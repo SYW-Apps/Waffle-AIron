@@ -10,6 +10,48 @@ methods:
     signature: 'loadProjectVariants(): VariantDef[]'
     returns: VariantDef[]
     params: []
+  - name: resolveVariantGuidance
+    description: >-
+      Resolve ONE component's variant guidance: the variant it declares, the core stereotype that
+      variant specializes, the implementation guidance, and the same-variant SIBLING components.
+      Null when the component declares no variant or one that does not resolve. The siblings travel
+      with the guidance because that is the entire payoff of a variant — every component of the same
+      kind gets implemented alike instead of reinvented per instance.
+    signature: >-
+      resolveVariantGuidance(component: ComponentSpec, allComponents: ComponentSpec[], variantsById:
+      VariantDef[]): VariantDef
+    returns: VariantDef
+    params:
+      - name: component
+        type: ComponentSpec
+        description: The component whose variant to resolve.
+      - name: allComponents
+        type: ComponentSpec[]
+        description: Every component, for finding same-variant siblings.
+      - name: variantsById
+        type: VariantDef[]
+        description: The loaded variant registry, keyed by id.
+  - name: composeVariantGuidance
+    description: >-
+      Compose the "Component variants" block injected into an owner/implementer agent for its
+      variant-tagged components — empty when none declare a known variant. Lives here rather than in
+      the agent resolver so the generated-agent renderer and the MCP spec-read path share ONE
+      implementation: a hosted agent and a local session are told the same thing about a variant by
+      construction, not by two copies staying in step.
+    signature: >-
+      composeVariantGuidance(comps: ComponentSpec[], allComponents: ComponentSpec[], variantsById:
+      VariantDef[]): string
+    returns: string
+    params:
+      - name: comps
+        type: ComponentSpec[]
+        description: The agent's own components.
+      - name: allComponents
+        type: ComponentSpec[]
+        description: Every component, for finding same-variant siblings.
+      - name: variantsById
+        type: VariantDef[]
+        description: The loaded variant registry, keyed by id.
 status: complete
 createdAt: '2026-07-15T12:24:19.110Z'
-updatedAt: '2026-07-15T12:26:32.646Z'
+updatedAt: '2026-07-29T20:46:03.334Z'

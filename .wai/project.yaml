@@ -1,5 +1,13 @@
 schemaVersion: 1.0.0
 name: Waffle-AIron
+extensions:
+  # wairon's own doctrine is wairon's own — nothing from a developer's global
+  # packs folder (~/.wairon/packs) may govern this repo. Without this, whatever a
+  # contributor happens to have installed machine-wide silently injects profiles,
+  # rules, and skills here: the gate, `wairon skills list`, and the MCP
+  # instructions/resources then differ per developer, and CI (which has no global
+  # packs) disagrees with every local run.
+  useGlobalPacks: false
 targets:
   - type: claude
     outputDir: .claude/agents

@@ -2,14 +2,23 @@ kind: value-object
 id: pack_skill
 name: PackSkill
 description: >-
-  A declarative AI-agent skill shipped by an extension pack. Discovered alongside the pack and
-  installed (namespaced by pack id) into supported client targets' skills directories, and published
-  through the wairon-skill MCP resource mirror.
+  A declarative AI-agent skill shipped by an extension pack, in one of two forms. A NEW skill
+  declares `id` and installs namespaced by pack id (never shadowing the reserved sdd-* builtins),
+  published through the wairon-skill MCP resource mirror. An EXTENDING skill declares `extends:
+  <builtin>` instead, and its body is appended to that builtin under a `## Platform: <pack>` heading
+  in pack load order — so an implementing agent reads ONE coherent instruction with the platform
+  part clearly attributed, rather than noticing a parallel skill and reconciling it (or every
+  wrapper forking the builtin wholesale). The builtin stays wairon's: an upgrade still updates the
+  base text, only the appended sections come from packs, and the composed skill keeps the BUILTIN's
+  frontmatter. Exactly one of id/extends is declared; a pack extending a builtin that does not exist
+  is an EXTENSION_LOAD_ERROR, never a silently dropped section.
 fields:
   - name: id
     type: string
-    description: Skill id within the pack (e.g. domain-implementer). Installed as <pack-id>-<id>.
-    optional: false
+    description: >-
+      Skill id within the pack (e.g. domain-implementer), installed as <pack-id>-<id>. Present for a
+      NEW skill; absent when extending.
+    optional: true
   - name: source
     type: string
     description: Path to the SKILL.md file, relative to the pack directory.
@@ -26,6 +35,13 @@ fields:
     type: string
     description: 'Provenance: the pack version that ships this skill.'
     optional: true
+  - name: extends
+    type: string
+    description: >-
+      The builtin skill this section is appended to (sdd-architect | sdd-narrative | sdd-auditor |
+      sdd-implement). Present when extending; absent for a new skill. An extending skill publishes
+      no resource of its own — it composes into the builtin's content.
+    optional: true
 methods: []
 createdAt: '2026-07-14T18:56:18.960Z'
-updatedAt: '2026-07-14T18:56:19.007Z'
+updatedAt: '2026-07-29T20:58:24.392Z'

@@ -1,6 +1,6 @@
 # Technology boundaries & the extension surface
 
-Status: **implemented** (0.2.0)
+Status: **implemented** (July 2026)
 
 Origin: a sibling project ("Appenser", an SDD tool for the Make.com low-code
 platform) evaluated building on wairon as its foundation and fed back two

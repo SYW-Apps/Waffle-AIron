@@ -3,8 +3,8 @@
 **Waffle AIron** — an AI-Driven Development (AIDD) support tool built around
 **Spec-Driven Development (SDD)**.
 
-> **Status:** v0.2 — the SDD spec tree, the conformance gate (a 16-module
-> rule registry with narrative control-flow validation, technology
+> **Status:** stable, actively developed — the SDD spec tree, the conformance gate (a 40-plus-rule
+> registry with narrative control-flow validation, technology
 > boundaries, and per-spec `lint.allow`), spec-derived agent topology,
 > skills, the MCP server, diagrams (Mermaid, interactive canvas + ERD,
 > draw.io/Excalidraw), extension packs (injectable profiles, language
@@ -186,6 +186,8 @@ See [docs/cli.md](docs/cli.md). Summary:
 - [Vision](docs/vision.md) — long-term direction
 - [CLI Reference](docs/cli.md) — all commands
 - [Hosted server](docs/design/hosted-mcp-server.md) — self-host wairon over HTTP (Docker, auth, sizing)
+- [Pack scoping](docs/design/pack-scoping.md) — the pack store, per-project selection, and reproducibility (design)
+- [Connecting-agent entrypoint](docs/design/connecting-agent-entrypoint.md) — MCP `instructions`, prompts, and skill composition
 - [Extending wairon](docs/extending-wairon.md) — extension packs & wrapper products (with a [working example](examples/wrapper/))
 - [Templates](docs/templates.md) — agent rendering templates
 - [Standards](docs/standards/INDEX.md) — the architecture standards the SDD model is built on
@@ -201,7 +203,7 @@ validation), js-yaml, the MCP SDK, and Vitest. Bundled with tsup.
 
 ## Contributing
 
-Early development. For bugs or questions, open an issue.
+Actively developed. For bugs or questions, open an issue.
 
 ## License
 

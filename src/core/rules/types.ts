@@ -10,6 +10,8 @@ import {
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
+import type { PackSelection } from '../../models/project.js';
+import type { PackSelectionFailure } from '../extensions.js';
 import type { CodeModel } from '../source-analysis.js';
 
 // ---------------------------------------------------------------------------
@@ -118,6 +120,21 @@ export interface RuleContext {
     guarantees: string[];
     /** Declarative rule assertions (closed kinds, pack-instantiated) evaluated by the declarative-assertions rule. */
     assertions: LoadedAssertion[];
+    /**
+     * The project's by-name pack SELECTIONS (legacy path refs excluded). The
+     * reproducibility rule checks these for a version/integrity pin, since a
+     * floating selection resolved off a mutable machine store is exactly what
+     * `enforceReproducibility` exists to prevent.
+     */
+    packSelections: PackSelection[];
+    /**
+     * Declared selections that could not be resolved, each carrying the code the
+     * pack-resolution rule reports it under. Resolution itself happens in the
+     * extension loader (bundle first, then the store), so the rule surfaces what
+     * the loader found rather than deciding again — the two can never disagree
+     * about whether a pack applies.
+     */
+    selectionFailures: PackSelectionFailure[];
   };
 
   /**
@@ -156,11 +173,35 @@ export interface RuleContext {
   ): void;
 }
 
+/**
+ * How much of the tree a rule must see to reach its verdict.
+ *
+ * - `'tree'` (the default) — the check reads relationships BETWEEN specs: a
+ *   component's interfaces, narrative reachability, the dependency graph. It is
+ *   only meaningful against a fully loaded tree.
+ * - `'spec'` — the check reads nothing but each spec's OWN fields, so it is a
+ *   pure function of one spec. That is what lets it also run against a
+ *   CANDIDATE spec BEFORE the write (see rules/candidate.ts), turning what
+ *   would otherwise be a permanent validate-time error into a refused write
+ *   with the same code and message.
+ *
+ * A rule that mixes the two belongs SPLIT in two, so the intrinsic half can
+ * reach the write boundary — see portalFieldsRule/portalsRule and
+ * durabilityDeclarationRule/durabilityRule.
+ */
+export type RuleScope = 'spec' | 'tree';
+
 export interface SddRule {
   /** Stable rule id (kebab-case), e.g. "stereotype-dependencies". */
   name: string;
   /** One-paragraph description of what the rule enforces and why. */
   description: string;
+  /**
+   * What the check needs to see (see RuleScope). Defaults to 'tree' — the
+   * conservative answer, since a rule that has not declared itself intrinsic
+   * must never be handed a one-spec context.
+   */
+  scope?: RuleScope;
   /** Every issue code this rule can emit, with default severity and summary. */
   codes: RuleCode[];
   check(ctx: RuleContext): void;

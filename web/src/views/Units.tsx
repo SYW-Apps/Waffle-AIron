@@ -29,8 +29,14 @@ function buildTree(units: OrganizationUnitRecord[]): TreeNode[] {
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
+  // Sort key falls back to id/name: a unit persisted before slugs existed has no
+  // `slug`, and reading `.localeCompare` off undefined took the whole page down
+  // with a minified TypeError. The server now normalizes this on read, but a view
+  // must not be the thing that breaks when a field it expects is absent —
+  // UnitSelect already guards the same way.
+  const sortKey = (n: TreeNode) => n.unit.slug || n.unit.id || n.unit.name || '';
   const sortRec = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => a.unit.slug.localeCompare(b.unit.slug));
+    nodes.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
     nodes.forEach((n) => sortRec(n.children));
   };
   sortRec(roots);

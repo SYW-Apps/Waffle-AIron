@@ -9,23 +9,32 @@ methods:
   - name: loadProjectExtensions
     narrative:
       - stepNumber: 1
+        description: >-
+          For each project entry that is a by-name SELECTION rather than a legacy path ref, resolve
+          it against the committed bundle and then the pack store, verifying a pinned integrity
+          digest; an unresolvable selection is collected as a load error instead of quietly reducing
+          the governing rule set.
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: resolveInstalledPack
+      - stepNumber: 2
         description: Resolve the global packs directory.
         type: call
         targetComponent: pack_source_adapter
         targetMethod: globalPacksDir
-      - stepNumber: 2
+      - stepNumber: 3
         description: >-
           Discover the global packs there (unless extensions.useGlobalPacks is false) to seed the
           global-scoped refs, then append the project's declared packs as project-scoped refs.
         type: call
         targetComponent: pack_source_adapter
         targetMethod: discoverPacks
-      - stepNumber: 3
+      - stepNumber: 4
         description: Resolve each gathered ref (global then project) to a concrete load target.
         type: call
         targetComponent: pack_source_adapter
         targetMethod: resolvePackRef
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Read each target's raw manifest, then parse/validate it against the pack schema and merge
           it (project packs win on collision) into the accumulated result; a failed pack is recorded
@@ -33,7 +42,7 @@ methods:
         type: call
         targetComponent: pack_source_adapter
         targetMethod: readManifest
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Return the merged LoadedExtensions — empty when the project declares no packs or its
           config is unreadable.
@@ -59,7 +68,242 @@ methods:
         description: Return the LoadedExtensions built from the given refs.
         type: return
         outcome: success
+  - name: packEntryLabel
+    narrative:
+      - stepNumber: 1
+        description: A legacy entry is already a path/module ref string.
+        type: branch
+        condition: the entry is a string (a legacy path or module ref)
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Return the ref unchanged — for a legacy entry the path IS its label.
+        type: return
+        outcome: the ref unchanged
+      - stepNumber: 3
+        description: >-
+          Return the selection's name, suffixed with @version when it pins one. Display only — this
+          label never loads a pack, so it touches no filesystem.
+        type: return
+        outcome: name or name@version
+    detail: full
+    intent: >-
+      Returns a legacy path ref unchanged, and a by-name selection as name@version (or just name
+      when unpinned). Pure string shaping for messages and listings — never used to load a pack, so
+      it never touches the filesystem.
+  - name: packEntryRef
+    narrative:
+      - stepNumber: 1
+        description: A legacy entry needs no resolution.
+        type: branch
+        condition: the entry is a string (a legacy path or module ref)
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Return the ref unchanged.
+        type: return
+        outcome: the ref unchanged
+      - stepNumber: 3
+        description: >-
+          Look for a committed bundle under .wai/packs/<name>/, taking the pinned version when one
+          is pinned and otherwise the newest bundled version. The bundle is checked FIRST so a clone
+          and CI resolve with an empty store and no network.
+        type: local
+      - stepNumber: 4
+        description: Prefer the committed copy when there is one — it is the repository's own truth.
+        type: branch
+        condition: a bundled copy was found
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Return the bundled pack's directory.
+        type: return
+        outcome: the bundle path
+      - stepNumber: 6
+        description: >-
+          Otherwise resolve the selection against this wairon install's pack store — the exact
+          version when pinned, else the newest installed.
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: resolveInstalledPack
+      - stepNumber: 7
+        description: >-
+          Return the installed pack's directory, or null when nothing satisfies the selection — the
+          caller decides whether that is an error it reports or an entry it skips.
+        type: return
+        outcome: the store path, or null
+    detail: full
+    intent: >-
+      Passes a legacy path/module ref straight through. For a selection, resolves it the same way
+      loading does — the committed bundle under .wai/packs/<name>/[<version>/] first, then the pack
+      store, preferring an exact pin and otherwise the newest version — and returns null when
+      nothing satisfies it, leaving the caller to decide whether that is an error to report or an
+      entry to skip.
+  - name: globalPacksEnabled
+    narrative:
+      - stepNumber: 1
+        description: The project may have declared a position on machine-wide packs.
+        type: branch
+        condition: extensions.useGlobalPacks is set on the project config
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Return what the project declared — an explicit choice always wins.
+        type: return
+        outcome: the declared value
+      - stepNumber: 3
+        description: >-
+          Return the shared default (false): a project's doctrine is what the project declares, so
+          an installed pack is available rather than authoritative. Kept as one constant so a reader
+          and a config writer can never disagree about what an absent field means.
+        type: return
+        outcome: the default (false)
+    detail: full
+    intent: >-
+      Returns the project's extensions.useGlobalPacks when set, otherwise the shared
+      GLOBAL_PACKS_DEFAULT constant (false). Trivial by design: the value lives in exactly one place
+      so a reader and a config writer can never disagree about what an absent field means.
+  - name: diagnoseProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Read the project config and root.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Determine whether extensions.useGlobalPacks is ABSENT from the RAW project file. The
+          parsed config defaults the field, so only the raw file distinguishes a project that never
+          decided — the one that may have depended on machine-wide doctrine — from one that chose
+          deliberately.
+        type: local
+      - stepNumber: 3
+        description: Walk the project's declared entries.
+        type: loop
+        loopKind: forEach
+        over: the declared pack entries
+        endStep: 4
+      - stepNumber: 4
+        label: entry_done
+        description: >-
+          Skip legacy path refs; for a selection, record its name and resolve it against the bundle
+          then the store, collecting the gate's own failure message when it does not resolve.
+        type: local
+      - stepNumber: 5
+        description: Enumerate what is installed in the store.
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: listInstalledPacks
+      - stepNumber: 6
+        description: Machine-wide packs only participate when the project opted in.
+        type: branch
+        condition: the project applies machine-wide packs
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Collect the machine-wide packs that apply, so a dependency on machine state is visible
+          rather than assumed.
+        type: local
+      - stepNumber: 8
+        description: >-
+          Everything installed that neither a selection nor an opt-in applies is reported as
+          installed-but-unapplied — the migration set when the project never declared a position.
+        type: local
+      - stepNumber: 9
+        description: >-
+          Return the diagnosis. Every failure degrades to an empty diagnosis instead of throwing: a
+          health check must never itself break.
+        type: return
+        outcome: the diagnosis
+    detail: full
+    intent: >-
+      Reads the project config and, for every by-name selection, resolves it the way loading does —
+      collecting the same message the gate would report for anything unresolvable. Enumerates the
+      store, determines which packs actually apply (selections plus, when the project opted in, the
+      machine-wide set), and reports the remainder as installed-but-unapplied. Separately reports
+      whether extensions.useGlobalPacks is ABSENT from the raw project file, which the parsed config
+      cannot express because it defaults the field — only an absent field marks a project that never
+      decided and may therefore have depended on machine-wide doctrine. Swallows every failure into
+      an empty diagnosis: a health check must never itself break.
+  - name: pinInstalledPacksAsSelections
+    narrative:
+      - stepNumber: 1
+        description: Run the pack diagnosis for this project.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Only a project that never declared a position AND has installed packs it is not applying
+          has anything to migrate.
+        type: branch
+        condition: the project already declared a position, or has no unapplied installed packs
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Do nothing — a project that deliberately applies nothing must never be given selections it
+          did not ask for.
+        type: return
+        outcome: nothing migrated
+      - stepNumber: 4
+        description: >-
+          Append a name+version selection for each unapplied pack, carrying its recorded origin as
+          the selection's source only when that origin is a fetchable URL (a local path cannot be
+          resolved by CI or a clone).
+        type: local
+      - stepNumber: 5
+        description: >-
+          Turn machine-wide loading off so the decision is explicit, and save the config — the
+          doctrine governing this project is now declared BY the project, visible in a diff and
+          reproducible for a clone.
+        type: local
+      - stepNumber: 6
+        description: Return the names recorded.
+        type: return
+        outcome: the recorded selections
+    detail: full
+    intent: >-
+      Runs the diagnosis and does nothing unless the project never declared a position AND has
+      installed packs it is not applying — so a project that deliberately applies nothing is never
+      given selections it did not ask for. Otherwise appends a name+version selection per unapplied
+      pack, carrying its recorded origin as a source only when that origin is a fetchable URL, sets
+      useGlobalPacks false to make the decision explicit, saves the config, and returns the recorded
+      names.
+  - name: defaultPackSelections
+    narrative:
+      - stepNumber: 1
+        description: Enumerate every pack installed in the store.
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: listInstalledPacks
+      - stepNumber: 2
+        description: Consider each installed pack in turn.
+        type: loop
+        loopKind: forEach
+        over: the installed packs
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Read the pack's manifest to learn whether it asks to be applied by default, skipping any
+          pack whose manifest will not load — a broken pack seeds nothing rather than seeding
+          something broken.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: readManifest
+      - stepNumber: 4
+        label: pack_considered
+        description: >-
+          When the manifest declares applyByDefault, record a name+version selection, carrying the
+          pack's recorded origin as its source only when that origin is a fetchable URL (a local
+          path could not be resolved by a clone or CI).
+        type: local
+      - stepNumber: 5
+        description: >-
+          Return the selections to seed. Any failure degrades to an empty list: initializing a
+          project must never fail because of a bad pack sitting in the store.
+        type: return
+        outcome: the default selections
+    detail: full
+    intent: >-
+      Enumerates the pack store, reads each installed pack's manifest through the pack source
+      adapter, and keeps only those declaring applyByDefault. Each becomes a name+version selection
+      carrying the pack's recorded origin as its source when that origin is a fetchable URL. A pack
+      whose manifest will not load is skipped rather than seeded broken, and any failure degrades to
+      an empty list — initializing a project must never fail because of a bad pack sitting in the
+      store.
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-07-14T20:23:49.634Z'
+updatedAt: '2026-07-29T21:28:00.320Z'

@@ -1,9 +1,10 @@
 id: skills_resource_orchestrator_impl
 name: Skills Resource Orchestrator Implementation
 description: >-
-  The MCP-resource workflow for the built-in SDD skills: lists them as MCP resource descriptors and
-  reads one skill's content, rejecting unknown resource ids, resolving through the Skills Resource
-  Specialist.
+  The MCP-facing guidance workflow for the built-in SDD skills: lists them as MCP resource
+  descriptors, reads one skill's content (rejecting unknown resource ids) through the Skills
+  Resource Specialist, and composes the server initialize instructions through the Server
+  Instructions Specialist.
 contract: iskills_resource_orchestrator
 sourcePath: src/core/skills.ts
 methods:
@@ -46,6 +47,18 @@ methods:
         type: return
         outcome: skill markdown content
     detail: full
+  - name: buildServerInstructions
+    narrative:
+      - stepNumber: 1
+        description: Compose the instructions text through the Server Instructions Specialist.
+        type: call
+        targetComponent: instructions_specialist
+        targetMethod: buildServerInstructions
+      - stepNumber: 2
+        description: Return the composed instructions for the MCP initialize handshake.
+        type: return
+        outcome: the composed instructions
+    detail: full
 status: complete
 createdAt: '2026-07-10T12:21:20.703Z'
-updatedAt: '2026-07-10T12:24:01.344Z'
+updatedAt: '2026-07-29T10:53:16.279Z'

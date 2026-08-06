@@ -51,6 +51,17 @@ detect_platform() {
 fetch_latest_version() {
     need_cmd curl
 
+    # An explicit WAIRON_VERSION pins the install and skips the API call — what a
+    # CI job wants, so a pipeline is not silently upgraded by a new release.
+    # Accepts "5.1.0" or "v5.1.0".
+    if [ -n "${WAIRON_VERSION:-}" ]; then
+        case "$WAIRON_VERSION" in
+            v*) VERSION="$WAIRON_VERSION" ;;
+            *)  VERSION="v$WAIRON_VERSION" ;;
+        esac
+        return
+    fi
+
     RELEASE_JSON=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest")
     VERSION=$(printf '%s' "$RELEASE_JSON" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
 

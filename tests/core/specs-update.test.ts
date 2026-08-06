@@ -15,6 +15,7 @@ import {
   loadComponentSpec,
   saveTypeSpec,
   loadTypeSpec,
+  loadSubsystemSpec,
   getComponentPath,
 } from '../../src/core/specs.js';
 
@@ -470,5 +471,178 @@ describe('granular specification updates via updateSpec', () => {
     // …but an explicit status change through updateSpec is deliberate and must work.
     updateSpec('component', 'billing-engine', { status: 'draft' });
     expect(loadComponentSpec('billing-engine')!.status).toBe('draft');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Array deltas UPSERT — they must not replace.
+//
+// The contract says a delta naming one element leaves the others intact, and that
+// an "action: delete" marker removes one. That held for methods/fields/dispatch/lifecycle
+// and silently did NOT for everything else: a one-entry delta on trustedLinks,
+// invariants, or lint.allow erased every entry it did not mention. Same data loss
+// already fixed once for dispatch tables, still live elsewhere — and it left a
+// stale lint allow (which wairon fails --ci on) with no way to remove it.
+// ---------------------------------------------------------------------------
+
+describe('array deltas upsert by identity and honour delete markers', () => {
+  let proj: string;
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (proj) fs.rmSync(proj, { recursive: true, force: true });
+  });
+
+  function project(): void {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-arraydelta-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+  }
+
+  it('trustedLinks: a one-entry delta updates that link and KEEPS the others', () => {
+    project();
+    saveSubsystemSpec({
+      schemaVersion: '1.0.0', id: 'billing', name: 'Billing', description: 'd', parentSystem: 'GK',
+      publicInterfaces: [], trustedLinks: [{ subsystem: 'x', reason: 'r1' }, { subsystem: 'y', reason: 'r2' }],
+      createdAt: now, updatedAt: now,
+    } as never);
+    invalidateSpecCache();
+
+    updateSpec('subsystem', 'billing', { trustedLinks: [{ subsystem: 'x', reason: 'UPDATED' }] });
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('billing')!.trustedLinks).toEqual([
+      { subsystem: 'x', reason: 'UPDATED' },
+      { subsystem: 'y', reason: 'r2' },
+    ]);
+
+    updateSpec('subsystem', 'billing', { trustedLinks: [{ subsystem: 'y', action: 'delete' }] });
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('billing')!.trustedLinks).toEqual([{ subsystem: 'x', reason: 'UPDATED' }]);
+  });
+
+  it('type invariants: keyed by id, upserted and deletable', () => {
+    project();
+    saveTypeSpec({
+      kind: 'entity', id: 'invoice', name: 'Invoice', fields: [], methods: [],
+      invariants: [{ id: 'i1', description: 'one' }, { id: 'i2', description: 'two' }],
+      createdAt: now, updatedAt: now,
+    } as never);
+    invalidateSpecCache();
+
+    updateSpec('type', 'invoice', { invariants: [{ id: 'i1', description: 'ONE' }] });
+    invalidateSpecCache();
+    expect(loadTypeSpec('invoice')!.invariants).toEqual([
+      { id: 'i1', description: 'ONE' },
+      { id: 'i2', description: 'two' },
+    ]);
+
+    updateSpec('type', 'invoice', { invariants: [{ id: 'i2', action: 'delete' }] });
+    invalidateSpecCache();
+    expect(loadTypeSpec('invoice')!.invariants).toEqual([{ id: 'i1', description: 'ONE' }]);
+  });
+
+  it('lint.allow: a stale suppression can be REMOVED by code — the dead end that motivated this', () => {
+    project();
+    saveTypeSpec({ kind: 'entity', id: 'invoice', name: 'Invoice', fields: [], methods: [], createdAt: now, updatedAt: now } as never);
+    invalidateSpecCache();
+    updateSpec('type', 'invoice', { lint: { allow: [{ code: 'A_CODE', reason: 'ra' }, { code: 'B_CODE', reason: 'rb' }] } });
+    invalidateSpecCache();
+
+    // Upsert one, keep the other.
+    updateSpec('type', 'invoice', { lint: { allow: [{ code: 'A_CODE', reason: 'RA' }] } });
+    invalidateSpecCache();
+    expect(loadTypeSpec('invoice')!.lint!.allow).toEqual([
+      { code: 'A_CODE', reason: 'RA' },
+      { code: 'B_CODE', reason: 'rb' },
+    ]);
+
+    // wairon flags a stale allow and fails --ci on it, so removal must be expressible.
+    updateSpec('type', 'invoice', { lint: { allow: [{ code: 'B_CODE', reason: 'x', action: 'delete' }] } });
+    invalidateSpecCache();
+    expect(loadTypeSpec('invoice')!.lint!.allow).toEqual([{ code: 'A_CODE', reason: 'RA' }]);
+  });
+
+  it('string arrays have no per-element identity, so they replace wholesale', () => {
+    project();
+    saveSubsystemSpec({ schemaVersion: '1.0.0', id: 'billing', name: 'B', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
+    saveComponentSpec({
+      id: 'repo', name: 'Repo', description: 'd', subsystem: 'billing', componentType: 'Repository',
+      owns: ['a', 'b', 'c'], dependsOn: [], createdAt: now, updatedAt: now,
+    } as never);
+    invalidateSpecCache();
+
+    updateSpec('component', 'repo', { owns: ['a'] });
+    invalidateSpecCache();
+    // Deliberate: there is no way to address one string, so the list IS the delta.
+    expect(loadComponentSpec('repo')!.owns).toEqual(['a']);
+  });
+
+  it('an empty array clears a keyed list outright', () => {
+    project();
+    saveSubsystemSpec({
+      schemaVersion: '1.0.0', id: 'billing', name: 'B', description: 'd', parentSystem: 'GK',
+      publicInterfaces: [], trustedLinks: [{ subsystem: 'x', reason: 'r' }], createdAt: now, updatedAt: now,
+    } as never);
+    invalidateSpecCache();
+    updateSpec('subsystem', 'billing', { trustedLinks: [] });
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('billing')!.trustedLinks).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Removing an optional field: the create/update/delete symmetry gap.
+//
+// An optional scalar could be SET but never CLEARED. null and undefined are
+// skipped by the merge (so a caller passing them for "no change" is not punished)
+// and the only workaround — writing "" — leaves the field PRESENT and empty, which
+// is a different and usually wrong spec: a Portal with basePath "" is not a Portal
+// without one. "unset" makes the removal explicit rather than inferred.
+// ---------------------------------------------------------------------------
+
+describe('unset removes an optional field', () => {
+  let proj: string;
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (proj) fs.rmSync(proj, { recursive: true, force: true });
+  });
+
+  function portal(): void {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-unset-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+    saveSubsystemSpec({ schemaVersion: '1.0.0', id: 's', name: 'S', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
+    saveComponentSpec({ id: 'p', name: 'P', description: 'd', subsystem: 's', componentType: 'Portal', portalType: 'HTTP_API', basePath: '/v1', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as never);
+    invalidateSpecCache();
+  }
+
+  it('removes the field entirely, leaving siblings untouched', () => {
+    portal();
+    updateSpec('component', 'p', { unset: ['basePath'] });
+    invalidateSpecCache();
+    const after = loadComponentSpec('p')!;
+    expect('basePath' in after).toBe(false);
+    expect(after.portalType).toBe('HTTP_API');
+    expect(after.componentType).toBe('Portal');
+  });
+
+  it('null and undefined still mean "no change", never a silent delete', () => {
+    portal();
+    updateSpec('component', 'p', { basePath: null });
+    invalidateSpecCache();
+    expect(loadComponentSpec('p')!.basePath).toBe('/v1');
+  });
+
+  it('refuses to unset a REQUIRED field, naming it', () => {
+    portal();
+    expect(() => updateSpec('component', 'p', { unset: ['componentType'] })).toThrow(/componentType/);
+  });
+
+  it('never leaks "unset" onto the spec as a field', () => {
+    portal();
+    updateSpec('component', 'p', { unset: ['basePath'] });
+    invalidateSpecCache();
+    expect('unset' in loadComponentSpec('p')!).toBe(false);
   });
 });

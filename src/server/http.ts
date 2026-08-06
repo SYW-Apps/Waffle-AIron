@@ -18,6 +18,7 @@ import * as landscape from './landscape.js';
 import * as operations from './operations.js';
 import { AdminAuthError, LockValidationError, runPeriodicGitSync } from './admin.js';
 import { runPeriodicBackingSync } from './gitbacking.js';
+import { migratePermissionModel } from './migration.js';
 import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy, PrincipalSubject } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -652,6 +653,51 @@ export function initHostInstance(cfg: HostConfig): void {
 // ihost_server.init — the lifecycle entrypoint's contract name.
 export { initHostInstance as init };
 
+/**
+ * Warn, at startup, when the data dir still holds pre-permission-model shapes.
+ *
+ * `wairon host doctor --fix` is operator-invoked and never automatic, so an
+ * instance can upgrade and keep serving unmigrated records. The consequences are
+ * severe and previously silent: legacy users and API tokens resolve to ZERO
+ * permissions, projects placed in no unit are invisible to every unit-scoped
+ * grant, and units written before slugs existed took the organizations page down
+ * with `undefined.localeCompare` — a minified TypeError that named neither the
+ * cause nor the remedy. An operator should not have to reverse-engineer a stack
+ * trace to discover a migration is pending.
+ *
+ * The migration's DRY RUN is reused as the detector rather than re-implementing
+ * the checks: it is already the authority on which shapes are stale, and a second
+ * implementation would drift from it. Dry-run mode only reports — it writes
+ * nothing, so this never mutates data on startup.
+ *
+ * Diagnostics must never prevent a server from starting, so every failure here is
+ * swallowed: a broken check is not a reason to refuse connections.
+ */
+export function warnIfDataDirUnmigrated(cfg: HostConfig): void {
+  try {
+    const report = migratePermissionModel(cfg.dataDir, false);
+    if (report.findings.length === 0) return;
+
+    console.error(
+      `[wairon migrate] ${report.findings.length} legacy data shape(s) found in ${cfg.dataDir} — `
+      + 'this instance has NOT been migrated to the permission model. Legacy users and tokens '
+      + 'resolve to zero permissions until you run: wairon host doctor --fix '
+      + '(run it without --fix first for a dry run).',
+    );
+    // Cap the per-finding detail: a large unmigrated instance can report many, and
+    // burying the remedy under hundreds of lines defeats the point of saying it.
+    const shown = report.findings.slice(0, 10);
+    for (const finding of shown) {
+      console.error(`[wairon migrate]   ${finding.area}: ${finding.detail}`);
+    }
+    if (report.findings.length > shown.length) {
+      console.error(`[wairon migrate]   … and ${report.findings.length - shown.length} more (see \`wairon host doctor\`).`);
+    }
+  } catch (err) {
+    console.error(`[wairon migrate] migration check skipped: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 /** Bind the data-plane and admin-plane listeners and begin accepting connections. */
 /** The literal placeholder shipped in .env.example — never a real credential. */
 export const PLACEHOLDER_ADMIN_TOKEN = 'replace-with-a-random-64-hex-character-token';
@@ -682,6 +728,8 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   // Lifecycle init runs BEFORE the listeners bind: seed the persisted instance
   // identity (and, under devMode, the synthetic local development unit).
   initHostInstance(cfg);
+
+  warnIfDataDirUnmigrated(cfg);
 
   const dataServer = http.createServer((req, res) => routeData(cfg, req, res));
   const adminServer = http.createServer((req, res) => {

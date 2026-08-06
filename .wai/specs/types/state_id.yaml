@@ -2,18 +2,29 @@ kind: value-object
 id: state_id
 name: StateId
 description: >-
-  Content-addressed identity of a spec-tree state: a deterministic hash over the canonicalized spec
-  files. Two trees with identical spec content produce the same StateId; any edit changes it. Backs
-  the commit-scoped lock record and the promote-time re-check.
+  Content-addressed identity of a project state: a deterministic hash over canonicalized content.
+  Two states with identical content produce the same StateId; any change alters it. Two flavours
+  exist, distinguished by `algorithm` so they can never compare equal: the CONTENT identity over the
+  spec tree alone (surface/landscape snapshot stamps and freshness comparisons, where doctrine is
+  irrelevant), and the GATE identity over the spec tree PLUS the governing doctrine (pack
+  identities, profiles, languages, patterns, guarantees, assertions, rule codes) — what the
+  commit-scoped lock record is scoped to and what the promote-time re-check recomputes, because a
+  lock asserts that these specs pass THIS gate.
 fields:
   - name: algorithm
     type: string
-    description: Hash algorithm identifier (e.g. "sha256")
+    description: >-
+      Hash algorithm identifier, also distinguishing the flavour: "sha256" = spec-tree content only;
+      "sha256+doctrine" = tree plus governing doctrine. stateIdEquals compares this, so a
+      content-only identity never satisfies a gate comparison — which is what makes lock records
+      written before doctrine coverage read as stale instead of as valid.
     optional: false
   - name: digest
     type: string
-    description: Hex digest over the canonicalized spec tree
+    description: >-
+      Hex digest over the canonicalized content (spec tree, plus the doctrine projection for the
+      gate flavour)
     optional: false
 methods: []
 createdAt: '2026-07-04T12:44:18.502Z'
-updatedAt: '2026-07-04T12:44:18.505Z'
+updatedAt: '2026-07-29T14:55:35.484Z'

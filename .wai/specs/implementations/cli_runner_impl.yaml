@@ -545,6 +545,20 @@ methods:
             step: 8
           - value: remove
             step: 10
+          - value: install
+            step: 13
+          - value: uninstall
+            step: 15
+          - value: which
+            step: 17
+          - value: use
+            step: 19
+          - value: unuse
+            step: 21
+          - value: bundle
+            step: 23
+          - value: sync
+            step: 25
         defaultStep: 12
       - stepNumber: 2
         label: doInit
@@ -600,7 +614,81 @@ methods:
         label: unknown
         description: Unknown action.
         type: throw
-        error: unknown pack action (expected init | build | add | list | remove)
+        error: >-
+          unknown pack action (expected init | build | install | uninstall | which | use | unuse |
+          bundle | sync | add | list | remove)
+      - stepNumber: 13
+        label: doInstall
+        description: >-
+          Install a pack into this wairon install's store (applies to nothing until a project
+          selects it).
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: installPack
+      - stepNumber: 14
+        description: Done.
+        type: return
+        outcome: install done
+      - stepNumber: 15
+        label: doUninstall
+        description: Remove a pack from the store.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: uninstallStorePack
+      - stepNumber: 16
+        description: Done.
+        type: return
+        outcome: uninstall done
+      - stepNumber: 17
+        label: doWhich
+        description: Identify which installed pack a name resolves to.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: whichPack
+      - stepNumber: 18
+        description: Done.
+        type: return
+        outcome: which done
+      - stepNumber: 19
+        label: doUse
+        description: Select an installed pack for this project.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: usePack
+      - stepNumber: 20
+        description: Done.
+        type: return
+        outcome: use done
+      - stepNumber: 21
+        label: doUnuse
+        description: Deselect a pack for this project.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: unusePack
+      - stepNumber: 22
+        description: Done.
+        type: return
+        outcome: unuse done
+      - stepNumber: 23
+        label: doBundle
+        description: Commit a copy of a selected pack under .wai/packs/.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: bundlePack
+      - stepNumber: 24
+        description: Done.
+        type: return
+        outcome: bundle done
+      - stepNumber: 25
+        label: doSync
+        description: Install every declared-but-missing pack from its recorded source.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: syncPacks
+      - stepNumber: 26
+        description: Done.
+        type: return
+        outcome: sync done
   - name: runLock
     narrative:
       - stepNumber: 1
@@ -642,4 +730,4 @@ methods:
         outcome: locked
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-24T18:15:12.186Z'
+updatedAt: '2026-07-29T20:21:15.010Z'

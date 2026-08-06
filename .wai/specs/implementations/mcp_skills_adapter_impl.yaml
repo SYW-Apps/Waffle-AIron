@@ -1,8 +1,8 @@
 id: mcp_skills_adapter_impl
 name: MCP Skills Client Adapter Implementation
 description: >-
-  Forwards MCP resource list/read calls across the subsystem boundary to the published skills
-  portal.
+  Forwards MCP resource list/read calls and the server-instructions composition across the subsystem
+  boundary to the published skills portal.
 contract: imcp_skills_adapter
 sourcePath: src/mcp/server.ts
 methods:
@@ -22,6 +22,13 @@ methods:
         targetComponent: skills_portal
         targetMethod: readResource
     symbol: readSkillResource
+  - name: buildServerInstructions
+    narrative:
+      - stepNumber: 1
+        description: Call buildServerInstructions on the skills portal across the subsystem boundary.
+        type: call
+        targetComponent: skills_portal
+        targetMethod: buildServerInstructions
 lint:
   allow:
     - code: CALL_STEP_UNREALIZED
@@ -31,4 +38,4 @@ lint:
         resource content. Revisit with the skills-resource refactor.
 status: complete
 createdAt: '2026-07-10T12:21:52.237Z'
-updatedAt: '2026-07-18T18:47:54.647Z'
+updatedAt: '2026-07-29T10:53:24.764Z'

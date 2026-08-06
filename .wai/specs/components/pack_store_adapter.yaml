@@ -1,0 +1,34 @@
+id: pack_store_adapter
+name: Pack Store Adapter
+description: >-
+  The filesystem boundary for this wairon install's pack STORE — the machine-wide pool of installed
+  packs (WAIRON_PACKS_DIR, else ~/.wairon/packs), laid out as <name>/<version>/ so several versions
+  of a pack coexist and different projects can select different ones. Owns installing a materialized
+  pack directory into the store, uninstalling one, enumerating what is installed, resolving a
+  selection by name (latest installed version when none is pinned), and computing the content digest
+  that gives a pack its identity. Alongside each installed pack it records an install record
+  (origin, digest, wairon version, timestamp) — the origin is what lets a project selection carry a
+  `source`, so a fresh machine or CI runner can obtain the same doctrine. Installed is NOT applied:
+  nothing here governs a project until that project selects it. Distinct from the pack source
+  adapter, which is the read boundary for LOADING a pack manifest; this one manages the installation
+  area.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn:
+  - pack_source_adapter
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      reason: >-
+        The store's lifecycle methods (packStoreDir, listInstalledPacks, installPackFromDirectory,
+        uninstallPack, computePackDigest) are driven by the `wairon pack install | uninstall | which
+        | use` commands. Those live in sdd_cli and cross into sdd_core through its PUBLISHED barrel
+        surface rather than as a modeled component edge — the established cli_variants_adapter
+        pattern, since a cross-subsystem edge onto an internal Adapter is a boundary violation — so
+        no narrative call step names them. resolveInstalledPack IS modeled (extension_orchestrator
+        calls it to resolve a project selection), which is why it is not covered here. A future
+        core_portal passthrough for the store would make these edges explicit and this allow stale.
+status: complete
+createdAt: '2026-07-29T17:41:33.113Z'
+updatedAt: '2026-07-29T19:01:28.488Z'

@@ -452,13 +452,56 @@ methods:
         description: Return the computed state hash
         type: return
         outcome: StateId or null
-lint:
-  allow:
-    - code: UNREALIZED_DEPENDENCY
-      reason: >-
-        The lock/state-hash forwarding methods are realized in sibling core modules (provision.ts,
-        lockfile.ts, statehash.ts) — specs.ts itself never imports them; same split-file facade
-        documented on the structural-conformance per-method offs.
+  - name: computeGateStateId
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load the governing extension packs through the extension workflow (global then project,
+          project winning on collision) — the doctrine the gate ran with.
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadProjectExtensions
+      - stepNumber: 2
+        description: >-
+          Hand that doctrine to the state hash specialist, which digests it together with the spec
+          tree.
+        type: call
+        targetComponent: state_hash_specialist
+        targetMethod: hashGateState
+      - stepNumber: 3
+        description: Return the gate StateId.
+        type: return
+        outcome: gate StateId
+    conformance: 'off'
+  - name: readLockState
+    narrative:
+      - stepNumber: 1
+        description: Read the persisted lock record via the lock registry.
+        type: call
+        targetComponent: lock_registry
+        targetMethod: read
+      - stepNumber: 2
+        description: No record means the project was simply never locked — a normal state, not a fault.
+        type: branch
+        condition: no lock record exists
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return the unlocked verdict, carrying the current gate identity a lock would record.
+        type: return
+        outcome: unlocked
+      - stepNumber: 4
+        description: Compute the GATE identity as it stands now — spec content plus governing doctrine.
+        type: call
+        targetComponent: state_hash_specialist
+        targetMethod: hashGateState
+      - stepNumber: 5
+        description: >-
+          Compare the recorded identity with the current one and return locked or stale, keeping the
+          record either way: staleness is a judgement ABOUT the record, so a caller can prompt for a
+          re-lock rather than present the project as never frozen.
+        type: return
+        outcome: locked or stale
+    conformance: 'off'
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:02:13.266Z'
+updatedAt: '2026-07-30T16:01:07.806Z'

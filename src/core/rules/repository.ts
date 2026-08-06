@@ -39,6 +39,18 @@ export function ruleSequence(): SddRule[] {
   return ruleSet.includes(lintAllowsRule) ? [...base, lintAllowsRule] : base;
 }
 
+/**
+ * rule_index: the registered rules that are INTRINSIC to a single spec
+ * (`scope: 'spec'`) — those whose verdict reads a spec's own fields and no
+ * cross-spec relationship. This is the subset the candidate validator runs
+ * against a not-yet-written spec, so the default ('tree') is the safe answer: a
+ * rule that has not declared itself intrinsic is never handed a one-spec
+ * context. Pack rules participate on the same terms.
+ */
+export function specScopedRules(): SddRule[] {
+  return ruleSequence().filter(r => r.scope === 'spec');
+}
+
 /** rule_index: every issue code any registered rule can emit — the lint.allow validation set. */
 export function knownIssueCodes(): RuleCode[] {
   return listRules().flatMap(r => r.codes);

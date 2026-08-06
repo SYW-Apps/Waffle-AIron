@@ -118,6 +118,20 @@ methods:
       two halves of a legal projectType value — architectural profiles and composite project kinds —
       come from the same core source instead of being restated in the hosting layer, where they
       would drift.
+  - name: computeGateStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward gate-StateId computation to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: computeGateStateId
+  - name: readLockState
+    narrative:
+      - stepNumber: 1
+        description: Forward the lock-verdict resolution to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: readLockState
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-24T23:52:35.483Z'
+updatedAt: '2026-07-30T16:00:00.079Z'

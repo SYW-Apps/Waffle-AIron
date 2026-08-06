@@ -1,6 +1,10 @@
 id: core_orchestrator
 name: Core Orchestrator
-description: Orchestrates spec loading and manipulation in the core subsystem.
+description: >-
+  Orchestrates spec loading and manipulation in the core subsystem. Also composes the GATE state
+  identity: it loads the governing doctrine through the extension workflow and hands it to the
+  (pure) state hash specialist, so the identity a lock is scoped to covers the rules that validated
+  the tree, not just the tree.
 subsystem: sdd_core
 componentType: Orchestrator
 owns: []
@@ -9,6 +13,7 @@ dependsOn:
   - state_hash_specialist
   - lock_registry
   - diagram_specialist
+  - extension_orchestrator
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-04T15:59:10.250Z'
+updatedAt: '2026-07-29T14:54:43.458Z'

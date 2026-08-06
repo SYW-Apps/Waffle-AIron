@@ -78,6 +78,81 @@ function readVariantsDir(dir: string): VariantDef[] {
  * variants (machine/org-wide) then the project's own (.wai/variants/), with the
  * project winning on an id collision. An uninitialized project simply has none.
  */
+/** A component's resolved variant, with the same-variant siblings to implement alike. */
+export interface ResolvedVariantGuidance {
+  /** The variant id the component declares. */
+  variant: string;
+  /** The core stereotype it specializes — authoritative for generic semantics. */
+  base: string;
+  /** How to implement a component of this variant. */
+  guidance: string;
+  /** Other components of the same variant, to implement consistently. */
+  siblings: string[];
+  /** Only applies for this target language, when the variant scopes itself. */
+  target?: string;
+  /** Only applies under this architectural profile, when the variant scopes itself. */
+  profile?: string;
+}
+
+/**
+ * Resolve one component's variant guidance, or null when it declares none (or one
+ * that does not resolve).
+ *
+ * The payoff of a variant is that every component of the same kind is implemented
+ * alike, so the siblings travel WITH the guidance. Shared by the generated-agent
+ * renderer and the MCP `sdd_get_spec` path — the same resolution, so a hosted agent
+ * and a local session are told the same thing.
+ */
+export function resolveVariantGuidance(
+  component: { id: string; variant?: string },
+  allComponents: { id: string; variant?: string }[],
+  variantsById: Map<string, VariantDef>,
+): ResolvedVariantGuidance | null {
+  if (!component.variant) return null;
+  const def = variantsById.get(component.variant);
+  if (!def) return null;
+  return {
+    variant: component.variant,
+    base: def.base,
+    guidance: def.guidance,
+    siblings: allComponents
+      .filter((o) => o.variant === component.variant && o.id !== component.id)
+      .map((o) => o.id),
+    ...(def.target ? { target: def.target } : {}),
+    ...(def.profile ? { profile: def.profile } : {}),
+  };
+}
+
+/**
+ * The "Component variants" block injected into an owner/implementer agent for its
+ * variant-tagged components. Empty when none of them declare a known variant.
+ */
+export function composeVariantGuidance(
+  comps: { id: string; variant?: string }[],
+  allComponents: { id: string; variant?: string }[],
+  variantsById: Map<string, VariantDef>,
+): string {
+  const resolved = comps
+    .map((c) => ({ id: c.id, guidance: resolveVariantGuidance(c, allComponents, variantsById) }))
+    .filter((r): r is { id: string; guidance: ResolvedVariantGuidance } => r.guidance !== null);
+  if (resolved.length === 0) return '';
+
+  const lines = [
+    '## Component variants — reuse the shared approach',
+    '',
+    'One or more of your components declare a variant — a base-anchored kind with implementation guidance. Implement every component of the same variant alike, reusing one shared approach instead of reinventing it per instance:',
+    '',
+  ];
+  for (const { id, guidance } of resolved) {
+    let line = `- **${id}** — variant \`${guidance.variant}\` (a kind of ${guidance.base}): ${guidance.guidance}`;
+    if (guidance.siblings.length > 0) {
+      line += ` Same-variant components elsewhere: ${guidance.siblings.join(', ')} — implement them consistently, reusing the same logic/concept.`;
+    }
+    lines.push(line);
+  }
+  return lines.join('\n');
+}
+
 export function loadProjectVariants(): VariantDef[] {
   try {
     const byId = new Map<string, VariantDef>();

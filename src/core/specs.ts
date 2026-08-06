@@ -1,9 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
-import { aiPathsAt, WaiPaths } from '../config/loader.js';
+import { aiPathsAt, loadProjectConfig, WaiPaths } from '../config/loader.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
-import { computeStateId } from './statehash.js';
+import { computeStateId, hashGateState, stateIdEquals, type StateId, type GateConfig } from './statehash.js';
+import { loadProjectExtensions } from './extensions.js';
+import { readLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import {
   SystemSpec,
@@ -500,6 +502,28 @@ export interface PromotableSpec {
  */
 export interface SaveSpecOptions {
   allowStatusDemotion?: boolean;
+}
+
+/**
+ * Hooks an AUTHORING caller injects into a write.
+ *
+ * `gate` sees the fully merged spec immediately before it is persisted, and
+ * throws to refuse the write. It exists as an injected hook rather than a direct
+ * call because the spec store must not depend on the rule engine — rules/
+ * coupling.ts and rules/namespace.ts already read this module, so importing the
+ * validator here would close an import cycle. Inversion keeps the dependency
+ * pointing one way and keeps mechanical re-saves (status promotion, layout
+ * normalization, migrations) ungated: they pass no hooks and behave exactly as
+ * before, which matters because a spec that predates a rule must stay loadable
+ * and repairable.
+ *
+ * Return notices to surface alongside the write's own.
+ */
+export interface SpecWriteHooks {
+  gate?(
+    kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+    merged: Record<string, any>,
+  ): string[] | void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1864,7 +1888,8 @@ export class SpecWorkspace {
   updateSpec(
     kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
     id: string,
-    delta: Record<string, any>
+    delta: Record<string, any>,
+    hooks?: SpecWriteHooks,
   ): string[] {
     const notices: string[] = [];
     const result = (() => {
@@ -2118,6 +2143,66 @@ export class SpecWorkspace {
       return merged;
     };
 
+    /**
+     * The identity key for an element of a delta-mergeable array, or null when the
+     * array has no per-element identity (a list of plain strings like `owns` or
+     * `guarantees`, where wholesale replacement is the only sane semantic).
+     *
+     * This table is what makes the documented contract true. Arrays used to be
+     * upserted only if they were explicitly listed below; everything else fell to
+     * wholesale replacement, so a delta naming ONE element silently deleted every
+     * element it did not mention — the same data loss already fixed for `dispatch`
+     * and `lifecycle`, still live for trustedLinks, invariants, patterns, lint
+     * allows, boundaries, and global requirements. Keyed here rather than guessed,
+     * with a name/id fallback so a future array field inherits upsert semantics
+     * instead of silently regressing to destructive replace.
+     */
+    const identityKeyOf = (field: string, item: unknown): string | null => {
+      if (item === null || typeof item !== 'object') return null; // string lists: replace wholesale
+      const o = item as Record<string, unknown>;
+      const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+      switch (field) {
+        case 'dispatch':           return str(o.capability);
+        case 'lifecycle':          return `${String(o.phase)} ${String(o.component)} ${String(o.method)}`;
+        case 'emits':
+        case 'subscribesTo':       return `${String(o.topic)} ${o.event === undefined ? '' : String(o.event)}`;
+        case 'trustedLinks':       return str(o.subsystem);
+        case 'allow':              return str(o.code);       // lint.allow
+        case 'invariants':         return str(o.id);
+        case 'patterns':           return str(o.id);
+        case 'boundaries':         return str(o.name);
+        case 'globalRequirements': return str(o.description);
+        case 'databases':          return str(o.id) ?? str(o.name);
+        default:                   return str(o.name) ?? str(o.id);
+      }
+    };
+
+    /** Upsert an array whose elements carry an identity, honouring delete markers. */
+    const mergeIdentifiedArray = (field: string, existing: any[], delta: any[]): any[] => {
+      const merged = [...existing];
+      for (const deltaItem of delta) {
+        const key = identityKeyOf(field, deltaItem);
+        // An element with no resolvable identity cannot be addressed; fall back to
+        // appending it rather than guessing which existing entry it replaces.
+        const idx = key === null
+          ? -1
+          : merged.findIndex((item) => identityKeyOf(field, item) === key);
+        const isDelete = deltaItem?.remove === true || deltaItem?.action === 'delete';
+        if (idx !== -1) {
+          if (isDelete) merged.splice(idx, 1);
+          else merged[idx] = { ...merged[idx], ...deltaItem };
+        } else if (!isDelete) {
+          merged.push(deltaItem);
+        }
+      }
+      return merged.map((item) =>
+        (item && typeof item === 'object' ? (({ action, remove, ...rest }) => rest)(item) : item));
+    };
+
+    /** True when every element of both sides can be addressed by identity. */
+    const isIdentifiedArray = (field: string, a: unknown[], b: unknown[]): boolean =>
+      a.every((i) => identityKeyOf(field, i) !== null) && b.every((i) => identityKeyOf(field, i) !== null);
+
     const mergeDelta = (existing: any, delta2: any): any => {
       const res = { ...existing };
       for (const [key, value] of Object.entries(delta2)) {
@@ -2138,9 +2223,17 @@ export class SpecWorkspace {
           res.dispatch = mergeKeyedArray(existing.dispatch, value, b => String(b?.capability));
         } else if (key === 'lifecycle' && Array.isArray(value) && Array.isArray(existing.lifecycle)) {
           res.lifecycle = mergeKeyedArray(existing.lifecycle, value, le => `${le?.phase} ${le?.component} ${le?.method}`);
-        } else if ((key === 'emits' || key === 'subscribesTo') && Array.isArray(value) && Array.isArray(existing[key])) {
-          res[key] = mergeKeyedArray(existing[key], value, (b: { topic?: string; event?: string }) => `${b?.topic} ${b?.event ?? ''}`);
+        } else if (Array.isArray(value) && value.length > 0 && Array.isArray(existing[key])
+                   && isIdentifiedArray(key, existing[key], value)) {
+          // Every other array whose elements carry an identity: upsert by it and
+          // honour delete markers, instead of replacing the list wholesale and
+          // silently dropping whatever the delta did not mention.
+          res[key] = mergeIdentifiedArray(key, existing[key], value);
         } else if (Array.isArray(value)) {
+          // No per-element identity (a list of plain strings), or an explicitly
+          // EMPTY array. Empty stays a wholesale clear on purpose: under upsert
+          // semantics it would otherwise mean "change nothing", leaving no way to
+          // empty a keyed list short of enumerating a delete per key.
           res[key] = value;
         } else if (typeof value === 'object' && typeof existing[key] === 'object' && existing[key] !== null) {
           res[key] = mergeDelta(existing[key], value);
@@ -2216,7 +2309,25 @@ export class SpecWorkspace {
       return out;
     };
 
-    const mergedResult = mergeDelta(result, qualifyDeltaRefs(delta));
+    // `unset` REMOVES optional fields, and is not itself a spec field.
+    //
+    // Without it an optional scalar could be set but never cleared: null and
+    // undefined are skipped by the merge (so a caller passing them for "no change"
+    // is not punished), and the only workaround — writing "" — leaves the field
+    // PRESENT and empty, which is a different, usually wrong spec (a Portal with
+    // basePath: "" or a component with variant: "" is not the same as one without).
+    // Explicit rather than overloading null: a destructive meaning must be asked
+    // for, never inferred from an absent value.
+    //
+    // Unsetting a REQUIRED field is not special-cased — schema validation refuses
+    // the write and names the field, which is the honest failure.
+    const unsetFields: string[] = Array.isArray((delta as Record<string, unknown>).unset)
+      ? ((delta as Record<string, unknown>).unset as unknown[]).filter((f): f is string => typeof f === 'string')
+      : [];
+    const { unset: _unset, ...mergeableDelta } = delta as Record<string, unknown>;
+
+    const mergedResult = mergeDelta(result, qualifyDeltaRefs(mergeableDelta));
+    for (const field of unsetFields) delete mergedResult[field];
     mergedResult.updatedAt = new Date().toISOString();
 
     // Symbolic step-label references resolve AFTER the merge, so a delta can
@@ -2232,6 +2343,13 @@ export class SpecWorkspace {
         throw new Error(`Unresolved narrative label references — nothing was saved:\n- ${labelErrors.join('\n- ')}`);
       }
     }
+
+    // Write-boundary gate, on the MERGED result — the only point where the spec
+    // the caller will actually get exists as one object, and still the last
+    // point before anything touches disk. A refusal throws, so "nothing was
+    // saved" stays literally true.
+    const gateNotices = hooks?.gate?.(kind, mergedResult);
+    if (gateNotices?.length) notices.push(...gateNotices);
 
     // An explicit status in the delta is a deliberate change — allow demotion
     // (e.g. reopening a completed spec to 'draft' for revision).
@@ -2454,6 +2572,60 @@ export function resolveChainingParent(): ChainingParentRef | null {
  * snapshots against what the (parent) tree looks like NOW; returns null when
  * the root holds no loadable spec tree.
  */
+/**
+ * Compute the GATE state identity of the current project
+ * (icore_orchestrator/icore_portal.computeGateStateId): load the governing
+ * extension packs, then digest the spec tree together with that doctrine.
+ *
+ * This is the identity `wairon lock` records and promotion re-checks, so a
+ * doctrine change invalidates a lock by state mismatch exactly as a spec edit
+ * does — nobody has to remember to invalidate it. Loading the doctrine here (not
+ * inside the hash specialist) keeps that specialist pure and makes every caller
+ * use the same doctrine source, so a lock and its promote-time re-check can never
+ * disagree about which rule set applied.
+ */
+export function computeGateStateId(): StateId {
+  // The gate is the packs AND the project's own governing configuration: which
+  // profile applies, and how it tuned the rules. A lock taken under one and
+  // promoted under another was never validated by the gate it claims to have
+  // passed. Config is read here and passed in, so the hash itself stays pure.
+  let gate: GateConfig = {};
+  try {
+    const config = loadProjectConfig();
+    gate = { projectType: config.projectType, rules: config.rules };
+  } catch { /* uninitialized project: the tree hash still stands on its own */ }
+  return hashGateState(loadProjectExtensions(), gate);
+}
+
+/** Whether a lock is in force, void, or absent. */
+export type LockState = 'unlocked' | 'locked' | 'stale';
+
+export interface LockStatus {
+  state: LockState;
+  /** The persisted record, or null when the project was never locked. */
+  record: LockRecord | null;
+  /** The gate identity as it stands NOW — what `state` was decided against. */
+  current: StateId;
+}
+
+/**
+ * Resolve the project's lock into one of three honest states, comparing the
+ * recorded gate identity against the current one.
+ *
+ * The ONE authority for the question "is this project locked?". Before this,
+ * `promote` compared StateIds while the project config view answered from the mere
+ * EXISTENCE of a record — so a project whose specs changed after locking still
+ * reported itself locked, and the freeze it claimed did not exist. Two answers to
+ * one question is how a time-of-check gap gets reintroduced after being closed, so
+ * every caller now shares this.
+ */
+export function readLockState(): LockStatus {
+  const record = readLockRecord();
+  const current = computeGateStateId();
+  if (!record) return { state: 'unlocked', record: null, current };
+  return { state: stateIdEquals(record.stateId, current) ? 'locked' : 'stale', record, current };
+}
+
 export function computeStateIdAt(root: string): string | null {
   const resolved = path.resolve(root);
   return runWithProjectRoot(resolved, () => {
@@ -2512,7 +2684,8 @@ export function findLegacySpecFiles(): { path: string; expected: string }[] {
 export function updateSpec(
   kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
   id: string,
-  delta: Record<string, any>
+  delta: Record<string, any>,
+  hooks?: SpecWriteHooks,
 ): string[] {
-  return current().updateSpec(kind, id, delta);
+  return current().updateSpec(kind, id, delta, hooks);
 }

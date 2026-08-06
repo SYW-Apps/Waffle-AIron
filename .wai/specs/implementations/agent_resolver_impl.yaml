@@ -44,6 +44,14 @@ methods:
         targetMethod: loadProjectVariants
       - stepNumber: 7
         description: >-
+          Render each owner/implementer's variant guidance through the variant registry, so the
+          generated agent and the MCP spec-read path emit the SAME text from one implementation
+          rather than two copies kept in step by hand.
+        type: call
+        targetComponent: variant_registry_adapter
+        targetMethod: composeVariantGuidance
+      - stepNumber: 8
+        description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
           and ONE delegating owner per chained subproject (projectPath) that routes work into the
           subproject without enumerating its internals; component implementers only when
@@ -52,4 +60,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-15T12:25:21.333Z'
+updatedAt: '2026-07-29T20:46:58.342Z'

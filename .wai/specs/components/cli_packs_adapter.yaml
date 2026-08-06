@@ -3,10 +3,12 @@ name: CLI Packs Client Adapter
 description: >-
   Local client adapter in sdd_cli for the unified `wairon pack` command family (with `wairon packs`
   kept as a deprecated alias). Authoring goes through the @wairon/sdk portal: init scaffolds a pack
-  project, build emits an installable .wpack archive. Install (add) is ZIP-aware — a .wpack/.zip
-  source is safely extracted (via the SDK) into .wai/packs/<name>/ and the directory registered,
-  while a plain file/dir source is vendored as before; list reads the merged set via the core
-  portal; remove deregisters + deletes a vendored pack.
+  project, build emits an installable .wpack archive. The STORE commands — install / uninstall /
+  which — manage this wairon install's machine-wide pool through the pack store adapter, and install
+  applies to nothing until a project selects the pack by name. The legacy commands remain: add is
+  ZIP-aware (a .wpack/.zip is safely extracted via the SDK into .wai/packs/<name>/ and the directory
+  registered, a plain file/dir is vendored), list reads the merged set via the core portal, remove
+  deregisters + deletes a vendored pack.
 subsystem: sdd_cli
 componentType: Adapter
 owns: []
@@ -15,4 +17,4 @@ dependsOn:
   - sdk_portal
 status: complete
 createdAt: '2026-07-14T20:08:56.448Z'
-updatedAt: '2026-07-21T18:44:46.068Z'
+updatedAt: '2026-07-29T17:57:34.184Z'

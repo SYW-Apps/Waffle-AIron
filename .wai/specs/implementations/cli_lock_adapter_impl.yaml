@@ -10,9 +10,12 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Assemble the lock scope (optional subsystem narrowing) and the record identity from the
-          tree's current StateId
-        type: local
+          Assemble the lock scope (optional subsystem narrowing), then obtain the record identity
+          from the tree's current GATE StateId — spec content plus governing doctrine, so the lock
+          records which rule set validated it
+        type: call
+        targetComponent: core_portal
+        targetMethod: computeGateStateId
       - stepNumber: 2
         description: Promote every in-scope spec to status complete (the lock status write)
         type: call
@@ -30,4 +33,4 @@ methods:
     symbol: runLock
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-07-24T20:48:49.481Z'
+updatedAt: '2026-07-29T14:56:00.059Z'

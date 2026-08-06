@@ -1,0 +1,68 @@
+id: instructions_specialist_impl
+name: Server Instructions Specialist Implementation
+description: >-
+  Composes the MCP initialize instructions in code (not from a packaged markdown template): most of
+  the text is live project fact — governing profile, loaded packs, available skill resource URIs —
+  so building it in code keeps the briefing honest per bound project and testable without the
+  filesystem. The static doctrine stays deliberately short and pointer-heavy; the depth belongs to
+  the skill documents it points at.
+contract: iinstructions_specialist
+sourcePath: src/core/instructions.ts
+methods:
+  - name: buildServerInstructions
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration to resolve the governing projectType/profile that
+          the briefing will name (an ambient config read, like every other component in the tree).
+        type: local
+      - stepNumber: 2
+        description: >-
+          Resolve the skill resources available to this project — the built-in sdd-* skills plus any
+          pack-provided ones — so the briefing can point the agent at real wairon-skill:// URIs
+          instead of naming skills that may not be installed.
+        type: call
+        targetComponent: skills_resource_specialist
+        targetMethod: listSkillResources
+      - stepNumber: 3
+        description: >-
+          Load the governing extension packs to obtain both the pack names the briefing reports and
+          the instruction blocks those packs contribute.
+        type: call
+        targetComponent: skills_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 4
+        description: >-
+          Compose wairon's OWN briefing: what an SDD spec tree is, the L0→L5 shape, the authoring
+          workflow order, that the sdd_* tool schemas are self-describing and authoritative, the
+          governing projectType/profile and what it implies, the loaded pack names, and the explicit
+          directive to read wairon-skill://sdd-architect (and the other listed skills) BEFORE
+          authoring.
+        type: local
+      - stepNumber: 5
+        description: >-
+          Select the pack instruction blocks that apply to this project: a block with no declared
+          profile scope always applies, one with a scope applies only when it names the governing
+          profile. Preserves pack load order, so load order is append order.
+        type: local
+      - stepNumber: 6
+        description: Append each selected block to wairon's briefing, in pack load order.
+        type: loop
+        loopKind: forEach
+        over: the selected pack instruction blocks
+        endStep: 7
+      - stepNumber: 7
+        label: block_done
+        description: >-
+          Append the attributed heading (## From pack "<name>") followed by the block's text —
+          attribution is what keeps a pack's delta legible AS a delta rather than blending into
+          wairon's own doctrine.
+        type: local
+      - stepNumber: 8
+        description: Return the composed instructions text.
+        type: return
+        outcome: the composed instructions
+    detail: full
+status: complete
+createdAt: '2026-07-29T10:50:20.337Z'
+updatedAt: '2026-07-29T11:56:33.408Z'

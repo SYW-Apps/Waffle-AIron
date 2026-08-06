@@ -10,7 +10,9 @@ methods:
     signature: 'provisionProject(name: string): void'
     returns: void
   - name: computeStateId
-    description: Compute the current spec-tree StateId.
+    description: >-
+      Compute the current spec-tree CONTENT StateId (used for surface/landscape snapshot stamps,
+      where doctrine is irrelevant).
     signature: 'computeStateId(): StateId'
     returns: StateId
   - name: readLockRecord
@@ -119,6 +121,20 @@ methods:
     signature: 'builtinProjectKinds(): string[]'
     returns: string[]
     params: []
+  - name: computeGateStateId
+    description: >-
+      Compute the current GATE StateId (spec tree + governing doctrine) — what the hosted lock is
+      scoped to and what promotion re-checks.
+    signature: 'computeGateStateId(): StateId'
+    returns: StateId
+    params: []
+  - name: readLockState
+    description: >-
+      Resolve the bound project's lock verdict (unlocked | locked | stale) through the core portal —
+      the shared authority the promote gate and every reporting surface answer from.
+    signature: 'readLockState(): LockStatus'
+    returns: LockStatus
+    params: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-07-24T23:52:27.050Z'
+updatedAt: '2026-07-30T15:59:21.737Z'

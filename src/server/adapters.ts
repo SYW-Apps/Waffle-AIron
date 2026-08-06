@@ -1,11 +1,12 @@
 import { computeStateId } from '../core/statehash.js';
+import { computeGateStateId, readLockState } from '../core/specs.js';
 import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph, assertContainedProjectPath } from '../core/specs.js';
 import { provisionProject, promoteAllComplete } from '../core/provision.js';
 import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
-import { globalPacksDir, discoverPacks, loadExtensionPacks, DeclarativePackSchema } from '../core/extensions.js';
+import { globalPacksDir, discoverPacks, loadExtensionPacks, packEntryRef, packEntryLabel, globalPacksEnabled, DeclarativePackSchema } from '../core/extensions.js';
 import { BUILTIN_PROFILES, PROJECT_KINDS } from '../core/rules/types.js';
 import { createMcpServer } from '../mcp/server.js';
 import * as gitPortal from '../git/index.js';
@@ -26,7 +27,15 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 // host_core_adapter → sdd_core (core_portal)
 export const hostCore = {
   provisionProject,
+  // Two identities, deliberately both exposed: computeStateId is the spec-tree
+  // CONTENT hash (surface/landscape snapshot stamps, where doctrine is
+  // irrelevant); computeGateStateId adds the governing doctrine and is what
+  // lock records and the promote-time re-check must use.
   computeStateId,
+  computeGateStateId,
+  // The shared lock verdict (unlocked | locked | stale). Reporting surfaces and
+  // the promote gate resolve it here rather than each comparing StateIds.
+  readLockState,
   readLockRecord,
   writeLockRecord,
   promoteAllComplete,
@@ -45,6 +54,13 @@ export const hostCore = {
   globalPacksDir,
   discoverPacks,
   loadExtensionPacks,
+  // A project's `extensions.packs` entry is a legacy path ref OR a by-name
+  // selection; these reduce either to a loadable ref / a display label.
+  packEntryRef,
+  packEntryLabel,
+  // Whether machine-wide packs also apply when the project has not said —
+  // forwarded so the hosted plane and core never disagree on the default.
+  globalPacksEnabled,
   /** Validate a parsed manifest as a declarative pack; returns the first error message, or null when valid. */
   checkDeclarativePack: (raw: unknown): string | null => {
     const result = DeclarativePackSchema.safeParse(raw);

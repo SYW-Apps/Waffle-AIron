@@ -1,5 +1,4 @@
 import * as https from 'https';
-import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -8,6 +7,8 @@ import { execSync } from 'child_process';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import { getChannel, setChannel, UpdateChannel } from '../config/userconfig.js';
+import { isNewerVersion } from '../utils/version.js';
+import { downloadFile } from '../utils/download.js';
 
 // ---------------------------------------------------------------------------
 // update command
@@ -232,46 +233,9 @@ function fetchReleases(repo: string): Promise<GithubRelease[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Download
+// Download — lifted to utils/download.ts so the pack store fetches a .wpack
+// with the same redirect-following implementation this uses for a release.
 // ---------------------------------------------------------------------------
-
-function downloadFile(url: string, dest: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
-    const get = url.startsWith('https://') ? https.get : http.get;
-
-    // agent: false disables keep-alive so the socket closes as soon as the
-    // response is done, preventing the event loop from hanging afterwards.
-    get(url, { headers: { 'User-Agent': `wairon/${WAIRON_VERSION}` }, agent: false }, (res) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        file.close();
-        res.destroy();
-        downloadFile(res.headers.location!, dest).then(resolve).catch(reject);
-        return;
-      }
-      if (res.statusCode !== 200) {
-        file.close();
-        res.destroy();
-        reject(new Error(`Download returned ${res.statusCode}`));
-        return;
-      }
-
-      res.pipe(file);
-      file.on('finish', () => {
-        res.destroy();
-        file.close(() => resolve());
-      });
-      file.on('error', (err) => {
-        res.destroy();
-        fs.unlink(dest, () => {});
-        reject(err);
-      });
-    }).on('error', (err) => {
-      fs.unlink(dest, () => {});
-      reject(err);
-    });
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Checksum verification
@@ -402,33 +366,9 @@ export function cleanStaleBinary(oldPath?: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Version comparison (semver-lite, handles X.Y.Z and X.Y.Z-suffix.N)
+// Version comparison — lifted to utils/version.ts so the pack store shares one
+// comparator with the update check instead of a second copy that drifts.
+// Aliased (not re-exported) so this module's own call site still binds locally.
 // ---------------------------------------------------------------------------
 
-export function isNewer(current: string, candidate: string): boolean {
-  // Strip pre-release suffix for base version comparison
-  const baseVersion = (v: string) => v.replace(/-.*$/, '');
-  const preRelease = (v: string) => {
-    const match = v.match(/-(.+)\.(\d+)$/);
-    return match ? { label: match[1], n: parseInt(match[2], 10) } : null;
-  };
-
-  const parse = (v: string) => baseVersion(v).split('.').map((n) => parseInt(n, 10) || 0);
-  const [cMaj, cMin, cPat] = parse(current);
-  const [nMaj, nMin, nPat] = parse(candidate);
-
-  if (nMaj !== cMaj) return nMaj > cMaj;
-  if (nMin !== cMin) return nMin > cMin;
-  if (nPat !== cPat) return nPat > cPat;
-
-  // Same base version: stable > pre-release; higher pre-release N wins
-  const cPre = preRelease(current);
-  const nPre = preRelease(candidate);
-
-  if (!cPre && !nPre) return false;    // same stable
-  if (!cPre && nPre) return false;     // current stable, candidate is pre-release — not newer
-  if (cPre && !nPre) return true;      // current pre-release, candidate stable — stable wins
-  if (cPre && nPre) return nPre.n > cPre.n; // both pre-release, higher N wins
-
-  return false;
-}
+export const isNewer = isNewerVersion;

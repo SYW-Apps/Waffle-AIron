@@ -158,6 +158,33 @@ function subtreeIds(units: OrganizationUnitRecord[], rootId: string): Set<string
   return subtree;
 }
 
+/**
+ * Fill in a `slug` for a unit persisted before slugs existed.
+ *
+ * `OrganizationUnitRecord.slug` is REQUIRED by the contract, but records written
+ * by a pre-slug wairon have none, and an instance that upgraded without running
+ * `wairon host doctor --fix` still holds them. Serving those records verbatim
+ * broke the organizations page with an unreadable minified TypeError
+ * (`undefined.localeCompare`) — a data-shape problem surfacing as a UI crash,
+ * which tells an operator nothing about the actual remedy.
+ *
+ * Derived, not invented: a unit's id is its dot-qualified path and the slug is the
+ * last segment, so a root unit's id IS its slug. That is the same rule the
+ * migration applies, which keeps a normalized read and a migrated record in
+ * agreement rather than drifting apart.
+ *
+ * This is a READ-path shim, not a substitute for the migration: grants, tokens,
+ * and qualified ids still need `host doctor --fix` (legacy subjects otherwise
+ * resolve to zero permissions). It only guarantees that a required field is never
+ * absent, so a missing migration presents as missing permissions — a symptom that
+ * names its cause — instead of a crashed page.
+ */
+function normalizeUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord {
+  if (unit.slug) return unit;
+  const id = unit.id ?? '';
+  return { ...unit, slug: id.slice(id.lastIndexOf('.') + 1) };
+}
+
 // ── store: authoritative in-memory holder of both collections ───────────────
 
 class OrganizationStore {
@@ -166,10 +193,12 @@ class OrganizationStore {
   constructor(private readonly dataDir: string) {}
 
   /** Load both persisted collections into the authoritative in-memory
-   *  representation and return them together. */
+   *  representation and return them together. Units are normalized on the way in
+   *  (see normalizeUnit) so no reader ever sees a record missing a field the
+   *  contract declares as required. */
   load(): OrganizationState {
     const state = readState(this.dataDir);
-    this.units = state.units;
+    this.units = state.units.map(normalizeUnit);
     this.placements = state.placements;
     return { units: this.units, placements: this.placements };
   }

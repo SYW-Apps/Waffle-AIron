@@ -1,0 +1,60 @@
+id: pack_store_adapter_impl
+name: Pack Store Adapter Implementation
+description: >-
+  Filesystem management of the installed-pack store, in src/core/packstore.ts. Versioned layout
+  (<name>/<version>/) with a sibling install record per pack, plus content digesting and
+  latest-version resolution. Backwards compatible with the pre-versioned flat store so an existing
+  install keeps working while projects migrate to explicit selection.
+contract: ipack_store_adapter
+sourcePath: src/core/packstore.ts
+methods:
+  - name: packStoreDir
+    narrative: []
+    intent: >-
+      Returns WAIRON_PACKS_DIR when set, else ~/.wairon/packs — the same directory the pack source
+      adapter has always treated as the global pool, so an existing install needs no move.
+  - name: listInstalledPacks
+    narrative: []
+    intent: >-
+      Scans the store one level for pack names, then a second level for version directories, reading
+      each pack's install record for its digest, origin, and provenance (recomputing the digest when
+      the record is missing or unreadable). Entries are grouped by name and ordered newest version
+      first. A legacy flat entry — a bare *.yaml/*.cjs pack file, or a pack directory holding an
+      entry file directly rather than version subdirectories — is reported at version
+      "0.0.0-unversioned". A missing or unreadable store is an empty list, never an error: having no
+      packs installed is a normal state.
+  - name: resolveInstalledPack
+    narrative: []
+    intent: >-
+      Filters the installed set to the requested name; with a version pin, returns that exact
+      version or null; without one, returns the highest version by semver-lite comparison (stable
+      outranks a pre-release at the same base). Null is a normal answer meaning "declared but not
+      installed", which the caller reports rather than silently continuing with less doctrine.
+  - name: installPackFromDirectory
+    narrative: []
+    intent: >-
+      Reads the pack's manifest to learn its declared name and version (defaulting the version to
+      "0.0.0-unversioned"), computes the content digest, copies the directory to
+      <store>/<name>/<version>/ — replacing that exact version if it already exists so a reinstall
+      is idempotent — and writes the install record alongside it with the origin, digest, wairon
+      version, and timestamp. A source directory with no pack entry file is refused before anything
+      is written, so a failed install never leaves a partial pack in the store.
+  - name: uninstallPack
+    narrative: []
+    intent: >-
+      Removes <store>/<name>/<version>/ for a named version, or the whole <store>/<name>/ tree when
+      no version is given, and prunes the now-empty name directory. Legacy flat entries are removed
+      by their file path. Returns whether anything existed to remove; removing nothing is not an
+      error.
+  - name: computePackDigest
+    narrative: []
+    intent: >-
+      Walks the pack directory for regular files, skipping the install record itself (it contains
+      the digest, so including it would be self-referential) and version-control noise, then folds
+      each file's forward-slash-normalized relative path and its bytes into one sha256 in sorted
+      path order. Sorting and path normalization are what make the digest reproducible across
+      platforms and independent of how the pack arrived.
+detail: intent
+status: draft
+createdAt: '2026-07-29T17:42:12.283Z'
+updatedAt: '2026-07-29T17:42:12.286Z'

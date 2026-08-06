@@ -1,8 +1,8 @@
 id: imcp_skills_adapter
 name: MCP Skills Client Adapter Interface
 description: >-
-  Adapter contract for the MCP server to list and read the built-in SDD skill resources across the
-  boundary to sdd_skills.
+  Adapter contract for the MCP server to list and read the built-in SDD skill resources, and to
+  fetch the composed server instructions, across the boundary to sdd_skills.
 component: mcp_skills_adapter
 methods:
   - name: listResources
@@ -18,6 +18,11 @@ methods:
       - name: resourceId
         type: string
         description: The MCP resource id / skill id to read.
+  - name: buildServerInstructions
+    description: Fetch the composed MCP initialize instructions for the bound project via the skills portal.
+    signature: 'buildServerInstructions(): string'
+    returns: string
+    params: []
 status: complete
 createdAt: '2026-07-10T12:21:45.718Z'
-updatedAt: '2026-07-10T12:21:56.243Z'
+updatedAt: '2026-07-29T10:50:45.295Z'

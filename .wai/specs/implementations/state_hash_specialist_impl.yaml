@@ -1,6 +1,8 @@
 id: state_hash_specialist_impl
 name: State Hash Specialist Implementation
-description: Deterministic content hash of the spec tree.
+description: >-
+  Deterministic content hash of the spec tree, and of the gate (tree + governing doctrine) that
+  validated it.
 contract: istate_hash_specialist
 sourcePath: src/core/statehash.ts
 methods:
@@ -42,6 +44,45 @@ methods:
         type: return
         outcome: StateId
     symbol: computeStateId
+  - name: hashGateState
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load the spec tree through the loader — the same content hashSpecTree digests, so a gate
+          StateId and a content StateId always agree about the specs.
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: >-
+          Project the supplied doctrine onto its identity-bearing surface: pack
+          names/versions/scopes, the merged profile and language tables, pattern ids, guarantee
+          tokens, assertions, and programmatic rule names with their codes. Programmatic rules
+          cannot be digested directly (they are functions), so their name+codes stand as their
+          identity.
+        type: local
+      - stepNumber: 3
+        description: >-
+          Deliberately EXCLUDE pack skills and instruction blocks from the projection: neither can
+          change a conformance verdict, and including them would invalidate every lock on a cosmetic
+          documentation edit.
+        type: local
+      - stepNumber: 4
+        description: >-
+          Canonicalize the tree and the doctrine projection together (stable key ordering, volatile
+          timestamps stripped) and digest them into one identity.
+        type: local
+      - stepNumber: 5
+        description: >-
+          Mark the algorithm as doctrine-covering so a content-only StateId can never compare equal
+          — which makes every lock record written before doctrine was covered read as STALE rather
+          than as silently valid.
+        type: local
+      - stepNumber: 6
+        description: Return the gate StateId.
+        type: return
+        outcome: gate StateId
+    detail: full
 status: complete
 createdAt: '2026-07-04T12:54:31.981Z'
-updatedAt: '2026-07-11T19:14:22.383Z'
+updatedAt: '2026-07-29T14:54:29.608Z'

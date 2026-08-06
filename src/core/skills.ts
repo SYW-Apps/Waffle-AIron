@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { ensureDir, fromProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { loadProjectExtensions as loadCoreExtensions, LoadedPackSkill } from './extensions.js';
+import { buildServerInstructions as composeServerInstructions } from './instructions.js';
 
 // ---------------------------------------------------------------------------
 // SDD skills export
@@ -15,8 +16,15 @@ import { loadProjectExtensions as loadCoreExtensions, LoadedPackSkill } from './
 
 const SKILL_NAMES = ['sdd-architect', 'sdd-narrative', 'sdd-auditor', 'sdd-implement'];
 
-/** skills_core_adapter: forward to the core surface to load the governing extension packs (for their pack-provided skills). */
-function loadProjectExtensions() {
+/**
+ * skills_core_adapter: forward to the core surface to load the governing
+ * extension packs — for their pack-provided skills (the exporter and the
+ * resource mirror) and their contributed instruction blocks (the instructions
+ * composer). Exported so the composer goes through this ONE adapter rather than
+ * reaching into sdd_core itself; it is the single seam this subsystem crosses
+ * the boundary through.
+ */
+export function loadProjectExtensions() {
   return loadCoreExtensions();
 }
 
@@ -25,9 +33,53 @@ function loadProjectExtensions() {
  * collides with the reserved built-in sdd-* skills or another pack's skills.
  */
 function packSkillId(skill: LoadedPackSkill): string {
-  const ns = skill.pack.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  return `${ns}-${skill.id}`;
+  return `${packNamespace(skill.pack)}-${skill.id}`;
 }
+
+/** A pack's name reduced to an id-safe namespace. */
+function packNamespace(pack: string): string {
+  return pack.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// ---------------------------------------------------------------------------
+// Skill composition — a pack EXTENDING a builtin (FR 7.3)
+//
+// A pack skill may `extends: sdd-implement` instead of standing beside it. Its
+// section is appended to the builtin under `## Platform: <pack>`, in pack load
+// order, so an implementing agent reads ONE coherent instruction with the
+// platform part clearly attributed — rather than noticing two skills and
+// reconciling them, or (worse) every wrapper forking the builtin wholesale.
+//
+// The builtin stays wairon's: an upgrade still updates the base text, and only
+// the appended sections come from packs.
+// ---------------------------------------------------------------------------
+
+/** The pack sections extending one builtin skill, in pack load order. */
+function extensionsFor(builtin: string, packSkills: LoadedPackSkill[]): LoadedPackSkill[] {
+  return packSkills.filter((s) => s.extends === builtin && fs.existsSync(s.sourcePath));
+}
+
+/**
+ * A builtin skill's content with every extending pack's section appended. Returns
+ * the builtin verbatim when no pack extends it, so an unextended skill is
+ * byte-identical to the template it ships as.
+ */
+function composeBuiltinSkill(name: string, packSkills: LoadedPackSkill[]): string {
+  const srcPath = skillTemplatePath(name);
+  const base = fs.existsSync(srcPath) ? fs.readFileSync(srcPath, 'utf-8') : '';
+  const sections = extensionsFor(name, packSkills);
+  if (sections.length === 0) return base;
+
+  const parts = [base.trimEnd()];
+  for (const section of sections) {
+    // Strip the extending file's own frontmatter: the composed skill keeps the
+    // BUILTIN's frontmatter, so its name/description stay wairon's.
+    const body = fs.readFileSync(section.sourcePath, 'utf-8').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+    parts.push(`## Platform: ${section.pack}`, body.trim());
+  }
+  return `${parts.join('\n\n')}\n`;
+}
+
 
 /** Parse a SKILL.md's YAML frontmatter (name + description) from its raw content. */
 function readFrontmatter(raw: string, fallbackName: string): { name: string; description: string } {
@@ -121,19 +173,22 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
     destinations.push(destDir);
 
     for (const name of SKILL_NAMES) {
-      const srcPath = skillTemplatePath(name);
-      if (!fs.existsSync(srcPath)) continue;
-      // Copy verbatim — skills are agent-facing and reference MCP tools, not the
+      if (!fs.existsSync(skillTemplatePath(name))) continue;
+      // The builtin, plus any pack sections extending it. Otherwise copied
+      // verbatim — skills are agent-facing and reference MCP tools, not the
       // `wairon` CLI, so there is no dev-path command to substitute.
-      const content = fs.readFileSync(srcPath, 'utf-8');
+      const content = composeBuiltinSkill(name, packSkills.filter((s) => s.targets.includes(type)));
       const destPath = skillDestPath(type, destDir, name);
       ensureDir(path.dirname(destPath));
       fs.writeFileSync(destPath, content, 'utf-8');
       fileCount++;
     }
 
-    // Pack skills targeting this client: installed namespaced <pack-id>-<skill-id>.
+    // NEW pack skills targeting this client: installed namespaced
+    // <pack-id>-<skill-id>. An `extends` skill is not installed on its own — it
+    // composed into its builtin above.
     for (const skill of packSkills) {
+      if (skill.extends !== undefined) continue;
       if (!skill.targets.includes(type)) continue;
       if (!fs.existsSync(skill.sourcePath)) continue;
       const id = packSkillId(skill);
@@ -168,11 +223,16 @@ export function checkSkillFreshness(type: string): SkillFreshness {
   const result: SkillFreshness = { dir, missing: [], stale: [], ok: [] };
   if (!dir) return result;
 
+  // Compare against what exportSddSkills WOULD write, not against the raw
+  // template: a builtin extended by a pack legitimately differs from its
+  // template, and comparing to the template would report every extended skill as
+  // permanently stale — telling users to run `generate` forever.
+  const packSkills = loadProjectExtensions().skills.filter((s) => s.targets.includes(type));
+
   for (const name of SKILL_NAMES) {
     const destPath = skillDestPath(type, dir, name);
     if (!fs.existsSync(destPath)) { result.missing.push(name); continue; }
-    const srcPath = skillTemplatePath(name);
-    const want = fs.existsSync(srcPath) ? fs.readFileSync(srcPath, 'utf-8') : '';
+    const want = composeBuiltinSkill(name, packSkills);
     const have = fs.readFileSync(destPath, 'utf-8');
     if (have === want) result.ok.push(name);
     else result.stale.push(name);
@@ -258,9 +318,11 @@ export function listSkillResources(): SkillResourceDescriptor[] {
       defaultForHostedMcp: true,
     };
   });
-  // Pack-provided skills (namespaced by pack id), published alongside the built-ins.
+  // Pack-provided skills (namespaced by pack id), published alongside the
+  // built-ins. An `extends` skill gets no resource of its own — it composed into
+  // its builtin's content above, which is the point: one coherent instruction.
   const pack: SkillResourceDescriptor[] = loadProjectExtensions().skills
-    .filter((s) => fs.existsSync(s.sourcePath))
+    .filter((s) => s.extends === undefined && fs.existsSync(s.sourcePath))
     .map((skill) => {
       const id = packSkillId(skill);
       const fm = readFrontmatter(fs.readFileSync(skill.sourcePath, 'utf-8'), id);
@@ -276,9 +338,16 @@ export function listSkillResources(): SkillResourceDescriptor[] {
   return [...builtin, ...pack];
 }
 
-/** Read one built-in skill's markdown content from the packaged templates. */
+/**
+ * Read one skill's markdown content. A builtin is returned COMPOSED with any pack
+ * sections extending it (the same text `exportSddSkills` writes to disk), so a
+ * cloud-only agent reading over MCP and a local session reading from disk get the
+ * identical instruction.
+ */
 export function readSkillResource(resourceId: string): string {
-  const packSkill = loadProjectExtensions().skills.find((s) => packSkillId(s) === resourceId);
+  const packSkills = loadProjectExtensions().skills;
+  if (SKILL_NAMES.includes(resourceId)) return composeBuiltinSkill(resourceId, packSkills);
+  const packSkill = packSkills.find((s) => s.extends === undefined && packSkillId(s) === resourceId);
   if (packSkill) return fs.readFileSync(packSkill.sourcePath, 'utf-8');
   return fs.readFileSync(skillTemplatePath(resourceId), 'utf-8');
 }
@@ -288,6 +357,15 @@ export function readSkillResource(resourceId: string): string {
 /** Portal: list the built-in SDD skills as MCP resource descriptors. */
 export function listResources(): SkillResourceDescriptor[] {
   return listSkillResources();
+}
+
+/**
+ * Orchestrator + Portal: compose the `instructions` the MCP server returns on
+ * the initialize handshake, through the instructions specialist. (That module
+ * imports back into this one — see the note in core/instructions.ts.)
+ */
+export function buildServerInstructions(): string {
+  return composeServerInstructions();
 }
 
 /**

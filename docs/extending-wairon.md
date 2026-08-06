@@ -13,7 +13,114 @@ A working wrapper lives at [`examples/wrapper/`](../examples/wrapper/) and
 is guarded by `tests/examples/wrapper-example.test.ts`, so it cannot
 silently rot.
 
-## Installing packs
+## Installing and selecting packs
+
+> **New model (preferred).** Installing a pack makes it *available*; a project
+> then *selects* it. Installing no longer grants a pack authority over every
+> project on the machine — see [pack scoping](design/pack-scoping.md).
+
+```sh
+wairon pack install ./appenser-1.2.0.wpack   # into this wairon install's store
+wairon pack which appenser                   # which version/digest/origin resolves?
+cd my-project
+wairon pack use appenser                     # THIS project applies it
+```
+
+`pack use` records the selection by name in `.wai/project.yaml`, carrying the
+origin the pack was installed from so a fresh clone or CI runner can obtain it:
+
+```yaml
+extensions:
+  packs:
+    - name: appenser
+      version: 1.2.0          # only when pinned; omit to track latest installed
+      integrity: sha256-…      # written by --pin
+      source: https://…/appenser-{version}.wpack
+```
+
+- `--pin` freezes the resolved version **and** its content digest.
+- `--source <url>` records an explicit fetch URL (overriding the install origin).
+- `--bundle` marks the pack for committing under `.wai/packs/`, so the repo needs
+  no machine setup at all — the answer for private packs and air-gapped CI. A
+  committed bundle resolves *before* the store.
+- `wairon pack unuse <name>` drops the selection; the pack stays installed.
+
+**A declared pack that cannot be resolved is an error**, not a silent skip:
+`validate`, `status`, `lock`, `generate`, and every `sdd_*` MCP call refuse and
+name the pack plus how to install it. A gate that quietly enforces less than the
+project declared is worse than one that fails.
+
+The code names the remedy, so the message tells you which fix applies:
+
+| Code | Meaning |
+|------|---------|
+| `PACK_NOT_INSTALLED` | absent from both the store and `.wai/packs/` — obtain it (`pack sync` / `pack install`) |
+| `PACK_VERSION_UNSATISFIED` | the pack *is* installed, but not at the pinned version (which the message lists) — correct the pin |
+| `PACK_INTEGRITY_MISMATCH` | resolved content does not match the pinned digest — reinstall, or update the pin if the change is intended |
+
+All three are error severity and appear in `wairon rules list`, so a project can
+retune them through `rules.sddRuleSeverity` if it must.
+
+If you install from a local path, no fetchable source can be recorded and
+`pack use` says so — bundle it, or pass `--source`.
+
+### Applying a pack to new projects by default
+
+A pack in the store can ask to be selected by every project created from then on:
+
+```yaml
+# pack.yaml
+applyByDefault: true
+```
+
+`wairon init` seeds it into the new project's `extensions.packs` as an explicit
+`name@version` selection. That is what a machine-wide install *should* mean — a
+default for new work, written where it is visible in review and removable — rather
+than retroactive authority over projects that never mentioned it.
+
+### Reproducibility
+
+With `rules.enforceReproducibility` (the default), a selection that neither pins a
+version nor bundles is reported: `UNPINNED_PACK_SELECTION` resolves to whatever
+this machine happens to have installed, so a clone or CI can enforce a different
+rule set than you do. `PACK_SOURCE_UNFETCHABLE` means nothing can obtain the pack
+elsewhere at all.
+
+Both are **warnings while you work** and errors under `wairon validate --ci`, so
+`wairon pack use appenser` stays a one-liner while CI refuses a pack set it cannot
+reproduce. `--pin` or `pack bundle` clears them; `enforceReproducibility: false`
+accepts the drift deliberately.
+
+### CI and a fresh machine
+
+`wairon pack install` accepts an HTTP(S) URL, and **`wairon pack sync` takes no
+arguments** — each selection carries its own source, so one command restores a
+project's doctrine anywhere:
+
+```yaml
+- uses: SYW-Apps/Waffle-AIron/.github/actions/setup-wairon@v5
+  with:
+    packs: sync          # sync (default) | none (bundled repos) | explicit sources
+- run: wairon validate --ci
+```
+
+Publishing a pack needs no registry — `wairon pack build` already emits
+`<name>-<version>.wpack`, which is a release asset as-is:
+
+```sh
+wairon pack build && gh release create v1.2.0 appenser-1.2.0.wpack
+```
+
+`source` supports `{version}` for pinned selections, and GitHub's
+`releases/latest/download/<asset>` resolves floating ones with no API call or
+token. `${VAR}` expands from the environment, so a private URL can take a token
+from a CI secret without committing it.
+
+Fetching happens **only** in `pack install <url>` and `pack sync` — never during
+`validate`, `status`, `generate`, or an MCP call, because the core workflow is
+required to work offline.
+
+## Installing packs (legacy vendoring)
 
 **Per project (recommended for repo doctrine):**
 
@@ -138,16 +245,92 @@ skills:
     targets: [claude, gemini]                     # client targets to install into
 ```
 
-- **Namespaced install.** Every pack skill installs as
+### Extending a builtin skill instead of standing beside it
+
+A platform delta usually belongs *inside* the relevant builtin, not next to it.
+Declare `extends` instead of `id`:
+
+```yaml
+skills:
+  - extends: sdd-implement          # sdd-architect | sdd-narrative | sdd-auditor
+    source: skills/make-implementer/SKILL.md
+    targets: [claude]
+  - id: make-control-plane          # unchanged: a genuinely new skill
+    source: skills/make-control-plane/SKILL.md
+    targets: [claude]
+```
+
+The section is appended to the builtin under `## Platform: <pack>`, in pack load
+order, both on install and on `resources/read`. So an implementing agent reads
+**one coherent instruction** with the platform part clearly attributed — instead
+of noticing a parallel `appenser-make-implementer` and reconciling it, or (worse)
+every wrapper forking the builtin wholesale.
+
+- The **builtin stays wairon's**: an upgrade still updates the base text, and the
+  composed skill keeps the builtin's own frontmatter, so its identity does not
+  change. Only the appended sections come from packs.
+- An extending skill publishes **no separate resource** — it *is* part of the
+  builtin now. Untouched builtins stay byte-identical to their templates.
+- `extends` pointing at a skill that does not exist is an
+  `EXTENSION_LOAD_ERROR`, not a silently dropped section: an older wairon must
+  never quietly fail to apply a newer pack's doctrine.
+- Exactly one of `id` / `extends` per entry.
+
+- **Namespaced install.** Every *new* pack skill installs as
   `<pack-id>-<skill-id>` (e.g. `appenser-domain-implementer`) — so skills from
   different packs never collide, and provenance is legible in the name. The
-  built-in `sdd-*` skill names are reserved; a pack cannot shadow them.
+  built-in `sdd-*` skill names are reserved; a pack cannot shadow them, only
+  extend them.
 - **Provenance + version** come from the pack (`name` + `version`), visible in
   `wairon skills list` and each MCP resource descriptor.
 - **Reproducibility** is automatic — pack skills are vendored under
   `.wai/packs/` and pinned in `project.yaml`, so they travel with the repo.
 - **No change when unused** — projects with no pack skills install exactly the
   built-ins, as before.
+
+## Teaching the connecting agent (`instructions`)
+
+An agent that connects to a wairon MCP server is **taught the SDD model on the
+handshake**: wairon returns MCP `instructions` on `initialize` — the protocol's
+field for "how to use this server", which clients inject into the agent's system
+prompt. It states what a spec tree is, the L0→L5 shape, the authoring order, that
+the `sdd_*` schemas are self-describing, the bound project's governing profile,
+the loaded packs, and — pointing rather than repeating — that
+`wairon-skill://sdd-architect` must be read **before** authoring.
+
+That default is **wairon's**, deliberately: wairon owns the model, so wairon
+teaches it, and it changes with wairon versions instead of drifting across every
+wrapper that would otherwise reimplement it. A pack does not restate it — a pack
+appends its **platform delta**:
+
+```yaml
+# pack.yaml
+instructions: >-
+  Specs in this project stay target-agnostic. Make.com mechanics (method
+  selector, JSON argument envelope, Router branches, blueprint patches) never
+  enter a spec — read wairon-skill://appenser-architect first.
+```
+
+Blocks are appended after wairon's own text under an attributed heading
+(`## From pack "appenser"`), in **pack load order** — so a reader can always tell
+platform doctrine from wairon doctrine. For finer control, spell blocks out and
+scope them to the governing profile the way assertions scope theirs:
+
+```yaml
+instructions:
+  - text: Applies to every project this pack governs.
+  - text: Router branches never appear in a spec — model them as narrative branch steps.
+    profile: [make-automation]        # only when this profile governs the project
+```
+
+- A block with no `profile` always applies; a scoped block applies only when the
+  project's `projectType` matches one of its entries (a block scoped to a profile
+  that cannot be resolved is withheld, so platform doctrine never leaks into an
+  unrelated project).
+- Because the text is composed **per server construction**, a hosted instance
+  reports each request's own bound project — its profile, its packs.
+- Pack skills stay the place for depth. `instructions` is the map that makes an
+  agent go and read them; keeping it short is the point.
 
 ## Reusable, versioned pattern references
 

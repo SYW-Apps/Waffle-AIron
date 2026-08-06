@@ -325,10 +325,12 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: promoteAllComplete
       - stepNumber: 7
-        description: Compute the validated StateId
+        description: >-
+          Compute the validated GATE StateId (spec content + governing doctrine) — the lock
+          certifies that these specs passed THIS gate
         type: call
         targetComponent: host_core_adapter
-        targetMethod: computeStateId
+        targetMethod: computeGateStateId
       - stepNumber: 8
         description: >-
           Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
@@ -363,10 +365,13 @@ methods:
           and the staleness verdict below all concern the bound tree.
         type: local
       - stepNumber: 2
-        description: Read the current lock record
+        description: >-
+          Resolve the lock verdict through the shared authority — one call yielding unlocked |
+          locked | stale plus the current gate identity, so promotion and every reporting surface
+          answer this question identically
         type: call
         targetComponent: host_core_adapter
-        targetMethod: readLockRecord
+        targetMethod: readLockState
       - stepNumber: 3
         description: If no lock record exists, refuse
         type: branch
@@ -377,10 +382,12 @@ methods:
         type: return
         outcome: not locked — lock first
       - stepNumber: 5
-        description: Recompute the current StateId
-        type: call
+        description: >-
+          A stale verdict means the specs or the governing doctrine moved since the lock, so the
+          recorded approval no longer covers this state — refuse and report the current identity
+        type: local
         targetComponent: host_core_adapter
-        targetMethod: computeStateId
+        targetMethod: computeGateStateId
       - stepNumber: 6
         description: If the current StateId differs from the lock's StateId, refuse as stale
         type: branch
@@ -538,10 +545,10 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: promoteAllComplete
       - stepNumber: 11
-        description: Compute the validated StateId
+        description: Compute the validated GATE StateId (spec content + governing doctrine)
         type: call
         targetComponent: host_core_adapter
-        targetMethod: computeStateId
+        targetMethod: computeGateStateId
       - stepNumber: 12
         description: >-
           Publish to git: commit the promoted working tree and push, returning the commit + compare
@@ -590,10 +597,10 @@ methods:
         description: Bind the project's isolated root
         type: local
       - stepNumber: 6
-        description: Read the current lock record
+        description: Resolve the lock verdict through the shared authority (unlocked | locked | stale)
         type: call
         targetComponent: host_core_adapter
-        targetMethod: readLockRecord
+        targetMethod: readLockState
       - stepNumber: 7
         description: If no lock record exists, refuse
         type: branch
@@ -605,10 +612,10 @@ methods:
         type: return
         outcome: not locked — lock first
       - stepNumber: 9
-        description: Recompute the current StateId
-        type: call
+        description: A stale verdict refuses the promotion and reports the current gate identity
+        type: local
         targetComponent: host_core_adapter
-        targetMethod: computeStateId
+        targetMethod: computeGateStateId
       - stepNumber: 10
         description: If the current StateId differs from the lock's StateId, refuse as stale
         type: branch
@@ -1039,12 +1046,6 @@ methods:
         description: Return the producer list
         type: return
         outcome: producer list
-lint:
-  allow:
-    - code: UNDECLARED_DEPENDENCY
-      reason: >-
-        admin.ts reads the state id via computeStateId directly instead of routing through
-        host_core_adapter — documented shortcut on the lock/promote path; refactor candidate.
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-25T16:36:39.166Z'
+updatedAt: '2026-07-30T16:01:35.065Z'

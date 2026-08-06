@@ -6,8 +6,11 @@ methods:
   - name: loadProjectExtensions
     description: >-
       Load everything governing the current project: globally installed packs (unless
-      extensions.useGlobalPacks is false), then the packs declared in project config — project packs
-      win on collision. An uninitialized project simply has none.
+      extensions.useGlobalPacks is false), then the project's declared entries — legacy path refs
+      and by-name SELECTIONS resolved against the committed bundle, then the pack store. Project
+      packs win on collision. An unresolvable selection contributes an EXTENSION_LOAD_ERROR instead
+      of silently reducing the rule set; the packs that did resolve still apply. An uninitialized
+      project simply has none.
     signature: 'loadProjectExtensions(): LoadedExtensions'
     returns: LoadedExtensions
     params: []
@@ -22,6 +25,73 @@ methods:
         type: string[]
       - name: projectRoot
         type: string
+  - name: packEntryLabel
+    description: >-
+      A stable human label for one configured pack entry — the path for a legacy ref, or
+      name[@version] for a selection. For messages and listings, never for loading.
+    signature: 'packEntryLabel(entry: PackSelection): string'
+    returns: string
+    params:
+      - name: entry
+        type: PackSelection
+        description: A configured pack entry (a legacy path ref string, or a selection).
+  - name: packEntryRef
+    description: >-
+      The loadable ref for one configured pack entry: a legacy path/module ref passes through
+      unchanged; a selection resolves against the committed bundle then the store. Null when a
+      selection cannot be resolved, leaving the caller to decide whether that is an error it reports
+      or an entry it skips.
+    signature: 'packEntryRef(entry: PackSelection, projectRoot: string): string | null'
+    returns: string | null
+    params:
+      - name: entry
+        type: PackSelection
+      - name: projectRoot
+        type: string
+  - name: globalPacksEnabled
+    description: >-
+      Whether machine-wide packs (the pack store) ALSO apply to a project that has not said. False
+      by default: a project's doctrine is what the project declares, so installing a pack makes it
+      available rather than authoritative. One accessor so every reader and every config writer
+      agrees on the default.
+    signature: 'globalPacksEnabled(config: ProjectConfig): boolean'
+    returns: boolean
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: diagnoseProjectPacks
+    description: >-
+      Report this project's pack situation for `wairon doctor`: selections that do not resolve,
+      installed packs the project does NOT apply, machine-wide packs it applies by opting in, and
+      whether it ever declared a position on machine-wide packs at all. That last flag is what
+      distinguishes a project that deliberately applies nothing from one that never decided — the
+      latter used to inherit machine-wide doctrine automatically, so its gate may now be weaker than
+      its author expects. Never throws.
+    signature: 'diagnoseProjectPacks(): PackDiagnosis'
+    returns: PackDiagnosis
+    params: []
+  - name: pinInstalledPacksAsSelections
+    description: >-
+      The migration action behind `wairon doctor --fix`: for a project that never declared a
+      position on machine-wide packs, record the installed-but-unapplied packs as explicit
+      name+version selections (carrying a fetchable origin as their source) and turn machine-wide
+      loading off. Doctrine that governs a project becomes declared BY that project, visible in a
+      diff and reproducible for a clone. Returns the names recorded; does nothing for a project that
+      already decided, so selections are never invented for one that deliberately applies nothing.
+    signature: 'pinInstalledPacksAsSelections(): string[]'
+    returns: string[]
+    params: []
+  - name: defaultPackSelections
+    description: >-
+      The store packs whose manifests declare `applyByDefault: true`, shaped as selections ready to
+      seed into a NEW project. Reads each installed pack's manifest and skips any that fails to
+      load, so a broken pack seeds nothing. Never throws — a machine with no such packs seeds an
+      empty list. The distinction it exists for: a machine-wide install becomes a default for
+      projects created from now on (written into the new project's config, visible in review and
+      removable) rather than retroactive authority over every project on disk.
+    signature: 'defaultPackSelections(): PackSelection[]'
+    returns: PackSelection[]
+    params: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-07-14T20:23:49.190Z'
+updatedAt: '2026-07-29T21:27:30.204Z'

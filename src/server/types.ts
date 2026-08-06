@@ -968,7 +968,15 @@ export interface WebGraphModel {
  *  parts of the project it does not govern. */
 export interface ProjectConfigView {
   projectType: string;
+  /** Whether a lock is IN FORCE — a record exists AND its gate identity still
+   *  matches. Deliberately not "a record exists": a stale record freezes nothing,
+   *  so reporting it as locked claimed a freeze that did not hold. */
   locked: boolean;
+  /** A lock record exists but no longer matches: the specs or the governing
+   *  doctrine moved since it was taken, so promotion refuses until a re-lock.
+   *  Distinguished from never-locked so a UI can prompt for the re-lock instead of
+   *  presenting the project as though it was never frozen. */
+  lockStale?: boolean;
   /** "builtin" for a built-in profile or project kind, otherwise the canonical
    *  name of the registered pack contributing it. Absent when the recorded value
    *  resolves to no loaded profile. */

@@ -1,0 +1,50 @@
+kind: value-object
+id: installed_pack
+name: InstalledPack
+description: >-
+  One extension pack present in this wairon install's pack STORE — installed, but applying to
+  nothing until a project selects it by name. Carries the identity a project pins against (name +
+  version + content digest) and the origin it came from, so a selection can record how a fresh
+  machine or CI runner obtains the same pack.
+fields:
+  - name: name
+    type: string
+    description: The pack's declared name — what a project selection references.
+    optional: false
+  - name: version
+    type: string
+    description: >-
+      The pack's declared version. A pack installed from a legacy flat store entry, or one declaring
+      none, is recorded as "0.0.0-unversioned".
+    optional: false
+  - name: digest
+    type: string
+    description: >-
+      sha256 content digest over the pack's files, canonically folded so an archive install, a
+      directory install, and a committed bundle of the same pack all compare equal. The identity an
+      `integrity:` pin verifies and the drift check compares.
+    optional: false
+  - name: origin
+    type: string
+    description: >-
+      Where this pack was installed FROM — a URL or a local path. Copied into a project selection's
+      `source` at selection time, so the project self-describes how to obtain its doctrine. A
+      local-path origin is not fetchable and is flagged as such.
+    optional: true
+  - name: installedAt
+    type: string
+    description: ISO timestamp of the install.
+    optional: true
+  - name: waironVersion
+    type: string
+    description: >-
+      The wairon version that performed the install — provenance for diagnosing a pack that no
+      longer loads.
+    optional: true
+  - name: path
+    type: string
+    description: Absolute path of the installed pack directory (<store>/<name>/<version>/).
+    optional: false
+methods: []
+createdAt: '2026-07-29T17:41:22.256Z'
+updatedAt: '2026-07-29T17:41:22.269Z'

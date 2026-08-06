@@ -6,6 +6,8 @@ import {
   RootsListChangedNotificationSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
   McpError,
   ErrorCode,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -20,9 +22,21 @@ import { EndpointSchema, type Endpoint, type SubsystemSpec } from '../models/spe
 import {
   listResources as coreListSkillResources,
   readResource as coreReadSkillResource,
+  buildServerInstructions as coreBuildServerInstructions,
   type SkillResourceDescriptor,
 } from '../core/skills.js';
-import { resolveChainingParent } from '../core/specs.js';
+import { resolveChainingParent, loadComponentSpecs } from '../core/specs.js';
+import * as specsModule from '../core/specs.js';
+// The gated authoring seam — shared by every access path (see core/authoring.ts).
+// Statically imported for the same reason as the core adapters below: it reads
+// the request-scoped project root at CALL time.
+import { addComponent, updateSpecGated } from '../core/authoring.js';
+import type { ComponentSpec } from '../models/specs.js';
+// Statically imported for the same reason as the skills adapter: these read the
+// request-scoped project root at CALL time, so a static binding stays correct per
+// bound project — and a lazy require of a relative path does not resolve under the
+// test runner, which silently turned this hop into a tool error.
+import { loadProjectVariants, resolveVariantGuidance } from '../core/variants.js';
 import {
   listExternalInterfaces as coreListExternalInterfaces,
   type ExternalSurfaceEntry,
@@ -49,14 +63,35 @@ function requireValidation() {
   return require('../core/validation.js') as typeof import('../core/validation.js');
 }
 
-function requireSpecs() {
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  return require('../core/specs.js') as typeof import('../core/specs.js');
+/**
+ * The core spec surface. STATIC, not lazily required: the loaders read the
+ * request-scoped project root at call time, so a static binding stays correct per
+ * bound project (this module already imports core/specs.js eagerly for
+ * resolveChainingParent, so nothing is loaded that was not loaded before).
+ *
+ * It matters because a lazy `require('../core/specs.js')` does not resolve under
+ * the test runner — which made every sdd_* tool built on it fail with a module
+ * error instead of running, so none of them could be driven end-to-end from a
+ * test through an MCP client.
+ */
+function requireSpecs(): typeof specsModule {
+  return specsModule;
 }
 
 function requireProvision() {
   /* eslint-disable @typescript-eslint/no-require-imports */
   return require('../core/provision.js') as typeof import('../core/provision.js');
+}
+
+/**
+ * mcp_core_adapter — resolve a component's variant guidance across the boundary
+ * into sdd_core. Lazily required like the other project-root-sensitive core hops:
+ * the variant registry is read per bound project.
+ */
+function resolveComponentVariantGuidance(component: { id: string; variant?: string }) {
+  if (!component.variant) return null;
+  const byId = new Map(loadProjectVariants().map((v) => [v.id, v]));
+  return resolveVariantGuidance(component, loadComponentSpecs(), byId);
 }
 
 // mcp_surfaces_adapter — thin forwarder across the boundary into the surface
@@ -84,6 +119,11 @@ function json(value: unknown): CallToolResult {
 function errText(message: string): CallToolResult {
   return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
 }
+
+// Spec WRITES go through core/authoring.ts, never straight to the store: the
+// candidate gate (and anything else that decides what may be written) lives
+// there so the CLI, this stdio server, the hosted MCP dispatch, and the hosted
+// web interface all share one behaviour. This module is a transport.
 
 // TypeScript hits TS2589 ("type instantiation excessively deep") on McpServer.registerTool
 // when inputSchema contains ZodOptional / ZodDefault / ZodString.describe() wrappers,
@@ -177,6 +217,16 @@ function listSkillResources(): SkillResourceDescriptor[] {
 function readSkillResource(resourceId: string): string {
   return coreReadSkillResource(resourceId);
 }
+/**
+ * mcp_skills_adapter.buildServerInstructions — the composed briefing the server
+ * returns on `initialize`. Unlike the two forwarders above, this one DOES read
+ * the request-scoped project root (it reports the bound project's profile and
+ * packs); resolving it per createMcpServer call is what keeps the hosted
+ * per-request scoped server correct.
+ */
+function buildServerInstructions(): string {
+  return coreBuildServerInstructions();
+}
 
 /** Resolve an MCP resource URI (wairon-skill://<id>) back to its skill id. */
 function skillIdFromResourceUri(uri: string): string {
@@ -219,6 +269,42 @@ function registerSkillResources(server: McpServer): void {
   });
 }
 
+/**
+ * Publish the same skill set as MCP PROMPTS.
+ *
+ * Resources are pull-only: a client must already know to fetch
+ * `wairon-skill://…`. Prompts are what makes a skill *discoverable* — clients
+ * surface them as slash commands or attachable context, so a human driving an
+ * agent can reach `sdd-architect` or `appenser-make-implementer` directly.
+ *
+ * Deliberately mirrored from the SAME descriptor list the resources use, so the
+ * two surfaces can never drift: one skill set, two ways in.
+ */
+function registerSkillPrompts(server: McpServer): void {
+  server.server.registerCapabilities({ prompts: {} });
+
+  server.server.setRequestHandler(ListPromptsRequestSchema, () => ({
+    prompts: listSkillResources().map((d) => ({
+      name: d.id,
+      title: d.name,
+      description: d.description,
+    })),
+  }));
+
+  server.server.setRequestHandler(GetPromptRequestSchema, (request) => {
+    const name = request.params.name;
+    try {
+      const content = readSkillResource(name);
+      return {
+        description: `The wairon "${name}" skill.`,
+        messages: [{ role: 'user' as const, content: { type: 'text' as const, text: content } }],
+      };
+    } catch (e) {
+      throw new McpError(ErrorCode.InvalidParams, e instanceof Error ? e.message : String(e));
+    }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Server factory
 // ---------------------------------------------------------------------------
@@ -236,9 +322,15 @@ export interface McpServerOptions {
 }
 
 export function createMcpServer(options: McpServerOptions = {}): McpServer {
+  // The protocol's own "how to use this server" channel, which clients inject
+  // into the agent's system prompt. Composed BEFORE construction because it is a
+  // constructor option, and composed per call so the hosted per-request scoped
+  // server reports ITS bound project's profile and packs, not a stale snapshot.
   const server = new McpServer({
     name: 'wairon',
     version: WAIRON_VERSION,
+  }, {
+    instructions: buildServerInstructions(),
   });
 
   // ── Topology tools ────────────────────────────────────────────────────────
@@ -584,15 +676,15 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         componentType: z.enum(['Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Registry', 'Adapter', 'Observer', 'Specialist', 'Repository', 'Gateway']).describe('The building block, or pattern (Repository/Gateway)'),
         owns: z.array(z.string()).optional().describe('Member block ids privately owned by this component (patterns only)'),
         dependsOn: z.array(z.string()).optional().describe('IDs of other components this collaborates with (facades or standalone blocks)'),
-        portalType: z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']).optional().describe('Required when componentType is Portal'),
-        basePath: z.string().optional().describe('Portal-only: base path/prefix all the portal\'s endpoints mount under (UNEXPECTED_PORTAL_FIELD on non-Portals)'),
+        portalType: z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']).optional().describe('Portal-only, and expected on every Portal. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
+        basePath: z.string().optional().describe('Portal-only: base path/prefix all the portal\'s endpoints mount under. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
         dispatch: z.array(z.object({
           capability: z.string().describe('Capability name exactly as dispatched at runtime (e.g. "shadow_module.get")'),
           component: z.string().describe('Component id serving this capability (must also appear under dependsOn/owns)'),
           method: z.string().describe('Method name on the serving component\'s interface'),
           description: z.string().optional(),
         })).optional().describe('Portal-only: capability → component.method dispatch table for generic-handle portals. Gives the reachability walker real edges and is validated against target interfaces (UNSERVED_CAPABILITY).'),
-        durability: z.enum(['ram-projection', 'durable', 'read-through', 'cache']).optional().describe('Store-only, and every Store should declare one (MISSING_DURABILITY): durable = persisted RAM projection (hydration read-back from a lifecycle init entrypoint required — MISSING_HYDRATION); read-through = persisted with no RAM copy (every read is the read-back, hydration exempt); ram-projection = rebuilt not restored; cache = evictable loss-safe memo state.'),
+        durability: z.enum(['ram-projection', 'durable', 'read-through', 'cache']).optional().describe('Store-only — OMIT IT on any other componentType, where it is refused at the write (DURABILITY_ON_NON_STORE) and nothing is saved. Every Store should declare one (MISSING_DURABILITY): durable = persisted RAM projection (hydration read-back from a lifecycle init entrypoint required — MISSING_HYDRATION); read-through = persisted with no RAM copy (every read is the read-back, hydration exempt); ram-projection = rebuilt not restored; cache = evictable loss-safe memo state.'),
         emits: z.array(z.object({
           topic: z.string().describe('Topic/channel name exactly as used on the bus'),
           event: z.string().optional().describe('Optional event name within the topic (informational; pairing is by topic)'),
@@ -608,11 +700,11 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, durability, emits, subscribesTo, ext }) => {
       try {
-        const { loadSubsystemSpec, saveComponentSpec } = requireSpecs();
+        const { loadSubsystemSpec } = requireSpecs();
         const sub = loadSubsystemSpec(subsystem);
         if (!sub) return errText(`Parent subsystem "${subsystem}" does not exist.`);
         const now = new Date().toISOString();
-        const notices = saveComponentSpec({
+        const candidate: ComponentSpec = {
           id,
           name,
           description,
@@ -630,7 +722,12 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           status: 'draft',
           createdAt: now,
           updatedAt: now,
-        });
+        };
+
+        // addComponent gates the candidate before persisting it: a field that
+        // contradicts componentType is refused while it is still only an
+        // argument, so nothing reaches disk and the fix is to retry the call.
+        const notices = addComponent(candidate);
         const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
         return text(`Successfully added L2 Component Spec "${name}" (${id}, ${componentType}).${noticeBlock}`);
       } catch (e) {
@@ -1011,7 +1108,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string }>(server,
     'sdd_get_spec',
     {
-      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching.',
+      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching. For a variant-tagged COMPONENT the result also carries a derived, read-only "variantGuidance" (the variant\'s base, its implementation guidance, and the same-variant sibling components to implement alike) — it is resolved from the variant registry, not part of the spec, so never write it back.',
       inputSchema: {
         kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of specification'),
         id: z.string().describe('The identifier of the spec to fetch (the L0 system spec is a singleton — pass the system name or "system")'),
@@ -1030,6 +1127,14 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           case 'type':           result = specs.loadTypeSpec(id); break;
         }
         if (!result) return errText(`Spec of kind "${kind}" with ID "${id}" does not exist.`);
+        // A variant carries implementation guidance that attaches to the component
+        // an implementer is holding — the right hook for platform guidance, with no
+        // doctrine duplication. It reached only GENERATED agent files, so a hosted
+        // agent never saw it; attach it here as a clearly-derived read-only field.
+        if (kind === 'component') {
+          const guidance = resolveComponentVariantGuidance(result as { id: string; variant?: string });
+          if (guidance) return json({ ...(result as object), variantGuidance: guidance });
+        }
         return json(result);
       } catch (e) {
         return errText(String(e));
@@ -1072,13 +1177,12 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       inputSchema: {
         kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update (system = the singleton L0 — vision, boundaries, globalRequirements, databases, and publicInterfaces: the project gateway surface, each entry {id, name, subsystem, component, type, details, audience: project|department|instance|partner|external}; id is informational)'),
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
-        delta: z.record(z.any()).describe('The partial fields to merge into the spec. For arrays (like methods or fields), elements are matched by "name" (or "id") and merged/upserted. Add "action: \'delete\'" (or "remove: true") to delete a named element. Dispatch tables upsert by "capability" and lifecycle entrypoints by phase+component+method (use "action: \'delete\'" to remove an entry). For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it). Renumbering RELOCATES every flow jump field (onTrueStep/onFalseStep/cases.step/defaultStep/endStep/catches.step/finallyStep/toStep) in the same narrative; deleting a step that is a jump target is rejected until the referrers are retargeted. Inserting AT a jump target relocates those jumps past the inserted step by default (a NOTICE is returned) — add "captureJumps": true on the inserted step to retarget entry jumps onto it (loop/try endStep region tails always relocate with the body and are never captured). Reference ids in deltas may use LOCAL names — they are qualified against the spec\'s namespace exactly as the loader would. Per-spec lint suppression: set "lint: { allow: [{ code, reason }] }" to silence a WARNING code on this spec only (errors always surface; stale allows are flagged).'),
+        delta: z.record(z.any()).describe('The partial fields to merge into the spec. ARRAYS UPSERT, they do not replace: an array whose elements carry an identity is merged element-by-element, so a delta naming ONE element leaves the others intact. Identity is "name" or "id" by default, and per field: dispatch by "capability", lifecycle by phase+component+method, emits/subscribesTo by topic+event, trustedLinks by "subsystem", invariants and patterns by "id", lint.allow by "code", boundaries by "name", globalRequirements by "description". Add "action: \'delete\'" (or "remove: true") alongside that identity to REMOVE an element — including a stale lint allow. Arrays of plain STRINGS (owns, dependsOn, guarantees) carry no per-element identity and are replaced wholesale; pass [] to clear any array outright. To REMOVE an optional field entirely, list it in "unset": e.g. {"unset": ["basePath", "variant"]} — passing null/undefined means "no change" (they are skipped), and writing "" would leave the field present but empty, which is a different and usually wrong spec. Unsetting a required field is refused by schema validation, which names it. For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it). Renumbering RELOCATES every flow jump field (onTrueStep/onFalseStep/cases.step/defaultStep/endStep/catches.step/finallyStep/toStep) in the same narrative; deleting a step that is a jump target is rejected until the referrers are retargeted. Inserting AT a jump target relocates those jumps past the inserted step by default (a NOTICE is returned) — add "captureJumps": true on the inserted step to retarget entry jumps onto it (loop/try endStep region tails always relocate with the body and are never captured). Reference ids in deltas may use LOCAL names — they are qualified against the spec\'s namespace exactly as the loader would. Per-spec lint suppression: set "lint: { allow: [{ code, reason }] }" to silence a WARNING code on this spec only (errors always surface; stale allows are flagged).'),
       },
     },
     ({ kind, id, delta }) => {
       try {
-        const specs = requireSpecs();
-        const notices = specs.updateSpec(kind, id, delta);
+        const notices = updateSpecGated(kind, id, delta);
         const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
         return text(`Successfully updated ${kind} spec "${id}".${noticeBlock}`);
       } catch (e) {
@@ -1125,6 +1229,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
 
   // ── Built-in SDD skills as read-only MCP resources ────────────────────────
   registerSkillResources(server);
+
+  // ── The same skills as MCP prompts (discoverable, not merely fetchable) ────
+  registerSkillPrompts(server);
 
   // ── Chained-subproject bind-time announcement ─────────────────────────────
   // When the bound root is a chained subproject, announce it on the startup

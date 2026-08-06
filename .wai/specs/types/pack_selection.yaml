@@ -1,0 +1,44 @@
+kind: value-object
+id: pack_selection
+name: PackSelection
+description: >-
+  A project's declaration that it APPLIES a given extension pack, recorded in .wai/project.yaml
+  under extensions.packs. The project states which pack it wants by name; the pack itself lives in
+  the committed bundle or in this wairon install's store. This is the separation a machine-wide
+  install never made: having a pack available must not grant it authority over every project on the
+  machine, because then the gate differs per developer and CI disagrees with every local run. A
+  declared pack that cannot be resolved is an error, never a silent skip.
+fields:
+  - name: name
+    type: string
+    description: The pack name — the only required field.
+    optional: false
+  - name: version
+    type: string
+    description: >-
+      Exact version pin. Omitted means the latest version installed in the store (or the newest
+      bundled version).
+    optional: true
+  - name: integrity
+    type: string
+    description: >-
+      Content digest pin (sha256-…), verified when the selection resolves; a mismatch is an error,
+      not a warning.
+    optional: true
+  - name: source
+    type: string
+    description: >-
+      Where to obtain this pack — copied automatically from the store's install record when the pack
+      is selected, so the project self-describes how a fresh machine or CI runner gets the same
+      doctrine. Supports a {version} placeholder and ${VAR} env expansion for private URLs.
+    optional: true
+  - name: bundle
+    type: boolean
+    description: >-
+      Commit a copy under .wai/packs/<name>/<version>/ and resolve from there first, so the
+      repository needs no machine setup at all — the answer for private packs, air-gapped CI, and
+      repos that must be self-sufficient.
+    optional: true
+methods: []
+createdAt: '2026-07-29T18:53:30.799Z'
+updatedAt: '2026-07-29T18:53:30.817Z'

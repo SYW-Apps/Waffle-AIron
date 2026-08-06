@@ -1,10 +1,262 @@
 # Changelog
 
-## Unreleased (from v5.0.1)
+## Unreleased (from v5.1.0)
 
-Additive features plus fixes: merge dev → main with `[minor]` in the merge commit
-message → **v5.1.0**. (`[major]` would wrongly jump to v6 — that instruction was
-spent on v5.0.0.)
+**Breaking.** Merge dev → main with `[major]` in the merge commit message →
+**v6.0.0**. Three changes are visible on upgrade without any action by the user,
+and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
+a project that has not declared them, existing lock records read as stale, and a
+project referencing a global pack's profile can newly fail `validate --ci`. Nothing
+here is purely additive, so `[minor]` would understate it.
+
+### Pack scoping: installing a pack no longer governs every project on the machine
+
+A pack installed machine-wide used to apply to every project on that machine,
+including projects that never mentioned it. The gate, `skills list`, and the MCP
+instructions therefore differed per developer, and CI — which has no pack store —
+enforced a different rule set than the author's laptop. Installing a pack now makes
+it *available*; a project *selects* what it applies.
+
+- **The pack store** — `wairon pack install <source>` puts a pack in this wairon
+  install's store (`WAIRON_PACKS_DIR`, else `~/.wairon/packs`), laid out
+  `<name>/<version>/` so several versions coexist. `pack uninstall`, and
+  `pack which <name>` to see exactly which version, path, content digest, and
+  recorded origin a name resolves to. Installing applies to nothing.
+- **Per-project selection** — `wairon pack use <name>[@version]` records the pack
+  by name in `.wai/project.yaml`. `--pin` freezes the resolved version and its
+  digest, `--source <url>` records an explicit fetch URL, `--bundle` marks it for
+  committing. `pack unuse` drops the selection and leaves the pack installed.
+  Unpinned means "latest installed".
+- **A selection carries its own source** — copied from the store's install record
+  at selection time, so the project self-describes how a fresh machine or CI runner
+  obtains the same doctrine. `wairon pack sync` installs every declared-but-missing
+  pack from it; `pack install` accepts a URL. A local-path origin is not fetchable
+  and `pack use` says so rather than leaving CI to discover it.
+- **Bundling for self-sufficiency** — `wairon pack bundle [name] [--all]` commits a
+  copy under `.wai/packs/<name>/<version>/`, which resolves **before** the store, so
+  a clone and CI need no store and no network. The answer for private packs and
+  air-gapped CI.
+- **A declared pack that cannot be resolved is an error**, never a silent skip:
+  `validate`, `status`, `lock`, `generate`, and every `sdd_*` MCP call refuse. The
+  code names the remedy — `PACK_NOT_INSTALLED` (absent), `PACK_VERSION_UNSATISFIED`
+  (installed, but not at the pin — the message lists what *is* installed),
+  `PACK_INTEGRITY_MISMATCH` (content off the pinned digest). All error severity, all
+  in `wairon rules list` and tunable via `rules.sddRuleSeverity`.
+- **A pinned `integrity` is verified on whichever path wins, recomputed from the
+  files.** A committed bundle is not exempt — it overrides the store, which makes it
+  the most important place to honour a pin, not a place to skip it. The store's
+  recorded digest is not trusted as the answer either, since a pack edited in place
+  would otherwise satisfy a pin it no longer matches.
+- **`PACK_STORE_DRIFT`** (warning) when a bundle and the store hold different
+  content for the same `name@version`. The bundle still applies, so this exists to
+  explain why an edit to the installed copy had no effect.
+- **`applyByDefault: true`** in a pack manifest seeds that pack into new projects at
+  `wairon init` — what a machine-wide install *should* mean: a default for projects
+  you create from now on, recorded where it is visible, not retroactive authority
+  over everything on disk.
+- **`rules.enforceReproducibility` now does something.** It has existed since `init`
+  started writing it and was read nowhere. It backs `UNPINNED_PACK_SELECTION` and
+  `PACK_SOURCE_UNFETCHABLE` — warnings while you work, errors under `--ci` and at
+  `lock`. You may develop against a floating pack set; CI will not accept one. A
+  bundled selection is exempt: its committed bytes are the pin.
+- **`wairon doctor`** reports unresolvable selections, installed-but-unapplied packs,
+  and packs applying via an explicit `useGlobalPacks: true`. `doctor --fix` records
+  the unapplied set as explicit selections. It never invents selections for a
+  project that deliberately applies nothing, distinguishing "never decided" (the
+  field absent from the file) from "chose deliberately".
+- **`.github/actions/setup-wairon`** — a composite action with `packs: sync | none |
+  <explicit list>`, so a cloned repo's CI needs no pack configuration.
+
+### The lock now covers the doctrine that validated the tree
+
+`wairon lock` recorded a hash of the spec tree alone. The pack set — which *is* the
+gate — was invisible to it, so you could lock a tree validated under one rule set,
+change the packs, and still promote on the strength of the earlier lock because the
+spec digest never moved. That is the stale-approval hole the commit-scoped lock
+exists to close, entering through the doctrine door.
+
+Implemented as a **second** identity rather than a change to the existing one,
+because the same StateId also stamps surface snapshots and drives their freshness
+comparison, where doctrine is irrelevant:
+
+- `computeStateId()` — spec tree only. Surface/landscape snapshots, freshness.
+- `computeGateStateId()` — tree **+** doctrine projection. `lock`, hosted lock, and
+  the promote-time re-check.
+
+The projection covers only what can change a verdict: pack identities, merged
+profile and language tables, patterns, guarantee tokens, assertions, and rule
+names/codes. Pack `skills` and `instructions` are excluded — prose cannot alter a
+verdict, and including it would invalidate every lock on a documentation tweak.
+
+It also covers the **builtin rule registry** (names, codes, default severities) and
+the project's own governing configuration (`projectType` and `rules`). So "valid
+stays valid unless the rules truly change": a release touching no rule keeps every
+lock, one that adds, removes, or re-grades a code invalidates exactly the locks it
+should, and a severity override or profile switch counts as the gate change it is.
+Keyed on the registry rather than the wairon version deliberately — the version
+would churn every lock on every patch. Residual gap, accepted knowingly: a rule
+whose *implementation* grows stricter without its name, codes, or default severity
+changing is not caught.
+
+### Teaching the connecting agent over MCP
+
+An agent connecting to a wairon MCP server received nothing: `initialize` carried no
+`instructions`, there was no prompts capability, and skills were pull-only
+resources. Spec-authoring quality depended on whether a human remembered to brief
+the agent.
+
+- **`instructions` on `initialize`** — the protocol's own "how to use this server"
+  field, which clients inject into the system prompt. Carries the L0→L5 shape, the
+  authoring order by tool name, the fact that the `sdd_*` schemas are
+  self-describing, the bound project's governing profile, the loaded packs, and the
+  directive to read `wairon-skill://sdd-architect` *before* authoring. Short and
+  pointer-heavy by design; composed per server construction, so a hosted
+  per-request server reports its own project.
+- **Packs contribute, wairon owns the default** — `instructions:` in a pack manifest
+  is appended under `## From pack "<name>"` in pack load order, optionally scoped to
+  the governing profile. A pack states its platform delta; it never restates
+  wairon's model, which would drift on every release.
+- **Skills as MCP prompts** as well as resources, so clients that surface prompts can
+  offer them directly.
+- **Pack skills can EXTEND a builtin** — `extends: sdd-implement` appends the pack's
+  section to the builtin under `## Platform: <pack>` instead of standing beside it as
+  a parallel skill the agent has to notice and reconcile. The builtin stays wairon's,
+  so an upgrade still updates it.
+- **Variant guidance reaches hosted agents** — `sdd_get_spec` on a variant-tagged
+  component returns the resolved guidance and its same-variant siblings as a derived,
+  read-only field. Previously it only reached generated agent files.
+
+### Spec authoring: array deltas upsert, and an optional field can be removed
+
+`sdd_update_spec` documented that arrays are "matched by name (or id) and
+merged/upserted", with `action: 'delete'` to remove an element. That held for
+`methods`, `fields`, `publicInterfaces`, `dispatch`, `lifecycle`, `emits`, and
+`subscribesTo` — and was **silently false for every other array**, which fell
+through to wholesale replacement. A delta naming ONE element deleted every element
+it did not mention:
+
+```
+trustedLinks  [x, y] + delta [x]     ->  [x]     (y silently gone)
+invariants    [i1,i2] + delta [i1]   ->  [i1]    (i2 silently gone)
+lint.allow    [A, B]  + delta [A]    ->  [A]     (B silently gone)
+```
+
+The same data loss already fixed once for dispatch tables, still live for six other
+fields — destroying authored specs through the sanctioned authoring path.
+
+- **One identity table replaces the per-field special cases**, so the contract is
+  true by construction and a future array field inherits upsert semantics instead
+  of regressing to destructive replace. Keys: `dispatch` by capability, `lifecycle`
+  by phase+component+method, `emits`/`subscribesTo` by topic+event, `trustedLinks`
+  by subsystem, `invariants` and `patterns` by id, `lint.allow` by code,
+  `boundaries` by name, `globalRequirements` by description, else name or id.
+- **`action: 'delete'` now works on all of them** — including a stale `lint.allow`,
+  which wairon reports and fails `--ci` on but which the tools previously could not
+  remove, dead-ending an agent restricted to the `sdd_*` surface.
+- **An explicitly empty array still clears a list.** Under pure upsert semantics it
+  would mean "change nothing", leaving no way to empty a keyed list.
+- **`unset` removes an optional field**: `{ unset: ['basePath', 'variant'] }`. It
+  could previously be set but never cleared — `null`/`undefined` mean "no change",
+  and writing `""` leaves the field present and empty, which is a different and
+  usually wrong spec. Explicit rather than overloading `null`: a destructive
+  meaning must be asked for, not inferred from an absent value.
+
+### A misplaced field is refused at the write, not discovered at validate time
+
+`sdd_add_component` accepted any field on any `componentType` — the write path only
+checked the schema, where `portalType`, `basePath`, and `durability` are all
+optional. The stereotype rules that reject them live in `sdd_validate_tree`, and two
+of their codes (`UNEXPECTED_PORTAL_FIELD`, `DURABILITY_ON_NON_STORE`) are errors that
+never relax while draft — correctly, since a misplaced field is wrong *now* rather
+than merely incomplete.
+
+The result was a trap rather than a warning. Setting `basePath` on an Orchestrator
+succeeded, then failed validation permanently, and before `unset` existed there was
+no way to remove the field again: the component was wedged, and recreating it was the
+only escape. Agents reported this as *"non-Portal components require Portal-only
+arguments"* — the schema never required them; the spec just could not be repaired.
+
+- **Rules now declare their scope.** `scope: 'spec'` marks a rule whose verdict reads
+  one spec's own fields and no cross-spec relationship; `'tree'` (the default, so an
+  undeclared rule can never leak into the write path) marks one that needs the loaded
+  tree. The intrinsic subset runs against a **candidate** spec before it is written.
+- **Two rules split along that line**, since each mixed intrinsic and tree checks:
+  `portal-fields` (field shape) out of `portal-endpoints` (endpoint bindings), and
+  `durability-declaration` (does the declaration belong here) out of
+  `durability-round-trip` (hydration reachability). Same codes, same messages, same
+  severities — relocated, not rewritten.
+- **`sdd_add_component` and `sdd_update_spec` gate on the merged spec**, so an update
+  cannot introduce a misplacement either. A refusal names the code and the remedy,
+  and nothing reaches disk — the fix is to retry the call, not repair a saved spec.
+- **Deliberately not the whole rule set.** A component is legitimately authored
+  before its interface, dependencies, and narratives exist, so tree rules would
+  reject every correct first step of the authoring order. A draft Portal without its
+  `portalType` yet still writes (a warning, as in a tree run); a Portal-only field on
+  a Store does not.
+- **Mechanical re-saves stay ungated** — status promotion, layout normalization, and
+  migrations pass no gate, so a spec that predates a rule remains loadable and
+  repairable via `unset`. `rules.sddRuleSeverity` disarms the gate exactly as it
+  disarms the same code in `validate`.
+
+### Fixes
+
+- **A stale lock reported itself as locked.** The hosted project config view judged
+  "locked" from the mere EXISTENCE of a lock record while the promote gate compared
+  state identities — so a project whose specs changed after locking still claimed a
+  freeze that did not hold, the same time-of-check gap the lock exists to close,
+  reintroduced in the reporting surface. `readLockState()` is now the single
+  authority (`unlocked | locked | stale`), shared by the promote gate, the config
+  view, `wairon status`, and `wairon doctor`, so they cannot disagree. `locked` now
+  means the lock is IN FORCE; `lockStale` distinguishes voided from never-locked so
+  a UI can prompt for the re-lock.
+- **Lock staleness was invisible until promote.** It was compared in exactly one
+  place, so a voided lock surfaced only when someone tried to promote — fail-closed,
+  but late. `status` and `doctor` now report it with the reason and the remedy.
+  Deliberately NOT auto-relocking on upgrade: the record carries `lockedBy` and
+  asserts that a human approved promoting this state, so regenerating it would make
+  that assertion untrue.
+- **Organizations page crashed on a hosted instance upgraded to v5** with
+  `Cannot read properties of undefined (reading 'localeCompare')`. Units persisted
+  before slugs existed have no `slug`, `host doctor --fix` is operator-invoked, and
+  the units view sorted on `slug` straight off the wire — a data-shape problem
+  surfacing as an unreadable minified UI crash. The read path now derives a missing
+  slug from the id (a unit's id is its dot-qualified path and the slug is its last
+  segment, so a root unit's id *is* its slug — the same rule the migration applies).
+  Identity is never rewritten and a present slug never overwritten.
+- **An unmigrated data dir now announces itself at startup.** `wairon serve` reports
+  pending legacy shapes and names the remedy, reusing the migration's own dry run as
+  the detector so the two cannot disagree. It writes nothing and never blocks
+  startup. Previously the first symptom was zero permissions or a crashed page.
+- **CI typechecks the web app.** `web/` is a separate package, not an npm workspace,
+  so the root `typecheck` never covered it and `build:web` does not run in CI — a
+  type error in `web/src` could reach main unnoticed.
+- **A test no longer rebuilds the project mid-suite.** The hosted-server example test
+  ran `npm run build`, whose `prebuild` cleans `sdk/dist`, while ~126 other test
+  files loaded in parallel workers — so any file importing `@wairon/sdk` in that
+  window died with `Cannot find module '/sdk/dist/index.js'`. Intermittent, invisible
+  when run alone, and more likely the more tests the suite gained.
+
+### Upgrading
+
+1. **Hosted instances: run `wairon host doctor` (dry run), then `--fix`.** Required
+   if you upgraded from a pre-permission-model version — legacy users and API tokens
+   otherwise resolve to zero permissions, and units without slugs break the
+   organizations page. `wairon serve` now warns when this is pending.
+2. **Re-lock any locked project.** The lock now covers doctrine, so records written
+   before this release read as *stale* and `promote` refuses until you re-lock. This
+   fails closed by design: those locks were taken without doctrine coverage and
+   cannot be retro-verified.
+3. **Declare the packs your projects apply.** Machine-wide packs no longer apply
+   unless a project selects them. Run `wairon doctor` to see what is installed but
+   unapplied and `wairon doctor --fix` to record it as explicit selections — or set
+   `extensions.useGlobalPacks: true` in `.wai/project.yaml` to keep the old
+   behaviour. **A project whose subsystem references a global pack's `profile` will
+   otherwise report `UNKNOWN_PROFILE`, which fails `validate --ci`.**
+4. **Embedding wairon as a library:** `LoadedExtensions` gained required
+   `instructions` and `selectionFailures` fields. Use the exported
+   `emptyExtensions()` rather than hand-constructing one.
+
+## v5.1.0 (from v5.0.1)
 
 ### Hosted profile application: a selected profile now actually governs (new, `feat/profile-apply-into-spec`)
 

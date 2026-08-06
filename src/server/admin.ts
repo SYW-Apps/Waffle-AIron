@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
-import { stateIdEquals } from '../core/statehash.js';
+
 import type { LockRecord } from '../core/lockfile.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
@@ -263,7 +263,9 @@ export function executeApprovedLock(cfg: HostConfig, projectId: string, subproje
       throw new LockValidationError(errors.map((e) => ({ code: e.code, message: e.message, specId: e.specId })));
     }
     hostCore.promoteAllComplete();
-    const stateId = hostCore.computeStateId();
+    // The GATE identity: the lock certifies that these specs passed THIS gate,
+    // so the governing doctrine is part of the frozen state.
+    const stateId = hostCore.computeGateStateId();
 
     // Git-backed: the lock is the semantic checkpoint — the auto-publish
     // trigger. Commit ONLY the .wai/ tree (pathspec-scoped, never the shared
@@ -538,13 +540,16 @@ export function promoteProject(cfg: HostConfig, credential: string | null, proje
 export function executeApprovedPromote(cfg: HostConfig, projectId: string, subproject?: string): PromoteResult {
   const root = boundLifecycleRoot(cfg, projectId, subproject);
   return runWithProjectRoot(root, () => {
-    const lock = hostCore.readLockRecord();
-    if (!lock) {
+    // One authority for "is this project locked?" — shared with the project config
+    // view, `status`, and `doctor`, so promotion and reporting can never disagree.
+    // A pack change (or a record written before doctrine was covered, whose
+    // algorithm marker differs) reads as stale instead of passing.
+    const { state, record: lock, current } = hostCore.readLockState();
+    if (state === 'unlocked' || !lock) {
       return { status: 'not-locked', message: 'Project is not locked; run lock first.' };
     }
-    const current = hostCore.computeStateId();
-    if (!stateIdEquals(current, lock.stateId)) {
-      return { status: 'stale', stateId: current, message: 'Spec tree changed since lock; re-lock required.' };
+    if (state === 'stale') {
+      return { status: 'stale', stateId: current, message: 'Spec tree or governing doctrine changed since lock; re-lock required.' };
     }
     hostCore.writeLockRecord({ ...lock, status: 'promoted' });
     return { status: 'ready', stateId: current, message: 'Locked state matches; change-set marked ready for promotion.' };
