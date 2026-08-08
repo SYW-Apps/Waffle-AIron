@@ -30,7 +30,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const TEMPLATES_DIR = path.join(REPO_ROOT, 'src', 'templates', 'skills');
 
 // Alphabetical order — the stable publication order the specialist enumerates.
-const SKILL_IDS = ['sdd-architect', 'sdd-auditor', 'sdd-implement', 'sdd-narrative'];
+const SKILL_IDS = ['sdd-architect', 'sdd-auditor', 'sdd-delegate', 'sdd-implement', 'sdd-narrative'];
 
 async function connectInMemory(server: McpServer): Promise<Client> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -40,7 +40,7 @@ async function connectInMemory(server: McpServer): Promise<Client> {
 }
 
 describe('skills_resource_specialist (core descriptors + content)', () => {
-  it('enumerates exactly the four built-in SDD skills with stable uris', () => {
+  it('enumerates exactly the five built-in SDD skills with stable uris', () => {
     const descriptors = listSkillResources();
     expect(descriptors.map((d) => d.id)).toEqual(SKILL_IDS);
 
@@ -87,14 +87,17 @@ describe('skills_resource_orchestrator / skills_portal (validation)', () => {
 });
 
 describe('MCP resources surface (real createMcpServer factory)', () => {
-  it('advertises the four SDD skills over resources/list', async () => {
+  it('advertises the five SDD skills over resources/list', async () => {
     const client = await connectInMemory(createMcpServer());
     try {
+      // The unified list also carries live wairon-agent:// brief entries for the
+      // bound project's topology — the skill surface is the scheme-filtered slice.
       const { resources } = await client.listResources();
-      expect(resources.map((r) => r.uri).sort()).toEqual(
+      const skillResources = resources.filter((r) => r.uri.startsWith('wairon-skill://'));
+      expect(skillResources.map((r) => r.uri).sort()).toEqual(
         SKILL_IDS.map((id) => `wairon-skill://${id}`),
       );
-      for (const r of resources) {
+      for (const r of skillResources) {
         expect(r.mimeType).toBe('text/markdown');
         expect(r.name).toBeTruthy();
         expect(r.description).toBeTruthy();
@@ -133,7 +136,7 @@ describe('hosted scoped server shares the same resource registration', () => {
     const client = await connectInMemory(createScopedServer());
     try {
       const { resources } = await client.listResources();
-      expect(resources.map((r) => r.uri).sort()).toEqual(
+      expect(resources.filter((r) => r.uri.startsWith('wairon-skill://')).map((r) => r.uri).sort()).toEqual(
         SKILL_IDS.map((id) => `wairon-skill://${id}`),
       );
     } finally {

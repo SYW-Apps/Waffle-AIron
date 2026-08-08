@@ -1,9 +1,10 @@
+import * as path from 'path';
 import { AgentRecord } from '../models/agent.js';
 import { ProjectConfig, TargetConfig } from '../models/project.js';
 import { loadTemplate, renderTemplateInstructions } from '../core/templates.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { getExporter } from './registry.js';
-import { ExportResult, WAIRON_MANAGED_BANNER } from './base.js';
+import { ExportContext, ExportResult, WAIRON_MANAGED_BANNER } from './base.js';
 
 // ---------------------------------------------------------------------------
 // Generate: agent file generation
@@ -78,6 +79,31 @@ export function generateAll(
   }
 
   return pool.map((agent) => generateAgent(agent, projectConfig, options));
+}
+
+/**
+ * Resolve the output paths the given topology occupies — one per agent ×
+ * matching target — without writing anything. This is the expected-file set
+ * stale-pruning reconciles against: it derives from the topology itself, never
+ * from what a (possibly scoped) run happened to write. Pass the FULL agent set.
+ */
+export function resolveExpectedOutputPaths(
+  agents: AgentRecord[],
+  projectConfig: ProjectConfig,
+  projectRoot: string = getProjectRoot(),
+): Set<string> {
+  const expected = new Set<string>();
+  for (const agent of agents) {
+    for (const agentTarget of agent.targets) {
+      const targetConfig = resolveTargetConfig(agentTarget, projectConfig);
+      if (!targetConfig) continue;
+      // outputPath() never reads the template — path shape is agent + target
+      // only — so no template is loaded (a missing one must not break pruning).
+      const ctx = { agent, projectRoot, target: targetConfig } as Omit<ExportContext, 'renderedInstructions'>;
+      expected.add(path.resolve(getExporter(targetConfig).outputPath(ctx)));
+    }
+  }
+  return expected;
 }
 
 // ---------------------------------------------------------------------------

@@ -196,9 +196,9 @@ async function runLock(options: LockOptions): Promise<void> {
   logger.blank();
   logger.success('Specs locked and agent topology generated.');
   logger.info(`Lock record written (.wai/lock.json): stateId ${record.stateId.algorithm}:${record.stateId.digest} — status ${record.status}.`);
-  logger.warn(
-    'Restart any running AI agent sessions (Claude Code / Antigravity / Codex) so the newly ' +
-      'generated implementer agents load — they are not picked up mid-session.',
+  logger.info(
+    'Generated owner files refreshed. Live agent briefs (sdd_get_agent_brief / wairon-agent://) ' +
+      'are composed per call and already current — no session restart needed.',
   );
 }
 

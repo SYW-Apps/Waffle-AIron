@@ -131,7 +131,17 @@ before you design anything**, and the others when their turn comes — they carr
 architecture standard, the narrative step reference, and the review checklist that
 this briefing only points at:
 
-${skillPointers(skills)}`;
+${skillPointers(skills)}
+
+## Delegating implementation
+
+Delegate component work from a LIVE agent brief, never a generated file: discover
+agents via \`listAgents\` (or the \`wairon-agent://\` resources), fetch the target's
+brief with \`sdd_get_agent_brief\`, and spawn a scoped subagent from it — its
+\`instructions\` as prompt, its \`ownedPaths\` as write fence. Briefs are composed
+from the current spec tree on every call, so a re-lock never requires a session
+restart — fetch fresh per delegation. \`wairon-skill://sdd-delegate\` carries the
+full flow.`;
 }
 
 /**

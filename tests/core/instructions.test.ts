@@ -93,9 +93,18 @@ describe('wairon instructions (the wairon-owned default)', () => {
     expect(text).toMatch(/before you design anything/i);
     // Every published skill is reachable, so the pointer list cannot go stale
     // against the skills the server actually serves.
-    for (const id of ['sdd-architect', 'sdd-auditor', 'sdd-implement', 'sdd-narrative']) {
+    for (const id of ['sdd-architect', 'sdd-auditor', 'sdd-delegate', 'sdd-implement', 'sdd-narrative']) {
       expect(text).toContain(`wairon-skill://${id}`);
     }
+  });
+
+  it('directs delegation through LIVE agent briefs, not generated files', () => {
+    const text = buildServerInstructions();
+    // The delegation directive: fetch the target's current brief and spawn a
+    // scoped subagent from it — a re-lock never requires a session restart.
+    expect(text).toContain('sdd_get_agent_brief');
+    expect(text).toContain('wairon-agent://');
+    expect(text).toContain('wairon-skill://sdd-delegate');
   });
 
   it('names the governing profile of the BOUND project', () => {

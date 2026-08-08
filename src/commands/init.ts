@@ -556,7 +556,11 @@ function buildProjectConfig(
       requireOwnedPaths: true,
       metaAgentTags: ['meta', 'guardian', 'architect'],
       enforceReproducibility: true,
-      generateComponentImplementers: true,
+      // Off by default (matches the schema + subproject provisioning): one owner
+      // agent per subsystem is the file granularity; component-level delegation
+      // is served as live MCP briefs. Per-component implementer FILES are a
+      // legacy escape hatch — opt in with `true` on small trees only.
+      generateComponentImplementers: false,
       sddRuleSeverity: {},
     },
     paths: {

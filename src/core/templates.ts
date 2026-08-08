@@ -3,6 +3,7 @@ import { listFiles, pathExists } from '../utils/fs.js';
 import { parseYaml, readYamlFile } from '../utils/yaml.js';
 import { TemplateNotFoundError } from '../utils/errors.js';
 import { Template, TemplateSchema } from '../models/template.js';
+import { AgentTemplate } from '../models/agent.js';
 import { AI_PATHS } from '../config/loader.js';
 import { globalTemplatesDir as resolveGlobalDir } from '../config/defaults.js';
 
@@ -23,18 +24,22 @@ function builtinTemplatesDir(): string {
 }
 
 /**
- * Load a single template by id.
- * Throws TemplateNotFoundError if not found in any tier.
+ * Load a single template by id (the itemplate_source_adapter loadTemplate
+ * contract). Returns the full Template for the exporters, superimposed with
+ * the AgentTemplate shape (templateName + raw instructions) for the live
+ * brief composition path.
+ * Throws TemplateNotFoundError if not found in any tier — never silently
+ * falls past the built-in tier.
  *
  * @param globalOverride - optional path from project config (globalTemplatesDir field)
  */
-export function loadTemplate(id: string, globalOverride?: string): Template {
+export function loadTemplate(id: string, globalOverride?: string): Template & AgentTemplate {
   const dirs = templateSearchDirs(globalOverride);
   for (const dir of dirs) {
     const filePath = path.join(dir, `${id}.yaml`);
     if (pathExists(filePath)) {
       const raw = readYamlFile(filePath);
-      return TemplateSchema.parse(raw);
+      return { ...TemplateSchema.parse(raw), templateName: id };
     }
   }
   throw new TemplateNotFoundError(id);

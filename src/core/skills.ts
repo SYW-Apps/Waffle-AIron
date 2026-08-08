@@ -8,13 +8,13 @@ import { buildServerInstructions as composeServerInstructions } from './instruct
 // ---------------------------------------------------------------------------
 // SDD skills export
 //
-// The built-in SDD skills (architect / narrative / auditor / implement) are
-// copied into each active target tool's skills directory so the host AI tool
-// can run them in-session. Skills are how wairon "equips" a session — it does
-// not orchestrate sessions itself.
+// The built-in SDD skills (architect / narrative / auditor / implement /
+// delegate) are copied into each active target tool's skills directory so the
+// host AI tool can run them in-session. Skills are how wairon "equips" a
+// session — it does not orchestrate sessions itself.
 // ---------------------------------------------------------------------------
 
-const SKILL_NAMES = ['sdd-architect', 'sdd-narrative', 'sdd-auditor', 'sdd-implement'];
+const SKILL_NAMES = ['sdd-architect', 'sdd-narrative', 'sdd-auditor', 'sdd-implement', 'sdd-delegate'];
 
 /**
  * skills_core_adapter: forward to the core surface to load the governing
@@ -253,7 +253,7 @@ export function activeTargetTypes(): string[] {
 // SDD skills as MCP resources
 //
 // Cloud-only agents cannot receive the filesystem-exported skills above, so the
-// MCP server also publishes the four built-in SDD skills as read-only MCP
+// MCP server also publishes the five built-in SDD skills as read-only MCP
 // resources. The functions below resolve the SAME packaged templates that
 // exportSddSkills copies to disk (src/templates/skills/*.md) into MCP-safe
 // descriptors and markdown content.
@@ -268,7 +268,7 @@ export function activeTargetTypes(): string[] {
 const SKILL_RESOURCE_SCHEME = 'wairon-skill';
 
 /**
- * The four packaged SDD skills published as MCP resources, in a stable
+ * The five packaged SDD skills published as MCP resources, in a stable
  * (alphabetical) order. Derived from SKILL_NAMES so the resource set can never
  * drift from the export source of truth.
  */
@@ -305,7 +305,7 @@ function readSkillFrontmatter(name: string): { name: string; description: string
 
 // ── skills_resource_specialist ─────────────────────────────────────────────
 
-/** List the four built-in SDD skills as MCP-safe resource descriptors. */
+/** List the five built-in SDD skills as MCP-safe resource descriptors. */
 export function listSkillResources(): SkillResourceDescriptor[] {
   const builtin: SkillResourceDescriptor[] = RESOURCE_SKILL_IDS.map((id) => {
     const fm = readSkillFrontmatter(id);

@@ -103,7 +103,7 @@ describe('a pack extends a builtin skill', () => {
   it('leaves the other builtins byte-identical to their templates', () => {
     projectWithPack(EXTENDS_YAML, { 'skills/make-implementer/SKILL.md': EXTENDING_SKILL });
     const templates = path.resolve(__dirname, '..', '..', 'src', 'templates', 'skills');
-    for (const untouched of ['sdd-architect', 'sdd-auditor', 'sdd-narrative']) {
+    for (const untouched of ['sdd-architect', 'sdd-auditor', 'sdd-delegate', 'sdd-narrative']) {
       expect(readSkillResource(untouched)).toBe(fs.readFileSync(path.join(templates, `${untouched}.md`), 'utf-8'));
     }
   });
@@ -113,7 +113,7 @@ describe('a pack extends a builtin skill', () => {
     const ids = listSkillResources().map((d) => d.id);
 
     // One coherent instruction is the point — not two skills to reconcile.
-    expect(ids).toEqual(['sdd-architect', 'sdd-auditor', 'sdd-implement', 'sdd-narrative']);
+    expect(ids).toEqual(['sdd-architect', 'sdd-auditor', 'sdd-delegate', 'sdd-implement', 'sdd-narrative']);
     expect(ids).not.toContain('appenser-make-implementer');
   });
 

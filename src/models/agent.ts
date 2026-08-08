@@ -88,6 +88,50 @@ export const AgentRecordSchema = z.object({
 export type AgentRecord = z.infer<typeof AgentRecordSchema>;
 
 // ---------------------------------------------------------------------------
+// Live delegation brief — composed on demand from the CURRENT spec tree
+// (never persisted, never stale); the dynamic replacement for generate-time
+// agent files, served over MCP.
+// ---------------------------------------------------------------------------
+
+export const AgentTemplateSchema = z.object({
+  /** Template identifier (architect, domain-owner, implementer, …) */
+  templateName: z.string(),
+
+  /** The raw instruction body with {{variable}} placeholders, before rendering */
+  instructions: z.string(),
+});
+
+export type AgentTemplate = z.infer<typeof AgentTemplateSchema>;
+
+export const AgentBriefSchema = z.object({
+  /** The resolved agent's stable id (e.g. sdd_core-owner, system-architect) */
+  agentId: z.string(),
+
+  /** Human-readable display name of the agent */
+  name: z.string(),
+
+  /** The instruction template the brief was rendered from */
+  template: z.string(),
+
+  /** Domain the agent belongs to (absent = global root) */
+  domainRoot: z.string().optional(),
+
+  /** Glob patterns of the files this agent owns — the write-scope fence */
+  ownedPaths: z.array(z.string()),
+
+  /** Spec paths the subagent should read first */
+  readPaths: z.array(z.string()).optional(),
+
+  /** The fully rendered instruction body — paste-ready as a subagent prompt */
+  instructions: z.string(),
+
+  /** Rendered variant guidance, also folded into instructions */
+  variantGuidance: z.string().optional(),
+});
+
+export type AgentBrief = z.infer<typeof AgentBriefSchema>;
+
+// ---------------------------------------------------------------------------
 // Helper: create a minimal valid agent record (useful in tests / stubs)
 // ---------------------------------------------------------------------------
 

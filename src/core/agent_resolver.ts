@@ -1,8 +1,10 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { AgentRecord } from '../models/agent.js';
+import { AgentBrief, AgentRecord } from '../models/agent.js';
 import { loadProjectConfig, AI_PATHS, loadTopologyConfig } from '../config/loader.js';
 import { getProjectRoot, pathExists } from '../utils/fs.js';
+import { WaironError } from '../utils/errors.js';
+import { loadTemplate, renderTemplateInstructions } from './templates.js';
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -457,4 +459,53 @@ export function resolveAgentTopology(): AgentRecord[] {
   }
 
   return agents;
+}
+
+/** Thrown when composeAgentBrief is asked for an id the current topology does not resolve. */
+export class UnknownAgentError extends WaironError {
+  constructor(agentId: string, knownIds: string[]) {
+    super(`Unknown agent id: "${agentId}". Known agent ids: ${knownIds.join(', ')}`);
+    this.name = 'UnknownAgentError';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Live delegation brief: composed on demand from the CURRENT spec tree, the
+// dynamic replacement for generate-time agent files.
+// ---------------------------------------------------------------------------
+export function composeAgentBrief(agentId: string): AgentBrief {
+  // Always resolve against the live topology — a re-lock changes the next call.
+  const records = resolveAgentTopology();
+  const record = records.find((r) => r.id === agentId);
+  if (!record) {
+    throw new UnknownAgentError(agentId, records.map((r) => r.id));
+  }
+
+  const template = loadTemplate(record.template, loadProjectConfig().globalTemplatesDir);
+  // The same variable map the generate-time exporter feeds templates (see
+  // exporters/generate.ts buildVars) — duplicated here because core must not
+  // import exporters.
+  const instructions = renderTemplateInstructions(template, {
+    agentId: record.id,
+    agentName: record.name,
+    agentDescription: record.description,
+    ownedPaths: record.ownedPaths.join('\n'),
+    tags: record.tags.join(', '),
+    renderContext: 'root',
+    contextNote: '',
+    domainPath: '.',
+    domainName: '',
+    variantGuidance: record.variantGuidance ?? '',
+  });
+
+  return {
+    agentId: record.id,
+    name: record.name,
+    template: record.template,
+    domainRoot: record.domainRoot,
+    ownedPaths: record.ownedPaths,
+    readPaths: record.readPaths,
+    instructions,
+    variantGuidance: record.variantGuidance || undefined,
+  };
 }

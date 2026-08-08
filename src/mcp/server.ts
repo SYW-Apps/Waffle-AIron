@@ -38,6 +38,11 @@ import type { ComponentSpec } from '../models/specs.js';
 // test runner, which silently turned this hop into a tool error.
 import { loadProjectVariants, resolveVariantGuidance } from '../core/variants.js';
 import {
+  composeAgentBrief as coreComposeAgentBrief,
+  resolveAgentTopology as coreResolveAgentTopology,
+} from '../core/agent_resolver.js';
+import type { AgentBrief, AgentRecord } from '../models/agent.js';
+import {
   listExternalInterfaces as coreListExternalInterfaces,
   type ExternalSurfaceEntry,
 } from '../core/surfaces.js';
@@ -100,6 +105,20 @@ function resolveComponentVariantGuidance(component: { id: string; variant?: stri
 // call time, so a static binding stays correct per bound project.
 function listExternalInterfaces(): ExternalSurfaceEntry[] {
   return coreListExternalInterfaces();
+}
+
+// mcp_core_adapter.composeAgentBrief — forward the live delegation-brief
+// composition to the core portal. Statically imported like the other core hops:
+// it resolves against the request-scoped project root at call time, so every
+// call sees the CURRENT topology (a re-lock changes the next call).
+function composeAgentBrief(agentId: string): AgentBrief {
+  return coreComposeAgentBrief(agentId);
+}
+
+// mcp_core_adapter.resolveAgentTopology — the same forward for the topology
+// read backing the wairon-agent:// resource listing.
+function resolveAgentTopology(): AgentRecord[] {
+  return coreResolveAgentTopology();
 }
 
 
@@ -185,13 +204,47 @@ function withStaleWarning(result: CallToolResult): CallToolResult {
   return result;
 }
 
+// The definitive spec-WRITE tool set: every tool that persists a change to the
+// spec tree. The agent topology (and therefore the wairon-agent:// brief
+// resources) is derived live from these specs, so a successful call to any of
+// them is what makes the long-lived stdio session emit resources/prompts
+// list-changed notifications (see emitListsChanged in createMcpServer).
+const SPEC_WRITE_TOOLS = new Set([
+  'sdd_initialize_system',
+  'sdd_add_subsystem',
+  'sdd_set_public_interfaces',
+  'sdd_set_subsystem_project_path',
+  'sdd_move_subsystem_project',
+  'sdd_externalize_subsystem',
+  'sdd_internalize_subsystem',
+  'sdd_add_component',
+  'sdd_define_interface',
+  'sdd_set_endpoints',
+  'sdd_write_narrative',
+  'sdd_add_type',
+  'sdd_delete_spec',
+  'sdd_update_spec',
+]);
+
+// Per-server list-changed emitter, registered ONLY for the long-lived stdio
+// server (the stateless hosted per-request server never emits — it advertises
+// no listChanged and stays correct-on-poll). Keyed per instance because the
+// hosted path creates many servers from this same factory.
+const listChangedEmitters = new WeakMap<McpServer, () => void>();
+
 function reg<Args extends Record<string, unknown>>(
   server: McpServer,
   name: string,
   config: { description: string; inputSchema?: Record<string, z.ZodTypeAny> },
   cb: (args: Args) => CallToolResult,
 ): void {
-  const guarded = (args: Args): CallToolResult => withStaleWarning(cb(args));
+  const guarded = (args: Args): CallToolResult => {
+    const result = withStaleWarning(cb(args));
+    // A SUCCESSFUL spec write just changed the derived agent topology — tell
+    // the connected session its resources/prompts lists are stale.
+    if (result.isError !== true && SPEC_WRITE_TOOLS.has(name)) listChangedEmitters.get(server)?.();
+    return result;
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (server as any).registerTool(name, config, guarded as any);
 }
@@ -238,27 +291,91 @@ function skillIdFromResourceUri(uri: string): string {
   }
 }
 
+// ── Live agent-brief resources (wairon-agent://) ────────────────────────────
+
+const AGENT_BRIEF_SCHEME = 'wairon-agent://';
+
+/**
+ * One wairon-agent:// descriptor per record in the CURRENT topology, via the
+ * core client adapter (statically imported like the other core hops — it reads
+ * the request-scoped project root at call time, and a lazy require does not
+ * resolve under the test runner). Recomputed on every list call (live, no
+ * cache), so a re-lock is visible on the next list. A root with no resolvable
+ * project contributes no entries: the skill surface stays listable regardless.
+ */
+function listAgentBriefResources(): { uri: string; name: string; description: string; mimeType: string }[] {
+  try {
+    return resolveAgentTopology().map((a) => ({
+      uri: `${AGENT_BRIEF_SCHEME}${a.id}`,
+      name: a.name,
+      description: a.description,
+      mimeType: SKILL_RESOURCE_MIME,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Render an AgentBrief as the wairon-agent:// resource's markdown content. */
+function renderAgentBriefMarkdown(brief: AgentBrief): string {
+  const lines = [
+    `# Agent brief: ${brief.agentId}`,
+    '',
+    `- **Name**: ${brief.name}`,
+    `- **Template**: ${brief.template}`,
+    ...(brief.domainRoot ? [`- **Domain root**: ${brief.domainRoot}`] : []),
+    `- **Owned paths**: ${brief.ownedPaths.join(', ')}`,
+    ...(brief.readPaths?.length ? [`- **Read paths**: ${brief.readPaths.join(', ')}`] : []),
+    '',
+    '## Instructions',
+    '',
+    brief.instructions,
+  ];
+  // Variant guidance is normally folded into the rendered instructions by the
+  // template; carry it as its own section only when the template did not.
+  if (brief.variantGuidance && !brief.instructions.includes(brief.variantGuidance)) {
+    lines.push('', '## Variant guidance', '', brief.variantGuidance);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 /**
  * Register the resources/list + resources/read endpoints on the SDK server so
  * both the stdio server and the hosted per-project scoped server (which reuse
- * this same factory) publish the built-in SDD skills automatically. Reads
- * dispatch through the skills adapter to the resource workflow; an unknown URI
- * surfaces the not-found message as an MCP error.
+ * this same factory) publish the built-in SDD skills PLUS one live agent-brief
+ * resource per agent in the current topology. Reads route on the URI scheme:
+ * wairon-agent:// composes that agent's live brief; everything else stays the
+ * skill path, where an unknown URI surfaces the not-found message as an MCP
+ * error. `listChanged` is declared ONLY by the long-lived stdio server, which
+ * actually emits list-changed after topology-altering spec writes; the
+ * stateless hosted per-request server advertises none and stays correct-on-poll.
  */
-function registerSkillResources(server: McpServer): void {
-  server.server.registerCapabilities({ resources: {} });
+function registerSkillResources(server: McpServer, listChanged: boolean): void {
+  server.server.registerCapabilities({ resources: listChanged ? { listChanged: true } : {} });
 
   server.server.setRequestHandler(ListResourcesRequestSchema, () => ({
-    resources: listSkillResources().map((d) => ({
-      uri: d.resourceUri,
-      name: d.name,
-      description: d.description,
-      mimeType: SKILL_RESOURCE_MIME,
-    })),
+    resources: [
+      ...listSkillResources().map((d) => ({
+        uri: d.resourceUri,
+        name: d.name,
+        description: d.description,
+        mimeType: SKILL_RESOURCE_MIME,
+      })),
+      ...listAgentBriefResources(),
+    ],
   }));
 
   server.server.setRequestHandler(ReadResourceRequestSchema, (request) => {
     const uri = request.params.uri;
+    if (uri.startsWith(AGENT_BRIEF_SCHEME)) {
+      try {
+        const brief = composeAgentBrief(uri.slice(AGENT_BRIEF_SCHEME.length));
+        return { contents: [{ uri, mimeType: SKILL_RESOURCE_MIME, text: renderAgentBriefMarkdown(brief) }] };
+      } catch (e) {
+        // UnknownAgentError names the known ids — surface that message as-is.
+        throw new McpError(ErrorCode.InvalidParams, e instanceof Error ? e.message : String(e));
+      }
+    }
     try {
       const content = readSkillResource(skillIdFromResourceUri(uri));
       return { contents: [{ uri, mimeType: SKILL_RESOURCE_MIME, text: content }] };
@@ -280,8 +397,8 @@ function registerSkillResources(server: McpServer): void {
  * Deliberately mirrored from the SAME descriptor list the resources use, so the
  * two surfaces can never drift: one skill set, two ways in.
  */
-function registerSkillPrompts(server: McpServer): void {
-  server.server.registerCapabilities({ prompts: {} });
+function registerSkillPrompts(server: McpServer, listChanged: boolean): void {
+  server.server.registerCapabilities({ prompts: listChanged ? { listChanged: true } : {} });
 
   server.server.setRequestHandler(ListPromptsRequestSchema, () => ({
     prompts: listSkillResources().map((d) => ({
@@ -332,6 +449,20 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   }, {
     instructions: buildServerInstructions(),
   });
+
+  // Truthful listChanged: ONLY the long-lived stdio session declares it, so
+  // ONLY that session emits. Fired by reg() after a successful SPEC_WRITE_TOOLS
+  // call — the derived agent topology (and its wairon-agent:// briefs) just
+  // changed. A no-op before a transport is connected, and never allowed to
+  // throw into a tool result.
+  if (!options.hostedTools) {
+    listChangedEmitters.set(server, () => {
+      try {
+        void server.server.sendResourceListChanged().catch(() => { /* transport gone mid-send */ });
+        void server.server.sendPromptListChanged().catch(() => { /* transport gone mid-send */ });
+      } catch { /* not connected yet — nothing to notify */ }
+    });
+  }
 
   // ── Topology tools ────────────────────────────────────────────────────────
 
@@ -1227,11 +1358,28 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  // ── Built-in SDD skills as read-only MCP resources ────────────────────────
-  registerSkillResources(server);
+  reg<{ agentId: string }>(server,
+    'sdd_get_agent_brief',
+    {
+      description: 'Compose the LIVE delegation brief for one resolved agent: the fully rendered instruction body plus the ownedPaths/readPaths scope fence — the dynamic replacement for generated per-component agent files. Fetch a brief and spawn a generic subagent with it: always fresh after a re-lock, no session restart needed. List agent ids via listAgents or resources/list (the wairon-agent:// entries).',
+      inputSchema: {
+        agentId: z.string().describe('The resolved agent id (list via listAgents or resources/list)'),
+      },
+    },
+    ({ agentId }) => {
+      try {
+        return json(composeAgentBrief(agentId));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  // ── Built-in SDD skills + live agent briefs as read-only MCP resources ────
+  registerSkillResources(server, !options.hostedTools);
 
   // ── The same skills as MCP prompts (discoverable, not merely fetchable) ────
-  registerSkillPrompts(server);
+  registerSkillPrompts(server, !options.hostedTools);
 
   // ── Chained-subproject bind-time announcement ─────────────────────────────
   // When the bound root is a chained subproject, announce it on the startup
