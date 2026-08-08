@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { composeAgentBrief, UnknownAgentError } from '../../src/core/agent_resolver.js';
-import { loadTemplate } from '../../src/core/templates.js';
+import { loadTemplate, loadAgentOverride } from '../../src/core/templates.js';
 import { TemplateNotFoundError } from '../../src/utils/errors.js';
 
 // ---------------------------------------------------------------------------
@@ -134,6 +134,70 @@ describe('composeAgentBrief (live delegation briefs)', () => {
     proj.activate();
     try {
       expect(() => loadTemplate('no-such-template')).toThrowError(TemplateNotFoundError);
+    } finally { proj.cleanup(); }
+  });
+
+  // -------------------------------------------------------------------------
+  // Per-agent project guidance (.wai/agents/<agentId>.md): user-owned markdown
+  // folded LIVE into the brief under an attributed '## Project guidance' section.
+  // -------------------------------------------------------------------------
+
+  it('folds .wai/agents/<agentId>.md into the instructions under a Project guidance section', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', 'schemaVersion: 1.0.0\nid: alpha\nname: Alpha\ndescription: d\nparentSystem: TestSystem');
+    proj.writeFile('.wai/agents/alpha-owner.md', 'Prefer the shared retry helper over ad-hoc loops.\n');
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('alpha-owner');
+      expect(brief.instructions).toContain('## Project guidance');
+      expect(brief.instructions).toContain('Prefer the shared retry helper over ad-hoc loops.');
+      // Attributed exactly once, guidance under the section, clean trailing newline.
+      expect(brief.instructions.match(/## Project guidance/g)).toHaveLength(1);
+      expect(brief.instructions.indexOf('Prefer the shared retry helper'))
+        .toBeGreaterThan(brief.instructions.indexOf('## Project guidance'));
+      expect(brief.instructions.endsWith('Prefer the shared retry helper over ad-hoc loops.\n')).toBe(true);
+    } finally { proj.cleanup(); }
+  });
+
+  it('emits no Project guidance section when the project defines no guidance file', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', 'schemaVersion: 1.0.0\nid: alpha\nname: Alpha\ndescription: d\nparentSystem: TestSystem');
+    proj.activate();
+    try {
+      expect(composeAgentBrief('alpha-owner').instructions).not.toContain('## Project guidance');
+    } finally { proj.cleanup(); }
+  });
+
+  it('reflects a guidance edit on the NEXT composeAgentBrief call (live read, no cache)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', 'schemaVersion: 1.0.0\nid: alpha\nname: Alpha\ndescription: d\nparentSystem: TestSystem');
+    proj.writeFile('.wai/agents/alpha-owner.md', 'First revision.\n');
+    proj.activate();
+    try {
+      expect(composeAgentBrief('alpha-owner').instructions).toContain('First revision.');
+      proj.writeFile('.wai/agents/alpha-owner.md', 'Second revision.\n');
+      const brief = composeAgentBrief('alpha-owner');
+      expect(brief.instructions).toContain('Second revision.');
+      expect(brief.instructions).not.toContain('First revision.');
+    } finally { proj.cleanup(); }
+  });
+
+  it('loadAgentOverride returns null when absent and the markdown verbatim when present', () => {
+    const proj = createTempProject();
+    proj.writeFile('.wai/agents/some-agent.md', '# Notes\n\nverbatim body\n');
+    proj.activate();
+    try {
+      expect(loadAgentOverride('some-agent')).toBe('# Notes\n\nverbatim body\n');
+      expect(loadAgentOverride('no-such-agent')).toBeNull();
+    } finally { proj.cleanup(); }
+  });
+
+  it('loadAgentOverride treats a directory at the guidance path as absent', () => {
+    const proj = createTempProject();
+    proj.writeFile('.wai/agents/dir-agent.md/nested.txt', 'x'); // makes dir-agent.md a directory
+    proj.activate();
+    try {
+      expect(loadAgentOverride('dir-agent')).toBeNull();
     } finally { proj.cleanup(); }
   });
 });

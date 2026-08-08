@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import * as path from 'path';
 import { Command } from 'commander';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { logger, setLogLevel } from '../utils/logger.js';
@@ -13,8 +14,8 @@ import { runGenerate } from '../commands/generate.js';
 import { runLock as lockTree } from '../commands/lock.js';
 import type { LockOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete } from '../commands/validate.js';
-import { assertProjectInitialized, loadProjectConfig, AI_PATHS } from '../config/loader.js';
-import { pathExists } from '../utils/fs.js';
+import { assertProjectInitialized, loadProjectConfig, loadRegistry, AI_PATHS } from '../config/loader.js';
+import { pathExists, writeFile } from '../utils/fs.js';
 import { runList } from '../commands/list.js';
 import { runShow } from '../commands/show.js';
 import { runMcpServe, runMcpInstall, runMcpStatus } from '../commands/mcp.js';
@@ -51,6 +52,7 @@ import {
   runSubsystemMove,
   runSubsystemExternalize,
   runSubsystemInternalize,
+  composeAgentBrief,
 } from '../commands/subsystem.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -194,10 +196,10 @@ async function runLock(options: LockOptions): Promise<void> {
   await runGenerate({ domain: options.subsystem });
 
   logger.blank();
-  logger.success('Specs locked and agent topology generated.');
+  logger.success('Specs locked and generated outputs reconciled.');
   logger.info(`Lock record written (.wai/lock.json): stateId ${record.stateId.algorithm}:${record.stateId.digest} — status ${record.status}.`);
   logger.info(
-    'Generated owner files refreshed. Live agent briefs (sdd_get_agent_brief / wairon-agent://) ' +
+    'Live agent briefs (sdd_get_agent_brief / wairon-agent://) ' +
       'are composed per call and already current — no session restart needed.',
   );
 }
@@ -528,6 +530,80 @@ program
   .description('Show details of a specific agent resolved from the spec tree')
   .action(async (id: string) => {
     await runShow(id);
+  });
+
+// ---------------------------------------------------------------------------
+// agent — live delegation briefs + user-owned per-agent guidance
+// ---------------------------------------------------------------------------
+
+/** Thrown when `wairon agent customize` targets a guidance file that already
+ *  exists — it is user-owned and is never regenerated or overwritten. */
+class GuidanceFileExistsError extends WaironError {
+  constructor(relPath: string) {
+    super(`${relPath} already exists. It is user-owned — edit it directly; wairon never regenerates or prunes it.`);
+    this.name = 'GuidanceFileExistsError';
+  }
+}
+
+// cli_runner.runAgent — `wairon agent <action> <id>`. `brief` prints the
+// agent's LIVE delegation brief (the CLI window into what sdd_get_agent_brief
+// serves); `customize` scaffolds the user-owned guidance file
+// .wai/agents/<id>.md from the current brief and REFUSES when it exists.
+async function runAgent(action: string, id: string): Promise<void> {
+  assertProjectInitialized();
+
+  switch (action) {
+    case 'brief': {
+      const brief = composeAgentBrief(id);
+      logger.header(`${brief.name} (${brief.agentId})`);
+      if (brief.domainRoot) logger.info(`Domain:      ${brief.domainRoot}`);
+      if (brief.ownedPaths.length > 0) {
+        logger.info('Owned paths:');
+        for (const p of brief.ownedPaths) logger.info(`  ${p}`);
+      }
+      if (brief.readPaths && brief.readPaths.length > 0) {
+        logger.info('Read paths:');
+        for (const p of brief.readPaths) logger.info(`  ${p}`);
+      }
+      logger.blank();
+      console.log(brief.instructions);
+      return;
+    }
+    case 'customize': {
+      // Composing first also validates the id (UnknownAgentError on a miss).
+      const brief = composeAgentBrief(id);
+      const guidancePath = path.join(AI_PATHS.root(), 'agents', `${id}.md`);
+      const relPath = `.wai/agents/${id}.md`;
+      if (pathExists(guidancePath)) {
+        throw new GuidanceFileExistsError(relPath);
+      }
+      // Starting content: the agent's (subsystem-derived) description. The
+      // spec-derived facts themselves stay OUT of the file — they are inferred
+      // live on every brief composition.
+      const description = loadRegistry().agents.find((a) => a.id === id)?.description ?? brief.name;
+      writeFile(guidancePath, [
+        `<!-- Project guidance for agent "${id}" — user-owned; wairon never regenerates or prunes this file.`,
+        '     Spec-derived facts (ownership, paths, workflow) are inferred LIVE from the spec tree on every',
+        '     brief composition — do not duplicate them here. Everything below this header is folded into',
+        `     every "${id}" brief under "## Project guidance". -->`,
+        '',
+        description,
+        '',
+      ].join('\n'));
+      logger.success(`Created ${relPath}`);
+      logger.info('Edit it freely — its content is folded into every future brief for this agent under "## Project guidance".');
+      return;
+    }
+    default:
+      throw new WaironError(`Unknown agent action "${action}" (expected brief | customize).`);
+  }
+}
+
+program
+  .command('agent <action> <id>')
+  .description('Live agent briefs: `brief <id>` prints the live delegation brief; `customize <id>` scaffolds the user-owned guidance file .wai/agents/<id>.md')
+  .action(async (action: string, id: string) => {
+    await runAgent(action, id);
   });
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ import { AgentBrief, AgentRecord } from '../models/agent.js';
 import { loadProjectConfig, AI_PATHS, loadTopologyConfig } from '../config/loader.js';
 import { getProjectRoot, pathExists } from '../utils/fs.js';
 import { WaironError } from '../utils/errors.js';
-import { loadTemplate, renderTemplateInstructions } from './templates.js';
+import { loadTemplate, loadAgentOverride, renderTemplateInstructions } from './templates.js';
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -485,7 +485,7 @@ export function composeAgentBrief(agentId: string): AgentBrief {
   // The same variable map the generate-time exporter feeds templates (see
   // exporters/generate.ts buildVars) — duplicated here because core must not
   // import exporters.
-  const instructions = renderTemplateInstructions(template, {
+  let instructions = renderTemplateInstructions(template, {
     agentId: record.id,
     agentName: record.name,
     agentDescription: record.description,
@@ -497,6 +497,14 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     domainName: '',
     variantGuidance: record.variantGuidance ?? '',
   });
+
+  // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
+  // read LIVE — an edit applies on the next call) under an attributed section,
+  // so the user's delta stays legible AS a delta over the inferred brief.
+  const guidance = loadAgentOverride(agentId);
+  if (guidance !== null) {
+    instructions = `${instructions.trimEnd()}\n\n## Project guidance\n\n${guidance.trim()}\n`;
+  }
 
   return {
     agentId: record.id,

@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { AgentRecord } from '../models/agent.js';
 import { ProjectConfig, TargetConfig } from '../models/project.js';
-import { loadTemplate, renderTemplateInstructions } from '../core/templates.js';
+import { loadTemplate, composeAgentBrief } from '../core/index.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { getExporter } from './registry.js';
 import { ExportContext, ExportResult, WAIRON_MANAGED_BANNER } from './base.js';
@@ -46,7 +46,11 @@ export function generateAgent(
   // Prepend the managed marker so `generate` can later reconcile/prune this file
   // safely (see WAIRON_MANAGED_MARKER). It is an HTML comment — inert in the
   // agent's instructions for every markdown-based target.
-  const rendered = `${WAIRON_MANAGED_BANNER}\n${renderTemplateInstructions(template, buildVars(agent))}`;
+  //
+  // The BODY is the live brief composition (core composeAgentBrief), so the
+  // file, the sdd_get_agent_brief tool, and the wairon-agent:// resource are
+  // one text — including the user-owned .wai/agents/<id>.md guidance fold.
+  const rendered = `${WAIRON_MANAGED_BANNER}\n${composeAgentBrief(agent.id).instructions}`;
   const results: ExportResult[] = [];
 
   for (const agentTarget of agent.targets) {
@@ -104,25 +108,6 @@ export function resolveExpectedOutputPaths(
     }
   }
   return expected;
-}
-
-// ---------------------------------------------------------------------------
-// Template variable builder
-// ---------------------------------------------------------------------------
-
-function buildVars(agent: AgentRecord): Record<string, string> {
-  return {
-    agentId: agent.id,
-    agentName: agent.name,
-    agentDescription: agent.description,
-    ownedPaths: agent.ownedPaths.join('\n'),
-    tags: agent.tags.join(', '),
-    renderContext: 'root',
-    contextNote: '',
-    domainPath: '.',
-    domainName: '',
-    variantGuidance: agent.variantGuidance ?? '',
-  };
 }
 
 /**

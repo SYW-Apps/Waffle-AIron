@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { listFiles, pathExists } from '../utils/fs.js';
+import { listFiles, pathExists, readFileOrNull } from '../utils/fs.js';
 import { parseYaml, readYamlFile } from '../utils/yaml.js';
 import { TemplateNotFoundError } from '../utils/errors.js';
 import { Template, TemplateSchema } from '../models/template.js';
@@ -43,6 +43,19 @@ export function loadTemplate(id: string, globalOverride?: string): Template & Ag
     }
   }
   throw new TemplateNotFoundError(id);
+}
+
+/**
+ * Read the optional per-agent project guidance file (the
+ * itemplate_source_adapter loadAgentOverride contract):
+ * .wai/agents/<agentId>.md under the bound project root. Read LIVE on every
+ * call — a user edit applies on the next brief composition, and wairon never
+ * regenerates or prunes the file (it is user-owned). A missing, unreadable,
+ * or non-file path behaves as absent (null) rather than throwing.
+ */
+export function loadAgentOverride(agentId: string): string | null {
+  const filePath = path.join(AI_PATHS.root(), 'agents', `${agentId}.md`);
+  return readFileOrNull(filePath);
 }
 
 /**
