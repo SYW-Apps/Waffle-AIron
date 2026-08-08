@@ -94,6 +94,15 @@ methods:
       and of which parent/mount? Used by server startup to announce the context.
     signature: 'resolveChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef | null
+  - name: composeAgentBrief
+    description: >-
+      Calls composeAgentBrief on core portal — the live per-agent delegation brief for the
+      sdd_get_agent_brief tool and the wairon-agent:// resource reads.
+    signature: 'composeAgentBrief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-06T08:22:04.863Z'
+updatedAt: '2026-08-08T11:12:36.729Z'

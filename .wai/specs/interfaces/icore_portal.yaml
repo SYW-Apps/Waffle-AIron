@@ -175,6 +175,15 @@ methods:
     signature: 'readLockState(): LockStatus'
     returns: LockStatus
     params: []
+  - name: composeAgentBrief
+    description: >-
+      Compose the live delegation brief for one resolved agent (rendered instructions + scope
+      fields). Pure 1:1 forward.
+    signature: 'composeAgentBrief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-30T15:59:26.637Z'
+updatedAt: '2026-08-08T11:12:28.089Z'

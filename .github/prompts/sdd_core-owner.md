@@ -17,11 +17,13 @@ You own and decide on everything within:
 .wai/specs/components/extension_orchestrator.yaml
 .wai/specs/components/lock_registry.yaml
 .wai/specs/components/pack_source_adapter.yaml
+.wai/specs/components/pack_store_adapter.yaml
 .wai/specs/components/spec_file_store.yaml
 .wai/specs/components/spec_index.yaml
 .wai/specs/components/spec_loader.yaml
 .wai/specs/components/spec_registry.yaml
 .wai/specs/components/state_hash_specialist.yaml
+.wai/specs/components/template_source_adapter.yaml
 .wai/specs/components/variant_registry_adapter.yaml
 src/core/agent_resolver.ts
 src/core/specs.ts
@@ -29,7 +31,9 @@ src/core/index.ts
 src/core/diagram.ts
 src/core/extensions.ts
 src/core/lockfile.ts
+src/core/packstore.ts
 src/core/statehash.ts
+src/core/templates.ts
 src/core/variants.ts
 ```
 

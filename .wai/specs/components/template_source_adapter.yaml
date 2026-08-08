@@ -1,0 +1,15 @@
+id: template_source_adapter
+name: Template Source Adapter
+description: >-
+  The only component doing agent-instruction-template file I/O: resolves a template name through the
+  three-tier override chain (project .wai/templates/ → user home ~/.wairon/templates/ → packaged
+  built-in templates) and returns the raw template. Serves both the generate-time exporters and the
+  live composeAgentBrief path from one implementation, so file-based and MCP-served agent
+  instructions can never drift.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-08-08T11:11:41.523Z'
+updatedAt: '2026-08-08T11:29:08.304Z'

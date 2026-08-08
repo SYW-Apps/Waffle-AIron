@@ -107,6 +107,13 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: listExternalInterfaces
+  - name: sdd_get_agent_brief
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the tool call to the agent-brief workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: getAgentBrief
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:14:39.730Z'
+updatedAt: '2026-08-08T11:14:01.658Z'

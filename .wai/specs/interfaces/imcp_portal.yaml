@@ -6,7 +6,12 @@ description: >-
 component: mcp_portal
 methods:
   - name: createMcpServer
-    description: Initializes and registers the MCP server (tool registration + stdio transport)
+    description: >-
+      Initializes and registers the MCP server (tool registration + stdio transport). Declares its
+      MCP capabilities truthfully: resources and prompts advertise listChanged only because the
+      long-lived stdio session actually emits list-changed notifications after a successful spec
+      write that alters the agent topology or skill set (the stateless hosted transport advertises
+      none and stays correct-on-poll).
     signature: 'createMcpServer(): McpServer'
     returns: McpServer
     endpoint:
@@ -87,24 +92,30 @@ methods:
       transport: Custom
       address: mcp tools/call sdd_internalize_subsystem
   - name: listResources
-    description: 'MCP resource: list the built-in SDD skills the server publishes as read-only resources.'
+    description: >-
+      MCP resource: list everything the server publishes as read-only resources — the built-in SDD
+      skills (wairon-skill://) plus one live agent-brief resource per agent in the current topology
+      (wairon-agent://).
     signature: 'listResources(): SkillResourceDescriptor[]'
     returns: SkillResourceDescriptor[]
     params: []
     endpoint:
       transport: Custom
-      address: mcp resources/list (built-in SDD skills)
+      address: mcp resources/list (SDD skills + live agent briefs)
   - name: readResource
-    description: 'MCP resource: read one published built-in SDD skill''s content by resource id.'
+    description: >-
+      MCP resource: read one published resource by id — a wairon-skill:// id returns the
+      (pack-composed) skill markdown, a wairon-agent:// id returns that agent's live brief composed
+      from the current spec tree.
     signature: 'readResource(resourceId: string): string'
     returns: string
     params:
       - name: resourceId
         type: string
-        description: The MCP resource id / skill id to read.
+        description: The MCP resource id — a skill id or wairon-agent:// agent id.
     endpoint:
       transport: Custom
-      address: mcp resources/read (built-in SDD skill)
+      address: mcp resources/read (SDD skill or agent brief)
   - name: sdd_list_external_interfaces
     description: >-
       List the bound project's consumable external surfaces (parent family, siblings, foreign
@@ -113,6 +124,21 @@ methods:
       reference resolution.
     signature: 'sdd_list_external_interfaces(): ExternalSurfaceEntry[]'
     returns: ExternalSurfaceEntry[]
+  - name: sdd_get_agent_brief
+    description: >-
+      Tool: compose the LIVE delegation brief for one resolved agent (rendered instructions +
+      ownedPaths/readPaths scope). The dynamic replacement for generated per-component agent files:
+      an orchestrating session fetches a brief and spawns a generic subagent with it — always fresh
+      after a re-lock, no session restart, identical over stdio and the hosted data plane.
+    signature: 'sdd_get_agent_brief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
+        description: The resolved agent id (list via listAgents or resources/list).
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_get_agent_brief
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:14:27.410Z'
+updatedAt: '2026-08-08T11:14:00.256Z'

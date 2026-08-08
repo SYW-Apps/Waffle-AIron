@@ -1,0 +1,27 @@
+id: template_source_adapter_impl
+name: Template Source Adapter Implementation
+description: >-
+  Concrete template loading over the three-tier override chain, realized by the existing
+  loadTemplate in src/core/templates.ts (previously unmodeled). The same implementation serves the
+  generate-time exporters and the live brief composition path.
+contract: itemplate_source_adapter
+sourcePath: src/core/templates.ts
+methods:
+  - name: loadTemplate
+    narrative:
+      - stepNumber: 1
+        description: Probe the project tier (.wai/templates/<name>.yaml) and use it when present
+        type: local
+      - stepNumber: 2
+        description: Otherwise probe the user-home tier (~/.wairon/templates/<name>.yaml)
+        type: local
+      - stepNumber: 3
+        description: Otherwise fall back to the packaged built-in template; an unknown name throws
+        type: local
+      - stepNumber: 4
+        description: Parse the template file and return the raw AgentTemplate (instruction body unrendered)
+        type: return
+        outcome: template loaded
+status: complete
+createdAt: '2026-08-08T11:12:05.560Z'
+updatedAt: '2026-08-08T11:29:08.615Z'

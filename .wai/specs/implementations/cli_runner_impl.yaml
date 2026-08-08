@@ -37,7 +37,10 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: loadSystemSpec
       - stepNumber: 2
-        description: Generate Dynamic Agent outputs matching configured target engines
+        description: >-
+          Generate Dynamic Agent outputs matching configured target engines, then prune stale
+          managed agent files against the FULL resolved topology (also under a domain scope),
+          re-export skills, and re-inject the local guides
         type: local
   - name: runList
     narrative:
@@ -725,9 +728,14 @@ methods:
         targetComponent: cli_surfaces_client_adapter
         targetMethod: generateChildSnapshots
       - stepNumber: 7
+        description: >-
+          Refresh the generated outputs (runGenerate): re-render owner/architect files, prune stale
+          managed agents against the full topology, re-export skills, re-inject guides
+        type: local
+      - stepNumber: 8
         description: Print the lock record and return
         type: return
         outcome: locked
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-29T20:21:15.010Z'
+updatedAt: '2026-08-08T11:14:57.744Z'
