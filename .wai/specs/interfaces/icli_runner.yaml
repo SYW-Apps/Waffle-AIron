@@ -5,18 +5,21 @@ component: cli_runner
 methods:
   - name: runInit
     description: >-
-      Initializes a new wairon workspace and exports static skills. Component-implementer file
-      generation (generateComponentImplementers) defaults OFF in the written project config:
-      per-subsystem owners are the file granularity, and component-level delegation is served as
-      live MCP briefs.
+      Initializes a new wairon workspace and exports static skills. Writes NO agent files:
+      component-implementer generation (generateComponentImplementers) and owner-file
+      materialization (materializeAgentFiles) both default OFF — per-subsystem agents are served as
+      live MCP briefs, and the injected guides + skills are the only per-tool artifacts.
     signature: 'runInit(options: { yes?: boolean }): Promise<void>'
     returns: Promise<void>
   - name: runGenerate
     description: >-
-      Generates output configs/agents based on spec topology — the optional MATERIALIZED VIEW of the
-      live topology (per-subsystem owners + architect). Stale-agent pruning always resolves the FULL
-      topology for its expected-file set, so a domain-scoped run prunes safely instead of skipping
-      pruning and leaving orphaned managed files.
+      Reconciles the generated outputs to the configured state. Agent-file materialization is OPT-IN
+      via rules.materializeAgentFiles (default off): when ON, generates per-subsystem
+      owner/architect files rendered through the SAME live brief composition (so file, tool, and
+      resource surfaces are one text) and prunes stale managed files against the FULL resolved
+      topology; when OFF (the default), the desired state is ZERO agent files — any leftover
+      wairon:managed agent files are removed once, and only guides and skills are (re)injected.
+      Hand-authored files and .wai/agents/ guidance files are never touched either way.
     signature: >-
       runGenerate(options: { target?: string; domain?: string; domains?: string; root?: boolean;
       dryRun?: boolean }): Promise<void>
@@ -149,6 +152,23 @@ methods:
       - name: options
         type: LockOptions
         description: 'CLI flags: --yes (skip confirmation), --subsystem (scope narrowing), --recursive.'
+  - name: runAgent
+    description: >-
+      Handle `wairon agent <action> <id>`: `brief` prints the agent's LIVE delegation brief
+      (composed from the current tree — the CLI window into what sdd_get_agent_brief serves);
+      `customize` scaffolds the user-owned project guidance file .wai/agents/<id>.md from the
+      current brief (a header explaining that spec facts are inferred live plus the subsystem
+      description as a starting point) and REFUSES when the file already exists — it is user-owned,
+      never regenerated, never pruned.
+    signature: 'runAgent(action: string, id: string): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: action
+        type: string
+        description: brief | customize
+      - name: id
+        type: string
+        description: The resolved agent id.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-08-08T11:14:55.568Z'
+updatedAt: '2026-08-08T12:43:46.303Z'

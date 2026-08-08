@@ -22,6 +22,25 @@ methods:
         description: Parse the template file and return the raw AgentTemplate (instruction body unrendered)
         type: return
         outcome: template loaded
+  - name: loadAgentOverride
+    narrative:
+      - stepNumber: 1
+        description: Probe .wai/agents/<agentId>.md under the bound project root
+        type: local
+      - stepNumber: 2
+        description: Route on presence
+        type: branch
+        condition: the guidance file exists
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return the file's markdown verbatim
+        type: return
+        outcome: guidance returned
+      - stepNumber: 4
+        description: No project guidance for this agent
+        type: return
+        outcome: 'null'
 status: complete
 createdAt: '2026-08-08T11:12:05.560Z'
-updatedAt: '2026-08-08T11:29:08.615Z'
+updatedAt: '2026-08-08T12:44:04.776Z'

@@ -736,6 +736,55 @@ methods:
         description: Print the lock record and return
         type: return
         outcome: locked
+  - name: runAgent
+    narrative:
+      - stepNumber: 1
+        description: Dispatch on the agent action
+        type: switch
+        'on': action
+        cases:
+          - value: brief
+            step: 2
+          - value: customize
+            step: 4
+        defaultStep: 9
+      - stepNumber: 2
+        description: Compose the agent's live brief via the core client adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: composeAgentBrief
+      - stepNumber: 3
+        description: Print the rendered brief (instructions + ownedPaths/readPaths scope)
+        type: return
+        outcome: brief printed
+      - stepNumber: 4
+        description: Compose the agent's live brief via the core client adapter to seed the scaffold
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: composeAgentBrief
+      - stepNumber: 5
+        description: Refuse to clobber a user-owned file
+        type: branch
+        condition: .wai/agents/<id>.md already exists
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: The guidance file is user-owned — point at it for direct editing instead of overwriting
+        type: throw
+        error: GuidanceFileExistsError
+      - stepNumber: 7
+        description: >-
+          Write the scaffold: a header explaining that spec-derived facts are inferred live (do not
+          duplicate them), then the subsystem description as the starting content
+        type: local
+      - stepNumber: 8
+        description: Report the created path and how it is used (folded into every future brief)
+        type: return
+        outcome: scaffolded
+      - stepNumber: 9
+        description: Unknown agent action
+        type: throw
+        error: unknown agent action (expected brief | customize)
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-08-08T11:14:57.744Z'
+updatedAt: '2026-08-08T12:43:52.292Z'

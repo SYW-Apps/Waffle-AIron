@@ -15,6 +15,18 @@ methods:
       - name: templateName
         type: string
         description: Template identifier (architect, domain-owner, implementer, …).
+  - name: loadAgentOverride
+    description: >-
+      Read the optional per-agent project guidance file (.wai/agents/<agentId>.md) and return its
+      markdown, or null when the project defines none. Read LIVE on every brief composition — user
+      edits apply on the next fetch; wairon scaffolds this file once on request and never
+      regenerates or prunes it (it is user-owned).
+    signature: 'loadAgentOverride(agentId: string): string | null'
+    returns: string | null
+    params:
+      - name: agentId
+        type: string
+        description: The resolved agent id whose guidance file to read.
 status: complete
 createdAt: '2026-08-08T11:11:55.834Z'
-updatedAt: '2026-08-08T11:29:08.464Z'
+updatedAt: '2026-08-08T12:39:57.345Z'
