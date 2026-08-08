@@ -225,6 +225,12 @@ themes, stored per browser alongside the existing UI settings.
   and login-cog pickers, re-theme the canvas chrome through the bridge, and
   `-rgb` companions + the accessible primary-contrast recompute from the final
   colors automatically. A vanished custom id degrades to the default theme.
+- **The picker is the shared SYW `ThemeMenu` component** (matching waffler_ui):
+  one compact "Appearance" section — a dropdown trigger showing the active
+  theme's swatch pill + name, a flyout listing every theme with "Create custom
+  theme" at its foot, and the mode toggle directly beneath. Extracted as a
+  props-only, app-agnostic component (`components/ThemeMenu.tsx`, styled purely
+  through `.tmenu-*` classes) so the same menu can be lifted into any SYW app.
 
 ### Fixes
 

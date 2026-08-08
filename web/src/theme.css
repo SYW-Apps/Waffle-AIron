@@ -430,7 +430,9 @@ select.input option, select.input optgroup {
   border-radius: 14px;
   box-shadow: var(--shadow);
   z-index: 300;
-  overflow: hidden;
+  /* visible, not hidden: the ThemeMenu flyout overlays past the popover edge
+     (section backgrounds are transparent, so the rounding stays clean). */
+  overflow: visible;
 }
 .hmenu-head { display: flex; gap: 12px; align-items: center; padding: 16px; border-bottom: 1px solid var(--border); }
 .hmenu-section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
@@ -443,6 +445,106 @@ select.input option, select.input optgroup {
 .theme-cog .hmenu-trigger { padding: 8px 10px; }
 .theme-cog .cog { font-size: 16px; line-height: 1; color: var(--ink-dim); }
 .theme-cog .hmenu-trigger:hover .cog, .theme-cog .hmenu-trigger.is-open .cog { color: var(--ink); }
+/* ── Theme menu (components/ThemeMenu.tsx) — the reusable compact palette +
+   mode picker shared across SYW apps. Styled ONLY through app alias tokens so
+   porting the component means restyling this block from the target app's vars. */
+.tmenu { display: flex; flex-direction: column; gap: 8px; }
+.tmenu-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tmenu-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-subtle); font-weight: 700; }
+.tmenu-manage { font: inherit; font-size: 11px; font-weight: 700; color: var(--accent); background: none; border: none; cursor: pointer; padding: 0; }
+.tmenu-manage:hover { text-decoration: underline; }
+.tmenu-hint { font-size: 11px; color: var(--ink-subtle); }
+.tmenu-picker { position: relative; }
+.tmenu-trigger {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.tmenu-trigger:hover { border-color: var(--border-strong); }
+.tmenu-trigger.is-open { border-color: var(--border-strong); box-shadow: var(--focus); }
+.tmenu-pill { display: flex; width: 42px; height: 16px; border-radius: 999px; overflow: hidden; border: 1px solid var(--border-soft); flex: 0 0 auto; }
+.tmenu-pill span { flex: 1; }
+.tmenu-opt-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.tmenu-opt-name { font-size: 13px; font-weight: 800; line-height: 1.1; }
+.tmenu-opt-desc { font-size: 11px; line-height: 1.15; color: var(--ink-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tmenu-caret { color: var(--ink-dim); font-size: 10px; transition: transform 0.16s; }
+.tmenu-trigger.is-open .tmenu-caret { transform: rotate(180deg); }
+.tmenu-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  padding: 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--menu-bg);
+  box-shadow: var(--shadow);
+  max-height: 320px;
+  overflow-y: auto;
+}
+.tmenu-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.tmenu-row:hover { background: var(--hover); }
+.tmenu-row.is-active { background: var(--panel-soft); color: var(--accent); }
+.tmenu-row .tmenu-pill { width: 38px; height: 14px; }
+.tmenu-check { font-size: 11px; color: var(--accent); }
+.tmenu-create {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-strong);
+  background: var(--panel-soft);
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.tmenu-create:hover { background: var(--hover); }
+.tmenu-modes { display: flex; gap: 4px; padding: 3px; border-radius: var(--radius-sm); background: var(--panel-soft); border: 1px solid var(--border-soft); }
+.tmenu-mode {
+  flex: 1;
+  min-height: 28px;
+  padding: 5px 6px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tmenu-mode:hover { color: var(--ink); }
+.tmenu-mode.is-active { border-color: var(--border-strong); background: var(--panel-soft); color: var(--accent); }
+
 .theme-list { display: flex; flex-direction: column; gap: 4px; }
 .theme-opt {
   display: flex;
