@@ -189,15 +189,22 @@ export const stereotypeDepsRule: SddRule = {
           }
         }
 
-        // Specialist rule: narrow capability. It MAY use Repositories, Indexes, and
-        // Adapters, but must not own/drive bus, persistence, or runtime concerns.
+        // Specialist rule: the wildcard block stays a PURE capability — it was
+        // historically the god-component channel (including holding entity
+        // state in memory), and the counter-doctrine is deliberate: it must
+        // not own/drive bus, persistence, or runtime concerns. It MAY use
+        // Repository facades, Indexes, Adapters, and other Specialists; ALL
+        // storage — even in-memory — goes through the Store/Registry/Index/
+        // Repository mechanism, reached from a Specialist only via the
+        // Repository facade (so Store AND Registry are out), and the
+        // workflow/runtime blocks (Orchestrator, Supervisor, Actor) are out.
         if (comp.componentType === 'Specialist') {
-          const forbiddenTypes = ['Portal', 'Observer', 'Orchestrator', 'Store', 'Supervisor'];
+          const forbiddenTypes = ['Portal', 'Observer', 'Orchestrator', 'Store', 'Registry', 'Supervisor', 'Actor'];
           if (forbiddenTypes.includes(depComp.componentType)) {
             ctx.addIssue(
               'error',
               'ARCHITECTURE_VIOLATION_SPECIALIST_DEP',
-              `Architectural violation: Specialist component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Specialists are narrow capabilities — they may use Repositories, Indexes, and Adapters, but not Orchestrators, Supervisors, Stores, Portals, or Observers.`
+              `Architectural violation: Specialist component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Specialists are pure capabilities — they may use Repository facades, Indexes, and Adapters, but never workflow/runtime blocks (Orchestrators, Supervisors, Actors) and never persistence directly (Stores, Registries — all storage, even in-memory, is reached through a Repository facade), nor Portals or Observers.`
               + (depComp.componentType === 'Store' ? storeResolutionHint(comp.componentType, depComp.id) : ''),
               comp.id,
               isDraftCtx || ctx.isComponentDraft(depComp.id),

@@ -119,9 +119,13 @@ is whether it also owns **state** or **workflow**:
   Adapter is its only reachable surface, and it depends on the **remote subsystem's
   Portal** (its front door), which dispatches inward. It still may not depend on the
   remote subsystem's Orchestrators/Stores/Specialists directly.
-- **Specialist** stays narrow; it **may** depend on Repositories, Indexes, and
-  **Adapters**, but must not own bus/persistence/runtime (those are
-  Observer/Store/Actor).
+- **Specialist** stays narrow — a pure capability, never the wildcard god
+  component. It **may** depend on Repository facades, Indexes, **Adapters**, and
+  other Specialists; it must **not** depend on workflow/runtime blocks
+  (Orchestrator, Supervisor, Actor) or on persistence directly (Store,
+  Registry): **all** storage, even in-memory, goes through the
+  Store/Registry/Index/Repository mechanism, and a Specialist reaches held
+  state only via the Repository facade.
 - The narrative `call` graph and the `dependsOn` graph must both be **DAGs** (no
   cycles), and every narrative `call` must target a method on a declared dependency.
 
