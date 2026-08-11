@@ -161,6 +161,55 @@ fields — destroying authored specs through the sanctioned authoring path.
   usually wrong spec. Explicit rather than overloading `null`: a destructive
   meaning must be asked for, not inferred from an absent value.
 
+### Re-authoring a spec no longer erases what the tool cannot express
+
+Every `sdd_add_*` / `sdd_define_*` / `sdd_write_*` tool is an upsert: called with an
+id that already exists, it rewrites that spec. Each tool's input schema is a
+hand-maintained **subset** of the canonical schema, and the handler rebuilt the spec
+from its arguments — so every field the input could not express was erased by a
+restatement that never mentioned it, under a `Successfully added` banner:
+
+```
+sdd_add_component      lint.allow, ext, auth, variant, patterns, externalLinks
+sdd_add_subsystem      lint.allow, ext
+sdd_add_type           lint.allow, ext
+sdd_initialize_system  databases (hard-reset to []), publicInterfaces, diagram
+```
+
+A suppressed warning silently coming back days later was the only tell. The same
+loss was fixed once for `sdd_define_interface` and `sdd_write_narrative`; the other
+four surfaces were never covered.
+
+- **All six write surfaces now carry forward what they cannot express**, driven by
+  each tool's *own* input-schema keys — so a field added to a tool starts being
+  replaced, and a field added only to the canonical schema starts being carried,
+  with no parallel list to drift. It lives at the tool boundary because only there
+  is "the caller cleared this" distinguishable from "the caller never mentioned it";
+  the store receives a whole spec and cannot tell those apart.
+- **`ext` is carried even though the tools accept it.** It is opaque pack data the
+  authoring agent does not own and cannot know to restate, and the schema promises
+  it is preserved verbatim. Everything else expressed keeps replace semantics.
+- **Removals are stated rather than left to be discovered.** Replace is still the
+  contract for what the input *can* say — but a restatement that drops a method or
+  empties an array now says so, naming what went:
+
+```
+NOTICE:
+- Component "graphics" already existed — re-authored in place; this input REPLACES what it expresses.
+- Carried forward (not expressible through this tool): createdAt, externalLinks, lint, ext.
+- REMOVED by this restatement: method "beta" (endpoint bindings included) — absent from the input…
+- CLEARED by omission: dependsOn (had 1) — the argument was not repeated…
+```
+
+- **Two automated checks hold the line** (`tests/mcp/schema-field-coverage.test.ts`).
+  Against the schemas the server actually publishes over `listTools` — not a copy of
+  them — every canonical field must be expressed by its tool, store-managed, derived,
+  or explicitly declared `sdd_update_spec`-only *with a reason*; stale declarations
+  are flagged too. Then each declared field is populated, the create tool re-run with
+  minimal arguments, and required to survive. The narrative **step** schema — the
+  largest hand-copied surface, where a missing field is stripped by the MCP SDK
+  before the handler runs — is covered the same way.
+
 ### A misplaced field is refused at the write, not discovered at validate time
 
 `sdd_add_component` accepted any field on any `componentType` — the write path only

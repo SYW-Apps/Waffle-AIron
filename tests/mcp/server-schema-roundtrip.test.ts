@@ -229,6 +229,40 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
     expect(missing.isError).toBe(true);
   }, 120_000);
 
+  it('round-trips an invokedBy method declaration and a register narrative step', async () => {
+    unwrapText(await client.callTool({ name: 'sdd_add_component', arguments: {
+      id: 'ord-worker', name: 'Order Worker', description: 'Periodic queue drain',
+      subsystem: 'ord', componentType: 'Specialist', dependsOn: ['ord-store'],
+    } }));
+    unwrapText(await client.callTool({ name: 'sdd_define_interface', arguments: {
+      id: 'iord-worker', name: 'IOrderWorker', description: 'Worker contract', component: 'ord-worker',
+      methods: [{
+        name: 'tick', description: 'Drain the pending order queue once', signature: 'tick(): Promise<void>', returns: 'Promise<void>',
+        invokedBy: { kind: 'runtime', caller: 'The host scheduler fires this every 30 seconds once the service enters the running state.' },
+      }],
+    } }));
+
+    const intf = await getSpec('interface', 'iord-worker');
+    expect(intf.methods).toEqual([{
+      name: 'tick', description: 'Drain the pending order queue once', signature: 'tick(): Promise<void>', returns: 'Promise<void>',
+      invokedBy: { kind: 'runtime', caller: 'The host scheduler fires this every 30 seconds once the service enters the running state.' },
+    }]);
+
+    unwrapText(await client.callTool({ name: 'sdd_write_narrative', arguments: {
+      id: 'ord-worker-impl', name: 'Order Worker Impl', description: 'Queue drain flow', contract: 'iord-worker',
+      methods: [{ name: 'tick', narrative: [
+        { description: 'Hand the persistence callback to the runtime timer', type: 'register', targetComponent: 'ord-store', targetMethod: 'put' },
+        { description: 'Done', type: 'return', outcome: 'success' },
+      ] }],
+    } }));
+
+    const impl = await getSpec('implementation', 'ord-worker-impl');
+    expect(impl.methods[0].narrative).toEqual([
+      { stepNumber: 1, description: 'Hand the persistence callback to the runtime timer', type: 'register', targetComponent: 'ord-store', targetMethod: 'put' },
+      { stepNumber: 2, description: 'Done', type: 'return', outcome: 'success' },
+    ]);
+  }, 120_000);
+
   it('redefining an interface preserves lint, ext, endpoints, and method ext with a notice', async () => {
     unwrapText(await client.callTool({ name: 'sdd_add_component', arguments: {
       id: 'ord-portal', name: 'Order Portal', description: 'Inbound front door',
@@ -269,7 +303,10 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
       ],
     } }));
     expect(out).toContain('NOTICE');
-    expect(out).toContain('Interface "iord-portal" already existed — redefined; carried forward from the previous definition: createdAt, lint, ext, endpoint (charge), method ext (charge).');
+    expect(out).toContain('Interface "iord-portal" already existed — re-authored in place; this input REPLACES what it expresses.');
+    expect(out).toContain('Carried forward (not expressible through this tool): createdAt, endpoint (charge), ext (charge), lint, ext.');
+    // The removal is STATED, not left for a validator warning to reveal later.
+    expect(out).toContain('REMOVED by this restatement: method "legacyPing" (endpoint bindings included)');
 
     const after = await getSpec('interface', 'iord-portal');
     expect(after.createdAt).toBe(before.createdAt);
@@ -294,7 +331,7 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
       ],
     } }));
     expect(out).toContain('endpoint (charge)');
-    expect(out).not.toContain('method ext (charge)'); // the input expressed it — nothing was carried
+    expect(out).not.toContain('ext (charge)'); // the input expressed it — nothing was carried
 
     const after = await getSpec('interface', 'iord-portal');
     const charge = after.methods[0];
@@ -320,7 +357,8 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
         { description: 'Done', type: 'return', outcome: 'success' },
       ] }],
     } }));
-    expect(out).toContain('Implementation "ord-orch-impl" already existed — re-authored; carried forward from the previous version: createdAt, lint, ext, method ext (fulfill).');
+    expect(out).toContain('Implementation "ord-orch-impl" already existed — re-authored in place; this input REPLACES what it expresses.');
+    expect(out).toContain('Carried forward (not expressible through this tool): createdAt, ext (fulfill), lint, ext.');
 
     const after = await getSpec('implementation', 'ord-orch-impl');
     expect(after.createdAt).toBe(before.createdAt);
