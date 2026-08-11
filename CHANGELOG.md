@@ -346,6 +346,29 @@ fixed to match the documented intent.
   `partner-billing::ledger`) and trips `NAMESPACE_SHADOWING` instead of
   silently merging into the root subsystem's id space.
 
+### Specialist dependency matrix closed: Registry and Actor edges now flag
+
+The Specialist is the wildcard block and was historically misused as a god
+component (up to holding entity state in memory); the deliberate
+counter-doctrine is that ALL storage — even in-memory — goes through the
+Store/Registry/Index/Repository mechanism and Specialists stay pure
+capabilities. The enforced forbidden list said so for Store but left the
+persistence WRITE path and one runtime block open — an oversight the
+rule-matrix sweep surfaced, now closed.
+
+- **Behavior change:** `Specialist → Registry` and `Specialist → Actor`
+  `dependsOn` edges now flag `ARCHITECTURE_VIOLATION_SPECIALIST_DEP` (error),
+  joining Portal/Observer/Orchestrator/Store/Supervisor. This closes the
+  wildcard god-component channel; Repository facades (plus Indexes, Adapters,
+  and other Specialists) remain the legal way for a Specialist to reach held
+  state. The rule message, doc comment, and the architecture standard's
+  dependency-rules bullet now state the closed list.
+- **Migration:** an existing tree with a deliberate `Specialist → Registry`/
+  `Actor` edge acknowledges it with a `lint.allow` reason on the spec — or,
+  better, retypes/rewires per the message's Repository-facade resolution.
+  (Note errors are not locally suppressible by default; re-tune the code via
+  `rules.sddRuleSeverity` first if a transition period is needed.)
+
 ### Rule-matrix test tier: every finding code pinned by fire+control fixtures
 
 The validator can emit ~160 distinct finding codes; the rule tests covered some
