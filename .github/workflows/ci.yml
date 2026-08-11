@@ -43,6 +43,14 @@ jobs:
       - name: Run tests
         run: npm test
 
+      # Black-box agent journeys against the BUILT artifact: spawns
+      # `node dist/cli/index.js mcp serve` as a real subprocess, speaks MCP
+      # stdio, and asserts tool results + the YAML on disk. This is the tier
+      # that catches the stale-server / stale-binary incident class the
+      # src-importing unit tests cannot see. Requires the Build step above.
+      - name: Run e2e journeys (built artifact)
+        run: npm run test:e2e
+
       # Dogfood: enforce wairon's own architecture-conformance gate on its spec tree.
       # --ci treats warnings as errors.
       - name: Architecture conformance gate

@@ -9,6 +9,34 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### Black-box e2e tier: agent journeys against the built artifact
+
+Two incidents this week shared a blind spot: a long-lived MCP server running an
+older `dist/` silently stripped newly-added schema fields on write, and an older
+CLI binary rejected spec trees using new vocabulary. Both were invisible to the
+unit suite, which imports `src/` directly and never runs what actually ships.
+The new `tests/e2e/` tier closes that gap by testing the BUILT artifact as a
+subprocess.
+
+- **Agent journeys over real MCP stdio** — each suite spawns
+  `node dist/cli/index.js mcp serve` against a scratch project and drives it
+  with the official SDK client: the full authoring flow (system → subsystem →
+  components → interfaces → narratives → validate → status → live agent brief),
+  the declared-entrypoint regression (`invokedBy` kind + caller and `register`
+  steps asserted VERBATIM in the YAML on disk — the stale-server class), and
+  agent-mistake journeys proving refusals are clean and leave the tree
+  byte-identical.
+- **CLI smoke on the journey-built tree** — `validate --ci`, `lock` (asserting
+  the `.wai/lock.json` stateId digest), and `agent brief` run through the built
+  binary, exactly as a human would.
+- **Wiring** — `npm run test:e2e` (own `vitest.e2e.config.ts`, generous
+  timeouts, no coverage); the default `npm test` stays unit-scope and excludes
+  `tests/e2e/**`. CI runs the e2e tier after Build. The release workflow gained
+  a post-publish verify job: in a clean node container it installs the
+  just-published `@wairon/cli@<version>` from the registry, asserts
+  `wairon --version` prints that version, and completes a JSON-RPC initialize
+  handshake against `wairon mcp serve`.
+
 ### Pack scoping: installing a pack no longer governs every project on the machine
 
 A pack installed machine-wide used to apply to every project on that machine,

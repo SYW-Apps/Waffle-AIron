@@ -26,6 +26,10 @@ on:
     secrets:
       NPM_TOKEN:
         required: true
+    outputs:
+      version:
+        description: 'The exact version that was published (e.g. 5.1.2 or 5.1.2-dev.3)'
+        value: ${{ jobs.publish.outputs.version }}
   workflow_dispatch:
     inputs:
       version:
@@ -51,6 +55,10 @@ jobs:
   publish:
     name: Publish (public, with provenance)
     runs-on: ubuntu-latest
+    # Exposed to callers (release.yml's post-publish verify installs exactly
+    # this version from the registry).
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
