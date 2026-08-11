@@ -207,6 +207,59 @@ jobs:
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  # POST-PUBLISH VERIFY: install the just-published @wairon/cli from the public
+  # registry in a clean node container (no repo checkout, no npm cache from the
+  # build) and prove the shipped artifact actually works: the binary reports
+  # the tag version, and `wairon mcp serve` completes a real JSON-RPC
+  # initialize handshake over stdio. This is the release-side gate for the
+  # "older published binary" incident class — the version comes from the
+  # publish job's output, so it always targets exactly what was published.
+  verify-npm:
+    name: Verify published CLI
+    needs: publish-npm
+    runs-on: ubuntu-latest
+    container: node:20
+    steps:
+      - name: Install the just-published version from the registry
+        shell: bash
+        run: |
+          VERSION="${{ needs.publish-npm.outputs.version }}"
+          echo "Verifying @wairon/cli@${VERSION}"
+          # Registry propagation can lag the publish by a few seconds — retry.
+          for i in 1 2 3 4 5; do
+            if npm install -g "@wairon/cli@${VERSION}"; then
+              exit 0
+            fi
+            echo "install attempt ${i} failed — retrying in 20s"
+            sleep 20
+          done
+          echo "::error::@wairon/cli@${VERSION} not installable from the registry after 5 attempts"
+          exit 1
+
+      - name: Binary reports the published version
+        shell: bash
+        run: |
+          VERSION="${{ needs.publish-npm.outputs.version }}"
+          GOT="$(wairon --version)"
+          echo "wairon --version -> ${GOT}"
+          if [ "${GOT}" != "${VERSION}" ]; then
+            echo "::error::wairon --version printed '${GOT}', expected '${VERSION}'"
+            exit 1
+          fi
+
+      - name: MCP stdio handshake (initialize round-trip)
+        shell: bash
+        run: |
+          # Dependency-free JSON-RPC handshake: pipe an initialize request into
+          # the stdio server and grep the response for the server identity and
+          # a negotiated protocolVersion. stdout is the JSON-RPC channel.
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"release-verify","version":"0.0.0"}}}' \
+            | timeout 60 wairon mcp serve > mcp-init-response.json 2> mcp-serve.log || true
+          echo "--- response ---"; cat mcp-init-response.json
+          echo "--- server log ---"; cat mcp-serve.log
+          grep -q '"protocolVersion"' mcp-init-response.json
+          grep -q '"name":"wairon"' mcp-init-response.json
+
   # @wairon/sdk (the pack-authoring library) publishes alongside @wairon/cli, in
   # lockstep at the same tag version. Independent package, independent tarball —
   # @wairon/cli bundles the sdk into its dist, while this ships the standalone
