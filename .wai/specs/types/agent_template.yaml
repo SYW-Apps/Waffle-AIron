@@ -1,0 +1,20 @@
+kind: value-object
+id: agent_template
+name: AgentTemplate
+description: >-
+  One loaded agent instruction template: the raw {{variable}} instruction body resolved through the
+  three-tier override chain (project .wai/templates → user home templates → packaged built-ins).
+subsystem: sdd_core
+fields:
+  - name: templateName
+    type: string
+    description: Template identifier (architect, domain-owner, implementer, …).
+    optional: false
+    key: primary
+  - name: instructions
+    type: string
+    description: The raw instruction body with {{variable}} placeholders, before rendering.
+    optional: false
+methods: []
+createdAt: '2026-08-08T11:11:38.921Z'
+updatedAt: '2026-08-08T11:11:39.048Z'

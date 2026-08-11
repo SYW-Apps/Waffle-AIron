@@ -1,9 +1,10 @@
+import * as path from 'path';
 import { AgentRecord } from '../models/agent.js';
 import { ProjectConfig, TargetConfig } from '../models/project.js';
-import { loadTemplate, renderTemplateInstructions } from '../core/templates.js';
+import { loadTemplate, composeAgentBrief } from '../core/index.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { getExporter } from './registry.js';
-import { ExportResult, WAIRON_MANAGED_BANNER } from './base.js';
+import { ExportContext, ExportResult, WAIRON_MANAGED_BANNER } from './base.js';
 
 // ---------------------------------------------------------------------------
 // Generate: agent file generation
@@ -45,7 +46,11 @@ export function generateAgent(
   // Prepend the managed marker so `generate` can later reconcile/prune this file
   // safely (see WAIRON_MANAGED_MARKER). It is an HTML comment — inert in the
   // agent's instructions for every markdown-based target.
-  const rendered = `${WAIRON_MANAGED_BANNER}\n${renderTemplateInstructions(template, buildVars(agent))}`;
+  //
+  // The BODY is the live brief composition (core composeAgentBrief), so the
+  // file, the sdd_get_agent_brief tool, and the wairon-agent:// resource are
+  // one text — including the user-owned .wai/agents/<id>.md guidance fold.
+  const rendered = `${WAIRON_MANAGED_BANNER}\n${composeAgentBrief(agent.id).instructions}`;
   const results: ExportResult[] = [];
 
   for (const agentTarget of agent.targets) {
@@ -80,23 +85,29 @@ export function generateAll(
   return pool.map((agent) => generateAgent(agent, projectConfig, options));
 }
 
-// ---------------------------------------------------------------------------
-// Template variable builder
-// ---------------------------------------------------------------------------
-
-function buildVars(agent: AgentRecord): Record<string, string> {
-  return {
-    agentId: agent.id,
-    agentName: agent.name,
-    agentDescription: agent.description,
-    ownedPaths: agent.ownedPaths.join('\n'),
-    tags: agent.tags.join(', '),
-    renderContext: 'root',
-    contextNote: '',
-    domainPath: '.',
-    domainName: '',
-    variantGuidance: agent.variantGuidance ?? '',
-  };
+/**
+ * Resolve the output paths the given topology occupies — one per agent ×
+ * matching target — without writing anything. This is the expected-file set
+ * stale-pruning reconciles against: it derives from the topology itself, never
+ * from what a (possibly scoped) run happened to write. Pass the FULL agent set.
+ */
+export function resolveExpectedOutputPaths(
+  agents: AgentRecord[],
+  projectConfig: ProjectConfig,
+  projectRoot: string = getProjectRoot(),
+): Set<string> {
+  const expected = new Set<string>();
+  for (const agent of agents) {
+    for (const agentTarget of agent.targets) {
+      const targetConfig = resolveTargetConfig(agentTarget, projectConfig);
+      if (!targetConfig) continue;
+      // outputPath() never reads the template — path shape is agent + target
+      // only — so no template is loaded (a missing one must not break pruning).
+      const ctx = { agent, projectRoot, target: targetConfig } as Omit<ExportContext, 'renderedInstructions'>;
+      expected.add(path.resolve(getExporter(targetConfig).outputPath(ctx)));
+    }
+  }
+  return expected;
 }
 
 /**

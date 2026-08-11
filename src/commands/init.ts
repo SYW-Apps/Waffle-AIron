@@ -556,7 +556,15 @@ function buildProjectConfig(
       requireOwnedPaths: true,
       metaAgentTags: ['meta', 'guardian', 'architect'],
       enforceReproducibility: true,
-      generateComponentImplementers: true,
+      // Off by default (matches the schema + subproject provisioning): one owner
+      // agent per subsystem is the file granularity; component-level delegation
+      // is served as live MCP briefs. Per-component implementer FILES are a
+      // legacy escape hatch — opt in with `true` on small trees only.
+      generateComponentImplementers: false,
+      // Off by default too: `init` (and every default `generate`) writes NO
+      // agent files — agents are served as live briefs, and files are the
+      // opt-in materialized view of the same briefs.
+      materializeAgentFiles: false,
       sddRuleSeverity: {},
     },
     paths: {

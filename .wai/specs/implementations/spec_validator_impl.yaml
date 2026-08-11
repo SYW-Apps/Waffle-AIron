@@ -109,9 +109,14 @@ methods:
         description: >-
           Run hierarchy, namespace-hygiene, round-trip, type-reference, contract (incl. cross-tree
           ref recognition), narrative, boundary, graph, naming, documentation, complexity,
-          semantic-edge rules (dispatch-table capability contracts and guarantee backing, dispatch-
-          and lifecycle-rooted reachability — lifecycle roots now spanning init/shutdown plus the
-          cyclic/interrupt/scheduled execution models — durability round-trip hydration with a
+          semantic-edge rules (dispatch-table capability contracts and guarantee backing, dispatch-,
+          lifecycle-, and declared-invocation-rooted reachability — lifecycle roots spanning
+          init/shutdown plus the cyclic/interrupt/scheduled execution models, invokedBy-declared L3
+          methods seeded as entrypoints with mandatory caller prose (INVOKED_BY_UNDESCRIBED when
+          missing) and flagged stale when the internal walk reaches them anyway
+          (INVOKED_BY_REDUNDANT — remove the declaration, the edge is modeled now), and register
+          steps traversed as deferred-invocation handoff edges so a registered callback method is
+          reached wherever its registering narrative is — durability round-trip hydration with a
           non-flooded boot graph and the four-mode durability axis required on every Store, untyped
           cross-subsystem seams with dispatch-table exemption, prose-claim realization), invariant
           backing (a declared entity invariant — type.invariants, anchored via componentClass — must
@@ -144,9 +149,10 @@ methods:
           non-off method must appear as a callee of the realized function — set membership over
           direct callees closed transitively through same-file named helpers, honoring the target
           method's symbol override and N:1 identity forwarding; CALL_STEP_UNREALIZED warning, order
-          and arguments deliberately unverified), dependency-conformance rules (runtime imports
-          between component-mapped files must be justified by declared dependsOn/owns edges — or,
-          across subsystems, by a declared edge to the target subsystem's published surface —
+          and arguments deliberately unverified; register handoff steps exempt, since a registration
+          references the callback rather than invoking it), dependency-conformance rules (runtime
+          imports between component-mapped files must be justified by declared dependsOn/owns edges
+          — or, across subsystems, by a declared edge to the target subsystem's published surface —
           UNDECLARED_DEPENDENCY; declared collaborator edges with no realizing import between
           exactly-analyzed files surface as UNREALIZED_DEPENDENCY), integration-conformance rules (a
           committed L4 simPath harness must exist inside the project root — SIM_FILE_MISSING — and
@@ -319,4 +325,4 @@ lint:
         when Level 3 models call indirection.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-24T18:08:10.060Z'
+updatedAt: '2026-08-11T15:26:13.045Z'

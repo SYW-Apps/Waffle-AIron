@@ -4,13 +4,14 @@ import { WaironError } from '../utils/errors.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { isProjectInitialized } from '../config/loader.js';
 import { loadSystemSpec } from '../core/specs.js';
+import { composeAgentBrief as coreComposeAgentBrief } from '../core/agent_resolver.js';
 import {
   createChainedSubsystem,
   moveSubsystemProject,
   externalizeSubsystem,
   internalizeSubsystem,
 } from '../core/provision.js';
-import type { SubsystemSpec } from '../models/index.js';
+import type { AgentBrief, SubsystemSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // subsystem command — create/relocate external (chained) subprojects
@@ -21,6 +22,14 @@ import type { SubsystemSpec } from '../models/index.js';
 // core chained-subsystem helpers so the parent link and the child project stay
 // in sync.
 // ---------------------------------------------------------------------------
+
+// cli_core_adapter.composeAgentBrief — 1:1 forward of the live delegation-brief
+// composition to the core portal; backs `wairon agent brief` and the
+// `wairon agent customize` scaffold seed. Composed against the CURRENT spec
+// tree on every call (a re-lock changes the next call).
+export function composeAgentBrief(agentId: string): AgentBrief {
+  return coreComposeAgentBrief(agentId);
+}
 
 interface SubsystemAddOptions {
   projectPath?: string;

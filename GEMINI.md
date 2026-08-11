@@ -1,6 +1,6 @@
 # Wairon SDD Project
 <!-- wairon-guide-start -->
-<!-- wairon-version: 5.0.2-dev.14 -->
+<!-- wairon-version: 5.1.1-dev.2 -->
 ## Wairon — Spec-Driven Development (you are operating inside it)
 
 This project uses **wairon**. System specs live under `.wai/specs/` (L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation → Narrative); agent topology and code are derived from it.
@@ -16,8 +16,8 @@ This project uses **wairon**. System specs live under `.wai/specs/` (L0 System �
   - **Leading `::`**: Bypasses the local subsystem prefix to resolve absolute from the system root (e.g. `::shared::error-type`).
   - **`super::`**: Goes up one parent subsystem level (e.g. `super::sibling_comp`, `super::super::parent_sibling`).
 - **Do not run the `wairon` CLI**: Use `sdd_validate_tree` and `sdd_get_status` instead of CLI commands.
-- **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run `wairon lock` to confirm and generate the implementer agents, then restart this session to load them."*
-- **To implement code**: Spawn the generated `<component-id>-implementer` subagent. Implementations must match L3 interfaces and L5 narratives exactly. If you are operating inside a subproject directory context (e.g. subfolder) and cannot see or spawn the generated implementer agent or its skills, instruct the user to start a new agent session from the parent wairon project directory root.
+- **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run `wairon lock` to confirm and freeze them."* No session restart is needed after the lock — delegate implementation right away via the `sdd-delegate` skill.
+- **To implement code**: Delegate via the `sdd-delegate` skill: fetch the component's live brief with the `sdd_get_agent_brief` MCP tool (or the `wairon-agent://` resource) and spawn a subagent from it. Briefs are composed per call from the current spec tree, so they are always current — never wait for a restart. Implementations must match L3 interfaces and L5 narratives exactly. Generated agent files under `.claude/agents/` are an optional materialized view of the same topology — the live briefs are canonical.
 
 ### Rules (enforced by `sdd_validate_tree`)
 1. **Design before code**: Complete spec and pass validator before writing source code.

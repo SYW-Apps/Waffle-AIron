@@ -58,6 +58,53 @@ methods:
           generateComponentImplementers is enabled. Each owner/implementer carries the rendered
           variantGuidance for its variant-tagged components.
         type: local
+  - name: composeAgentBrief
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current agent topology (resolveAgentTopology over the live spec tree) and
+          locate the record whose id matches agentId
+        type: local
+      - stepNumber: 2
+        description: Refuse unknown agents
+        type: branch
+        condition: no record matches agentId
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Unknown agent id — name the known ids in the error so a caller can self-correct
+        type: throw
+        error: UnknownAgentError
+      - stepNumber: 4
+        description: Load the record's instruction template through the template source adapter
+        type: call
+        targetComponent: template_source_adapter
+        targetMethod: loadTemplate
+      - stepNumber: 5
+        description: >-
+          Build the variable map from the record (agentName, ownedPaths fence, domain context,
+          rendered variantGuidance) and substitute the {{variable}} placeholders into the template
+          body
+        type: local
+      - stepNumber: 6
+        description: >-
+          Read the optional per-agent project guidance file (.wai/agents/<agentId>.md) — live, so a
+          user edit applies on the next fetch
+        type: call
+        targetComponent: template_source_adapter
+        targetMethod: loadAgentOverride
+      - stepNumber: 7
+        description: >-
+          When guidance exists, append it to the rendered instructions under an attributed '##
+          Project guidance' section — the user's delta stays legible AS a delta over the inferred
+          brief
+        type: local
+      - stepNumber: 8
+        description: >-
+          Return the AgentBrief: rendered instructions plus the structured scope fields (ownedPaths,
+          readPaths, domainRoot, template)
+        type: return
+        outcome: brief composed
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-29T20:46:58.342Z'
+updatedAt: '2026-08-08T12:43:24.207Z'

@@ -55,6 +55,6 @@ methods:
       path order. Sorting and path normalization are what make the digest reproducible across
       platforms and independent of how the pack arrived.
 detail: intent
-status: draft
+status: complete
 createdAt: '2026-07-29T17:42:12.283Z'
-updatedAt: '2026-07-29T17:42:12.286Z'
+updatedAt: '2026-08-08T11:29:08.541Z'

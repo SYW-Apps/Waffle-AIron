@@ -31,6 +31,15 @@ methods:
       parent tree.
     signature: 'internalizeSubsystem(subsystemId: string): void'
     returns: void
+  - name: composeAgentBrief
+    description: >-
+      Calls composeAgentBrief on core portal — the live delegation brief backing `wairon agent
+      brief` and the `wairon agent customize` scaffold seed.
+    signature: 'composeAgentBrief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:44:44.075Z'
+updatedAt: '2026-08-08T12:43:32.235Z'

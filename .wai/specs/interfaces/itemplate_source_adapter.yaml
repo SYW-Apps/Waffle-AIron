@@ -1,0 +1,32 @@
+id: itemplate_source_adapter
+name: Template Source Adapter Interface
+description: >-
+  Adapter contract for loading agent instruction templates from the three-tier override chain. Pure
+  read; unknown template names throw rather than silently falling back past the built-in tier.
+component: template_source_adapter
+methods:
+  - name: loadTemplate
+    description: >-
+      Resolve one template by name through project → user-home → packaged built-in tiers and return
+      its raw {{variable}} instruction body.
+    signature: 'loadTemplate(templateName: string): AgentTemplate'
+    returns: AgentTemplate
+    params:
+      - name: templateName
+        type: string
+        description: Template identifier (architect, domain-owner, implementer, …).
+  - name: loadAgentOverride
+    description: >-
+      Read the optional per-agent project guidance file (.wai/agents/<agentId>.md) and return its
+      markdown, or null when the project defines none. Read LIVE on every brief composition — user
+      edits apply on the next fetch; wairon scaffolds this file once on request and never
+      regenerates or prunes it (it is user-owned).
+    signature: 'loadAgentOverride(agentId: string): string | null'
+    returns: string | null
+    params:
+      - name: agentId
+        type: string
+        description: The resolved agent id whose guidance file to read.
+status: complete
+createdAt: '2026-08-08T11:11:55.834Z'
+updatedAt: '2026-08-08T12:39:57.345Z'

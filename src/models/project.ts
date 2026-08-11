@@ -139,6 +139,15 @@ export const RulesConfigSchema = z.object({
   generateComponentImplementers: z.boolean().default(false),
 
   /**
+   * Whether `wairon generate` writes per-subsystem owner/architect agent FILES.
+   * Off by default: agents are served as LIVE briefs (sdd_get_agent_brief /
+   * wairon-agent://), and files are merely the opt-in materialized view of the
+   * same briefs. When off, generate reconciles to zero agent files — leftover
+   * wairon-managed files are removed (hand-authored files never are).
+   */
+  materializeAgentFiles: z.boolean().default(false),
+
+  /**
    * Severity overrides for SDD validation rules.
    * Key: rule code (e.g. CIRCULAR_DEPENDENCY), Value: error | warning | off
    */

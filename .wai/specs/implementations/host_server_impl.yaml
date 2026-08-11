@@ -36,17 +36,17 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
-          Schedule the periodic git-backup timer: at each interval run the pre-authorized
-          .wai/-scoped backup sweep over the git-bound projects (skip-if-clean — a quiet project
-          never commits noise)
-        type: call
+          Schedule the periodic git-backup timer: register the pre-authorized .wai/-scoped backup
+          sweep over the git-bound projects as the interval callback (skip-if-clean — a quiet
+          project never commits noise); the runtime invokes it each interval, not this method
+        type: register
         targetComponent: admin_orchestrator
         targetMethod: runPeriodicGitSync
       - stepNumber: 7
         description: >-
-          The same timer also sweeps the container-level backup bindings (unit container repos + the
-          instance-structure backup repo) whose interval has elapsed
-        type: call
+          Register the container-level backing sweep (unit container repos + the instance-structure
+          backup repo, interval-elapsed gated) on the same periodic timer
+        type: register
         targetComponent: git_backing_orchestrator
         targetMethod: runPeriodicBackingSync
       - stepNumber: 8
@@ -113,4 +113,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-07-16T15:41:49.407Z'
+updatedAt: '2026-08-11T17:05:54.243Z'

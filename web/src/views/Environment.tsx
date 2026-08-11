@@ -140,10 +140,10 @@ function landscapeToCanvasModel(g: Graph): unknown {
  */
 export function Environment({ initialUnitRoute = '' }: { initialUnitRoute?: string }) {
   const state = useAsync<Graph>(() => get('/web/graph?tier=landscape&level=1'), [], ['landscape']);
-  const { themeId, appearance } = useSettings();
+  const { themeId, appearance, customThemes } = useSettings();
   const nav = useNavigate();
   const canvasTheme = engineTheme(appearance);
-  const canvasVars = useMemo(() => engineVars(themeId, appearance), [themeId, appearance]);
+  const canvasVars = useMemo(() => engineVars(themeId, appearance, customThemes), [themeId, appearance, customThemes]);
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<CanvasHandle | null>(null);

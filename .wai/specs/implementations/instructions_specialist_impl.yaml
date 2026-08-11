@@ -35,9 +35,11 @@ methods:
         description: >-
           Compose wairon's OWN briefing: what an SDD spec tree is, the L0→L5 shape, the authoring
           workflow order, that the sdd_* tool schemas are self-describing and authoritative, the
-          governing projectType/profile and what it implies, the loaded pack names, and the explicit
+          governing projectType/profile and what it implies, the loaded pack names, the explicit
           directive to read wairon-skill://sdd-architect (and the other listed skills) BEFORE
-          authoring.
+          authoring, and the delegation directive: delegate implementation by fetching the target
+          agent's LIVE brief (sdd_get_agent_brief / wairon-agent://) and spawning a scoped subagent
+          from it — briefs are always current, so no session restart follows a re-lock.
         type: local
       - stepNumber: 5
         description: >-
@@ -65,4 +67,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-29T10:50:20.337Z'
-updatedAt: '2026-07-29T11:56:33.408Z'
+updatedAt: '2026-08-08T11:14:45.262Z'

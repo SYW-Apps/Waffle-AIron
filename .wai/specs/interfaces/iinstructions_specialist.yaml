@@ -9,9 +9,11 @@ methods:
     description: >-
       Compose the full instructions text for the bound project: wairon's own SDD briefing (spec-tree
       shape, L0→L5, authoring order, self-describing tool schemas, the governing
-      projectType/profile, the loaded packs, and the read-the-skill-first directive with the
-      available skill resource URIs), then every governing pack's instruction blocks appended under
-      an attributed heading in pack load order. Returns the composed text; never throws — an
+      projectType/profile, the loaded packs, the read-the-skill-first directive with the available
+      skill resource URIs, and the delegation directive — fetch a live agent brief via
+      sdd_get_agent_brief or its wairon-agent:// resource and spawn a scoped subagent from it, never
+      from a stale generated file), then every governing pack's instruction blocks appended under an
+      attributed heading in pack load order. Returns the composed text; never throws — an
       uninitialized project or a failed pack load degrades to wairon's own briefing so a connecting
       agent is always taught something.
     signature: 'buildServerInstructions(): string'
@@ -19,4 +21,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-29T10:49:14.890Z'
-updatedAt: '2026-07-29T11:56:28.102Z'
+updatedAt: '2026-08-08T11:14:42.823Z'

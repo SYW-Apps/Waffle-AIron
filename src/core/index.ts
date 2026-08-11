@@ -23,3 +23,8 @@ export * from './packstore.js';
 // surface the loader is the one callers mean — stated explicitly so the star
 // exports above are not ambiguous.
 export { loadProjectExtensions } from './extensions.js';
+
+// Live delegation-brief composition (icore_portal composeAgentBrief) — a pure
+// 1:1 forward to the agent resolver, stated explicitly for the anchored
+// conformance check.
+export { composeAgentBrief } from './agent_resolver.js';

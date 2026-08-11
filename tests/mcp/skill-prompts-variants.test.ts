@@ -45,12 +45,14 @@ describe('skills published as MCP prompts (7.4)', () => {
     const { resources } = await client.listResources();
 
     // One skill set, two ways in — the two surfaces cannot drift because they are
-    // built from the same descriptor list.
-    expect(prompts.length).toBe(resources.length);
+    // built from the same descriptor list. (resources/list additionally carries
+    // live wairon-agent:// brief entries, which have no prompt mirror.)
+    const skillResources = resources.filter((r) => r.uri.startsWith('wairon-skill://'));
+    expect(prompts.length).toBe(skillResources.length);
     expect(prompts.map((p) => p.name).sort()).toEqual(
-      resources.map((r) => r.uri.replace('wairon-skill://', '')).sort(),
+      skillResources.map((r) => r.uri.replace('wairon-skill://', '')).sort(),
     );
-    for (const id of ['sdd-architect', 'sdd-auditor', 'sdd-implement', 'sdd-narrative']) {
+    for (const id of ['sdd-architect', 'sdd-auditor', 'sdd-delegate', 'sdd-implement', 'sdd-narrative']) {
       expect(prompts.map((p) => p.name)).toContain(id);
     }
   });

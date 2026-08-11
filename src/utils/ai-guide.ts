@@ -35,7 +35,7 @@ If \`.wai/specs/\` exists, the wairon SDD workflow is active; otherwise ignore i
   1. **Skills**: Use \`sdd-architect\` to design (and \`sdd-implement\`, \`sdd-narrative\`, \`sdd-auditor\`). Refer to project's local guide file for detailed constraints.
   2. **MCP Tools Only**: Author/validate specs *only* via \`sdd_*\` tools (e.g. \`sdd_initialize_system\`, \`sdd_validate_tree\`).
   3. **No CLI Exec**: Do not run the \`wairon\` CLI (human tool). Use MCP tools \`sdd_validate_tree\` and \`sdd_get_status\` instead.
-  4. **Subagents**: Spawn generated \`<component>-implementer\` subagents for coding.
+  4. **Delegation**: Delegate implementation via the \`sdd-delegate\` skill — live agent briefs (\`sdd_get_agent_brief\` MCP tool / \`wairon-agent://\` resource) are composed per call and always current; no session restart. Generated agent files are an optional materialized view of the same topology. User-owned per-agent guidance may live in \`.wai/agents/<agent-id>.md\` (folded into every brief; scaffold via \`wairon agent customize <id>\`).
   5. **Design First**: Complete spec and pass \`sdd_validate_tree\` before writing code.
   6. **Consistency**: Code must match L3 interfaces and L5 narratives exactly. If the spec is wrong, stop and update the spec.
   7. **Subprojects & Namespacing**: If a subsystem uses \`projectPath\` delegation, target its specs using namespaced IDs (e.g. \`subsystem::component\`). Use leading \`::\` to target root (e.g. \`::shared::type\`) and \`super::\` to go up a level (e.g. \`super::sibling\`). wairon automatically resolves the path and strips the prefix on writes.`;
@@ -56,8 +56,8 @@ This project uses **wairon**. System specs live under \`.wai/specs/\` (L0 System
   - **Leading \`::\`**: Bypasses the local subsystem prefix to resolve absolute from the system root (e.g. \`::shared::error-type\`).
   - **\`super::\`**: Goes up one parent subsystem level (e.g. \`super::sibling_comp\`, \`super::super::parent_sibling\`).
 - **Do not run the \`wairon\` CLI**: Use \`sdd_validate_tree\` and \`sdd_get_status\` instead of CLI commands.
-- **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run \`wairon lock\` to confirm and generate the implementer agents, then restart this session to load them."*
-- **To implement code**: Spawn the generated \`<component-id>-implementer\` subagent. Implementations must match L3 interfaces and L5 narratives exactly. If you are operating inside a subproject directory context (e.g. subfolder) and cannot see or spawn the generated implementer agent or its skills, instruct the user to start a new agent session from the parent wairon project directory root.
+- **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run \`wairon lock\` to confirm and freeze them."* No session restart is needed after the lock — delegate implementation right away via the \`sdd-delegate\` skill.
+- **To implement code**: Delegate via the \`sdd-delegate\` skill: fetch the component's live brief with the \`sdd_get_agent_brief\` MCP tool (or the \`wairon-agent://\` resource) and spawn a subagent from it. Briefs are composed per call from the current spec tree, so they are always current — never wait for a restart. Implementations must match L3 interfaces and L5 narratives exactly. Generated agent files under \`.claude/agents/\` are an optional materialized view of the same topology — the live briefs are canonical.
 
 ### Rules (enforced by \`sdd_validate_tree\`)
 1. **Design before code**: Complete spec and pass validator before writing source code.

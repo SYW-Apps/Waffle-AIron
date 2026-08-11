@@ -167,10 +167,33 @@ methods:
         type: call
         targetComponent: mcp_skills_adapter
         targetMethod: listResources
+      - stepNumber: 2
+        description: >-
+          Resolve the current agent topology via the core client adapter and append one
+          wairon-agent:// brief descriptor per record — recomputed per request so a re-lock is
+          visible on the next list.
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: resolveAgentTopology
     symbol: registerSkillResources
   - name: readResource
     narrative:
       - stepNumber: 1
+        description: Route on the resource URI scheme
+        type: branch
+        condition: resourceId is a wairon-agent:// agent-brief id
+        onTrueStep: 2
+        onFalseStep: 4
+      - stepNumber: 2
+        description: Compose that agent's live brief via the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: composeAgentBrief
+      - stepNumber: 3
+        description: Render the brief as the resource's markdown content
+        type: return
+        outcome: agent brief rendered
+      - stepNumber: 4
         description: Read one built-in SDD skill resource via the skills client adapter.
         type: call
         targetComponent: mcp_skills_adapter
@@ -185,7 +208,17 @@ methods:
         type: call
         targetComponent: mcp_surfaces_adapter
         targetMethod: listExternalInterfaces
+  - name: getAgentBrief
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Compose the agent's live delegation brief via the core client adapter and shape the tool
+          response
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: composeAgentBrief
+    symbol: sdd_get_agent_brief
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-24T18:14:35.011Z'
+updatedAt: '2026-08-08T11:13:40.000Z'

@@ -11,10 +11,22 @@ methods:
       resolved HostExposurePolicy gating of control-plane surfaces) and begin accepting connections.
     signature: 'start(config: HostConfig): void'
     returns: void
+    invokedBy:
+      kind: runtime
+      caller: >-
+        The `wairon serve` composition root (sdd_cli, cli_host_adapter) starts the supervisor
+        process; an HTTP_API portal cannot expose a non-HTTP bootstrap method, so no modeled call
+        chain can reach it. Boot initialization stays separately seeded by the lifecycle init
+        entrypoint.
   - name: stop
     description: Gracefully drain in-flight requests and shut the listeners down.
     signature: 'stop(): void'
     returns: void
+    invokedBy:
+      kind: runtime
+      caller: >-
+        The `wairon serve` composition root stops the supervisor on process shutdown (signal
+        handling); like start, it sits outside any modeled HTTP call chain by design.
   - name: init
     description: >-
       One-time boot initialization, run BEFORE the listeners bind (the sdd_host lifecycle init
@@ -31,4 +43,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:49:31.392Z'
-updatedAt: '2026-07-16T00:24:57.676Z'
+updatedAt: '2026-08-11T17:05:48.662Z'

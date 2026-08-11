@@ -2,10 +2,11 @@ id: sdd_validator
 name: SDD Architectural Validator
 description: >-
   Checks spec tree completeness, interface contract compliance, and component-type interaction
-  boundaries; validates semantic wiring (dispatch tables, lifecycle-rooted reachability, durability
-  round-trips, typed cross-subsystem seams, prose-claim realization), namespace hygiene (reserved
-  keywords, root-subsystem shadowing, cross-tree reference recognition), and writer round-trip
-  serializability, so validate predicts every write lock would refuse.
+  boundaries; validates semantic wiring (dispatch tables, lifecycle- and declared-invocation-rooted
+  reachability with register-step handoff edges, durability round-trips, typed cross-subsystem
+  seams, prose-claim realization), namespace hygiene (reserved keywords, root-subsystem shadowing,
+  cross-tree reference recognition), and writer round-trip serializability, so validate predicts
+  every write lock would refuse.
 parentSystem: Waffle-AIron
 publicInterfaces:
   - type: Custom
@@ -14,4 +15,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-10T22:14:31.264Z'
+updatedAt: '2026-08-11T15:25:47.291Z'

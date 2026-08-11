@@ -1,10 +1,16 @@
-id: "sdd_skills"
-name: "SDD Skills Exporter"
-description: "Bootstraps and synchronizes the 4 SDD AI Skills to local AI CLI directories."
-parentSystem: "Waffle-AIron"
+id: sdd_skills
+name: SDD Skills Exporter
+description: >-
+  Bootstraps and synchronizes the built-in SDD AI Skills (sdd-architect, sdd-narrative, sdd-auditor,
+  sdd-implement, sdd-delegate) to local AI CLI directories, composes pack skill extensions into
+  them, and publishes the same skill content plus the composed server instructions over MCP for
+  cloud-only agents.
+parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: "Custom"
-    component: "skills_portal"
-    details: "Provides skill exporting services."
-createdAt: "2026-06-10T19:28:00.000Z"
-updatedAt: "2026-06-10T19:28:00.000Z"
+  - type: Custom
+    details: Provides skill exporting services.
+    component: skills_portal
+trustedLinks: []
+status: complete
+createdAt: '2026-06-10T19:28:00.000Z'
+updatedAt: '2026-08-08T11:14:38.367Z'

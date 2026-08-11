@@ -1,0 +1,57 @@
+kind: value-object
+id: agent_brief
+name: AgentBrief
+description: >-
+  The live delegation brief for one resolved agent: the fully rendered instruction body plus the
+  structured scope fields an orchestrating session needs to spawn a correctly-fenced subagent.
+  Composed on demand from the CURRENT spec tree (never persisted, never stale) — the dynamic
+  replacement for generate-time agent files, served over MCP as the sdd_get_agent_brief tool and
+  wairon-agent:// resources.
+subsystem: sdd_core
+fields:
+  - name: agentId
+    type: string
+    description: The resolved agent's stable id (e.g. sdd_core-owner, system-architect).
+    optional: false
+    key: primary
+  - name: name
+    type: string
+    description: Human-readable display name of the agent.
+    optional: false
+  - name: template
+    type: string
+    description: >-
+      The instruction template the brief was rendered from (architect, domain-owner, implementer,
+      …).
+    optional: false
+  - name: domainRoot
+    type: string
+    description: Domain the agent belongs to (absent = global root).
+    optional: true
+  - name: ownedPaths
+    type: string[]
+    description: >-
+      Glob patterns of the files this agent owns — the write-scope fence the spawning session passes
+      to the subagent.
+    optional: false
+  - name: readPaths
+    type: string[]
+    description: >-
+      Spec paths the subagent should read first (system spec, component/interface/implementation
+      specs) — richer than the generated files ever carried.
+    optional: true
+  - name: instructions
+    type: string
+    description: >-
+      The fully rendered instruction body (template variables substituted, variant guidance folded
+      in) — paste-ready as a spawned subagent's prompt.
+    optional: false
+  - name: variantGuidance
+    type: string
+    description: >-
+      The rendered variant-implementation guidance for the agent's variant-tagged components, also
+      folded into instructions; carried structurally for programmatic consumers.
+    optional: true
+methods: []
+createdAt: '2026-08-08T11:11:36.097Z'
+updatedAt: '2026-08-08T11:11:36.108Z'

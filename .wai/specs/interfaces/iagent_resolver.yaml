@@ -8,12 +8,30 @@ methods:
       Resolve the LAYERED agent topology for THIS project's own layer only: the system architect,
       one owner per LOCAL subsystem, and exactly ONE delegating owner per chained subproject (a
       projectPath subsystem) — never enumerating a subproject's internals, which belong to its own
-      layer generated in its .wai. Federated subprojects carry a :: namespace prefix and are
-      excluded here. Component-implementer agents are emitted only when
-      generateComponentImplementers is enabled. Keeps each .claude/agents (and the context every
-      session loads) proportional to a single layer instead of the whole deep tree.
+      layer. Federated subprojects carry a :: namespace prefix and are excluded here.
+      Component-implementer agents are emitted only when generateComponentImplementers is enabled —
+      a legacy escape hatch: component-level delegation is served as live briefs
+      (composeAgentBrief), not files. Keeps each generated agent set (and the context every session
+      loads) proportional to a single layer instead of the whole deep tree.
     signature: 'resolveAgentTopology(): AgentRecord[]'
     returns: AgentRecord[]
+  - name: composeAgentBrief
+    description: >-
+      Compose the LIVE delegation brief for one resolved agent: resolve the current topology, locate
+      the record by id, load its instruction template through the template source adapter, render
+      the record's variables into it (scope fence, domain context, variant guidance), fold in the
+      optional user-owned project guidance file (.wai/agents/<agentId>.md, read live), and return
+      the structured AgentBrief — rendered instructions plus ownedPaths/readPaths. Always reflects
+      the CURRENT spec tree and guidance, so a re-lock or a guidance edit changes the next call's
+      result with no session restart; an unknown agentId throws. An owner's scope runs UP TO its
+      chained subprojects, never into them — a subproject appears only as a delegating owner whose
+      brief routes work to that child's own layer.
+    signature: 'composeAgentBrief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
+        description: The resolved agent id (e.g. sdd_core-owner, system-architect).
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-12T12:09:50.624Z'
+updatedAt: '2026-08-08T12:43:28.063Z'

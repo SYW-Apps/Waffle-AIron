@@ -33,8 +33,14 @@ fields:
     description: >-
       Per-method L5 narratives (steps, detail, intent). A dispatch step routes a named capability
       through a target Portal's dispatch table — validated against that table (UNSERVED_CAPABILITY)
-      and traversed by reachability, unlike a bare call to the generic handle. Each method may also
-      override the conformance tier and bind an explicit realizing symbol (code-level name) for
+      and traversed by reachability, unlike a bare call to the generic handle. A register step
+      (targetComponent + targetMethod, target resolved exactly like a call step against a declared
+      dependency's contract) hands the target method to the runtime as a callback — a
+      deferred-invocation edge: unused-detection treats the registered method as reached wherever
+      its registering narrative is (so the callback correctly returns to unused if its registrar
+      does), while call-graph conformance exempts register steps from CALL_STEP_UNREALIZED because a
+      registration references the callback rather than invoking it. Each method may also override
+      the conformance tier and bind an explicit realizing symbol (code-level name) for
       intent-language renames — e.g. a store's put realized by saveSnapshot.
     optional: false
   - name: status
@@ -50,4 +56,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-11T17:53:39.341Z'
+updatedAt: '2026-08-11T15:25:39.357Z'

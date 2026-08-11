@@ -161,6 +161,55 @@ fields — destroying authored specs through the sanctioned authoring path.
   usually wrong spec. Explicit rather than overloading `null`: a destructive
   meaning must be asked for, not inferred from an absent value.
 
+### Re-authoring a spec no longer erases what the tool cannot express
+
+Every `sdd_add_*` / `sdd_define_*` / `sdd_write_*` tool is an upsert: called with an
+id that already exists, it rewrites that spec. Each tool's input schema is a
+hand-maintained **subset** of the canonical schema, and the handler rebuilt the spec
+from its arguments — so every field the input could not express was erased by a
+restatement that never mentioned it, under a `Successfully added` banner:
+
+```
+sdd_add_component      lint.allow, ext, auth, variant, patterns, externalLinks
+sdd_add_subsystem      lint.allow, ext
+sdd_add_type           lint.allow, ext
+sdd_initialize_system  databases (hard-reset to []), publicInterfaces, diagram
+```
+
+A suppressed warning silently coming back days later was the only tell. The same
+loss was fixed once for `sdd_define_interface` and `sdd_write_narrative`; the other
+four surfaces were never covered.
+
+- **All six write surfaces now carry forward what they cannot express**, driven by
+  each tool's *own* input-schema keys — so a field added to a tool starts being
+  replaced, and a field added only to the canonical schema starts being carried,
+  with no parallel list to drift. It lives at the tool boundary because only there
+  is "the caller cleared this" distinguishable from "the caller never mentioned it";
+  the store receives a whole spec and cannot tell those apart.
+- **`ext` is carried even though the tools accept it.** It is opaque pack data the
+  authoring agent does not own and cannot know to restate, and the schema promises
+  it is preserved verbatim. Everything else expressed keeps replace semantics.
+- **Removals are stated rather than left to be discovered.** Replace is still the
+  contract for what the input *can* say — but a restatement that drops a method or
+  empties an array now says so, naming what went:
+
+```
+NOTICE:
+- Component "graphics" already existed — re-authored in place; this input REPLACES what it expresses.
+- Carried forward (not expressible through this tool): createdAt, externalLinks, lint, ext.
+- REMOVED by this restatement: method "beta" (endpoint bindings included) — absent from the input…
+- CLEARED by omission: dependsOn (had 1) — the argument was not repeated…
+```
+
+- **Two automated checks hold the line** (`tests/mcp/schema-field-coverage.test.ts`).
+  Against the schemas the server actually publishes over `listTools` — not a copy of
+  them — every canonical field must be expressed by its tool, store-managed, derived,
+  or explicitly declared `sdd_update_spec`-only *with a reason*; stale declarations
+  are flagged too. Then each declared field is populated, the create tool re-run with
+  minimal arguments, and required to survive. The narrative **step** schema — the
+  largest hand-copied surface, where a missing field is stripped by the MCP SDK
+  before the handler runs — is covered the same way.
+
 ### A misplaced field is refused at the write, not discovered at validate time
 
 `sdd_add_component` accepted any field on any `componentType` — the write path only
@@ -197,6 +246,64 @@ arguments"* — the schema never required them; the spec just could not be repai
   migrations pass no gate, so a spec that predates a rule remains loadable and
   repairable via `unset`. `rules.sddRuleSeverity` disarms the gate exactly as it
   disarms the same code in `validate`.
+
+### Hosted web UI: custom theme builder (new, `feat/webapp-custom-theme-builder`)
+
+The theme picker's three built-in palettes are now a starting point, not the
+menu. A **theme builder** (`/themes`, reached from the header menu's new
+"Custom themes" section) lets a user author, duplicate, and delete their own
+themes, stored per browser alongside the existing UI settings.
+
+- **Sparse overrides over the derived engine.** wairon derives its whole
+  `--wairon-*` palette from one primary color, so a custom theme stores only
+  the edits: resolution is derive(primary, mode) → base overrides → per-mode
+  overrides. Every field in the builder shows the resolved value, marks whether
+  it is `derived` or `custom`, and resets per field — untouched tokens keep
+  adapting to light/dark/high-contrast. (The reference SYW builder this ports
+  layers derivation *over* a full snapshot, which silently discards base edits;
+  the inversion is deliberate.)
+- **The editor.** Grouped token editors (brand, surfaces, text, borders &
+  effects, status) with color pickers + alpha, shadow presets, and free-form
+  CSS for gradients; a seed control that re-derives the full palette from one
+  color; per-mode override pinning; live surface/typography previews with
+  WCAG contrast ratios; and a "generate accessible text set" pass that pins
+  AA-compliant (4.5:1) text tokens for the previewed mode. Edits stage in a
+  local draft with a floating save bar — nothing applies or persists until
+  saved.
+- **Custom themes are first-class everywhere**: they appear in the header-menu
+  and login-cog pickers, re-theme the canvas chrome through the bridge, and
+  `-rgb` companions + the accessible primary-contrast recompute from the final
+  colors automatically. A vanished custom id degrades to the default theme.
+- **The picker is the shared SYW `ThemeMenu` component** (matching waffler_ui):
+  one compact "Appearance" section — a dropdown trigger showing the active
+  theme's swatch pill + name, a flyout listing every theme with "Create custom
+  theme" at its foot, and the mode toggle directly beneath. Extracted as a
+  props-only, app-agnostic component (`components/ThemeMenu.tsx`, styled purely
+  through `.tmenu-*` classes) so the same menu can be lifted into any SYW app.
+
+### Declared entrypoints: `register` steps + `invokedBy` (new)
+
+Unused-detection could only see callers the narrative graph modeled, so a callback
+handed to the runtime (timer, event listener, shutdown hook) or a method invoked by
+an external system read as `UNUSED_COMPONENT`/`UNUSED_METHOD` — and the lint.allow
+that silenced the finding also stopped reachability from propagating through the
+method's narrative. Two mechanisms close that honestly:
+
+- **`register` narrative step** — a runtime-callback HANDOFF with the same target
+  shape as a `call` step (`targetComponent` + `targetMethod`). Reachability treats
+  it as an edge (the callback is reached wherever its registering narrative is),
+  but it is NOT an invocation: exempt from call-graph conformance
+  (`CALL_STEP_UNREALIZED`), never a call-cycle edge (`UNCONDITIONAL_CALL_CYCLE`),
+  and not followed by the durability boot walk — registering a hydrating read at
+  init is not executing it at boot, matching the non-flooded boot-graph doctrine.
+  Targets get the identical existence/dependency/contract validation call steps get.
+- **`invokedBy` on L3 methods** — `{ kind: runtime | external | sibling-subsystem,
+  caller }` declares a real caller OUTSIDE the modeled graph. Unused-detection seeds
+  the method as an entrypoint, so reachability PROPAGATES through its narrative —
+  unlike a lint.allow, which only hides the finding. The declaration is audited:
+  missing or placeholder-thin `caller` prose warns `INVOKED_BY_UNDESCRIBED`, and a
+  declaration on a method the internal walk already reaches warns
+  `INVOKED_BY_REDUNDANT` (stale — remove it).
 
 ### Fixes
 

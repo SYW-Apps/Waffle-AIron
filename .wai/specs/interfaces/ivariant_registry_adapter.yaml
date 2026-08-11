@@ -31,6 +31,12 @@ methods:
       - name: variantsById
         type: VariantDef[]
         description: The loaded variant registry, keyed by id.
+    invokedBy:
+      kind: sibling-subsystem
+      caller: >-
+        sdd_mcp's spec-read path invokes it: sdd_get_spec attaches a variant-tagged component's
+        resolved guidance and same-variant siblings, reaching sdd_core over its published barrel
+        surface rather than a modeled component edge.
   - name: composeVariantGuidance
     description: >-
       Compose the "Component variants" block injected into an owner/implementer agent for its
@@ -54,4 +60,4 @@ methods:
         description: The loaded variant registry, keyed by id.
 status: complete
 createdAt: '2026-07-15T12:24:19.110Z'
-updatedAt: '2026-07-29T20:46:03.334Z'
+updatedAt: '2026-08-11T17:05:41.603Z'

@@ -25,6 +25,11 @@ methods:
         type: string[]
       - name: projectRoot
         type: string
+    invokedBy:
+      kind: external
+      caller: >-
+        Wrapper products embedding wairon as a library call loadExtensions directly as the public
+        library entry point (docs/extending-wairon.md); no internal call chain exists by design.
   - name: packEntryLabel
     description: >-
       A stable human label for one configured pack entry — the path for a legacy ref, or
@@ -35,6 +40,12 @@ methods:
       - name: entry
         type: PackSelection
         description: A configured pack entry (a legacy path ref string, or a selection).
+    invokedBy:
+      kind: sibling-subsystem
+      caller: >-
+        sdd_cli pack commands (cli_packs_adapter) and sdd_host's pack plane (host_core_adapter
+        forwarder into pack_registry/pack_orchestrator) label pack entries for listings and
+        messages, crossing over sdd_core's published barrel surface.
   - name: packEntryRef
     description: >-
       The loadable ref for one configured pack entry: a legacy path/module ref passes through
@@ -48,6 +59,12 @@ methods:
         type: PackSelection
       - name: projectRoot
         type: string
+    invokedBy:
+      kind: sibling-subsystem
+      caller: >-
+        sdd_cli pack commands (cli_packs_adapter) and sdd_host's pack plane (host_core_adapter
+        forwarder) resolve a selection entry to its loadable ref, crossing over sdd_core's published
+        barrel surface.
   - name: globalPacksEnabled
     description: >-
       Whether machine-wide packs (the pack store) ALSO apply to a project that has not said. False
@@ -59,6 +76,11 @@ methods:
     params:
       - name: config
         type: ProjectConfig
+    invokedBy:
+      kind: sibling-subsystem
+      caller: >-
+        sdd_cli pack commands and sdd_host's pack plane read the useGlobalPacks gate when rewriting
+        extensions config, crossing over sdd_core's published barrel surface.
   - name: diagnoseProjectPacks
     description: >-
       Report this project's pack situation for `wairon doctor`: selections that do not resolve,
@@ -70,6 +92,11 @@ methods:
     signature: 'diagnoseProjectPacks(): PackDiagnosis'
     returns: PackDiagnosis
     params: []
+    invokedBy:
+      kind: sibling-subsystem
+      caller: >-
+        The `wairon doctor` command (sdd_cli, commands/doctor.ts) runs the project pack diagnosis
+        over sdd_core's published barrel surface rather than a modeled component edge.
   - name: pinInstalledPacksAsSelections
     description: >-
       The migration action behind `wairon doctor --fix`: for a project that never declared a
@@ -81,6 +108,12 @@ methods:
     signature: 'pinInstalledPacksAsSelections(): string[]'
     returns: string[]
     params: []
+    invokedBy:
+      kind: sibling-subsystem
+      caller: >-
+        The `wairon doctor --fix` flow (sdd_cli, commands/doctor.ts) pins installed packs as
+        explicit selections over sdd_core's published barrel surface rather than a modeled component
+        edge.
   - name: defaultPackSelections
     description: >-
       The store packs whose manifests declare `applyByDefault: true`, shaped as selections ready to
@@ -92,6 +125,11 @@ methods:
     signature: 'defaultPackSelections(): PackSelection[]'
     returns: PackSelection[]
     params: []
+    invokedBy:
+      kind: sibling-subsystem
+      caller: >-
+        The `wairon init` scaffold (sdd_cli, commands/init.ts) seeds a new project config's pack
+        selections over sdd_core's published barrel surface rather than a modeled component edge.
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-07-29T21:27:30.204Z'
+updatedAt: '2026-08-11T17:06:48.997Z'

@@ -263,7 +263,7 @@ export type DeclarativePack = z.infer<typeof DeclarativePackSchema>;
 export type LoadedPackSkill = PackSkill & { pack: string; packVersion?: string; sourcePath: string };
 
 /** The builtin skills a pack may extend. Kept here so the pack loader can reject an unknown target without importing the skills subsystem. */
-const EXTENDABLE_BUILTIN_SKILLS = ['sdd-architect', 'sdd-narrative', 'sdd-auditor', 'sdd-implement'];
+const EXTENDABLE_BUILTIN_SKILLS = ['sdd-architect', 'sdd-narrative', 'sdd-auditor', 'sdd-implement', 'sdd-delegate'];
 
 /**
  * Load errors for pack skills that extend a builtin which does not exist.

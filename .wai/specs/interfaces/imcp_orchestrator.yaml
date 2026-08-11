@@ -48,18 +48,23 @@ methods:
     signature: 'internalizeSubsystem(subsystemId: string): void'
     returns: void
   - name: listResources
-    description: List the built-in SDD skills as MCP resource descriptors for publication to connected agents.
+    description: >-
+      List the MCP resources the server publishes: the built-in SDD skills plus one live
+      wairon-agent:// brief resource per agent in the CURRENT topology — recomputed per request, so
+      a re-lock is visible on the next list.
     signature: 'listResources(): SkillResourceDescriptor[]'
     returns: SkillResourceDescriptor[]
     params: []
   - name: readResource
-    description: Read one built-in SDD skill's content by MCP resource id for a resource read.
+    description: >-
+      Read one published resource by id, routing on the URI scheme: a wairon-skill:// id reads the
+      (pack-composed) skill markdown; a wairon-agent:// id composes that agent's live brief.
     signature: 'readResource(resourceId: string): string'
     returns: string
     params:
       - name: resourceId
         type: string
-        description: The MCP resource id / skill id to read.
+        description: The MCP resource id — a skill id or a wairon-agent:// agent id.
   - name: listExternalInterfaces
     description: >-
       The sdd_list_external_interfaces tool workflow: read the project's consumable external
@@ -67,6 +72,17 @@ methods:
       verdicts, and shape the tool response.
     signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
     returns: ExternalSurfaceEntry[]
+  - name: getAgentBrief
+    description: >-
+      The sdd_get_agent_brief tool workflow: compose the live delegation brief for one resolved
+      agent via the core client adapter and shape the tool response — the always-fresh replacement
+      for generated per-component agent files.
+    signature: 'getAgentBrief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
+        description: The resolved agent id to brief.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-24T18:14:22.238Z'
+updatedAt: '2026-08-08T11:12:49.479Z'

@@ -46,6 +46,9 @@ function defaultProjectConfig(name: string, now: string): ProjectConfig {
       // a large tree/subproject with per-component implementers emits thousands
       // of agents that every session then loads. Opt in with `true` on small trees.
       generateComponentImplementers: false,
+      // Files are the opt-in materialized view of the live briefs — off means
+      // `generate` reconciles to zero agent files.
+      materializeAgentFiles: false,
       sddRuleSeverity: {},
     },
     paths: { specsDir: '.wai/specs' },

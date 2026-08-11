@@ -502,6 +502,20 @@ export const MethodSignatureSchema = z.object({
    * writes with hydration read-backs (MISSING_HYDRATION); optional elsewhere.
    */
   effect: z.enum(['read', 'write']).optional(),
+  /**
+   * Typed acknowledgment of a real caller OUTSIDE the modeled narrative graph
+   * (runtime timer/hook, external system, sibling subsystem). Unused-detection
+   * seeds the method as an entrypoint, so reachability PROPAGATES through its
+   * narrative — unlike a lint.allow, which only silences the finding. `caller`
+   * states WHO invokes it (placeholder-thin prose is INVOKED_BY_UNDESCRIBED;
+   * a method the internal walk already reaches is INVOKED_BY_REDUNDANT).
+   * Prefer a `register` narrative step when the wiring is internal — the
+   * registration itself is then a modeled, checkable edge.
+   */
+  invokedBy: z.object({
+    kind: z.enum(['runtime', 'external', 'sibling-subsystem']),
+    caller: z.string().optional(),
+  }).optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
   ext: ExtDataSchema.optional(),
 });
@@ -540,6 +554,7 @@ export const NarrativeStepTypeSchema = z.enum([
   'local',    // in-component work
   'call',     // cross-component call (targetComponent/targetMethod)
   'dispatch', // capability routed through a generic Portal's dispatch table (targetComponent + capability)
+  'register', // runtime-callback handoff (targetComponent/targetMethod): reachability edge, never an invocation
   'branch',   // if/else: condition + onTrueStep (default next) / onFalseStep
   'switch',   // multiway dispatch: on + cases[{value, step}] + defaultStep
   'loop',     // header step; body = next..endStep; loopKind picks the form
@@ -591,8 +606,8 @@ export const NarrativeStepSchema = z.object({
   label: z.string().min(1).optional(),
   description: z.string(),
   type: NarrativeStepTypeSchema,
-  targetComponent: z.string().optional(), // Required if type is 'call' or 'dispatch', references L2 Component id
-  targetMethod: z.string().optional(),    // Required if type is 'call', references Method name on target interface
+  targetComponent: z.string().optional(), // Required if type is 'call', 'register' or 'dispatch', references L2 Component id
+  targetMethod: z.string().optional(),    // Required if type is 'call' or 'register', references Method name on target interface
   capability: z.string().optional(),      // Required if type is 'dispatch': the capability routed through the target Portal's dispatch table
   /**
    * call/dispatch only: the credential this step presents to an authed callee
