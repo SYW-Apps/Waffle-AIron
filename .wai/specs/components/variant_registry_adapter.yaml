@@ -15,16 +15,7 @@ componentType: Adapter
 owns: []
 dependsOn: []
 lint:
-  allow:
-    - code: UNUSED_METHOD
-      reason: >-
-        resolveVariantGuidance is driven by the MCP spec-read path (sdd_get_spec attaches a
-        variant-tagged component's resolved guidance and siblings, so a HOSTED agent gets what only
-        generated agent files used to carry). That caller is in sdd_mcp and reaches sdd_core through
-        its published barrel surface rather than as a modeled component edge — the
-        cli_variants_adapter pattern, since a cross-subsystem edge onto an internal Adapter is a
-        boundary violation — so no narrative call step names it. composeVariantGuidance IS modeled
-        (agent_resolver calls it), and would not need this suppression on its own.
+  allow: []
 status: complete
 createdAt: '2026-07-15T12:23:50.906Z'
-updatedAt: '2026-07-29T20:47:09.761Z'
+updatedAt: '2026-08-11T17:06:02.523Z'
