@@ -9,6 +9,37 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### Validator fixes: --ci draft parity + namespace shadowing detectable from disk
+
+Two intent/implementation gaps the rule-matrix and e2e tiers surfaced, both
+fixed to match the documented intent.
+
+- **`validate --ci` waives `DRAFT_SUBSYSTEM_WARNING` like the component
+  variant** — `isCiDraftWaivable` waived `DRAFT_COMPONENT_WARNING` but not
+  `DRAFT_SUBSYSTEM_WARNING`, so any fresh draft tree failed `--ci` on a pure
+  status notice while the CLI simultaneously printed "N draft-related
+  warning(s) (non-fatal in --ci)". Both codes (the whole `DRAFT_*_WARNING`
+  family — hierarchy.ts emits each with the same unconditional draft context)
+  are now waived identically; every other warning, including draft-downgraded
+  completeness findings like an unbound Portal method, stays fatal. The e2e
+  authoring journey's `lint.allow` workaround for this is gone.
+- **Declaration-site ids always mount-qualify, so `NAMESPACE_SHADOWING` is
+  reachable** — the loader ran a chained child's DECLARED spec ids through the
+  same `qualifyId` used for references, whose root-subsystem anchor returned
+  any bare id colliding with a root subsystem name UNQUALIFIED. A child
+  subsystem named like a root subsystem therefore silently merged into the
+  root's id space (duplicate subsystem + `ORPHANED_SUBSYSTEM` noise, no
+  shadowing warning) — the exact hazard `NAMESPACE_SHADOWING` documents, with
+  its tripwire structurally unreachable from disk. Declarations now qualify
+  through a dedicated `qualifyDeclaredId` (mount realizations — a child
+  subsystem under the mount's own name — still collapse onto the mount);
+  reference resolution is untouched, so `::`-absolute and bare root-anchored
+  references from a child to root subsystems resolve exactly as before.
+  **Behavior change:** a colliding chained-child subsystem (or component/
+  interface/implementation/type) id now loads qualified (e.g.
+  `partner-billing::ledger`) and trips `NAMESPACE_SHADOWING` instead of
+  silently merging into the root subsystem's id space.
+
 ### Rule-matrix test tier: every finding code pinned by fire+control fixtures
 
 The validator can emit ~160 distinct finding codes; the rule tests covered some
