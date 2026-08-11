@@ -102,52 +102,35 @@ export default [
   // -------------------------------------------------------------------------
   // NAMESPACE_SHADOWING
   // -------------------------------------------------------------------------
-  // PRODUCT FINDING (faithful fixture FAILS — do not adjust it to pass):
-  // The documented intent is "a subproject-local name must not shadow a
-  // root-level subsystem id — a bare reference to a shadowed name silently
-  // anchors to the ROOT subsystem, so the local spec becomes unaddressable"
-  // (namespaceHygieneRule, NAMESPACE_SHADOWING error). The fixture below
-  // models exactly that: root subsystem `ledger`, chained mount
-  // `partner-billing`, child-local subsystem `ledger`.
-  //
-  // Through the real product path (validateSddTree over the loaded tree) the
-  // code NEVER fires: the rule detects a shadowed name as a QUALIFIED id whose
-  // last segment equals a root subsystem id (segments.length > 1), but the
-  // loader's qualifyId() short-circuits on any bare child id whose first
-  // segment is a root subsystem name and returns it UNQUALIFIED (specs.ts
-  // qualifyId: `if (rootSubsystems.has(firstSegment)) return id;`). The
-  // child's `ledger` therefore loads as bare root-anchored `ledger` — a
-  // duplicate of the root subsystem (observed run: two `ledger` subsystems,
-  // ORPHANED_SUBSYSTEM on the child copy, no NAMESPACE_SHADOWING) — which is
-  // precisely the silent root-anchoring hazard the rule documents, with its
-  // tripwire structurally unreachable from disk. The rule only fires on
-  // hand-built contexts (the unit tests cover it "structurally";
-  // tests/core/rules-semantic-edges.test.ts notes the same limitation).
-  //
-  // defineRuleFixture(<the faithful fire fixture, verbatim below>):
-  // {
-  //   code: 'NAMESPACE_SHADOWING',
-  //   severity: 'error',
-  //   expectFire: true,
-  //   scenario:
-  //     'The chained partner-billing subproject defines its own ledger subsystem while the root project already has a ledger subsystem, so bare ledger references inside the subproject silently anchor to the root.',
-  //   tree: {
-  //     system: { name: 'CommerceOS', vision: 'Order-to-cash commerce platform with chained partner billing.' },
-  //     subsystems: [
-  //       { id: 'ledger', description: 'The root double-entry ledger of record.' },
-  //       {
-  //         id: 'partner-billing',
-  //         description: 'Chained partner billing subproject mount.',
-  //         projectPath: 'packages/partner-billing',
-  //       },
-  //     ],
-  //     files: childProject('packages/partner-billing', 'PartnerBilling', [
-  //       { id: 'partner-billing', description: 'Partner billing workflows.' },
-  //       // The defect: a subproject-local subsystem named like the ROOT ledger subsystem.
-  //       { id: 'ledger', description: 'Partner-side billing ledger.' },
-  //     ]),
-  //   },
-  // }
+  // Regression for the qualifyId declaration/reference bug: the loader used to
+  // root-anchor a bare child DECLARATION whose name collided with a root
+  // subsystem id, silently merging it into the root id space so this tripwire
+  // was structurally unreachable from disk. Declarations now always
+  // mount-qualify (qualifyDeclaredId in src/core/specs.ts); only reference
+  // sites keep the root-subsystem anchor.
+  defineRuleFixture({
+    code: 'NAMESPACE_SHADOWING',
+    severity: 'error',
+    expectFire: true,
+    scenario:
+      'The chained partner-billing subproject defines its own ledger subsystem while the root project already has a ledger subsystem, so bare ledger references inside the subproject silently anchor to the root.',
+    tree: {
+      system: { name: 'CommerceOS', vision: 'Order-to-cash commerce platform with chained partner billing.' },
+      subsystems: [
+        { id: 'ledger', description: 'The root double-entry ledger of record.' },
+        {
+          id: 'partner-billing',
+          description: 'Chained partner billing subproject mount.',
+          projectPath: 'packages/partner-billing',
+        },
+      ],
+      files: childProject('packages/partner-billing', 'PartnerBilling', [
+        { id: 'partner-billing', description: 'Partner billing workflows.' },
+        // The defect: a subproject-local subsystem named like the ROOT ledger subsystem.
+        { id: 'ledger', description: 'Partner-side billing ledger.' },
+      ]),
+    },
+  }),
   defineRuleFixture({
     code: 'NAMESPACE_SHADOWING',
     expectFire: false,

@@ -330,15 +330,4 @@ export async function authorJourneyTree(client: Client): Promise<void> {
       },
     });
   }
-  // DRAFT_SUBSYSTEM_WARNING is not in the --ci draft-waiver set (unlike
-  // DRAFT_COMPONENT_WARNING), so a pre-lock tree must acknowledge it to run
-  // `validate --ci` green. See the e2e report: this asymmetry looks like a
-  // product oversight, tracked outside this suite.
-  await callToolOk(client, 'sdd_update_spec', {
-    kind: 'subsystem',
-    id: JOURNEY.subsystem,
-    delta: {
-      lint: { allow: [{ code: 'DRAFT_SUBSYSTEM_WARNING', reason: 'e2e journey validates the authored tree pre-lock in CI mode' }] },
-    },
-  });
 }

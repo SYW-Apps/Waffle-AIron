@@ -9,6 +9,60 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### Validator fixes: --ci draft parity + namespace shadowing detectable from disk
+
+Two intent/implementation gaps the rule-matrix and e2e tiers surfaced, both
+fixed to match the documented intent.
+
+- **`validate --ci` waives `DRAFT_SUBSYSTEM_WARNING` like the component
+  variant** — `isCiDraftWaivable` waived `DRAFT_COMPONENT_WARNING` but not
+  `DRAFT_SUBSYSTEM_WARNING`, so any fresh draft tree failed `--ci` on a pure
+  status notice while the CLI simultaneously printed "N draft-related
+  warning(s) (non-fatal in --ci)". Both codes (the whole `DRAFT_*_WARNING`
+  family — hierarchy.ts emits each with the same unconditional draft context)
+  are now waived identically; every other warning, including draft-downgraded
+  completeness findings like an unbound Portal method, stays fatal. The e2e
+  authoring journey's `lint.allow` workaround for this is gone.
+- **Declaration-site ids always mount-qualify, so `NAMESPACE_SHADOWING` is
+  reachable** — the loader ran a chained child's DECLARED spec ids through the
+  same `qualifyId` used for references, whose root-subsystem anchor returned
+  any bare id colliding with a root subsystem name UNQUALIFIED. A child
+  subsystem named like a root subsystem therefore silently merged into the
+  root's id space (duplicate subsystem + `ORPHANED_SUBSYSTEM` noise, no
+  shadowing warning) — the exact hazard `NAMESPACE_SHADOWING` documents, with
+  its tripwire structurally unreachable from disk. Declarations now qualify
+  through a dedicated `qualifyDeclaredId` (mount realizations — a child
+  subsystem under the mount's own name — still collapse onto the mount);
+  reference resolution is untouched, so `::`-absolute and bare root-anchored
+  references from a child to root subsystems resolve exactly as before.
+  **Behavior change:** a colliding chained-child subsystem (or component/
+  interface/implementation/type) id now loads qualified (e.g.
+  `partner-billing::ledger`) and trips `NAMESPACE_SHADOWING` instead of
+  silently merging into the root subsystem's id space.
+
+### Specialist dependency matrix closed: Registry and Actor edges now flag
+
+The Specialist is the wildcard block and was historically misused as a god
+component (up to holding entity state in memory); the deliberate
+counter-doctrine is that ALL storage — even in-memory — goes through the
+Store/Registry/Index/Repository mechanism and Specialists stay pure
+capabilities. The enforced forbidden list said so for Store but left the
+persistence WRITE path and one runtime block open — an oversight the
+rule-matrix sweep surfaced, now closed.
+
+- **Behavior change:** `Specialist → Registry` and `Specialist → Actor`
+  `dependsOn` edges now flag `ARCHITECTURE_VIOLATION_SPECIALIST_DEP` (error),
+  joining Portal/Observer/Orchestrator/Store/Supervisor. This closes the
+  wildcard god-component channel; Repository facades (plus Indexes, Adapters,
+  and other Specialists) remain the legal way for a Specialist to reach held
+  state. The rule message, doc comment, and the architecture standard's
+  dependency-rules bullet now state the closed list.
+- **Migration:** an existing tree with a deliberate `Specialist → Registry`/
+  `Actor` edge acknowledges it with a `lint.allow` reason on the spec — or,
+  better, retypes/rewires per the message's Repository-facade resolution.
+  (Note errors are not locally suppressible by default; re-tune the code via
+  `rules.sddRuleSeverity` first if a transition period is needed.)
+
 ### Rule-matrix test tier: every finding code pinned by fire+control fixtures
 
 The validator can emit ~160 distinct finding codes; the rule tests covered some
