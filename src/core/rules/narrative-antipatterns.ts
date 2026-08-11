@@ -28,7 +28,7 @@ function isTerminal(step: NarrativeStep, nextOf: (n: number) => number | undefin
   if (step.type === 'return' || step.type === 'throw') return true;
   const n = step.stepNumber;
   switch (step.type) {
-    case 'local': case 'call': case 'dispatch':
+    case 'local': case 'call': case 'register': case 'dispatch':
       return nextOf(n) === undefined;
     case 'branch':
       return step.onTrueStep === undefined && nextOf(n) === undefined;
@@ -197,6 +197,8 @@ export const narrativeAntipatternsRule: SddRule = {
         }
 
         // -- collect method-level call edges for the cycle pass -------------
+        // `register` steps are deliberately NOT collected: a handoff defers
+        // the invocation to the runtime, so it cannot recurse by construction.
         if (!component) continue;
         const fromKey = `${component.id}::${implMethod.name}`;
         for (const s of steps) {

@@ -74,6 +74,7 @@ export function stepGraph(steps: NarrativeStep[]): {
     switch (s.type) {
       case 'local':
       case 'call':
+      case 'register':
       case 'dispatch':
         succ.push(fallNext(n));
         break;
@@ -159,6 +160,7 @@ export const narrativeFlowRule: SddRule = {
           switch (s.type) {
             case 'local':
             case 'call':
+            case 'register':
             case 'dispatch': {
               const extra = flowConfigOn(s);
               if (extra.length) malformed(`step ${s.stepNumber} (${s.type}) carries flow config (${extra.join(', ')}) — use a flow step type instead.`);
@@ -329,7 +331,7 @@ export const narrativeFlowRule: SddRule = {
           if (s.finallyStep !== undefined) handlerStarts.add(s.finallyStep);
           const last = byNum.get(s.endStep);
           const nxt = nextOf(s.endStep);
-          if (last && (last.type === 'local' || last.type === 'call' || last.type === 'dispatch') && nxt !== undefined && handlerStarts.has(nxt)) {
+          if (last && (last.type === 'local' || last.type === 'call' || last.type === 'register' || last.type === 'dispatch') && nxt !== undefined && handlerStarts.has(nxt)) {
             ctx.addIssue(
               'warning',
               'FALLTHROUGH_INTO_HANDLER',

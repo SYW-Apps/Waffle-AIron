@@ -3073,6 +3073,7 @@ export function mountCanvas(host, model, opts = {}) {
       case 'try': return s.n + '. \u26E8 try \u2014 ' + s.text;
       case 'parallel': return s.n + '. \u2225 ' + s.text;
       case 'jump': return s.n + '. \u21B7 ' + s.text;
+      case 'register': return s.n + '. \u27F2 register \u2014 ' + s.text;
       case 'return': return s.n + '. \u23CE return' + (s.outcome ? ' \u2014 ' + s.outcome : '');
       case 'throw': return s.n + '. \u26A1 throw' + (s.err ? ' ' + s.err : '');
       default: return s.n + '. ' + s.text;
@@ -3096,7 +3097,9 @@ export function mountCanvas(host, model, opts = {}) {
     (graph.joins || []).forEach(function (j2) { joinByHeader[j2.header] = j2; });
     graph.steps.forEach(function (s, i) {
       var id = 'n' + s.n;
-      var isCall = (s.kind === 'call' || s.kind === 'dispatch') && !!s.call;
+      // Register steps render like calls (target edge + label) — the label
+      // itself says "register", keeping the handoff visually distinct.
+      var isCall = (s.kind === 'call' || s.kind === 'dispatch' || s.kind === 'register') && !!s.call;
       // A detached call's target renders as a separate ghost node (below), so
       // the step node itself stays plain and undrillable.
       var isDetached = isCall && !!s.detach;
@@ -3351,7 +3354,7 @@ export function mountCanvas(host, model, opts = {}) {
     comps.push({ id: 'start', name: flowTitle() + '()', subsystem: 'flow', componentType: 'Start', public: false, owns: [] });
     graph.steps.forEach(function (s) {
       var name = flowStepLabel(s) + (s.call && !s.detach ? ' \u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
-      comps.push({ id: 'n' + s.n, name: name, subsystem: 'flow', componentType: (s.kind === 'call' || s.kind === 'dispatch') ? 'Call' : 'Step', public: false, owns: [] });
+      comps.push({ id: 'n' + s.n, name: name, subsystem: 'flow', componentType: (s.kind === 'call' || s.kind === 'dispatch' || s.kind === 'register') ? 'Call' : 'Step', public: false, owns: [] });
     });
     // Virtual flow nodes (join bars, detached-call ghosts) export as plain
     // steps so the editable diagrams keep the fan-out/join and detachment.

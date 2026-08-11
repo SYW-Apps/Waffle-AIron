@@ -1,6 +1,6 @@
 import { RuleContext, SddRule } from './types.js';
 import { BUILTIN_TYPES, extractTypeIdentifiers, extractTypeGenerics, methodTypeRefs, matchTypeRef } from './type-analysis.js';
-import { effectiveNarrativeDetail } from './narrative-detail.js';
+import { effectiveNarrativeDetail, passesIntentFloor } from './narrative-detail.js';
 
 /** Dependency-cycle detection over the component dependsOn graph. */
 export const cyclesRule: SddRule = {
@@ -91,6 +91,15 @@ export interface WalkOptions {
    * are followed either way.
    */
   followDispatchTables?: boolean;
+  /**
+   * Whether `register` steps (runtime-callback handoffs) contribute edges.
+   * TRUE for unused-detection: a callback handed to the runtime IS reached
+   * wherever its registering narrative is reached. FALSE for the durability
+   * boot-graph: registration is a deferred invocation — registering a hydration
+   * read at init does not execute it at boot, so the boot walk must not take
+   * the edge (same doctrine as the non-flooded dispatch tables).
+   */
+  followRegisterEdges?: boolean;
 }
 
 export function walkNarrativeGraph(
@@ -99,6 +108,7 @@ export function walkNarrativeGraph(
   opts: WalkOptions = {},
 ): { reachedComponents: Set<string>; reachedMethods: Set<string> } {
   const followDispatchTables = opts.followDispatchTables ?? true;
+  const followRegisterEdges = opts.followRegisterEdges ?? true;
   const reachedComponents = new Set<string>();
   const reachedMethods = new Set<string>();
   const queue: { compId: string; methodName: string }[] = [];
@@ -163,6 +173,12 @@ export function walkNarrativeGraph(
         reachComponent(step.targetComponent);
         enqueueMethod(step.targetComponent, step.targetMethod);
       }
+      // A register step is a handoff, not an invocation — but the callback IS
+      // reached wherever its registering narrative is (the runtime will call it).
+      if (followRegisterEdges && step.type === 'register' && step.targetComponent && step.targetMethod) {
+        reachComponent(step.targetComponent);
+        enqueueMethod(step.targetComponent, step.targetMethod);
+      }
       if (step.type === 'dispatch' && step.targetComponent) {
         reachComponent(step.targetComponent);
         const portal = ctx.componentMap.get(step.targetComponent);
@@ -203,11 +219,13 @@ export function walkNarrativeGraph(
 export const reachabilityRule: SddRule = {
   name: 'unused-detection',
   description:
-    'Walks the narrative execution graph (call steps, dispatch-table routing, lifecycle flows) from every entrypoint (Portal/Observer/published component/lifecycle entrypoint) and flags components and methods no execution chain reaches, plus types no field or signature references.',
+    'Walks the narrative execution graph (call steps, register handoffs, dispatch-table routing, lifecycle flows) from every entrypoint (Portal/Observer/published component/lifecycle entrypoint/invokedBy-declared method) and flags components and methods no execution chain reaches, plus types no field or signature references. An interface method declaring invokedBy (a real caller outside the modeled graph) seeds the walk, so its narrative propagates reachability; the declaration itself is audited (thin caller prose, or a method the internal walk already reaches).',
   codes: [
     { code: 'UNUSED_COMPONENT', defaultSeverity: 'warning', summary: 'Component never reached by any narrative call chain' },
     { code: 'UNUSED_METHOD', defaultSeverity: 'warning', summary: 'Method never called by any narrative step' },
     { code: 'UNUSED_TYPE', defaultSeverity: 'warning', summary: 'Type never referenced by fields or signatures' },
+    { code: 'INVOKED_BY_UNDESCRIBED', defaultSeverity: 'warning', summary: 'invokedBy declaration whose caller prose is missing or placeholder-thin' },
+    { code: 'INVOKED_BY_REDUNDANT', defaultSeverity: 'warning', summary: 'invokedBy declaration on a method the internal narrative walk already reaches — stale, remove it' },
   ],
   check(ctx) {
     // Collect root entry points: Portals, Observers, components backing public
@@ -230,7 +248,48 @@ export const reachabilityRule: SddRule = {
       }
     }
 
-    const { reachedComponents, reachedMethods } = walkNarrativeGraph(ctx, seeds);
+    // Phase 1 — the INTERNAL walk (no invokedBy seeds): the baseline that
+    // decides whether an invokedBy declaration is redundant.
+    const baseWalk = walkNarrativeGraph(ctx, seeds);
+
+    // Audit invokedBy declarations and collect their entrypoint seeds.
+    const invokedBySeeds: WalkSeed[] = [];
+    for (const intf of ctx.interfaces) {
+      // A declaration on an unresolvable component can't be judged (the
+      // dangling reference is the hierarchy family's finding).
+      if (!ctx.componentMap.has(intf.component)) continue;
+      const comp = ctx.componentMap.get(intf.component)!;
+      for (const m of intf.methods) {
+        if (!m.invokedBy) continue;
+        invokedBySeeds.push({ compId: intf.component, methodName: m.name });
+        if (!ctx.isSpecInScope(intf.id)) continue;
+        const isDraftCtx = comp.status === 'draft' || comp.status === 'design' || intf.status === 'draft' || intf.status === 'design';
+        if (!passesIntentFloor(m.invokedBy.caller, m.name)) {
+          ctx.addIssue(
+            'warning',
+            'INVOKED_BY_UNDESCRIBED',
+            `Method "${m.name}" on component "${intf.component}" declares invokedBy (${m.invokedBy.kind}) but its "caller" prose is missing or placeholder-thin — state WHO invokes it and when, so the entrypoint claim stays reviewable.`,
+            intf.id,
+            isDraftCtx,
+          );
+        }
+        if (baseWalk.reachedMethods.has(methodKey(intf.component, m.name))) {
+          ctx.addIssue(
+            'warning',
+            'INVOKED_BY_REDUNDANT',
+            `Method "${m.name}" on component "${intf.component}" declares invokedBy (${m.invokedBy.kind}), but the internal narrative walk already reaches it — the declaration is stale; remove it.`,
+            intf.id,
+            isDraftCtx,
+          );
+        }
+      }
+    }
+
+    // Phase 2 — the FULL walk (base seeds + invokedBy entrypoints) feeds the
+    // UNUSED_* verdicts, so a declared external caller's narrative propagates.
+    const { reachedComponents, reachedMethods } = invokedBySeeds.length
+      ? walkNarrativeGraph(ctx, [...seeds, ...invokedBySeeds])
+      : baseWalk;
 
     // Generate warnings for unused components
     for (const comp of ctx.components) {

@@ -322,8 +322,10 @@ export const durabilityRule: SddRule = {
     // followDispatchTables: false — at boot only edges the init narratives
     // actually TAKE count; a hydrating read merely offered in a reached
     // portal's table is not a boot-time read (explicit dispatch steps in the
-    // init flow are still followed).
-    const initReach = initSeeds.length ? walkNarrativeGraph(ctx, initSeeds, { followDispatchTables: false }) : null;
+    // init flow are still followed). followRegisterEdges: false for the same
+    // reason — registering a callback at init hands it to the runtime for
+    // LATER; it is not a boot-time execution of the hydrating read.
+    const initReach = initSeeds.length ? walkNarrativeGraph(ctx, initSeeds, { followDispatchTables: false, followRegisterEdges: false }) : null;
 
     for (const comp of ctx.components) {
       const isDraftCtx = ctx.isComponentDraft(comp.id);

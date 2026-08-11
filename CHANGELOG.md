@@ -232,6 +232,30 @@ themes, stored per browser alongside the existing UI settings.
   props-only, app-agnostic component (`components/ThemeMenu.tsx`, styled purely
   through `.tmenu-*` classes) so the same menu can be lifted into any SYW app.
 
+### Declared entrypoints: `register` steps + `invokedBy` (new)
+
+Unused-detection could only see callers the narrative graph modeled, so a callback
+handed to the runtime (timer, event listener, shutdown hook) or a method invoked by
+an external system read as `UNUSED_COMPONENT`/`UNUSED_METHOD` — and the lint.allow
+that silenced the finding also stopped reachability from propagating through the
+method's narrative. Two mechanisms close that honestly:
+
+- **`register` narrative step** — a runtime-callback HANDOFF with the same target
+  shape as a `call` step (`targetComponent` + `targetMethod`). Reachability treats
+  it as an edge (the callback is reached wherever its registering narrative is),
+  but it is NOT an invocation: exempt from call-graph conformance
+  (`CALL_STEP_UNREALIZED`), never a call-cycle edge (`UNCONDITIONAL_CALL_CYCLE`),
+  and not followed by the durability boot walk — registering a hydrating read at
+  init is not executing it at boot, matching the non-flooded boot-graph doctrine.
+  Targets get the identical existence/dependency/contract validation call steps get.
+- **`invokedBy` on L3 methods** — `{ kind: runtime | external | sibling-subsystem,
+  caller }` declares a real caller OUTSIDE the modeled graph. Unused-detection seeds
+  the method as an entrypoint, so reachability PROPAGATES through its narrative —
+  unlike a lint.allow, which only hides the finding. The declaration is audited:
+  missing or placeholder-thin `caller` prose warns `INVOKED_BY_UNDESCRIBED`, and a
+  declaration on a method the internal walk already reaches warns
+  `INVOKED_BY_REDUNDANT` (stale — remove it).
+
 ### Fixes
 
 - **A stale lock reported itself as locked.** The hosted project config view judged

@@ -9,13 +9,13 @@ import { resolveSurfaceRef, isExternalNamespaceRef } from './namespace.js';
 export const contractsRule: SddRule = {
   name: 'contract-symmetry-and-narratives',
   description:
-    'Implementations mirror their contract method-for-method. Narrative call steps must name an existing component and method, the caller must declare the dependency, and asserted semantic guarantees must be backed by the target contract.',
+    'Implementations mirror their contract method-for-method. Narrative call steps (and register handoffs, which share the identical target shape) must name an existing component and method, the caller must declare the dependency, and asserted semantic guarantees must be backed by the target contract.',
   codes: [
     { code: 'UNEXPECTED_IMPLEMENTATION_METHOD', defaultSeverity: 'error', summary: 'Implementation method not present on the contract' },
     { code: 'MISSING_IMPLEMENTATION_METHOD', defaultSeverity: 'error', summary: 'Contract method missing from the implementation' },
-    { code: 'MISSING_TARGET_COMPONENT', defaultSeverity: 'error', summary: 'Call step missing targetComponent' },
-    { code: 'MISSING_TARGET_METHOD', defaultSeverity: 'error', summary: 'Call step missing targetMethod' },
-    { code: 'INVALID_TARGET_COMPONENT_REFERENCE', defaultSeverity: 'error', summary: 'Call step targets a non-existent component' },
+    { code: 'MISSING_TARGET_COMPONENT', defaultSeverity: 'error', summary: 'Call/register step missing targetComponent' },
+    { code: 'MISSING_TARGET_METHOD', defaultSeverity: 'error', summary: 'Call/register step missing targetMethod' },
+    { code: 'INVALID_TARGET_COMPONENT_REFERENCE', defaultSeverity: 'error', summary: 'Call/register step targets a non-existent component' },
     { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree reference (super::/:: form) with no surface snapshot covering it — only the parent project can verify it' },
     { code: 'SURFACE_REF_NOT_EXPOSED', defaultSeverity: 'error', summary: 'Cross-tree reference resolves to a surface snapshot that does not expose the called method/capability' },
     { code: 'UNDECLARED_DEPENDENCY_CALL', defaultSeverity: 'error', summary: 'Call step targets a component the caller does not depend on or own' },
@@ -61,9 +61,12 @@ export const contractsRule: SddRule = {
       // Level 5 narrative step validation. Dispatch steps share the component-
       // existence and declared-dependency checks with call steps; capability
       // resolution against the target Portal's table is the dispatch rule's.
+      // Register steps (runtime-callback handoffs) name a target exactly like
+      // call steps do and get IDENTICAL target validation — the handoff must
+      // point at a real dependency's real method even though it never invokes.
       for (const implMethod of impl.methods) {
         for (const step of implMethod.narrative) {
-          if (step.type !== 'call' && step.type !== 'dispatch') continue;
+          if (step.type !== 'call' && step.type !== 'dispatch' && step.type !== 'register') continue;
 
           if (!step.targetComponent) {
             ctx.addIssue(
@@ -139,11 +142,15 @@ export const contractsRule: SddRule = {
             continue;
           }
 
+          // From here down: call and register steps share the full target
+          // resolution path (register wording differs, mechanics don't).
+          const verb = step.type === 'register' ? 'registers callback' : 'calls';
+
           if (!step.targetMethod) {
             ctx.addIssue(
               'error',
               'MISSING_TARGET_METHOD',
-              `Method "${implMethod.name}" in implementation "${impl.id}" has a call step (${step.stepNumber}) missing "targetMethod".`,
+              `Method "${implMethod.name}" in implementation "${impl.id}" has a ${step.type} step (${step.stepNumber}) missing "targetMethod".`,
               impl.id,
               isDraftCtx,
             );
@@ -161,7 +168,7 @@ export const contractsRule: SddRule = {
                   ctx.addIssue(
                     'error',
                     'SURFACE_REF_NOT_EXPOSED',
-                    `Method "${implMethod.name}" in implementation "${impl.id}" calls "${step.targetMethod}" on cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not expose that method on "${resolved.entry.id}".`,
+                    `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} "${step.targetMethod}" on cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not expose that method on "${resolved.entry.id}".`,
                     impl.id,
                     isDraftCtx,
                     true,
@@ -186,7 +193,7 @@ export const contractsRule: SddRule = {
               ctx.addIssue(
                 'warning',
                 'CROSS_TREE_REF_UNRESOLVED',
-                `Method "${implMethod.name}" in implementation "${impl.id}" calls cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, or import/generate the producing project's surface.`,
+                `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, or import/generate the producing project's surface.`,
                 impl.id,
                 isDraftCtx,
               );
@@ -194,7 +201,7 @@ export const contractsRule: SddRule = {
               ctx.addIssue(
                 'error',
                 'INVALID_TARGET_COMPONENT_REFERENCE',
-                `Method "${implMethod.name}" in implementation "${impl.id}" calls component "${step.targetComponent}" which does not exist (step ${step.stepNumber}).`,
+                `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} component "${step.targetComponent}" which does not exist (step ${step.stepNumber}).`,
                 impl.id,
                 isDraftCtx,
               );
@@ -210,7 +217,7 @@ export const contractsRule: SddRule = {
               ctx.addIssue(
                 'error',
                 'UNDECLARED_DEPENDENCY_CALL',
-                `Method "${implMethod.name}" in implementation "${impl.id}" (component "${callingComponent.id}") calls component "${step.targetComponent}" (step ${step.stepNumber}) but component "${callingComponent.id}" does not list "${step.targetComponent}" as a dependency.`,
+                `Method "${implMethod.name}" in implementation "${impl.id}" (component "${callingComponent.id}") ${verb} component "${step.targetComponent}" (step ${step.stepNumber}) but component "${callingComponent.id}" does not list "${step.targetComponent}" as a dependency.`,
                 impl.id,
                 isDraftCtx || ctx.isComponentDraft(callingComponent.id),
               );
@@ -229,7 +236,7 @@ export const contractsRule: SddRule = {
             ctx.addIssue(
               'error',
               'INVALID_TARGET_METHOD_REFERENCE',
-              `Method "${implMethod.name}" in implementation "${impl.id}" calls method "${step.targetMethod}" on component "${step.targetComponent}" which is not defined on any of its interfaces (step ${step.stepNumber}).`,
+              `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} method "${step.targetMethod}" on component "${step.targetComponent}" which is not defined on any of its interfaces (step ${step.stepNumber}).`,
               impl.id,
               isDraftCtx || ctx.isComponentDraft(step.targetComponent),
             );

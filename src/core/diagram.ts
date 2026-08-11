@@ -600,6 +600,20 @@ export function generateSequenceDiagram(
           }
           break;
         }
+        case 'register': {
+          // Runtime-callback handoff: a dashed arrow labeled "register", no
+          // activation and no walk — registration is not an invocation, so the
+          // callback's own flow is not part of this sequence.
+          if (!step.targetComponent || !step.targetMethod) break;
+          const regTarget = componentById.get(step.targetComponent);
+          if (!regTarget) {
+            lines.push(`  Note over ${selfId}: ${escapeLabel(`registers callback on unknown "${step.targetComponent}"`)}`);
+            break;
+          }
+          const regTargetId = declare(regTarget);
+          lines.push(`  ${selfId}--)${regTargetId}: ${escapeLabel(`register ${step.targetMethod}()`)}`);
+          break;
+        }
         case 'call': {
           if (!step.targetComponent || !step.targetMethod) break;
           const target = componentById.get(step.targetComponent);
