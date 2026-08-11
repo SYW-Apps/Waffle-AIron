@@ -21,11 +21,16 @@ fields:
     description: L2 component realizing this contract
     optional: false
   - name: methods
-    type: object[]
+    type: MethodSignature[]
     description: >-
-      Method signatures: name, params, returns, guarantees, endpoint, effect (read | write —
-      required on a durable Store's contract methods so the durability round-trip rule can pair
-      external writes with hydration read-backs)
+      Method signatures (see method_signature): name, params, returns, guarantees, endpoint, effect
+      (read | write — required on a durable Store's contract methods so the durability round-trip
+      rule can pair external writes with hydration read-backs), and an optional invokedBy
+      declared-invocation ({kind: runtime | external | sibling-subsystem, caller} — see
+      declared_invocation) acknowledging a real caller outside the modeled narrative graph:
+      unused-detection seeds the method as a reachability entrypoint, with mandatory caller prose
+      (INVOKED_BY_UNDESCRIBED) and a staleness flag when the internal walk reaches the method anyway
+      (INVOKED_BY_REDUNDANT)
     optional: false
   - name: status
     type: string
@@ -33,4 +38,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-10T18:47:36.202Z'
+updatedAt: '2026-08-11T15:28:34.603Z'
