@@ -9,6 +9,41 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### Rule-matrix test tier: every finding code pinned by fire+control fixtures
+
+The validator can emit ~160 distinct finding codes; the rule tests covered some
+of them, and nothing noticed when a rule shipped without any. The new
+`tests/rules-matrix/` tier makes that coverage self-enforcing.
+
+- **Fixture contract** — `defineRuleFixture({ code, severity?, anchoredTo?,
+  scenario, tree, expectFire })`: each code gets a TRIGGERING fixture and a
+  near-identical CONTROL that must stay quiet for that code (a control only
+  guarantees its own code's silence — other codes may fire). Trees are
+  declarative miniature systems with realistic domain names, materialized as
+  real temp `.wai` projects and validated through `validateSddTree()` — the
+  same loader → schema → composed-rule-sequence path the CLI, MCP server, and
+  hosted gate run, so a rule starved by the loader fails here too. Family
+  files under `tests/rules-matrix/families/` are auto-collected; there is no
+  central manifest to conflict on.
+- **The ratchet** — `meta.test.ts` diffs the real `knownIssueCodes` universe
+  (test pack included, so namespaced `<PACK>_<CODE>` assertion codes are
+  enforced on the same terms) against the collected fixtures; `ratchet.json`
+  lists the not-yet-covered debt explicitly and only shrinks. A new code with
+  no fixture and no entry, a stale entry for a now-covered code, or an
+  unsorted/unknown entry each turn CI red — so every new rule needs fixtures
+  immediately, and deleting coverage means growing a file a reviewer reads.
+- **Pack composition proven** — a small declarative test pack
+  (`ledger-platform`) contributes a forbid-edge assertion and a guarantee
+  token; fixtures pin that its namespaced code fires and can be satisfied, and
+  that a pack-declared guarantee token is accepted while an undeclared one
+  still flags `UNKNOWN_GUARANTEE`.
+- **Coverage floors** — `vitest.config.ts` now carries `coverage.thresholds`:
+  a global floor just under the measured baseline plus a higher floor for
+  `src/core/rules/**` (measured separately — vitest excludes glob-matched
+  files from the global pool). The floors move deliberately, by humans; no
+  `autoUpdate`. Thresholds apply to `npm run test:coverage` only — plain
+  `npm test` stays coverage-free.
+
 ### Black-box e2e tier: agent journeys against the built artifact
 
 Two incidents this week shared a blind spot: a long-lived MCP server running an

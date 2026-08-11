@@ -1,0 +1,327 @@
+/**
+ * Namespace integrity and cross-tree freshness (src/core/rules/namespace.ts).
+ *
+ * Documented intents pinned here:
+ *  - RESERVED_ID_SEGMENT (error): no id segment may be the reserved namespace
+ *    keyword "super" — stored references to such an id would be consumed as a
+ *    namespace hop and resolve to a different spec.
+ *  - NAMESPACE_SHADOWING (error): a subproject-local name must not shadow a
+ *    root-level subsystem id — a bare reference to a shadowed name silently
+ *    anchors to the ROOT subsystem, so the local spec becomes unaddressable.
+ *  - ROUNDTRIP_SERIALIZATION (error): every loaded spec must re-serialize
+ *    through the exact writer pipeline — validate must predict every refusal a
+ *    later save or lock would raise. Only the CONTROL is expressible from disk
+ *    (see the note at that fixture).
+ *  - SURFACE_STALE (warning): every chained child's stored parent-surface
+ *    snapshot must match the parent's CURRENT exported contracts; a drifted
+ *    snapshot means the child validates standalone against a stale truth.
+ */
+import * as yaml from 'js-yaml';
+import { defineRuleFixture } from '../harness.js';
+
+const TS = '2026-01-01T00:00:00.000Z';
+
+function dumpSpec(spec: Record<string, unknown>): string {
+  return yaml.dump({ schemaVersion: '1.0.0', createdAt: TS, updatedAt: TS, ...spec }, { noRefs: true, lineWidth: 200 });
+}
+
+/** Minimal chained-child project files: an L0 index plus subsystem files. */
+function childProject(
+  base: string,
+  systemName: string,
+  subsystems: Record<string, unknown>[],
+  extra?: Record<string, string>,
+): Record<string, string> {
+  const files: Record<string, string> = {
+    [`${base}/.wai/specs/.index.yaml`]: dumpSpec({
+      name: systemName,
+      vision: `The ${systemName} subproject of this scenario's miniature system family.`,
+    }),
+  };
+  for (const sub of subsystems) {
+    files[`${base}/.wai/specs/subsystems/${String(sub.id).replace(/[^a-zA-Z0-9._-]+/g, '_')}.yaml`] = dumpSpec({
+      name: String(sub.id),
+      description: `The ${String(sub.id)} subsystem of the ${systemName} subproject.`,
+      parentSystem: systemName,
+      ...sub,
+    });
+  }
+  return { ...files, ...(extra ?? {}) };
+}
+
+function surfaceYaml(snapshot: Record<string, unknown>): string {
+  return yaml.dump(
+    { origin: 'generated', stateId: 'sha256:0123456789abcdef', generatedAt: TS, types: [], ...snapshot },
+    { noRefs: true, lineWidth: 200 },
+  );
+}
+
+export default [
+  // -------------------------------------------------------------------------
+  // RESERVED_ID_SEGMENT
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'RESERVED_ID_SEGMENT',
+    severity: 'error',
+    anchoredTo: 'super',
+    expectFire: true,
+    scenario:
+      'An ops team abbreviates its batch run supervisor component to the id super, which the :: namespace grammar reserves as the parent hop keyword.',
+    tree: {
+      subsystems: [{ id: 'batch-runs', description: 'Nightly batch execution and babysitting.' }],
+      components: [
+        {
+          // The defect: "super" is the reserved namespace keyword.
+          id: 'super',
+          componentType: 'Supervisor',
+          subsystem: 'batch-runs',
+          description: 'Supervises nightly batch runs and restarts failed steps.',
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'RESERVED_ID_SEGMENT',
+    expectFire: false,
+    reason: 'The supervisor carries a real domain name; no id segment collides with the reserved keyword.',
+    scenario:
+      'The nightly batch run supervisor is named batch-supervisor, avoiding the reserved namespace keyword.',
+    tree: {
+      subsystems: [{ id: 'batch-runs', description: 'Nightly batch execution and babysitting.' }],
+      components: [
+        {
+          id: 'batch-supervisor',
+          componentType: 'Supervisor',
+          subsystem: 'batch-runs',
+          description: 'Supervises nightly batch runs and restarts failed steps.',
+        },
+      ],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // NAMESPACE_SHADOWING
+  // -------------------------------------------------------------------------
+  // PRODUCT FINDING (faithful fixture FAILS — do not adjust it to pass):
+  // The documented intent is "a subproject-local name must not shadow a
+  // root-level subsystem id — a bare reference to a shadowed name silently
+  // anchors to the ROOT subsystem, so the local spec becomes unaddressable"
+  // (namespaceHygieneRule, NAMESPACE_SHADOWING error). The fixture below
+  // models exactly that: root subsystem `ledger`, chained mount
+  // `partner-billing`, child-local subsystem `ledger`.
+  //
+  // Through the real product path (validateSddTree over the loaded tree) the
+  // code NEVER fires: the rule detects a shadowed name as a QUALIFIED id whose
+  // last segment equals a root subsystem id (segments.length > 1), but the
+  // loader's qualifyId() short-circuits on any bare child id whose first
+  // segment is a root subsystem name and returns it UNQUALIFIED (specs.ts
+  // qualifyId: `if (rootSubsystems.has(firstSegment)) return id;`). The
+  // child's `ledger` therefore loads as bare root-anchored `ledger` — a
+  // duplicate of the root subsystem (observed run: two `ledger` subsystems,
+  // ORPHANED_SUBSYSTEM on the child copy, no NAMESPACE_SHADOWING) — which is
+  // precisely the silent root-anchoring hazard the rule documents, with its
+  // tripwire structurally unreachable from disk. The rule only fires on
+  // hand-built contexts (the unit tests cover it "structurally";
+  // tests/core/rules-semantic-edges.test.ts notes the same limitation).
+  //
+  // defineRuleFixture(<the faithful fire fixture, verbatim below>):
+  // {
+  //   code: 'NAMESPACE_SHADOWING',
+  //   severity: 'error',
+  //   expectFire: true,
+  //   scenario:
+  //     'The chained partner-billing subproject defines its own ledger subsystem while the root project already has a ledger subsystem, so bare ledger references inside the subproject silently anchor to the root.',
+  //   tree: {
+  //     system: { name: 'CommerceOS', vision: 'Order-to-cash commerce platform with chained partner billing.' },
+  //     subsystems: [
+  //       { id: 'ledger', description: 'The root double-entry ledger of record.' },
+  //       {
+  //         id: 'partner-billing',
+  //         description: 'Chained partner billing subproject mount.',
+  //         projectPath: 'packages/partner-billing',
+  //       },
+  //     ],
+  //     files: childProject('packages/partner-billing', 'PartnerBilling', [
+  //       { id: 'partner-billing', description: 'Partner billing workflows.' },
+  //       // The defect: a subproject-local subsystem named like the ROOT ledger subsystem.
+  //       { id: 'ledger', description: 'Partner-side billing ledger.' },
+  //     ]),
+  //   },
+  // }
+  defineRuleFixture({
+    code: 'NAMESPACE_SHADOWING',
+    expectFire: false,
+    reason: 'The subproject-local subsystem carries a name no root subsystem uses, so every bare reference resolves unambiguously.',
+    scenario:
+      'The chained partner-billing subproject names its ledger partner-ledger, avoiding the root ledger subsystem name.',
+    tree: {
+      system: { name: 'CommerceOS', vision: 'Order-to-cash commerce platform with chained partner billing.' },
+      subsystems: [
+        { id: 'ledger', description: 'The root double-entry ledger of record.' },
+        {
+          id: 'partner-billing',
+          description: 'Chained partner billing subproject mount.',
+          projectPath: 'packages/partner-billing',
+        },
+      ],
+      files: childProject('packages/partner-billing', 'PartnerBilling', [
+        { id: 'partner-billing', description: 'Partner billing workflows.' },
+        { id: 'partner-ledger', description: 'Partner-side billing ledger.' },
+      ]),
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // ROUNDTRIP_SERIALIZATION — control only.
+  //
+  // NO fire fixture is expressible through the real product path: the loader
+  // parses spec files with the SAME strict zod schemas the writer refuses on,
+  // and qualifyId/relativizeId are exact inverses, so any tree that LOADS also
+  // re-serializes (that inverse property is precisely what this tripwire rule
+  // guards). The historical refusal (a root-mounted external subsystem whose
+  // qualified publicInterfaces/lifecycle members failed the writer schema on
+  // lock) is pinned here as the control: the exact shape that once refused must
+  // now round-trip quietly.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'ROUNDTRIP_SERIALIZATION',
+    expectFire: false,
+    reason:
+      'A root-mounted external subsystem with publicInterfaces and lifecycle entries is the historical lock-refusal shape; the writer pipeline must relativize its qualified members back to the child-local form without a refusal.',
+    scenario:
+      'A root-mounted external network-http subsystem publishes its portal and declares an init lifecycle entry, and every loaded spec re-serializes through the writer pipeline.',
+    tree: {
+      system: { name: 'MeshWorks', vision: 'Service mesh platform with chained protocol subprojects.' },
+      subsystems: [
+        {
+          id: 'network-http',
+          description: 'Chained HTTP protocol stack mount.',
+          projectPath: 'services/network-http',
+        },
+      ],
+      files: childProject(
+        'services/network-http',
+        'NetworkHttp',
+        [
+          {
+            id: 'network-http',
+            description: 'HTTP protocol stack of the mesh.',
+            publicInterfaces: [
+              { type: 'MessageBus', details: 'net.http capability provider surface.', component: 'http-portal' },
+            ],
+            lifecycle: [
+              { phase: 'init', component: 'http-portal', method: 'provision', description: 'Bind listeners and announce the capability.' },
+            ],
+          },
+        ],
+        {
+          'services/network-http/.wai/specs/components/http_portal.yaml': dumpSpec({
+            id: 'http-portal',
+            name: 'Http Portal',
+            description: 'MessageBus portal serving the net.http capability.',
+            subsystem: 'network-http',
+            componentType: 'Portal',
+            portalType: 'MessageBus',
+            owns: [],
+            dependsOn: [],
+          }),
+          'services/network-http/.wai/specs/interfaces/ihttp_portal.yaml': dumpSpec({
+            id: 'ihttp_portal',
+            name: 'Http Portal',
+            description: 'Contract of the HTTP capability portal.',
+            component: 'http-portal',
+            methods: [
+              {
+                name: 'provision',
+                description: 'Bind listeners and announce the net.http capability.',
+                signature: 'provision(): void',
+                returns: 'void',
+              },
+            ],
+          }),
+        },
+      ),
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // SURFACE_STALE
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'SURFACE_STALE',
+    severity: 'warning',
+    anchoredTo: 'field-ops',
+    expectFire: true,
+    scenario:
+      'The chained field-ops child still holds a parent surface snapshot exposing a harvest telemetry portal the parent no longer exports, so standalone validation would run against a stale truth.',
+    tree: {
+      system: { name: 'AgriFleetOS', vision: 'Agricultural fleet coordination platform with chained field operations.' },
+      subsystems: [
+        {
+          id: 'field-ops',
+          description: 'Chained field operations subproject mount.',
+          projectPath: 'apps/field-ops',
+        },
+      ],
+      files: childProject(
+        'apps/field-ops',
+        'FieldOps',
+        [{ id: 'field-ops', description: 'In-field harvest operations.' }],
+        {
+          // The defect: the held snapshot's contracts no longer match the
+          // parent's current (empty) exported surface.
+          'apps/field-ops/.wai/surfaces/AgriFleetOS.yaml': surfaceYaml({
+            projectName: 'AgriFleetOS',
+            interfaces: [
+              {
+                id: 'iharvest_telemetry',
+                name: 'Harvest Telemetry',
+                component: 'harvest-telemetry-portal',
+                audience: 'project',
+                type: 'REST',
+                details: 'Retired harvest telemetry ingestion surface.',
+                methods: [
+                  {
+                    name: 'ingestSample',
+                    description: 'Ingest one harvest telemetry sample.',
+                    signature: 'ingestSample(sampleId: string): void',
+                    returns: 'void',
+                  },
+                ],
+              },
+            ],
+          }),
+        },
+      ),
+    },
+  }),
+  defineRuleFixture({
+    code: 'SURFACE_STALE',
+    expectFire: false,
+    reason: 'The held snapshot matches the parent\'s current exported surface content, so the child validates against the current truth.',
+    scenario:
+      'The chained field-ops child holds a parent surface snapshot that matches the parent\'s current exported contracts.',
+    tree: {
+      system: { name: 'AgriFleetOS', vision: 'Agricultural fleet coordination platform with chained field operations.' },
+      subsystems: [
+        {
+          id: 'field-ops',
+          description: 'Chained field operations subproject mount.',
+          projectPath: 'apps/field-ops',
+        },
+      ],
+      files: childProject(
+        'apps/field-ops',
+        'FieldOps',
+        [{ id: 'field-ops', description: 'In-field harvest operations.' }],
+        {
+          // Matches the parent's current projection: no exported entries.
+          'apps/field-ops/.wai/surfaces/AgriFleetOS.yaml': surfaceYaml({
+            projectName: 'AgriFleetOS',
+            interfaces: [],
+          }),
+        },
+      ),
+    },
+  }),
+];
