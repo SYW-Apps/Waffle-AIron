@@ -105,6 +105,42 @@ function qualifyId(id: string | undefined, prefix: string, rootSubsystems: Reado
   return prefix ? `${prefix}::${id}` : id;
 }
 
+const NO_ROOT_SUBSYSTEMS: ReadonlySet<string> = new Set();
+
+/**
+ * Qualification for a spec's OWN id at its DECLARATION site, when its file is
+ * loaded from a chained child project. Unlike reference resolution
+ * (`qualifyId`), a declaration may NEVER root-anchor: a bare child id whose
+ * name happens to collide with a ROOT subsystem id still declares a spec that
+ * is LOCAL to this mount. Routing declarations through the reference logic
+ * root-anchored such an id, silently merging the child spec into the root
+ * subsystem's id space — exactly the hazard NAMESPACE_SHADOWING documents,
+ * with its tripwire (a QUALIFIED id whose last segment equals a root id) made
+ * structurally unreachable from disk. Declarations always mount-qualify; only
+ * reference sites keep the root-subsystem anchor.
+ *
+ * `mountRealization` (subsystem declarations only): ONE bare form does not
+ * nest — the flat external realization of the mount itself, a child subsystem
+ * declared under the mount's own local name. That is precisely what
+ * relativizeId stores for an in-memory id equal to the whole prefix, so it
+ * loads back AS the mount id (letting mergeMountRealizations collapse mount +
+ * realization into the flat external subsystem), never as a child of itself.
+ */
+function qualifyDeclaredId(id: string, prefix: string, mountRealization = false): string {
+  if (!id || !prefix) return id;
+  if (id.startsWith('::') || id.startsWith('super::')) {
+    // A declaration never legitimately carries an explicit hop form (the
+    // writer schema refuses them); should one appear hand-authored, resolve it
+    // exactly as a reference would — these forms never consult the
+    // root-subsystem set, so the shadowing hazard does not apply.
+    return qualifyId(id, prefix, NO_ROOT_SUBSYSTEMS);
+  }
+  if (mountRealization && id === prefix.split('::').pop()) {
+    return prefix;
+  }
+  return `${prefix}::${id}`;
+}
+
 export function splitNamespace(qualifiedId: string): { prefix: string; localId: string } {
   if (!qualifiedId.includes('::')) {
     return { prefix: '', localId: qualifiedId };
@@ -799,8 +835,10 @@ export class SpecWorkspace {
     }
 
     // 2. Namespace local subsystems (runs always to handle projectPath delegation)
+    // Declared ids go through qualifyDeclaredId (always mount-qualified);
+    // qualifyId with the root-subsystem anchor is for REFERENCES only.
     index.subsystems = index.subsystems.map(sub => {
-      const qualifiedSubId = namespacePrefix ? qualifyId(sub.id, namespacePrefix, this.rootSubsystems) : sub.id;
+      const qualifiedSubId = namespacePrefix ? qualifyDeclaredId(sub.id, namespacePrefix, true) : sub.id;
       const componentPrefix = sub.projectPath ? qualifiedSubId : namespacePrefix;
       return {
         ...sub,
@@ -820,14 +858,14 @@ export class SpecWorkspace {
     const originalSubsystemPaths = index.paths.subsystem;
     index.paths.subsystem = {};
     for (const [k, v] of Object.entries(originalSubsystemPaths)) {
-      const qualifiedK = namespacePrefix ? qualifyId(k, namespacePrefix, this.rootSubsystems) : k;
+      const qualifiedK = namespacePrefix ? qualifyDeclaredId(k, namespacePrefix, true) : k;
       index.paths.subsystem[qualifiedK] = v;
     }
 
     if (namespacePrefix) {
       index.components = index.components.map(comp => ({
         ...comp,
-        id: qualifyId(comp.id, namespacePrefix, this.rootSubsystems),
+        id: qualifyDeclaredId(comp.id, namespacePrefix),
         subsystem: qualifyId(comp.subsystem, namespacePrefix, this.rootSubsystems),
         owns: comp.owns.map(o => qualifyId(o, namespacePrefix, this.rootSubsystems)),
         dependsOn: comp.dependsOn.map(d => qualifyId(d, namespacePrefix, this.rootSubsystems)),
@@ -839,13 +877,13 @@ export class SpecWorkspace {
 
       index.interfaces = index.interfaces.map(intf => ({
         ...intf,
-        id: qualifyId(intf.id, namespacePrefix, this.rootSubsystems),
+        id: qualifyDeclaredId(intf.id, namespacePrefix),
         component: qualifyId(intf.component, namespacePrefix, this.rootSubsystems),
       }));
 
       index.implementations = index.implementations.map(impl => ({
         ...impl,
-        id: qualifyId(impl.id, namespacePrefix, this.rootSubsystems),
+        id: qualifyDeclaredId(impl.id, namespacePrefix),
         contract: qualifyId(impl.contract, namespacePrefix, this.rootSubsystems),
         methods: impl.methods.map(m => ({
           ...m,
@@ -858,14 +896,14 @@ export class SpecWorkspace {
 
       index.types = index.types.map(t => ({
         ...t,
-        id: qualifyId(t.id, namespacePrefix, this.rootSubsystems),
+        id: qualifyDeclaredId(t.id, namespacePrefix),
         subsystem: t.subsystem ? qualifyId(t.subsystem, namespacePrefix, this.rootSubsystems) : undefined,
         group: t.group ? qualifyId(t.group, namespacePrefix, this.rootSubsystems) : undefined,
       }));
 
       index.groups = index.groups.map(g => ({
         ...g,
-        id: qualifyId(g.id, namespacePrefix, this.rootSubsystems),
+        id: qualifyDeclaredId(g.id, namespacePrefix),
       }));
 
       const originalPaths = index.paths;
@@ -879,19 +917,19 @@ export class SpecWorkspace {
       };
 
       for (const [k, v] of Object.entries(originalPaths.component)) {
-        index.paths.component[qualifyId(k, namespacePrefix, this.rootSubsystems)] = v;
+        index.paths.component[qualifyDeclaredId(k, namespacePrefix)] = v;
       }
       for (const [k, v] of Object.entries(originalPaths.interface)) {
-        index.paths.interface[qualifyId(k, namespacePrefix, this.rootSubsystems)] = v;
+        index.paths.interface[qualifyDeclaredId(k, namespacePrefix)] = v;
       }
       for (const [k, v] of Object.entries(originalPaths.implementation)) {
-        index.paths.implementation[qualifyId(k, namespacePrefix, this.rootSubsystems)] = v;
+        index.paths.implementation[qualifyDeclaredId(k, namespacePrefix)] = v;
       }
       for (const [k, v] of Object.entries(originalPaths.type)) {
-        index.paths.type[qualifyId(k, namespacePrefix, this.rootSubsystems)] = v;
+        index.paths.type[qualifyDeclaredId(k, namespacePrefix)] = v;
       }
       for (const [k, v] of Object.entries(originalPaths.group)) {
-        index.paths.group[qualifyId(k, namespacePrefix, this.rootSubsystems)] = v;
+        index.paths.group[qualifyDeclaredId(k, namespacePrefix)] = v;
       }
     }
 

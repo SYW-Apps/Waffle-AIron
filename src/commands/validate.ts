@@ -30,7 +30,9 @@ export interface ValidateOptions {
 // enforce completeness of finished work, not punish the existence of declared
 // drafts. A warning is waived from the --ci failure decision only when it
 // merely reflects a draft/design spec:
-//   • DRAFT_COMPONENT_WARNING — always, it exists solely to surface a draft.
+//   • DRAFT_SUBSYSTEM_WARNING / DRAFT_COMPONENT_WARNING — always, they exist
+//     solely to surface a draft (the whole DRAFT_*_WARNING family is pure
+//     status notice, emitted only for draft/design specs).
 //   • UNUSED_COMPONENT — only when the referenced component is itself draft/
 //     design (carried on the issue as draftContext by the rule that raised it);
 //     an unused *complete* component is a real gap and stays fatal.
@@ -40,6 +42,7 @@ export interface ValidateOptions {
 
 export function isCiDraftWaivable(issue: ValidationIssue): boolean {
   if (issue.severity !== 'warning') return false;
+  if (issue.code === 'DRAFT_SUBSYSTEM_WARNING') return true;
   if (issue.code === 'DRAFT_COMPONENT_WARNING') return true;
   if (issue.code === 'UNUSED_COMPONENT') return issue.draftContext === true;
   return false;

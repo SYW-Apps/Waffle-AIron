@@ -1,6 +1,5 @@
 {
   "uncoveredFire": [
-    "NAMESPACE_SHADOWING",
     "ROUNDTRIP_SERIALIZATION"
   ],
   "uncoveredControl": []
