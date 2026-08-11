@@ -1,0 +1,29 @@
+# The rule-matrix test extension pack — a small DECLARATIVE pack the matrix
+# tier loads through the real project-extension loader, proving that rule
+# enforcement composes with pack-contributed doctrine:
+#   - one forbid-edge assertion, surfaced under the namespaced code
+#     LEDGER_PLATFORM_DIRECT_VENDOR_CALL (assertionFullCode(name, code)),
+#   - one semantic guarantee token ("ledger-balanced") extending the builtin
+#     guarantee vocabulary (UNKNOWN_GUARANTEE must accept it and still flag
+#     undeclared tokens).
+# Referenced from fixtures via FIXTURE_PACK_DIR (tests/rules-matrix/harness.ts)
+# and folded into the enforced code universe by tests/rules-matrix/meta.test.ts.
+name: ledger-platform
+version: 1.0.0
+
+guarantees:
+  - ledger-balanced
+
+assertions:
+  - kind: forbid-edge
+    code: DIRECT_VENDOR_CALL
+    severity: error
+    reason: >-
+      Ledger-platform doctrine: workflow orchestrators must reach payment
+      vendors through the payout Gateway facade, never the raw vendor Adapter —
+      vendor failover and sandboxing live in the Gateway.
+    from:
+      componentType: [Orchestrator]
+    to:
+      componentType: [Adapter]
+    relation: [dependsOn]
