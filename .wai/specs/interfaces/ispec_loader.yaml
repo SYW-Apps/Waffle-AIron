@@ -86,6 +86,23 @@ methods:
       genuine top root. Pure detection — never rebinds, never mutates.
     signature: 'findChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef | null
+  - name: listChainedRoots
+    description: >-
+      Every chained subproject root beneath the bound project, as project-relative directories in
+      walk order (recursing through nested mounts). The downward companion to findChainingParent,
+      and what a whole-tree operation needs to know which trees belong to this project.
+    signature: 'listChainedRoots(): string[]'
+    returns: string[]
+    guarantees:
+      - idempotent
+  - name: invalidateCache
+    description: >-
+      Drop the cached spec index, for callers that changed the tree on disk outside the save paths
+      (an imported tree swapped into place).
+    signature: 'invalidateCache(): void'
+    returns: void
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-24T18:01:35.994Z'
+updatedAt: '2026-08-12T17:24:51.947Z'

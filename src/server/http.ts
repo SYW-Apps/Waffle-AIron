@@ -175,6 +175,7 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/projects/packs/upload',
   '/web/projects/packs/remove',
   '/web/projects/packs/adopt',
+  '/web/projects/tree/import',
   '/web/projects/policy/reconcile',
   '/web/projects/producers',
   '/web/projects/producers/remove',
@@ -336,19 +337,23 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
         // data (a bare refetch), and a spurious nudge after a failed mutation is
         // harmless — the refetch just returns the unchanged, scope-filtered view.
         if (req.method === 'POST' && res.statusCode < 400) {
-          for (const ch of channelsForWebMutation(url.pathname, body)) publishChange(ch);
+          for (const ch of channelsForWebMutation(url.pathname, body, url.searchParams.get('projectId') ?? undefined)) {
+            publishChange(ch);
+          }
         }
       });
-    // The .wpack upload routes carry a raw application/zip body — read it as a
-    // Buffer (bounded by the same cap) instead of JSON-parsing it. Every other
-    // POST route stays JSON.
-    const isPackUpload =
+    // The .wpack and .waitree upload routes carry a raw application/zip body —
+    // read it as a Buffer (bounded by the same cap) instead of JSON-parsing it.
+    // Every other POST route stays JSON.
+    const isArchiveUpload =
       req.method === 'POST' &&
-      (url.pathname === '/web/admin/packs/upload' || url.pathname === '/web/projects/packs/upload');
+      (url.pathname === '/web/admin/packs/upload' ||
+        url.pathname === '/web/projects/packs/upload' ||
+        url.pathname === '/web/projects/tree/import');
     const readInput: Promise<unknown> =
       req.method !== 'POST'
         ? Promise.resolve(undefined)
-        : isPackUpload
+        : isArchiveUpload
           ? readRawBody(req)
           : readBody(req);
     readInput
@@ -468,6 +473,28 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
       if (req.method === 'DELETE' && parts.length === 3) {
         admin.destroyProject(cfg, cred, parts[2]);
         return sendJson(res, 200, { ok: true });
+      }
+      // GET /admin/projects/:id/tree — download the whole spec tree as a
+      // .waitree archive. POST the same path — replace it from one. The archive
+      // rides base64 in the JSON body here rather than as a raw upload: the
+      // admin plane is uniformly JSON, and the browser/CLI paths that want a
+      // raw stream use /web/projects/tree/import.
+      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'tree') {
+        const exported = admin.exportProjectTree(cfg, cred, parts[2]);
+        res.writeHead(200, {
+          'content-type': 'application/zip',
+          'content-disposition': `attachment; filename="${exported.suggestedFileName}"`,
+        });
+        res.end(Buffer.from(exported.archive));
+        return;
+      }
+      if (req.method === 'POST' && parts.length === 4 && parts[3] === 'tree') {
+        const archive = Buffer.from(String(body.archiveBase64 ?? ''), 'base64');
+        return sendJson(
+          res,
+          200,
+          admin.importProjectTree(cfg, cred, parts[2], archive, undefined, body.replaceExisting === true),
+        );
       }
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'lock') return sendJson(res, 200, admin.lockProject(cfg, cred, parts[2]));
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'promote') return sendJson(res, 200, admin.promoteProject(cfg, cred, parts[2]));

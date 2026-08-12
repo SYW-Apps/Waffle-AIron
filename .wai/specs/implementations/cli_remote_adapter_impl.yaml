@@ -1,0 +1,115 @@
+id: cli_remote_adapter_impl
+name: CLI Remote Client Adapter Implementation
+description: >-
+  src/commands/remote.ts — the HTTP client edge onto a remote hosted instance's data plane. One
+  authenticated JSON-RPC tools/call per capability, with the tool-result envelope unwrapped so a
+  hosted refusal surfaces as a CLI error instead of a silent success.
+contract: icli_remote_adapter
+sourcePath: src/commands/remote.ts
+methods:
+  - name: exportRemoteTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          POST a tools/call for sdd_host_export_tree to the hosted data plane, presenting the bearer
+          credential and the bound project selector; decode the base64 archive out of the tool
+          result.
+        type: call
+        targetComponent: host_http_portal
+        targetMethod: handleMcpRequest
+        auth:
+          from: remote_target.token
+          note: >-
+            The bearer credential the caller resolved — the same token an agent's MCP client
+            presents. Never logged or persisted by this adapter.
+  - name: importRemoteTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          POST a tools/call for sdd_host_import_tree carrying the base64-encoded archive and the
+          replace choice; surface a hosted refusal (isError) as a CLI error.
+        type: call
+        targetComponent: host_http_portal
+        targetMethod: handleMcpRequest
+        auth:
+          from: remote_target.token
+          note: The bearer credential the caller resolved; the hosted side gates on project:admin.
+  - name: initializeRemoteProject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          POST the create to the hosted WEB plane's project route with the bearer credential and the
+          owner unit — the one endpoint that can answer before the project exists. A 404 means the
+          instance does not expose its web plane, which is reported as such rather than as a
+          permission failure.
+        type: call
+        targetComponent: web_portal
+        targetMethod: projectCreate
+        auth:
+          from: remote_target.token
+          note: >-
+            The same bearer credential the transfer calls present; the hosted side resolves
+            project:create over the owner unit.
+      - stepNumber: 2
+        description: >-
+          Return the instance's summary — an approval-gated instance answers that a REQUEST was
+          created, which the caller must report rather than treat as a completed project.
+        type: return
+        outcome: created or requested
+  - name: validateRemoteTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          POST a tools/call for sdd_validate_tree scoped to the bound project; return the parsed
+          report.
+        type: call
+        targetComponent: host_http_portal
+        targetMethod: handleMcpRequest
+        auth:
+          from: remote_target.token
+          note: The resolved bearer credential; the hosted side gates the read on project:read.
+  - name: getRemoteStatus
+    narrative:
+      - stepNumber: 1
+        description: >-
+          POST a tools/call for sdd_get_status scoped to the bound project; return the rendered
+          dashboard.
+        type: call
+        targetComponent: host_http_portal
+        targetMethod: handleMcpRequest
+        auth:
+          from: remote_target.token
+          note: The resolved bearer credential; gated on project:read.
+  - name: lockRemoteProject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          POST a tools/call for sdd_host_lock_project. The bound selector may name a chained child,
+          in which case exactly that child tree is frozen; an approval-gated instance answers that a
+          request was created, which is returned verbatim rather than reshaped into a success.
+        type: call
+        targetComponent: host_http_portal
+        targetMethod: handleMcpRequest
+        auth:
+          from: remote_target.token
+          note: The resolved bearer credential; gated on project:write over the bound project.
+lint:
+  allow:
+    - code: CALL_STEP_UNREALIZED
+      reason: >-
+        The call into host_http_portal.handleMcpRequest is an HTTP request to a REMOTE deployment
+        (fetch POST <instance>/mcp), not an in-process call. The call-graph analyzer matches callees
+        by name within one build, so a network hop across a process boundary can never be realized
+        as a named callee — by construction, not by omission. The edge is real: the endpoint, method
+        and payload are exactly the portal's declared /mcp contract, and
+        tests/commands/remote.test.ts exercises it against a real server.
+    - code: UNREALIZED_DEPENDENCY
+      reason: >-
+        Same boundary: sdd_cli reaches sdd_host across the NETWORK, so no runtime import connects
+        src/commands/remote.ts to the hosted subsystem's files. The Level-2 dependency analyzer
+        resolves import graphs within a single build and cannot see an HTTP edge — the same analyzer
+        limitation already acknowledged for the workspace-package boundary on host_sdk_adapter_impl,
+        one boundary further out.
+status: draft
+createdAt: '2026-08-12T18:32:35.043Z'
+updatedAt: '2026-08-12T18:48:45.293Z'

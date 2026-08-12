@@ -1,10 +1,11 @@
 id: isdk_portal
 name: SDK Portal Interface
 description: >-
-  The published `@wairon/sdk` library API — four capabilities, each a 1:1 forward to the SDK
-  orchestrator with no logic of its own. This is the in-process facade cross-subsystem consumers
-  (sdd_cli, sdd_host) reach through their client Adapters, and the surface the package's index
-  re-exports (alongside the pure authoring + rule-authoring types).
+  The published `@wairon/sdk` library API — the pack-authoring capabilities plus the spec-tree
+  archive capabilities, each a 1:1 forward to the SDK orchestrator with no logic of its own. This is
+  the in-process facade cross-subsystem consumers (sdd_cli, sdd_core, sdd_host) reach through their
+  client Adapters, and the surface the package's index re-exports (alongside the pure authoring +
+  rule-authoring types).
 component: sdk_portal
 methods:
   - name: scaffoldPack
@@ -56,6 +57,58 @@ methods:
     endpoint:
       transport: Custom
       address: '@wairon/sdk#extractPack'
+  - name: buildTreeArchive
+    description: Pack a project's spec tree — the supplied roots' .wai directories — into a .waitree archive.
+    signature: >-
+      buildTreeArchive(roots: TreeRootSource[], projectName: string, stateId?: string,
+      includeDerived?: boolean): TreeBuildResult
+    returns: TreeBuildResult
+    params:
+      - name: roots
+        type: tree_root_source[]
+      - name: projectName
+        type: string
+      - name: stateId
+        type: string
+        optional: true
+      - name: includeDerived
+        type: boolean
+        optional: true
+    endpoint:
+      transport: Custom
+      address: '@wairon/sdk#buildTreeArchive'
+  - name: inspectTreeArchive
+    description: Inspect a .waitree archive without extracting it.
+    signature: 'inspectTreeArchive(archive: bytes): TreeArchiveInfo'
+    returns: TreeArchiveInfo
+    params:
+      - name: archive
+        type: bytes
+    endpoint:
+      transport: Custom
+      address: '@wairon/sdk#inspectTreeArchive'
+  - name: extractTreeArchive
+    description: >-
+      Safely extract a .waitree archive into a destination project root under enforced limits,
+      optionally refusing executable entries.
+    signature: >-
+      extractTreeArchive(archive: bytes, destDir: string, limits?: PackExtractionLimits,
+      refuseExecutableEntries?: boolean): TreeExtractionResult
+    returns: TreeExtractionResult
+    params:
+      - name: archive
+        type: bytes
+      - name: destDir
+        type: string
+      - name: limits
+        type: pack_extraction_limits
+        optional: true
+      - name: refuseExecutableEntries
+        type: boolean
+        optional: true
+    endpoint:
+      transport: Custom
+      address: '@wairon/sdk#extractTreeArchive'
 status: complete
 createdAt: '2026-07-21T18:13:58.018Z'
-updatedAt: '2026-07-21T19:26:05.453Z'
+updatedAt: '2026-08-12T17:19:57.111Z'

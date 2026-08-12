@@ -311,6 +311,55 @@ methods:
       - name: skipIfClean
         type: boolean
         optional: true
+  - name: exportProjectTree
+    description: >-
+      Pack a hosted project's spec tree into a .waitree archive. Requires project:read over the
+      project — the same grant that already reads every spec individually, so bulk export grants
+      nothing new. TREE-scoped: a subproject qualifier binds the chained child's tree, so a
+      credential narrowed to one child exports exactly that child.
+    signature: >-
+      exportProjectTree(credential: string, project: string, subproject?: string, includeDerived?:
+      boolean): TreeExportResult
+    returns: TreeExportResult
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: subproject
+        type: string
+        description: >-
+          Chained-subproject mount chain ('a' or 'a::b') — binds the child tree instead of the
+          project root
+        optional: true
+      - name: includeDerived
+        type: boolean
+        optional: true
+  - name: importProjectTree
+    description: >-
+      Replace a hosted project's spec tree from a .waitree archive. Requires project:admin over the
+      project — strictly above project:write, because this replaces the entire design rather than
+      editing one spec. Refuses an occupied destination unless replaceExisting is set, always
+      refuses executable entries (the archive arrived over the wire, and executable doctrine
+      installs only through the trusted filesystem), and moves the previous tree aside to a backup.
+      TREE-scoped through the same qualifier binding as export.
+    signature: >-
+      importProjectTree(credential: string, project: string, archive: bytes, subproject?: string,
+      replaceExisting?: boolean): TreeImportResult
+    returns: TreeImportResult
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: archive
+        type: bytes
+      - name: subproject
+        type: string
+        optional: true
+      - name: replaceExisting
+        type: boolean
+        optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-25T17:04:41.956Z'
+updatedAt: '2026-08-12T17:27:32.377Z'

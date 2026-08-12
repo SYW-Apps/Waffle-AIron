@@ -9,6 +9,61 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### Spec trees move between local and hosted — `.waitree` archives + `wairon remote`
+
+A spec tree was stuck where it was born: a project outgrowing local had no path
+to a hosted instance, a hosted project could not be forked locally, and a
+developer whose agent worked against a hosted project could not run `wairon
+validate` from their checkout at all. Three additions close that, sharing one
+archive format.
+
+- **`.waitree`, the spec-tree archive.** A project's whole tree — its own `.wai/`
+  plus the `.wai/` of every chained subproject, at their original relative paths
+  — packs into one file with a `wairon-tree.yaml` envelope carrying the project
+  name, the packed roots, the tree's content state id and per-entry sha256s.
+  Authored design travels (specs, lock, rules, variants, surfaces, packs);
+  regenerable artifacts (`generated/`, `docs/`) stay behind unless asked for,
+  since the destination rebuilds them. Rides the same ZIP boundary and the same
+  pre-decompress safety model as `.wpack` (zip-slip, bomb, depth, symlink), with
+  caps sized for thousands of small YAML files.
+- **Hosted export/import.** `sdd_host_export_tree` / `sdd_host_import_tree` on
+  the data plane (project:read / project:admin), a **Transfer** tab in the web
+  project view, and `GET|POST /admin/projects/{id}/tree` for operators. Both are
+  TREE-scoped like lock and promote: a credential narrowed to `proj::child`
+  transfers exactly that child. Import **never writes into a live tree** — it
+  extracts to staging inside the project root and only then swaps into place,
+  moving the previous tree aside to a timestamped backup, so a rejected or
+  corrupt archive leaves the destination byte-identical. Executable content
+  (a bundled code pack) is always refused over the wire, the same rule the pack
+  surface already applies; a local extraction on your own machine is the trusted
+  filesystem tier and is not restricted.
+- **`wairon remote push|pull|attach|detach|status`, `wairon login|logout`.**
+  Migration in both directions from a checkout, over the *same* authenticated MCP
+  endpoint an agent uses — no second auth surface. `attach` records a standing
+  binding (instance + project in `.wai/remote.json`, credential in
+  `~/.wairon/credentials.json`, never mixed), after which `validate`, `status`
+  and `lock` run against the hosted tree; everything needing local files keeps
+  failing with guidance to pull first. With nothing attached, the binding falls
+  back to **the agent's own MCP configuration** — so a developer whose agent
+  already works against a hosted project types no credential twice, and the two
+  cannot drift onto different projects. `wairon mcp install --hosted <url>`
+  writes that entry.
+
+Two constraints worth knowing: creating the destination project during
+`push --unit` rides the hosted *web* route (the data plane resolves its project
+binding before dispatch, so it cannot address a project that does not exist yet),
+and `wairon logout` forgets a credential locally without revoking it — revocation
+lives in the hosted UI under Tokens, which the command says out loud.
+
+### Fixed: `sdd_get_status`, `sdd_validate_tree` and `listDomains` failed on the hosted data plane
+
+Four `sdd_*` tools reached their implementations through lazy
+`require('../commands/status.js')`-style calls. The server is bundled, so those
+paths resolve against a directory that holds no such file: on a hosted instance
+the tools answered `Cannot find module` instead of running — `sdd_get_status`
+returned no dashboard at all. They are now static imports, the fix already
+applied once to the spec surface (and documented there) extended to the rest.
+
 ### Rule-matrix test tier: every finding code pinned by fire+control fixtures
 
 The validator can emit ~160 distinct finding codes; the rule tests covered some

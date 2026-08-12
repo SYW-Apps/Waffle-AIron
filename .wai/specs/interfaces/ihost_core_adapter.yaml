@@ -135,6 +135,28 @@ methods:
     signature: 'readLockState(): LockStatus'
     returns: LockStatus
     params: []
+  - name: exportSpecTree
+    description: >-
+      Pack the bound project's whole spec tree (its own .wai plus every chained subproject) into a
+      .waitree archive with provenance. Forwarded to the core portal.
+    signature: 'exportSpecTree(includeDerived?: boolean): TreeExportResult'
+    returns: TreeExportResult
+    params:
+      - name: includeDerived
+        type: boolean
+        optional: true
+  - name: importSpecTree
+    description: >-
+      Import a .waitree archive into the bound project root under an explicit policy, backing up any
+      tree it replaces. Forwarded to the core portal; the hosted caller always sets the
+      executable-entry refusal, because the archive arrived over the wire.
+    signature: 'importSpecTree(archive: bytes, options: TreeImportOptions): TreeImportResult'
+    returns: TreeImportResult
+    params:
+      - name: archive
+        type: bytes
+      - name: options
+        type: tree_import_options
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-07-30T15:59:21.737Z'
+updatedAt: '2026-08-12T17:27:23.850Z'

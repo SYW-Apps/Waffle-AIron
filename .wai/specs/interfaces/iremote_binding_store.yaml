@@ -1,0 +1,95 @@
+id: iremote_binding_store
+name: Remote Binding Store Interface
+description: >-
+  Read/write access to the two persisted facts behind an attached checkout: the project-local
+  binding (never secret) and the user-local credential per instance (always secret). Every read
+  tolerates a missing or malformed file as "nothing stored".
+component: remote_binding_store
+methods:
+  - name: readBinding
+    description: >-
+      The binding recorded for a project root, or null when the checkout is not attached (including
+      when the file is absent or unreadable — unattached is a normal state, not an error).
+    signature: 'readBinding(root: string): RemoteBinding | null'
+    returns: RemoteBinding | null
+    params:
+      - name: root
+        type: string
+    guarantees:
+      - idempotent
+    effect: read
+  - name: writeBinding
+    description: >-
+      Record the binding for a project root, replacing any previous one. Writes the instance URL and
+      project id only — never a credential, because this file lives in the project and may be
+      committed.
+    signature: 'writeBinding(root: string, binding: RemoteBinding): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+      - name: binding
+        type: remote_binding
+    effect: write
+  - name: clearBinding
+    description: >-
+      Detach a project root by removing its binding. Idempotent: detaching an unattached checkout
+      succeeds silently.
+    signature: 'clearBinding(root: string): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+    guarantees:
+      - idempotent
+    effect: write
+  - name: readCredential
+    description: >-
+      The stored bearer credential for an instance URL, or null when none is stored. Keyed by
+      instance so one login serves every project on that machine.
+    signature: 'readCredential(url: string): string | null'
+    returns: string | null
+    params:
+      - name: url
+        type: string
+    guarantees:
+      - idempotent
+    effect: read
+  - name: writeCredential
+    description: >-
+      Store the bearer credential for an instance URL in the USER's credential store, never in a
+      project directory. The file is created with owner-only permissions where the platform supports
+      it.
+    signature: 'writeCredential(url: string, token: string): void'
+    returns: void
+    params:
+      - name: url
+        type: string
+      - name: token
+        type: string
+    effect: write
+  - name: clearCredential
+    description: >-
+      Forget the stored credential for an instance URL. Idempotent, and the local half of `wairon
+      logout` — it does not revoke the token on the instance, which the description must say plainly
+      so nobody believes a compromised token was killed.
+    signature: 'clearCredential(url: string): void'
+    returns: void
+    params:
+      - name: url
+        type: string
+    guarantees:
+      - idempotent
+    effect: write
+  - name: listCredentialUrls
+    description: >-
+      The instance URLs a credential is stored for — what `wairon remote status` shows so a
+      developer can see which instances this machine can reach without printing any secret.
+    signature: 'listCredentialUrls(): string[]'
+    returns: string[]
+    guarantees:
+      - idempotent
+    effect: read
+status: draft
+createdAt: '2026-08-12T18:41:53.798Z'
+updatedAt: '2026-08-12T18:41:53.801Z'

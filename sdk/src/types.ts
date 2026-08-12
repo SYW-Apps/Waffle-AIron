@@ -164,3 +164,93 @@ export interface PackExtractionPlan {
   /** Sum of approved entries' inflated sizes. */
   totalUncompressedBytes: number;
 }
+
+// ---------------------------------------------------------------------------
+// Spec-tree archive value objects (the `.waitree` format).
+//
+// A pack is doctrine a project SELECTS; a tree is the project's own design.
+// Both ride the same ZIP adapter and the same safety model, but they are
+// separate formats with separate envelopes — PackExtractionLimits and
+// PackExtractionPlan are the archive-generic pieces both codecs share.
+// ---------------------------------------------------------------------------
+
+/**
+ * The `.waitree` envelope, serialized as `wairon-tree.yaml` at the archive root
+ * — the portable, versioned identity + integrity header wrapping one project's
+ * spec tree (its `.wai/` plus the `.wai/` of every chained subproject).
+ */
+export interface TreeArchiveManifest {
+  /** Tree-archive format version (currently 1); a newer major is rejected, not silently mis-read. */
+  formatVersion: number;
+  /** The exporting project's name. */
+  projectName: string;
+  /** Project-relative directory of every packed root, in packing order ('.' first). */
+  roots: string[];
+  /** The exporting tree's content state at export time — provenance, never an import gate. */
+  stateId?: string;
+  /** The wairon version that produced the archive. */
+  waironVersion?: string;
+  /** Minimum compatible wairon version (semver range). */
+  minWaironVersion?: string;
+  /** Whether regenerable artifacts (generated/, docs/) were packed too. */
+  includesDerived?: boolean;
+  /** Optional integrity digest over the manifest. */
+  digest?: string;
+  /** Optional per-entry integrity map: archive path -> sha256. */
+  entryDigests?: Record<string, string>;
+  /** Producer stamp, e.g. "@wairon/sdk@X.Y.Z". */
+  generatedBy?: string;
+  /** ISO-8601 export timestamp. */
+  generatedAt?: string;
+}
+
+/**
+ * One spec-tree root to pack: where it sits relative to the project root, and
+ * the absolute directory holding its `.wai/`. The caller (which knows how to
+ * walk chained subprojects) resolves these — the SDK never walks a spec tree,
+ * it only archives the roots it is handed.
+ */
+export interface TreeRootSource {
+  /** Project-relative directory: '.' for the top project, e.g. 'packages/foo'. */
+  relativePath: string;
+  /** Absolute path of this root's .wai/ directory. */
+  waiDir: string;
+}
+
+/** What a `.waitree` declares about itself, read WITHOUT extracting anything. */
+export interface TreeArchiveInfo {
+  manifest: TreeArchiveManifest;
+  /** Number of regular file entries in the archive. */
+  entryCount: number;
+  totalUncompressedBytes: number;
+  /** Whether formatVersion + minWaironVersion are compatible with the running wairon. */
+  compatible: boolean;
+}
+
+/** The output of packing a spec tree: bytes, sealed envelope, suggested name. */
+export interface TreeBuildResult {
+  /** The assembled .waitree (ZIP) bytes. */
+  archive: Uint8Array;
+  /** The sealed envelope written into the archive. */
+  manifest: TreeArchiveManifest;
+  /** e.g. "waffle-airon.waitree". */
+  suggestedFileName: string;
+  /** How many spec-tree files were packed. */
+  fileCount: number;
+}
+
+/**
+ * Where an extracted spec tree landed and what it contained. Purely the archive
+ * layer's account — what to do about a pre-existing tree (refuse, back up,
+ * replace) is the importing caller's policy, not the codec's.
+ */
+export interface TreeExtractionResult {
+  /** Absolute path the tree was written under. */
+  destDir: string;
+  /** The archive's parsed envelope. */
+  manifest: TreeArchiveManifest;
+  /** Project-relative roots recreated under destDir. */
+  roots: string[];
+  /** Archive-relative paths written. */
+  writtenPaths: string[];
+}

@@ -1,0 +1,50 @@
+kind: value-object
+id: remote_command_options
+name: RemoteCommandOptions
+description: >-
+  The flag surface of `wairon remote` and the overrides any command may use to address a hosted
+  instance for one invocation. url/project/token address the instance — each falling back to its
+  environment variable, then (for the credential) to the user's stored credential for that instance,
+  so CI never puts a secret on the command line and an attached developer never repeats one. The
+  rest select a migration's policy.
+fields:
+  - name: url
+    type: string
+    description: Hosted instance base URL (else WAIRON_REMOTE_URL)
+    optional: true
+  - name: project
+    type: string
+    description: Hosted project id, optionally subproject-qualified (else WAIRON_REMOTE_PROJECT)
+    optional: true
+  - name: token
+    type: string
+    description: Bearer credential (else WAIRON_REMOTE_TOKEN) — never accepted from a project file
+    optional: true
+  - name: unit
+    type: string
+    description: 'Push: owner organization unit for a project this command should create first'
+    optional: true
+  - name: force
+    type: boolean
+    description: Replace an authored tree at the destination (backed up first)
+    optional: true
+  - name: includeDerived
+    type: boolean
+    description: 'Push: pack regenerable artifacts too'
+    optional: true
+  - name: archive
+    type: string
+    description: Also write the transferred archive to this path
+    optional: true
+  - name: dir
+    type: string
+    description: 'Pull: the local project root to import into'
+    optional: true
+  - name: 'yes'
+    type: boolean
+    description: Skip the confirmation prompt (for scripts / CI)
+    optional: true
+methods: []
+componentClass: cli_runner
+createdAt: '2026-08-12T18:33:33.586Z'
+updatedAt: '2026-08-12T18:43:10.285Z'

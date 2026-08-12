@@ -1,0 +1,292 @@
+id: remote_orchestrator_impl
+name: Remote Migration Orchestrator Implementation
+description: >-
+  src/commands/remote.ts — the two migration workflows, composing the local tree transfer with the
+  remote hosted one. Neither direction writes anything until the other side has produced a complete
+  archive.
+contract: iremote_orchestrator
+sourcePath: src/commands/remote.ts
+methods:
+  - name: pushTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Export the LOCAL spec tree first — nothing is created or changed on the instance until
+          there is something complete to send.
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: exportSpecTree
+      - stepNumber: 2
+        description: Did the caller ask to write the archive to a file as well?
+        type: branch
+        condition: options.archivePath is set
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Write the archive there too, so the same command yields the artifact an air-gapped
+          transfer needs.
+        type: local
+      - stepNumber: 4
+        description: Did the caller ask to create the destination project?
+        type: branch
+        condition: options.createUnitId is set
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Initialize the hosted project into the named owner unit. An approval-requested outcome is
+          carried through to the caller, never treated as created.
+        type: call
+        targetComponent: cli_remote_adapter
+        targetMethod: initializeRemoteProject
+      - stepNumber: 6
+        label: send
+        description: >-
+          Import the archive into the hosted project. The hosted side enforces project:admin,
+          refuses executable content, and backs up whatever it replaces.
+        type: call
+        targetComponent: cli_remote_adapter
+        targetMethod: importRemoteTree
+      - stepNumber: 7
+        description: >-
+          Assemble the outcome: direction push, the instance and project addressed, what moved,
+          whether the project was created, and the hosted backup path.
+        type: local
+      - stepNumber: 8
+        description: Return what the migration moved.
+        type: return
+        outcome: pushed
+  - name: pullTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Export the HOSTED tree first — the local root is not touched until a complete archive is
+          in hand.
+        type: call
+        targetComponent: cli_remote_adapter
+        targetMethod: exportRemoteTree
+      - stepNumber: 2
+        description: Did the caller ask to write the archive to a file as well?
+        type: branch
+        condition: options.archivePath is set
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Write the archive there too.
+        type: local
+      - stepNumber: 4
+        label: land
+        description: >-
+          Import it into the local root under the caller's policy: an authored local tree is never
+          replaced without replaceExisting, and whatever is replaced is backed up. The
+          executable-entry guard is deliberately NOT set — this is the trusted-filesystem tier.
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: importSpecTree
+      - stepNumber: 5
+        description: >-
+          Assemble the outcome: direction pull, the instance and project addressed, what moved, and
+          the local backup path.
+        type: local
+      - stepNumber: 6
+        description: Return what the migration moved.
+        type: return
+        outcome: pulled
+  - name: resolveTarget
+    narrative:
+      - stepNumber: 1
+        description: Did the caller supply the instance and project explicitly?
+        type: branch
+        condition: overrides carry both a url and a project (from flags or the environment)
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Take them verbatim — an explicit flag always wins over any recorded or derived binding.
+        type: jump
+        toStep: 7
+      - stepNumber: 3
+        description: Read this checkout's recorded binding.
+        type: call
+        targetComponent: remote_binding_store
+        targetMethod: readBinding
+      - stepNumber: 4
+        description: Was a binding recorded?
+        type: branch
+        condition: readBinding returned a binding
+        onTrueStep: 7
+        onFalseStep: 5
+      - stepNumber: 5
+        description: >-
+          Fall back to the agent's own MCP configuration — the point of the fallback: a developer
+          whose agent already works against a hosted project never types the connection twice, and
+          the two cannot drift onto different projects.
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: detectHostedMcpSource
+      - stepNumber: 6
+        description: Is there no hosted source anywhere?
+        type: branch
+        condition: no hosted MCP entry was detected
+        onTrueStep: 10
+        onFalseStep: 7
+      - stepNumber: 7
+        label: credential
+        description: >-
+          Resolve the credential for the chosen instance: the explicit flag, else the environment,
+          else the token carried on the agent's MCP entry.
+        type: local
+      - stepNumber: 8
+        description: Fall back to the machine's stored credential for that instance.
+        type: call
+        targetComponent: remote_binding_store
+        targetMethod: readCredential
+      - stepNumber: 9
+        description: >-
+          Return the resolved target, or null when no credential can be found for an
+          otherwise-resolved instance — the caller reports how to obtain one.
+        type: return
+        outcome: resolved
+      - stepNumber: 10
+        label: unattached
+        description: >-
+          Nothing resolves — this checkout is purely local, which is a normal state and not an error
+          here.
+        type: return
+        outcome: unattached
+  - name: attach
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Verify the binding actually works BEFORE recording it — an attach that cannot reach or is
+          refused by the instance must fail here, not leave every later command failing
+          mysteriously.
+        type: call
+        targetComponent: cli_remote_adapter
+        targetMethod: getRemoteStatus
+      - stepNumber: 2
+        description: >-
+          Store the credential in the USER's credential store, keyed by instance — never in the
+          project.
+        type: call
+        targetComponent: remote_binding_store
+        targetMethod: writeCredential
+      - stepNumber: 3
+        description: Record the binding (instance + project only) with the project.
+        type: call
+        targetComponent: remote_binding_store
+        targetMethod: writeBinding
+      - stepNumber: 4
+        description: Return the recorded binding.
+        type: return
+        outcome: attached
+  - name: detach
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Remove the binding, returning the checkout to purely local operation. The stored
+          credential is deliberately left alone — it belongs to the machine, and other checkouts may
+          be using it.
+        type: call
+        targetComponent: remote_binding_store
+        targetMethod: clearBinding
+  - name: describeAttachment
+    narrative:
+      - stepNumber: 1
+        description: Read the recorded binding for this checkout.
+        type: call
+        targetComponent: remote_binding_store
+        targetMethod: readBinding
+      - stepNumber: 2
+        description: Was one recorded?
+        type: branch
+        condition: a binding was recorded
+        onTrueStep: 5
+        onFalseStep: 3
+      - stepNumber: 3
+        description: >-
+          Report what the agent's MCP configuration points at instead, so an unattached checkout
+          still explains where its agent is working.
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: detectHostedMcpSource
+      - stepNumber: 4
+        description: >-
+          Project a derived binding (source 'mcp-config') from the detected hosted entry, or null
+          when there is none.
+        type: local
+      - stepNumber: 5
+        label: report
+        description: Return the binding and its provenance — never the credential.
+        type: return
+        outcome: described
+  - name: validateAttached
+    narrative:
+      - stepNumber: 1
+        description: Validate the attached project's tree on the instance.
+        type: call
+        targetComponent: cli_remote_adapter
+        targetMethod: validateRemoteTree
+  - name: statusAttached
+    narrative:
+      - stepNumber: 1
+        description: Read the attached project's completeness dashboard from the instance.
+        type: call
+        targetComponent: cli_remote_adapter
+        targetMethod: getRemoteStatus
+  - name: lockAttached
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Freeze the attached project's tree on the instance, carrying an approval-requested outcome
+          back as such.
+        type: call
+        targetComponent: cli_remote_adapter
+        targetMethod: lockRemoteProject
+  - name: storeCredential
+    narrative:
+      - stepNumber: 1
+        description: Was a project supplied to verify the credential against?
+        type: branch
+        condition: probeProjectId is set
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Probe the instance with the credential before storing it — a stored credential that does
+          not work turns every later failure into a permission mystery.
+        type: call
+        targetComponent: cli_remote_adapter
+        targetMethod: getRemoteStatus
+      - stepNumber: 3
+        label: store
+        description: Store the credential for this instance in the user's credential store.
+        type: call
+        targetComponent: remote_binding_store
+        targetMethod: writeCredential
+  - name: forgetCredential
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Remove the stored credential for this instance. Local only — nothing is revoked on the
+          instance.
+        type: call
+        targetComponent: remote_binding_store
+        targetMethod: clearCredential
+  - name: listStoredInstances
+    narrative:
+      - stepNumber: 1
+        description: List the instances a credential is stored for — URLs only.
+        type: call
+        targetComponent: remote_binding_store
+        targetMethod: listCredentialUrls
+  - name: storedCredentialFor
+    narrative:
+      - stepNumber: 1
+        description: Read the stored credential for this instance.
+        type: call
+        targetComponent: remote_binding_store
+        targetMethod: readCredential
+status: draft
+createdAt: '2026-08-12T18:32:48.928Z'
+updatedAt: '2026-08-12T18:55:28.211Z'

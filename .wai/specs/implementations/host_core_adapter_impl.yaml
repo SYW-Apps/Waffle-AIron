@@ -132,6 +132,20 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: readLockState
+  - name: exportSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Forward the spec-tree export to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: exportSpecTree
+  - name: importSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Forward the spec-tree import to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: importSpecTree
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-30T16:00:00.079Z'
+updatedAt: '2026-08-12T17:28:05.176Z'

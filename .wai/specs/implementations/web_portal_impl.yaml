@@ -748,7 +748,29 @@ methods:
         targetMethod: listProjectProfiles
     detail: calls-only
     symbol: opsListProjectProfiles
+  - name: projectTreeExport
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read projectId from the query and forward with the session as the credential, answering
+          the archive bytes as application/zip with a download disposition.
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: exportProjectTree
+    detail: calls-only
+    symbol: opsExportProjectTree
+  - name: projectTreeImport
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read projectId and the replace flag from the query and the raw application/zip body, and
+          forward with the session as the credential.
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: importProjectTree
+    detail: calls-only
+    symbol: opsImportProjectTree
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-24T23:39:22.383Z'
+updatedAt: '2026-08-12T17:29:18.166Z'

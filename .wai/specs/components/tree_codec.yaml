@@ -1,0 +1,29 @@
+id: tree_codec
+name: Tree Codec
+description: >-
+  The pure format-and-safety brain of the `.waitree` spec-tree archive — no I/O. Parses and
+  serializes the `wairon-tree.yaml` envelope (formatVersion, projectName, roots, stateId, wairon +
+  min-wairon compat, optional per-entry sha256 map and manifest digest, generatedBy/At) and checks
+  format-version compatibility, failing loudly on a newer major rather than silently mis-reading it.
+  On the outbound half it decides WHICH files belong in a tree archive: authored spec state is
+  packed (project.yaml, topology.yaml, specs, lock, rules, variants, context, surfaces, packs, the
+  phased design) while regenerable artifacts (generated/, docs/) are dropped unless the caller asks
+  for them — so a moved tree is the design, not its rendered output. On the inbound half it computes
+  a SAFE EXTRACTION PLAN from the entry metadata the archive adapter enumerates, or rejects: it
+  normalizes and confines every path under the destination (zip-slip guard), rejects absolute paths,
+  `..` traversal, backslashes and drive letters, symlinks and non-regular entries, and enforces the
+  caps — entry count, total inflated size, per-entry size, compression ratio (zip-bomb guard) and
+  path depth — all before a byte is decompressed. Separately, and only where the caller asks for it,
+  it refuses EXECUTABLE entries: a bundled code pack riding inside a tree is exactly the content the
+  hosted pack surface already refuses over the wire, so the hosted import path calls that guard
+  while a local extraction on a developer's own machine need not. Tree caps are their own profile,
+  not the pack profile: a real spec tree is thousands of small YAML files across several chained
+  roots.
+subsystem: sdd_sdk
+componentType: Specialist
+owns: []
+dependsOn: []
+variant: codec
+status: complete
+createdAt: '2026-08-12T17:18:40.203Z'
+updatedAt: '2026-08-12T17:21:54.948Z'

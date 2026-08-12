@@ -179,6 +179,16 @@ const PROJECT_OPS_TOOLS = new Set<string>([
   'sdd_host_commit_project',
 ]);
 
+/** The two spec-tree transfer tools. Dispatched like the project-ops tools, but
+ *  TREE-scoped rather than record-level: they act on the BOUND tree and receive
+ *  the binding's subproject qualifier, exactly as lock/promote do, so a
+ *  credential narrowed to a chained child transfers precisely that child. That
+ *  is why they are deliberately absent from PROJECT_RECORD_TOOLS. */
+const TREE_TRANSFER_TOOLS = new Set<string>([
+  'sdd_host_export_tree',
+  'sdd_host_import_tree',
+]);
+
 /** The RECORD-level hosted tools: they act on the hosted project RECORD (or its
  *  repository), never on the bound spec tree, so they always receive the TOP
  *  project id. A subproject-qualified credential is REFUSED them (steps 10–11) —
@@ -285,6 +295,7 @@ const MUTATING_HOST_TOOLS = new Set([
   'sdd_host_promote_project',
   'sdd_host_await_approval', // a decided approval may have executed the action
   'sdd_host_policy_reconcile',
+  'sdd_host_import_tree', // replaces the whole spec tree — every open view is stale
 ]);
 
 /**
@@ -427,7 +438,12 @@ export async function dispatchProjectLifecycleTool(
   const name = msg.params?.name;
   if (
     typeof name !== 'string' ||
-    !(PROJECT_LIFECYCLE_TOOLS.has(name) || LANDSCAPE_DISCOVERY_TOOLS.has(name) || PROJECT_OPS_TOOLS.has(name))
+    !(
+      PROJECT_LIFECYCLE_TOOLS.has(name) ||
+      LANDSCAPE_DISCOVERY_TOOLS.has(name) ||
+      PROJECT_OPS_TOOLS.has(name) ||
+      TREE_TRANSFER_TOOLS.has(name)
+    )
   ) {
     return undefined;
   }
@@ -515,6 +531,38 @@ export async function dispatchProjectLifecycleTool(
           typeof args.message === 'string' && args.message ? args.message : undefined,
         );
         break;
+      case 'sdd_host_export_tree': {
+        // TREE-scoped: the bound qualifier is forwarded, so a credential scoped
+        // to a chained child exports exactly that child. The archive rides the
+        // JSON-RPC result as base64 and is therefore bounded by the same body
+        // cap as every other data-plane response — a tree too large for that is
+        // an honest failure pointing at the raw-upload route, never a truncation.
+        const exported = projectops.exportProjectTree(cfg, credential, projectId, subproject);
+        value = {
+          projectName: exported.projectName,
+          roots: exported.roots,
+          fileCount: exported.fileCount,
+          stateId: exported.stateId,
+          suggestedFileName: exported.suggestedFileName,
+          archiveBase64: Buffer.from(exported.archive).toString('base64'),
+        };
+        break;
+      }
+      case 'sdd_host_import_tree': {
+        // TREE-scoped like export. The base64 argument is decoded here (a
+        // transport concern); the orchestrator takes bytes and always refuses
+        // executable entries.
+        const decoded = Buffer.from(String(args.archiveBase64 ?? ''), 'base64');
+        value = projectops.importProjectTree(
+          cfg,
+          credential,
+          projectId,
+          decoded,
+          subproject,
+          args.replaceExisting === true,
+        );
+        break;
+      }
       default: // 'sdd_host_get_approval_status'
         value = getApprovalStatus(cfg, credential, String(args.requestId ?? ''));
         break;

@@ -6,6 +6,7 @@ import * as operations from './operations.js';
 import * as gitbacking from './gitbacking.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import type { ProducerConfig } from '../producers/index.js';
+import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type {
   AuditEvent,
   AuditQuery,
@@ -35,6 +36,29 @@ import type {
 // permission resolver — no authorization logic and no state lives here, so the
 // two portals stay lean and the gates stay single-sourced.
 // ---------------------------------------------------------------------------
+
+// ── spec-tree transfer (.waitree) ─────────────────────────────────────────────
+
+export function exportProjectTree(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  subproject?: string,
+  includeDerived?: boolean,
+): TreeExportResult {
+  return admin.exportProjectTree(cfg, credential, project, subproject, includeDerived);
+}
+
+export function importProjectTree(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  archive: Uint8Array,
+  subproject?: string,
+  replaceExisting?: boolean,
+): TreeImportResult {
+  return admin.importProjectTree(cfg, credential, project, archive, subproject, replaceExisting);
+}
 
 // ── packs ─────────────────────────────────────────────────────────────────────
 

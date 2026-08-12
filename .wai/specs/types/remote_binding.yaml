@@ -1,0 +1,31 @@
+kind: value-object
+id: remote_binding
+name: RemoteBinding
+description: >-
+  A checkout's standing attachment to one hosted project: which instance, which project, and WHERE
+  that answer came from. The provenance matters operationally — a developer debugging "why is my
+  validate hitting the server?" needs to see whether the binding came from an explicit attach, from
+  the agent's MCP configuration, or from flags on this one command. Deliberately carries NO
+  credential: the binding file lives in the project (and may be committed), while the token lives in
+  the user's own credential store keyed by instance URL.
+fields:
+  - name: url
+    type: string
+    description: Hosted instance base URL
+    optional: false
+  - name: projectId
+    type: string
+    description: Hosted project id, optionally subproject-qualified
+    optional: false
+  - name: source
+    type: string
+    description: 'Where the binding was resolved from: "flags" | "binding-file" | "mcp-config"'
+    optional: false
+  - name: attachedAt
+    type: string
+    description: ISO-8601 stamp of an explicit attach; absent for a derived binding
+    optional: true
+methods: []
+componentClass: remote_binding_store
+createdAt: '2026-08-12T18:41:21.744Z'
+updatedAt: '2026-08-12T18:41:21.752Z'

@@ -200,6 +200,212 @@ methods:
         description: Return where the pack landed + its parsed manifest.
         type: return
         outcome: success
+  - name: buildTreeArchive
+    narrative:
+      - stepNumber: 1
+        description: Initialize an empty archive file map and an empty packed-roots list.
+        type: local
+      - stepNumber: 2
+        description: Pack each supplied root.
+        type: loop
+        loopKind: forEach
+        over: roots
+        endStep: 5
+      - stepNumber: 3
+        description: Read this root's .wai directory recursively into a file map.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: readPackDir
+      - stepNumber: 4
+        description: >-
+          Keep only portable design state, dropping regenerable artifacts unless includeDerived was
+          set.
+        type: call
+        targetComponent: tree_codec
+        targetMethod: selectTreeFiles
+      - stepNumber: 5
+        label: packEnd
+        description: >-
+          Prefix every kept file with this root's project-relative path plus '.wai/' and append it
+          to the archive file map; record the root's relativePath.
+        type: local
+      - stepNumber: 6
+        description: Did the roots yield no files at all?
+        type: branch
+        condition: the archive file map is empty
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Refuse to produce an empty archive — an export that silently carries nothing is worse than
+          a failure.
+        type: throw
+        error: tree export found no spec-tree files under the supplied roots
+      - stepNumber: 8
+        description: >-
+          Build the unsealed envelope: formatVersion, projectName, the packed roots in order, the
+          supplied stateId, the running wairon version and the includesDerived flag.
+        type: local
+      - stepNumber: 9
+        description: >-
+          Seal integrity (entryDigests + digest + generatedBy/generatedAt, the timestamp read here
+          and passed in).
+        type: call
+        targetComponent: tree_codec
+        targetMethod: sealTreeIntegrity
+      - stepNumber: 10
+        description: Serialize the sealed manifest to canonical envelope text.
+        type: call
+        targetComponent: tree_codec
+        targetMethod: serializeTreeManifest
+      - stepNumber: 11
+        description: Upsert wairon-tree.yaml (the sealed envelope text) into the archive file map.
+        type: local
+      - stepNumber: 12
+        description: Deflate the files + envelope into .waitree archive bytes.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: assembleArchive
+      - stepNumber: 13
+        description: Derive the suggested file name from the project name.
+        type: local
+      - stepNumber: 14
+        description: Return the TreeBuildResult (bytes + sealed manifest + suggested name + file count).
+        type: return
+        outcome: success
+  - name: inspectTreeArchive
+    narrative:
+      - stepNumber: 1
+        description: Enumerate archive entries without inflating.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: listEntries
+      - stepNumber: 2
+        description: Is there no wairon-tree.yaml entry?
+        type: branch
+        condition: no entry named wairon-tree.yaml
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject a non-.waitree archive.
+        type: throw
+        error: not a .waitree archive (missing wairon-tree.yaml envelope)
+      - stepNumber: 4
+        label: readEnv
+        description: Inflate just the envelope entry.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: inflateEntry
+      - stepNumber: 5
+        description: Parse + version-check the envelope text.
+        type: call
+        targetComponent: tree_codec
+        targetMethod: parseTreeManifest
+      - stepNumber: 6
+        description: Compute compatibility against the running wairon version.
+        type: call
+        targetComponent: tree_codec
+        targetMethod: checkTreeCompatibility
+      - stepNumber: 7
+        description: >-
+          Assemble TreeArchiveInfo from the manifest plus the enumerated entry count and total
+          inflated size.
+        type: local
+      - stepNumber: 8
+        description: Return the TreeArchiveInfo (no extraction performed).
+        type: return
+        outcome: success
+  - name: extractTreeArchive
+    narrative:
+      - stepNumber: 1
+        description: Did the caller omit limits?
+        type: branch
+        condition: limits is undefined
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Fall back to the codec's tree limit profile.
+        type: call
+        targetComponent: tree_codec
+        targetMethod: defaultTreeLimits
+      - stepNumber: 3
+        label: list
+        description: Enumerate archive entries without inflating (caps run pre-decompress).
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: listEntries
+      - stepNumber: 4
+        description: Compute the safe extraction plan (throws on any unsafe/oversized entry).
+        type: call
+        targetComponent: tree_codec
+        targetMethod: planTreeExtraction
+      - stepNumber: 5
+        description: Did the caller ask for the over-the-wire portability guard?
+        type: branch
+        condition: refuseExecutableEntries is true
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Refuse executable or non-spec-tree entries before anything is inflated.
+        type: call
+        targetComponent: tree_codec
+        targetMethod: assertPortableTreePaths
+      - stepNumber: 7
+        label: inflate
+        description: Initialize an empty file list.
+        type: local
+      - stepNumber: 8
+        description: Inflate each approved path from the plan.
+        type: loop
+        loopKind: forEach
+        over: plan.paths
+        endStep: 10
+      - stepNumber: 9
+        description: Inflate one approved entry.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: inflateEntry
+      - stepNumber: 10
+        label: inflateEnd
+        description: Append { path, contents } to the file list.
+        type: local
+      - stepNumber: 11
+        description: Is the wairon-tree.yaml envelope missing from the inflated files?
+        type: branch
+        condition: no inflated file is named wairon-tree.yaml
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
+        description: Reject a non-.waitree archive.
+        type: throw
+        error: not a .waitree archive (missing wairon-tree.yaml envelope)
+      - stepNumber: 13
+        label: parse
+        description: Parse the envelope into the result manifest.
+        type: call
+        targetComponent: tree_codec
+        targetMethod: parseTreeManifest
+      - stepNumber: 14
+        description: >-
+          Enforce integrity BEFORE writing (throws on mismatch; no-op when the archive carried
+          none).
+        type: call
+        targetComponent: tree_codec
+        targetMethod: verifyTreeIntegrity
+      - stepNumber: 15
+        description: >-
+          Write the approved, integrity-checked files as a directory tree under the destination
+          project root.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: writeTree
+      - stepNumber: 16
+        description: Assemble TreeExtractionResult (destination, manifest, recreated roots, written paths).
+        type: local
+      - stepNumber: 17
+        description: Return where the tree landed + its parsed manifest.
+        type: return
+        outcome: success
 status: complete
 createdAt: '2026-07-21T18:23:59.148Z'
-updatedAt: '2026-07-21T19:26:05.892Z'
+updatedAt: '2026-08-12T17:21:34.476Z'

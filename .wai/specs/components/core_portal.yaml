@@ -8,7 +8,8 @@ dependsOn:
   - agent_resolver
   - core_orchestrator
   - extension_orchestrator
+  - tree_transfer_orchestrator
 portalType: Custom
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-14T19:02:52.867Z'
+updatedAt: '2026-08-12T17:26:14.313Z'

@@ -1,0 +1,26 @@
+id: cli_remote_adapter
+name: CLI Remote Client Adapter
+description: >-
+  The CLI's client edge onto a REMOTE hosted instance — the one place in sdd_cli that speaks HTTP to
+  another wairon deployment. The transfer capabilities are each one authenticated JSON-RPC
+  `tools/call` against the hosted MCP endpoint: the bearer credential goes in the Authorization
+  header and the bound project in the project selector, exactly as an agent's MCP client presents
+  them, so the CLI is authorized, permission-gated and audited by the same machinery with no second
+  auth surface to build or secure. Project CREATION is the one capability that cannot ride that
+  endpoint — the data plane resolves its project binding BEFORE dispatching any tool, so a project
+  that does not exist yet can never be addressed there — and goes instead to the web plane's
+  instance-scoped project route, which accepts the same bearer through its auth bridge and resolves
+  project:create over the owner unit through the same permission resolver. The adapter owns the
+  whole wire concern: composing the envelope, unwrapping the tool-result envelope (a tool-level
+  refusal arrives as a 200 carrying isError, and must surface as a clear CLI error rather than an
+  apparent success), decoding base64 archive payloads, and turning transport failures into
+  actionable messages. It holds no state and makes no policy decisions.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - host_http_portal
+  - web_portal
+status: complete
+createdAt: '2026-08-12T18:31:27.931Z'
+updatedAt: '2026-08-12T18:38:15.487Z'

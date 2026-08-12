@@ -1,0 +1,29 @@
+kind: value-object
+id: tree_archive_info
+name: TreeArchiveInfo
+description: >-
+  What a `.waitree` archive declares about itself, read WITHOUT extracting anything: its parsed
+  envelope plus the entry count and total inflated size enumerated from the archive directory. Lets
+  a caller show what an archive holds — and refuse an oversized or incompatible one — before a
+  single byte is decompressed.
+fields:
+  - name: manifest
+    type: tree_archive_manifest
+    description: The parsed, version-checked envelope
+    optional: false
+  - name: entryCount
+    type: number
+    description: Number of file entries the archive carries
+    optional: false
+  - name: totalUncompressedBytes
+    type: number
+    description: Total inflated size the archive would produce
+    optional: false
+  - name: compatible
+    type: boolean
+    description: Whether formatVersion and minWaironVersion are compatible with the running wairon
+    optional: false
+methods: []
+componentClass: tree_codec
+createdAt: '2026-08-12T17:18:20.118Z'
+updatedAt: '2026-08-12T17:18:20.126Z'

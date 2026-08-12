@@ -21,6 +21,7 @@ import {
   SUBPROJECT_SEPARATOR,
 } from './projects.js';
 import { hostCore, hostGit, hostProducer, validateProjectAsComplete } from './adapters.js';
+import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import { setSecret as storeSecret, listSecretKeys } from '../utils/secrets.js';
 import type { ProducerConfig } from '../producers/index.js';
@@ -495,6 +496,62 @@ export function setSecret(_cfg: HostConfig, credential: string | null, key: stri
 export function listSecrets(_cfg: HostConfig, credential: string | null): string[] {
   requireAdmin(credential);
   return listSecretKeys();
+}
+
+// ── Spec-tree transfer (.waitree) ─────────────────────────────────────────
+//
+// The hosted half of local↔hosted migration. Both are TREE-scoped like lock and
+// promote: a `subproject` qualifier binds the CHAINED CHILD's tree, so a
+// credential narrowed to one child exports/imports exactly that child while
+// permission resolution stays anchored at the top project.
+
+/**
+ * Pack a hosted project's spec tree into a .waitree archive. Requires
+ * project:read — the same grant that already reads every spec individually, so
+ * a bulk export grants nothing new.
+ */
+export function exportProjectTree(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  subproject?: string,
+  includeDerived?: boolean,
+): TreeExportResult {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:read', 'project', project).value !== 'yes') {
+    throw new AdminAuthError("Forbidden — exporting a project's spec tree requires project:read over it");
+  }
+  const root = boundLifecycleRoot(cfg, project, subproject);
+  return runWithProjectRoot(root, () => hostCore.exportSpecTree(includeDerived));
+}
+
+/**
+ * Replace a hosted project's spec tree from a .waitree archive. Requires
+ * project:admin — deliberately above project:write, because this replaces the
+ * whole design rather than editing one spec. Executable entries are ALWAYS
+ * refused: the archive arrived over the wire, and executable doctrine installs
+ * only through the trusted filesystem (the same rule the pack surface applies).
+ */
+export function importProjectTree(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  archive: Uint8Array,
+  subproject?: string,
+  replaceExisting?: boolean,
+): TreeImportResult {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:admin', 'project', project).value !== 'yes') {
+    throw new AdminAuthError("Forbidden — importing a project's spec tree requires project:admin over it");
+  }
+  const root = boundLifecycleRoot(cfg, project, subproject);
+  return runWithProjectRoot(root, () =>
+    hostCore.importSpecTree(archive, {
+      destDir: root,
+      replaceExisting: replaceExisting === true,
+      refuseExecutableEntries: true,
+    }),
+  );
 }
 
 // ── Diagrams ──────────────────────────────────────────────────────────────

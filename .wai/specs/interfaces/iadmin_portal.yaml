@@ -316,6 +316,44 @@ methods:
       transport: HTTP
       method: POST
       path: /admin/approvals/{id}/execute
+  - name: exportProjectTree
+    description: >-
+      Return a project's whole spec tree as a .waitree archive download — the operator's migration
+      surface, alongside the diagram download.
+    signature: 'exportProjectTree(credential: string, project: string): bytes'
+    returns: bytes
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/projects/{id}/tree
+  - name: importProjectTree
+    description: >-
+      Replace a project's spec tree from a .waitree archive carried as base64 in the JSON body,
+      backing up the previous tree. The admin plane is uniformly JSON; the raw-stream upload path is
+      the web portal's /web/projects/tree/import.
+    signature: >-
+      importProjectTree(credential: string, project: string, archiveBase64: string,
+      replaceExisting?: boolean): TreeImportResult
+    returns: TreeImportResult
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: archiveBase64
+        type: string
+      - name: replaceExisting
+        type: boolean
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects/{id}/tree
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-07-16T00:18:55.142Z'
+updatedAt: '2026-08-12T18:07:00.384Z'

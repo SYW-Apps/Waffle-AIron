@@ -1027,6 +1027,38 @@ methods:
       transport: HTTP
       method: GET
       path: /web/projects/profiles
+  - name: projectTreeExport
+    description: >-
+      Download the scoped project's whole spec tree as a .waitree archive (the migration counterpart
+      of the canvas download): reads projectId from the query, forwards to
+      project_ops_orchestrator.exportProjectTree with the session as the credential, and answers
+      application/zip with a download disposition naming the project. Requires project:read over the
+      project upstream.
+    signature: 'projectTreeExport(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/tree/export
+  - name: projectTreeImport
+    description: >-
+      Replace the scoped project's spec tree from an uploaded .waitree archive carried as a raw
+      application/zip body (the same raw-body route shape as the pack upload). Forwards to
+      project_ops_orchestrator.importProjectTree with the session as the credential; requires
+      project:admin over the project upstream, refuses executable entries, and reports where the
+      replaced tree was backed up.
+    signature: 'projectTreeImport(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/tree/import
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-24T23:31:05.797Z'
+updatedAt: '2026-08-12T17:29:09.172Z'

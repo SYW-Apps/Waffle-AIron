@@ -150,10 +150,20 @@ export function publishChange(channel: string): void {
  * Map a successful /web mutation path (+ body) to the channels it invalidates.
  * Publishing is best-effort and side-effect-free for listeners (a bare refetch),
  * so a spurious publish after a failed mutation is harmless.
+ *
+ * `queryProjectId` is the fallback for the RAW-BODY upload routes (.wpack pack
+ * installs, .waitree tree imports): their body is archive bytes, not JSON, so
+ * the project they touch is only nameable from the query string. Without it
+ * those routes would nudge the projects list but never the project's own
+ * channel — leaving an open canvas showing the pre-import tree.
  */
-export function channelsForWebMutation(pathname: string, body: unknown): string[] {
+export function channelsForWebMutation(pathname: string, body: unknown, queryProjectId?: string): string[] {
   const b = (body ?? {}) as { projectId?: unknown; id?: unknown };
-  const projectId = typeof b.projectId === 'string' ? b.projectId : typeof b.id === 'string' ? b.id : undefined;
+  const projectId = typeof b.projectId === 'string'
+    ? b.projectId
+    : typeof b.id === 'string'
+      ? b.id
+      : (queryProjectId || undefined);
   const channels = new Set<string>();
   const add = (...cs: string[]) => cs.forEach((c) => channels.add(c));
 

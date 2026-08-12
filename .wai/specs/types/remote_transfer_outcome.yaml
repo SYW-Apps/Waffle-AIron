@@ -1,0 +1,55 @@
+kind: value-object
+id: remote_transfer_outcome
+name: RemoteTransferOutcome
+description: >-
+  What one migration actually moved, in terms the operator can verify: which direction, between
+  which local root and which hosted project, how much travelled, and what happened to whatever was
+  already at the destination. Reported rather than logged silently, because a migration that
+  replaced a tree must always name the backup it can be undone from.
+fields:
+  - name: direction
+    type: string
+    description: '"push" (local → hosted) or "pull" (hosted → local)'
+    optional: false
+  - name: url
+    type: string
+    description: The hosted instance involved
+    optional: false
+  - name: projectId
+    type: string
+    description: The hosted project involved
+    optional: false
+  - name: projectName
+    type: string
+    description: The moved tree's project name, from its envelope
+    optional: false
+  - name: roots
+    type: string[]
+    description: Project-relative roots moved — '.' plus every chained subproject
+    optional: false
+  - name: fileCount
+    type: number
+    description: How many spec-tree files moved
+    optional: false
+  - name: backupPath
+    type: string
+    description: Where the destination's previous tree was moved aside; absent when it held none
+    optional: true
+  - name: createdProject
+    type: boolean
+    description: 'Push only: the hosted project was initialized as part of this migration'
+    optional: true
+  - name: archivePath
+    type: string
+    description: Where the archive was written or read, when the caller routed it through a file
+    optional: true
+  - name: destDir
+    type: string
+    description: >-
+      Pull only: the local project root the tree landed in — reported because a pull may target a
+      directory other than the bound project root.
+    optional: true
+methods: []
+componentClass: remote_orchestrator
+createdAt: '2026-08-12T18:31:17.450Z'
+updatedAt: '2026-08-12T18:40:05.555Z'

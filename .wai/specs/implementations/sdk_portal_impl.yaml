@@ -35,7 +35,28 @@ methods:
         type: call
         targetComponent: sdk_orchestrator
         targetMethod: extractPack
+  - name: buildTreeArchive
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK orchestrator.
+        type: call
+        targetComponent: sdk_orchestrator
+        targetMethod: buildTreeArchive
+  - name: inspectTreeArchive
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK orchestrator.
+        type: call
+        targetComponent: sdk_orchestrator
+        targetMethod: inspectTreeArchive
+  - name: extractTreeArchive
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK orchestrator.
+        type: call
+        targetComponent: sdk_orchestrator
+        targetMethod: extractTreeArchive
 conformance: declared
 status: complete
 createdAt: '2026-07-21T18:23:33.249Z'
-updatedAt: '2026-07-21T19:26:05.977Z'
+updatedAt: '2026-08-12T17:21:42.732Z'

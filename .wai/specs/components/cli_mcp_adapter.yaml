@@ -1,0 +1,21 @@
+id: cli_mcp_adapter
+name: CLI MCP Configuration Adapter
+description: >-
+  The CLI's boundary onto the AI tools' own MCP configuration files — the place that knows where
+  Claude and Gemini/Antigravity read server definitions from, and what a wairon entry looks like
+  there. It registers this project's server (a LOCAL stdio entry over this checkout, or a HOSTED
+  http entry naming an instance, project and bearer), reports where a registration exists, and READS
+  an existing entry back to answer the question `wairon remote` needs: is the agent working against
+  this checkout's own .wai tree, or against a hosted project — and if hosted, which one, with which
+  credential. That read is what lets a developer whose agent is already wired attach the CLI without
+  typing a credential twice: the agent and the CLI then share one source of truth instead of
+  drifting apart. Config files are the property of the tools that own them, so writes touch only the
+  single `wairon` entry and leave every other server, and every unrelated key, untouched.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - mcp_portal
+status: complete
+createdAt: '2026-08-12T18:42:01.746Z'
+updatedAt: '2026-08-12T18:55:18.087Z'

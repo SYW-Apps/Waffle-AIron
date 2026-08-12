@@ -1,0 +1,135 @@
+id: itree_codec
+name: Tree Codec Interface
+description: >-
+  Pure format + safety logic for spec-tree archives — no I/O, no clock. Parses/serializes the
+  `wairon-tree.yaml` envelope, decides which tree files are portable, provides the tree safety-limit
+  profile, computes a safe extraction plan (or rejects), refuses executable entries on request, and
+  verifies integrity and version compatibility.
+component: tree_codec
+methods:
+  - name: parseTreeManifest
+    description: >-
+      Parse and validate the wairon-tree.yaml envelope text into a TreeArchiveManifest; throws on a
+      malformed envelope or an unsupported (newer-major) formatVersion.
+    signature: 'parseTreeManifest(text: string): TreeArchiveManifest'
+    returns: TreeArchiveManifest
+    params:
+      - name: text
+        type: string
+    guarantees:
+      - idempotent
+  - name: serializeTreeManifest
+    description: Serialize a TreeArchiveManifest to canonical wairon-tree.yaml text (used by export).
+    signature: 'serializeTreeManifest(manifest: TreeArchiveManifest): string'
+    returns: string
+    params:
+      - name: manifest
+        type: tree_archive_manifest
+    guarantees:
+      - idempotent
+  - name: defaultTreeLimits
+    description: >-
+      The extraction-safety profile for spec trees — deliberately looser on entry count and total
+      size than the pack profile (a real tree is thousands of small YAML files across several
+      chained roots) and stricter on nothing. Callers override individual caps.
+    signature: 'defaultTreeLimits(): PackExtractionLimits'
+    returns: PackExtractionLimits
+    params: []
+    guarantees:
+      - idempotent
+  - name: selectTreeFiles
+    description: >-
+      Decide which of a root's files are portable design state: keep authored spec state, drop
+      regenerable artifacts (generated/, docs/) unless includeDerived is set. The one place the
+      portability doctrine lives, so export and any future bundling can never disagree about it.
+    signature: 'selectTreeFiles(files: PackFile[], includeDerived: boolean): PackFile[]'
+    returns: PackFile[]
+    params:
+      - name: files
+        type: pack_file[]
+      - name: includeDerived
+        type: boolean
+    guarantees:
+      - idempotent
+  - name: planTreeExtraction
+    description: >-
+      Compute the safe extraction plan from enumerated entries under the given limits, or throw:
+      normalize + confine each path under the destination (zip-slip), reject absolute/`..`/backslash
+      paths, symlinks and non-regular entries, and enforce entry-count / total-size / per-entry /
+      compression-ratio / depth caps — all before anything is decompressed.
+    signature: >-
+      planTreeExtraction(entries: ArchiveEntryMeta[], limits: PackExtractionLimits):
+      PackExtractionPlan
+    returns: PackExtractionPlan
+    params:
+      - name: entries
+        type: archive_entry_meta[]
+      - name: limits
+        type: pack_extraction_limits
+    guarantees:
+      - idempotent
+  - name: assertPortableTreePaths
+    description: >-
+      Assert the planned paths carry no EXECUTABLE content (a bundled code pack's .js/.cjs/.mjs
+      entry) and that every path sits under a recognized spec-tree root, or throw with the same
+      guidance the pack surface gives: executable doctrine installs through the trusted filesystem,
+      never over the wire. Called by the hosted import path; a local extraction on the developer's
+      own machine may skip it.
+    signature: 'assertPortableTreePaths(paths: string[]): void'
+    returns: void
+    params:
+      - name: paths
+        type: string[]
+    guarantees:
+      - idempotent
+  - name: verifyTreeIntegrity
+    description: >-
+      When the envelope carries integrity data, verify every entry's sha256 against entryDigests;
+      returns true if integrity data was present and matched, false if the archive carried none.
+      Throws on a digest mismatch.
+    signature: 'verifyTreeIntegrity(manifest: TreeArchiveManifest, files: PackFile[]): boolean'
+    returns: boolean
+    params:
+      - name: manifest
+        type: tree_archive_manifest
+      - name: files
+        type: pack_file[]
+    guarantees:
+      - idempotent
+  - name: sealTreeIntegrity
+    description: >-
+      Produce-side partner of verifyTreeIntegrity, used by export: compute a sha256 per file into
+      entryDigests plus an overall manifest digest, stamp generatedBy/generatedAt from the
+      caller-supplied values (time is passed in, keeping the codec pure), and return the sealed
+      TreeArchiveManifest.
+    signature: >-
+      sealTreeIntegrity(manifest: TreeArchiveManifest, files: PackFile[], generatedBy: string,
+      generatedAt: string): TreeArchiveManifest
+    returns: TreeArchiveManifest
+    params:
+      - name: manifest
+        type: tree_archive_manifest
+      - name: files
+        type: pack_file[]
+      - name: generatedBy
+        type: string
+      - name: generatedAt
+        type: string
+    guarantees:
+      - idempotent
+  - name: checkTreeCompatibility
+    description: >-
+      Return whether the archive's formatVersion and minWaironVersion are compatible with the
+      running wairon version.
+    signature: 'checkTreeCompatibility(manifest: TreeArchiveManifest, waironVersion: string): boolean'
+    returns: boolean
+    params:
+      - name: manifest
+        type: tree_archive_manifest
+      - name: waironVersion
+        type: string
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-08-12T17:19:03.131Z'
+updatedAt: '2026-08-12T18:28:00.431Z'

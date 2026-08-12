@@ -1,0 +1,28 @@
+kind: value-object
+id: tree_build_result
+name: TreeBuildResult
+description: >-
+  The outcome of packing a spec tree: the archive bytes, the sealed envelope that describes them,
+  and a suggested file name derived from the project name. The bytes are returned rather than
+  written so the same build serves a file write, an HTTP upload, and a base64 tool argument.
+fields:
+  - name: archive
+    type: bytes
+    description: The assembled .waitree archive bytes
+    optional: false
+  - name: manifest
+    type: tree_archive_manifest
+    description: The sealed envelope written into the archive
+    optional: false
+  - name: suggestedFileName
+    type: string
+    description: e.g. "waffle-airon.waitree"
+    optional: false
+  - name: fileCount
+    type: number
+    description: How many spec-tree files were packed
+    optional: false
+methods: []
+componentClass: tree_codec
+createdAt: '2026-08-12T17:18:24.355Z'
+updatedAt: '2026-08-12T17:18:24.362Z'

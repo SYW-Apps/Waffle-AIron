@@ -314,6 +314,19 @@ export interface GitBackingBinding {
   includeCredentials?: boolean;
 }
 
+/** What a spec-tree import actually did — including where the replaced tree went. */
+export interface TreeImportResult {
+  destDir: string;
+  projectName: string;
+  /** Project-relative roots recreated: '.' plus every chained subproject. */
+  roots: string[];
+  fileCount: number;
+  replaced: boolean;
+  /** Where the replaced tree was moved aside; absent when nothing was replaced. */
+  backupPath?: string;
+  stateId?: string;
+}
+
 /** The best human label for a user or subject: name, then email, then a short id. */
 export function subjectLabel(s: { displayName?: string; email?: string; userId?: string }): string {
   if (s.displayName && s.displayName.trim()) return s.displayName;

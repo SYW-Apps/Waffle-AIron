@@ -32,6 +32,34 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: validateAsComplete
+  - name: runValidation
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load the project configuration and the resolved agent registry, scoped to a subsystem when
+          one was named.
+        type: local
+      - stepNumber: 2
+        description: Check the registry's topology rules.
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateRegistry
+      - stepNumber: 3
+        description: Check the project configuration.
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateProjectConfig
+      - stepNumber: 4
+        description: Check the SDD spec tree.
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateSddTree
+      - stepNumber: 5
+        description: >-
+          Render every finding and exit non-zero when errors were reported — or, under --ci, when
+          warnings were.
+        type: local
+    symbol: runValidate
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:05:41.741Z'
+updatedAt: '2026-08-12T18:54:27.887Z'

@@ -1,0 +1,36 @@
+id: itree_transfer_orchestrator
+name: Tree Transfer Orchestrator Interface
+description: >-
+  The two spec-tree transfer workflows over the bound project root: pack the whole tree (with every
+  chained subproject) for transfer, and take one in under an explicit, non-permissive import policy.
+component: tree_transfer_orchestrator
+methods:
+  - name: exportSpecTree
+    description: >-
+      Pack the bound project's spec tree — its own .wai plus the .wai of every chained subproject —
+      into a .waitree archive, stamped with the tree's current content state. Throws when the bound
+      root holds no spec tree, rather than returning an empty archive that would look like a
+      successful export of nothing.
+    signature: 'exportSpecTree(includeDerived?: boolean): TreeExportResult'
+    returns: TreeExportResult
+    params:
+      - name: includeDerived
+        type: boolean
+        description: Pack regenerable artifacts (generated/, docs/) too; default false
+        optional: true
+  - name: importSpecTree
+    description: >-
+      Import a .waitree archive into a project root: inspect it before touching disk, refuse an
+      incompatible archive or an occupied destination the caller did not ask to replace, extract
+      into staging, swap into place with a backup of any previous tree, and invalidate the spec
+      repository's cached index. Returns what was written and where the backup went.
+    signature: 'importSpecTree(archive: bytes, options: TreeImportOptions): TreeImportResult'
+    returns: TreeImportResult
+    params:
+      - name: archive
+        type: bytes
+      - name: options
+        type: tree_import_options
+status: complete
+createdAt: '2026-08-12T17:24:29.791Z'
+updatedAt: '2026-08-12T18:28:00.500Z'

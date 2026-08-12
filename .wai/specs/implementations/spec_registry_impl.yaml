@@ -83,6 +83,15 @@ methods:
       never throws, it only surfaces issues. Returns the collected issues so validate reports at
       validate time every refusal that lock's status promotion or any later save would otherwise
       raise mid-write.
+  - name: invalidateCache
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Invalidate every registered workspace's cached index IN PLACE, never evicting the
+          workspace itself — a caller holding a workspace reference (tests, the hosted server's
+          per-project scopes) must keep receiving invalidations
+        type: local
+    symbol: invalidateSpecCache
 lint:
   allow:
     - code: UNNARRATED_COMPLEXITY
@@ -93,4 +102,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-07-18T22:57:54.177Z'
+updatedAt: '2026-08-12T18:07:58.971Z'

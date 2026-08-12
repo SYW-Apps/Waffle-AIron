@@ -21,6 +21,16 @@ methods:
       every spec were already complete — the dry-run `wairon lock` refuses to freeze on.
     signature: 'validateAsComplete(): ValidationResult'
     returns: ValidationResult
+  - name: runValidation
+    description: >-
+      The whole `wairon validate` workflow over the LOCAL tree: run the registry, project-config and
+      spec-tree checks, render their findings, and exit non-zero when the tree is invalid (or, under
+      --ci, carries warnings). The runner delegates here rather than orchestrating the three checks
+      itself, so the composition lives with the checks it composes.
+    signature: >-
+      runValidation(options: { ci?: boolean; subsystem?: string; recursive?: boolean }):
+      Promise<void>
+    returns: Promise<void>
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:05:15.918Z'
+updatedAt: '2026-08-12T18:54:24.322Z'

@@ -2,6 +2,7 @@ import { computeStateId } from '../core/statehash.js';
 import { computeGateStateId, readLockState } from '../core/specs.js';
 import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph, assertContainedProjectPath } from '../core/specs.js';
+import { exportSpecTree, importSpecTree } from '../core/treetransfer.js';
 import { provisionProject, promoteAllComplete } from '../core/provision.js';
 import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
@@ -49,6 +50,10 @@ export const hostCore = {
   loadSubsystemSpecs,
   // Level-of-detail project-tier graph for the web UI, forwarded to core_portal.
   buildProjectGraph,
+  // Whole-spec-tree transfer (.waitree), forwarded to core_portal — the seam the
+  // hosted export/import surfaces and every local↔hosted migration run through.
+  exportSpecTree,
+  importSpecTree,
   // Extension-pack loading forwarded to sdd_core — used by the hosted pack store
   // (pack_registry) and the policy plane's required/default-pack application.
   globalPacksDir,

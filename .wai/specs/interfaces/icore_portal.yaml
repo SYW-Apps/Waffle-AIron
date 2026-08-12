@@ -184,6 +184,27 @@ methods:
     params:
       - name: agentId
         type: string
+  - name: exportSpecTree
+    description: >-
+      Packs the bound project's whole spec tree (its own .wai plus every chained subproject) into a
+      .waitree archive with provenance
+    signature: 'exportSpecTree(includeDerived?: boolean): TreeExportResult'
+    returns: TreeExportResult
+    params:
+      - name: includeDerived
+        type: boolean
+        optional: true
+  - name: importSpecTree
+    description: >-
+      Imports a .waitree archive into a project root under an explicit import policy, backing up any
+      tree it replaces
+    signature: 'importSpecTree(archive: bytes, options: TreeImportOptions): TreeImportResult'
+    returns: TreeImportResult
+    params:
+      - name: archive
+        type: bytes
+      - name: options
+        type: tree_import_options
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-08T11:12:28.089Z'
+updatedAt: '2026-08-12T17:26:16.949Z'

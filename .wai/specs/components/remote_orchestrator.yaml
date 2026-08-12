@@ -1,0 +1,37 @@
+id: remote_orchestrator
+name: Remote Migration Orchestrator
+description: >-
+  Owns everything a developer does against a hosted instance from a checkout: the two MIGRATION
+  workflows and the standing ATTACHMENT that makes ordinary commands run against the hosted tree.
+
+
+  Migration — pushTree exports the local spec tree and imports it into the hosted project
+  (optionally creating that project first); pullTree does the reverse into the local root, under the
+  same non-permissive policy the local importer enforces. Either direction can route through a FILE
+  instead of the network, so an air-gapped move is the same workflow with one half done later.
+
+
+  Attachment — resolveTarget answers, for one command, WHICH hosted project this checkout speaks to
+  and with which credential, from an explicit flag, then the recorded binding, then the agent's own
+  MCP configuration. That last fallback is the point: a developer whose agent already works against
+  a hosted project never types a credential twice, and the agent and the CLI cannot drift onto
+  different projects. attach records the binding (never the credential — that belongs to the user's
+  credential store); detach removes it; describeAttachment reports what is resolved and from where,
+  without ever printing a secret.
+
+
+  A checkout attached to a hosted project has NO local spec tree, so the commands that read one run
+  against the hosted tree instead — validate, status, lock and promote each have a remote
+  counterpart here. Everything else stays honestly local: a command that needs files on disk fails
+  with guidance to pull first, rather than silently doing nothing.
+subsystem: sdd_cli
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - cli_remote_adapter
+  - cli_core_adapter
+  - remote_binding_store
+  - cli_mcp_adapter
+status: complete
+createdAt: '2026-08-12T18:31:45.498Z'
+updatedAt: '2026-08-12T18:42:45.765Z'

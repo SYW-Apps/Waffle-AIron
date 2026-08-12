@@ -1,0 +1,169 @@
+id: tree_archive_adapter_impl
+name: Tree Archive Adapter Implementation
+description: >-
+  src/core/treetransfer.ts — the archive + filesystem boundary for spec-tree transfer. The three
+  archive capabilities forward 1:1 to the @wairon/sdk portal; the staging/probe/swap/discard
+  operations are the only directory moves a tree import performs.
+contract: itree_archive_adapter
+sourcePath: src/core/treetransfer.ts
+methods:
+  - name: buildTreeArchive
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK portal.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: buildTreeArchive
+  - name: inspectTreeArchive
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK portal.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: inspectTreeArchive
+  - name: extractTreeArchive
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the SDK portal, letting the omitted limits fall back to its tree caps profile
+          and passing the caller's executable-entry policy through unchanged.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: extractTreeArchive
+  - name: hasSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Does the root hold a .wai directory carrying a project config?
+        type: branch
+        condition: the root's .wai directory exists and contains project.yaml
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: A spec tree is present.
+        type: return
+        outcome: present
+      - stepNumber: 3
+        description: No spec tree here.
+        type: return
+        outcome: absent
+    detail: full
+  - name: createStagingDir
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Derive a uniquely named staging directory beside the destination root (a sibling, so the
+          swap is a rename within one filesystem rather than a cross-device copy) and create it
+          empty.
+        type: local
+      - stepNumber: 2
+        description: Return the staging directory path.
+        type: return
+        outcome: success
+    detail: full
+  - name: commitStagedTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Derive the timestamped backup directory path beside the destination root; nothing has
+          moved yet.
+        type: local
+      - stepNumber: 2
+        description: Swap each root into place.
+        type: loop
+        loopKind: forEach
+        over: roots
+        endStep: 5
+      - stepNumber: 3
+        description: Does this root hold an existing .wai that the caller asked to preserve?
+        type: branch
+        condition: backupExisting is set and the destination root's .wai exists
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Move the existing .wai into the backup directory under this root's project-relative path,
+          so one backup holds the whole previous tree in its original shape.
+        type: local
+      - stepNumber: 5
+        label: swapEnd
+        description: >-
+          Move the staged root's .wai into position under the destination, replacing whatever
+          remains there.
+        type: local
+      - stepNumber: 6
+        description: Was anything moved aside?
+        type: branch
+        condition: the backup directory was created
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Return the backup directory path.
+        type: return
+        outcome: replaced
+      - stepNumber: 8
+        description: Return an empty string — the destination held no previous tree.
+        type: return
+        outcome: fresh
+    detail: full
+  - name: discardStagingDir
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Remove the staging directory and everything under it, swallowing any failure — tidying
+          must never fail an import that already succeeded.
+        type: local
+    detail: full
+  - name: hasAuthoredSpecs
+    narrative:
+      - stepNumber: 1
+        description: Locate the root's specs directory.
+        type: local
+      - stepNumber: 2
+        description: Is there no specs directory at all?
+        type: branch
+        condition: the specs directory does not exist
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Nothing authored.
+        type: return
+        outcome: none
+      - stepNumber: 4
+        description: Scan the specs tree for any spec file other than the L0 system index.
+        type: loop
+        loopKind: forEach
+        over: the spec files under the specs directory
+        endStep: 6
+      - stepNumber: 5
+        description: Is this file something other than the L0 system index?
+        type: branch
+        condition: the file is not the system index
+        onTrueStep: 8
+        onFalseStep: 6
+      - stepNumber: 6
+        label: scanEnd
+        description: This file is the bootstrap index — keep looking.
+        type: local
+      - stepNumber: 7
+        description: Only the bootstrap L0 index — nothing authored.
+        type: return
+        outcome: none
+      - stepNumber: 8
+        label: authored
+        description: Authored design is present.
+        type: return
+        outcome: authored
+    detail: full
+lint:
+  allow:
+    - code: UNREALIZED_DEPENDENCY
+      reason: >-
+        tree_archive_adapter imports the published @wairon/sdk surface (`import * as sdkPortal from
+        '@wairon/sdk'`), but sdd_sdk is a SEPARATE npm workspace package (its sourcePaths are
+        sdk/src/*). The Level-2 dependency analyzer resolves only RELATIVE specifiers against the
+        mapped source files, so a legitimate cross-package import of the published portal reads as
+        unrealized — the same analyzer limitation already acknowledged on host_sdk_adapter_impl. The
+        edge is real and correct.
+status: complete
+createdAt: '2026-08-12T17:25:38.862Z'
+updatedAt: '2026-08-12T18:28:00.572Z'
