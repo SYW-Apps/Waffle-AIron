@@ -6,7 +6,13 @@ import * as crypto from 'crypto';
 import { execSync } from 'child_process';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
-import { getChannel, setChannel, UpdateChannel } from '../config/userconfig.js';
+import {
+  getChannel,
+  setChannel,
+  isUpdateChannel,
+  UPDATE_CHANNELS,
+  UpdateChannel,
+} from '../config/userconfig.js';
 import { isNewerVersion } from '../utils/version.js';
 import { downloadFile } from '../utils/download.js';
 
@@ -15,10 +21,11 @@ import { downloadFile } from '../utils/download.js';
 //
 // Checks GitHub Releases for a newer version and optionally installs it.
 //
-// Channel support:
-//   stable  — only stable releases (no -beta.N / -preview.N suffix)
-//   beta    — stable + beta pre-releases
-//   preview — stable + beta + preview pre-releases
+// Channel support — each channel sees its own tier and every narrower one:
+//   stable  — only stable releases (vX.Y.Z, no pre-release suffix)
+//   beta    — stable + -beta.N
+//   preview — stable + -beta.N + -preview.N
+//   dev     — everything, including the -dev.N build cut from every dev merge
 //
 // Usage:
 //   wairon update                   — check and install if newer (uses saved channel)
@@ -29,7 +36,8 @@ import { downloadFile } from '../utils/download.js';
 
 export interface UpdateOptions {
   check?: boolean;
-  channel?: UpdateChannel;
+  /** Raw `--channel` value — validated here, since commander accepts any string. */
+  channel?: string;
 }
 
 interface GithubRelease {
@@ -49,12 +57,21 @@ interface GithubAsset {
 
 export async function runUpdate(options: UpdateOptions = {}): Promise<void> {
   // Persist channel change if requested
+  let requested: UpdateChannel | undefined;
   if (options.channel) {
-    setChannel(options.channel);
-    logger.success(`Update channel set to: ${options.channel}`);
+    if (!isUpdateChannel(options.channel)) {
+      logger.error(
+        `Unknown update channel "${options.channel}". Valid channels: ${UPDATE_CHANNELS.join(', ')}`,
+      );
+      process.exit(1);
+      return;
+    }
+    requested = options.channel;
+    setChannel(requested);
+    logger.success(`Update channel set to: ${requested}`);
   }
 
-  const channel = options.channel ?? getChannel();
+  const channel = requested ?? getChannel();
   logger.info(`Current version: ${WAIRON_VERSION}  (channel: ${channel})`);
   logger.info('Checking for updates...');
 
@@ -67,23 +84,23 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<void> {
     process.exit(1);
   }
 
-  // Filter releases by channel
-  const eligible = releases.filter((r) => isEligibleForChannel(r.tag_name, channel));
-  if (eligible.length === 0) {
-    logger.success(`Already up to date (${WAIRON_VERSION})`);
-    return;
-  }
-
-  const release = eligible[0]; // releases are sorted newest-first by GitHub
-  const latestVersion = release.tag_name.replace(/^v/, '');
   const currentVersion = WAIRON_VERSION.replace(/^v/, '');
 
-  if (!isNewer(currentVersion, latestVersion)) {
-    logger.success(`Already up to date (${WAIRON_VERSION})`);
+  // Filter releases by channel
+  const eligible = releases.filter((r) => isEligibleForChannel(r.tag_name, channel, r.prerelease));
+  const release = eligible[0]; // releases are sorted newest-first by GitHub
+
+  reportOffChannelBuild(channel, currentVersion, release?.tag_name);
+
+  if (!release || !isNewer(currentVersion, release.tag_name.replace(/^v/, ''))) {
+    logger.success(`Already up to date (${WAIRON_VERSION}, channel: ${channel})`);
+    reportWiderChannel(releases, channel, currentVersion);
     return;
   }
 
-  const channelLabel = release.prerelease ? ` [${releaseChannelLabel(release.tag_name)}]` : '';
+  const latestVersion = release.tag_name.replace(/^v/, '');
+  const label = releaseChannelLabel(release.tag_name);
+  const channelLabel = label === 'stable' ? '' : ` [${label}]`;
   logger.info(`New version available: ${release.tag_name}${channelLabel}  (current: ${WAIRON_VERSION})`);
 
   if (release.body) {
@@ -134,7 +151,10 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<void> {
   const selfPath = getSelfPath();
   if (!selfPath) {
     logger.warn('Cannot self-update: wairon was installed via npm.');
-    logger.info('Run `npm update -g waffle-airon` to update.');
+    // npm's own channel is the dist-tag, which mirrors these channels 1:1
+    // (stable publishes to `latest`, the rest to a tag of the same name).
+    const distTag = channel === 'stable' ? 'latest' : channel;
+    logger.info(`Run \`npm install -g @wairon/cli@${distTag}\` to update.`);
     process.exit(1);
   }
 
@@ -175,27 +195,107 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * Determine whether a release tag is eligible for the given channel.
- *   stable  → only tags without a pre-release suffix (v1.2.3)
- *   beta    → stable + tags with -beta.N suffix
- *   preview → stable + beta + tags with -preview.N suffix
+ * Channel breadth, narrowest first. A channel is eligible for every release
+ * whose tier is at or below its own rank, so `dev` sees everything and
+ * `stable` sees only untagged releases.
  */
-function isEligibleForChannel(tag: string, channel: UpdateChannel): boolean {
-  const version = tag.replace(/^v/, '');
-  const isBeta = /-beta\.\d+$/.test(version);
-  const isPreview = /-preview\.\d+$/.test(version);
-  const isStable = !isBeta && !isPreview;
+const CHANNEL_RANK: Record<UpdateChannel, number> = {
+  stable: 0,
+  beta: 1,
+  preview: 2,
+  dev: 3,
+};
 
-  if (isStable) return true;
-  if (isBeta && (channel === 'beta' || channel === 'preview')) return true;
-  if (isPreview && channel === 'preview') return true;
-  return false;
+/**
+ * Classify a release into a channel tier.
+ *
+ * Closed by default: anything carrying a pre-release suffix is a pre-release,
+ * and a suffix this build does not recognize ranks at the widest tier rather
+ * than falling through to `stable`. That fall-through is exactly what let
+ * `-dev.N` builds reach stable installs — `-dev` was simply not in the list of
+ * known pre-release labels, so it read as a stable release.
+ */
+export function releaseTier(tag: string, githubPrerelease = false): number {
+  const version = tag.replace(/^v/, '');
+  const dash = version.indexOf('-');
+
+  if (dash === -1) {
+    // No suffix. Cross-check GitHub's own flag: a release the publisher marked
+    // pre-release is never a stable-channel candidate, whatever the tag says.
+    return githubPrerelease ? CHANNEL_RANK.dev : CHANNEL_RANK.stable;
+  }
+
+  const label = version.slice(dash + 1).replace(/\.\d+$/, '');
+  const rank = CHANNEL_RANK[label as UpdateChannel];
+  return rank === undefined || rank === CHANNEL_RANK.stable ? CHANNEL_RANK.dev : rank;
 }
 
-function releaseChannelLabel(tag: string): string {
-  if (/-beta\.\d+$/.test(tag)) return 'beta';
-  if (/-preview\.\d+$/.test(tag)) return 'preview';
-  return 'stable';
+/**
+ * Say so when the running build is wider than the configured channel — e.g. a
+ * `stable` install running a `-dev.N` build, which is what the old filter
+ * produced. Such a build is not "newer" than the stable line it forked from, so
+ * the version check alone reports "up to date" and the mismatch stays invisible
+ * until the next stable release catches up.
+ */
+function reportOffChannelBuild(
+  channel: UpdateChannel,
+  currentVersion: string,
+  newestOnChannel: string | undefined,
+): void {
+  const tier = releaseTier(currentVersion);
+  if (tier <= (CHANNEL_RANK[channel] ?? CHANNEL_RANK.stable)) return;
+
+  const label = releaseChannelLabel(currentVersion);
+  logger.warn(
+    `This is a ${label} build (${WAIRON_VERSION}) but the update channel is ${channel}.`,
+  );
+  const target = newestOnChannel ? ` The newest ${channel} release is ${newestOnChannel}.` : '';
+  const track = isUpdateChannel(label)
+    ? `Track this build with \`wairon update --channel ${label}\`, or reinstall`
+    : 'Reinstall';
+  logger.info(`It will not update until ${channel} passes it.${target} ${track} to return to ${channel}.`);
+  logger.blank();
+}
+
+/**
+ * When an up-to-date narrower channel is sitting behind a newer pre-release,
+ * say so once. Without this the only signal is silence, which reads as "there
+ * is nothing newer" rather than "there is nothing newer *on your channel*".
+ */
+function reportWiderChannel(
+  releases: GithubRelease[],
+  channel: UpdateChannel,
+  currentVersion: string,
+): void {
+  const wider = releases.find(
+    (r) =>
+      !isEligibleForChannel(r.tag_name, channel, r.prerelease) &&
+      isNewer(currentVersion, r.tag_name.replace(/^v/, '')),
+  );
+  if (!wider) return;
+
+  const label = releaseChannelLabel(wider.tag_name);
+  const hint = isUpdateChannel(label)
+    ? ` — install it with \`wairon update --channel ${label}\`.`
+    : '.';
+  logger.info(`A newer pre-release exists: ${wider.tag_name} [${label}]${hint}`);
+}
+
+/** Determine whether a release is eligible for the given channel. */
+export function isEligibleForChannel(
+  tag: string,
+  channel: UpdateChannel,
+  githubPrerelease = false,
+): boolean {
+  return releaseTier(tag, githubPrerelease) <= (CHANNEL_RANK[channel] ?? CHANNEL_RANK.stable);
+}
+
+/** The channel label to show for a release — the raw suffix when unrecognized. */
+export function releaseChannelLabel(tag: string): string {
+  const version = tag.replace(/^v/, '');
+  const dash = version.indexOf('-');
+  if (dash === -1) return 'stable';
+  return version.slice(dash + 1).replace(/\.\d+$/, '') || 'stable';
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +304,10 @@ function releaseChannelLabel(tag: string): string {
 
 function fetchReleases(repo: string): Promise<GithubRelease[]> {
   return new Promise((resolve, reject) => {
-    const url = `https://api.github.com/repos/${repo}/releases?per_page=20`;
+    // 100 (the GitHub maximum) rather than a page that a run of pre-releases
+    // can fill: `dev` cuts a build per merge, so a page of 20 can hold nothing
+    // but -dev.N and leave a stable install seeing no eligible release at all.
+    const url = `https://api.github.com/repos/${repo}/releases?per_page=100`;
     const options = {
       headers: {
         'User-Agent': `wairon/${WAIRON_VERSION}`,

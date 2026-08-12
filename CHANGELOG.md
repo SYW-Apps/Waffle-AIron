@@ -55,6 +55,35 @@ binding before dispatch, so it cannot address a project that does not exist yet)
 and `wairon logout` forgets a credential locally without revoking it — revocation
 lives in the hosted UI under Tokens, which the command says out loud.
 
+### Fixed: `wairon update` installed dev builds onto stable installs
+
+`-dev.N` was never in the self-updater's list of pre-release labels — it knew
+only `-beta.N` and `-preview.N` — so a dev build fell through the channel filter
+as a *stable* release. On the default `stable` channel, `wairon update` would
+download the build cut from the last merge to `dev`. Both halves of the release
+pipeline were already correct (every `-dev.N` GitHub release is marked
+pre-release, and npm has `latest` on the stable version with dev builds under the
+`dev` dist-tag), so this was purely the client misreading correct tags — no
+release or tag needed republishing.
+
+`dev` is now a first-class update channel alongside `stable`, `beta` and
+`preview`. Channels are ranked, and each sees its own tier and every narrower
+one: `stable` installs only `vX.Y.Z`, `dev` sees everything. Switch with
+`wairon update --channel dev` (persisted in `~/.wairon/config.json`); an
+unrecognized `--channel` value is now rejected rather than saved.
+
+Classification is closed by default, which is what failed before: any tag with a
+pre-release suffix is a pre-release, and a suffix this build does not recognize
+(`-rc.1`, `-nightly.N`) ranks at the *widest* tier instead of falling through to
+stable — so the next label added to the release pipeline cannot repeat this. The
+updater also cross-checks GitHub's own `prerelease` flag, so a release marked
+pre-release is never a stable-channel candidate however its tag reads. Two
+related fixes ride along: an up-to-date narrow channel now says when a newer
+pre-release exists on a wider one (silence read as "nothing is newer" rather
+than "nothing is newer *for you*"), and the release page size went from 20 to
+100 — `dev` cuts a build per merge, so a page of 20 could hold nothing but
+`-dev.N` and leave a stable install seeing no eligible release at all.
+
 ### Fixed: `sdd_get_status`, `sdd_validate_tree` and `listDomains` failed on the hosted data plane
 
 Four `sdd_*` tools reached their implementations through lazy
@@ -63,6 +92,36 @@ paths resolve against a directory that holds no such file: on a hosted instance
 the tools answered `Cannot find module` instead of running — `sdd_get_status`
 returned no dashboard at all. They are now static imports, the fix already
 applied once to the spec surface (and documented there) extended to the rest.
+
+### `wairon dev` is its own local mode again — no sign-in screen, no hosted chrome
+
+The local dev server could land on the hosted sign-in screen and stay there,
+reporting *"No sign-in method is configured on this instance"* — a dead end,
+since `wairon dev` deliberately configures none. Two causes, both fixed, plus the
+mode itself is now a distinct surface rather than the hosted app with pieces
+hidden.
+
+- **A stale session cookie no longer wedges the dev server.** Auto-login only ran
+  on a *cookieless* GET, but session cookies are not port-scoped: a
+  `wairon_session` left by another project's dev server, a hosted instance on the
+  same host, or an ephemeral dev data dir that was cleaned would be presented,
+  resolve to nothing, and 401. Any bearerless GET in devMode now re-establishes
+  the local session and overrides the presented cookie (re-sending `Set-Cookie`
+  only when the value actually changes). Hosted mode is untouched — it still
+  mints nothing and 404s `/web/dev-login`.
+- **An expired dev session is no longer handed back.** `startDevSession` reused
+  the first stored session for the local-developer subject without checking its
+  expiry, so after the 30-day TTL it returned a dead credential forever. It now
+  prunes expired sessions before reuse and mints a fresh one.
+- **Local mode is a separate shell.** `wairon dev` serves one project on
+  loopback with no accounts, so it no longer renders the environment/org-unit
+  navigator or hosted chrome: a slim bar with two surfaces — **Canvas** (the live
+  architecture graph, bound to the local project) and **Specs** (the spec value
+  editor, previously unreachable in dev) — sharing the same components as the
+  hosted app, so the canvas ↔ specs deep-links work in both. The sign-in screen
+  is unreachable in local mode: an unauthenticated boot probes the dev-only
+  re-establish route once, recovering silently on a dev server and falling
+  through to the real login only on a hosted one.
 
 ### Rule-matrix test tier: every finding code pinned by fire+control fixtures
 

@@ -9,7 +9,14 @@ import * as fs from 'fs';
 // Created on first write; all fields are optional.
 // ---------------------------------------------------------------------------
 
-export type UpdateChannel = 'stable' | 'beta' | 'preview';
+export type UpdateChannel = 'stable' | 'beta' | 'preview' | 'dev';
+
+/** Every channel, narrowest first — the order `wairon update --channel` accepts. */
+export const UPDATE_CHANNELS: UpdateChannel[] = ['stable', 'beta', 'preview', 'dev'];
+
+export function isUpdateChannel(value: string): value is UpdateChannel {
+  return (UPDATE_CHANNELS as string[]).includes(value);
+}
 
 export interface UserConfig {
   /** Which release channel to track for updates. Default: 'stable' */
@@ -62,7 +69,11 @@ export function setChannel(channel: UpdateChannel): void {
 }
 
 export function getChannel(): UpdateChannel {
-  return loadUserConfig().channel ?? 'stable';
+  // A hand-edited or future-version config can carry a channel this build does
+  // not know. Fall back to the narrowest channel rather than letting an
+  // unrecognized value widen what a stable install is willing to install.
+  const channel = loadUserConfig().channel;
+  return channel && isUpdateChannel(channel) ? channel : 'stable';
 }
 
 export function getDisabledAliases(): string[] {
