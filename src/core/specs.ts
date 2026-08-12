@@ -558,6 +558,14 @@ export interface PromotableSpec {
  */
 export interface SaveSpecOptions {
   allowStatusDemotion?: boolean;
+  /**
+   * Keep the existing `updatedAt` instead of re-stamping it — for a MECHANICAL
+   * re-save that changes no authored content (the lock's status promotion).
+   * Stamping there claimed the spec had been edited, so freezing a tree was
+   * indistinguishable from designing it in a diff, and every lock dirtied two
+   * lines per spec where the status flip alone is one.
+   */
+  preserveUpdatedAt?: boolean;
 }
 
 /**
@@ -1383,7 +1391,7 @@ export class SpecWorkspace {
     return issues;
   }
 
-  saveSubsystemSpec(spec: SubsystemSpec): void {
+  saveSubsystemSpec(spec: SubsystemSpec, opts?: SaveSpecOptions): void {
     const p = this.getSubsystemPath(spec.id);
     ensureDir(path.dirname(p));
 
@@ -1427,7 +1435,7 @@ export class SpecWorkspace {
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id));
     invalidateSpecCache();
   }
@@ -1511,7 +1519,7 @@ export class SpecWorkspace {
         + `The subsystem field is now "${spec.subsystem}" (was "${existing.subsystem}").`,
       );
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id));
     invalidateSpecCache();
     // Keep the physical layout in sync with ownership: nest owned members under
@@ -1629,7 +1637,7 @@ export class SpecWorkspace {
         }
       }
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id));
     invalidateSpecCache();
     return notices;
@@ -1695,7 +1703,7 @@ export class SpecWorkspace {
         specToWrite.status = existing.status;
       }
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id));
     invalidateSpecCache();
     return notices;
@@ -1729,7 +1737,7 @@ export class SpecWorkspace {
    * relocates an existing file — both are by design, but silent they read as
    * "the subsystem parameter was ignored".
    */
-  saveTypeSpec(spec: TypeSpec): string[] {
+  saveTypeSpec(spec: TypeSpec, opts?: SaveSpecOptions): string[] {
     const notices: string[] = [];
     const existing = this.loadTypeSpec(spec.id);
     const group = spec.group || (existing ? existing.group : undefined);
@@ -1762,7 +1770,7 @@ export class SpecWorkspace {
         specToWrite.group = relativizeId(existing.group, this.writePrefixFor(spec.id));
       }
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id));
     invalidateSpecCache();
     return notices;
@@ -1790,7 +1798,7 @@ export class SpecWorkspace {
     return this.scanAll().groups.find((g) => g.id === id) ?? null;
   }
 
-  saveGroupSpec(spec: GroupSpec): void {
+  saveGroupSpec(spec: GroupSpec, opts?: SaveSpecOptions): void {
     const p = this.getGroupPath(spec.id);
     ensureDir(path.dirname(p));
 
@@ -1800,7 +1808,7 @@ export class SpecWorkspace {
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(GroupSpecSchema, specToWrite, 'group', spec.id));
     invalidateSpecCache();
   }
@@ -1863,12 +1871,20 @@ export class SpecWorkspace {
   }
 
   /** Set a single spec's status (bumps updatedAt). Caller invalidates the cache. */
+  /**
+   * Flip one spec's lifecycle status, changing nothing else — the lock's freeze.
+   *
+   * `preserveUpdatedAt` because this is MECHANICAL: no authored content moves,
+   * so re-stamping updatedAt would claim an edit that never happened and make a
+   * freeze read like a design change in review.
+   */
   applySpecStatus(kind: SpecKind, id: string, status: SpecStatus): void {
+    const keepStamp: SaveSpecOptions = { preserveUpdatedAt: true };
     switch (kind) {
-      case 'subsystem':      { const s = this.loadSubsystemSpec(id);      if (s) this.saveSubsystemSpec({ ...s, status }); break; }
-      case 'component':      { const s = this.loadComponentSpec(id);      if (s) this.saveComponentSpec({ ...s, status }); break; }
-      case 'interface':      { const s = this.loadInterfaceSpec(id);      if (s) this.saveInterfaceSpec({ ...s, status }); break; }
-      case 'implementation': { const s = this.loadImplementationSpec(id); if (s) this.saveImplementationSpec({ ...s, status }); break; }
+      case 'subsystem':      { const s = this.loadSubsystemSpec(id);      if (s) this.saveSubsystemSpec({ ...s, status }, keepStamp); break; }
+      case 'component':      { const s = this.loadComponentSpec(id);      if (s) this.saveComponentSpec({ ...s, status }, keepStamp); break; }
+      case 'interface':      { const s = this.loadInterfaceSpec(id);      if (s) this.saveInterfaceSpec({ ...s, status }, keepStamp); break; }
+      case 'implementation': { const s = this.loadImplementationSpec(id); if (s) this.saveImplementationSpec({ ...s, status }, keepStamp); break; }
     }
   }
 

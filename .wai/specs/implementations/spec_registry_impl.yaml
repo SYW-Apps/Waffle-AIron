@@ -1,9 +1,10 @@
 id: spec_registry_impl
 name: Spec Registry Implementation
 description: >-
-  Validated write pipeline of the spec workspace: namespace relativization, updatedAt stamping,
-  writer-schema re-parse, and persistence through the file store; the dry run exercises the
-  identical pipeline in memory.
+  Validated write pipeline of the spec workspace: namespace relativization, updatedAt stamping
+  (skipped on a MECHANICAL re-save that changes no authored content — the lock's status promotion —
+  so a freeze never reads as an edit), writer-schema re-parse, and persistence through the file
+  store; the dry run exercises the identical pipeline in memory.
 contract: ispec_registry
 sourcePath: src/core/specs.ts
 methods:
@@ -11,8 +12,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Stamp updatedAt and re-parse the system spec through the writer schema — a refusal aborts
-          the save
+          Stamp updatedAt (unless the caller asked to preserve it for a mechanical re-save) and
+          re-parse the system spec through the writer schema — a refusal aborts the save
         type: local
       - stepNumber: 2
         description: Persist the serialized document to the system spec path through the file store
@@ -23,8 +24,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces for the target mount, stamp updatedAt, and re-parse
-          through the writer schema — a refusal aborts the save
+          Qualify ids, relativize namespaces for the target mount, stamp updatedAt (unless preserved
+          for a mechanical re-save), and re-parse through the writer schema — a refusal aborts the
+          save
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its subsystem spec path through the file store
@@ -35,8 +37,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces, stamp updatedAt, re-parse through the writer schema,
-          and collect placement notices for layout decisions the caller should see
+          Qualify ids, relativize namespaces, stamp updatedAt (unless preserved for a mechanical
+          re-save), re-parse through the writer schema, and collect placement notices for layout
+          decisions the caller should see
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its component spec path through the file store
@@ -47,8 +50,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces, stamp updatedAt, re-parse through the writer schema,
-          and collect placement notices
+          Qualify ids, relativize namespaces, stamp updatedAt (unless preserved for a mechanical
+          re-save), re-parse through the writer schema, and collect placement notices
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its interface spec path through the file store
@@ -59,8 +62,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces, stamp updatedAt, re-parse through the writer schema,
-          and collect placement notices
+          Qualify ids, relativize namespaces, stamp updatedAt (unless preserved for a mechanical
+          re-save), re-parse through the writer schema, and collect placement notices
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its implementation spec path through the file store
@@ -102,4 +105,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-08-12T18:07:58.971Z'
+updatedAt: '2026-08-12T20:05:24.999Z'

@@ -39,3 +39,14 @@ wairon.exe
 target/
 
 STATE.md
+
+# Derived spec-tree artifacts — regenerated from .wai/specs/, never authored.
+# `wairon diagram --all` rebuilds the whole diagram set; `wairon generate`
+# rebuilds the rest. Tracking them put ~1.3 MB of rendered output in the repo
+# and made every regeneration a commit that carried no design change.
+#
+# NOT ignored, deliberately: .wai/lock.json (the gate's record — `promote`
+# re-checks the live state against it, so a clone without it cannot promote)
+# and .wai/context/*.md (agent-facing guidance people read on GitHub).
+.wai/docs/diagrams/
+.wai/generated/
