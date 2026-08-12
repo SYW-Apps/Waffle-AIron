@@ -84,14 +84,18 @@ than "nothing is newer *for you*"), and the release page size went from 20 to
 100 — `dev` cuts a build per merge, so a page of 20 could hold nothing but
 `-dev.N` and leave a stable install seeing no eligible release at all.
 
-### Fixed: `sdd_get_status`, `sdd_validate_tree` and `listDomains` failed on the hosted data plane
+### `sdd_get_status`, `sdd_validate_tree` and `listDomains` can be exercised end to end again
 
 Four `sdd_*` tools reached their implementations through lazy
-`require('../commands/status.js')`-style calls. The server is bundled, so those
-paths resolve against a directory that holds no such file: on a hosted instance
-the tools answered `Cannot find module` instead of running — `sdd_get_status`
-returned no dashboard at all. They are now static imports, the fix already
-applied once to the spec surface (and documented there) extended to the rest.
+`require('../commands/status.js')`-style calls. Shipped builds were fine — the
+bundler inlines those — but the test runner resolves neither the `.js` specifier
+nor the path, so any test driving them through a real MCP client got `Cannot
+find module` instead of a result. They could be shipped but not proven, which is
+how the hosted data plane ended up with tools no end-to-end test covered. Now
+static imports, extending the fix already applied once to the spec surface (and
+documented there) to the rest. `context.ts`'s lazy `require('./domains.js')` —
+documented as breaking a circular dependency that does not exist — went the same
+way.
 
 ### `wairon dev` is its own local mode again — no sign-in screen, no hosted chrome
 
