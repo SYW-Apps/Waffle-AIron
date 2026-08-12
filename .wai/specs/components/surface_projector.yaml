@@ -9,6 +9,7 @@ componentType: Specialist
 owns: []
 dependsOn:
   - surfaces_core_adapter
+variant: projector
 status: complete
 createdAt: '2026-07-10T23:12:25.556Z'
-updatedAt: '2026-07-11T09:04:02.195Z'
+updatedAt: '2026-08-12T05:26:08.716Z'

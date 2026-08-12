@@ -10,6 +10,7 @@ componentType: Specialist
 owns: []
 dependsOn:
   - spec_loader
+variant: projector
 status: complete
 createdAt: '2026-07-04T12:44:46.997Z'
-updatedAt: '2026-07-04T13:06:22.736Z'
+updatedAt: '2026-08-12T05:26:11.886Z'

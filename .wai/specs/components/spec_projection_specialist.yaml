@@ -10,6 +10,7 @@ componentType: Specialist
 owns: []
 dependsOn:
   - producer_core_adapter
+variant: projector
 status: complete
 createdAt: '2026-07-04T17:29:01.496Z'
-updatedAt: '2026-07-04T17:42:04.070Z'
+updatedAt: '2026-08-12T05:26:10.201Z'

@@ -1,0 +1,55 @@
+# The four recognized Specialist shapes — named, base-anchored refinements of
+# the wildcard stereotype. Registered as variants (not stereotypes) by
+# deliberate decision (2026-08-12): a variant carries identity + implementation
+# guidance at zero rule-matrix cost. PROMOTION CRITERION: a variant earns
+# first-class stereotype status when independent projects/packs keep
+# re-registering it, or when its edge rules exceed what guidance (or a future
+# variant-scoped assertion) can express.
+- id: arbiter
+  base: Specialist
+  guidance: >-
+    A stateless ruling authority: given a subject/candidate plus an EXPLICITLY
+    SUPPLIED world of facts, compute a deterministic verdict (permit/deny,
+    visible/hidden, pass/warn/fail) together with the deciding reason. The
+    arbiter performs NO I/O and holds NO dependencies on stores, registries,
+    repositories, indexes, or adapters — the caller gathers the world and
+    passes it in (the canonical companion shape: a gather-Specialist or
+    Orchestrator assembles the facts, the arbiter rules). Same inputs MUST
+    always yield the same verdict: no clock reads, no randomness — take
+    timestamps as parameters. Declare `idempotent` on verdict methods where it
+    holds. This purity is what keeps rulings replayable, testable, and
+    auditable; if you feel the need to fetch something, that fetch belongs in
+    the caller.
+- id: projector
+  base: Specialist
+  guidance: >-
+    A stateless derivation of a self-contained view — a snapshot, graph model,
+    document tree, rendered artifact, or digest — computed on demand from a
+    source model. Load the source through AT MOST ONE read facade (a
+    Repository, or a read-only adapter of the owning subsystem), or take it
+    purely as parameters; the same source must always yield the same view.
+    Own nothing, write nothing: the caller persists or serves the result.
+    Distinct from an Index: an Index is a MAINTAINED read model over a Store
+    it shares references with; a projector is RECOMPUTED per call and owns no
+    state. If the derivation starts coordinating multiple facades or deciding
+    what to do with its output, it is drifting toward an Orchestrator — split
+    it.
+- id: composer
+  base: Specialist
+  guidance: >-
+    Renders authored text or file sets — scaffolds, briefings, composed
+    documents — from embedded templates plus supplied values, for a human or
+    connecting-agent audience. Return the composed content (e.g. an in-memory
+    file map or markdown string); NEVER write it to disk or execute it — the
+    caller owns persistence and delivery. Degrade gracefully when optional
+    inputs are missing (an absent block composes to nothing, not an error), so
+    composition never takes down the surface that serves it.
+- id: codec
+  base: Specialist
+  guidance: >-
+    A pure bidirectional translator between two formats (native model ↔ wire
+    or archive format), with validation and safety checking on the inbound
+    half (schema conformance, integrity, resource-abuse guards). Whole values
+    in, whole values out; no I/O — the bytes and the clock arrive as
+    parameters. Keep BOTH directions in one component so the round-trip stays
+    testable as a single property.

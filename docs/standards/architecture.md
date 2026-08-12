@@ -318,6 +318,23 @@ interface. They are vocabulary, **not** distinct types.
 | Scanner | `scan(scope) → findings` | Specialist |
 | Mapper / Compiler / Evaluator | one transform method | Specialist |
 
+### The four registered Specialist shapes (variants)
+
+One step above roles sit the **registered Specialist variants** — recurring shapes
+with a machine-recognized identity (`variant:` on the component, resolved against
+the variant registry) whose guidance travels into every agent brief. They exist to
+shrink the wildcard gradually: when a Specialist matches a shape, tag it, and the
+implementer inherits the shape's discipline. A variant is **promoted to a
+first-class stereotype** only when independent projects/packs keep re-registering
+it, or when its edge rules exceed what guidance can express.
+
+| Variant | Shape | Discipline (guidance-enforced) |
+|---|---|---|
+| `arbiter` | subject + supplied world → deterministic verdict + reasons | NO I/O, no state deps — the caller gathers the world (companion shape: gather-Specialist/Orchestrator → arbiter rules); no clock/randomness; `idempotent` where it holds |
+| `projector` | source model → self-contained derived view (snapshot, graph, artifact, digest) | ≤1 read facade or parameters-only; recomputed per call, owns nothing, writes nothing. NOT an Index: an Index is a maintained read model over an owned Store |
+| `composer` | templates + values → authored text/file map | returns content, never writes or executes it; degrades gracefully on missing optional inputs |
+| `codec` | format ↔ format, bidirectional | pure whole-value translation; inbound half validates + safety-checks; both directions in one component so the round-trip stays testable |
+
 **Router vs Portal vs Facade:** a **Router** selects a destination from *dynamic
 input values*; a **Portal** is the *transport* boundary that *uses* a Router/Index
 to dispatch; a **Facade** does *no* routing (the caller already chose the method).

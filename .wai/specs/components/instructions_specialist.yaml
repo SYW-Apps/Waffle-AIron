@@ -18,6 +18,7 @@ owns: []
 dependsOn:
   - skills_core_adapter
   - skills_resource_specialist
+variant: composer
 status: complete
 createdAt: '2026-07-29T10:49:01.675Z'
-updatedAt: '2026-07-29T11:56:11.946Z'
+updatedAt: '2026-08-12T05:26:20.139Z'

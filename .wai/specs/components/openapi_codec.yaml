@@ -8,8 +8,9 @@ subsystem: sdd_surfaces
 componentType: Specialist
 owns: []
 dependsOn: []
+variant: codec
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:12:27.905Z'
-updatedAt: '2026-08-11T17:06:03.200Z'
+updatedAt: '2026-08-12T05:26:21.551Z'
