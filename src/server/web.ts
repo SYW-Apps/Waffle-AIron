@@ -432,16 +432,21 @@ export function startDevSession(cfg: HostConfig): string {
     throw new Error('dev session is only available under wairon dev (devMode)');
   }
 
-  // step 3: list existing sessions for the synthetic local-developer subject.
+  // step 3: drop already-expired sessions BEFORE looking for one to reuse — an aged-out
+  // dev session must never be handed back as a dead credential (the dev UI would land
+  // on a login screen that devMode configures no login method for).
+  pruneExpiredWebSessions(cfg.dataDir, new Date().toISOString());
+
+  // step 4: list the surviving (live) sessions for the synthetic local-developer subject.
   const dev = devSubject(cfg);
   const existing = listWebSessionsBySubject(cfg.dataDir, dev.userId);
 
-  // steps 4–5: reuse an existing dev session (no churn).
+  // steps 5–6: reuse a live dev session (no churn).
   if (existing.length > 0) {
     return existing[0].id;
   }
 
-  // step 6: build a new session bound to the local-developer subject, narrowed to
+  // step 7: build a new session bound to the local-developer subject, narrowed to
   // the one local project (never instance-wide '*'); the session stores NO
   // permissions — authentication resolves them live from the subject identity.
   const session: WebSession = {
@@ -451,9 +456,9 @@ export function startDevSession(cfg: HostConfig): string {
     createdAt: '', // stamped by the registry
     expiresAt: new Date(Date.now() + DEV_SESSION_TTL_MS).toISOString(),
   };
-  const stored = createWebSession(cfg.dataDir, session); // step 7
+  const stored = createWebSession(cfg.dataDir, session); // step 8
 
-  return stored.id; // step 8
+  return stored.id; // step 9
 }
 
 /**

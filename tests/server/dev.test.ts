@@ -82,6 +82,29 @@ describe('local dev session (startDevSession) (sdd_host)', () => {
     expect(Date.parse(s.expiresAt)).toBeGreaterThan(Date.now());
   });
 
+  it('never hands back an EXPIRED dev session — it prunes it and mints a fresh live one', () => {
+    // A dev session that aged out (the TTL is 30 days, so this is what a project
+    // picked back up weeks later looks like). Reusing it would return a dead
+    // credential and strand the dev UI on a login screen devMode configures no
+    // login method for.
+    const dead = createWebSession(dataDir, {
+      id: '',
+      subject: { userId: devUserId, kind: 'human', issuer: 'local', displayName: 'Local developer' },
+      projects: ['local'],
+      createdAt: '',
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+
+    const id = startDevSession(devCfg);
+
+    expect(id).not.toBe(dead.id);
+    expect(getWebSessionById(dataDir, dead.id)).toBeNull(); // pruned, not left to rot
+    const live = listWebSessionsBySubject(dataDir, devUserId);
+    expect(live).toHaveLength(1);
+    expect(live[0].id).toBe(id);
+    expect(Date.parse(live[0].expiresAt)).toBeGreaterThan(Date.now());
+  });
+
   it('getCurrentContext returns local:true under devMode, as the instance-admin dev subject', () => {
     const id = startDevSession(devCfg);
     const ctx = getCurrentContext(devCfg, id);
@@ -243,6 +266,41 @@ describe('dev-mode HTTP wiring (routeData) (sdd_host)', () => {
     expect(JSON.parse(ctx.body).local).toBe(true);
   });
 
+  it('devMode: a GET carrying a STALE session cookie is RE-ESTABLISHED, not left unauthenticated', async () => {
+    // Session cookies are not port-scoped, so the browser can present a
+    // wairon_session from another project's dev server, a hosted instance on the
+    // same host, or an ephemeral dev data dir that was cleaned. Trusting it would
+    // 401 /web/context and strand the dev UI on a login screen that devMode
+    // configures no login method for — so the dev server overrides it.
+    await startServer(devCfg());
+    const stale = 'wairon_session=ws_deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+
+    const ctx = await raw({ method: 'GET', path: '/web/context', headers: { cookie: stale } });
+    expect(ctx.status).toBe(200); // NOT 401
+    const setCookie = String(ctx.headers['set-cookie']?.[0] ?? '');
+    expect(setCookie).toMatch(/^wairon_session=ws_[0-9a-f]+/);
+    expect(setCookie).not.toContain('deadbeef'); // the live dev session, not the stale id
+    expect(JSON.parse(ctx.body).local).toBe(true);
+
+    // The app shell gets the same repair, so a hard refresh recovers on its own.
+    const shell = await raw({ method: 'GET', path: '/', headers: { cookie: stale } });
+    expect(shell.status).toBe(200);
+    expect(String(shell.headers['set-cookie']?.[0] ?? '')).toMatch(/^wairon_session=ws_[0-9a-f]+/);
+
+    // One dev session throughout — the repair reuses, it does not churn.
+    expect(listWebSessionsBySubject(dataDir, ensureInstanceIdentity(dataDir).localDevUserId)).toHaveLength(1);
+  });
+
+  it('devMode: a GET already carrying the LIVE dev cookie re-sends no redundant Set-Cookie', async () => {
+    await startServer(devCfg());
+    const first = await raw({ method: 'GET', path: '/web/context' });
+    const sessionId = /wairon_session=(ws_[0-9a-f]+)/.exec(String(first.headers['set-cookie']?.[0] ?? ''))![1];
+
+    const again = await raw({ method: 'GET', path: '/web/context', headers: { cookie: `wairon_session=${sessionId}` } });
+    expect(again.status).toBe(200);
+    expect(again.headers['set-cookie']).toBeUndefined();
+  });
+
   it('devMode: GET /web/dev-login mints/reuses the session, sets the cookie, and 302s to /', async () => {
     await startServer(devCfg());
     const res = await raw({ method: 'GET', path: '/web/dev-login' });
@@ -273,6 +331,16 @@ describe('dev-mode HTTP wiring (routeData) (sdd_host)', () => {
     const ctx = await raw({ method: 'GET', path: '/web/context' });
     expect(ctx.status).toBe(401);
     expect(ctx.headers['set-cookie']).toBeUndefined();
+
+    // And an UNKNOWN session cookie stays a plain 401: the dev repair that
+    // overrides a stale cookie is devMode-only and never mints here.
+    const stale = await raw({
+      method: 'GET',
+      path: '/web/context',
+      headers: { cookie: 'wairon_session=ws_deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef' },
+    });
+    expect(stale.status).toBe(401);
+    expect(stale.headers['set-cookie']).toBeUndefined();
 
     // Nothing was minted the whole time.
     expect(listWebSessionsBySubject(dataDir, ensureInstanceIdentity(dataDir).localDevUserId)).toHaveLength(0);

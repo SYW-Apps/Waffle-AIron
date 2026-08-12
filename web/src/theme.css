@@ -388,6 +388,26 @@ select.input option, select.input optgroup {
 }
 .view { flex: 1; min-height: 0; overflow: auto; }
 
+/* ── Local developer shell (`wairon dev`) ─────────────────────────────────────
+   One project, loopback, no accounts: a single slim bar carrying the two local
+   surfaces (canvas + specs) replaces the hosted sidebar/topbar pair. The theme
+   cog sits IN this bar rather than floating over the canvas, so it never
+   overlaps the graph. */
+.dev-bar { gap: 10px; }
+.dev-bar .tabstrip { border-bottom: none; margin-left: 6px; }
+.dev-bar .tab { padding: 7px 13px; }
+.dev-bar .theme-cog { position: static; }
+.dev-tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+}
+
 /* ── Header account + settings menu ──────────────────────────────────────── */
 .hmenu { position: relative; }
 .hmenu-trigger {

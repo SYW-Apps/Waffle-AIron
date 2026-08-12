@@ -318,15 +318,21 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
     }
     const secureCookie = exposure.requireTls;
 
-    // DEV auto-login (strictly devMode): on a cookieless GET, transparently establish
+    // DEV auto-login (strictly devMode): on any bearerless GET, transparently establish
     // the local-developer session and install the cookie inline BEFORE dispatch, so
-    // the REUSED client lands signed-in and never sees a 401 / login screen. Excludes
-    // /web/dev-login itself (that route mints + redirects on its own). Never runs in
-    // hosted mode — so a hosted server sets no session cookie here.
+    // the REUSED client lands signed-in and never sees a 401 / login screen. The
+    // presented cookie is OVERRIDDEN rather than trusted: session cookies are not
+    // port-scoped, so a stale wairon_session from another project's dev server, a
+    // hosted instance on the same host, a wiped ephemeral dev data dir, or an expired
+    // session would otherwise resolve to nothing here and wedge the dev UI on a login
+    // screen that has no login method (devMode configures none). The mint is
+    // idempotent, so the Set-Cookie only goes out when the value actually changes.
+    // Excludes /web/dev-login itself (that route mints + redirects on its own). Never
+    // runs in hosted mode — so a hosted server sets no session cookie here.
     let sessionCredential = credential;
-    if (devMode && req.method === 'GET' && !cookie && url.pathname !== '/web/dev-login') {
+    if (devMode && req.method === 'GET' && !bearer && url.pathname !== '/web/dev-login') {
       const devSessionId = startDevSession(cfg);
-      res.setHeader('set-cookie', setSessionCookie(devSessionId, secureCookie));
+      if (devSessionId !== cookie) res.setHeader('set-cookie', setSessionCookie(devSessionId, secureCookie));
       sessionCredential = devSessionId;
     }
 

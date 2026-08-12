@@ -89,9 +89,11 @@ export async function download(path: string, fallbackName: string): Promise<void
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-/** Raw GET (no parse) — for status probes where the caller inspects res.status. */
-export function raw(path: string): Promise<Response> {
-  return request(path);
+/** Raw GET (no parse) — for status probes where the caller inspects the Response
+ *  itself (status, or `type === 'opaqueredirect'` when called with
+ *  `{ redirect: 'manual' }` to detect a redirect without following it). */
+export function raw(path: string, init: RequestInit = {}): Promise<Response> {
+  return request(path, init);
 }
 
 /**
