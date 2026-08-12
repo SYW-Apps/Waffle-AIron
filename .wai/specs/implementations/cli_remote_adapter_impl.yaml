@@ -110,6 +110,6 @@ lint:
         resolves import graphs within a single build and cannot see an HTTP edge — the same analyzer
         limitation already acknowledged for the workspace-package boundary on host_sdk_adapter_impl,
         one boundary further out.
-status: draft
+status: complete
 createdAt: '2026-08-12T18:32:35.043Z'
-updatedAt: '2026-08-12T18:48:45.293Z'
+updatedAt: '2026-08-12T19:21:57.816Z'

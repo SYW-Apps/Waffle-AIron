@@ -287,6 +287,6 @@ methods:
         type: call
         targetComponent: remote_binding_store
         targetMethod: readCredential
-status: draft
+status: complete
 createdAt: '2026-08-12T18:32:48.928Z'
-updatedAt: '2026-08-12T18:55:28.211Z'
+updatedAt: '2026-08-12T19:21:57.961Z'

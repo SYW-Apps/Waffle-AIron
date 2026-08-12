@@ -52,6 +52,6 @@ methods:
       Return the instance URLs the credential file holds entries for, sorted, with no token values —
       the safe projection `wairon remote status` and `wairon logout` (with no argument) print.
 detail: intent
-status: draft
+status: complete
 createdAt: '2026-08-12T18:43:31.843Z'
-updatedAt: '2026-08-12T18:43:31.845Z'
+updatedAt: '2026-08-12T19:21:57.891Z'
