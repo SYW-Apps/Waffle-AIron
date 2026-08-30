@@ -65,6 +65,7 @@ import {
   composeAgentBrief,
 } from '../commands/subsystem.js';
 import { describeBudget } from '../core/budget_policy.js';
+import { showExecution, setExecutionTier } from '../commands/execution.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
 cleanStaleBinary();
@@ -356,6 +357,29 @@ async function runPack(
   else if (action === 'sync') await syncPacks();
   else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | bundle | sync | add | list | remove)');
 }
+
+// ---------------------------------------------------------------------------
+// execution — the resource axis: what each agent's work costs to do
+// ---------------------------------------------------------------------------
+
+const executionCmd = program
+  .command('execution')
+  .description('Execution budgets: what each agent\'s work is like and the model/turn/tool allowance it earns');
+
+executionCmd
+  .command('show')
+  .alias('ls')
+  .description('Show the current budget tier and the derived allowance for every agent')
+  .action(async () => {
+    await showExecution();
+  });
+
+executionCmd
+  .command('set-tier <tier>')
+  .description('Set the aggressiveness dial: off | free | default | trade | aggressive')
+  .action(async (tier: string) => {
+    await setExecutionTier(tier);
+  });
 
 const rulesCmd = program
   .command('rules')

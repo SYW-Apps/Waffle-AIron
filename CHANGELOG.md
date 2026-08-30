@@ -54,6 +54,11 @@ bill by comparison.
 `sdd-delegate` applies the budget when spawning, because constituting a subagent
 correctly is part of spawning it rather than a separate concern.
 
+`wairon execution show` lists every agent's allowance with the rationale that
+produced it, so a tier choice is auditable rather than magic;
+`wairon execution set-tier <tier>` moves the dial and says what the new tier
+costs before you keep it.
+
 ### Spec trees move between local and hosted — `.waitree` archives + `wairon remote`
 
 A spec tree was stuck where it was born: a project outgrowing local had no path
