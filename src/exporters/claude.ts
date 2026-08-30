@@ -93,8 +93,25 @@ function yamlScalar(value: string): string {
   return /[:#\n]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
 }
 
+export interface ClaudeExporterOptions {
+  /**
+   * Whether this instance may emit execution-budget front-matter.
+   *
+   * The markdown SHAPE of a Claude agent file (front-matter + instruction
+   * body) is reused by the cursor/copilot/codex targets, but the budget fields
+   * are Claude Code's subagent contract specifically — `maxTurns`,
+   * `mcpServers` and `effort` mean nothing to those tools, and emitting them
+   * would put unrecognized keys in their files rather than constrain
+   * anything. Reuse the shape; keep the encoding per-tool until another
+   * tool's fields are actually verified.
+   */
+  emitBudget?: boolean;
+}
+
 export class ClaudeExporter implements Exporter {
   readonly targetType = 'claude';
+
+  constructor(private readonly options: ClaudeExporterOptions = {}) {}
 
   outputPath(ctx: Omit<ExportContext, 'renderedInstructions'>): string {
     const { agent, target, projectRoot } = ctx;
@@ -111,7 +128,7 @@ export class ClaudeExporter implements Exporter {
       `description: ${yamlScalar(agent.description)}`,
     ];
 
-    if (budget) {
+    if (budget && this.options.emitBudget) {
       // Absent modelTier means the policy deliberately expressed no choice —
       // omit the field so the agent keeps Claude Code's `inherit` default,
       // rather than baking in a tier the project did not ask for.

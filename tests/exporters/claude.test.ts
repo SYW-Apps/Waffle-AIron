@@ -27,7 +27,7 @@ instructions: |
 `;
 
 describe('ClaudeExporter', () => {
-  const exporter = new ClaudeExporter();
+  const exporter = new ClaudeExporter({ emitBudget: true });
 
   const agent = createAgentRecord({
     id: 'core-service-owner',
@@ -169,5 +169,30 @@ describe('ClaudeExporter', () => {
     for (const line of frontmatter.trim().split('\n')) {
       expect(line).toMatch(/^[a-zA-Z]+: .+$/);
     }
+  });
+
+  it('does not emit budget front-matter for targets that only reuse the markdown shape', () => {
+    // cursor/copilot/codex share ClaudeExporter for the file shape, but the
+    // budget fields are Claude Code's subagent contract. An unhonoured budget
+    // is worse than none — it reads as enforced when nothing enforces it.
+    const shapeOnly = new ClaudeExporter();
+    const content = shapeOnly.export({
+      agent,
+      template,
+      renderedInstructions: 'body',
+      projectRoot,
+      target: { type: 'cursor' as const, outputDir: '.cursor/agents', enabled: true },
+      budget: {
+        modelTier: 'small',
+        maxTurns: 25,
+        toolClass: 'implement',
+        allowNestedDelegation: false,
+        mcp: 'none',
+      },
+    }).content;
+    expect(content).toContain('name: Core Service Owner');
+    expect(content).not.toContain('model:');
+    expect(content).not.toContain('maxTurns:');
+    expect(content).not.toContain('mcpServers:');
   });
 });

@@ -54,6 +54,13 @@ bill by comparison.
 `sdd-delegate` applies the budget when spawning, because constituting a subagent
 correctly is part of spawning it rather than a separate concern.
 
+Budget front-matter is emitted for the `claude` target only. The
+`cursor`/`copilot`/`codex` targets reuse the Claude markdown shape, but the
+budget fields are Claude Code's subagent contract — writing them elsewhere
+would add keys those tools ignore rather than constraints they honour, and an
+unhonoured budget reads as enforced when nothing enforces it. A target opts in
+once its own fields are verified.
+
 `wairon execution show` lists every agent's allowance with the rationale that
 produced it, so a tier choice is auditable rather than magic;
 `wairon execution set-tier <tier>` moves the dial and says what the new tier
