@@ -64,6 +64,7 @@ import {
   runSubsystemInternalize,
   composeAgentBrief,
 } from '../commands/subsystem.js';
+import { describeBudget } from '../core/budget_policy.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
 cleanStaleBinary();
@@ -626,6 +627,13 @@ async function runAgent(action: string, id: string): Promise<void> {
       if (brief.readPaths && brief.readPaths.length > 0) {
         logger.info('Read paths:');
         for (const p of brief.readPaths) logger.info(`  ${p}`);
+      }
+      if (brief.budget && brief.profile) {
+        logger.blank();
+        logger.info('Execution budget (advisory — apply when spawning):');
+        for (const line of describeBudget(brief.profile, brief.budget)) {
+          logger.info(`  ${line.replace(/^- \*\*(.+?)\*\*: /, '$1: ')}`);
+        }
       }
       logger.blank();
       console.log(brief.instructions);

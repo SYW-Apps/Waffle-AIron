@@ -46,6 +46,7 @@ import {
   composeAgentBrief as coreComposeAgentBrief,
   resolveAgentTopology as coreResolveAgentTopology,
 } from '../core/agent_resolver.js';
+import { describeBudget } from '../core/budget_policy.js';
 import type { AgentBrief, AgentRecord } from '../models/agent.js';
 import {
   listExternalInterfaces as coreListExternalInterfaces,
@@ -486,6 +487,18 @@ function renderAgentBriefMarkdown(brief: AgentBrief): string {
   // template; carry it as its own section only when the template did not.
   if (brief.variantGuidance && !brief.instructions.includes(brief.variantGuidance)) {
     lines.push('', '## Variant guidance', '', brief.variantGuidance);
+  }
+  // Present only when the project opted into a budget tier. Advisory: the
+  // caller spawning from this brief is what actually applies it.
+  if (brief.budget && brief.profile) {
+    lines.push(
+      '',
+      '## Execution budget',
+      '',
+      ...describeBudget(brief.profile, brief.budget),
+      '',
+      'Advisory — apply these when spawning. Map the capability tier onto your host tool\'s models; a tool that cannot express a field should ignore it rather than approximate it.',
+    );
   }
   return `${lines.join('\n')}\n`;
 }

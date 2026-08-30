@@ -37,6 +37,7 @@ function defaultProjectConfig(name: string, now: string): ProjectConfig {
     name,
     projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    execution: { tier: 'off', overrides: {} },
     rules: {
       noOverlappingOwnership: true,
       requireOwnedPaths: true,

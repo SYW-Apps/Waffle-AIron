@@ -9,6 +9,51 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### Execution budgets: the topology gains a resource axis
+
+The derived topology said who owns what, and nothing about what their work costs
+to do. In a delegating workflow that gap is expensive: a subagent's `model` field
+defaults to `inherit`, so an agent file that omits it silently adopts the parent
+session's model — measured across three archived sessions of this project's own
+development, 1,860 of 2,176 subagent turns ran on the most expensive tier that
+way, and the fixed per-spawn overhead everyone worries about was under 2% of the
+bill by comparison.
+
+- **`ExecutionProfile` — what the work is like.** Derived from the topology alone
+  (no spec authoring): `breadth` from owned-path spread, `writes` from the role,
+  `reasoningDepth` from the component stereotype, `delegates` from the template.
+  The vocabulary already encoded the last one — a Store is plumbing its contract
+  and narrative fully describe, an Orchestrator carries the decisions — so
+  derivation reads the stereotype rather than inventing a second classification.
+- **`ExecutionBudget` — what that earns.** Capability *tiers* (`small`,
+  `standard`, `large`, `frontier`), never vendor model names, plus effort, a turn
+  ceiling, a tool class, nested-delegation rights and MCP access. Mapping a tier
+  onto a real model is the consumer's job, because only the consumer knows what
+  its host tool understands.
+- **A tier dial, `execution.tier`, defaulting to `off`.** `free` applies
+  structural constraints only and is defined as having no quality tradeoff at
+  all; `default` adds tier selection and turn ceilings; `trade` and `aggressive`
+  each name what they cost. Raising the dial can only tighten a budget, so it is
+  safe to turn without auditing every agent. At `off` every output is
+  byte-identical to before this existed.
+- **Both delivery paths carry it.** Generated agent files can *enforce* a budget
+  through front-matter (`model`, `effort`, `maxTurns`, `tools`, `mcpServers`);
+  a live brief can only *advise*, since the caller spawning from it is what
+  applies it. That asymmetry is deliberate — a brief is consumed by tools wairon
+  does not control. Since `materializeAgentFiles` is off by default, the brief is
+  the path most projects actually use.
+- **`frontier` is never derived.** It is reachable only by an explicit
+  per-agent override, and it is not an owner tier: treat it as a sparring partner
+  for a question the specs do not settle. An owner that genuinely needs it is
+  usually a component doing too much.
+- **`orchestrate` is not derived either.** Every agent in a wairon topology owns
+  and authors something — even a chained-subproject owner writes its mount spec —
+  so the thin no-bulk-content grant would break them rather than make them
+  cheaper. It stays selectable by override for a hand-defined manager.
+
+`sdd-delegate` applies the budget when spawning, because constituting a subagent
+correctly is part of spawning it rather than a separate concern.
+
 ### Spec trees move between local and hosted — `.waitree` archives + `wairon remote`
 
 A spec tree was stuck where it was born: a project outgrowing local had no path

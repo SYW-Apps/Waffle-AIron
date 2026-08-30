@@ -1,4 +1,5 @@
 import { AgentRecord } from '../models/agent.js';
+import { ExecutionBudget } from '../models/execution.js';
 import { TargetConfig } from '../models/project.js';
 import { Template } from '../models/template.js';
 
@@ -33,6 +34,17 @@ export interface ExportContext {
   /** Absolute path to the project root */
   projectRoot: string;
   target: TargetConfig;
+  /**
+   * The resolved execution budget for this agent, if the project has the
+   * budget tier enabled. Undefined means tier `off` — exporters must then
+   * produce byte-identical output to what they produced before budgets
+   * existed, so turning the feature on is the only thing that changes files.
+   *
+   * The budget speaks in capability TIERS. Each exporter maps those onto
+   * whatever its host tool actually understands, and silently drops any part
+   * the tool cannot express.
+   */
+  budget?: ExecutionBudget;
 }
 
 export interface ExportResult {

@@ -2,6 +2,8 @@ import * as path from 'path';
 import { AgentRecord } from '../models/agent.js';
 import { ProjectConfig, TargetConfig } from '../models/project.js';
 import { loadTemplate, composeAgentBrief } from '../core/index.js';
+import { deriveExecutionProfile } from '../core/execution_profile.js';
+import { resolveBudget } from '../core/budget_policy.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { getExporter } from './registry.js';
 import { ExportContext, ExportResult, WAIRON_MANAGED_BANNER } from './base.js';
@@ -53,6 +55,15 @@ export function generateAgent(
   const rendered = `${WAIRON_MANAGED_BANNER}\n${composeAgentBrief(agent.id).instructions}`;
   const results: ExportResult[] = [];
 
+  // The resource shape of this agent's work, read off the topology. Undefined
+  // at tier `off` (the default), in which case exporters emit exactly what
+  // they emitted before budgets existed.
+  const budget = resolveBudget(
+    deriveExecutionProfile(agent),
+    projectConfig.execution,
+    agent.id,
+  );
+
   for (const agentTarget of agent.targets) {
     const targetConfig = resolveTargetConfig(agentTarget, projectConfig);
     if (!targetConfig) continue;
@@ -62,7 +73,7 @@ export function generateAgent(
     }
     if (!options.dryRun) {
       results.push(getExporter(targetConfig).export({
-        agent, template, renderedInstructions: rendered, projectRoot, target: targetConfig,
+        agent, template, renderedInstructions: rendered, projectRoot, target: targetConfig, budget,
       }));
     }
   }

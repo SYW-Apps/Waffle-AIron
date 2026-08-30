@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ExecutionBudgetSchema, ExecutionProfileSchema } from './execution.js';
 
 // ---------------------------------------------------------------------------
 // Output target definitions
@@ -127,6 +128,22 @@ export const AgentBriefSchema = z.object({
 
   /** Rendered variant guidance, also folded into instructions */
   variantGuidance: z.string().optional(),
+
+  /**
+   * The resource shape of this agent's work, and the allowance it earns.
+   *
+   * Both are ABSENT unless the project has opted in with `execution.tier`,
+   * which is what keeps the brief useful to consumers that cannot act on it:
+   * an MCP client with no subagents — or a host tool that cannot express a
+   * model choice — simply never sees these fields.
+   *
+   * Where generated agent files can ENFORCE a budget through front-matter,
+   * a brief can only ADVISE: the caller spawning from this brief is the one
+   * that picks the model and tool grant. That asymmetry is deliberate, not a
+   * gap — a brief is consumed by tools wairon does not control.
+   */
+  profile: ExecutionProfileSchema.optional(),
+  budget: ExecutionBudgetSchema.optional(),
 });
 
 export type AgentBrief = z.infer<typeof AgentBriefSchema>;
