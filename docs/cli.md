@@ -55,6 +55,31 @@ can emit, default severities, and any per-project overrides from
 rule is a self-contained module in `src/core/rules/`. Rules injected by
 extension packs are listed too, tagged with their pack.
 
+### `wairon execution show` (alias `ls`) / `wairon execution set-tier <tier>`
+Execution budgets — the resource axis of the derived topology. Where authority
+says which paths an agent owns, a budget says what its work costs to do:
+a capability tier, a reasoning effort, a turn ceiling, a tool class, and
+whether it may delegate further or load MCP servers.
+
+`show` lists every agent's allowance next to the rationale that produced it
+(component stereotype, owned-path breadth, role), so a tier choice is auditable
+rather than magic. It also flags any agent an override has pinned to the
+`frontier` tier — derivation never selects it.
+
+`set-tier` moves the aggressiveness dial and states what the new tier costs:
+
+| Tier | What it does |
+|------|--------------|
+| `off` (default) | No budgets derived. Output is byte-identical to before this feature existed. |
+| `free` | Structural constraints only — tool class, MCP access, nested delegation. No model or effort selection, so no quality tradeoff at all. |
+| `default` | Adds capability-tier selection per role and turn ceilings. Mechanical work (Store, Index, Registry, Adapter) runs smaller; work carrying decisions (Orchestrator, Supervisor, Specialist) keeps the capable tier. |
+| `trade` | Adds effort reduction on mechanical work and steps standard work down a tier. Real but bounded quality cost. |
+| `aggressive` | Small tier for everything but deep reasoning, halved turn ceilings. Expect partial results and worse judgment. |
+
+Raising the dial can only tighten a budget, so it is safe to turn without
+auditing every agent. Per-agent overrides live in `.wai/project.yaml` under
+`execution.overrides`.
+
 ### `wairon packs list | add <source> [--global] | remove <name> [--global]`
 Extension packs — plain config files (YAML, or a JS module for programmatic
 rules) injecting custom profiles, language/platform tables, and conformance
