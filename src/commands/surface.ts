@@ -115,12 +115,14 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
     }
 
     case 'generate-children': {
+      // Only CHANGED paths come back — an empty list means every delivered
+      // surface already matched, which is not the same as having no children.
       const written = generateChildSnapshots();
       if (!written.length) {
-        logger.info('No chained child projects found — nothing to generate.');
+        logger.info('Delivered surfaces are already up to date — nothing rewritten.');
         return;
       }
-      logger.success(`Wrote the family surface into ${written.length} chained child project(s):`);
+      logger.success(`Updated ${written.length} delivered surface(s):`);
       for (const p of written) logger.info(`  ${p}`);
       return;
     }

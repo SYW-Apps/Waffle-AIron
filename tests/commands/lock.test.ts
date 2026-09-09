@@ -210,12 +210,32 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, child surfaces',
 
     const { stdout } = await runCli(rootDir, '--no-recursive');
 
-    expect(stdout).toContain('Regenerated the family/sibling surfaces');
+    expect(stdout).toContain('Updated');
+    expect(stdout).toContain('delivered surface(s)');
     const surfacesDir = path.join(rootDir, 'packages', 'kid', '.wai', 'surfaces');
     expect(fs.existsSync(surfacesDir)).toBe(true);
-    expect(fs.readdirSync(surfacesDir).length).toBeGreaterThan(0);
+    const delivered = fs.readdirSync(surfacesDir);
+    expect(delivered.length).toBeGreaterThan(0);
     const record = JSON.parse(fs.readFileSync(path.join(rootDir, '.wai', 'lock.json'), 'utf8'));
     expect(record.status).toBe('ready');
+
+    // A second lock over an unchanged tree must not rewrite a single delivered
+    // surface: the projection stamps fresh provenance every run, and writing
+    // that unconditionally is what buried real spec edits under a flood of
+    // modified files in git.
+    const before = delivered.map((f) => {
+      const p = path.join(surfacesDir, f);
+      return { f, bytes: fs.readFileSync(p, 'utf8'), mtime: fs.statSync(p).mtimeMs };
+    });
+
+    const second = await runCli(rootDir, '--no-recursive');
+    expect(second.stdout).not.toContain('delivered surface(s)');
+
+    for (const { f, bytes, mtime } of before) {
+      const p = path.join(surfacesDir, f);
+      expect(fs.readFileSync(p, 'utf8')).toBe(bytes);
+      expect(fs.statSync(p).mtimeMs).toBe(mtime);
+    }
   }, 180_000);
 
   it('does NOT regenerate child surfaces when the tree mounts no chained children', async () => {

@@ -197,10 +197,13 @@ async function runLock(options: LockOptions): Promise<void> {
 
   // --- A locked parent ships fresh surfaces: regenerate the family and
   // sibling snapshots into every chained child (no-op when none are mounted).
+  // Every delivered surface is re-projected, but only the ones whose published
+  // contract actually moved are rewritten — a lock that changed one subsystem
+  // should not show every child's whole surface set as modified in git.
   const childPaths = generateChildSnapshots();
   if (childPaths.length > 0) {
     logger.blank();
-    logger.success(`Regenerated the family/sibling surfaces into ${childPaths.length} chained child snapshot(s):`);
+    logger.success(`Updated ${childPaths.length} delivered surface(s) in the chained children:`);
     for (const p of childPaths) logger.info(`  ${p}`);
   }
 

@@ -320,12 +320,47 @@ function snapshotFilename(projectName: string): string {
   return `${safeFilenamePart(projectName)}.yaml`;
 }
 
-export function saveSnapshot(snapshot: SurfaceSnapshot, rootDir: string = getProjectRoot()): string {
+/**
+ * Write a snapshot only when its CONTENT differs from what is already on disk.
+ *
+ * Every projection stamps a fresh `generatedAt` and the tree's current
+ * `stateId`, so an unconditional write rewrites the bytes of every delivered
+ * surface on every lock — even when the published contract is identical. On a
+ * tree with several chained children that is (children × subsystems) files
+ * showing as modified in git after a lock that changed one subsystem, which
+ * buries the specs the human actually edited.
+ *
+ * Provenance is exactly what `surfaceContentKey` strips, and it is also what
+ * the SURFACE_STALE gate already ignores: staleness is judged on content, so a
+ * file whose content still matches is not stale and does not need rewriting.
+ */
+function writeSnapshotIfChanged(
+  snapshot: SurfaceSnapshot,
+  rootDir: string,
+): { path: string; changed: boolean } {
   const dir = surfacesDir(rootDir);
   fs.mkdirSync(dir, { recursive: true });
   const p = path.join(dir, snapshotFilename(snapshot.projectName));
-  writeYamlFile(p, SurfaceSnapshotSchema.parse(snapshot));
-  return p;
+  const next = SurfaceSnapshotSchema.parse(snapshot);
+
+  if (fs.existsSync(p)) {
+    try {
+      const existing = SurfaceSnapshotSchema.parse(readYamlFile(p));
+      if (surfaceContentKey(existing) === surfaceContentKey(next)) {
+        return { path: p, changed: false };
+      }
+    } catch {
+      // Unreadable or written by an older schema — rewrite it rather than
+      // leaving something the loader cannot parse.
+    }
+  }
+
+  writeYamlFile(p, next);
+  return { path: p, changed: true };
+}
+
+export function saveSnapshot(snapshot: SurfaceSnapshot, rootDir: string = getProjectRoot()): string {
+  return writeSnapshotIfChanged(snapshot, rootDir).path;
 }
 
 export function removeSnapshot(projectName: string, rootDir: string = getProjectRoot()): boolean {
@@ -491,16 +526,24 @@ export function generateChildSnapshots(rootDir: string = getProjectRoot()): stri
     }
     return snap;
   };
+  // Only CHANGED paths are reported. Every delivered surface is re-projected
+  // on every call (so a contract change can never be missed), but one whose
+  // content still matches is left untouched — regenerating everything and
+  // writing only what moved is both safer than scoping the regeneration and
+  // quieter than rewriting the lot.
   const written: string[] = [];
+  const record = (r: { path: string; changed: boolean }): void => {
+    if (r.changed) written.push(r.path);
+  };
   for (const child of children) {
     const childDir = path.resolve(rootDir, child.projectPath!);
     if (!fs.existsSync(childDir)) continue;
-    written.push(saveSnapshot(familySnapshot, childDir));
+    record(writeSnapshotIfChanged(familySnapshot, childDir));
     // Per-sibling delivery: every OTHER subsystem's published surface (the
     // child's own mount excluded — it does not consume itself).
     for (const sibling of topLevel) {
       if (sibling.id === child.id) continue;
-      written.push(saveSnapshot(siblingSurface(sibling.id), childDir));
+      record(writeSnapshotIfChanged(siblingSurface(sibling.id), childDir));
     }
   }
   return written;

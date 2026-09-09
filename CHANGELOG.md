@@ -9,6 +9,33 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### `wairon lock` no longer floods git with rewritten surfaces
+
+A lock scoped to one subsystem still showed every chained child's entire
+surface set as modified. The specs actually edited were buried under files
+whose *content* had not changed at all.
+
+Three things compounded. `generateChildSnapshots` ships the family surface plus
+**every** sibling subsystem's published surface into **every** chained child, so
+the delivered set is (children x subsystems) files. It takes no scope, so
+`--subsystem` never narrowed it. And each projection stamps a fresh
+`generatedAt` and the tree's current `stateId`, which an unconditional
+`writeYamlFile` then wrote — so every one of those files changed bytes on every
+lock regardless of whether a contract moved.
+
+- **Delivered surfaces are now written only when their content differs.**
+  Provenance (`generatedAt`, `stateId`, `origin`) is exactly what
+  `surfaceContentKey` already strips, and exactly what the SURFACE_STALE gate
+  already ignores — staleness is judged on content, so a surface whose content
+  still matches is not stale and does not need rewriting.
+- **Scoping was the wrong fix and is not applied.** Every delivered surface is
+  still re-projected on every lock, so a contract change can never be missed;
+  only the ones that actually moved are written. That is safer than narrowing
+  the regeneration, which could leave a stale surface behind.
+- `wairon surface generate-children` and the lock summary now report what was
+  *updated* rather than what was visited, and an empty result reads as "already
+  up to date" instead of the previous, wrong "no chained child projects found".
+
 ### Execution budgets: the topology gains a resource axis
 
 The derived topology said who owns what, and nothing about what their work costs
