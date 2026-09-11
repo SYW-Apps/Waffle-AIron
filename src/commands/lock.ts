@@ -1,13 +1,16 @@
 import * as os from 'os';
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
-import { captureBaseline, writeBaseline, diffAgainstBaseline, diffSize } from '../core/baseline.js';
+import {
+  captureBaseline, writeBaseline, diffAgainstBaseline, diffSize, currentChildPins, movedChildren,
+} from '../core/baseline.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import * as path from 'path';
 import {
   computeGateStateId,
   writeLockRecord,
   specPathsInScope,
+  loadSubsystemSpecs,
   type LockRecord,
 } from '../core/index.js';
 import { getProjectRoot } from '../utils/fs.js';
@@ -63,6 +66,17 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
     for (const p of diff.added) logger.info(`  + ${p}`);
     for (const p of diff.removed) logger.info(`  - ${p}`);
   }
+  // A chained child's own edits never show up in the parent's spec diff — the
+  // trees are approved separately. What the parent reviews is the child MOVING:
+  // its approval shifting away from the one this parent pinned.
+  const moved = movedChildren(loadSubsystemSpecs());
+  if (moved.length > 0) {
+    logger.info(`${moved.length} chained child project(s) moved since the last approval:`);
+    for (const m of moved) {
+      logger.info(`  ${m.id}: ${m.pinned.slice(0, 19)}… → ${m.now ? `${m.now.slice(0, 19)}…` : '(no approval)'}`);
+    }
+  }
+
   logger.blank();
   logger.warn('This records the current design as approved and (re)generates the agent topology.');
 
@@ -130,6 +144,6 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
       ),
     }
     : undefined;
-  writeBaseline(captureBaseline(lockedBy, {}, root, scope));
+  writeBaseline(captureBaseline(lockedBy, currentChildPins(loadSubsystemSpecs(), root), root, scope));
   return record;
 }

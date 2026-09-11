@@ -222,3 +222,50 @@ export function settledSpecPaths(root: string = getProjectRoot()): Set<string> |
   const diff = diffAgainstBaseline(root);
   return diff ? new Set(diff.unchangedPaths) : null;
 }
+
+/** Render a StateId the way a child pin stores it. */
+export function pinOf(stateId: StateId): string {
+  return `${stateId.algorithm}:${stateId.digest}`;
+}
+
+/**
+ * The approved StateId of every chained child mounted under this root, keyed by
+ * mount id — what a parent approval PINS.
+ *
+ * A child with no approval of its own contributes no pin: the parent can only
+ * record a decision the child's owner actually made.
+ */
+export function currentChildPins(
+  mounts: { id: string; projectPath?: string }[],
+  root: string = getProjectRoot(),
+): Record<string, string> {
+  const pins: Record<string, string> = {};
+  for (const mount of mounts) {
+    if (!mount.projectPath || mount.id.includes('::')) continue;
+    const childRoot = path.resolve(root, mount.projectPath);
+    const child = readBaseline(childRoot);
+    if (child) pins[mount.id] = pinOf(child.stateId);
+  }
+  return pins;
+}
+
+/**
+ * Chained children whose own approval has moved away from what the parent
+ * pinned. This is the parent-side review signal that a child edit is supposed
+ * to produce — and the reason a child edit does NOT dirty the parent's own
+ * spec diff: the two are separate decisions, and only this one crosses.
+ */
+export function movedChildren(
+  mounts: { id: string; projectPath?: string }[],
+  root: string = getProjectRoot(),
+): { id: string; pinned: string; now: string | null }[] {
+  const baseline = readBaseline(root);
+  if (!baseline) return [];
+  const now = currentChildPins(mounts, root);
+  const moved: { id: string; pinned: string; now: string | null }[] = [];
+  for (const [id, pinned] of Object.entries(baseline.children)) {
+    const current = now[id] ?? null;
+    if (current !== pinned) moved.push({ id, pinned, now: current });
+  }
+  return moved;
+}

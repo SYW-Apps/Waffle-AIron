@@ -11,7 +11,7 @@ import {
   getLoaderIssues,
   scanAllSpecs,
 } from '../core/specs.js';
-import { readBaseline, diffAgainstBaseline, diffSize } from '../core/baseline.js';
+import { readBaseline, diffAgainstBaseline, diffSize, movedChildren } from '../core/baseline.js';
 
 export interface StatusOptions {
   subsystem?: string;
@@ -208,9 +208,17 @@ function lockLine(): string {
     const baseline = readBaseline();
     if (!baseline) return '';
 
+    // A moved chained child is a change the parent should review even when none
+    // of the parent's OWN specs shifted — the trees are approved separately, and
+    // this pin is the only thing that crosses between them.
+    const moved = movedChildren(loadSubsystemSpecs());
+    const childNote = moved.length
+      ? `\n${moved.length} chained child project(s) moved since approval: ${moved.map((m) => m.id).join(', ')}.`
+      : '';
+
     const diff = diffAgainstBaseline();
     if (!diff || diffSize(diff) === 0) {
-      return `\nApproved: ${baseline.approvedAt} by ${baseline.approvedBy} — no spec has changed since.\n`;
+      return `\nApproved: ${baseline.approvedAt} by ${baseline.approvedBy} — no spec has changed since.${childNote}\n`;
     }
 
     const parts: string[] = [];
@@ -227,6 +235,7 @@ function lockLine(): string {
       + `— approved ${baseline.approvedAt} by ${baseline.approvedBy}:\n`
       + named.map((p) => `  ${p}`).join('\n')
       + (rest > 0 ? `\n  … and ${rest} more` : '')
+      + childNote
       + '\n';
   } catch {
     return ''; // never let a report line break the report

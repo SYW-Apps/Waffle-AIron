@@ -9,7 +9,7 @@ import {
 } from '../../src/core/specs.js';
 import {
   captureBaseline, writeBaseline, readBaseline, clearBaseline,
-  diffAgainstBaseline, diffSize, baselineDir,
+  diffAgainstBaseline, diffSize, baselineDir, currentChildPins, movedChildren, pinOf,
 } from '../../src/core/baseline.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
 
@@ -184,6 +184,56 @@ describe('approval baseline', () => {
     expect(clearBaseline()).toBe(true);
     expect(readBaseline()).toBeNull();
     expect(clearBaseline()).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Child pins — the one thing that crosses between separately-approved trees.
+  // -------------------------------------------------------------------------
+
+  it('pins only children that have an approval of their own', () => {
+    root = project();
+    const childRoot = path.join(root, 'packages', 'billing');
+    fs.mkdirSync(path.join(childRoot, '.wai'), { recursive: true });
+
+    const mounts = [{ id: 'billing', projectPath: 'packages/billing' }];
+    // The child has never been approved — a parent cannot record a decision
+    // its owner never made.
+    expect(currentChildPins(mounts, root)).toEqual({});
+
+    // Give the child its own approval.
+    const childBaseline = { ...captureBaseline('local:child'), projectRoot: path.resolve(childRoot) };
+    writeBaseline(childBaseline);
+
+    const pins = currentChildPins(mounts, root);
+    expect(pins.billing).toBe(pinOf(childBaseline.stateId));
+  });
+
+  it('a child moving is visible to the parent WITHOUT dirtying the parent diff', () => {
+    root = project();
+    const childRoot = path.join(root, 'packages', 'billing');
+    fs.mkdirSync(path.join(childRoot, '.wai'), { recursive: true });
+    const mounts = [{ id: 'billing', projectPath: 'packages/billing' }];
+
+    // Child approved, then the parent approves and pins it.
+    const first = { ...captureBaseline('local:child'), projectRoot: path.resolve(childRoot) };
+    writeBaseline(first);
+    writeBaseline(captureBaseline('local:parent', currentChildPins(mounts, root), root));
+    expect(movedChildren(mounts, root)).toEqual([]);
+
+    // The child re-approves at a different state.
+    const second = {
+      ...first,
+      stateId: { ...first.stateId, digest: 'f'.repeat(64) },
+    };
+    writeBaseline(second);
+
+    const moved = movedChildren(mounts, root);
+    expect(moved).toHaveLength(1);
+    expect(moved[0].id).toBe('billing');
+    expect(moved[0].now).toBe(pinOf(second.stateId));
+
+    // …and the parent's OWN spec diff is untouched by it.
+    expect(diffSize(diffAgainstBaseline()!)).toBe(0);
   });
 
   it('records the gate identity and who approved it', () => {
