@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSystemSpec, saveSubsystemSpec, saveComponentSpec, updateSpec,
+  saveSystemSpec, saveSubsystemSpec, saveComponentSpec, updateSpec, loadComponentSpecs,
   deleteComponentSpec, invalidateSpecCache,
 } from '../../src/core/specs.js';
 import {
@@ -158,13 +158,93 @@ describe('approval baseline', () => {
     }
   });
 
-  it('carries child pins, so a parent can review a child moving without being dirtied by it', () => {
+  it('carries child pins as metadata, not as local changes', () => {
     root = project();
     const rec = captureBaseline('local:tester', { billing: 'sha256:abc123' });
     writeBaseline(rec);
 
     expect(readBaseline()!.children).toEqual({ billing: 'sha256:abc123' });
-    // The pin is metadata about a child; it does not appear as a local change.
+    expect(diffSize(diffAgainstBaseline()!)).toBe(0);
+  });
+
+  it('excludes a REAL chained child’s specs — a child edit must not dirty the parent', () => {
+    // Regression. `snapshotSpecFiles` federates recursively, so the parent
+    // baseline captured every child spec file: approving the parent silently
+    // froze work it does not own, and any child edit showed up in the parent's
+    // diff — the exact thing the child PIN exists to replace. The earlier test
+    // used a fake pin with no mounted child, so it could not see this.
+    root = project();
+
+    // A real mount: the parent subsystem carries projectPath, and the child has
+    // its own spec tree on disk underneath it.
+    saveSubsystemSpec({
+      id: 'billing', name: 'billing', description: 'a chained billing domain',
+      parentSystem: 'baseline-sys', publicInterfaces: [], trustedLinks: [],
+      projectPath: 'packages/billing',
+      status: 'draft', createdAt: now, updatedAt: now,
+    } as SubsystemSpec);
+    const childSpecs = path.join(root, 'packages', 'billing', '.wai', 'specs');
+    fs.mkdirSync(path.join(childSpecs, 'subsystems'), { recursive: true });
+    fs.mkdirSync(path.join(childSpecs, 'components'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'packages', 'billing', '.wai', 'project.yaml'), JSON.stringify({
+      schemaVersion: '1.0.0', name: 'billing-sys', projectType: 'backend',
+      targets: [], rules: {}, createdAt: now, updatedAt: now,
+    }));
+    const stamp = `createdAt: '${now}'
+updatedAt: '${now}'`;
+    fs.writeFileSync(path.join(childSpecs, '.index.yaml'),
+      `schemaVersion: 1.0.0
+name: billing-sys
+vision: the child system
+${stamp}
+`);
+    fs.writeFileSync(path.join(childSpecs, 'subsystems', 'ledger.yaml'),
+      `schemaVersion: 1.0.0
+id: ledger
+name: ledger
+description: the child ledger domain
+parentSystem: billing-sys
+${stamp}
+`);
+    // A COMPONENT is what makes the child appear in the federated spec index —
+    // snapshotSpecFiles pulls from index.paths, not from raw directories.
+    const childComp = path.join(childSpecs, 'components', 'ledger_store.yaml');
+    fs.writeFileSync(childComp,
+      `schemaVersion: 1.0.0
+id: ledger_store
+name: Ledger Store
+description: the child store
+subsystem: ledger
+componentType: Store
+dependsOn: []
+owns: []
+${stamp}
+`);
+    invalidateSpecCache();
+
+    // Sanity: the child IS federated into the parent's index, so this fixture
+    // genuinely exercises the recursion the bug rode on.
+    expect(loadComponentSpecs().some((c) => c.id.includes('ledger_store'))).toBe(true);
+
+    writeBaseline(captureBaseline('local:tester'));
+
+    // No child path was captured…
+    const approved = Object.keys(readBaseline()!.specs);
+    expect(approved.some((p) => p.includes('packages/billing'))).toBe(false);
+
+    // …and editing the child leaves the parent's diff empty.
+    fs.writeFileSync(childComp,
+      `schemaVersion: 1.0.0
+id: ledger_store
+name: Ledger Store
+description: the child store, revised
+subsystem: ledger
+componentType: Store
+dependsOn: []
+owns: []
+${stamp}
+`);
+    invalidateSpecCache();
     expect(diffSize(diffAgainstBaseline()!)).toBe(0);
   });
 

@@ -3,7 +3,9 @@ import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { getProjectRoot, ensureDir, pathExists } from '../utils/fs.js';
-import { computeGateStateId, snapshotSpecFiles, loadSystemSpec } from './specs.js';
+import {
+  computeGateStateId, snapshotSpecFiles, loadSystemSpec, loadSubsystemSpecs,
+} from './specs.js';
 import type { StateId } from './statehash.js';
 
 // ---------------------------------------------------------------------------
@@ -120,10 +122,21 @@ export function clearBaseline(root: string = getProjectRoot()): boolean {
 
 /** The current spec tree as relative-path → content, the shape a baseline stores. */
 function currentSpecs(root: string): Record<string, string> {
+  // `snapshotSpecFiles` federates recursively (`scanAll` defaults to
+  // `recursive: true`), so it returns every chained child's specs too. A parent
+  // baseline must not contain them: the trees are approved separately, so
+  // capturing a child's specs here would mean a parent approval silently
+  // freezes work the parent does not own — and every child edit would dirty
+  // the parent's diff, which is exactly what the child PIN exists to replace.
+  const mountDirs = loadSubsystemSpecs()
+    .filter((s) => s.projectPath && !s.id.includes('::'))
+    .map((s) => `${path.resolve(root, s.projectPath as string).split(path.sep).join('/')}/`);
+
   const out: Record<string, string> = {};
   for (const [abs, content] of snapshotSpecFiles()) {
-    const rel = path.relative(root, abs).replace(/\\/g, '/');
-    out[rel] = content;
+    const normalized = path.resolve(abs).split(path.sep).join('/');
+    if (mountDirs.some((dir) => normalized.startsWith(dir))) continue;
+    out[path.relative(root, abs).split(path.sep).join('/')] = content;
   }
   return out;
 }
