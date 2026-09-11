@@ -255,8 +255,21 @@ function reg<Args extends Record<string, unknown>>(
     if (result.isError !== true && SPEC_WRITE_TOOLS.has(name)) listChangedEmitters.get(server)?.();
     return result;
   };
+  // A raw shape is parsed by the SDK as a NON-strict z.object, which silently
+  // DROPS any key it does not know. A caller writing `dependson` instead of
+  // `dependsOn` was told "Successfully added" while nothing was set, and the
+  // tree validated clean afterwards because nothing had changed — the write
+  // never happened and nothing said so.
+  //
+  // Handing the SDK a strict object instead refuses the unknown key by name.
+  // It also tightens the advertised JSON Schema to additionalProperties:false,
+  // which steers a model away from inventing the field in the first place —
+  // cheaper than catching it after the fact.
+  const strictConfig = config.inputSchema
+    ? { ...config, inputSchema: z.object(config.inputSchema).strict() }
+    : config;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (server as any).registerTool(name, config, guarded as any);
+  (server as any).registerTool(name, strictConfig as any, guarded as any);
 }
 
 // ---------------------------------------------------------------------------

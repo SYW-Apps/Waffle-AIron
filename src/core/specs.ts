@@ -2022,6 +2022,38 @@ export class SpecWorkspace {
       );
     }
 
+    // A delta key the canonical schema does not know is a typo, not a field.
+    // The delta arrives as a permissive z.record, so an unknown key sails
+    // through the tool boundary, gets merged into the spec object, and is then
+    // stripped by the spec schema on write — leaving "Successfully updated",
+    // an unchanged tree, and a clean validate. `dependson` for `dependsOn` was
+    // reported exactly this way: the edit never happened and nothing said so.
+    const deltaSchema = {
+      system: SystemSpecSchema,
+      subsystem: SubsystemSpecSchema,
+      component: ComponentSpecSchema,
+      interface: InterfaceSpecSchema,
+      implementation: ImplementationSpecSchema,
+      type: TypeSpecSchema,
+    }[kind];
+    const knownKeys = new Set(Object.keys(deltaSchema.shape));
+    // `unset` is a delta-only verb, not a spec field.
+    knownKeys.add('unset');
+    const unknownKeys = Object.keys(delta ?? {}).filter((k) => !knownKeys.has(k));
+    if (unknownKeys.length > 0) {
+      const near = (k: string): string => {
+        const norm = k.toLowerCase().replace(/[_\-\s]/g, '');
+        const hit = [...knownKeys].find((v) => v.toLowerCase().replace(/[_\-\s]/g, '') === norm);
+        return hit ? ` (did you mean "${hit}"?)` : '';
+      };
+      throw new Error(
+        `Refusing to update ${kind} "${id}": unknown field(s) `
+        + `${unknownKeys.map((k) => `"${k}"${near(k)}`).join(', ')}. `
+        + 'An unknown key is dropped on write, so the edit would report success and change nothing. '
+        + `Known fields: ${[...knownKeys].sort().join(', ')}.`,
+      );
+    }
+
     // Flow-step jump fields relocate with renumbering, exactly like an
     // assembler relocating addresses: inserts/deletes shift every jump field
     // in the SAME narrative that points at or beyond the mutation point.
