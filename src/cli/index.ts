@@ -63,6 +63,8 @@ import {
   runSubsystemInternalize,
   composeAgentBrief,
 } from '../commands/subsystem.js';
+import { describeBudget } from '../core/budget_policy.js';
+import { showExecution, setExecutionTier } from '../commands/execution.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
 cleanStaleBinary();
@@ -194,10 +196,13 @@ async function runLock(options: LockOptions): Promise<void> {
 
   // --- A locked parent ships fresh surfaces: regenerate the family and
   // sibling snapshots into every chained child (no-op when none are mounted).
+  // Every delivered surface is re-projected, but only the ones whose published
+  // contract actually moved are rewritten — a lock that changed one subsystem
+  // should not show every child's whole surface set as modified in git.
   const childPaths = generateChildSnapshots();
   if (childPaths.length > 0) {
     logger.blank();
-    logger.success(`Regenerated the family/sibling surfaces into ${childPaths.length} chained child snapshot(s):`);
+    logger.success(`Updated ${childPaths.length} delivered surface(s) in the chained children:`);
     for (const p of childPaths) logger.info(`  ${p}`);
   }
 
@@ -354,6 +359,29 @@ async function runPack(
   else if (action === 'sync') await syncPacks();
   else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | bundle | sync | add | list | remove)');
 }
+
+// ---------------------------------------------------------------------------
+// execution — the resource axis: what each agent's work costs to do
+// ---------------------------------------------------------------------------
+
+const executionCmd = program
+  .command('execution')
+  .description('Execution budgets: what each agent\'s work is like and the model/turn/tool allowance it earns');
+
+executionCmd
+  .command('show')
+  .alias('ls')
+  .description('Show the current budget tier and the derived allowance for every agent')
+  .action(async () => {
+    await showExecution();
+  });
+
+executionCmd
+  .command('set-tier <tier>')
+  .description('Set the aggressiveness dial: off | free | default | trade | aggressive')
+  .action(async (tier: string) => {
+    await setExecutionTier(tier);
+  });
 
 const rulesCmd = program
   .command('rules')
@@ -625,6 +653,13 @@ async function runAgent(action: string, id: string): Promise<void> {
       if (brief.readPaths && brief.readPaths.length > 0) {
         logger.info('Read paths:');
         for (const p of brief.readPaths) logger.info(`  ${p}`);
+      }
+      if (brief.budget && brief.profile) {
+        logger.blank();
+        logger.info('Execution budget (advisory — apply when spawning):');
+        for (const line of describeBudget(brief.profile, brief.budget)) {
+          logger.info(`  ${line.replace(/^- \*\*(.+?)\*\*: /, '$1: ')}`);
+        }
       }
       logger.blank();
       console.log(brief.instructions);

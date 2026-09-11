@@ -551,6 +551,9 @@ function buildProjectConfig(
     name,
     projectType,
     targets,
+    // New projects start with budgets off — the same output a project got
+    // before execution budgets existed. Opt in with `execution.tier`.
+    execution: { tier: 'off', overrides: {} },
     rules: {
       noOverlappingOwnership: true,
       requireOwnedPaths: true,

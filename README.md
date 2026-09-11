@@ -192,6 +192,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 - [Hosted server](docs/design/hosted-mcp-server.md) — self-host wairon over HTTP (Docker, auth, sizing)
 - [Pack scoping](docs/design/pack-scoping.md) — the pack store, per-project selection, and reproducibility (design)
 - [Connecting-agent entrypoint](docs/design/connecting-agent-entrypoint.md) — MCP `instructions`, prompts, and skill composition
+- [Execution budgets](docs/design/execution-budgets.md) — what each agent's work costs to do, derived alongside what it owns (design)
 - [Approval baselines](docs/design/approval-baseline.md) — what `lock` approves, and why it stopped rewriting your spec tree (design)
 - [Extending wairon](docs/extending-wairon.md) — extension packs & wrapper products (with a [working example](examples/wrapper/))
 - [Templates](docs/templates.md) — agent rendering templates

@@ -9,6 +9,90 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### `wairon lock` no longer floods git with rewritten surfaces
+
+A lock scoped to one subsystem still showed every chained child's entire
+surface set as modified. The specs actually edited were buried under files
+whose *content* had not changed at all.
+
+Three things compounded. `generateChildSnapshots` ships the family surface plus
+**every** sibling subsystem's published surface into **every** chained child, so
+the delivered set is (children x subsystems) files. It takes no scope, so
+`--subsystem` never narrowed it. And each projection stamps a fresh
+`generatedAt` and the tree's current `stateId`, which an unconditional
+`writeYamlFile` then wrote — so every one of those files changed bytes on every
+lock regardless of whether a contract moved.
+
+- **Delivered surfaces are now written only when their content differs.**
+  Provenance (`generatedAt`, `stateId`, `origin`) is exactly what
+  `surfaceContentKey` already strips, and exactly what the SURFACE_STALE gate
+  already ignores — staleness is judged on content, so a surface whose content
+  still matches is not stale and does not need rewriting.
+- **Scoping was the wrong fix and is not applied.** Every delivered surface is
+  still re-projected on every lock, so a contract change can never be missed;
+  only the ones that actually moved are written. That is safer than narrowing
+  the regeneration, which could leave a stale surface behind.
+- `wairon surface generate-children` and the lock summary now report what was
+  *updated* rather than what was visited, and an empty result reads as "already
+  up to date" instead of the previous, wrong "no chained child projects found".
+
+### Execution budgets: the topology gains a resource axis
+
+The derived topology said who owns what, and nothing about what their work costs
+to do. In a delegating workflow that gap is expensive: a subagent's `model` field
+defaults to `inherit`, so an agent file that omits it silently adopts the parent
+session's model — measured across three archived sessions of this project's own
+development, 1,860 of 2,176 subagent turns ran on the most expensive tier that
+way, and the fixed per-spawn overhead everyone worries about was under 2% of the
+bill by comparison.
+
+- **`ExecutionProfile` — what the work is like.** Derived from the topology alone
+  (no spec authoring): `breadth` from owned-path spread, `writes` from the role,
+  `reasoningDepth` from the component stereotype, `delegates` from the template.
+  The vocabulary already encoded the last one — a Store is plumbing its contract
+  and narrative fully describe, an Orchestrator carries the decisions — so
+  derivation reads the stereotype rather than inventing a second classification.
+- **`ExecutionBudget` — what that earns.** Capability *tiers* (`small`,
+  `standard`, `large`, `frontier`), never vendor model names, plus effort, a turn
+  ceiling, a tool class, nested-delegation rights and MCP access. Mapping a tier
+  onto a real model is the consumer's job, because only the consumer knows what
+  its host tool understands.
+- **A tier dial, `execution.tier`, defaulting to `off`.** `free` applies
+  structural constraints only and is defined as having no quality tradeoff at
+  all; `default` adds tier selection and turn ceilings; `trade` and `aggressive`
+  each name what they cost. Raising the dial can only tighten a budget, so it is
+  safe to turn without auditing every agent. At `off` every output is
+  byte-identical to before this existed.
+- **Both delivery paths carry it.** Generated agent files can *enforce* a budget
+  through front-matter (`model`, `effort`, `maxTurns`, `tools`, `mcpServers`);
+  a live brief can only *advise*, since the caller spawning from it is what
+  applies it. That asymmetry is deliberate — a brief is consumed by tools wairon
+  does not control. Since `materializeAgentFiles` is off by default, the brief is
+  the path most projects actually use.
+- **`frontier` is never derived.** It is reachable only by an explicit
+  per-agent override, and it is not an owner tier: treat it as a sparring partner
+  for a question the specs do not settle. An owner that genuinely needs it is
+  usually a component doing too much.
+- **`orchestrate` is not derived either.** Every agent in a wairon topology owns
+  and authors something — even a chained-subproject owner writes its mount spec —
+  so the thin no-bulk-content grant would break them rather than make them
+  cheaper. It stays selectable by override for a hand-defined manager.
+
+`sdd-delegate` applies the budget when spawning, because constituting a subagent
+correctly is part of spawning it rather than a separate concern.
+
+Budget front-matter is emitted for the `claude` target only. The
+`cursor`/`copilot`/`codex` targets reuse the Claude markdown shape, but the
+budget fields are Claude Code's subagent contract — writing them elsewhere
+would add keys those tools ignore rather than constraints they honour, and an
+unhonoured budget reads as enforced when nothing enforces it. A target opts in
+once its own fields are verified.
+
+`wairon execution show` lists every agent's allowance with the rationale that
+produced it, so a tier choice is auditable rather than magic;
+`wairon execution set-tier <tier>` moves the dial and says what the new tier
+costs before you keep it.
+
 ### `wairon lock` stopped rewriting your spec tree
 
 Approving used to ratchet every spec's `status` from `draft` to `complete` on

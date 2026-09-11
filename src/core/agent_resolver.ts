@@ -5,6 +5,8 @@ import { loadProjectConfig, AI_PATHS, loadTopologyConfig } from '../config/loade
 import { getProjectRoot, pathExists } from '../utils/fs.js';
 import { WaironError } from '../utils/errors.js';
 import { loadTemplate, loadAgentOverride, renderTemplateInstructions } from './templates.js';
+import { deriveExecutionProfile } from './execution_profile.js';
+import { resolveBudget } from './budget_policy.js';
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -506,6 +508,13 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     instructions = `${instructions.trimEnd()}\n\n## Project guidance\n\n${guidance.trim()}\n`;
   }
 
+  // The resource axis, resolved from the same live topology as the rest of the
+  // brief. Absent at tier `off` (the default), so a consumer that never opted
+  // in sees exactly the brief it saw before budgets existed.
+  const config = loadProjectConfig();
+  const profile = deriveExecutionProfile(record);
+  const budget = resolveBudget(profile, config.execution, record.id);
+
   return {
     agentId: record.id,
     name: record.name,
@@ -515,5 +524,7 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     readPaths: record.readPaths,
     instructions,
     variantGuidance: record.variantGuidance || undefined,
+    profile: budget ? profile : undefined,
+    budget,
   };
 }

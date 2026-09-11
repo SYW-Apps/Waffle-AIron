@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CustomTargetSchema } from './agent.js';
+import { ExecutionConfigSchema } from './execution.js';
 
 // ---------------------------------------------------------------------------
 // Project configuration — lives at .wai/project.yaml
@@ -272,6 +273,16 @@ export const ProjectConfigSchema = z.object({
   targets: z.array(TargetConfigSchema).default([]),
 
   rules: RulesConfigSchema.default({}),
+
+  /**
+   * Execution budgets — the RESOURCE axis of the derived topology. Controls
+   * whether generated agent files carry model/effort/turn/tool constraints in
+   * addition to their authority scope.
+   *
+   * Defaults to tier `off`, so adding this feature changes no existing
+   * project's generated output until it is deliberately turned on.
+   */
+  execution: ExecutionConfigSchema.default({ tier: 'off', overrides: {} }),
 
   /**
    * Extension packs — wairon's plugin surface. Each entry is a relative path

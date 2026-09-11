@@ -13,7 +13,7 @@ import { TemplateNotFoundError } from '../../src/utils/errors.js';
 // scope fields (ownedPaths/readPaths/domainRoot), never a generated file.
 // ---------------------------------------------------------------------------
 
-function createTempProject() {
+function createTempProject(execution?: Record<string, unknown>) {
   invalidateSpecCache();
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-brief-test-'));
 
@@ -25,6 +25,9 @@ function createTempProject() {
     projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {},
+    // Omitted entirely unless a test opts in, so the default path exercises
+    // tier `off` exactly as an existing project would.
+    ...(execution ? { execution } : {}),
     createdAt: '2026-08-08T10:00:00Z',
     updatedAt: '2026-08-08T10:00:00Z',
   }));
@@ -91,6 +94,72 @@ describe('composeAgentBrief (live delegation briefs)', () => {
       expect(brief.instructions).toContain('**Alpha Owner**');
       expect(brief.instructions).toContain('.wai/specs/subsystems/alpha.yaml');
       expect(brief.instructions).not.toContain('{{ownedPaths}}');
+    } finally { proj.cleanup(); }
+  });
+
+
+  // -------------------------------------------------------------------------
+  // Execution budget on the brief
+  //
+  // The brief is the delivery path that actually runs in a default wairon
+  // project (materializeAgentFiles is off), so the budget has to reach it —
+  // advisory there, since the CALLER spawning from the brief is what applies
+  // it. Absent unless the project opted in, which is the MCP opt-in.
+  // -------------------------------------------------------------------------
+
+  const SUB = [
+    'schemaVersion: 1.0.0',
+    'id: alpha',
+    'name: Alpha',
+    'description: d',
+    'parentSystem: TestSystem',
+  ].join('\n');
+
+  it('carries no budget or profile when the project has not opted in', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', SUB);
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('alpha-owner');
+      expect(brief.budget).toBeUndefined();
+      expect(brief.profile).toBeUndefined();
+    } finally { proj.cleanup(); }
+  });
+
+  it('carries budget and profile once the project sets an execution tier', () => {
+    const proj = createTempProject({ tier: 'default', overrides: {} });
+    proj.writeSpec('subsystem', 'alpha', SUB);
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('alpha-owner');
+      expect(brief.profile?.delegates).toBe(true);
+      expect(brief.budget?.modelTier).toBe('large');
+      expect(brief.budget?.toolClass).toBe('implement');
+      expect(brief.profile?.rationale).toBeTruthy();
+    } finally { proj.cleanup(); }
+  });
+
+  it('never derives the frontier tier — it is reachable only by explicit override', () => {
+    const proj = createTempProject({ tier: 'aggressive', overrides: {} });
+    proj.writeSpec('subsystem', 'alpha', SUB);
+    proj.activate();
+    try {
+      expect(composeAgentBrief('alpha-owner').budget?.modelTier).not.toBe('frontier');
+      expect(composeAgentBrief('system-architect').budget?.modelTier).not.toBe('frontier');
+    } finally { proj.cleanup(); }
+  });
+
+  it('honours a per-agent override from project config', () => {
+    const proj = createTempProject({
+      tier: 'default',
+      overrides: { 'alpha-owner': { modelTier: 'frontier' } },
+    });
+    proj.writeSpec('subsystem', 'alpha', SUB);
+    proj.activate();
+    try {
+      expect(composeAgentBrief('alpha-owner').budget?.modelTier).toBe('frontier');
+      // Siblings are untouched by another agent's override.
+      expect(composeAgentBrief('system-architect').budget?.modelTier).toBe('large');
     } finally { proj.cleanup(); }
   });
 
