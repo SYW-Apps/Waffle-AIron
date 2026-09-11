@@ -2062,6 +2062,72 @@ export class SpecWorkspace {
       return refs;
     };
 
+    // -----------------------------------------------------------------------
+    // Delta intent guards
+    //
+    // Every keyed array here upserts: find by identity, merge if found, else
+    // append. That makes a MISADDRESSED delta indistinguishable from an
+    // addition — editing `compile_manifest_body` when the contract says
+    // `compileManifestBody` silently added a fourth method, and the only
+    // signal was an UNEXPECTED_IMPLEMENTATION_METHOD warning at a later
+    // validate (a warning, not an error, while the spec is draft).
+    //
+    // The same shape made malformed delete markers silent no-ops: `action:
+    // "remove"` or `remove: "true"` match no delete branch, get stripped on
+    // write, and the caller is told it succeeded while nothing was removed.
+    //
+    // Genuine additions still append — refusing those would make update_spec
+    // unable to add anything. What is refused is the pair of cases that can
+    // only be mistakes: an identity that near-misses an existing one, and a
+    // delete that addressed nothing.
+    // -----------------------------------------------------------------------
+
+    /** Identity with case and separators removed — how a near-miss is spotted. */
+    const normalizeIdentity = (k: unknown): string =>
+      String(k ?? '').toLowerCase().replace(/[_\-\s]/g, '');
+
+    /** Refuse markers that look like a delete but match no delete branch. */
+    const assertDeltaMarkers = (item: any, label: string): void => {
+      if (!item || typeof item !== 'object') return;
+      if ('remove' in item && typeof item.remove !== 'boolean') {
+        throw new Error(
+          `Refusing to update ${label}: "remove" must be the boolean true, got ${JSON.stringify(item.remove)}. `
+          + 'A non-boolean is ignored, which would leave the element in place while reporting success.',
+        );
+      }
+      if ('action' in item && item.action !== 'add' && item.action !== 'delete') {
+        throw new Error(
+          `Refusing to update ${label}: unknown action ${JSON.stringify(item.action)} — expected "add" or "delete". `
+          + 'An unknown verb is ignored, which would leave the element in place while reporting success.',
+        );
+      }
+    };
+
+    /**
+     * An unmatched delta element is an addition — unless it is a delete that
+     * addressed nothing, or its identity differs from an existing one only by
+     * case or separators, which is a typo far more often than a sibling.
+     */
+    const assertUnmatchedIsAnAddition = (
+      deltaItem: any, key: unknown, existingKeys: unknown[], label: string,
+    ): void => {
+      if (deltaItem?.remove === true || deltaItem?.action === 'delete') {
+        throw new Error(
+          `Refusing to delete ${label} "${String(key)}": nothing with that identity exists. `
+          + (existingKeys.length ? `Present: ${existingKeys.map(String).join(', ')}.` : 'The collection is empty.'),
+        );
+      }
+      const near = existingKeys.find(
+        (k) => String(k) !== String(key) && normalizeIdentity(k) === normalizeIdentity(key),
+      );
+      if (near !== undefined) {
+        throw new Error(
+          `Refusing to add ${label} "${String(key)}": "${String(near)}" already exists and differs only in case or `
+          + 'separators. Use the existing identity to edit it, or pick a name that is not a near-duplicate.',
+        );
+      }
+    };
+
     const mergeNarrative = (existingSteps: any[], deltaSteps: any[]): any[] => {
       let steps = [...existingSteps];
       const sortedDeltas = [...deltaSteps].sort((a, b) => a.stepNumber - b.stepNumber);
@@ -2157,6 +2223,7 @@ export class SpecWorkspace {
     const mergeMethods = (existingMethods: any[], deltaMethods: any[]): any[] => {
       const merged = [...existingMethods];
       for (const deltaMethod of deltaMethods) {
+        assertDeltaMarkers(deltaMethod, `method "${deltaMethod?.name}"`);
         const idx = merged.findIndex(m => m.name === deltaMethod.name);
         if (idx !== -1) {
           if (deltaMethod.remove === true || deltaMethod.action === 'delete') {
@@ -2176,9 +2243,8 @@ export class SpecWorkspace {
             };
           }
         } else {
-          if (deltaMethod.remove !== true && deltaMethod.action !== 'delete') {
-            merged.push(deltaMethod);
-          }
+          assertUnmatchedIsAnAddition(deltaMethod, deltaMethod.name, merged.map(m => m.name), 'method');
+          merged.push(deltaMethod);
         }
       }
       return merged;
@@ -2187,6 +2253,7 @@ export class SpecWorkspace {
     const mergeNamedArray = (existing: any[], delta: any[]): any[] => {
       const merged = [...existing];
       for (const deltaItem of delta) {
+        assertDeltaMarkers(deltaItem, `entry "${deltaItem?.name}"`);
         const idx = merged.findIndex(item => item.name === deltaItem.name);
         if (idx !== -1) {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
@@ -2199,9 +2266,8 @@ export class SpecWorkspace {
             };
           }
         } else {
-          if (deltaItem.remove !== true && deltaItem.action !== 'delete') {
-            merged.push(deltaItem);
-          }
+          assertUnmatchedIsAnAddition(deltaItem, deltaItem.name, merged.map(i => i.name), 'entry');
+          merged.push(deltaItem);
         }
       }
       return merged;
@@ -2214,6 +2280,7 @@ export class SpecWorkspace {
     const mergeKeyedArray = (existing: any[], delta: any[], keyOf: (item: any) => string): any[] => {
       const merged = [...existing];
       for (const deltaItem of delta) {
+        assertDeltaMarkers(deltaItem, `entry "${keyOf(deltaItem)}"`);
         const idx = merged.findIndex(item => keyOf(item) === keyOf(deltaItem));
         if (idx !== -1) {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
@@ -2221,7 +2288,8 @@ export class SpecWorkspace {
           } else {
             merged[idx] = { ...merged[idx], ...deltaItem };
           }
-        } else if (deltaItem.remove !== true && deltaItem.action !== 'delete') {
+        } else {
+          assertUnmatchedIsAnAddition(deltaItem, keyOf(deltaItem), merged.map(keyOf), 'entry');
           merged.push(deltaItem);
         }
       }
@@ -2231,6 +2299,8 @@ export class SpecWorkspace {
     const mergePublicInterfaces = (existing: any[], delta: any[]): any[] => {
       const merged = [...existing];
       for (const deltaItem of delta) {
+        const piKey = (i: any) => `${i?.component}.${i?.interface}`;
+        assertDeltaMarkers(deltaItem, `publicInterface "${piKey(deltaItem)}"`);
         const idx = merged.findIndex(item => item.component === deltaItem.component && item.interface === deltaItem.interface);
         if (idx !== -1) {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
@@ -2242,9 +2312,8 @@ export class SpecWorkspace {
             };
           }
         } else {
-          if (deltaItem.remove !== true && deltaItem.action !== 'delete') {
-            merged.push(deltaItem);
-          }
+          assertUnmatchedIsAnAddition(deltaItem, piKey(deltaItem), merged.map(piKey), 'publicInterface');
+          merged.push(deltaItem);
         }
       }
       return merged;
@@ -2294,11 +2363,21 @@ export class SpecWorkspace {
         const idx = key === null
           ? -1
           : merged.findIndex((item) => identityKeyOf(field, item) === key);
+        assertDeltaMarkers(deltaItem, `${field} entry "${String(key)}"`);
         const isDelete = deltaItem?.remove === true || deltaItem?.action === 'delete';
         if (idx !== -1) {
           if (isDelete) merged.splice(idx, 1);
           else merged[idx] = { ...merged[idx], ...deltaItem };
-        } else if (!isDelete) {
+        } else {
+          // An element with no resolvable identity cannot near-miss anything;
+          // only the phantom-delete guard is meaningful for it.
+          if (key !== null) {
+            assertUnmatchedIsAnAddition(
+              deltaItem, key, merged.map((i) => identityKeyOf(field, i)).filter((k) => k !== null), field,
+            );
+          } else if (isDelete) {
+            throw new Error(`Refusing to delete a ${field} entry with no resolvable identity.`);
+          }
           merged.push(deltaItem);
         }
       }
