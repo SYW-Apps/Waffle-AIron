@@ -161,8 +161,10 @@ describe('lock records an approval; status reports what moved since (real CLI)',
 
     const { stdout, stderr } = await run(root, 'status');
     const out = `${stdout}\n${stderr}`;
-    expect(out).toMatch(/1 spec\(s\) changed since approval/);
-    expect(out).toMatch(/1 changed/);
+    // Singular, and with no redundant "(1 changed)" breakdown — one category
+    // says it once.
+    expect(out).toMatch(/1 spec changed since approval/);
+    expect(out).not.toMatch(/\(1 changed\)/);
     expect(out).toMatch(/worker/);
     // The old banner is gone for good.
     expect(out).not.toContain('STALE');
