@@ -1,6 +1,7 @@
 import * as os from 'os';
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
+import { captureBaseline, writeBaseline } from '../core/baseline.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import {
   collectPromotableSpecs,
@@ -113,5 +114,13 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
     status: 'ready',
   };
   writeLockRecord(record);
+
+  // Record WHAT was approved, not just that something was. The lock record
+  // carries an identity, which can only ever answer "did anything move?"; the
+  // baseline carries the tree, so `wairon status` can name the specs that
+  // moved and a human can review a change instead of a banner.
+  //
+  // Written outside the working tree, so approving adds nothing to `git status`.
+  writeBaseline(captureBaseline(lockedBy));
   return record;
 }

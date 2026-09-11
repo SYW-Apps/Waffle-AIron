@@ -1,0 +1,156 @@
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { setProjectRoot } from '../../src/utils/fs.js';
+import {
+  saveSystemSpec, saveSubsystemSpec, saveComponentSpec, invalidateSpecCache,
+} from '../../src/core/specs.js';
+import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
+
+// ---------------------------------------------------------------------------
+// lock → status, end to end through the real CLI.
+//
+// The behaviour this replaces: `wairon status` printed `Lock: STALE` on a tree
+// validating 0 errors / 0 warnings — a banner that named nothing and asked for
+// work producing no new information. With the approved tree kept as a baseline,
+// the same line names the specs that actually moved.
+//
+// It also pins the property the whole design turns on: approving writes NOTHING
+// into the project. The flood of rewritten files was the original complaint.
+// ---------------------------------------------------------------------------
+
+const execFileP = promisify(execFile);
+const REPO_ROOT = path.resolve(__dirname, '..', '..');
+const TSX_CLI = path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+const WAIRON_CLI = path.join(REPO_ROOT, 'src', 'cli', 'index.ts');
+const now = '2026-09-11T10:00:00Z';
+
+function buildProject(root: string): void {
+  fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), JSON.stringify({
+    schemaVersion: '1.0.0', name: 'approve-sys', projectType: 'backend',
+    targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    rules: {}, createdAt: now, updatedAt: now,
+  }));
+  setProjectRoot(root);
+  saveSystemSpec({
+    schemaVersion: '1.0.0', name: 'approve-sys', vision: 'an approval fixture',
+    boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+  });
+  saveSubsystemSpec({
+    id: 'dom', name: 'dom', description: 'the approval domain',
+    parentSystem: 'approve-sys', publicInterfaces: [], trustedLinks: [],
+    status: 'draft', createdAt: now, updatedAt: now,
+  } as SubsystemSpec);
+  saveComponentSpec({
+    id: 'worker', name: 'Worker', description: 'a worker component',
+    subsystem: 'dom', componentType: 'Specialist', dependsOn: [], owns: [],
+    status: 'draft', createdAt: now, updatedAt: now,
+  } as ComponentSpec);
+  invalidateSpecCache();
+  setProjectRoot(null);
+}
+
+/** Every file under a directory as relPath → content, for byte-exact comparison. */
+function snapshotDir(dir: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const walk = (d: string): void => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else out.set(path.relative(dir, p).replace(/\\/g, '/'), fs.readFileSync(p, 'utf8'));
+    }
+  };
+  walk(dir);
+  return out;
+}
+
+describe('lock records an approval; status reports what moved since (real CLI)', () => {
+  let root: string;
+  let store: string;
+
+  beforeEach(() => {
+    store = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-astore-'));
+  });
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    for (const d of [root, store]) {
+      try { if (d) fs.rmSync(d, { recursive: true, force: true }); } catch { /* win locks */ }
+    }
+  });
+
+  const run = (cwd: string, ...args: string[]) =>
+    execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, ...args], {
+      cwd,
+      timeout: 180_000,
+      env: { ...process.env, WAIRON_BASELINE_DIR: store },
+    });
+
+  it('says nothing about approval before there is one', async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approve-'));
+    buildProject(root);
+
+    const { stdout } = await run(root, 'status');
+    expect(stdout).not.toMatch(/approval/i);
+    expect(stdout).not.toContain('STALE');
+  }, 180_000);
+
+  it('captures the approval OUTSIDE the project — no new or removed files', async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approve-'));
+    buildProject(root);
+
+    const specsDir = path.join(root, '.wai', 'specs');
+    const before = snapshotDir(specsDir);
+
+    await run(root, 'lock', '--yes');
+
+    // The approved tree landed in the baseline store, not the repo.
+    expect(fs.readdirSync(store)).toHaveLength(1);
+    expect(snapshotDir(root).has('.wai/baseline.json')).toBe(false);
+
+    // The spec FILE SET is untouched by approving.
+    const after = snapshotDir(specsDir);
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+
+    // Byte-identity is NOT asserted yet: `promoteAllComplete` still ratchets
+    // every spec's `status: draft → complete` during lock, which is the other
+    // half of the working-tree churn and goes next — it needs an authored
+    // `draft` flag to replace what the ratchet was standing in for.
+  }, 180_000);
+
+  it('reports no change right after approving', async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approve-'));
+    buildProject(root);
+    await run(root, 'lock', '--yes');
+
+    const { stdout } = await run(root, 'status');
+    expect(stdout).toMatch(/no spec has changed since/i);
+    expect(stdout).not.toContain('STALE');
+  }, 180_000);
+
+  it('names the spec that moved instead of asserting staleness', async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approve-'));
+    buildProject(root);
+    await run(root, 'lock', '--yes');
+
+    // Edit one component spec on disk.
+    const compPath = path.join(root, '.wai', 'specs', 'dom', 'worker', '.index.yaml');
+    const target = fs.existsSync(compPath)
+      ? compPath
+      : path.join(root, '.wai', 'specs', 'components', 'worker.yaml');
+    fs.writeFileSync(target, fs.readFileSync(target, 'utf8').replace(/description:.*/, 'description: an edited worker component'));
+
+    const { stdout, stderr } = await run(root, 'status');
+    const out = `${stdout}\n${stderr}`;
+    expect(out).toMatch(/1 spec\(s\) changed since approval/);
+    expect(out).toMatch(/1 changed/);
+    expect(out).toMatch(/worker/);
+    // The old banner is gone for good.
+    expect(out).not.toContain('STALE');
+  }, 180_000);
+});

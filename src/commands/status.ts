@@ -10,8 +10,8 @@ import {
   loadImplementationSpecs,
   getLoaderIssues,
   scanAllSpecs,
-  readLockState,
 } from '../core/specs.js';
+import { readBaseline, diffAgainstBaseline, diffSize } from '../core/baseline.js';
 
 export interface StatusOptions {
   subsystem?: string;
@@ -178,12 +178,12 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
     }
   }
 
-  // The same lock verdict the MCP report carries — the CLI is where a human
-  // actually looks, so it must not be the surface that stays quiet.
+  // The same approval verdict the MCP report carries — the CLI is where a
+  // human actually looks, so it must not be the surface that stays quiet.
   const lock = lockLine().trim();
   if (lock) {
     logger.blank();
-    if (lock.includes('STALE')) logger.warn(lock);
+    if (lock.includes('changed since approval')) logger.warn(lock);
     else logger.info(lock);
   }
 
@@ -191,23 +191,43 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
 }
 
 /**
- * The project's lock state, reported here because staleness used to surface in
- * exactly one place — the hosted promote gate — so a voided lock was invisible
- * until someone tried to promote. A frozen design is a fact about the project;
- * `status` is where a human looks for those.
+ * What has changed since the human last approved this tree.
  *
- * Silent for a project that was never locked: absence of a freeze is the normal
- * state, not news.
+ * This used to report the lock's StateId verdict, which could only ever say
+ * `STALE` — a banner that fired on a tree validating 0 errors / 0 warnings,
+ * named nothing to look at, and asked for work that produced no new
+ * information. With the approved tree stored as a baseline, the same line can
+ * name the specs that actually moved, which is the only form a human can act
+ * on.
+ *
+ * Silent for a project that was never approved: absence of an approval is the
+ * normal state of a tree still being designed, not news.
  */
 function lockLine(): string {
   try {
-    const { state, record } = readLockState();
-    if (state === 'unlocked') return '';
-    if (state === 'locked') {
-      return `\nLock: FROZEN at ${record!.lockedAt} by ${record!.lockedBy} (wairon ${record!.validatorVersion}).\n`;
+    const baseline = readBaseline();
+    if (!baseline) return '';
+
+    const diff = diffAgainstBaseline();
+    if (!diff || diffSize(diff) === 0) {
+      return `\nApproved: ${baseline.approvedAt} by ${baseline.approvedBy} — no spec has changed since.\n`;
     }
-    return `\nLock: STALE — the specs or the governing doctrine changed since ${record!.lockedAt}, `
-      + 'so this lock no longer holds and promotion will refuse it. Re-run `wairon lock` to freeze the current state.\n';
+
+    const parts: string[] = [];
+    if (diff.changed.length) parts.push(`${diff.changed.length} changed`);
+    if (diff.added.length) parts.push(`${diff.added.length} added`);
+    if (diff.removed.length) parts.push(`${diff.removed.length} removed`);
+
+    // Name a few, then say how many more — enough to orient without becoming
+    // the wall of text the old banner was trying not to be.
+    const named = [...diff.changed, ...diff.added, ...diff.removed].slice(0, 5);
+    const rest = diffSize(diff) - named.length;
+
+    return `\n${diffSize(diff)} spec(s) changed since approval (${parts.join(', ')}) `
+      + `— approved ${baseline.approvedAt} by ${baseline.approvedBy}:\n`
+      + named.map((p) => `  ${p}`).join('\n')
+      + (rest > 0 ? `\n  … and ${rest} more` : '')
+      + '\n';
   } catch {
     return ''; // never let a report line break the report
   }
