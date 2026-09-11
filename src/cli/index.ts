@@ -15,7 +15,7 @@ import { runLock as lockTree } from '../commands/lock.js';
 import type { LockOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete } from '../commands/validate.js';
 import { assertProjectInitialized, loadProjectConfig, loadRegistry, AI_PATHS } from '../config/loader.js';
-import { pathExists, writeFile } from '../utils/fs.js';
+import { pathExists, writeFile, getProjectRoot } from '../utils/fs.js';
 import { runList } from '../commands/list.js';
 import { runShow } from '../commands/show.js';
 import { runMcpServe, runMcpInstall, runMcpStatus } from '../commands/mcp.js';
@@ -46,6 +46,16 @@ import {
 } from '../commands/host.js';
 import { runProduce } from '../commands/produce.js';
 import { runSurface, generateChildSnapshots } from '../commands/surface.js';
+import {
+  runRemote,
+  runLogin,
+  runLogout,
+  resolveTarget,
+  validateAttached,
+  statusAttached,
+  lockAttached,
+  storedCredentialFor,
+} from '../commands/remote.js';
 import {
   runSubsystemAdd,
   runSubsystemMove,
@@ -203,14 +213,66 @@ async function runLock(options: LockOptions): Promise<void> {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Attached-checkout routing (cli_runner)
+//
+// A checkout ATTACHED to a hosted project has no local spec tree, so the three
+// commands that read one run against the hosted tree instead. Everything else
+// stays honestly local: a command that needs files on disk keeps failing with
+// guidance to `wairon remote pull` rather than silently doing nothing.
+// ---------------------------------------------------------------------------
+
+/** cli_runner.runLock — hosted when attached, else the local freeze. */
+async function lockCommand(opts: { yes?: boolean; subsystem?: string; recursive?: boolean }): Promise<void> {
+  const target = resolveTarget(getProjectRoot(), {});
+  if (target) {
+    const outcome = await lockAttached(target);
+    logger.success(`Hosted lock of "${target.projectId}" on ${target.url}: ${outcome}`);
+    return;
+  }
+  await runLock({ yes: opts.yes, subsystem: opts.subsystem, recursive: opts.recursive });
+}
+
+/** cli_runner.runValidate — hosted when attached, else the local validation. */
+async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursive?: boolean }): Promise<void> {
+  const target = resolveTarget(getProjectRoot(), {});
+  if (target) {
+    const report = (await validateAttached(target, opts.subsystem)) as {
+      valid?: boolean;
+      errors?: { code: string; message: string; specId?: string }[];
+      warnings?: { code: string; message: string; specId?: string }[];
+    };
+    const errors = report.errors ?? [];
+    const warnings = report.warnings ?? [];
+    logger.info(`Validated "${target.projectId}" on ${target.url} — ${errors.length} error(s), ${warnings.length} warning(s).`);
+    for (const e of errors) logger.error(`  [${e.code}] ${e.specId ? `${e.specId}: ` : ''}${e.message}`);
+    for (const w of warnings) logger.warn(`  [${w.code}] ${w.specId ? `${w.specId}: ` : ''}${w.message}`);
+    // Exit non-zero exactly as a local run would, so CI gates identically.
+    if (errors.length || (opts.ci && warnings.length)) process.exit(1);
+    return;
+  }
+  await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive });
+}
+
+/** cli_runner.runStatus — hosted when attached, else the local dashboard. */
+async function statusCommand(opts: { subsystem?: string; recursive?: boolean }): Promise<void> {
+  const target = resolveTarget(getProjectRoot(), {});
+  if (target) {
+    logger.info(`Status of "${target.projectId}" on ${target.url}:`);
+    process.stdout.write(`${await statusAttached(target, opts.subsystem)}\n`);
+    return;
+  }
+  await runStatus({ subsystem: opts.subsystem, recursive: opts.recursive });
+}
+
 program
   .command('lock')
-  .description('Final check before implementation: validate the spec tree as complete, freeze all specs to complete, and (re)generate the agent topology — only if it validates')
+  .description('Final check before implementation: validate the spec tree as complete, freeze all specs to complete, and (re)generate the agent topology — only if it validates. In an attached checkout, locks the hosted project instead.')
   .option('-y, --yes', 'skip the confirmation prompt (for scripts / CI)')
   .option('--subsystem <id>', 'only lock specs in the specified subsystem')
   .option('--no-recursive', 'do not recursively validate subprojects')
   .action(async (opts) => {
-    await runLock({ yes: opts.yes, subsystem: opts.subsystem, recursive: opts.recursive });
+    await lockCommand(opts);
   });
 
 // ---------------------------------------------------------------------------
@@ -224,7 +286,7 @@ program
   .option('--subsystem <id>', 'only validate the specified subsystem (granular)')
   .option('--no-recursive', 'do not recursively validate subprojects')
   .action(async (opts) => {
-    await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive });
+    await validateCommand(opts);
   });
 
 // ---------------------------------------------------------------------------
@@ -237,7 +299,7 @@ program
   .option('--subsystem <id>', 'only show status for the specified subsystem')
   .option('--no-recursive', 'do not recursively show status for subprojects')
   .action(async (opts) => {
-    await runStatus({ subsystem: opts.subsystem, recursive: opts.recursive });
+    await statusCommand(opts);
   });
 
 // ---------------------------------------------------------------------------
@@ -656,8 +718,23 @@ mcpCmd
   .option('--global', 'install into the global/home config instead of the project (respects CLAUDE_CONFIG_DIR / GEMINI_CONFIG_DIR)')
   .option('--config-dir <path>', "explicit config dir to install into (validated for the agent; requires --backend). Reliable alternative to relying on the shell's CLAUDE_CONFIG_DIR")
   .option('--backend <type>', 'target AI assistant: claude | gemini (aliases: agy, antigravity → gemini)')
+  .option('--hosted <url>', 'register a HOSTED entry against this instance instead of the local stdio server')
+  .option('--project <id>', 'hosted: the project the agent should be bound to')
+  .option('--token <token>', 'hosted: the bearer to carry (else the credential stored by `wairon login`)')
   .action(async (opts) => {
-    await runMcpInstall({ global: opts.global, configDir: opts.configDir, backend: opts.backend });
+    // Resolve the credential HERE (the config adapter may not read the
+    // credential store) so `wairon login` once is enough to wire an agent.
+    const hostedToken = opts.hosted
+      ? (opts.token ?? storedCredentialFor(String(opts.hosted).replace(/\/+$/, '')) ?? undefined)
+      : undefined;
+    await runMcpInstall({
+      global: opts.global,
+      configDir: opts.configDir,
+      backend: opts.backend,
+      hostedUrl: opts.hosted,
+      hostedProject: opts.project,
+      hostedToken,
+    });
   });
 
 mcpCmd
@@ -701,6 +778,50 @@ program
       source: opts.source,
       origin: opts.origin,
       portal: opts.portal,
+    });
+  });
+
+// ---------------------------------------------------------------------------
+// remote — migrate a spec tree between this checkout and a hosted instance
+// ---------------------------------------------------------------------------
+
+program
+  .command('login <url>')
+  .description('store a bearer credential for a hosted instance on this machine')
+  .option('--token <token>', 'the bearer credential (else WAIRON_REMOTE_TOKEN) — mint one in the hosted UI under Tokens')
+  .option('--project <id>', 'verify the credential against this project before storing it')
+  .action(async (url: string, opts) => {
+    await runLogin(url, { token: opts.token, project: opts.project });
+  });
+
+program
+  .command('logout [url]')
+  .description('forget a stored credential for a hosted instance (local only — does NOT revoke it), or list what is stored')
+  .action(async (url: string | undefined) => {
+    await runLogout(url, {});
+  });
+
+program
+  .command('remote <action>')
+  .description('hosted instance: push | pull (migrate a spec tree) · attach | detach | status (bind this checkout)')
+  .option('--url <url>', 'hosted instance base URL (else WAIRON_REMOTE_URL)')
+  .option('--project <id>', 'hosted project id, optionally qualified as project::subsystem (else WAIRON_REMOTE_PROJECT)')
+  .option('--token <token>', 'bearer credential (else WAIRON_REMOTE_TOKEN) — mint one in the hosted UI under Tokens')
+  .option('--unit <id>', 'push: create the destination project first, owned by this organization unit')
+  .option('--force', 'replace an authored spec tree at the destination (it is backed up first)')
+  .option('--include-derived', 'push: pack regenerable artifacts (diagrams, generated topology) too')
+  .option('--archive <path>', 'also write the transferred archive to this path (file or directory)')
+  .option('--dir <path>', 'pull: the local project root to import into (default: this project)')
+  .action(async (action: string, opts) => {
+    await runRemote(action, {
+      url: opts.url,
+      project: opts.project,
+      token: opts.token,
+      unit: opts.unit,
+      force: opts.force,
+      includeDerived: opts.includeDerived,
+      archive: opts.archive,
+      dir: opts.dir,
     });
   });
 
@@ -941,7 +1062,7 @@ program
   .command('update')
   .description('Check and install the latest wairon release')
   .option('--check', 'only check for updates without installing')
-  .option('--channel <name>', 'switch release channel (stable|beta|preview)')
+  .option('--channel <name>', 'switch release channel (stable|beta|preview|dev)')
   .action(async (opts) => {
     await runUpdate({ check: opts.check, channel: opts.channel });
   });

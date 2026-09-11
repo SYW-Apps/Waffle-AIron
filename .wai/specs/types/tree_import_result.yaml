@@ -1,0 +1,40 @@
+kind: value-object
+id: tree_import_result
+name: TreeImportResult
+description: >-
+  What an import actually did: where the tree landed, which roots were recreated, whether an
+  existing tree was replaced, and — when one was — where its backup went, so a mistaken import is
+  always recoverable by moving one directory back.
+fields:
+  - name: destDir
+    type: string
+    description: The project root the tree was written under
+    optional: false
+  - name: projectName
+    type: string
+    description: The imported project's name, from the archive envelope
+    optional: false
+  - name: roots
+    type: string[]
+    description: Project-relative roots recreated under destDir
+    optional: false
+  - name: fileCount
+    type: number
+    description: How many spec-tree files were written
+    optional: false
+  - name: replaced
+    type: boolean
+    description: Whether a spec tree was already present and got replaced
+    optional: false
+  - name: backupPath
+    type: string
+    description: Where the replaced tree was moved aside; absent when the destination held none
+    optional: true
+  - name: stateId
+    type: string
+    description: The exporting tree's content state, carried from the envelope
+    optional: true
+methods: []
+componentClass: tree_transfer_orchestrator
+createdAt: '2026-08-12T17:23:45.971Z'
+updatedAt: '2026-08-12T17:23:45.979Z'

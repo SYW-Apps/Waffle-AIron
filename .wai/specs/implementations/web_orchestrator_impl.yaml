@@ -277,22 +277,30 @@ methods:
         error: dev session is only available under wairon dev (devMode)
       - stepNumber: 3
         description: >-
-          List existing sessions for the synthetic local-developer subject through the web session
-          repository (so the dev server reuses one session rather than churning the store on every
-          cookieless hit)
+          Drop already-expired sessions through the web session repository BEFORE looking for one to
+          reuse, so an aged-out dev session is never handed back as a dead credential (the dev UI
+          would land on a login screen devMode configures no login method for)
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: pruneExpired
+      - stepNumber: 4
+        description: >-
+          List the surviving (live) sessions for the synthetic local-developer subject through the
+          web session repository (so the dev server reuses one session rather than churning the
+          store on every cookieless hit)
         type: call
         targetComponent: web_session_repository
         targetMethod: listBySubject
-      - stepNumber: 4
-        description: 'If a local-developer session already exists, reuse it: return its id'
-        type: branch
-        condition: a local-developer session already exists
-        onFalseStep: 6
       - stepNumber: 5
+        description: 'If a LIVE local-developer session already exists, reuse it: return its id'
+        type: branch
+        condition: a live local-developer session already exists
+        onFalseStep: 7
+      - stepNumber: 6
         description: Return the existing local-developer session id
         type: return
         outcome: existing dev session id
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Build a new WebSession bound to the synthetic local-developer subject (issuer 'local',
           userId = the PERSISTED boot-reserved local-developer UUID seeded at first boot, kind
@@ -302,12 +310,12 @@ methods:
           matching the dev-subject identity check in authenticateSession. This path is devMode-only
           and never mints a session in a hosted deployment. expiresAt = now + the session TTL.
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Persist the new local-developer session through the web session repository
         type: call
         targetComponent: web_session_repository
         targetMethod: create
-      - stepNumber: 8
+      - stepNumber: 9
         description: Return the new local-developer session id
         type: return
         outcome: new dev session id
@@ -446,4 +454,4 @@ lint:
         declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-07-18T23:47:41.590Z'
+updatedAt: '2026-08-12T05:34:27.125Z'

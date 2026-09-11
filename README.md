@@ -125,8 +125,12 @@ wairon update          # check and install the latest stable release
 wairon update --check  # check only
 ```
 
-Release channels: `stable` (default), `beta`, `preview` — switch with
-`wairon update --channel <name>` (persists in `~/.wairon/config.json`).
+Release channels: `stable` (default), `beta`, `preview`, `dev` — switch with
+`wairon update --channel <name>` (persists in `~/.wairon/config.json`). Each
+channel sees its own tier and every narrower one, so `stable` only ever
+installs a `vX.Y.Z` release and `dev` sees the `-dev.N` build cut from every
+merge to `dev`. Installing from npm, the channels are the dist-tags:
+`@wairon/cli@latest`, `@beta`, `@preview`, `@dev`.
 
 ---
 

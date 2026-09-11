@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { asList, get, post, postBinary } from '../api';
+import { asList, download, get, post, postBinary } from '../api';
 import {
   AsyncButton,
   AsyncView,
@@ -19,7 +19,7 @@ import {
 import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
 import { SharingTab } from './Sharing';
 import { SpecsTab } from './SpecsEditor';
-import type { GitBackingStatus, PackDescriptor, PolicyEvaluationResult, ProducerConfig } from '../types';
+import type { GitBackingStatus, PackDescriptor, PolicyEvaluationResult, ProducerConfig, TreeImportResult } from '../types';
 
 // ── Packs ────────────────────────────────────────────────────────────────────
 
@@ -446,6 +446,113 @@ function GitTab({ projectId }: { projectId: string }) {
   );
 }
 
+// ── Transfer (.waitree spec-tree migration) ──────────────────────────────────
+
+function TransferTab({ projectId }: { projectId: string }) {
+  const toast = useToast();
+  const enc = encodeURIComponent(projectId);
+  const [file, setFile] = useState<File | null>(null);
+  const [replace, setReplace] = useState(false);
+  const [includeDerived, setIncludeDerived] = useState(false);
+  const [last, setLast] = useState<TreeImportResult | null>(null);
+
+  async function exportTree() {
+    await download(
+      `/web/projects/tree/export?projectId=${enc}${includeDerived ? '&includeDerived=1' : ''}`,
+      `${projectId}.waitree`,
+    );
+    toast.ok('Spec tree exported');
+  }
+
+  async function importTree() {
+    if (!file) return;
+    const d = await postBinary<TreeImportResult>(
+      `/web/projects/tree/import?projectId=${enc}${replace ? '&replace=1' : ''}`,
+      file,
+    );
+    setLast(d);
+    setFile(null);
+    toast.ok(`Imported “${d.projectName}” — ${d.fileCount} file(s)`);
+  }
+
+  return (
+    <div className="stack-lg">
+      <p className="hint">
+        Move this project's whole spec tree — its own <code>.wai/</code> plus every chained subproject — as a single
+        <code> .waitree</code> archive. This is the migration path between a local checkout and this instance.
+      </p>
+
+      <div className="panel">
+        <h4>Export</h4>
+        <p className="hint">
+          Downloads the authored design: specs, lock, rules, variants, surfaces and packs. Regenerable artifacts
+          (diagrams, generated topology) are rebuilt at the destination and left out by default.
+        </p>
+        <label className="toggle-row">
+          <input type="checkbox" checked={includeDerived} onChange={(e) => setIncludeDerived(e.target.checked)} />
+          <span className="cell-stack">
+            <strong>Include generated artifacts</strong>
+            <span className="hint">A larger archive; rarely needed, since the destination regenerates them.</span>
+          </span>
+        </label>
+        <div className="row-actions">
+          <AsyncButton variant="primary" action={exportTree} onError={toast.bad}>
+            Download .waitree
+          </AsyncButton>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h4>Import</h4>
+        <p className="hint">
+          Replaces this project's spec tree from an archive. Requires <code>project:admin</code>. Executable content is
+          always refused, and the previous tree is moved aside to a backup you can restore by hand.
+        </p>
+        <Field label="Spec-tree archive (.waitree)" hint="Produced by an export here, or by `wairon remote pull`.">
+          <input
+            className="input"
+            type="file"
+            accept=".waitree,.zip,application/zip"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+        </Field>
+        <label className="toggle-row">
+          <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
+          <span className="cell-stack">
+            <strong>Replace the existing spec tree</strong>
+            <span className="hint">
+              Required once this project holds authored specs — a freshly created project imports without it.
+            </span>
+          </span>
+        </label>
+        <div className="row-actions">
+          <AsyncButton variant="primary" action={importTree} onError={toast.bad} disabled={!file}>
+            Import archive
+          </AsyncButton>
+        </div>
+        {last && (
+          <dl className="kv">
+            <dt>Imported</dt>
+            <dd>
+              <strong>{last.projectName}</strong> — {last.fileCount} file(s)
+            </dd>
+            <dt>Roots</dt>
+            <dd>
+              {last.roots.map((r) => (
+                <code key={r} className="subtle">{r} </code>
+              ))}
+            </dd>
+            <dt>Previous tree</dt>
+            <dd>
+              {last.backupPath ? <code className="subtle">{last.backupPath}</code> : <span className="hint">none — the project was empty</span>}
+            </dd>
+          </dl>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Ops shell ────────────────────────────────────────────────────────────────
 
 const OPS_TABS = [
@@ -454,6 +561,7 @@ const OPS_TABS = [
   { id: 'policy', label: 'Policy' },
   { id: 'producers', label: 'Producers' },
   { id: 'git', label: 'Git' },
+  { id: 'transfer', label: 'Transfer' },
   { id: 'sharing', label: 'Sharing' },
 ];
 
@@ -503,6 +611,7 @@ export function ProjectOps() {
         {tab === 'policy' && <PolicyTab projectId={projectId} />}
         {tab === 'producers' && <ProducersTab projectId={projectId} />}
         {tab === 'git' && <GitTab projectId={projectId} />}
+        {tab === 'transfer' && <TransferTab projectId={projectId} />}
         {tab === 'sharing' && <SharingTab projectId={projectId} />}
       </div>
     </div>

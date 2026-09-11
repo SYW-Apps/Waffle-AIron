@@ -432,16 +432,21 @@ export function startDevSession(cfg: HostConfig): string {
     throw new Error('dev session is only available under wairon dev (devMode)');
   }
 
-  // step 3: list existing sessions for the synthetic local-developer subject.
+  // step 3: drop already-expired sessions BEFORE looking for one to reuse — an aged-out
+  // dev session must never be handed back as a dead credential (the dev UI would land
+  // on a login screen that devMode configures no login method for).
+  pruneExpiredWebSessions(cfg.dataDir, new Date().toISOString());
+
+  // step 4: list the surviving (live) sessions for the synthetic local-developer subject.
   const dev = devSubject(cfg);
   const existing = listWebSessionsBySubject(cfg.dataDir, dev.userId);
 
-  // steps 4–5: reuse an existing dev session (no churn).
+  // steps 5–6: reuse a live dev session (no churn).
   if (existing.length > 0) {
     return existing[0].id;
   }
 
-  // step 6: build a new session bound to the local-developer subject, narrowed to
+  // step 7: build a new session bound to the local-developer subject, narrowed to
   // the one local project (never instance-wide '*'); the session stores NO
   // permissions — authentication resolves them live from the subject identity.
   const session: WebSession = {
@@ -451,9 +456,9 @@ export function startDevSession(cfg: HostConfig): string {
     createdAt: '', // stamped by the registry
     expiresAt: new Date(Date.now() + DEV_SESSION_TTL_MS).toISOString(),
   };
-  const stored = createWebSession(cfg.dataDir, session); // step 7
+  const stored = createWebSession(cfg.dataDir, session); // step 8
 
-  return stored.id; // step 8
+  return stored.id; // step 9
 }
 
 /**
@@ -3074,6 +3079,43 @@ function opsInstallGlobalPackArchive(cfg: HostConfig, sessionId: string, req: In
 function opsInstallProjectPackArchive(cfg: HostConfig, sessionId: string, req: IncomingMessage, url: URL, body: Body, res: ServerResponse): void {
   sendJson(res, 200, projectops.installProjectPackArchive(cfg, sessionId, q(url, 'projectId') ?? '', archiveBody(body), packNameOverride(req)));
 }
+
+// ── Spec-tree transfer (.waitree) ────────────────────────────────────────────
+// The browser half of local↔hosted migration: download the whole tree, or
+// replace it from an uploaded archive. Export answers raw bytes (the archive IS
+// the payload); import takes a raw application/zip body like the pack upload.
+
+/** GET /web/projects/tree/export?projectId=[&includeDerived=1] — project:read. */
+function opsExportProjectTree(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  const result = projectops.exportProjectTree(
+    cfg,
+    sessionId,
+    q(url, 'projectId') ?? '',
+    undefined,
+    q(url, 'includeDerived') === '1',
+  );
+  res.writeHead(200, {
+    'content-type': 'application/zip',
+    'content-disposition': `attachment; filename="${result.suggestedFileName}"`,
+  });
+  res.end(Buffer.from(result.archive));
+}
+
+/** POST /web/projects/tree/import?projectId=[&replace=1] — project:admin, raw zip body. */
+function opsImportProjectTree(cfg: HostConfig, sessionId: string, url: URL, body: Body, res: ServerResponse): void {
+  sendJson(
+    res,
+    200,
+    projectops.importProjectTree(
+      cfg,
+      sessionId,
+      q(url, 'projectId') ?? '',
+      archiveBody(body),
+      undefined,
+      q(url, 'replace') === '1',
+    ),
+  );
+}
 // Stage B+C: the selectable-profile catalog and server-global pack adoption.
 function opsListAvailableProfiles(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
   sendJson(res, 200, { profiles: projectops.listAvailableProfiles(cfg, sessionId) });
@@ -3438,6 +3480,16 @@ export async function handleWebRequest(
       // pack into the project by name (project:admin).
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'adopt') {
         return opsAdoptProjectPack(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/tree/export?projectId=[&includeDerived=1] — download the
+      // whole spec tree as a .waitree archive (project:read).
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'tree' && parts[3] === 'export') {
+        return opsExportProjectTree(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/tree/import?projectId=[&replace=1] — replace the spec
+      // tree from a raw application/zip .waitree body (project:admin).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'tree' && parts[3] === 'import') {
+        return opsImportProjectTree(cfg, sessionId, url, body, res);
       }
       // GET /web/projects/config?projectId= — the project's editable config (projectType + lock) (project:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'config') {

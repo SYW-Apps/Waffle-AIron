@@ -128,6 +128,102 @@ export interface McpInstallOptions {
   global?:  boolean;
   /** Explicit config dir to install into (highest precedence; validated). Requires backend. */
   configDir?: string;
+  /** Register a HOSTED http entry against this instance instead of the local stdio server. */
+  hostedUrl?: string;
+  /** Hosted only: the project selector to carry on the entry. */
+  hostedProject?: string;
+  /** Hosted only: the bearer to carry; falls back to the stored credential for the instance. */
+  hostedToken?: string;
+}
+
+/** What the agent's own MCP configuration says wairon is attached to. */
+export interface DetectedMcpSource {
+  /** 'local' (stdio over this checkout) or 'hosted' (http on an instance). */
+  kind: 'local' | 'hosted';
+  /** The config file the entry was read from — named in output so a surprise is traceable. */
+  configPath: string;
+  url?: string;
+  projectId?: string;
+  token?: string;
+}
+
+/** The config files an AI tool may define the wairon MCP server in, in precedence order. */
+function mcpConfigCandidates(cwd: string): string[] {
+  return [
+    path.join(cwd, '.mcp.json'),
+    claudeMcpConfigPath(true),
+    path.join(cwd, '.gemini', 'settings.json'),
+    path.join(geminiGlobalDir(), 'antigravity-cli', 'mcp_config.json'),
+  ];
+}
+
+/**
+ * cli_mcp_adapter.detectHostedMcpSource — read the wairon entry out of the
+ * agent's own MCP configuration and report what it points at.
+ *
+ * This is what lets `wairon remote` attach without a second round of
+ * configuration: if the agent already works against a hosted project, the CLI
+ * can address the SAME project with the SAME credential, and the two cannot
+ * drift apart. Purely a read, and deliberately total — an unparseable agent
+ * config must never break an ordinary wairon command, so anything unreadable
+ * simply contributes nothing.
+ */
+export function detectHostedMcpSource(cwd: string = process.cwd()): DetectedMcpSource | null {
+  for (const configPath of mcpConfigCandidates(cwd)) {
+    let entry: Record<string, unknown> | undefined;
+    try {
+      if (!fs.existsSync(configPath)) continue;
+      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8')) as {
+        mcpServers?: Record<string, Record<string, unknown>>;
+      };
+      entry = parsed.mcpServers?.['wairon'];
+    } catch {
+      continue; // unreadable or malformed — not our problem to report here
+    }
+    if (!entry) continue;
+
+    const url = typeof entry.url === 'string' ? entry.url : undefined;
+    if (!url) return { kind: 'local', configPath };
+
+    const headers = (entry.headers ?? {}) as Record<string, unknown>;
+    const source: DetectedMcpSource = { kind: 'hosted', configPath, url: mcpBaseUrl(url) };
+    const project = headerValue(headers, 'x-wairon-project') ?? projectFromQuery(url);
+    if (project) source.projectId = project;
+    const authorization = headerValue(headers, 'authorization');
+    const bearer = authorization && /^bearer\s+/i.test(authorization)
+      ? authorization.replace(/^bearer\s+/i, '').trim()
+      : undefined;
+    if (bearer) source.token = bearer;
+    return source;
+  }
+  return null;
+}
+
+/** Case-insensitive header lookup (config files are hand-edited). */
+function headerValue(headers: Record<string, unknown>, name: string): string | undefined {
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === name && typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+/** The `?project=` selector carried on an endpoint URL, when it has one. */
+function projectFromQuery(endpoint: string): string | undefined {
+  try {
+    return new URL(endpoint).searchParams.get('project') ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** An MCP endpoint URL reduced to the instance base the CLI addresses. */
+function mcpBaseUrl(endpoint: string): string {
+  try {
+    const parsed = new URL(endpoint);
+    return `${parsed.origin}${parsed.pathname.replace(/\/mcp\/?$/, '').replace(/\/+$/, '')}`;
+  } catch {
+    return endpoint.replace(/\/mcp\/?(\?.*)?$/, '').replace(/\/+$/, '');
+  }
 }
 
 /**
@@ -234,9 +330,15 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
       ? {}
       : { WAIRON_PROJECT_DIR: process.cwd().replace(/\\/g, '/') };
 
-    const desiredEntry = useDirectNode
-      ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env }
-      : { command: 'wairon', args: ['mcp', 'serve'], env };
+    // A HOSTED registration points the agent at an INSTANCE rather than at this
+    // checkout: the same http endpoint, bearer and project selector the CLI's
+    // remote surface uses, so `wairon remote` can read this entry back and the
+    // agent and CLI provably work on the same project.
+    const desiredEntry = options.hostedUrl
+      ? hostedMcpEntry(options)
+      : useDirectNode
+        ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env }
+        : { command: 'wairon', args: ['mcp', 'serve'], env };
 
     // Self-heal: if an entry already exists but points somewhere else (e.g. a
     // stale path from a moved repo or an earlier machine), rewrite it instead of
@@ -334,6 +436,28 @@ export async function runMcpStatus(): Promise<void> {
   if (fs.existsSync(mcpDir)) {
     logger.info(`MCP state dir: ${chalk.gray(mcpDir)}`);
   }
+}
+
+/**
+ * The hosted (http) MCP entry: the instance's /mcp endpoint plus the headers the
+ * data plane reads — the bearer it authenticates, and the project it binds. The
+ * token comes from the flag, else the machine's stored credential for that
+ * instance, so `wairon login` once is enough to wire an agent.
+ */
+function hostedMcpEntry(options: McpInstallOptions): Record<string, unknown> {
+  const base = options.hostedUrl!.replace(/\/+$/, '');
+  // The credential is RESOLVED BY THE CALLER, never read here: this adapter's
+  // job is the config file, and reaching into the credential store would make
+  // it depend on state it has no business knowing about.
+  const token = (options.hostedToken ?? '').trim();
+  if (!token) {
+    throw new WaironError(
+      `No credential for ${base}. Run \`wairon login ${base}\` first, or pass --token.`,
+    );
+  }
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (options.hostedProject) headers['X-Wairon-Project'] = options.hostedProject;
+  return { type: 'http', url: `${base}/mcp`, headers };
 }
 
 /**

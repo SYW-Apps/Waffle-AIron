@@ -1,10 +1,10 @@
 id: admin_orchestrator_impl
 name: Admin Orchestrator Implementation
 description: >-
-  Control-plane workflows: credential auth then project/key lifecycle, git-aware lock/promote,
-  diagrams, and git backing. Project create/destroy/lock/promote are scope-aware (a super-admin via
-  the master credential or an instance-wide grant, or a unit-scoped admin holding the matching
-  capability for an organization unit); the remaining key/git/producer/secret/diagram workflows stay
+  Control-plane workflows: credential auth then project/key lifecycle, git-aware lock, diagrams, and
+  git backing. Project create/destroy/lock are scope-aware (a super-admin via the master credential
+  or an instance-wide grant, or a unit-scoped admin holding the matching capability for an
+  organization unit); the remaining key/git/producer/secret/diagram workflows stay
   master-credential-only.
 contract: iadmin_orchestrator
 sourcePath: src/server/admin.ts
@@ -930,6 +930,83 @@ methods:
         description: Return the producer list
         type: return
         outcome: producer list
+  - name: exportProjectTree
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential (bootstrap master or a user-bound token)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:read permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the export
+        type: throw
+        error: Forbidden — exporting a project's spec tree requires project:read over it
+      - stepNumber: 5
+        description: >-
+          Bind the tree the action concerns: the project's isolated root, or the CHAINED CHILD's
+          root when a subproject qualifier was supplied (resolved through the containment-checked
+          qualified resolution, never silently falling back to the project root)
+        type: local
+      - stepNumber: 6
+        description: Pack the bound tree into a .waitree archive within that scope
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: exportSpecTree
+      - stepNumber: 7
+        description: Return the archive and its provenance
+        type: return
+        outcome: exported tree
+  - name: importProjectTree
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential (bootstrap master or a user-bound token)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:admin permission over the target project — deliberately above
+          project:write, because this replaces the whole design rather than editing one spec
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the import
+        type: throw
+        error: Forbidden — importing a project's spec tree requires project:admin over it
+      - stepNumber: 5
+        description: >-
+          Bind the tree the action concerns: the project's isolated root, or the CHAINED CHILD's
+          root when a subproject qualifier was supplied
+        type: local
+      - stepNumber: 6
+        description: >-
+          Import the archive within that scope, ALWAYS refusing executable entries (it arrived over
+          the wire) and passing the caller's replace choice through unchanged
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: importSpecTree
+      - stepNumber: 7
+        description: Return what was written and where the replaced tree was backed up
+        type: return
+        outcome: imported tree
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-11T21:00:19.859Z'
+updatedAt: '2026-09-11T23:03:12.155Z'

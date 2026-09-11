@@ -1,0 +1,34 @@
+kind: value-object
+id: detected_mcp_source
+name: DetectedMcpSource
+description: >-
+  What the agent's own MCP configuration says wairon is attached to — read, never written, from the
+  config files an AI tool loads its server definitions from. A LOCAL (stdio) entry means the agent
+  is authoring this checkout's own .wai tree; a HOSTED (http) entry names the instance and carries
+  the bearer the agent presents, which the CLI can reuse so a developer whose agent already works
+  never types a credential twice.
+fields:
+  - name: kind
+    type: string
+    description: '"local" (stdio server over this checkout) or "hosted" (http server on an instance)'
+    optional: false
+  - name: configPath
+    type: string
+    description: The config file the entry was read from — named in output so a surprising binding is traceable
+    optional: false
+  - name: url
+    type: string
+    description: 'Hosted only: the instance''s MCP endpoint base URL'
+    optional: true
+  - name: projectId
+    type: string
+    description: 'Hosted only: the project selector carried on the entry, when it names one'
+    optional: true
+  - name: token
+    type: string
+    description: 'Hosted only: the bearer credential the entry presents, when it carries one'
+    optional: true
+methods: []
+componentClass: cli_mcp_adapter
+createdAt: '2026-08-12T18:41:27.528Z'
+updatedAt: '2026-08-12T18:41:27.535Z'

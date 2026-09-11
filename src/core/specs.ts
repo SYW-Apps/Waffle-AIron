@@ -287,6 +287,62 @@ export function findChainingParent(childRoot: string): ChainingParentRef | null 
 }
 
 /**
+ * Walk DOWN from a project root and list every chained subproject root beneath
+ * it, as project-relative POSIX directories in walk order (parents before their
+ * own children). The downward companion to findChainingParent, and what a
+ * WHOLE-TREE operation — archiving a project for transfer — needs in order to
+ * know which trees belong to this project.
+ *
+ * Mirrors the loader's recursion guards exactly, but silently: a mount that
+ * escapes the root (absolute / `../`), points at a missing directory, or forms a
+ * cycle is SKIPPED rather than reported, because this is a pure locator and the
+ * loader already raises those as issues on every scan. Returns [] for a project
+ * that chains nothing.
+ */
+export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
+  const root = path.resolve(rootDir);
+  const found: string[] = [];
+  const visited = new Set<string>([root]);
+
+  const walk = (projectDir: string, depth: number): void => {
+    if (depth > 32) return; // the loader's own bound on chain depth
+    const specsDir = aiPathsAt(projectDir).specsDir();
+    if (!pathExists(specsDir)) return;
+    for (const file of listFilesRecursive(specsDir, '.yaml')) {
+      let raw: unknown;
+      try {
+        raw = readYamlFile(file);
+      } catch {
+        continue;
+      }
+      // A subsystem spec (has parentSystem) that mounts a child via projectPath.
+      if (!raw || typeof raw !== 'object' || !('parentSystem' in raw)) continue;
+      const projectPath = (raw as { projectPath?: unknown }).projectPath;
+      if (typeof projectPath !== 'string' || projectPath.trim() === '') continue;
+
+      let childDir: string;
+      try {
+        childDir = path.resolve(projectDir, projectPath);
+      } catch {
+        continue; // malformed projectPath — not a resolvable mount
+      }
+      // Containment is checked against the BOUND root, so no hop however deep
+      // may escape it; nesting still resolves against the immediate parent.
+      if (projectPathEscapesRoot(root, projectPath, childDir)) continue;
+      if (visited.has(childDir)) continue;
+      if (!fs.existsSync(childDir)) continue;
+
+      visited.add(childDir);
+      found.push(path.relative(root, childDir).split(path.sep).join('/'));
+      walk(childDir, depth + 1);
+    }
+  };
+
+  walk(root, 0);
+  return found;
+}
+
+/**
  * Collapse a mount subsystem (has projectPath) and its same-id child realization
  * into a single flat external subsystem: the child provides the content, the
  * mount contributes projectPath. Genuine duplicates (both internal or both
@@ -502,6 +558,14 @@ export interface PromotableSpec {
  */
 export interface SaveSpecOptions {
   allowStatusDemotion?: boolean;
+  /**
+   * Keep the existing `updatedAt` instead of re-stamping it — for a MECHANICAL
+   * re-save that changes no authored content (the lock's status promotion).
+   * Stamping there claimed the spec had been edited, so freezing a tree was
+   * indistinguishable from designing it in a diff, and every lock dirtied two
+   * lines per spec where the status flip alone is one.
+   */
+  preserveUpdatedAt?: boolean;
 }
 
 /**
@@ -1327,7 +1391,7 @@ export class SpecWorkspace {
     return issues;
   }
 
-  saveSubsystemSpec(spec: SubsystemSpec): void {
+  saveSubsystemSpec(spec: SubsystemSpec, opts?: SaveSpecOptions): void {
     const p = this.getSubsystemPath(spec.id);
     ensureDir(path.dirname(p));
 
@@ -1371,7 +1435,7 @@ export class SpecWorkspace {
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id));
     invalidateSpecCache();
   }
@@ -1455,7 +1519,7 @@ export class SpecWorkspace {
         + `The subsystem field is now "${spec.subsystem}" (was "${existing.subsystem}").`,
       );
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id));
     invalidateSpecCache();
     // Keep the physical layout in sync with ownership: nest owned members under
@@ -1607,7 +1671,7 @@ export class SpecWorkspace {
         }
       }
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id));
     invalidateSpecCache();
     return notices;
@@ -1674,7 +1738,7 @@ export class SpecWorkspace {
         specToWrite.status = existing.status;
       }
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id));
     invalidateSpecCache();
     return notices;
@@ -1708,7 +1772,7 @@ export class SpecWorkspace {
    * relocates an existing file — both are by design, but silent they read as
    * "the subsystem parameter was ignored".
    */
-  saveTypeSpec(spec: TypeSpec): string[] {
+  saveTypeSpec(spec: TypeSpec, opts?: SaveSpecOptions): string[] {
     const notices: string[] = [];
     const existing = this.loadTypeSpec(spec.id);
     const group = spec.group || (existing ? existing.group : undefined);
@@ -1741,7 +1805,7 @@ export class SpecWorkspace {
         specToWrite.group = relativizeId(existing.group, this.writePrefixFor(spec.id));
       }
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id));
     invalidateSpecCache();
     return notices;
@@ -1769,7 +1833,7 @@ export class SpecWorkspace {
     return this.scanAll().groups.find((g) => g.id === id) ?? null;
   }
 
-  saveGroupSpec(spec: GroupSpec): void {
+  saveGroupSpec(spec: GroupSpec, opts?: SaveSpecOptions): void {
     const p = this.getGroupPath(spec.id);
     ensureDir(path.dirname(p));
 
@@ -1779,7 +1843,7 @@ export class SpecWorkspace {
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
     }
-    specToWrite.updatedAt = new Date().toISOString();
+    specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(GroupSpecSchema, specToWrite, 'group', spec.id));
     invalidateSpecCache();
   }
@@ -1890,12 +1954,20 @@ export class SpecWorkspace {
   }
 
   /** Set a single spec's status (bumps updatedAt). Caller invalidates the cache. */
+  /**
+   * Flip one spec's lifecycle status, changing nothing else — the lock's freeze.
+   *
+   * `preserveUpdatedAt` because this is MECHANICAL: no authored content moves,
+   * so re-stamping updatedAt would claim an edit that never happened and make a
+   * freeze read like a design change in review.
+   */
   applySpecStatus(kind: SpecKind, id: string, status: SpecStatus): void {
+    const keepStamp: SaveSpecOptions = { preserveUpdatedAt: true };
     switch (kind) {
-      case 'subsystem':      { const s = this.loadSubsystemSpec(id);      if (s) this.saveSubsystemSpec({ ...s, status }); break; }
-      case 'component':      { const s = this.loadComponentSpec(id);      if (s) this.saveComponentSpec({ ...s, status }); break; }
-      case 'interface':      { const s = this.loadInterfaceSpec(id);      if (s) this.saveInterfaceSpec({ ...s, status }); break; }
-      case 'implementation': { const s = this.loadImplementationSpec(id); if (s) this.saveImplementationSpec({ ...s, status }); break; }
+      case 'subsystem':      { const s = this.loadSubsystemSpec(id);      if (s) this.saveSubsystemSpec({ ...s, status }, keepStamp); break; }
+      case 'component':      { const s = this.loadComponentSpec(id);      if (s) this.saveComponentSpec({ ...s, status }, keepStamp); break; }
+      case 'interface':      { const s = this.loadInterfaceSpec(id);      if (s) this.saveInterfaceSpec({ ...s, status }, keepStamp); break; }
+      case 'implementation': { const s = this.loadImplementationSpec(id); if (s) this.saveImplementationSpec({ ...s, status }, keepStamp); break; }
     }
   }
 

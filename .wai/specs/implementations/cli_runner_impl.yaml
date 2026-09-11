@@ -9,26 +9,43 @@ methods:
   - name: runValidate
     narrative:
       - stepNumber: 1
+        description: >-
+          Is this checkout ATTACHED to a hosted project? An attached checkout has no local tree, so
+          validating locally would report a vacuous pass.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: resolveTarget
+      - stepNumber: 2
+        description: Attached?
+        type: branch
+        condition: a hosted target resolved
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Validate the ATTACHED project's tree on the instance instead.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: validateAttached
+      - stepNumber: 4
+        description: >-
+          Print the hosted findings and exit non-zero when it reported errors, exactly as a local
+          run would.
+        type: return
+        outcome: validated remotely
+      - stepNumber: 5
         description: Load project configuration file
         type: local
-      - stepNumber: 2
-        description: Validate registry rules
+      - stepNumber: 6
+        description: >-
+          Not attached: run the whole local validation workflow — registry, project config and spec
+          tree — through the validator adapter.
         type: call
         targetComponent: cli_validator_adapter
-        targetMethod: validateRegistry
-      - stepNumber: 3
-        description: Validate project configuration
-        type: call
-        targetComponent: cli_validator_adapter
-        targetMethod: validateProjectConfig
-      - stepNumber: 4
-        description: Validate SDD specification tree
-        type: call
-        targetComponent: cli_validator_adapter
-        targetMethod: validateSddTree
-      - stepNumber: 5
+        targetMethod: runValidation
+      - stepNumber: 7
         description: Print validation errors/warnings and exit process if invalid
         type: local
+    symbol: validateCommand
   - name: runGenerate
     narrative:
       - stepNumber: 1
@@ -678,47 +695,72 @@ methods:
   - name: runLock
     narrative:
       - stepNumber: 1
+        description: >-
+          Is this checkout ATTACHED to a hosted project? A hosted lock is the instance's
+          execute-primary workflow, not a local freeze.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: resolveTarget
+      - stepNumber: 2
+        description: Attached?
+        type: branch
+        condition: a hosted target resolved
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Lock the ATTACHED project on the instance.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: lockAttached
+      - stepNumber: 4
+        description: >-
+          Report the outcome verbatim — an approval-gated instance answers that a REQUEST was
+          created, which must never be printed as a completed lock.
+        type: return
+        outcome: locked or requested
+      - stepNumber: 5
         description: Run the as-complete dry-run gate over the tree
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateAsComplete
-      - stepNumber: 2
+      - stepNumber: 6
         description: The gate found errors (an invalid tree is never frozen)
         type: branch
         condition: as-complete validation reported errors
-        onFalseStep: 4
-      - stepNumber: 3
+        onFalseStep: 8
+      - stepNumber: 7
         description: Refuse the lock, printing the blocking findings
         type: return
         outcome: refused
-      - stepNumber: 4
+      - stepNumber: 8
         description: >-
           Confirm with the human (skipped under --yes), then freeze the tree through the lock
           adapter
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: lockTree
-      - stepNumber: 5
+      - stepNumber: 9
         description: The tree mounts chained children
         type: branch
         condition: at least one subsystem carries a projectPath
-        onFalseStep: 7
-      - stepNumber: 6
+        onFalseStep: 11
+      - stepNumber: 10
         description: >-
           Regenerate the family and sibling surface snapshots into every chained child — a locked
           parent ships fresh surfaces
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: generateChildSnapshots
-      - stepNumber: 7
+      - stepNumber: 11
         description: >-
           Refresh the generated outputs (runGenerate): re-render owner/architect files, prune stale
           managed agents against the full topology, re-export skills, re-inject guides
         type: local
-      - stepNumber: 8
+      - stepNumber: 12
         description: Print the lock record and return
         type: return
         outcome: locked
+    symbol: lockCommand
   - name: runAgent
     narrative:
       - stepNumber: 1
@@ -768,6 +810,208 @@ methods:
         description: Unknown agent action
         type: throw
         error: unknown agent action (expected brief | customize)
+  - name: runRemote
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the instance URL, project selector and bearer credential for this command:
+          explicit flags, then the environment, then this checkout's recorded binding, then the
+          agent's own MCP configuration. Refuse with actionable guidance when nothing resolves.
+        type: local
+      - stepNumber: 2
+        description: Route on the remote action
+        type: switch
+        'on': action
+        cases:
+          - value: push
+            step: 3
+          - value: pull
+            step: 5
+          - value: attach
+            step: 7
+          - value: detach
+            step: 9
+          - value: status
+            step: 11
+        defaultStep: 13
+      - stepNumber: 3
+        description: >-
+          Migrate the local spec tree into the hosted project (creating it first when --unit was
+          given).
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: pushTree
+      - stepNumber: 4
+        description: Report what was pushed
+        type: jump
+        toStep: 14
+      - stepNumber: 5
+        description: Migrate the hosted spec tree into this checkout.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: pullTree
+      - stepNumber: 6
+        description: Report what was pulled
+        type: jump
+        toStep: 14
+      - stepNumber: 7
+        description: >-
+          Record a standing binding for this checkout, after verifying it resolves against the
+          instance.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: attach
+        error: 'Unknown remote action (supported: push, pull)'
+      - stepNumber: 8
+        label: attachReported
+        description: Report what is now attached
+        type: jump
+        toStep: 14
+      - stepNumber: 9
+        description: Remove the binding, returning the checkout to purely local operation.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: detach
+      - stepNumber: 10
+        description: Report the detachment
+        type: jump
+        toStep: 14
+      - stepNumber: 11
+        description: >-
+          Describe what this checkout is attached to and how it resolved — never printing the
+          credential.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: describeAttachment
+      - stepNumber: 12
+        description: Report the attachment
+        type: jump
+        toStep: 14
+      - stepNumber: 13
+        description: Reject an unknown remote action, naming the supported ones.
+        type: throw
+        targetComponent: remote_orchestrator
+        targetMethod: describeAttachment
+        error: 'Unknown remote action (supported: push, pull, attach, detach, status)'
+      - stepNumber: 14
+        label: outcome
+        description: >-
+          Print the outcome: for a migration, direction, instance and project, roots and file count,
+          whether the project was created, and any backup path the destination reported — a replaced
+          tree must always name what it can be undone from; for attach/detach/status, what this
+          checkout now addresses and where that answer came from.
+        type: local
+  - name: runLogin
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Take the token from --token or prompt for it without echoing, and normalize the instance
+          URL.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Verify the credential against the instance and store it for this machine — not for this
+          project: a login serves every checkout, while binding a project is what `wairon remote
+          attach` is for.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: storeCredential
+      - stepNumber: 3
+        description: >-
+          Confirm which instance is now reachable, and point at `wairon remote attach` as the next
+          step. Never echo the credential.
+        type: local
+        targetComponent: remote_orchestrator
+        targetMethod: attach
+      - stepNumber: 4
+        description: Confirm which instance is now reachable, without echoing the credential.
+        type: local
+  - name: runLogout
+    narrative:
+      - stepNumber: 1
+        description: Was an instance named?
+        type: branch
+        condition: a url argument was supplied
+        onTrueStep: 2
+        onFalseStep: 4
+      - stepNumber: 2
+        description: Forget the stored credential for that instance.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: forgetCredential
+      - stepNumber: 3
+        description: >-
+          State plainly that this forgot the credential LOCALLY and did NOT revoke it on the
+          instance — revocation lives in the hosted UI under Tokens. Then finish.
+        type: return
+        outcome: forgotten
+      - stepNumber: 4
+        label: listStored
+        description: List the instances this machine holds a credential for, printing URLs only.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: listStoredInstances
+  - name: runStatus
+    narrative:
+      - stepNumber: 1
+        description: Is this checkout ATTACHED to a hosted project?
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: resolveTarget
+      - stepNumber: 2
+        description: Attached?
+        type: branch
+        condition: a hosted target resolved
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Read the ATTACHED project's completeness dashboard from the instance.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: statusAttached
+      - stepNumber: 4
+        description: >-
+          Print the hosted dashboard, naming the instance and project so it is never mistaken for a
+          local tree.
+        type: return
+        outcome: reported remotely
+      - stepNumber: 5
+        description: >-
+          Not attached: read and print the LOCAL spec tree's completeness dashboard, scoped to a
+          subsystem when one was named.
+        type: local
+    symbol: statusCommand
+  - name: runMcpServe
+    narrative:
+      - stepNumber: 1
+        description: Run the stdio MCP server against the resolved project root.
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: serveMcpStdio
+  - name: runMcpInstall
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For a HOSTED registration, resolve the bearer to embed: the explicit flag, else the
+          credential stored for that instance — done HERE because the config adapter may not read
+          the credential store.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: storedCredentialFor
+      - stepNumber: 2
+        description: >-
+          Register (or self-heal) the wairon entry in the configured AI tools' MCP configuration —
+          local stdio, or hosted http when an instance was named.
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: installMcpServer
+  - name: runMcpStatus
+    narrative:
+      - stepNumber: 1
+        description: Report where a wairon MCP server is registered and what it points at.
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: reportMcpStatus
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-11T21:00:27.366Z'
+updatedAt: '2026-09-11T23:02:03.216Z'

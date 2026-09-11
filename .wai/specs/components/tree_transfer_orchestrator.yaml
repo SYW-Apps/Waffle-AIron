@@ -1,0 +1,26 @@
+id: tree_transfer_orchestrator
+name: Tree Transfer Orchestrator
+description: >-
+  Owns the two spec-tree transfer workflows — the seam every local↔hosted migration runs through, no
+  matter which surface triggered it. exportSpecTree: read the bound project's identity from its L0
+  system spec, ask the spec repository for every chained subproject root, stamp the tree's current
+  content state as provenance, and hand the resulting root set to the archive adapter, returning the
+  bytes plus enough provenance to name a file and reconcile a lock at the far end. importSpecTree:
+  inspect the incoming archive BEFORE touching disk (rejecting an incompatible format outright),
+  refuse a destination that already holds a tree unless the caller explicitly asked to replace it,
+  extract into a staging directory, and only then swap into place with the previous tree moved aside
+  to a backup — so a rejected, corrupt, or oversized archive leaves the destination exactly as it
+  was and a completed replacement is undone by moving one directory back. Finally it drops the spec
+  repository's cached index, because a tree that arrived by directory swap bypassed every save path
+  the cache normally observes. Holds no state: both workflows are one-shot transforms over the bound
+  project root.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - tree_archive_adapter
+  - spec_loader
+  - state_hash_specialist
+status: complete
+createdAt: '2026-08-12T17:24:17.967Z'
+updatedAt: '2026-08-12T17:26:32.750Z'

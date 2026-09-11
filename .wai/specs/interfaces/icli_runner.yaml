@@ -165,6 +165,84 @@ methods:
       - name: id
         type: string
         description: The resolved agent id.
+  - name: runRemote
+    description: >-
+      `wairon remote <action>` — the hosted-instance surface of a checkout. push/pull migrate a spec
+      tree in either direction; attach records a standing binding so ordinary commands run against
+      the hosted project; detach removes it; status reports what is attached and how it resolved.
+      Resolves the instance, project and credential from flags, the environment, the recorded
+      binding, or the agent's own MCP configuration, then routes to the remote orchestrator and
+      reports exactly what happened — including any backup a replaced tree can be undone from.
+    signature: 'runRemote(action: string, options: RemoteCommandOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: action
+        type: string
+        description: push | pull | attach | detach | status
+      - name: options
+        type: remote_command_options
+  - name: runLogin
+    description: >-
+      `wairon login <url>` — store a bearer credential for a hosted instance in the USER's
+      credential store, so every checkout on this machine can reach it without repeating the token.
+      Takes the token from --token or a prompt, verifies it against the instance before storing (a
+      credential that does not work is a worse outcome than no credential), and never echoes it
+      back.
+    signature: 'runLogin(url: string, options: { token?: string; project?: string }): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: url
+        type: string
+      - name: options
+        type: remote_command_options
+  - name: runLogout
+    description: >-
+      `wairon logout [url]` — forget the stored credential for an instance (or list what is stored
+      when no URL is given). Local only: it does NOT revoke the token on the instance, which the
+      output states plainly so nobody believes a leaked credential has been killed — revocation
+      lives in the hosted UI under Tokens.
+    signature: 'runLogout(url: string, options: RemoteCommandOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: url
+        type: string
+      - name: options
+        type: remote_command_options
+  - name: runMcpServe
+    description: >-
+      `wairon mcp serve` — run the wairon MCP server on stdio for an AI tool that spawned it,
+      attached to the resolved project root.
+    signature: 'runMcpServe(): Promise<void>'
+    returns: Promise<void>
+    params: []
+  - name: runMcpInstall
+    description: >-
+      `wairon mcp install` — register the wairon MCP server with the configured AI tools: the LOCAL
+      stdio server over this checkout by default, or a HOSTED http entry when --hosted names an
+      instance, so the agent authors that instance's tree and `wairon remote` can read the same
+      entry back.
+    signature: 'runMcpInstall(options: McpInstallOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: options
+        type: mcp_install_options
+  - name: runMcpStatus
+    description: >-
+      `wairon mcp status` — report where a wairon MCP server is registered and what it points at
+      (local checkout or hosted instance), alongside what the CLI itself resolves.
+    signature: 'runMcpStatus(): Promise<void>'
+    returns: Promise<void>
+    params: []
+  - name: runStatus
+    description: >-
+      `wairon status` — print the spec tree's completeness dashboard. In an ATTACHED checkout there
+      is no local tree, so it reports the hosted project's instead, naming the instance so the two
+      are never confused.
+    signature: 'runStatus(options: StatusCommandOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: options
+        type: status_command_options
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-11T20:59:58.319Z'
+updatedAt: '2026-09-11T23:01:54.493Z'

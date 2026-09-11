@@ -7,15 +7,17 @@ owns: []
 dependsOn:
   - cli_core_adapter
   - cli_validator_adapter
-  - cli_skills_adapter
+  - cli_lock_adapter
   - cli_host_adapter
   - cli_producer_adapter
-  - cli_surfaces_client_adapter
   - cli_packs_adapter
+  - cli_skills_adapter
   - cli_rules_adapter
   - cli_patterns_adapter
   - cli_variants_adapter
-  - cli_lock_adapter
+  - cli_surfaces_client_adapter
+  - remote_orchestrator
+  - cli_mcp_adapter
 lint:
   allow:
     - code: GOD_COMPONENT
@@ -30,4 +32,4 @@ lint:
         from the one CLI entry orchestrator.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-24T18:06:47.461Z'
+updatedAt: '2026-08-12T18:46:36.615Z'

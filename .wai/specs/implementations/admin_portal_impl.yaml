@@ -203,6 +203,24 @@ methods:
         targetComponent: project_lifecycle_orchestrator
         targetMethod: executeApprovedRequest
     symbol: executeApprovedRequest
+  - name: exportProjectTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the admin orchestrator with the master credential, answering the archive bytes
+          as an application/zip download.
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: exportProjectTree
+    detail: calls-only
+  - name: importProjectTree
+    narrative:
+      - stepNumber: 1
+        description: Forward the raw application/zip body to the admin orchestrator with the master credential.
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: importProjectTree
+    detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-09-11T21:00:22.281Z'
+updatedAt: '2026-09-11T23:02:01.172Z'

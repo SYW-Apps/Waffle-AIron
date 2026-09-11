@@ -115,18 +115,17 @@ export function CanvasView({
           '_blank',
           'noopener',
         ),
-      // Stage G: deep-link the focused spec into the hosted Specs value editor.
-      // Encodes the qualified id as path segments (`::` → `/`, no %3A) so the
-      // editor URL mirrors the same hierarchy the canvas uses. Undefined in
-      // local-dev (no /projects route) so the engine hides the button.
-      onOpenSpec: isLocal
-        ? undefined
-        : (kind: string, id: string) => {
-            const idPath = id ? id.split('::').map(encodeURIComponent).join('/') : '';
-            navigate(
-              '/projects/' + encodeURIComponent(projectIdRef.current) + '/specs/' + kind + (idPath ? '/' + idPath : ''),
-            );
-          },
+      // Stage G: deep-link the focused spec into the Specs value editor. Encodes
+      // the qualified id as path segments (`::` → `/`, no %3A) so the editor URL
+      // mirrors the same hierarchy the canvas uses. The editor lives at a
+      // different route per mode: the hosted app scopes it to a project
+      // (/projects/<id>/specs/…), the local dev shell has only one project and
+      // mounts it at /specs/… — the button itself is the same affordance.
+      onOpenSpec: (kind: string, id: string) => {
+        const idPath = id ? id.split('::').map(encodeURIComponent).join('/') : '';
+        const tail = kind + (idPath ? '/' + idPath : '');
+        navigate(isLocal ? '/specs/' + tail : '/projects/' + encodeURIComponent(projectIdRef.current) + '/specs/' + tail);
+      },
       // Stage G: focus a component / open a method's narrative modal when the URL hash asks.
       initialFlow: hashCmdRef.current.flow,
       initialSelect: hashCmdRef.current.select,

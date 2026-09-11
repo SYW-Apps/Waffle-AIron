@@ -45,6 +45,17 @@ methods:
     description: Loads all type specifications across flat, per-subsystem, and grouped layouts.
     signature: 'loadTypeSpecs(): TypeSpec[]'
     returns: TypeSpec[]
+  - name: listChainedRoots
+    description: >-
+      Every chained subproject root beneath the bound project, as project-relative directories in
+      walk order, recursing through nested mounts (a child that itself chains a grandchild
+      contributes both). Empty for a project that chains nothing. Pure read over the same recursive
+      scan the loader already performs — the one place that knows where a project's trees physically
+      live.
+    signature: 'listChainedRoots(): string[]'
+    returns: string[]
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-07-18T22:57:54.065Z'
+updatedAt: '2026-08-12T17:24:44.641Z'

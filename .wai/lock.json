@@ -1,11 +1,11 @@
 {
   "stateId": {
     "algorithm": "sha256+doctrine",
-    "digest": "8b6faac096c03c9c69e4f0920309135c4e4f5f9a4839bfe58145e39941e3a933"
+    "digest": "062b4952872b992d03b0e928aafc6302f0115271ca8eb18c199d8d19fbb5c88e"
   },
-  "lockedAt": "2026-08-11T18:00:59.059Z",
+  "lockedAt": "2026-08-12T19:21:58.066Z",
   "lockedBy": "local:ShutYourWaffle",
-  "validatorVersion": "5.1.1-dev.2",
+  "validatorVersion": "5.1.1-dev.5",
   "validationResult": {
     "valid": true,
     "errors": 0,

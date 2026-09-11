@@ -1,0 +1,172 @@
+id: iremote_orchestrator
+name: Remote Migration Orchestrator Interface
+description: >-
+  The two migration directions between a local checkout and a hosted project, the standing
+  attachment that decides which project ordinary commands address, and the hosted counterparts of
+  the commands an attached checkout cannot run locally.
+component: remote_orchestrator
+methods:
+  - name: pushTree
+    description: >-
+      Migrate the local spec tree INTO a hosted project: export it locally, optionally initialize
+      the destination project first (createUnitId), then import it there. Reports whether the
+      project was created and where the hosted side backed up any tree it replaced. When archivePath
+      is given the archive is also written there, so the same command produces the artifact an
+      air-gapped transfer needs.
+    signature: 'pushTree(target: RemoteTarget, options: RemoteTransferOptions): RemoteTransferOutcome'
+    returns: RemoteTransferOutcome
+    params:
+      - name: target
+        type: remote_target
+      - name: options
+        type: remote_transfer_options
+  - name: pullTree
+    description: >-
+      Migrate a hosted project's spec tree INTO the local root: export it from the instance, then
+      import it locally under the same non-permissive policy — an authored local tree is never
+      replaced without replaceExisting, and whatever is replaced is backed up. Local extraction does
+      NOT apply the executable-entry guard: the archive came from an instance the operator chose to
+      trust, and refusing a bundled code pack on the way OUT would make a hosted project unpullable.
+    signature: 'pullTree(target: RemoteTarget, options: RemoteTransferOptions): RemoteTransferOutcome'
+    returns: RemoteTransferOutcome
+    params:
+      - name: target
+        type: remote_target
+      - name: options
+        type: remote_transfer_options
+  - name: resolveTarget
+    description: >-
+      Resolve which hosted project THIS command addresses, and with which credential, in a fixed
+      precedence: explicit flags, then the recorded binding for this project root, then the agent's
+      own MCP configuration. The credential comes from the flag, else the environment, else the
+      user's credential store for that instance, else the token carried on the agent's MCP entry.
+      Returns null when nothing resolves — an unattached checkout is a normal state, and the caller
+      decides whether that is an error.
+    signature: 'resolveTarget(root: string, overrides: RemoteCommandOptions): RemoteTarget | null'
+    returns: RemoteTarget | null
+    params:
+      - name: root
+        type: string
+      - name: overrides
+        type: remote_command_options
+  - name: attach
+    description: >-
+      Record this checkout's standing binding to a hosted project after verifying it actually
+      resolves — an attach that cannot reach the instance, or is refused by it, fails LOUDLY here
+      rather than leaving every later command to fail mysteriously. Stores the credential in the
+      user's credential store and the binding (URL + project only) with the project.
+    signature: 'attach(root: string, target: RemoteTarget): RemoteBinding'
+    returns: RemoteBinding
+    params:
+      - name: root
+        type: string
+      - name: target
+        type: remote_target
+  - name: detach
+    description: >-
+      Remove this checkout's binding, returning it to purely local operation. Leaves the stored
+      credential alone — it belongs to the machine, not the project, and other checkouts may be
+      using it.
+    signature: 'detach(root: string): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+    guarantees:
+      - idempotent
+  - name: describeAttachment
+    description: >-
+      What this checkout is attached to and how it was resolved (explicit binding, or derived from
+      the agent's MCP configuration), plus whether a credential is available for that instance —
+      never the credential itself.
+    signature: 'describeAttachment(root: string): RemoteBinding | null'
+    returns: RemoteBinding | null
+    params:
+      - name: root
+        type: string
+    guarantees:
+      - idempotent
+  - name: validateAttached
+    description: >-
+      Run validation against the ATTACHED hosted project's tree and return its report, for a
+      checkout that has no local tree to validate.
+    signature: 'validateAttached(target: RemoteTarget, subsystem?: string): Json'
+    returns: Json
+    params:
+      - name: target
+        type: remote_target
+      - name: subsystem
+        type: string
+        optional: true
+  - name: statusAttached
+    description: Read the completeness dashboard of the ATTACHED hosted project's tree.
+    signature: 'statusAttached(target: RemoteTarget, subsystem?: string): string'
+    returns: string
+    params:
+      - name: target
+        type: remote_target
+      - name: subsystem
+        type: string
+        optional: true
+  - name: lockAttached
+    description: >-
+      Freeze the ATTACHED hosted project's tree. Reports an approval-requested outcome as such —
+      never as a completed lock.
+    signature: 'lockAttached(target: RemoteTarget): string'
+    returns: string
+    params:
+      - name: target
+        type: remote_target
+  - name: storeCredential
+    description: >-
+      Store a bearer credential for a hosted instance on this machine, after verifying the instance
+      accepts it. Separate from attach on purpose: a credential belongs to the MACHINE and serves
+      every checkout, while a binding belongs to ONE project — logging in should not silently bind
+      whatever directory you happened to be standing in.
+    signature: 'storeCredential(url: string, token: string, probeProjectId?: string): void'
+    returns: void
+    params:
+      - name: url
+        type: string
+      - name: token
+        type: string
+      - name: probeProjectId
+        type: string
+        description: >-
+          A project to verify the credential against; when absent the credential is stored
+          unverified and the caller says so
+        optional: true
+  - name: forgetCredential
+    description: >-
+      Forget a stored credential LOCALLY. It does not revoke anything on the instance — the caller
+      must say so plainly, because believing a leaked token was killed is worse than knowing it was
+      not.
+    signature: 'forgetCredential(url: string): void'
+    returns: void
+    params:
+      - name: url
+        type: string
+    guarantees:
+      - idempotent
+  - name: listStoredInstances
+    description: The hosted instances this machine holds a credential for — URLs only, never tokens.
+    signature: 'listStoredInstances(): string[]'
+    returns: string[]
+    guarantees:
+      - idempotent
+  - name: storedCredentialFor
+    description: >-
+      The stored credential for an instance, for the one caller that must WRITE it elsewhere:
+      registering a hosted MCP entry the agent will present. The MCP config adapter is deliberately
+      not permitted to read the credential store itself — an Adapter has no business reaching into
+      held state — so the resolution happens here and the token is handed to it.
+    signature: 'storedCredentialFor(url: string): string | null'
+    returns: string | null
+    params:
+      - name: url
+        type: string
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-08-12T18:31:56.292Z'
+updatedAt: '2026-08-12T19:21:57.664Z'

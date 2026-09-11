@@ -1,0 +1,125 @@
+id: itree_archive_adapter
+name: Tree Archive Adapter Interface
+description: >-
+  The archive + filesystem boundary for spec-tree transfer: three forwards onto the SDK's .waitree
+  capabilities, and the staging/backup/swap directory operations that keep an import recoverable.
+  The only place in sdd_core that touches archive bytes or moves a spec tree on disk.
+component: tree_archive_adapter
+methods:
+  - name: buildTreeArchive
+    description: Pack the supplied tree roots' .wai directories into .waitree archive bytes (SDK forward).
+    signature: >-
+      buildTreeArchive(roots: TreeRootSource[], projectName: string, stateId?: string,
+      includeDerived?: boolean): TreeBuildResult
+    returns: TreeBuildResult
+    params:
+      - name: roots
+        type: tree_root_source[]
+      - name: projectName
+        type: string
+      - name: stateId
+        type: string
+        optional: true
+      - name: includeDerived
+        type: boolean
+        optional: true
+  - name: inspectTreeArchive
+    description: >-
+      Read what a .waitree archive declares — envelope, entry count, inflated size, compatibility —
+      without extracting anything (SDK forward).
+    signature: 'inspectTreeArchive(archive: bytes): TreeArchiveInfo'
+    returns: TreeArchiveInfo
+    params:
+      - name: archive
+        type: bytes
+  - name: extractTreeArchive
+    description: >-
+      Extract a .waitree archive into a destination directory under the SDK's enforced tree limits,
+      optionally refusing executable entries (SDK forward). Callers extract into a staging
+      directory, never into a live tree.
+    signature: >-
+      extractTreeArchive(archive: bytes, destDir: string, refuseExecutableEntries?: boolean):
+      TreeExtractionResult
+    returns: TreeExtractionResult
+    params:
+      - name: archive
+        type: bytes
+      - name: destDir
+        type: string
+      - name: refuseExecutableEntries
+        type: boolean
+        optional: true
+  - name: hasSpecTree
+    description: >-
+      Whether a project root already holds a spec tree (a .wai directory carrying a project config).
+      Drives the BACKUP decision — whatever is there is preserved, bootstrap or not.
+    signature: 'hasSpecTree(root: string): boolean'
+    returns: boolean
+    params:
+      - name: root
+        type: string
+    guarantees:
+      - idempotent
+  - name: createStagingDir
+    description: >-
+      Allocate an empty, uniquely named staging directory INSIDE the destination root and return its
+      path. Extraction lands here first, so a rejected or corrupt archive never touches the live
+      tree. Inside rather than beside the root on purpose: the swap stays a same-filesystem rename
+      AND nothing is ever written outside the project's isolated root, which the hosted tenant model
+      requires.
+    signature: 'createStagingDir(destDir: string): string'
+    returns: string
+    params:
+      - name: destDir
+        type: string
+  - name: commitStagedTree
+    description: >-
+      Swap a fully extracted staging tree into place: for each root, move any existing spec
+      directory aside into one timestamped backup under the destination's .wai-backups/ (when
+      backupExisting is set), then move the staged .wai into position. A legacy .wairon directory is
+      moved aside by its own name rather than left behind shadowing the tree that replaced it.
+      Returns the backup directory path, or an empty string when nothing was replaced. The last step
+      of an import and the only one that mutates the live tree.
+    signature: >-
+      commitStagedTree(stagingDir: string, destDir: string, roots: string[], backupExisting:
+      boolean): string
+    returns: string
+    params:
+      - name: stagingDir
+        type: string
+      - name: destDir
+        type: string
+      - name: roots
+        type: string[]
+      - name: backupExisting
+        type: boolean
+  - name: discardStagingDir
+    description: >-
+      Remove a staging directory and everything under it. Best-effort cleanup after a committed or
+      abandoned import; never throws, because failing to tidy must not fail the import that already
+      succeeded.
+    signature: 'discardStagingDir(stagingDir: string): void'
+    returns: void
+    params:
+      - name: stagingDir
+        type: string
+    guarantees:
+      - idempotent
+  - name: hasAuthoredSpecs
+    description: >-
+      Whether a project root holds AUTHORED design — any spec beyond the L0 system index a bootstrap
+      writes. Drives the REFUSAL decision, and deliberately NOT the same question as hasSpecTree:
+      every hosted project is provisioned with a project config and an empty L0 spec the moment it
+      is created, so treating "has a tree" as "has a design" would make importing into a fresh
+      project impossible without an override — turning the guard into noise everyone routinely
+      overrides. A bootstrap tree is not a design; anything authored on top of it is.
+    signature: 'hasAuthoredSpecs(root: string): boolean'
+    returns: boolean
+    params:
+      - name: root
+        type: string
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-08-12T17:24:09.167Z'
+updatedAt: '2026-08-12T18:28:00.354Z'

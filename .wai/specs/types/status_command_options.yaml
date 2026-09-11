@@ -1,0 +1,19 @@
+kind: value-object
+id: status_command_options
+name: StatusCommandOptions
+description: >-
+  The flag surface of `wairon status`: an optional subsystem scope and whether to recurse into
+  chained subprojects.
+fields:
+  - name: subsystem
+    type: string
+    description: Only report this subsystem
+    optional: true
+  - name: recursive
+    type: boolean
+    description: Recurse into chained subprojects (default true)
+    optional: true
+methods: []
+componentClass: cli_runner
+createdAt: '2026-08-12T18:49:18.857Z'
+updatedAt: '2026-08-12T18:49:18.867Z'

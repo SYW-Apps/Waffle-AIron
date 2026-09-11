@@ -1,0 +1,174 @@
+id: tree_transfer_orchestrator_impl
+name: Tree Transfer Orchestrator Implementation
+description: >-
+  src/core/treetransfer.ts — the two spec-tree transfer workflows. Export gathers roots and
+  provenance then hands off to the archive adapter; import inspects before touching disk, stages,
+  and only then swaps into place with a backup.
+contract: itree_transfer_orchestrator
+sourcePath: src/core/treetransfer.ts
+methods:
+  - name: exportSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Load the bound project's L0 system spec — its name is the exported tree's identity.
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Is there no system spec at the bound root?
+        type: branch
+        condition: loadSystemSpec returned null
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Refuse rather than produce an archive of nothing, which would look like a successful
+          export.
+        type: throw
+        error: no spec tree to export at this project root
+      - stepNumber: 4
+        description: List every chained subproject root beneath this project.
+        type: call
+        targetComponent: spec_loader
+        targetMethod: listChainedRoots
+      - stepNumber: 5
+        description: >-
+          Assemble the root set: the top project at '.' first, then each chained root, every entry
+          paired with the absolute .wai directory it names.
+        type: local
+      - stepNumber: 6
+        description: >-
+          Digest the tree's content into a StateId, stamped into the envelope as provenance for
+          reconciling a lock at the far end.
+        type: call
+        targetComponent: state_hash_specialist
+        targetMethod: hashSpecTree
+        assertsGuarantees:
+          - idempotent
+      - stepNumber: 7
+        description: Pack the roots into .waitree archive bytes.
+        type: call
+        targetComponent: tree_archive_adapter
+        targetMethod: buildTreeArchive
+      - stepNumber: 8
+        description: Assemble the TreeExportResult from the build result plus the packed roots and state id.
+        type: local
+      - stepNumber: 9
+        description: Return the archive and its provenance.
+        type: return
+        outcome: success
+  - name: importSpecTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read what the archive declares BEFORE anything touches disk — envelope, roots, size,
+          compatibility.
+        type: call
+        targetComponent: tree_archive_adapter
+        targetMethod: inspectTreeArchive
+      - stepNumber: 2
+        description: Is the archive incompatible with this wairon?
+        type: branch
+        condition: the inspected info reports incompatible
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse an archive this wairon cannot faithfully read.
+        type: throw
+        error: incompatible .waitree archive (format or minimum wairon version)
+      - stepNumber: 4
+        description: >-
+          Resolve the destination project root: the caller's destDir, else the currently bound
+          project root.
+        type: local
+      - stepNumber: 5
+        description: >-
+          Does the destination already hold a spec tree? This drives the BACKUP — whatever is there
+          is preserved, bootstrap or not.
+        type: call
+        targetComponent: tree_archive_adapter
+        targetMethod: hasSpecTree
+      - stepNumber: 6
+        description: >-
+          Does it hold AUTHORED design? This drives the REFUSAL — a freshly provisioned project
+          carries only an empty L0 spec, which is not a design worth refusing over.
+        type: call
+        targetComponent: tree_archive_adapter
+        targetMethod: hasAuthoredSpecs
+      - stepNumber: 7
+        description: Is authored design present that the caller did not ask to replace?
+        type: branch
+        condition: authored design is present and options.replaceExisting is not set
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Refuse to overwrite an existing design silently — replacing a spec tree is always an
+          explicit choice.
+        type: throw
+        error: >-
+          the destination already holds an authored spec tree; pass replaceExisting to move it aside
+          and import over it
+      - stepNumber: 9
+        label: stage
+        description: Allocate a staging directory beside the destination.
+        type: call
+        targetComponent: tree_archive_adapter
+        targetMethod: createStagingDir
+      - stepNumber: 10
+        description: >-
+          Extract into staging under the enforced limits and the caller's executable-entry policy. A
+          rejected, corrupt, or oversized archive fails HERE, leaving the destination untouched.
+        type: try
+        endStep: 11
+        catches:
+          - error: any extraction failure
+            step: 17
+      - stepNumber: 11
+        description: Extract the archive into the staging directory.
+        type: call
+        targetComponent: tree_archive_adapter
+        targetMethod: extractTreeArchive
+      - stepNumber: 12
+        description: >-
+          Swap the staged tree into place, moving any previous tree aside into one timestamped
+          backup.
+        type: call
+        targetComponent: tree_archive_adapter
+        targetMethod: commitStagedTree
+      - stepNumber: 13
+        description: Remove the now-empty staging directory (best effort).
+        type: call
+        targetComponent: tree_archive_adapter
+        targetMethod: discardStagingDir
+      - stepNumber: 14
+        description: >-
+          Drop the spec repository's cached index — this tree arrived as a directory swap, bypassing
+          every save path the cache observes.
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 15
+        description: >-
+          Assemble the TreeImportResult: destination, project name and roots from the envelope, file
+          count, whether a tree was replaced, and the backup path when one was taken.
+        type: local
+      - stepNumber: 16
+        description: Return what was written and where the backup went.
+        type: return
+        outcome: success
+      - stepNumber: 17
+        label: cleanupAndRethrow
+        description: >-
+          Discard the staging directory, then re-raise — a failed import leaves neither a
+          half-written tree nor litter.
+        type: call
+        targetComponent: tree_archive_adapter
+        targetMethod: discardStagingDir
+      - stepNumber: 18
+        description: Re-raise the extraction failure to the caller.
+        type: throw
+        error: the original extraction failure
+status: complete
+createdAt: '2026-08-12T17:26:02.381Z'
+updatedAt: '2026-08-12T18:28:00.712Z'

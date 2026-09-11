@@ -34,6 +34,18 @@ methods:
     returns: ValidationIssue[]
     guarantees:
       - idempotent
+  - name: invalidateCache
+    description: >-
+      Drop every workspace's cached index IN PLACE (never evicting the workspace itself, so a caller
+      holding a reference keeps receiving invalidations). Every save path already calls this; it is
+      exposed on the contract for the one case that bypasses them — a spec tree that arrived as a
+      directory swap, which the cache's own change detection would otherwise only notice after its
+      staleness window.
+    signature: 'invalidateCache(): void'
+    returns: void
+    guarantees:
+      - idempotent
+    effect: write
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-07-18T22:57:54.007Z'
+updatedAt: '2026-08-12T17:24:47.413Z'

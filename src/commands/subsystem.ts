@@ -6,6 +6,11 @@ import { isProjectInitialized } from '../config/loader.js';
 import { loadSystemSpec } from '../core/specs.js';
 import { composeAgentBrief as coreComposeAgentBrief } from '../core/agent_resolver.js';
 import {
+  exportSpecTree as coreExportSpecTree,
+  importSpecTree as coreImportSpecTree,
+} from '../core/treetransfer.js';
+import type { TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/treetransfer.js';
+import {
   createChainedSubsystem,
   moveSubsystemProject,
   externalizeSubsystem,
@@ -29,6 +34,23 @@ import type { AgentBrief, SubsystemSpec } from '../models/index.js';
 // tree on every call (a re-lock changes the next call).
 export function composeAgentBrief(agentId: string): AgentBrief {
   return coreComposeAgentBrief(agentId);
+}
+
+// cli_core_adapter.exportSpecTree / importSpecTree — 1:1 forwards of the whole
+// spec-tree transfer to the core portal, backing `wairon remote push|pull`.
+//
+// The import deliberately does NOT set the executable-entry guard: a developer
+// extracting an archive from an instance they chose to trust is the
+// trusted-filesystem tier — the same tier `wairon packs add` installs code packs
+// through. Refusing a bundled code pack here would make a hosted project
+// unpullable, while the hosted import (which accepts archives from anyone with
+// project:admin) always applies it.
+export function exportSpecTree(includeDerived?: boolean): TreeExportResult {
+  return coreExportSpecTree(includeDerived);
+}
+
+export function importSpecTree(archive: Uint8Array, options: TreeImportOptions): TreeImportResult {
+  return coreImportSpecTree(archive, options);
 }
 
 interface SubsystemAddOptions {

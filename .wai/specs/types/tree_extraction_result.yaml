@@ -1,0 +1,29 @@
+kind: value-object
+id: tree_extraction_result
+name: TreeExtractionResult
+description: >-
+  Where an extracted spec tree landed and what it contained: the destination project root, the
+  parsed envelope, the roots recreated under it, and the written paths. Purely the archive layer's
+  account of the extraction — what to do about a pre-existing tree (refuse, back up, replace) is the
+  importing caller's policy, not the codec's.
+fields:
+  - name: destDir
+    type: string
+    description: The project root the tree was written under
+    optional: false
+  - name: manifest
+    type: tree_archive_manifest
+    description: The archive's parsed envelope
+    optional: false
+  - name: roots
+    type: string[]
+    description: Project-relative roots recreated under destDir
+    optional: false
+  - name: writtenPaths
+    type: string[]
+    description: Archive-relative paths written
+    optional: false
+methods: []
+componentClass: tree_codec
+createdAt: '2026-08-12T17:18:28.131Z'
+updatedAt: '2026-08-12T17:19:26.818Z'

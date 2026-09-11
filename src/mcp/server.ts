@@ -15,6 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
+import { getStatusReport } from '../commands/status.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
 import { resolveNarrativeLabels } from '../core/narrative-labels.js';
@@ -27,6 +28,10 @@ import {
 } from '../core/skills.js';
 import { resolveChainingParent, loadComponentSpecs } from '../core/specs.js';
 import * as specsModule from '../core/specs.js';
+import * as loaderModule from '../config/loader.js';
+import * as validationModule from '../core/validation.js';
+import * as provisionModule from '../core/provision.js';
+import { resolveDomains } from '../core/domains.js';
 // The gated authoring seam — shared by every access path (see core/authoring.ts).
 // Statically imported for the same reason as the core adapters below: it reads
 // the request-scoped project root at CALL time.
@@ -58,14 +63,19 @@ import {
 // Usage: wairon mcp serve  (add to .claude/settings.json mcpServers)
 // ---------------------------------------------------------------------------
 
+// STATIC, not lazily required — for the reason spelled out on requireSpecs
+// below: these modules read the request-scoped project root at CALL time, so a
+// static binding stays correct per bound project, while a lazy
+// `require('../config/loader.js')` fails to resolve both under the test runner
+// AND inside the bundled hosted server (the bundle's directory has no such
+// file). Every sdd_* tool built on them then answered "Cannot find module"
+// instead of running.
 function requireLoader() {
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  return require('../config/loader.js') as typeof import('../config/loader.js');
+  return loaderModule;
 }
 
 function requireValidation() {
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  return require('../core/validation.js') as typeof import('../core/validation.js');
+  return validationModule;
 }
 
 /**
@@ -84,8 +94,7 @@ function requireSpecs(): typeof specsModule {
 }
 
 function requireProvision() {
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  return require('../core/provision.js') as typeof import('../core/provision.js');
+  return provisionModule;
 }
 
 /**
@@ -662,7 +671,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     () => {
       try {
-        const { resolveDomains } = require('../core/domains.js') as typeof import('../core/domains.js');
+        // Static import (see requireLoader): a lazy require never resolves in
+        // the bundled server, so listDomains failed there instead of answering.
         return json(resolveDomains());
       } catch (e) {
         return errText(String(e));
@@ -1567,7 +1577,12 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ subsystem, recursive }) => {
       try {
-        const { getStatusReport } = require('../commands/status.js') as typeof import('../commands/status.js');
+        // STATIC import, not a lazy require: the server is bundled (tsup), and a
+        // runtime `require('../commands/status.js')` resolves against the bundle's
+        // directory — where that file does not exist. It worked from the CLI
+        // (whose bundle happened to contain it) and failed on the HOSTED data
+        // plane, where sdd_get_status answered "Cannot find module" instead of
+        // the dashboard.
         return text(getStatusReport({
           subsystem,
           recursive: recursive ?? true,
@@ -1715,6 +1730,17 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       inputSchema: {
         subsystem: z.string().optional().describe('Narrow staging to .wai/specs/<subsystem>/ (a convenience — git history stays per-repo)'),
         message: z.string().optional().describe('Commit message; defaults to a timestamped wairon message'),
+      },
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_host_export_tree', {
+      description: 'Hosted spec-tree transfer: pack the BOUND project\'s WHOLE spec tree — its own .wai plus every chained subproject — into a .waitree archive, returned as base64 with its roots, file count and state id. The migration counterpart of an import: use it to take a hosted project local, or to move it to another instance. Requires project:read over the project. Bounded by the data-plane body cap; a very large tree exports through the web download route instead.',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ archiveBase64: string; replaceExisting?: boolean }>(server, 'sdd_host_import_tree', {
+      description: 'Hosted spec-tree transfer: REPLACE the BOUND project\'s spec tree from a base64 .waitree archive. Requires project:admin over the project (strictly above project:write — this replaces the whole design, not one spec). Refuses an occupied destination unless replaceExisting is set, always refuses executable entries (rule/code packs install only through the trusted filesystem), and moves the previous tree aside to a backup whose path is returned.',
+      inputSchema: {
+        archiveBase64: z.string().describe('The .waitree archive bytes, base64-encoded'),
+        replaceExisting: z.boolean().optional().describe('Replace a tree already present (backed up first); without it an occupied destination is refused'),
       },
     }, hostedStub);
   }

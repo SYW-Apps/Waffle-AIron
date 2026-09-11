@@ -11,6 +11,7 @@ subsystem: sdd_host
 componentType: Specialist
 owns: []
 dependsOn: []
+variant: arbiter
 status: complete
 createdAt: '2026-07-15T20:27:07.813Z'
-updatedAt: '2026-07-15T23:30:41.201Z'
+updatedAt: '2026-08-12T05:25:53.021Z'

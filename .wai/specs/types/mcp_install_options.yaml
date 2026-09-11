@@ -1,0 +1,41 @@
+kind: value-object
+id: mcp_install_options
+name: McpInstallOptions
+description: >-
+  What `wairon mcp install` writes and where. Absent a hosted URL it registers the LOCAL stdio
+  server over this checkout (the long-standing behavior); with one it registers a HOSTED http entry
+  instead, so the agent authors the instance's tree — and `wairon remote` can then read that same
+  entry back rather than asking the developer to repeat the connection details.
+fields:
+  - name: backend
+    type: string
+    description: >-
+      Target AI assistant: claude | gemini (aliases resolve); absent = the project's configured
+      targets
+    optional: true
+  - name: global
+    type: boolean
+    description: Install into the user/global config instead of the project's
+    optional: true
+  - name: configDir
+    type: string
+    description: Explicit agent config directory (validated; implies a global-style install)
+    optional: true
+  - name: hostedUrl
+    type: string
+    description: Register a HOSTED http entry against this instance instead of the local stdio server
+    optional: true
+  - name: hostedProject
+    type: string
+    description: 'Hosted only: the project selector to carry on the entry'
+    optional: true
+  - name: hostedToken
+    type: string
+    description: >-
+      Hosted only: the bearer credential to carry; falls back to the stored credential for the
+      instance
+    optional: true
+methods: []
+componentClass: cli_mcp_adapter
+createdAt: '2026-08-12T18:42:24.845Z'
+updatedAt: '2026-08-12T18:42:24.853Z'

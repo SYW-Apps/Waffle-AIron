@@ -1,8 +1,9 @@
 id: isdk_orchestrator
 name: SDK Orchestrator Interface
 description: >-
-  The four pack-authoring/archive workflows, delegating format decisions to the codec, template
-  rendering to the scaffold specialist, and all I/O to the archive adapter. Stateless.
+  The pack-authoring/archive workflows plus the spec-tree archive workflows, delegating format
+  decisions to the codecs, template rendering to the scaffold specialist, and all I/O to the archive
+  adapter. Stateless.
 component: sdk_orchestrator
 methods:
   - name: scaffoldPack
@@ -53,6 +54,65 @@ methods:
       - name: limits
         type: pack_extraction_limits
         optional: true
+  - name: buildTreeArchive
+    description: >-
+      Read every supplied tree root's .wai directory (adapter), keep only portable design state
+      (tree codec), prefix each root's files with its project-relative path, seal the envelope and
+      assemble the files into a .waitree (adapter). Returns the archive bytes + sealed manifest +
+      suggested file name.
+    signature: >-
+      buildTreeArchive(roots: TreeRootSource[], projectName: string, stateId?: string,
+      includeDerived?: boolean): TreeBuildResult
+    returns: TreeBuildResult
+    params:
+      - name: roots
+        type: tree_root_source[]
+        description: >-
+          Every root to pack, top project first — discovered by the caller, which owns chaining
+          knowledge
+      - name: projectName
+        type: string
+      - name: stateId
+        type: string
+        description: The exporting tree's content state, stamped as provenance
+        optional: true
+      - name: includeDerived
+        type: boolean
+        description: Pack regenerable artifacts too (default false)
+        optional: true
+  - name: inspectTreeArchive
+    description: >-
+      Enumerate entries (adapter), parse + version-check the wairon-tree.yaml envelope (tree codec),
+      and return a TreeArchiveInfo WITHOUT extracting anything — so a caller can show, or refuse,
+      what an archive holds before a byte is decompressed.
+    signature: 'inspectTreeArchive(archive: bytes): TreeArchiveInfo'
+    returns: TreeArchiveInfo
+    params:
+      - name: archive
+        type: bytes
+  - name: extractTreeArchive
+    description: >-
+      Enumerate entries (adapter), compute a safe extraction plan under `limits` (tree codec —
+      rejecting unsafe/oversized archives), optionally refuse executable entries, inflate the
+      approved entries, verify integrity, and write the tree under destDir (adapter). Omitted limits
+      fall back to the codec's tree profile. Writes only; replacing or preserving an existing tree
+      is the caller's policy.
+    signature: >-
+      extractTreeArchive(archive: bytes, destDir: string, limits?: PackExtractionLimits,
+      refuseExecutableEntries?: boolean): TreeExtractionResult
+    returns: TreeExtractionResult
+    params:
+      - name: archive
+        type: bytes
+      - name: destDir
+        type: string
+      - name: limits
+        type: pack_extraction_limits
+        optional: true
+      - name: refuseExecutableEntries
+        type: boolean
+        description: Apply the portable-path guard — set by any surface accepting an archive over the wire
+        optional: true
 status: complete
 createdAt: '2026-07-21T18:13:51.375Z'
-updatedAt: '2026-07-21T20:43:27.575Z'
+updatedAt: '2026-08-12T17:19:38.983Z'

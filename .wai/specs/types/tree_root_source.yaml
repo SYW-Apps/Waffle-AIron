@@ -1,0 +1,22 @@
+kind: value-object
+id: tree_root_source
+name: TreeRootSource
+description: >-
+  One spec-tree root to pack: where it sits relative to the project root, and the absolute directory
+  holding its `.wai/`. The caller (which knows how to walk chained subprojects) resolves these; the
+  archive layer only reads what it is handed, so root discovery and archiving stay separable.
+fields:
+  - name: relativePath
+    type: string
+    description: >-
+      Project-relative directory of this root — '.' for the top project, e.g. 'packages/foo' for a
+      chained child
+    optional: false
+  - name: waiDir
+    type: string
+    description: Absolute path of this root's .wai/ directory, the directory whose contents are packed
+    optional: false
+methods: []
+componentClass: tree_codec
+createdAt: '2026-08-12T17:18:13.890Z'
+updatedAt: '2026-08-12T17:18:13.900Z'

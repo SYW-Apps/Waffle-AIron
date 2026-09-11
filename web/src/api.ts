@@ -53,9 +53,47 @@ export async function postBinary<T = unknown>(
   return parse<T>(res, path);
 }
 
-/** Raw GET (no parse) — for status probes where the caller inspects res.status. */
-export function raw(path: string): Promise<Response> {
-  return request(path);
+/**
+ * GET a file and hand it to the browser as a download. Used where the response
+ * IS the payload (a .waitree spec-tree archive) rather than JSON, so the normal
+ * parse path does not apply. The file name comes from the server's
+ * content-disposition, falling back to `fallbackName`; errors surface through
+ * the same `{ error }` handling as every other call.
+ */
+export async function download(path: string, fallbackName: string): Promise<void> {
+  const res = await request(path);
+  if (!res.ok) {
+    let message = `${path} failed (${res.status})`;
+    try {
+      const t = await res.text();
+      const j = t ? JSON.parse(t) : null;
+      if (j && typeof j.error === 'string') message = j.error;
+      else if (t) message = t;
+    } catch {
+      /* keep the default */
+    }
+    throw new ApiError(message, res.status);
+  }
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const matched = /filename="?([^";]+)"?/i.exec(disposition);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = matched?.[1] ?? fallbackName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoke on the next tick — revoking synchronously can cancel the download
+  // in some browsers before it has read the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/** Raw GET (no parse) — for status probes where the caller inspects the Response
+ *  itself (status, or `type === 'opaqueredirect'` when called with
+ *  `{ redirect: 'manual' }` to detect a redirect without following it). */
+export function raw(path: string, init: RequestInit = {}): Promise<Response> {
+  return request(path, init);
 }
 
 /**

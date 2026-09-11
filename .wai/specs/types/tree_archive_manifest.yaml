@@ -1,0 +1,72 @@
+kind: value-object
+id: tree_archive_manifest
+name: TreeArchiveManifest
+description: >-
+  The `.waitree` envelope, serialized as `wairon-tree.yaml` at the archive root — the portable,
+  versioned identity + integrity header wrapping one project's SPEC TREE (its `.wai/` directory plus
+  the `.wai/` of every chained subproject). Distinct from PackArchiveManifest: a pack is doctrine a
+  project SELECTS, a tree is the project's own design. `roots` records the project-relative
+  directory of every packed root ('.' for the top project, e.g. 'packages/foo' for a chained child)
+  so extraction recreates exactly the mount layout subproject resolution expects. `stateId` is the
+  exporting tree's content state at export time — provenance for reconciling a lock after a move,
+  never a gate. `formatVersion` gates archive-format compatibility (a newer major fails loudly
+  rather than silently mis-reading); `minWaironVersion` gates runtime compatibility. Integrity
+  mirrors the pack envelope: `digest` over the whole manifest and `entryDigests` (archive path →
+  sha256).
+fields:
+  - name: formatVersion
+    type: number
+    description: Tree-archive format version (currently 1); a newer major is rejected, not silently mis-read
+    optional: false
+  - name: projectName
+    type: string
+    description: >-
+      The exporting project's name, read from its .wai/project.yaml — provenance and the default
+      suggested file name
+    optional: false
+  - name: roots
+    type: string[]
+    description: >-
+      Project-relative directory of every packed root, in packing order: '.' for the top project,
+      then each chained subproject (e.g. 'packages/foo')
+    optional: false
+  - name: stateId
+    type: string
+    description: >-
+      The exporting tree's computed content state at export time — provenance for lock
+      reconciliation, never an import gate
+    optional: true
+  - name: waironVersion
+    type: string
+    description: The wairon version that produced the archive
+    optional: true
+  - name: minWaironVersion
+    type: string
+    description: Minimum compatible wairon version (semver range)
+    optional: true
+  - name: includesDerived
+    type: boolean
+    description: >-
+      Whether regenerable artifacts (generated/, docs/) were packed too; false for the default lean
+      archive
+    optional: true
+  - name: digest
+    type: string
+    description: Optional integrity digest over the manifest
+    optional: true
+  - name: entryDigests
+    type: Record<string, string>
+    description: 'Optional per-entry integrity map: archive path → sha256'
+    optional: true
+  - name: generatedBy
+    type: string
+    description: Producer stamp, e.g. "@wairon/sdk@X.Y.Z"
+    optional: true
+  - name: generatedAt
+    type: string
+    description: ISO-8601 export timestamp
+    optional: true
+methods: []
+componentClass: tree_codec
+createdAt: '2026-08-12T17:18:10.306Z'
+updatedAt: '2026-08-12T17:18:10.329Z'

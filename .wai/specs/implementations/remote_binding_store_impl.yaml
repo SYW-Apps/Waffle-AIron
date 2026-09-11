@@ -1,0 +1,57 @@
+id: remote_binding_store_impl
+name: Remote Binding Store Implementation
+description: >-
+  src/commands/remotebinding.ts — the two persisted files behind an attached checkout:
+  .wai/remote.json in the project (binding, never secret) and ~/.wairon/credentials.json in the
+  user's home (credentials, keyed by instance URL).
+contract: iremote_binding_store
+sourcePath: src/commands/remotebinding.ts
+methods:
+  - name: readBinding
+    narrative: []
+    intent: >-
+      Read <root>/.wai/remote.json and parse it into a RemoteBinding carrying source 'binding-file'.
+      A missing file, unreadable file, malformed JSON, or a record missing url/projectId all yield
+      null: an unattached checkout is the normal state and must never surface as an error
+      mid-command. Reads from disk on every call, so a re-attach in another process (or an edited
+      file) is picked up immediately.
+  - name: writeBinding
+    narrative: []
+    intent: >-
+      Write { url, projectId, attachedAt } to <root>/.wai/remote.json, creating .wai/ if needed,
+      replacing any previous record. The credential is deliberately absent from what is written —
+      this file lives in the project and may be committed. Written atomically (temp file + rename)
+      so a concurrent read never observes a half-written record.
+  - name: clearBinding
+    narrative: []
+    intent: >-
+      Delete <root>/.wai/remote.json. Idempotent and silent when it does not exist — detaching an
+      unattached checkout is a success, not an error.
+  - name: readCredential
+    narrative: []
+    intent: >-
+      Read ~/.wairon/credentials.json (a map of instance URL to token, URLs normalized so a trailing
+      slash or differing case never hides a stored credential) and return the token for the given
+      instance, or null when the file is absent, unreadable, or carries no entry.
+  - name: writeCredential
+    narrative: []
+    intent: >-
+      Upsert the token under the normalized instance URL in ~/.wairon/credentials.json, creating the
+      directory and file if needed and preserving every other instance's entry. Written atomically,
+      and with owner-only permissions (0600) where the platform supports it — this file holds live
+      bearer credentials.
+  - name: clearCredential
+    narrative: []
+    intent: >-
+      Remove the entry for the normalized instance URL, preserving every other. Idempotent. This
+      forgets the credential LOCALLY only — it does not and cannot revoke it on the instance, which
+      the caller's output must say plainly.
+  - name: listCredentialUrls
+    narrative: []
+    intent: >-
+      Return the instance URLs the credential file holds entries for, sorted, with no token values —
+      the safe projection `wairon remote status` and `wairon logout` (with no argument) print.
+detail: intent
+status: complete
+createdAt: '2026-08-12T18:43:31.843Z'
+updatedAt: '2026-08-12T19:21:57.891Z'

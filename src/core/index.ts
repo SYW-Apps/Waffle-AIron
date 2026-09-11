@@ -16,6 +16,7 @@ export * from './context.js';
 export * from './surfaces.js';
 export * from './openapi.js';
 export * from './packstore.js';
+export * from './treetransfer.js';
 
 // Two components legitimately expose a `loadProjectExtensions`: sdd_core's real
 // pack loader (extensions.js) and sdd_skills' thin client adapter onto it
@@ -28,3 +29,8 @@ export { loadProjectExtensions } from './extensions.js';
 // 1:1 forward to the agent resolver, stated explicitly for the anchored
 // conformance check.
 export { composeAgentBrief } from './agent_resolver.js';
+
+// Spec-tree transfer (icore_portal exportSpecTree / importSpecTree) — pure 1:1
+// forwards to the tree transfer orchestrator, stated explicitly for the same
+// anchored conformance check.
+export { exportSpecTree, importSpecTree } from './treetransfer.js';

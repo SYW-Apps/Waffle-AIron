@@ -81,6 +81,123 @@ stored permission grants on existing hosted instances still upgrade.
 Separation of duties is worth rebuilding — but on a baseline, where "approved by
 X at baseline B" is a reviewable fact, rather than as a status string nothing
 reads.
+### Spec trees move between local and hosted — `.waitree` archives + `wairon remote`
+
+A spec tree was stuck where it was born: a project outgrowing local had no path
+to a hosted instance, a hosted project could not be forked locally, and a
+developer whose agent worked against a hosted project could not run `wairon
+validate` from their checkout at all. Three additions close that, sharing one
+archive format.
+
+- **`.waitree`, the spec-tree archive.** A project's whole tree — its own `.wai/`
+  plus the `.wai/` of every chained subproject, at their original relative paths
+  — packs into one file with a `wairon-tree.yaml` envelope carrying the project
+  name, the packed roots, the tree's content state id and per-entry sha256s.
+  Authored design travels (specs, lock, rules, variants, surfaces, packs);
+  regenerable artifacts (`generated/`, `docs/`) stay behind unless asked for,
+  since the destination rebuilds them. Rides the same ZIP boundary and the same
+  pre-decompress safety model as `.wpack` (zip-slip, bomb, depth, symlink), with
+  caps sized for thousands of small YAML files.
+- **Hosted export/import.** `sdd_host_export_tree` / `sdd_host_import_tree` on
+  the data plane (project:read / project:admin), a **Transfer** tab in the web
+  project view, and `GET|POST /admin/projects/{id}/tree` for operators. Both are
+  TREE-scoped like lock and promote: a credential narrowed to `proj::child`
+  transfers exactly that child. Import **never writes into a live tree** — it
+  extracts to staging inside the project root and only then swaps into place,
+  moving the previous tree aside to a timestamped backup, so a rejected or
+  corrupt archive leaves the destination byte-identical. Executable content
+  (a bundled code pack) is always refused over the wire, the same rule the pack
+  surface already applies; a local extraction on your own machine is the trusted
+  filesystem tier and is not restricted.
+- **`wairon remote push|pull|attach|detach|status`, `wairon login|logout`.**
+  Migration in both directions from a checkout, over the *same* authenticated MCP
+  endpoint an agent uses — no second auth surface. `attach` records a standing
+  binding (instance + project in `.wai/remote.json`, credential in
+  `~/.wairon/credentials.json`, never mixed), after which `validate`, `status`
+  and `lock` run against the hosted tree; everything needing local files keeps
+  failing with guidance to pull first. With nothing attached, the binding falls
+  back to **the agent's own MCP configuration** — so a developer whose agent
+  already works against a hosted project types no credential twice, and the two
+  cannot drift onto different projects. `wairon mcp install --hosted <url>`
+  writes that entry.
+
+Two constraints worth knowing: creating the destination project during
+`push --unit` rides the hosted *web* route (the data plane resolves its project
+binding before dispatch, so it cannot address a project that does not exist yet),
+and `wairon logout` forgets a credential locally without revoking it — revocation
+lives in the hosted UI under Tokens, which the command says out loud.
+
+### Fixed: `wairon update` installed dev builds onto stable installs
+
+`-dev.N` was never in the self-updater's list of pre-release labels — it knew
+only `-beta.N` and `-preview.N` — so a dev build fell through the channel filter
+as a *stable* release. On the default `stable` channel, `wairon update` would
+download the build cut from the last merge to `dev`. Both halves of the release
+pipeline were already correct (every `-dev.N` GitHub release is marked
+pre-release, and npm has `latest` on the stable version with dev builds under the
+`dev` dist-tag), so this was purely the client misreading correct tags — no
+release or tag needed republishing.
+
+`dev` is now a first-class update channel alongside `stable`, `beta` and
+`preview`. Channels are ranked, and each sees its own tier and every narrower
+one: `stable` installs only `vX.Y.Z`, `dev` sees everything. Switch with
+`wairon update --channel dev` (persisted in `~/.wairon/config.json`); an
+unrecognized `--channel` value is now rejected rather than saved.
+
+Classification is closed by default, which is what failed before: any tag with a
+pre-release suffix is a pre-release, and a suffix this build does not recognize
+(`-rc.1`, `-nightly.N`) ranks at the *widest* tier instead of falling through to
+stable — so the next label added to the release pipeline cannot repeat this. The
+updater also cross-checks GitHub's own `prerelease` flag, so a release marked
+pre-release is never a stable-channel candidate however its tag reads. Two
+related fixes ride along: an up-to-date narrow channel now says when a newer
+pre-release exists on a wider one (silence read as "nothing is newer" rather
+than "nothing is newer *for you*"), and the release page size went from 20 to
+100 — `dev` cuts a build per merge, so a page of 20 could hold nothing but
+`-dev.N` and leave a stable install seeing no eligible release at all.
+
+### `sdd_get_status`, `sdd_validate_tree` and `listDomains` can be exercised end to end again
+
+Four `sdd_*` tools reached their implementations through lazy
+`require('../commands/status.js')`-style calls. Shipped builds were fine — the
+bundler inlines those — but the test runner resolves neither the `.js` specifier
+nor the path, so any test driving them through a real MCP client got `Cannot
+find module` instead of a result. They could be shipped but not proven, which is
+how the hosted data plane ended up with tools no end-to-end test covered. Now
+static imports, extending the fix already applied once to the spec surface (and
+documented there) to the rest. `context.ts`'s lazy `require('./domains.js')` —
+documented as breaking a circular dependency that does not exist — went the same
+way.
+
+### `wairon dev` is its own local mode again — no sign-in screen, no hosted chrome
+
+The local dev server could land on the hosted sign-in screen and stay there,
+reporting *"No sign-in method is configured on this instance"* — a dead end,
+since `wairon dev` deliberately configures none. Two causes, both fixed, plus the
+mode itself is now a distinct surface rather than the hosted app with pieces
+hidden.
+
+- **A stale session cookie no longer wedges the dev server.** Auto-login only ran
+  on a *cookieless* GET, but session cookies are not port-scoped: a
+  `wairon_session` left by another project's dev server, a hosted instance on the
+  same host, or an ephemeral dev data dir that was cleaned would be presented,
+  resolve to nothing, and 401. Any bearerless GET in devMode now re-establishes
+  the local session and overrides the presented cookie (re-sending `Set-Cookie`
+  only when the value actually changes). Hosted mode is untouched — it still
+  mints nothing and 404s `/web/dev-login`.
+- **An expired dev session is no longer handed back.** `startDevSession` reused
+  the first stored session for the local-developer subject without checking its
+  expiry, so after the 30-day TTL it returned a dead credential forever. It now
+  prunes expired sessions before reuse and mints a fresh one.
+- **Local mode is a separate shell.** `wairon dev` serves one project on
+  loopback with no accounts, so it no longer renders the environment/org-unit
+  navigator or hosted chrome: a slim bar with two surfaces — **Canvas** (the live
+  architecture graph, bound to the local project) and **Specs** (the spec value
+  editor, previously unreachable in dev) — sharing the same components as the
+  hosted app, so the canvas ↔ specs deep-links work in both. The sign-in screen
+  is unreachable in local mode: an unauthenticated boot probes the dev-only
+  re-establish route once, recovering silently on a dev server and falling
+  through to the real login only on a hosted one.
 
 ### Rule-matrix test tier: every finding code pinned by fire+control fixtures
 

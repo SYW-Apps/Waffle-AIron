@@ -1,0 +1,36 @@
+kind: value-object
+id: remote_transfer_options
+name: RemoteTransferOptions
+description: >-
+  The choices one migration makes, shared by both directions so the two workflows read alike.
+  Nothing here defaults permissively: without replaceExisting an authored destination tree is
+  refused rather than overwritten, and createUnitId is the only way a push creates anything on the
+  far side. createUnitId and includeDerived apply to a push; destDir applies to a pull; archivePath
+  applies to either.
+fields:
+  - name: createUnitId
+    type: string
+    description: >-
+      Push: initialize the destination project into this organization unit before sending. Absent =
+      the project must already exist.
+    optional: true
+  - name: replaceExisting
+    type: boolean
+    description: Replace an AUTHORED tree at the destination (backed up first). Absent = refuse.
+    optional: true
+  - name: includeDerived
+    type: boolean
+    description: 'Push: pack regenerable artifacts too (default false).'
+    optional: true
+  - name: archivePath
+    type: string
+    description: Also write the archive to this path, producing the artifact an air-gapped transfer needs.
+    optional: true
+  - name: destDir
+    type: string
+    description: 'Pull: the local project root to import into; defaults to the bound project root.'
+    optional: true
+methods: []
+componentClass: remote_orchestrator
+createdAt: '2026-08-12T18:33:28.250Z'
+updatedAt: '2026-08-12T18:33:28.286Z'

@@ -1,0 +1,26 @@
+kind: value-object
+id: remote_target
+name: RemoteTarget
+description: >-
+  Everything the CLI needs to act on ONE project of ONE hosted instance: where the instance is,
+  which project to bind, and the bearer credential to present. Deliberately a value passed per call
+  rather than ambient state — the same command can address a different instance on the next
+  invocation, and nothing is cached behind the caller's back. The token is a secret: it is never
+  logged, never written into a project file, and never echoed back in a result.
+fields:
+  - name: url
+    type: string
+    description: Base URL of the hosted instance's data plane (e.g. https://wairon.example.com)
+    optional: false
+  - name: projectId
+    type: string
+    description: The hosted project to bind — optionally subproject-qualified as 'projectId::subsystemId'
+    optional: false
+  - name: token
+    type: string
+    description: Bearer credential presented on every call; the same credential an agent's MCP client uses
+    optional: false
+methods: []
+componentClass: cli_remote_adapter
+createdAt: '2026-08-12T18:31:11.240Z'
+updatedAt: '2026-08-12T18:31:11.251Z'

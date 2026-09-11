@@ -1,0 +1,163 @@
+id: cli_mcp_adapter_impl
+name: CLI MCP Configuration Adapter Implementation
+description: >-
+  src/commands/mcp.ts — where Claude and Gemini/Antigravity read MCP server definitions from, what a
+  wairon entry looks like there (local stdio or hosted http), and how to read one back. Writes touch
+  only the `wairon` entry.
+contract: icli_mcp_adapter
+sourcePath: src/commands/mcp.ts
+methods:
+  - name: detectHostedMcpSource
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the known config locations in precedence order: the project's .mcp.json, the user's
+          .claude.json, then the Gemini/Antigravity project and global files.
+        type: loop
+        loopKind: forEach
+        over: the candidate config paths
+        endStep: 9
+      - stepNumber: 2
+        description: >-
+          Read and parse this config, and take its wairon server entry. A missing, unreadable or
+          malformed file contributes NOTHING and never throws — this runs inside ordinary commands,
+          and a broken agent config must not break the CLI.
+        type: local
+      - stepNumber: 3
+        description: Is there no wairon entry here?
+        type: branch
+        condition: the config carries no mcpServers.wairon entry
+        onTrueStep: 9
+        onFalseStep: 4
+      - stepNumber: 4
+        description: Does the entry carry no url (a command/args stdio server)?
+        type: branch
+        condition: the entry has no url field
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report a LOCAL source — the agent authors this checkout's own tree — naming the config
+          file it came from.
+        type: return
+        outcome: local
+      - stepNumber: 6
+        description: >-
+          Reduce the endpoint to the instance base URL the CLI addresses (dropping the /mcp path and
+          any query).
+        type: local
+      - stepNumber: 7
+        description: >-
+          Read the project selector from the entry's X-Wairon-Project header, falling back to a
+          ?project= query on the endpoint.
+        type: local
+      - stepNumber: 8
+        description: >-
+          Parse the bearer out of the entry's Authorization header when it carries one, then report
+          a HOSTED source with the instance, project and credential.
+        type: return
+        outcome: hosted
+      - stepNumber: 9
+        label: nextConfig
+        description: Nothing usable here — continue with the next config location.
+        type: local
+      - stepNumber: 10
+        description: No wairon entry is registered anywhere.
+        type: return
+        outcome: none
+    detail: full
+    intent: ''
+  - name: installMcpServer
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse a config dir given without a backend — a config directory is agent-specific, so the
+          pair is meaningless alone.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Resolve which backends to write: the explicit --backend, else the backends the project's
+          configured targets imply, else Claude.
+        type: local
+      - stepNumber: 3
+        description: Write the entry for each resolved backend.
+        type: loop
+        loopKind: forEach
+        over: the resolved backends
+        endStep: 12
+      - stepNumber: 4
+        description: >-
+          Validate an explicit config dir for this backend (an implicit global-style install), then
+          resolve the file this backend actually loads SERVER DEFINITIONS from — for Claude,
+          .mcp.json or the user .claude.json, never .claude/settings.json, which Claude ignores for
+          servers.
+        type: local
+      - stepNumber: 5
+        description: >-
+          Read the existing config, keeping every other server and key intact; an unparseable file
+          starts fresh rather than aborting the install.
+        type: local
+      - stepNumber: 6
+        description: Was a hosted instance named?
+        type: branch
+        condition: options.hostedUrl is set
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Build the HOSTED entry: the instance's /mcp endpoint with the caller-resolved bearer and
+          the project selector as headers. A missing credential throws with the login command to
+          run.
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: >-
+          Build the LOCAL stdio entry, pinned to this project via WAIRON_PROJECT_DIR for a
+          project-scoped install so the server never silently climbs to an ancestor .wai; a global
+          install stays unpinned and scopes per session.
+        type: local
+      - stepNumber: 9
+        label: merge
+        description: Is the existing entry already exactly this one?
+        type: branch
+        condition: the registered entry equals the desired entry
+        onTrueStep: 12
+        onFalseStep: 10
+      - stepNumber: 10
+        description: >-
+          Write the entry under mcpServers.wairon — REWRITING a stale one rather than skipping,
+          because a stale command path is exactly how an agent silently loses its wairon tools.
+        type: local
+      - stepNumber: 11
+        description: >-
+          Report where it wrote, what the entry points at, and what the agent must do to pick it up
+          (restart, and for a project-scoped Claude server, approve it once).
+        type: local
+      - stepNumber: 12
+        label: backendEnd
+        description: This backend is up to date.
+        type: local
+    detail: full
+    intent: ''
+    symbol: runMcpInstall
+  - name: reportMcpStatus
+    narrative: []
+    intent: >-
+      For each known config location, report whether a wairon entry is registered and whether it is
+      local or hosted (naming the instance), plus the project the CLI resolves — the one place a
+      developer can see agent and CLI agreeing or disagreeing about what they are working on. Prints
+      paths, never credentials.
+    symbol: runMcpStatus
+  - name: serveMcpStdio
+    narrative: []
+    intent: >-
+      Resolve the project root to attach to — a pinned WAIRON_PROJECT_DIR, else the nearest ancestor
+      holding a .wai, else the cwd — and record HOW it resolved, announcing root and method on
+      stderr (never stdout, which is the JSON-RPC channel) so an attachment to an ancestor tree is
+      observable rather than mysterious. Then start the MCP server on the stdio transport and run
+      until the transport closes.
+    symbol: runMcpServe
+detail: intent
+status: complete
+createdAt: '2026-08-12T18:43:49.494Z'
+updatedAt: '2026-08-12T19:21:57.740Z'

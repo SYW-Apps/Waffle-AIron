@@ -18,6 +18,7 @@ subsystem: sdd_sdk
 componentType: Specialist
 owns: []
 dependsOn: []
+variant: codec
 status: complete
 createdAt: '2026-07-21T17:22:15.864Z'
-updatedAt: '2026-07-21T18:26:55.348Z'
+updatedAt: '2026-08-12T05:26:22.087Z'

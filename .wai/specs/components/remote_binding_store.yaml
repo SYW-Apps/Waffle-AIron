@@ -1,0 +1,30 @@
+id: remote_binding_store
+name: Remote Binding Store
+description: >-
+  The durable half of `wairon remote attach`: which hosted project this checkout is bound to, and
+  the credential to reach it. Deliberately TWO files with different lifetimes and different trust,
+  because collapsing them would leak a secret into a repository. The BINDING (instance URL + project
+  id) lives with the project at .wai/remote.json — it is not a secret, and a team may legitimately
+  commit it so every checkout attaches to the same instance. The CREDENTIAL lives in the user's own
+  store at ~/.wairon/credentials.json, keyed by instance URL, shared across every project on that
+  machine and never written into a project directory. Reads go straight to disk on every call (no
+  RAM copy to go stale when another process re-attaches or a token is rotated), and a malformed or
+  unreadable file reads as "no binding" rather than throwing — an unattached checkout is a normal
+  state, not an error.
+subsystem: sdd_cli
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Deliberately standalone (the sanctioned lightweight form): two small key→value files read
+        straight from disk, with exactly one workflow-layer consumer (remote_orchestrator) and no
+        query surface. A Repository + Registry + Index around "read one binding, read one token"
+        would be pure ceremony — there is nothing to index, nothing to project, and no second reader
+        to keep consistent.
+status: complete
+createdAt: '2026-08-12T18:41:35.884Z'
+updatedAt: '2026-08-12T18:46:31.763Z'

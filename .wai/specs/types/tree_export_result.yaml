@@ -1,0 +1,37 @@
+kind: value-object
+id: tree_export_result
+name: TreeExportResult
+description: >-
+  One project's spec tree packed for transfer: the archive bytes plus enough provenance for the
+  caller to name the file, show what moved, and reconcile a lock afterwards. Returned as bytes
+  rather than written to a path, because the same export serves a CLI file write, an HTTP download
+  and a base64 tool result.
+fields:
+  - name: archive
+    type: bytes
+    description: The .waitree archive bytes
+    optional: false
+  - name: suggestedFileName
+    type: string
+    description: e.g. "waffle-airon.waitree"
+    optional: false
+  - name: projectName
+    type: string
+    description: The exported project's name
+    optional: false
+  - name: roots
+    type: string[]
+    description: Project-relative roots packed — '.' plus every chained subproject
+    optional: false
+  - name: fileCount
+    type: number
+    description: How many spec-tree files were packed
+    optional: false
+  - name: stateId
+    type: string
+    description: The tree's content state at export time
+    optional: true
+methods: []
+componentClass: tree_transfer_orchestrator
+createdAt: '2026-08-12T17:23:35.826Z'
+updatedAt: '2026-08-12T17:23:35.837Z'

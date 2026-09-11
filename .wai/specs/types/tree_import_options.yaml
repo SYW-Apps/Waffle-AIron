@@ -1,0 +1,32 @@
+kind: value-object
+id: tree_import_options
+name: TreeImportOptions
+description: >-
+  The policy an importing caller chooses, kept separate from the archive format so each surface can
+  be as strict as its trust level requires: a hosted surface accepting an upload sets
+  refuseExecutableEntries, while a developer extracting their own archive locally need not. Nothing
+  here is defaulted permissively — an absent replaceExisting refuses to overwrite rather than
+  silently replacing a tree.
+fields:
+  - name: replaceExisting
+    type: boolean
+    description: >-
+      Replace AUTHORED design already present at the destination (the previous tree is moved aside
+      to a backup first). Absent or false REFUSES rather than overwriting. A freshly provisioned
+      project — a project config plus an empty L0 spec and nothing else — is not authored design and
+      is imported over without this.
+    optional: true
+  - name: refuseExecutableEntries
+    type: boolean
+    description: >-
+      Apply the portable-path guard, refusing executable content — set by every surface accepting an
+      archive over the wire.
+    optional: true
+  - name: destDir
+    type: string
+    description: Project root to import into; defaults to the currently bound project root.
+    optional: true
+methods: []
+componentClass: tree_transfer_orchestrator
+createdAt: '2026-08-12T17:23:41.472Z'
+updatedAt: '2026-08-12T18:13:29.692Z'

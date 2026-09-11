@@ -1,0 +1,85 @@
+id: icli_remote_adapter
+name: CLI Remote Client Adapter Interface
+description: >-
+  The hosted-instance capabilities the CLI reaches over HTTP, one authenticated MCP tool call each.
+  Every method takes the full RemoteTarget — instance, project and credential — so nothing is
+  ambient and a single process can address several instances.
+component: cli_remote_adapter
+methods:
+  - name: exportRemoteTree
+    description: >-
+      Call sdd_host_export_tree on the bound hosted project and return the decoded .waitree archive
+      bytes with the envelope facts that came with them. Requires project:read on the far side.
+    signature: 'exportRemoteTree(target: RemoteTarget): TreeExportResult'
+    returns: TreeExportResult
+    params:
+      - name: target
+        type: remote_target
+  - name: importRemoteTree
+    description: >-
+      Call sdd_host_import_tree on the bound hosted project with the base64-encoded archive.
+      Requires project:admin on the far side; executable content is refused there, not here.
+    signature: >-
+      importRemoteTree(target: RemoteTarget, archive: bytes, replaceExisting: boolean):
+      TreeImportResult
+    returns: TreeImportResult
+    params:
+      - name: target
+        type: remote_target
+      - name: archive
+        type: bytes
+      - name: replaceExisting
+        type: boolean
+  - name: initializeRemoteProject
+    description: >-
+      Create the destination project on the instance before a first push, through the hosted WEB
+      plane's project route rather than the data plane: /mcp binds one project and resolves that
+      binding before dispatching, so a project that does not exist yet cannot be addressed there.
+      Presents the same bearer credential and is gated on project:create over the owner unit by the
+      same resolver. Returns the instance's summary — an approval-gated instance may answer that a
+      request was created, which is not a completed project.
+    signature: 'initializeRemoteProject(target: RemoteTarget, ownerUnitId: string): string'
+    returns: string
+    params:
+      - name: target
+        type: remote_target
+      - name: ownerUnitId
+        type: string
+  - name: validateRemoteTree
+    description: >-
+      Call sdd_validate_tree against the bound hosted project and return the validation report, so
+      `wairon validate` in an attached checkout gates on the tree that actually exists rather than
+      on nothing. Requires project:read.
+    signature: 'validateRemoteTree(target: RemoteTarget, subsystem?: string): Json'
+    returns: Json
+    params:
+      - name: target
+        type: remote_target
+      - name: subsystem
+        type: string
+        optional: true
+  - name: getRemoteStatus
+    description: >-
+      Call sdd_get_status against the bound hosted project and return the completeness dashboard.
+      Requires project:read.
+    signature: 'getRemoteStatus(target: RemoteTarget, subsystem?: string): string'
+    returns: string
+    params:
+      - name: target
+        type: remote_target
+      - name: subsystem
+        type: string
+        optional: true
+  - name: lockRemoteProject
+    description: >-
+      Call sdd_host_lock_project against the bound hosted project (or the chained child a qualified
+      selector names). Execute-primary: an instance whose policy resolves to approval answers that a
+      REQUEST was created, which the caller must report rather than treat as locked.
+    signature: 'lockRemoteProject(target: RemoteTarget): string'
+    returns: string
+    params:
+      - name: target
+        type: remote_target
+status: complete
+createdAt: '2026-08-12T18:31:37.284Z'
+updatedAt: '2026-08-12T19:21:57.507Z'

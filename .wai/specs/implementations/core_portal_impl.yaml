@@ -250,6 +250,20 @@ methods:
         type: call
         targetComponent: agent_resolver
         targetMethod: composeAgentBrief
+  - name: exportSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the tree transfer orchestrator.
+        type: call
+        targetComponent: tree_transfer_orchestrator
+        targetMethod: exportSpecTree
+  - name: importSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the tree transfer orchestrator.
+        type: call
+        targetComponent: tree_transfer_orchestrator
+        targetMethod: importSpecTree
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-08T11:12:35.014Z'
+updatedAt: '2026-08-12T17:26:20.640Z'
