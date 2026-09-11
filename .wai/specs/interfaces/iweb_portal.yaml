@@ -324,17 +324,6 @@ methods:
       transport: HTTP
       method: POST
       path: /web/projects/lock
-  - name: projectPromote
-    description: Promote a project; forwards to web_project_orchestrator.promoteProject.
-    signature: 'projectPromote(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
-    params:
-      - name: request
-        type: HttpRequest
-    endpoint:
-      transport: HTTP
-      method: POST
-      path: /web/projects/promote
   - name: projectDestroy
     description: Destroy a project; forwards to web_project_orchestrator.destroyProject.
     signature: 'projectDestroy(request: HttpRequest): HttpResponse'
@@ -1061,4 +1050,4 @@ methods:
       path: /web/projects/tree/import
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-08-12T17:29:09.172Z'
+updatedAt: '2026-09-11T23:01:56.594Z'
