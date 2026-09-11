@@ -60,14 +60,6 @@ methods:
         targetComponent: admin_portal
         targetMethod: lockProject
     symbol: runHostLock
-  - name: promoteProject
-    narrative:
-      - stepNumber: 1
-        description: Forward to the admin portal
-        type: call
-        targetComponent: admin_portal
-        targetMethod: promoteProject
-    symbol: runHostPromote
 status: complete
 createdAt: '2026-07-04T12:53:10.615Z'
-updatedAt: '2026-07-11T19:14:22.419Z'
+updatedAt: '2026-09-11T21:00:24.655Z'

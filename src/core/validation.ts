@@ -39,6 +39,9 @@ import { loadSurfaceSnapshots } from './surfaces.js';
 import { buildCodeModel } from './source-analysis.js';
 import { findChainingParent } from './specs.js';
 import { getProjectRoot } from '../utils/fs.js';
+import * as path from 'path';
+import { settledSpecPaths } from './baseline.js';
+import type { SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec } from '../models/index.js';
 
 /**
  * Codes whose verdict is ROOT-DEPENDENT: they fail because a referenced spec, a
@@ -335,9 +338,20 @@ export function validateSddTree(
   // so the rules genuinely see them as complete. Restore in `finally` so the
   // flip never leaks to later callers sharing this process (e.g. the MCP
   // server or hosted request scope).
+  // Approved-and-unchanged specs are presented to the rules as complete. That
+  // is what the on-disk `status: draft → complete` ratchet used to buy — after
+  // approval, ordinary validate stops relaxing completeness findings — except
+  // the ratchet bought it by rewriting every spec file in the tree, and it was
+  // ONE-WAY: an edited spec stayed marked complete, so in-flux work kept being
+  // judged at full strictness with no way back short of a manual demotion.
+  //
+  // Deriving it from the baseline writes nothing and is bidirectional: a spec
+  // that drifts after approval returns to draft context by itself. With no
+  // baseline the authored status stands, which is how a tree behaves before
+  // anyone has gated it.
   const statusBearing: { status?: 'draft' | 'design' | 'complete' }[] = treatAllAsComplete
     ? [...subsystems, ...components, ...interfaces, ...implementations]
-    : [];
+    : settledStatusBearing({ subsystems, components, interfaces, implementations });
   const statusSnapshot = statusBearing.map((s) => s.status);
   for (const s of statusBearing) s.status = 'complete';
 
@@ -514,6 +528,49 @@ export function validateSddTree(
   } finally {
     statusBearing.forEach((s, i) => { s.status = statusSnapshot[i]; });
   }
+}
+
+/**
+ * The loaded spec objects that a human has approved and that have not moved
+ * since — the set presented to the rules as `complete`.
+ *
+ * Empty when the tree was never approved (authored status stands) and, by
+ * construction, excludes anything edited since: those return to draft context
+ * on their own, which the one-way on-disk ratchet could never do.
+ */
+function settledStatusBearing(loaded: {
+  subsystems: SubsystemSpec[];
+  components: ComponentSpec[];
+  interfaces: InterfaceSpec[];
+  implementations: ImplementationSpec[];
+}): { status?: 'draft' | 'design' | 'complete' }[] {
+  let settled: Set<string> | null;
+  try {
+    settled = settledSpecPaths();
+  } catch {
+    return []; // a baseline problem must never break validation
+  }
+  if (!settled || settled.size === 0) return [];
+
+  const root = getProjectRoot();
+  const index = scanAllSpecs();
+  const rel = (abs: string): string => path.relative(root, abs).split(path.sep).join('/');
+
+  const out: { status?: 'draft' | 'design' | 'complete' }[] = [];
+  const take = (
+    specs: { id: string }[],
+    paths: Record<string, string>,
+  ): void => {
+    for (const spec of specs) {
+      const p = paths[spec.id];
+      if (p && settled!.has(rel(p))) out.push(spec as { status?: 'draft' | 'design' | 'complete' });
+    }
+  };
+  take(loaded.subsystems, index.paths.subsystem);
+  take(loaded.components, index.paths.component);
+  take(loaded.interfaces, index.paths.interface);
+  take(loaded.implementations, index.paths.implementation);
+  return out;
 }
 
 /**

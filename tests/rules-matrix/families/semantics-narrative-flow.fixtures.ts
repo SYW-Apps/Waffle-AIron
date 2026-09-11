@@ -100,6 +100,37 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
+  // DUPLICATE_STEP_LABEL
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'DUPLICATE_STEP_LABEL',
+    severity: 'error',
+    anchoredTo: 'customs_clearance_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'Two steps carry the label "filed" — the symbolic anchor a later delta addresses a step by, so every reference to it is ambiguous.',
+    tree: customsTree([
+      { stepNumber: 1, type: 'local', description: 'Measure the parcel against the oversize thresholds.' },
+      { stepNumber: 2, type: 'local', label: 'filed', description: 'File the freight-class customs declaration.' },
+      { stepNumber: 3, type: 'local', label: 'filed', description: 'File the standard customs declaration.' },
+      { stepNumber: 4, type: 'return', description: 'Report the declaration filed.', outcome: 'success' },
+    ]),
+  }),
+  defineRuleFixture({
+    code: 'DUPLICATE_STEP_LABEL',
+    expectFire: false,
+    reason: 'Each label anchors exactly one step, so every symbolic reference resolves to one place.',
+    scenario:
+      'The two declaration steps carry distinct labels.',
+    tree: customsTree([
+      { stepNumber: 1, type: 'local', description: 'Measure the parcel against the oversize thresholds.' },
+      { stepNumber: 2, type: 'local', label: 'filed-freight', description: 'File the freight-class customs declaration.' },
+      { stepNumber: 3, type: 'local', label: 'filed-standard', description: 'File the standard customs declaration.' },
+      { stepNumber: 4, type: 'return', description: 'Report the declaration filed.', outcome: 'success' },
+    ]),
+  }),
+
+  // -------------------------------------------------------------------------
   // UNREACHABLE_STEP
   // -------------------------------------------------------------------------
   defineRuleFixture({

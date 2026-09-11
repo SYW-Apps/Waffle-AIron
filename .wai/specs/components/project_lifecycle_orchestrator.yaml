@@ -1,7 +1,7 @@
 id: project_lifecycle_orchestrator
 name: Project Lifecycle Orchestrator
 description: >-
-  Project lifecycle actions — initialization, lock, and promotion — requested over MCP, CLI, or UI.
+  Project lifecycle actions — initialization and lock — requested over MCP, CLI, or UI.
   Execute-primary: the action is the caller's normal intent, and the caller's resolved permission
   decides the path: yes executes directly through the pre-authorized entrypoints, approval creates a
   pending ApprovalRequest (the security exception added for separation of duties), no forbids (403 +
@@ -9,11 +9,11 @@ description: >-
   executing or creating an approval — enforce-mode violations reject immediately, warn-mode findings
   ride the summary. Approved requests auto-execute on decision by dispatching to the pre-authorized
   entrypoints (policy orchestrator's executeApprovedInit for init; the admin plane's
-  executeApprovedLock/executeApprovedPromote for lock/promote) and are marked completed. Deciding
-  requires a yes approval:decide permission over the request's project and a decision's decidedBy
-  MUST differ from the originating request's requestedBy (self-approval rejected) — a caller whose
-  own permission is yes executes directly and never enters the approval path, so the self-approval
-  guard cannot deadlock a single-admin instance. Records audit events best-effort.
+  executeApprovedLock for lock) and are marked completed. Deciding requires a yes approval:decide
+  permission over the request's project and a decision's decidedBy MUST differ from the originating
+  request's requestedBy (self-approval rejected) — a caller whose own permission is yes executes
+  directly and never enters the approval path, so the self-approval guard cannot deadlock a
+  single-admin instance. Records audit events best-effort.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -27,4 +27,4 @@ dependsOn:
   - project_registry
 status: complete
 createdAt: '2026-07-16T00:08:29.572Z'
-updatedAt: '2026-07-16T07:27:54.347Z'
+updatedAt: '2026-09-11T21:04:17.550Z'

@@ -9,7 +9,7 @@ import {
 } from './approvals.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { executeApprovedLock, executeApprovedPromote } from './admin.js';
+import { executeApprovedLock } from './admin.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
 import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds } from './authorization.js';
@@ -28,7 +28,7 @@ import type {
 // ---------------------------------------------------------------------------
 // Project Lifecycle Orchestrator (sdd_host)
 //
-// EXECUTE-PRIMARY project lifecycle actions — initialize / lock / promote —
+// EXECUTE-PRIMARY project lifecycle actions — initialize / lock —
 // requested over MCP, CLI, or UI. The action is the caller's normal intent;
 // an approval request is the EXCEPTION added for separation of duties. Every
 // method authenticates the caller credential (via the auth specialist) and
@@ -36,8 +36,8 @@ import type {
 // resolved value:
 //   yes      → execute directly through the pre-authorized entry points
 //              (project:init through the policy orchestrator's
-//              executeApprovedInit; project:lock / project:promote through the
-//              admin plane's executeApprovedLock / executeApprovedPromote) and
+//              executeApprovedInit; project:lock through the admin plane's
+//              executeApprovedLock) and
 //              return a completed ProjectActionOutcome.
 //   approval → create a pending ApprovalRequest and return a pending-approval
 //              outcome; deciding it AUTO-EXECUTES the action.
@@ -65,7 +65,7 @@ const DEFAULT_APPROVAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
  *  Resolved hierarchically: an instance-level value decides everywhere, a
  *  unit-scoped value decides within its subtree's projects. */
 const APPROVAL_DECIDE_CAPABILITY = 'approval:decide';
-/** The capability that lets a caller lock/promote a project. The legacy
+/** The capability that lets a caller lock a project. The legacy
  *  `mcp:write` / `lock:create` / `promote:mark-ready` permissions all map here. */
 const PROJECT_WRITE_CAPABILITY = 'project:write';
 /** The capability that lets a caller initialize a project into a unit. */
@@ -346,42 +346,6 @@ export function lockProject(
   });
 }
 
-/**
- * EXECUTE-PRIMARY project promotion: resolve the caller's project:write
- * permission over the project — yes promotes directly via the admin plane's
- * pre-authorized executeApprovedPromote (completed outcome carrying the promote
- * result), approval creates a pending project:promote request, no forbids.
- *
- * An optional `subproject` qualifier CONFINES the action to a chained child's
- * tree (forwarded to the pre-authorized entry, which reads and re-checks THAT
- * child's own lock and StateId). Permission resolution and audit provenance stay
- * anchored at the TOP project id.
- */
-export function promoteProject(
-  cfg: HostConfig,
-  credential: string | null,
-  projectId: string,
-  subproject?: string,
-): ProjectActionOutcome {
-  return lifecycleAction(cfg, credential, projectId, {
-    action: 'project:promote',
-    verb: 'Promote',
-    noun: 'promotion',
-    subproject,
-    execute: () => {
-      const promo = executeApprovedPromote(cfg, projectId, subproject);
-      return {
-        status: 'completed',
-        action: 'project:promote',
-        summary:
-          `Promotion of project "${projectId}"${subprojectSuffix(subproject)}: ` +
-          `${promo.status} — ${promo.message}`,
-        promote: promo,
-      };
-    },
-  });
-}
-
 /** The completed-outcome summary fragment naming the confined child tree, empty
  *  for an unqualified action (whose wording is unchanged). */
 function subprojectSuffix(subproject?: string): string {
@@ -445,7 +409,7 @@ function lifecycleAction(
   credential: string | null,
   projectId: string,
   opts: {
-    action: 'project:lock' | 'project:promote';
+    action: 'project:lock';
     verb: string;
     noun: string;
     execute: () => ProjectActionOutcome;
@@ -654,11 +618,6 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
       const lock = executeApprovedLock(cfg, req.projectId ?? '', scope);
       return `Locked project "${req.projectId}"${subprojectSuffix(scope)} (status: ${lock.status}).`;
     }
-    case 'project:promote': {
-      const scope = readSubprojectScope(req);
-      const promo = executeApprovedPromote(cfg, req.projectId ?? '', scope);
-      return `Promotion of project "${req.projectId}"${subprojectSuffix(scope)}: ${promo.status} — ${promo.message}`;
-    }
     default:
       throw new Error(`Unsupported approval kind "${req.kind}".`);
   }
@@ -670,7 +629,7 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
  * in approved status (error naming the actual status) and unexpired, dispatch by
  * kind to the pre-authorized execution entry point (project:init to the policy
  * orchestrator's executeApprovedInit, which re-evaluates the active policy and may
- * reject; project:lock / project:promote to the admin plane), mark the approval
+ * reject; project:lock to the admin plane), mark the approval
  * completed, audit at security level (best-effort), and return an outcome summary.
  * The manual retry path behind decideRequest's auto-execution. A re-evaluation
  * failure at execution leaves the approval approved, not completed. Rejects

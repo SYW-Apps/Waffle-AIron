@@ -1665,10 +1665,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       description: 'Hosted project lifecycle (execute-primary): LOCK the bound project (validate-as-complete gate + commit-scoped lock record). Executes directly when your resolved permission is yes and returns the completed outcome; when it is approval, a pending approval request is created instead (await it with sdd_host_await_approval).',
       inputSchema: {},
     }, hostedStub);
-    reg<Record<string, never>>(server, 'sdd_host_promote_project', {
-      description: 'Hosted project lifecycle (execute-primary): PROMOTE the bound, locked project after a StateId re-check. Executes directly when your resolved permission is yes; when it is approval, a pending approval request is created instead.',
-      inputSchema: {},
-    }, hostedStub);
     reg<{ id: string; ownerUnitId: string }>(server, 'sdd_host_initialize_project', {
       description: 'Hosted project lifecycle (execute-primary): initialize a new hosted project into its REQUIRED owner organization unit (with an optional profile selection). Executes directly when your resolved permission is yes; when it is approval, a pending approval request is created instead.',
       inputSchema: {
