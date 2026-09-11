@@ -1543,10 +1543,44 @@ export class SpecWorkspace {
     }
   }
 
+  /**
+   * Refuse a write that would land on a file already holding a DIFFERENT spec.
+   *
+   * In the nested layout a spec's path is derived from its parent — a component
+   * for an interface, a contract for an implementation — and the spec's own id
+   * is not part of it (see getInterfacePath / getImplementationPath, which take
+   * the id but ignore it once the parent resolves). So a second id bound to the
+   * same parent resolves to the SAME file.
+   *
+   * Left unguarded that is silent data loss, and doubly invisible: the caller's
+   * `existing` lookup is by the NEW id, finds nothing, and every re-author
+   * notice ("REMOVED …", the carry-forward seam) stays quiet. An agent renaming
+   * an interface by defining a new one destroys the old contract, its
+   * narratives and its lint.allows, and is told "Successfully defined".
+   */
+  private assertPathHoldsNoOtherSpec(p: string, id: string, kind: string, parentLabel: string): void {
+    if (!pathExists(p)) return;
+    let occupantId: string | undefined;
+    try {
+      occupantId = (readYamlFile(p) as { id?: string } | null)?.id;
+    } catch {
+      return; // unreadable/legacy — the write is the repair
+    }
+    if (!occupantId) return;
+    // A namespaced read of the same spec is not a different spec.
+    if (occupantId === id || splitNamespace(occupantId).localId === splitNamespace(id).localId) return;
+    throw new Error(
+      `Cannot write ${kind} "${id}": ${parentLabel} is already ${kind === 'interface' ? 'served by' : 'implemented by'} `
+      + `"${occupantId}" at ${path.relative(this.rootDir, p)}, and both ids resolve to that one file. `
+      + `Re-author "${occupantId}" instead, or delete it first if you meant to replace it.`,
+    );
+  }
+
   /** Returns non-fatal placement notices (see saveTypeSpec) — empty when there is nothing to clarify. */
   saveInterfaceSpec(spec: InterfaceSpec, opts?: SaveSpecOptions): string[] {
     const notices: string[] = [];
     const p = this.getInterfacePath(spec.id, spec.component);
+    this.assertPathHoldsNoOtherSpec(p, spec.id, 'interface', `component "${spec.component}"`);
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareInterfaceForWrite(spec);
@@ -1621,6 +1655,7 @@ export class SpecWorkspace {
   saveImplementationSpec(spec: ImplementationSpec, opts?: SaveSpecOptions): string[] {
     const notices: string[] = [];
     const p = this.getImplementationPath(spec.id, spec.contract);
+    this.assertPathHoldsNoOtherSpec(p, spec.id, 'implementation', `contract "${spec.contract}"`);
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareImplementationForWrite(spec);
