@@ -10,7 +10,6 @@ import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import {
   initializeProject,
   lockProject,
-  promoteProject,
   getApprovalStatus,
   awaitApproval,
 } from './projectlifecycle.js';
@@ -151,7 +150,6 @@ export function auditToolCall(
 const PROJECT_LIFECYCLE_TOOLS = new Set<string>([
   'sdd_host_initialize_project',
   'sdd_host_lock_project',
-  'sdd_host_promote_project',
   'sdd_host_get_approval_status',
   'sdd_host_await_approval',
 ]);
@@ -196,7 +194,7 @@ const TREE_TRANSFER_TOOLS = new Set<string>([
  *  parent, i.e. the qualifier would narrow nothing.
  *
  *  The two TREE-scoped lifecycle tools — sdd_host_lock_project and
- *  sdd_host_promote_project — are deliberately ABSENT: they are confined by
+ *  — are deliberately ABSENT: they are confined by
  *  FORWARDING the qualifier (steps 16/18) so the action lands on exactly the child
  *  tree the credential is scoped to. */
 const PROJECT_RECORD_TOOLS = new Set<string>([
@@ -292,7 +290,6 @@ function requiredDataPlaneCapability(toolName: string): 'project:read' | 'projec
 const MUTATING_HOST_TOOLS = new Set([
   'sdd_host_initialize_project',
   'sdd_host_lock_project',
-  'sdd_host_promote_project',
   'sdd_host_await_approval', // a decided approval may have executed the action
   'sdd_host_policy_reconcile',
   'sdd_host_import_tree', // replaces the whole spec tree — every open view is stale
@@ -461,11 +458,6 @@ export async function dispatchProjectLifecycleTool(
         // Bound project (args ignored) + the bound qualifier: a qualified
         // credential freezes exactly the child tree it is scoped to.
         value = lockProject(cfg, credential, projectId, subproject);
-        break;
-      case 'sdd_host_promote_project':
-        // Bound project (args ignored) + the bound qualifier: the lock/StateId
-        // re-check then concerns that child tree.
-        value = promoteProject(cfg, credential, projectId, subproject);
         break;
       case 'sdd_host_await_approval':
         // Long-poll for a decision on the caller's own approval request.

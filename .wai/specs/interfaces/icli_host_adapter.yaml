@@ -34,10 +34,6 @@ methods:
     description: Forward the state-scoped lock to the admin portal.
     signature: 'lockProject(credential: string, project: string): LockRecord'
     returns: LockRecord
-  - name: promoteProject
-    description: Forward the gated promote to the admin portal.
-    signature: 'promoteProject(credential: string, project: string): PromoteResult'
-    returns: PromoteResult
 status: complete
 createdAt: '2026-07-04T12:49:25.392Z'
-updatedAt: '2026-07-16T00:18:56.547Z'
+updatedAt: '2026-09-11T20:59:55.785Z'

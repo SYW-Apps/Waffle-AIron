@@ -189,7 +189,6 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/tokens/revoke',
   '/web/projects',
   '/web/projects/lock',
-  '/web/projects/promote',
   '/web/projects/destroy',
 ]);
 
@@ -503,7 +502,6 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
         );
       }
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'lock') return sendJson(res, 200, admin.lockProject(cfg, cred, parts[2]));
-      if (req.method === 'POST' && parts.length === 4 && parts[3] === 'promote') return sendJson(res, 200, admin.promoteProject(cfg, cred, parts[2]));
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'git') return sendJson(res, 201, admin.enableGit(cfg, cred, parts[2], body.remote, body.branch ?? 'main', body.pat));
       if (req.method === 'DELETE' && parts.length === 4 && parts[3] === 'git') {
         admin.disableGit(cfg, cred, parts[2]);

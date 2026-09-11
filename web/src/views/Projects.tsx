@@ -18,7 +18,7 @@ import { UnitSelect } from '../components/UnitSelect';
 import type { OrganizationUnitRecord, ProjectRecord } from '../types';
 
 function statusTone(status: string): 'ok' | 'warn' | 'neutral' {
-  if (status === 'ready' || status === 'promoted') return 'ok';
+  if (status === 'ready') return 'ok';
   if (status === 'locked') return 'warn';
   return 'neutral';
 }
@@ -88,11 +88,6 @@ export function Projects() {
     toast.ok(`Locked ${id}`);
     projects.reload();
   }
-  async function promote(id: string) {
-    await post('/web/projects/promote', { projectId: id });
-    toast.ok(`Promoted ${id}`);
-    projects.reload();
-  }
   async function destroy(id: string) {
     await post('/web/projects/destroy', { id });
     toast.ok(`Destroyed ${id}`);
@@ -142,9 +137,6 @@ export function Projects() {
                     </Button>
                     <AsyncButton size="sm" action={() => lock(p.id)} onError={toast.bad}>
                       Lock
-                    </AsyncButton>
-                    <AsyncButton size="sm" action={() => promote(p.id)} onError={toast.bad}>
-                      Promote
                     </AsyncButton>
                     <ConfirmButton
                       label="Destroy"

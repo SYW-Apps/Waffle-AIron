@@ -125,6 +125,7 @@ export const narrativeFlowRule: SddRule = {
     { code: 'JUMP_INTO_REGION', defaultSeverity: 'warning', summary: 'Jump lands in the middle of a loop/try body from outside — regions are entered through their header' },
     { code: 'FALLTHROUGH_INTO_HANDLER', defaultSeverity: 'warning', summary: 'try body falls through into its own catch/finally region on the success path' },
     { code: 'BACKWARD_JUMP', defaultSeverity: 'warning', summary: 'Backward jump that is not a continue to an enclosing loop header — model repetition with a loop step' },
+    { code: 'DUPLICATE_STEP_LABEL', defaultSeverity: 'error', summary: 'Two steps in one narrative share a label — the symbolic anchor later deltas address by' },
   ],
   check(ctx) {
     for (const impl of ctx.implementations) {
@@ -134,6 +135,34 @@ export const narrativeFlowRule: SddRule = {
         const steps = implMethod.narrative;
         if (!steps.length) continue;
         const where = `Method "${implMethod.name}" in implementation "${impl.id}": `;
+
+        // A label is the symbolic anchor later deltas address a step by, and
+        // the WRITE path already refuses duplicates — but nothing checked a
+        // tree that acquired one another way (a hand edit, or a git merge of
+        // two branches that each added the same label). Such a tree validated
+        // 0/0 and then refused EVERY sdd_update_spec on that implementation,
+        // including deltas to unrelated fields, with no finding pointing at
+        // the cause. The validator has to agree with the write path.
+        const labelled = new Map<string, number>();
+        for (const step of steps) {
+          const label = (step as { label?: string }).label;
+          if (!label) continue;
+          const first = labelled.get(label);
+          if (first !== undefined) {
+            ctx.addIssue(
+              'error',
+              'DUPLICATE_STEP_LABEL',
+              `${where}steps ${first} and ${step.stepNumber} share the label "${label}". `
+              + 'A label anchors one step for later deltas to address; two steps holding it makes '
+              + 'every symbolic reference ambiguous and blocks all further edits to this implementation. '
+              + 'Rename one.',
+              impl.id,
+              isDraftCtx,
+            );
+          } else {
+            labelled.set(label, step.stepNumber);
+          }
+        }
 
         let sound = true;
         const malformed = (msg: string): void => {

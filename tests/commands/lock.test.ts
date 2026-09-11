@@ -17,6 +17,7 @@ import {
 } from '../../src/core/specs.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
 import { runLock } from '../../src/commands/lock.js';
+import { readBaseline } from '../../src/core/baseline.js';
 import type { ValidationResult } from '../../src/core/validation.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -106,6 +107,8 @@ function buildLockableProject(rootDir: string, withEndpoint = true): void {
   setProjectRoot(rootDir);
 }
 
+process.env['WAIRON_BASELINE_DIR'] = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockstore-'));
+
 describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
   let rootDir: string;
 
@@ -137,17 +140,22 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     expect(record!.lockedBy).toMatch(/^local/);
     expect(record!.validationResult).toEqual({ valid: true, errors: 0, warnings: 1 });
 
-    // Everything froze on disk...
+    // Approving writes NOTHING into the spec tree — the status ratchet that
+    // used to rewrite every file is gone, and the approval lives in the
+    // baseline instead.
     invalidateSpecCache();
-    expect(collectPromotableSpecs()).toHaveLength(0);
-    expect(loadComponentSpec('gateway-portal')?.status).toBe('complete');
+    expect(loadComponentSpec('gateway-portal')?.status).toBe('draft');
+    const baseline = readBaseline(rootDir);
+    expect(baseline).not.toBeNull();
+    expect(Object.keys(baseline!.specs).some((p) => p.includes('gateway-portal'))).toBe(true);
+
     // ...and the record persisted to .wai/lock.json.
     const onDisk = JSON.parse(fs.readFileSync(path.join(rootDir, '.wai', 'lock.json'), 'utf8'));
     expect(onDisk.stateId).toEqual(record!.stateId);
     expect(onDisk.status).toBe('ready');
   });
 
-  it('--subsystem narrows the freeze to in-scope specs', async () => {
+  it('--subsystem approves only its own scope, never the whole tree', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
     buildLockableProject(rootDir);
     saveSubsystemSpec(subsystem('aux-sub'));
@@ -156,15 +164,19 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     setProjectRoot(rootDir);
 
     const record = await runLock({ yes: true, subsystem: 'core-sub' });
-
     expect(record).not.toBeNull();
+
+    // The approval covers core-sub's specs and nothing outside it: a scoped
+    // approval must never silently mark the rest of the tree reviewed.
+    const approved = Object.keys(readBaseline(rootDir)!.specs);
+    expect(approved.some((p) => p.includes('gateway-portal'))).toBe(true);
+    expect(approved.some((p) => p.includes('aux-orchestrator'))).toBe(false);
+    expect(approved.some((p) => p.includes('aux-sub'))).toBe(false);
+
+    // And no spec file was rewritten either way.
     invalidateSpecCache();
-    expect(loadComponentSpec('gateway-portal')?.status).toBe('complete');
-    // Out-of-scope specs stay untouched.
+    expect(loadComponentSpec('gateway-portal')?.status).toBe('draft');
     expect(loadComponentSpec('aux-orchestrator')?.status).toBe('draft');
-    const leftover = collectPromotableSpecs().map((p) => p.id);
-    expect(leftover).toContain('aux-sub');
-    expect(leftover).toContain('aux-orchestrator');
   });
 
   it('a declined confirmation returns null and changes nothing', async () => {
@@ -186,6 +198,8 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     invalidateSpecCache();
     expect(collectPromotableSpecs()).toHaveLength(promotableBefore);
     expect(fs.existsSync(path.join(rootDir, '.wai', 'lock.json'))).toBe(false);
+    // Declining records no approval.
+    expect(readBaseline(rootDir)).toBeNull();
   });
 });
 

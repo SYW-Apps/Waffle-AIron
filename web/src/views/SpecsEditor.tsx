@@ -1495,7 +1495,7 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
     <div className="panel stack-lg">
       {locked && (
         <div className="lock-banner">
-          This project is locked — saving a spec change will invalidate the lock (a re-lock is required before promote).
+          This project is approved — saving a spec change puts this spec back in flux until it is approved again.
         </div>
       )}
       {cfg.profileResolvable === false && (

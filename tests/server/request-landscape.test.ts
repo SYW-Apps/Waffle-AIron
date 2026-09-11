@@ -308,7 +308,6 @@ describe('handleMcpRequest landscape discovery dispatch (end-to-end)', () => {
     for (const name of [
       'sdd_host_initialize_project',
       'sdd_host_lock_project',
-      'sdd_host_promote_project',
       'sdd_host_get_approval_status',
       'sdd_host_await_approval',
       'sdd_landscape_list_reachable_projects',

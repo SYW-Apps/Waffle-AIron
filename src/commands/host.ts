@@ -655,19 +655,6 @@ export async function runHostLock(options: HostOptions = {}): Promise<void> {
   }
 }
 
-export async function runHostPromote(options: HostOptions = {}): Promise<void> {
-  const cfg = resolveHostConfig(options);
-  if (!options.project) throw new WaironError('`--project <id>` is required for `host promote`.');
-  try {
-    const result = admin.promoteProject(cfg, masterCredential(), options.project);
-    const mark = result.status === 'ready' ? chalk.green('✓') : chalk.yellow('✗');
-    logger.info(`${mark} ${result.message}`);
-    if (result.status !== 'ready') process.exitCode = 1;
-  } catch (e) {
-    throw mapAdminError(e);
-  }
-}
-
 // ── wairon host git <action> ──────────────────────────────────────────────────
 
 // ── wairon host producer <action> ─────────────────────────────────────────────

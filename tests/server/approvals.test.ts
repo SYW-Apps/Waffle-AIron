@@ -229,7 +229,7 @@ describe('approval repository (sdd_host)', () => {
     // Distinct createdAt values, seeded out of order, to assert newest-first.
     seed([
       mkReq({ id: 'r-a', status: 'pending', projectId: 'p1', kind: 'project:lock', requestedBy: { userId: 'u-1', kind: 'human', issuer: 'local' }, createdAt: '2026-07-01T00:00:00.000Z' }),
-      mkReq({ id: 'r-b', status: 'approved', projectId: 'p1', kind: 'project:promote', requestedBy: { userId: 'u-2', kind: 'human', issuer: 'local' }, createdAt: '2026-07-03T00:00:00.000Z' }),
+      mkReq({ id: 'r-b', status: 'approved', projectId: 'p1', kind: 'project:init', requestedBy: { userId: 'u-2', kind: 'human', issuer: 'local' }, createdAt: '2026-07-03T00:00:00.000Z' }),
       mkReq({ id: 'r-c', status: 'pending', projectId: 'p2', kind: 'project:lock', requestedBy: { userId: 'u-1', kind: 'human', issuer: 'local' }, createdAt: '2026-07-05T00:00:00.000Z' }),
       mkReq({ id: 'r-d', status: 'denied', projectId: 'p2', kind: 'project:init', requestedBy: { userId: 'u-3', kind: 'human', issuer: 'local' }, createdAt: '2026-07-02T00:00:00.000Z' }),
     ]);

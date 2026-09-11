@@ -1,24 +1,27 @@
 import * as os from 'os';
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
-import { WAIRON_VERSION } from '../config/defaults.js';
 import {
-  collectPromotableSpecs,
-  applySpecStatus,
-  invalidateSpecCache,
-  promoteAllComplete,
+  captureBaseline, writeBaseline, diffAgainstBaseline, diffSize, currentChildPins, movedChildren,
+} from '../core/baseline.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
+import * as path from 'path';
+import {
   computeGateStateId,
   writeLockRecord,
+  specPathsInScope,
+  loadSubsystemSpecs,
   type LockRecord,
 } from '../core/index.js';
+import { getProjectRoot } from '../utils/fs.js';
 import type { ValidationResult } from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
 // cli_lock_adapter — the core-side half of `wairon lock` (lockTree, realized
-// by runLock): summarize what will freeze, confirm with the human (skipped
-// under --yes), promote every in-scope spec to `complete` through the core
-// barrel, and persist the commit-scoped lock record carrying the tree's
-// current StateId.
+// by runLock): summarize what CHANGED since the last approval, confirm with
+// the human (skipped under --yes), and record the current tree as approved.
+// It writes nothing into the spec tree — the approval lives in the baseline,
+// outside the working copy.
 //
 // Callers gate on an as-complete validation FIRST — the runner routes the
 // dry-run through the validator adapter's validateAsComplete before this
@@ -47,18 +50,35 @@ export interface LockOptions {
  * same shape).
  */
 export async function runLock(options: LockOptions = {}, gate?: ValidationResult): Promise<LockRecord | null> {
-  // --- Assemble the lock scope + summary of what will freeze ---
-  const promotable = collectPromotableSpecs(options.subsystem);
-  if (promotable.length === 0) {
-    logger.info('All specs are already complete — this will re-validate and regenerate the agent topology.');
+  // --- Summarize what is actually being approved ---
+  // Against the previous approval, not against each spec's stored status: the
+  // human is deciding about a CHANGE, and "3 specs moved since you last said
+  // yes" is the question they can answer. A first approval has no baseline to
+  // compare with, so it reports the size of the tree instead.
+  const diff = diffAgainstBaseline();
+  if (!diff) {
+    logger.info('First approval of this tree — the whole spec tree becomes the approved baseline.');
+  } else if (diffSize(diff) === 0) {
+    logger.info('Nothing has changed since the last approval — this will re-validate and regenerate the agent topology.');
   } else {
-    logger.info(`${promotable.length} spec(s) will be frozen as complete:`);
-    for (const p of promotable) {
-      logger.info(`  • ${p.kind.padEnd(14)} ${p.id}  (${p.status} → complete)`);
+    logger.info(`${diffSize(diff)} spec(s) changed since the last approval:`);
+    for (const p of diff.changed) logger.info(`  ~ ${p}`);
+    for (const p of diff.added) logger.info(`  + ${p}`);
+    for (const p of diff.removed) logger.info(`  - ${p}`);
+  }
+  // A chained child's own edits never show up in the parent's spec diff — the
+  // trees are approved separately. What the parent reviews is the child MOVING:
+  // its approval shifting away from the one this parent pinned.
+  const moved = movedChildren(loadSubsystemSpecs());
+  if (moved.length > 0) {
+    logger.info(`${moved.length} chained child project(s) moved since the last approval:`);
+    for (const m of moved) {
+      logger.info(`  ${m.id}: ${m.pinned.slice(0, 19)}… → ${m.now ? `${m.now.slice(0, 19)}…` : '(no approval)'}`);
     }
   }
+
   logger.blank();
-  logger.warn('This freezes the design as the source of truth and (re)generates the agent topology.');
+  logger.warn('This records the current design as approved and (re)generates the agent topology.');
 
   // --- Confirm (the "are you sure?" gate) ---
   if (!options.yes) {
@@ -70,25 +90,19 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
       {
         type: 'confirm',
         name: 'confirmed',
-        message: 'Lock these specs and generate the agent topology? This freezes the design.',
+        message: 'Approve this design and generate the agent topology?',
         default: false,
       },
     ]);
     if (!confirmed) return null;
   }
 
-  // --- Freeze: promote every in-scope spec to complete ---
-  if (options.subsystem) {
-    // The core-wide freeze takes no scope parameter — a scoped lock promotes
-    // exactly the collected in-scope specs instead.
-    for (const p of promotable) applySpecStatus(p.kind, p.id, 'complete');
-    invalidateSpecCache();
-  } else {
-    promoteAllComplete();
-  }
-  if (promotable.length > 0) {
-    logger.success(`Locked ${promotable.length} spec(s) as complete.`);
-  }
+  // Nothing is written into the spec tree. Approval used to ratchet every
+  // spec's `status` to `complete` on disk — up to hundreds of rewritten files
+  // for a decision that changed no design — so that later validate runs would
+  // stop relaxing completeness findings. The baseline carries that fact now,
+  // and derives it per spec, so an edit after approval returns that spec to
+  // draft context on its own instead of staying frozen complete.
 
   // --- Persist the commit-scoped lock record at the tree's CURRENT StateId ---
   // Computed AFTER the freeze (like the hosted lock): the promotion is part of
@@ -113,5 +127,23 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
     status: 'ready',
   };
   writeLockRecord(record);
+
+  // Record WHAT was approved, not just that something was. The lock record
+  // carries an identity, which can only ever answer "did anything move?"; the
+  // baseline carries the tree, so `wairon status` can name the specs that
+  // moved and a human can review a change instead of a banner.
+  //
+  // Written outside the working tree, so approving adds nothing to `git status`.
+  // A scoped approval covers only its subsystem; everything else keeps the
+  // approval it already had.
+  const root = getProjectRoot();
+  const scope = options.subsystem
+    ? {
+      paths: new Set(
+        specPathsInScope(options.subsystem).map((p) => path.relative(root, p).split(path.sep).join('/')),
+      ),
+    }
+    : undefined;
+  writeBaseline(captureBaseline(lockedBy, currentChildPins(loadSubsystemSpecs(), root), root, scope));
   return record;
 }

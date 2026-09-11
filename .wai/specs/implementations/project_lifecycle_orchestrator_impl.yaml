@@ -194,91 +194,6 @@ methods:
         type: return
         outcome: the project action outcome
     detail: full
-  - name: promoteProject
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Resolve the caller's project:write permission over the project
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
-      - stepNumber: 3
-        description: 'Branch on the resolved value: yes executes, no forbids, approval requests'
-        type: switch
-        'on': the resolved effective permission value
-        cases:
-          - value: 'yes'
-            step: 4
-          - value: 'no'
-            step: 7
-        defaultStep: 8
-      - stepNumber: 4
-        description: >-
-          Authorized: promote directly via the admin plane's pre-authorized entry, forwarding the
-          project id AND the optional subproject qualifier so the lock/StateId re-check concerns the
-          chained child's tree when one was supplied — permission and audit stay anchored at the TOP
-          project id.
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: executeApprovedPromote
-      - stepNumber: 5
-        description: >-
-          Build a completed ProjectActionOutcome (action project:promote) carrying the promote
-          result
-        type: local
-      - stepNumber: 6
-        description: Executed — continue to auditing
-        type: jump
-        toStep: 11
-      - stepNumber: 7
-        description: Reject the promotion
-        type: throw
-        error: Forbidden — caller may not promote this project
-      - stepNumber: 8
-        description: >-
-          Build the pending project:promote ApprovalRequest: kind, the TOP project id, the
-          requester's subject and token id, expiry, and a redacted human summary. When the caller is
-          bound to a subproject, record that qualifier in the request's payload (payloadType naming
-          the scope shape), so the approved promotion re-checks THAT child's lock and StateId rather
-          than the whole project's, and the summary names the subproject so an approver sees the
-          real scope.
-        type: local
-      - stepNumber: 9
-        description: Create the pending approval request
-        type: call
-        targetComponent: approval_repository
-        targetMethod: create
-      - stepNumber: 10
-        description: Build a pending-approval ProjectActionOutcome carrying the created request
-        type: local
-      - stepNumber: 11
-        description: Append a redacted audit event without letting a failure fail the action
-        type: try
-        endStep: 13
-        catches:
-          - error: audit append failure
-            step: 14
-      - stepNumber: 12
-        description: Append the redacted project-lifecycle audit event (security level)
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 13
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 15
-      - stepNumber: 14
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 15
-        description: Return the project action outcome
-        type: return
-        outcome: the project action outcome
-    detail: full
   - name: getApprovalStatus
     narrative:
       - stepNumber: 1
@@ -426,7 +341,7 @@ methods:
         description: If the decision denied the request, skip execution and go to auditing
         type: branch
         condition: the decision denied the request (not approved)
-        onTrueStep: 21
+        onTrueStep: 19
         onFalseStep: 12
       - stepNumber: 12
         description: 'Approved: auto-execute by dispatching on the request''s kind'
@@ -437,9 +352,7 @@ methods:
             step: 13
           - value: project:lock
             step: 15
-          - value: project:promote
-            step: 17
-        defaultStep: 19
+        defaultStep: 17
       - stepNumber: 13
         description: Execute the approved initialization via the policy orchestrator's pre-authorized entry
         type: call
@@ -448,7 +361,7 @@ methods:
       - stepNumber: 14
         description: Continue to mark the approval completed
         type: jump
-        toStep: 20
+        toStep: 18
       - stepNumber: 15
         description: >-
           project:lock — execute through the admin plane's pre-authorized lock entry, forwarding the
@@ -461,48 +374,36 @@ methods:
       - stepNumber: 16
         description: Continue to mark the approval completed
         type: jump
-        toStep: 20
+        toStep: 18
       - stepNumber: 17
-        description: >-
-          project:promote — execute through the admin plane's pre-authorized promote entry,
-          forwarding the subproject qualifier recorded on the request's payload when it carries one,
-          so the lock/StateId re-check concerns that child tree.
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: executeApprovedPromote
-      - stepNumber: 18
-        description: Continue to mark the approval completed
-        type: jump
-        toStep: 20
-      - stepNumber: 19
         description: Reject an unsupported approval kind
         type: throw
         error: unsupported approval kind
-      - stepNumber: 20
+      - stepNumber: 18
         description: Mark the approval completed once execution succeeded
         type: call
         targetComponent: approval_repository
         targetMethod: markCompleted
-      - stepNumber: 21
+      - stepNumber: 19
         description: Append a redacted audit event without letting a failure fail the decision
         type: try
-        endStep: 23
+        endStep: 21
         catches:
           - error: audit append failure
-            step: 24
-      - stepNumber: 22
+            step: 22
+      - stepNumber: 20
         description: Append the redacted approval.decided audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 23
+      - stepNumber: 21
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 25
-      - stepNumber: 24
+        toStep: 23
+      - stepNumber: 22
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 25
+      - stepNumber: 23
         description: Return the decided approval request
         type: return
         outcome: the decided approval request
@@ -564,9 +465,7 @@ methods:
             step: 12
           - value: project:lock
             step: 14
-          - value: project:promote
-            step: 16
-        defaultStep: 18
+        defaultStep: 16
       - stepNumber: 12
         description: >-
           Execute the approved project initialization under pack policy via the policy
@@ -577,7 +476,7 @@ methods:
       - stepNumber: 13
         description: Continue to mark the approval completed
         type: jump
-        toStep: 19
+        toStep: 17
       - stepNumber: 14
         description: >-
           project:lock — execute through the admin plane's pre-authorized lock entry, forwarding the
@@ -589,49 +488,38 @@ methods:
       - stepNumber: 15
         description: Continue to mark the approval completed
         type: jump
-        toStep: 19
+        toStep: 17
       - stepNumber: 16
-        description: >-
-          project:promote — execute through the admin plane's pre-authorized promote entry,
-          forwarding the subproject qualifier recorded on the request's payload when it carries one.
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: executeApprovedPromote
-      - stepNumber: 17
-        description: Continue to mark the approval completed
-        type: jump
-        toStep: 19
-      - stepNumber: 18
         description: Reject an unsupported approval kind
         type: throw
         error: unsupported approval kind
-      - stepNumber: 19
+      - stepNumber: 17
         description: Mark the approval completed once the privileged action has executed successfully
         type: call
         targetComponent: approval_repository
         targetMethod: markCompleted
-      - stepNumber: 20
+      - stepNumber: 18
         description: Append a redacted audit event without letting a failure fail the execution
         type: try
-        endStep: 22
+        endStep: 20
         catches:
           - error: audit append failure
-            step: 23
-      - stepNumber: 21
+            step: 21
+      - stepNumber: 19
         description: >-
           Append the redacted approval.executed audit event (security level) under the active
           retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 22
+      - stepNumber: 20
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 24
-      - stepNumber: 23
+        toStep: 22
+      - stepNumber: 21
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 24
+      - stepNumber: 22
         description: Return the execution outcome summary
         type: return
         outcome: execution outcome summary
@@ -687,4 +575,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-07-25T17:26:30.125Z'
+updatedAt: '2026-09-11T21:02:56.042Z'

@@ -2,7 +2,7 @@
 
 A self-contained, runnable demo of the wairon **hosting server** — wairon served
 over HTTP for many fully-isolated projects, with an admin control plane and a
-state-scoped lock/promote. See the
+the state-scoped lock. See the
 [hosted server guide](../../docs/design/hosted-mcp-server.md) for the full
 architecture, Docker deployment, auth, and sizing.
 
@@ -25,11 +25,10 @@ verifies each step (it exits non-zero if anything fails):
 4. **Scoped tool call:** a valid key completes MCP `initialize`, then
    `sdd_get_status` returns `● System: demo` — proving the call was bound to the
    *demo* project's tree via per-request `AsyncLocalStorage`.
-5. **State-scoped lock → promote:** `wairon host lock` validates as-complete and
-   writes `.wai/lock.json` scoped to a deterministic `StateId`; `promote` matches
-   → ready.
-6. **TOCTOU guard:** editing a spec after locking makes `promote` refuse
-   (`re-lock required`) until you re-lock.
+5. **State-scoped lock:** `wairon host lock` validates as-complete and writes
+   `.wai/lock.json` scoped to a deterministic `StateId`.
+6. **TOCTOU guard:** editing a spec after locking moves the `StateId`, so the
+   recorded lock no longer describes the tree.
 
 Override ports with `DEMO_PORT` / `DEMO_ADMIN_PORT` if `8987`/`8988` are taken.
 

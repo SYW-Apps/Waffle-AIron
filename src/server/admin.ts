@@ -31,7 +31,6 @@ import type {
   HostedProjectRecord,
   Principal,
   PrincipalSubject,
-  PromoteResult,
   DisplayRole,
 } from './types.js';
 
@@ -215,7 +214,7 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
 }
 
 /**
- * Step 1 of executeApprovedLock / executeApprovedPromote: the root the action
+ * Step 1 of executeApprovedLock: the root the action
  * concerns. Without a qualifier that is the project's own isolated root; WITH one
  * it is the CHAINED CHILD's tree, resolved through the project registry's
  * containment-checked qualified resolution — the SAME seam the data plane binds
@@ -576,39 +575,3 @@ export function diagramViewLink(cfg: HostConfig, credential: string | null, proj
   return `/view/diagram?token=${signViewToken(project, 'canvas')}`;
 }
 
-export function promoteProject(cfg: HostConfig, credential: string | null, project: string): PromoteResult {
-  const principal = requirePrincipal(cfg, credential);
-  if (authorize(cfg.dataDir, principal, 'project:write', 'project', project).value !== 'yes') {
-    throw new AdminAuthError('Forbidden — promoting a project requires project:write over it');
-  }
-  return executeApprovedPromote(cfg, project);
-}
-
-/**
- * Pre-authorized entry for the approval workflow: the same privileged action as
- * promoteProject but WITHOUT credential authentication — the caller
- * (project_lifecycle_orchestrator) has already enforced permission-based
- * authorization. Never routed from any portal.
- *
- * An optional `subproject` qualifier binds the CHAINED CHILD's tree instead of
- * the project's own, so the lock-record read, the StateId recomputation and the
- * staleness verdict all concern that child's tree.
- */
-export function executeApprovedPromote(cfg: HostConfig, projectId: string, subproject?: string): PromoteResult {
-  const root = boundLifecycleRoot(cfg, projectId, subproject);
-  return runWithProjectRoot(root, () => {
-    // One authority for "is this project locked?" — shared with the project config
-    // view, `status`, and `doctor`, so promotion and reporting can never disagree.
-    // A pack change (or a record written before doctrine was covered, whose
-    // algorithm marker differs) reads as stale instead of passing.
-    const { state, record: lock, current } = hostCore.readLockState();
-    if (state === 'unlocked' || !lock) {
-      return { status: 'not-locked', message: 'Project is not locked; run lock first.' };
-    }
-    if (state === 'stale') {
-      return { status: 'stale', stateId: current, message: 'Spec tree or governing doctrine changed since lock; re-lock required.' };
-    }
-    hostCore.writeLockRecord({ ...lock, status: 'promoted' });
-    return { status: 'ready', stateId: current, message: 'Locked state matches; change-set marked ready for promotion.' };
-  });
-}

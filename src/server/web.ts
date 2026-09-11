@@ -2605,9 +2605,6 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       Array.prototype.forEach.call(host.querySelectorAll('[data-lock]'), function (b) {
         b.addEventListener('click', function () { projectAction('/web/projects/lock', { projectId: b.getAttribute('data-lock') }, b, 'Locking…', 'Lock'); });
       });
-      Array.prototype.forEach.call(host.querySelectorAll('[data-promote]'), function (b) {
-        b.addEventListener('click', function () { projectAction('/web/projects/promote', { projectId: b.getAttribute('data-promote') }, b, 'Promoting…', 'Promote'); });
-      });
       Array.prototype.forEach.call(host.querySelectorAll('[data-destroy]'), function (b) {
         b.addEventListener('click', function () {
           if (!confirm('Destroy project "' + b.getAttribute('data-destroy') + '"? This removes its entire spec tree.')) return;
@@ -3022,11 +3019,6 @@ function projectCreate(cfg: HostConfig, sessionId: string, body: Body, res: Serv
 /** Lock a project; forwards to web_project_orchestrator.lockProject. */
 function projectLock(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   sendJson(res, 200, webproject.lockProject(cfg, sessionId, String(body?.projectId ?? '')));
-}
-
-/** Promote a project; forwards to web_project_orchestrator.promoteProject. */
-function projectPromote(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webproject.promoteProject(cfg, sessionId, String(body?.projectId ?? '')));
 }
 
 /** Destroy a project; forwards to web_project_orchestrator.destroyProject. */
@@ -3454,10 +3446,6 @@ export async function handleWebRequest(
       // POST /web/projects/lock { projectId } — lock (lock:create scope).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'lock') {
         return projectLock(cfg, sessionId, body, res);
-      }
-      // POST /web/projects/promote { projectId } — mark ready (promote:mark-ready scope).
-      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'promote') {
-        return projectPromote(cfg, sessionId, body, res);
       }
       // POST /web/projects/destroy { id } — deregister (project:destroy scope).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'destroy') {

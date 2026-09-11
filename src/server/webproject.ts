@@ -4,7 +4,6 @@ import { listProjectRecords } from './projects.js';
 import { listProjectPlacements } from './organization.js';
 import {
   lockProject as adminLockProject,
-  promoteProject as adminPromoteProject,
   destroyProject as adminDestroyProject,
 } from './admin.js';
 import { initializeProjectWithProfile } from './policy.js';
@@ -14,7 +13,6 @@ import type {
   HostedProjectRecord,
   ProjectInitRequest,
   ProjectProfileSelection,
-  PromoteResult,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -112,15 +110,6 @@ export function createProject(
  */
 export function lockProject(cfg: HostConfig, sessionId: string, projectId: string): LockRecord {
   return adminLockProject(cfg, sessionId, projectId); // step 1 (forward)
-}
-
-/**
- * Mark a locked project ready for promotion after the StateId re-check. Forwards
- * to admin_orchestrator.promoteProject passing the sessionId as the credential —
- * project:write permission is enforced there.
- */
-export function promoteProject(cfg: HostConfig, sessionId: string, projectId: string): PromoteResult {
-  return adminPromoteProject(cfg, sessionId, projectId); // step 1 (forward)
 }
 
 /**

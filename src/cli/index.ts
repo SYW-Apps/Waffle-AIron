@@ -39,7 +39,6 @@ import {
   runHostDoctor,
   runHostKey,
   runHostLock,
-  runHostPromote,
   runHostGit,
   runHostProducer,
   runHostSecret,
@@ -992,15 +991,6 @@ hostCmd
   .option('--data-dir <path>', 'data root')
   .action(async (opts) => {
     await runHostLock({ project: opts.project, dataDir: opts.dataDir });
-  });
-
-hostCmd
-  .command('promote')
-  .description('promote a locked project after re-checking its StateId (never merges to production)')
-  .requiredOption('--project <id>', 'project id')
-  .option('--data-dir <path>', 'data root')
-  .action(async (opts) => {
-    await runHostPromote({ project: opts.project, dataDir: opts.dataDir });
   });
 
 hostCmd

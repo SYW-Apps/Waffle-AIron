@@ -33,13 +33,13 @@ The server splits a public **data plane** from an admin **control plane**, on
 | Plane | Bind (default) | Auth | Surface |
 |---|---|---|---|
 | **Data** | `0.0.0.0:8080` | project API key (bearer) | `POST /mcp` (the `sdd_*` tool surface), `GET /healthz`, `GET /readyz` |
-| **Control** | `127.0.0.1:8081` | master credential (`WAIRON_ADMIN_TOKEN`) | `/admin/projects`, `/admin/keys`, `/admin/projects/{id}/lock`, `/admin/projects/{id}/promote` |
+| **Control** | `127.0.0.1:8081` | master credential (`WAIRON_ADMIN_TOKEN`) | `/admin/projects`, `/admin/keys`, `/admin/projects/{id}/lock` |
 
 The data plane **reuses `sdd_mcp` unchanged** — `host_mcp_adapter` calls
 `createMcpServer()` and runs it inside the request's bound project scope, so the
 existing `sdd_*` tools resolve to the right `.wai/` tree with no changes to them.
 The control plane owns **project & key lifecycle plus the state-scoped
-lock/promote**, and is reachable two ways that hit the *same* logic: the HTTP
+lock**, and is reachable two ways that hit the *same* logic: the HTTP
 admin API, and the `wairon host …` CLI (in-process — no server needed).
 
 ### Request flow (data plane)
@@ -101,7 +101,7 @@ verifier slots in at the same boundary. Not a v1 requirement.
 
 ---
 
-## 4. State-scoped lock & gated promote
+## 4. State-scoped lock
 
 Closes the stale-approval (TOCTOU) gap from the feature request.
 
@@ -110,13 +110,20 @@ Closes the stale-approval (TOCTOU) gap from the feature request.
   no-op re-save doesn't shift identity). Identical spec content ⇒ identical
   `StateId`; any edit changes it.
 - **`wairon host lock --project <id>`** → `validateAsComplete` (full strictness,
-  no draft relaxation, mutates nothing) → on success, promote all specs to
-  `complete` and write `.wai/lock.json` **scoped to the exact `StateId`** it
-  validated.
-- **`wairon host promote --project <id>`** → reads the lock, **recomputes the
-  current `StateId`**, and refuses (`stale — re-lock required`) if it drifted.
-  It **never merges** to production — at most it marks the change-set `ready`.
-  Verified: editing a spec after lock flips promote to stale until you re-lock.
+  no draft relaxation, mutates nothing) → on success, record the approved tree
+  as the **baseline** and write `.wai/lock.json` **scoped to the exact `StateId`**
+  it validated. The spec tree itself is never written to — see
+  [approval baselines](approval-baseline.md).
+
+**On the removed `promote` step.** Lock used to be followed by a second gate,
+`wairon host promote`, which re-read the lock, recomputed the `StateId`, and —
+if nothing had drifted — flipped `lock.json`'s `status` from `ready` to
+`promoted`. That was its entire effect. It never merged, published or deployed
+anything, and no code ever branched on the value: the sole reader treated
+`ready` and `promoted` identically. It was intended as a separation-of-duties
+checkpoint, but `lock` is already the human gate (agents do not run it), so it
+gated a door that was already locked. Removed; the `promote:mark-ready` legacy
+permission alias is kept in `migration.ts` so stored grants still upgrade.
 
 ---
 
@@ -132,13 +139,11 @@ participant:
   branch.
 - `wairon host git sync` (or `POST …/git/sync`) pulls the default branch into the
   working branch.
-- **`lock` is git-aware:** it syncs, validates-as-complete, promotes, then
+- **`lock` is git-aware:** it syncs, validates-as-complete, records the approved
+  baseline, then
   **commits + pushes the working branch** and records the commit SHA + a
   **compare URL** — you open the PR (push-only, no forge API). `wairon validate`
   is the natural PR status check.
-- **`promote`** is unchanged — the content `StateId` already refuses a stale
-  lock, and it never merges (the human merges the PR).
-
 Identity: a single bot token — `WAIRON_GIT_TOKEN` (+ `WAIRON_GIT_NAME` /
 `WAIRON_GIT_EMAIL`). `.wai/lock.json` and `.wai/git.json` stay container-local
 (never committed). The Docker image ships with `git` installed.
@@ -327,7 +332,7 @@ Two equivalent paths to the same control-plane logic:
 
 - **CLI over `docker exec` / SSH** (recommended — no admin port exposed):
   `wairon host project create|list|destroy`, `wairon host key mint|list|revoke`,
-  `wairon host lock`, `wairon host promote`. Reads `WAIRON_ADMIN_TOKEN` and
+  `wairon host lock`. Reads `WAIRON_ADMIN_TOKEN` and
   `WAIRON_DATA_DIR` from the container env.
 - **HTTP admin API** — the same operations under `/admin/*`, bound to
   `127.0.0.1:8081` by default. To let your own UI/automation call it, run with
@@ -341,7 +346,7 @@ Two equivalent paths to the same control-plane logic:
 - **Auth:** `Authorization: Bearer <project key>`. Scope is server-side; a
   single-project key needs no `project` argument.
 - **Tools:** the full `sdd_*` surface. No privileged tools on the public plane —
-  lock/promote are control-plane only.
+  lock is control-plane only.
 
 ### 5.4a Reverse proxy & the realtime WebSocket (`/web/ws`)
 
@@ -536,5 +541,5 @@ resize without a rebuild.
 - **Sync/mirror backends** (FR#5) remain future work: native FS is the source of
   truth; a `wairon sync --git <remote>` mirror would layer on top, not replace it.
 - **Actual promotion/merge** to a canonical branch is deliberately out of scope —
-  `promote` marks readiness after the `StateId` re-check; a separate human-gated
-  step performs any merge.
+  `lock` records the approved `StateId`; a separate human-gated step (merging the
+  PR) performs any merge.
