@@ -17,20 +17,15 @@ methods:
         targetComponent: core_portal
         targetMethod: computeGateStateId
       - stepNumber: 2
-        description: Promote every in-scope spec to status complete (the lock status write)
-        type: call
-        targetComponent: core_portal
-        targetMethod: promoteAllComplete
-      - stepNumber: 3
         description: Persist the commit-scoped lock record
         type: call
         targetComponent: core_portal
         targetMethod: writeLockRecord
-      - stepNumber: 4
+      - stepNumber: 3
         description: Return the written lock record
         type: return
         outcome: LockRecord
     symbol: runLock
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-07-29T14:56:00.059Z'
+updatedAt: '2026-09-11T21:01:06.021Z'

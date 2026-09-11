@@ -1,17 +1,11 @@
 id: host_request_orchestrator
 name: Host Request Orchestrator
 description: >-
-  Per-request data-plane orchestrator: authenticate the bearer token, resolve and bind the
-  authorized project scope (rejecting cross-project access), then dispatch the sdd_* tool call into
-  the reused MCP tool surface within that scope. It also dispatches the execute-primary
-  project-lifecycle MCP tools (sdd_host_initialize_project, sdd_host_lock_project,
-  sdd_host_promote_project, sdd_host_get_approval_status, sdd_host_await_approval) to the project
-  lifecycle orchestrator, the four hosted landscape MCP tools to the surface exchange orchestrator,
-  and the project-ops MCP tools (sdd_host_pack_list, sdd_host_pack_install,
-  sdd_host_policy_evaluate, sdd_host_policy_reconcile, sdd_host_produce, sdd_host_commit_project —
-  all bound to THE one authorized project; instance-level operations are deliberately absent from
-  the data plane) to the project ops orchestrator — each already resolver-gated upstream, bypassing
-  the ordinary data-plane permission check. Appends a redacted audit event per handled call.
+  Per-request data-plane workflow: authenticate the bearer token, resolve and bind the authorized
+  project scope, then dispatch the sdd_* call — routing the execute-primary project-lifecycle tools
+  (sdd_host_initialize_project, sdd_host_lock_project, sdd_host_get_approval_status,
+  sdd_host_await_approval) to the project lifecycle orchestrator, and every other tool to the scoped
+  MCP server after enforcing the granular data-plane permission over the bound project.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -27,4 +21,4 @@ dependsOn:
   - project_ops_orchestrator
 status: complete
 createdAt: '2026-07-04T12:33:41.786Z'
-updatedAt: '2026-07-16T15:36:19.271Z'
+updatedAt: '2026-09-11T21:03:20.390Z'

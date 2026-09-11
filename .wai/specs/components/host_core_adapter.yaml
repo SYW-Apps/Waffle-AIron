@@ -1,10 +1,9 @@
 id: host_core_adapter
 name: Host Core Client Adapter
 description: >-
-  Local client adapter crossing the subsystem boundary to sdd_core via its published portal:
-  provisions a project's spec skeleton, computes the deterministic spec-tree state id, reads/writes
-  the lock record, and applies status promotion — the spec-tree operations the admin orchestrator
-  composes for provisioning and lock/promote.
+  Client adapter crossing the subsystem boundary into sdd_core: provisions a project's spec
+  skeleton, computes the deterministic spec-tree state id, and reads/writes the lock record — the
+  spec-tree operations the admin orchestrator composes for provisioning and lock.
 subsystem: sdd_host
 componentType: Adapter
 owns: []
@@ -12,4 +11,4 @@ dependsOn:
   - core_portal
 status: complete
 createdAt: '2026-07-04T12:33:54.676Z'
-updatedAt: '2026-07-04T13:06:22.566Z'
+updatedAt: '2026-09-11T21:04:09.035Z'

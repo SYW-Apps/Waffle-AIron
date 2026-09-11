@@ -222,16 +222,6 @@ methods:
         targetComponent: web_project_orchestrator
         targetMethod: lockProject
     detail: calls-only
-  - name: projectPromote
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Parse projectId from the body, resolve the session cookie, and forward to the web project
-          orchestrator
-        type: call
-        targetComponent: web_project_orchestrator
-        targetMethod: promoteProject
-    detail: calls-only
   - name: projectDestroy
     narrative:
       - stepNumber: 1
@@ -751,4 +741,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-24T23:39:22.383Z'
+updatedAt: '2026-09-11T21:00:32.710Z'

@@ -53,13 +53,6 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: lockProject
-  - name: promoteProject
-    narrative:
-      - stepNumber: 1
-        description: Forward to the admin orchestrator
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: promoteProject
   - name: generateDiagram
     narrative:
       - stepNumber: 1
@@ -212,4 +205,4 @@ methods:
     symbol: executeApprovedRequest
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-07-16T00:14:12.872Z'
+updatedAt: '2026-09-11T21:00:22.281Z'

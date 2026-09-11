@@ -65,14 +65,6 @@ methods:
       transport: HTTP
       method: POST
       path: /admin/projects/{id}/lock
-  - name: promoteProject
-    description: Promote a locked project after re-checking its StateId; never merges to production itself.
-    signature: 'promoteProject(credential: string, project: string): PromoteResult'
-    returns: PromoteResult
-    endpoint:
-      transport: HTTP
-      method: POST
-      path: /admin/projects/{id}/promote
   - name: generateDiagram
     description: Generate and return a project's diagram artifact.
     signature: 'generateDiagram(credential: string, project: string, format: string): string'
@@ -318,4 +310,4 @@ methods:
       path: /admin/approvals/{id}/execute
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-07-16T00:18:55.142Z'
+updatedAt: '2026-09-11T20:59:52.977Z'
