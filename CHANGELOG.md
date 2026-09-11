@@ -9,6 +9,53 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### `wairon lock` stopped rewriting your spec tree
+
+Approving used to ratchet every spec's `status` from `draft` to `complete` on
+disk — **786 files** on this project's own tree, for a decision that changed no
+design. A lock scoped to one subsystem still rewrote everything it could reach,
+and the specs a human had actually edited were buried under files whose content
+had not changed. `.wai/phased_design.md` records that blanket freeze being
+reverted by hand four times, once annotated "product gap: lock needs phase
+awareness".
+
+The fix is one addition that retires several concepts: **store the approved
+tree, not a hash of it.**
+
+- **Approval baselines** (`src/core/baseline.ts`) keep the approved tree
+  OUTSIDE the working copy (`WAIRON_BASELINE_DIR`, else `~/.wairon/baselines`).
+  Approving adds nothing to `git status`; a test asserts the spec tree is
+  byte-identical afterwards.
+- **`wairon status` names what moved** instead of asserting that something did.
+  `Lock: STALE` — which fired on a tree validating 0 errors / 0 warnings, named
+  nothing, and asked for work producing no new information — is gone:
+
+  ```
+  3 spec(s) changed since approval (2 changed, 1 added) — approved … by robbe:
+    sdd_core/spec_loader/.index.yaml
+    ...
+  ```
+
+  Silent before there has ever been an approval: a design still being written
+  is not news.
+- **Settledness is derived, not stored.** The ratchet was load-bearing — the
+  MCP authoring tools always write `status: 'draft'`, draft specs get
+  completeness findings downgraded to warnings, and lock was the only promoter,
+  so deleting it naively would have left the gate permanently soft. A spec that
+  is approved and unchanged is now presented to the rules as complete in
+  memory. It is also bidirectional, which the one-way on-disk ratchet could
+  never be: a spec that drifts after approval returns to draft context by
+  itself.
+- **Per `.wai`, with children pinned.** Every project root owns its own
+  baseline, so a parent's approval never freezes a child's in-flight work and a
+  child cloned alone still has one. A parent pins each child's approved
+  `StateId` the way a submodule pins a commit: a child edit does not dirty the
+  parent, but the parent still sees the child move.
+- **`lock --subsystem` approves only its own scope.** Everything outside keeps
+  the approval it already had.
+
+Rationale record: [docs/design/approval-baseline.md](docs/design/approval-baseline.md).
+
 ### Removed: `promote`, a second gate on an already-locked door
 
 `wairon host promote` re-read the lock, recomputed the `StateId`, and — if

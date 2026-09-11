@@ -110,9 +110,10 @@ Closes the stale-approval (TOCTOU) gap from the feature request.
   no-op re-save doesn't shift identity). Identical spec content ⇒ identical
   `StateId`; any edit changes it.
 - **`wairon host lock --project <id>`** → `validateAsComplete` (full strictness,
-  no draft relaxation, mutates nothing) → on success, promote all specs to
-  `complete` and write `.wai/lock.json` **scoped to the exact `StateId`** it
-  validated.
+  no draft relaxation, mutates nothing) → on success, record the approved tree
+  as the **baseline** and write `.wai/lock.json` **scoped to the exact `StateId`**
+  it validated. The spec tree itself is never written to — see
+  [approval baselines](approval-baseline.md).
 
 **On the removed `promote` step.** Lock used to be followed by a second gate,
 `wairon host promote`, which re-read the lock, recomputed the `StateId`, and —
@@ -138,7 +139,8 @@ participant:
   branch.
 - `wairon host git sync` (or `POST …/git/sync`) pulls the default branch into the
   working branch.
-- **`lock` is git-aware:** it syncs, validates-as-complete, freezes the specs, then
+- **`lock` is git-aware:** it syncs, validates-as-complete, records the approved
+  baseline, then
   **commits + pushes the working branch** and records the commit SHA + a
   **compare URL** — you open the PR (push-only, no forge API). `wairon validate`
   is the natural PR status check.
