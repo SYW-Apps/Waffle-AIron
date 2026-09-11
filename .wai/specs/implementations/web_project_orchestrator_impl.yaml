@@ -16,16 +16,6 @@ methods:
         targetComponent: admin_orchestrator
         targetMethod: lockProject
     detail: calls-only
-  - name: promoteProject
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Forward to the admin orchestrator passing the sessionId as the credential (project:write
-          permission enforced there)
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: promoteProject
-    detail: calls-only
   - name: destroyProject
     narrative:
       - stepNumber: 1
@@ -88,4 +78,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T20:36:25.016Z'
-updatedAt: '2026-07-16T15:31:49.622Z'
+updatedAt: '2026-09-11T21:00:35.059Z'

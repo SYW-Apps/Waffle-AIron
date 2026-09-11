@@ -50,11 +50,10 @@ publicInterfaces:
     stability: stable
   - id: hosted-admin-api
     details: >-
-      Streamable HTTP MCP endpoint exposing the sdd_* tool surface request-scoped to the
-      authenticated project, plus discovery and execute-primary project-lifecycle tools. The
-      consumable surface of a wairon deployment.
+      Exposure-policy-controlled control plane for project/key/pack/producer/secret/git lifecycle
+      and the privileged lock. Operator-facing within a deployment.
     authPolicy: master credential or resolved admin permissions; disabled over HTTP by default
 databases: []
 targetLanguage: typescript
 createdAt: '2026-06-10T20:23:00.000Z'
-updatedAt: '2026-07-16T00:13:29.552Z'
+updatedAt: '2026-09-11T21:04:20.590Z'

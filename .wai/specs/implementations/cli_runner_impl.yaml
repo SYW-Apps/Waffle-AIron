@@ -183,23 +183,6 @@ methods:
         description: Return after lock
         type: return
         outcome: locked
-  - name: runHostPromote
-    narrative:
-      - stepNumber: 1
-        description: Read the master credential from the environment
-        type: local
-      - stepNumber: 2
-        description: Promote the project via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: promoteProject
-      - stepNumber: 3
-        description: Print the promote result
-        type: local
-      - stepNumber: 4
-        description: Return after promote
-        type: return
-        outcome: promoted
   - name: runProduce
     narrative:
       - stepNumber: 1
@@ -787,4 +770,4 @@ methods:
         error: unknown agent action (expected brief | customize)
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-08-08T12:43:52.292Z'
+updatedAt: '2026-09-11T21:00:27.366Z'

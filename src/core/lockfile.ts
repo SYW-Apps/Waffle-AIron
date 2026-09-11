@@ -25,8 +25,8 @@ export interface LockRecord {
   validatorVersion: string;
   /** The as-complete validation outcome captured at lock time. */
   validationResult: { valid: boolean; errors: number; warnings: number };
-  /** "ready" (locked, awaiting promotion) or "promoted". */
-  status: 'ready' | 'promoted';
+  /** Always 'ready'. The lock IS the human gate; there is no second state. */
+  status: 'ready';
   /** For git-backed projects: the pushed commit the PR is at. */
   commitSha?: string;
   /** For git-backed projects: the compare/PR URL a human opens to merge. */

@@ -9,6 +9,79 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### `wairon lock` stopped rewriting your spec tree
+
+Approving used to ratchet every spec's `status` from `draft` to `complete` on
+disk — **786 files** on this project's own tree, for a decision that changed no
+design. A lock scoped to one subsystem still rewrote everything it could reach,
+and the specs a human had actually edited were buried under files whose content
+had not changed. `.wai/phased_design.md` records that blanket freeze being
+reverted by hand four times, once annotated "product gap: lock needs phase
+awareness".
+
+The fix is one addition that retires several concepts: **store the approved
+tree, not a hash of it.**
+
+- **Approval baselines** (`src/core/baseline.ts`) keep the approved tree
+  OUTSIDE the working copy (`WAIRON_BASELINE_DIR`, else `~/.wairon/baselines`).
+  Approving adds nothing to `git status`; a test asserts the spec tree is
+  byte-identical afterwards.
+- **`wairon status` names what moved** instead of asserting that something did.
+  `Lock: STALE` — which fired on a tree validating 0 errors / 0 warnings, named
+  nothing, and asked for work producing no new information — is gone:
+
+  ```
+  3 spec(s) changed since approval (2 changed, 1 added) — approved … by robbe:
+    sdd_core/spec_loader/.index.yaml
+    ...
+  ```
+
+  Silent before there has ever been an approval: a design still being written
+  is not news.
+- **Settledness is derived, not stored.** The ratchet was load-bearing — the
+  MCP authoring tools always write `status: 'draft'`, draft specs get
+  completeness findings downgraded to warnings, and lock was the only promoter,
+  so deleting it naively would have left the gate permanently soft. A spec that
+  is approved and unchanged is now presented to the rules as complete in
+  memory. It is also bidirectional, which the one-way on-disk ratchet could
+  never be: a spec that drifts after approval returns to draft context by
+  itself.
+- **Per `.wai`, with children pinned.** Every project root owns its own
+  baseline, so a parent's approval never freezes a child's in-flight work and a
+  child cloned alone still has one. A parent pins each child's approved
+  `StateId` the way a submodule pins a commit: a child edit does not dirty the
+  parent, but the parent still sees the child move.
+- **`lock --subsystem` approves only its own scope.** Everything outside keeps
+  the approval it already had.
+
+Rationale record: [docs/design/approval-baseline.md](docs/design/approval-baseline.md).
+
+### Removed: `promote`, a second gate on an already-locked door
+
+`wairon host promote` re-read the lock, recomputed the `StateId`, and — if
+nothing had drifted — flipped `.wai/lock.json`'s `status` from `ready` to
+`promoted`. That was its entire effect. `'promoted'` appeared in four places in
+the whole codebase: the field's comment, its type union, the single write, and
+one UI function that treated `ready` and `promoted` **identically**. Nothing
+merged, published, deployed, or branched on it; its own success message read
+"change-set marked ready for promotion".
+
+It was designed as a separation-of-duties checkpoint, wired through the approval
+machinery so a second person could sign off. But `lock` is already the human
+gate — agents do not run it — so promote gated a door that was already locked.
+
+Removed end to end: the CLI command, the `sdd_host_promote_project` MCP tool,
+the admin and web HTTP routes, `executeApprovedPromote`, the lifecycle
+orchestrator action, the `project:promote` approval kind, `PromoteResult`, and
+the Promote button. `LockRecord.status` is now the single value `'ready'`.
+
+**Kept:** the `promote:mark-ready` → `project:write` alias in `migration.ts`, so
+stored permission grants on existing hosted instances still upgrade.
+
+Separation of duties is worth rebuilding — but on a baseline, where "approved by
+X at baseline B" is a reviewable fact, rather than as a status string nothing
+reads.
+
 ### Rule-matrix test tier: every finding code pinned by fire+control fixtures
 
 The validator can emit ~160 distinct finding codes; the rule tests covered some

@@ -55,34 +55,6 @@ methods:
         optional: true
     guarantees:
       - atomic
-  - name: promoteProject
-    description: >-
-      Execute-primary project promotion. Authenticate the caller and resolve their project:write
-      permission over the project: yes -> promote directly via the admin plane's pre-authorized
-      executeApprovedPromote and return a completed ProjectActionOutcome carrying the promote
-      result; approval -> create a pending project:promote ApprovalRequest and return a
-      pending-approval outcome; no -> Forbidden. An optional subproject qualifier confines the
-      ACTION to a chained child's tree (forwarded to the pre-authorized entry on the direct path;
-      recorded in the request's payload and named in the summary on the approval path, so an
-      approved promotion re-checks that child's lock and StateId rather than the whole project's).
-      Permission resolution and audit provenance stay anchored at the TOP project id.
-    signature: >-
-      promoteProject(credential: string, projectId: string, subproject?: string):
-      ProjectActionOutcome
-    returns: ProjectActionOutcome
-    params:
-      - name: credential
-        type: string
-      - name: projectId
-        type: string
-      - name: subproject
-        type: string
-        description: >-
-          Chained-subsystem mount chain ('a' or 'a::b') to confine the promotion to; absent promotes
-          the project's own tree.
-        optional: true
-    guarantees:
-      - atomic
   - name: getApprovalStatus
     description: >-
       Authenticate the caller, lazily expire overdue pending requests, then return one approval
@@ -167,4 +139,4 @@ methods:
         type: number
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-07-25T17:26:44.431Z'
+updatedAt: '2026-09-11T21:00:00.666Z'

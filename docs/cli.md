@@ -31,11 +31,25 @@ SDD skills. Filters limit generation to a target type or to specific domains.
 `--dry-run` previews without writing.
 
 ### `wairon lock [-y, --yes] [--subsystem <id>] [--no-recursive]`
-The final check before implementation: validate the spec tree **as if complete**
-(full strictness, no draft-status relaxation) and — only if it passes — freeze
-every spec to `complete` and regenerate the agent topology (the
-`<component>-implementer` agents). A failed or cancelled lock leaves every file
-byte-for-byte unchanged. `--yes` skips the confirmation (for CI); `--subsystem`
+Review and approve the design. Validates the spec tree **as if complete** (full
+strictness, no draft-status relaxation) and — only if it passes — records the
+current tree as the approved **baseline** and regenerates the agent topology.
+
+It writes **nothing into your spec tree**. The approval is stored outside the
+working copy (`WAIRON_BASELINE_DIR`, else `~/.wairon/baselines`), so approving
+adds nothing to `git status`. A failed or cancelled lock changes nothing at all.
+
+Before approving, it reports what moved since the last approval — the question
+a human is actually answering:
+
+```
+3 spec(s) changed since the last approval:
+  ~ sdd_core/spec_loader/.index.yaml
+  ~ sdd_core/spec_loader/.interface.yaml
+  + sdd_core/spec_index/.index.yaml
+```
+
+`--yes` skips the confirmation (for CI); `--subsystem`
 limits the scope.
 
 ### `wairon doctor [--fix]`
@@ -174,7 +188,7 @@ and author specs directly.
 `wairon serve` runs wairon as an HTTP server that hosts many **fully-isolated**
 projects behind one endpoint — a public **data plane** (the `sdd_*` tools over
 streamable HTTP, per-project API-key scoped) and an admin **control plane**
-(project & key lifecycle, state-scoped lock/promote). See the
+(project & key lifecycle, state-scoped lock). See the
 [hosted server guide](design/hosted-mcp-server.md) for the architecture, Docker
 self-hosting, auth, and sizing.
 
@@ -199,7 +213,6 @@ Runs **in-process** (no running server needed), so it works over SSH /
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
 | `wairon host lock --project <id>` | Validate-as-complete + write the state-scoped lock record |
-| `wairon host promote --project <id>` | Promote a locked project after re-checking its StateId (never merges) |
 
 ---
 

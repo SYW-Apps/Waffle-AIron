@@ -355,57 +355,6 @@ methods:
         description: Return the lock record (with the compare URL to open the PR when git-backed)
         type: return
         outcome: lock record
-  - name: executeApprovedPromote
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Bind the root this promotion concerns: the project's isolated root, or — when a subproject
-          qualifier was supplied — the chained CHILD's tree, resolved through the project registry's
-          containment-checked qualified resolution. The lock record read, the StateId recomputation
-          and the staleness verdict below all concern the bound tree.
-        type: local
-      - stepNumber: 2
-        description: >-
-          Resolve the lock verdict through the shared authority — one call yielding unlocked |
-          locked | stale plus the current gate identity, so promotion and every reporting surface
-          answer this question identically
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: readLockState
-      - stepNumber: 3
-        description: If no lock record exists, refuse
-        type: branch
-        condition: no lock record exists
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Return not-locked
-        type: return
-        outcome: not locked — lock first
-      - stepNumber: 5
-        description: >-
-          A stale verdict means the specs or the governing doctrine moved since the lock, so the
-          recorded approval no longer covers this state — refuse and report the current identity
-        type: local
-        targetComponent: host_core_adapter
-        targetMethod: computeGateStateId
-      - stepNumber: 6
-        description: If the current StateId differs from the lock's StateId, refuse as stale
-        type: branch
-        condition: current StateId differs from the lock's StateId
-        onFalseStep: 8
-      - stepNumber: 7
-        description: Return stale-lock
-        type: return
-        outcome: stale lock — re-lock required
-      - stepNumber: 8
-        description: >-
-          Mark the change-set ready for promotion (the human merges the PR when git-backed); never
-          merge here
-        type: local
-      - stepNumber: 9
-        description: Return the promote result
-        type: return
-        outcome: promote result
   - name: createProject
     narrative:
       - stepNumber: 1
@@ -570,71 +519,6 @@ methods:
         description: Return the lock record (with the compare URL to open the PR when git-backed)
         type: return
         outcome: lock record
-    detail: full
-  - name: promoteProject
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential (bootstrap master or a user-bound token)
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Resolve the caller's project:write permission over the target project
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
-      - stepNumber: 3
-        description: If the effective value is not yes, deny
-        type: branch
-        condition: the effective value is not yes
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Reject the promotion
-        type: throw
-        error: Forbidden — promoting a project requires project:write over it
-      - stepNumber: 5
-        description: Bind the project's isolated root
-        type: local
-      - stepNumber: 6
-        description: Resolve the lock verdict through the shared authority (unlocked | locked | stale)
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: readLockState
-      - stepNumber: 7
-        description: If no lock record exists, refuse
-        type: branch
-        condition: no lock record exists
-        onTrueStep: 8
-        onFalseStep: 9
-      - stepNumber: 8
-        description: Return not-locked
-        type: return
-        outcome: not locked — lock first
-      - stepNumber: 9
-        description: A stale verdict refuses the promotion and reports the current gate identity
-        type: local
-        targetComponent: host_core_adapter
-        targetMethod: computeGateStateId
-      - stepNumber: 10
-        description: If the current StateId differs from the lock's StateId, refuse as stale
-        type: branch
-        condition: current StateId differs from the lock's StateId
-        onTrueStep: 11
-        onFalseStep: 12
-      - stepNumber: 11
-        description: Return stale-lock
-        type: return
-        outcome: stale lock — re-lock required
-      - stepNumber: 12
-        description: >-
-          Mark the change-set ready for promotion (the human merges the PR when git-backed); never
-          merge here
-        type: local
-      - stepNumber: 13
-        description: Return the promote result
-        type: return
-        outcome: promote result
     detail: full
   - name: enableGit
     narrative:
@@ -1048,4 +932,4 @@ methods:
         outcome: producer list
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-30T16:01:35.065Z'
+updatedAt: '2026-09-11T21:00:19.859Z'

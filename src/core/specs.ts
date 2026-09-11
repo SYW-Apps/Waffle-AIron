@@ -1841,6 +1841,54 @@ export class SpecWorkspace {
     return out;
   }
 
+  /**
+   * Every spec FILE inside a subsystem scope (absolute paths), regardless of
+   * status. `collectPromotableSpecs` answers a different question — which specs
+   * are not yet complete — so it cannot stand in for this: a scoped approval
+   * must cover the specs it approves whether or not they were already settled.
+   */
+  specPathsInScope(scopeSubsystem?: string): string[] {
+    const index = this.scanAll();
+    const components = this.loadComponentSpecs();
+    const interfaces = this.loadInterfaceSpecs();
+    const implementations = this.loadImplementationSpecs();
+
+    const inScope = (specSubsystem: string | undefined): boolean => {
+      if (!scopeSubsystem) return true;
+      if (!specSubsystem) return false;
+      return specSubsystem === scopeSubsystem || specSubsystem.startsWith(`${scopeSubsystem}::`);
+    };
+
+    const out = new Set<string>();
+    const add = (p: string | undefined): void => { if (p) out.add(path.resolve(p)); };
+
+    for (const s of this.loadSubsystemSpecs()) {
+      if (!scopeSubsystem || s.id === scopeSubsystem || s.id.startsWith(`${scopeSubsystem}::`)) {
+        add(index.paths.subsystem[s.id]);
+      }
+    }
+    for (const c of components) {
+      if (inScope(c.subsystem)) add(index.paths.component[c.id]);
+    }
+    for (const i of interfaces) {
+      const comp = components.find((c) => c.id === i.component);
+      if (comp && inScope(comp.subsystem)) add(index.paths.interface[i.id]);
+    }
+    for (const m of implementations) {
+      const intf = interfaces.find((i) => i.id === m.contract);
+      const comp = intf ? components.find((c) => c.id === intf.component) : null;
+      if (comp && inScope(comp.subsystem)) add(index.paths.implementation[m.id]);
+    }
+    // An unscoped call also covers the L0 and every type, which belong to no
+    // subsystem — a whole-tree approval must approve them too.
+    if (!scopeSubsystem) {
+      add(this.paths.specsSystem());
+      for (const p of Object.values(index.paths.type)) add(p);
+      for (const p of Object.values(index.paths.group)) add(p);
+    }
+    return [...out];
+  }
+
   /** Set a single spec's status (bumps updatedAt). Caller invalidates the cache. */
   applySpecStatus(kind: SpecKind, id: string, status: SpecStatus): void {
     switch (kind) {
@@ -2778,6 +2826,10 @@ export function collectPromotableSpecs(scopeSubsystem?: string): PromotableSpec[
 
 export function applySpecStatus(kind: SpecKind, id: string, status: SpecStatus): void {
   current().applySpecStatus(kind, id, status);
+}
+
+export function specPathsInScope(scopeSubsystem?: string): string[] {
+  return current().specPathsInScope(scopeSubsystem);
 }
 
 export function snapshotSpecFiles(): Map<string, string> {

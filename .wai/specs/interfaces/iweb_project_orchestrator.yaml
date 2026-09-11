@@ -55,18 +55,6 @@ methods:
         type: string
       - name: projectId
         type: string
-  - name: promoteProject
-    description: >-
-      Mark a locked project ready-for-promotion after the StateId re-check; forwards to
-      admin_orchestrator.promoteProject with the session as the credential (project:write permission
-      enforced there).
-    signature: 'promoteProject(sessionId: string, projectId: string): PromoteResult'
-    returns: PromoteResult
-    params:
-      - name: sessionId
-        type: string
-      - name: projectId
-        type: string
   - name: destroyProject
     description: >-
       Deregister a project and its tree; forwards to admin_orchestrator.destroyProject with the
@@ -80,4 +68,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-07-16T15:31:31.604Z'
+updatedAt: '2026-09-11T21:00:06.734Z'
