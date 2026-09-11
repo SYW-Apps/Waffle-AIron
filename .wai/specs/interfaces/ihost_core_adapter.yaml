@@ -23,10 +23,6 @@ methods:
     description: Persist a lock record.
     signature: 'writeLockRecord(record: LockRecord): void'
     returns: void
-  - name: promoteAllComplete
-    description: Promote every spec to status complete.
-    signature: 'promoteAllComplete(): void'
-    returns: void
   - name: renderDiagram
     description: Render the bound project's spec tree into a diagram artifact string.
     signature: 'renderDiagram(format: string): string'
@@ -131,7 +127,7 @@ methods:
   - name: readLockState
     description: >-
       Resolve the bound project's lock verdict (unlocked | locked | stale) through the core portal —
-      the shared authority the promote gate and every reporting surface answer from.
+      the shared authority every reporting surface answers from.
     signature: 'readLockState(): LockStatus'
     returns: LockStatus
     params: []
@@ -188,4 +184,4 @@ methods:
         type: SubsystemSpec[]
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-11T23:19:47.003Z'
+updatedAt: '2026-09-11T23:36:35.650Z'

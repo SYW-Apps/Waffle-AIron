@@ -903,7 +903,7 @@ program
 
 const hostCmd = program
   .command('host')
-  .description('Administer the hosting server: projects, API keys, and state-scoped lock/promote');
+  .description('Administer the hosting server: projects, API keys, and the state-scoped lock');
 
 hostCmd
   .command('project <action>')

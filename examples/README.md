@@ -3,7 +3,7 @@
 - **[`hosted-server/`](hosted-server/)** — a runnable, self-verifying demo of the
   **hosting server** (`wairon serve`): provision an isolated project, mint a
   scoped API key, drive the HTTP data plane (auth + a project-scoped `sdd_*` tool
-  call), then lock/promote with the state-scoped TOCTOU guard. `node
+  call), then lock with the state-scoped TOCTOU guard. `node
   examples/hosted-server/demo.mjs` (after `npm run build`). Reference:
   [`docs/design/hosted-mcp-server.md`](../docs/design/hosted-mcp-server.md).
 

@@ -1115,7 +1115,7 @@ export interface InstanceIdentity {
   createdAt: string;
 }
 
-/** The standardized result of a project lifecycle action (initialize/lock/promote).
+/** The standardized result of a project lifecycle action (initialize/lock).
  *  EXECUTE-PRIMARY: when the caller is authorized the action RUNS and status is
  *  'completed' with the natural result; when their effective permission is
  *  'approval' the action is not run and status is 'pending-approval' carrying

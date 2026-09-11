@@ -81,10 +81,6 @@ methods:
     description: Persist a commit-scoped lock record.
     signature: 'writeLockRecord(record: LockRecord): void'
     returns: void
-  - name: promoteAllComplete
-    description: Promote every spec in the tree to status complete (the lock status write).
-    signature: 'promoteAllComplete(): void'
-    returns: void
   - name: renderDiagram
     description: >-
       Render the current project's spec tree into the requested diagram format and return the
@@ -238,4 +234,4 @@ methods:
         type: SubsystemSpec[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-11T23:20:50.726Z'
+updatedAt: '2026-09-11T23:33:49.043Z'

@@ -50,7 +50,6 @@ curl -s -XPOST http://127.0.0.1:8080/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sdd_get_status","arguments":{}}}'
 
 wairon host lock --project acme
-wairon host promote --project acme
 ```
 
 ## Git-backed projects — repo as the source of truth
@@ -95,7 +94,8 @@ Edit the specs over the data plane as usual (the `sdd_*` MCP tools). When ready:
 
 ```sh
 wairon host lock --project acme
-#  → validates as-complete, promotes, commits + pushes wairon/work, prints a compare URL
+#  → validates as-complete, records the approval baseline, commits + pushes
+#    wairon/work, prints a compare URL (the spec tree itself is left untouched)
 ```
 
 Open the printed **compare URL** to raise the PR into `main` (push-only — wairon

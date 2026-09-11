@@ -137,13 +137,6 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: writeLockRecord
-  - name: promoteAllComplete
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: promoteAllComplete
   - name: renderDiagram
     narrative:
       - stepNumber: 1
@@ -281,4 +274,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-11T23:20:54.606Z'
+updatedAt: '2026-09-11T23:33:38.902Z'

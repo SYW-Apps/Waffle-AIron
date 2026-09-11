@@ -88,9 +88,8 @@ methods:
         description: >-
           Confine a subproject-qualified credential. These tools act on the project RECORD or its
           repository, never on the bound tree, so serving them would let a token scoped to one
-          chained child reach the whole parent — the qualifier would narrow nothing. The two
-          TREE-scoped lifecycle tools (lock, promote) are excluded: they are confined instead by
-          forwarding the qualifier.
+          chained child reach the whole parent — the qualifier would narrow nothing. The TREE-scoped
+          lifecycle tool (lock) is excluded: it is confined instead by forwarding the qualifier.
         type: branch
         condition: >-
           the resolved binding carries a subproject qualifier AND the called tool acts on the hosted
@@ -412,4 +411,4 @@ methods:
     symbol: handleMcpRequest
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-11T23:02:33.444Z'
+updatedAt: '2026-09-11T23:36:46.756Z'

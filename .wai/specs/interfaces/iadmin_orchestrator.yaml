@@ -3,7 +3,7 @@ name: Admin Orchestrator Interface
 description: >-
   Contract for the control-plane workflows behind the admin portal: authenticate a bootstrap/admin
   (master) credential and, only for an admin principal, perform the requested project, API-key,
-  lock, promote, diagram, producer, secret, or git action.
+  lock, diagram, producer, secret, or git action.
 component: admin_orchestrator
 methods:
   - name: createProject
@@ -61,8 +61,8 @@ methods:
     description: >-
       Authenticate the caller (bootstrap master or a user token), resolve the caller's project:write
       permission over the target project via the authorization seam (must be yes), bind the project
-      scope, validate-as-complete, and on success promote statuses and write the StateId-scoped lock
-      record.
+      scope, validate-as-complete, and on success record the approval baseline and write the
+      StateId-scoped lock record. The spec tree itself is never rewritten.
     signature: 'lockProject(credential: string, project: string): LockRecord'
     returns: LockRecord
   - name: generateDiagram
@@ -335,4 +335,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-11T23:01:50.354Z'
+updatedAt: '2026-09-11T23:36:27.897Z'

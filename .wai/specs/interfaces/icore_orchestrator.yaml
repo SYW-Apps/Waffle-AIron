@@ -79,10 +79,6 @@ methods:
     description: Persist a commit-scoped lock record.
     signature: 'writeLockRecord(record: LockRecord): void'
     returns: void
-  - name: promoteAllComplete
-    description: Promote every spec in the tree to status complete (the lock status write).
-    signature: 'promoteAllComplete(): void'
-    returns: void
   - name: renderDiagram
     description: Delegate diagram rendering to the diagram specialist.
     signature: 'renderDiagram(format: string): string'
@@ -188,4 +184,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-30T15:58:42.651Z'
+updatedAt: '2026-09-11T23:33:50.961Z'

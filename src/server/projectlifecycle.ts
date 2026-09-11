@@ -352,7 +352,7 @@ function subprojectSuffix(subproject?: string): string {
   return subproject ? ` subproject "${subproject}"` : '';
 }
 
-/** The payloadType a lock/promote ApprovalRequest carries when its requester was
+/** The payloadType a lock ApprovalRequest carries when its requester was
  *  confined to a chained subproject. */
 const SUBPROJECT_SCOPE_PAYLOAD = 'SubprojectScope';
 
@@ -372,7 +372,7 @@ function subprojectScopePayload(subproject?: string): { payloadType?: string; pa
   return { payloadType: SUBPROJECT_SCOPE_PAYLOAD, payload: JSON.stringify({ subproject }) };
 }
 
-/** The subproject qualifier recorded on an approved lock/promote request, or
+/** The subproject qualifier recorded on an approved lock request, or
  *  undefined for an unqualified one (or a payload that does not parse — a
  *  malformed payload must not silently widen the action to the whole project,
  *  so the caller treats undefined as "no confinement was requested" only when
@@ -390,7 +390,7 @@ function readSubprojectScope(req: ApprovalRequest): string | undefined {
   return parsed.subproject;
 }
 
-/** Shared body for the lock/promote lifecycle actions: authenticate → resolve
+/** Shared body for the gated lifecycle actions: authenticate → resolve
  *  project:write over the project → switch on the resolved value (yes executes
  *  through the supplied pre-authorized entry, no forbids, approval creates the
  *  pending request), differing only in the kind, wording, and execution.
@@ -441,7 +441,7 @@ function lifecycleAction(
       return outcome;
     }
     case 'no':
-      throw new ForbiddenError(`caller may not ${opts.noun === 'promotion' ? 'promote' : opts.noun} this project`);
+      throw new ForbiddenError(`caller may not ${opts.noun} this project`);
     default: {
       if (!existingProjectRoot(cfg.dataDir, projectId)) {
         throw new Error(`Unknown project "${projectId}".`);

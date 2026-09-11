@@ -215,8 +215,8 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   }
 
   // ── Lock ────────────────────────────────────────────────────────────────────
-  // A voided lock used to be discoverable only by attempting a promote, which
-  // fails closed but tells you late. Silent for a project that was never locked.
+  // A voided lock used to be discoverable only by attempting the next gated
+  // action, which fails closed but tells you late. Silent for a project that was never locked.
   if (isProjectInitialized()) {
     try {
       const lock = readLockState();

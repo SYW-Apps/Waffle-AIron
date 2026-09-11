@@ -1238,7 +1238,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       </div>
     </div>
 
-    <!-- Projects view (project lifecycle: list / create / lock / promote / destroy) -->
+    <!-- Projects view (project lifecycle: list / create / lock / destroy) -->
     <div class="view" id="view-projects">
       <div class="pane-r"><div id="projectsBody" style="max-width:900px;margin:0 auto;"><div class="hint">Loading…</div></div></div>
     </div>
@@ -2590,7 +2590,6 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         var st = p.status === 'active' ? 'ok' : 'warn';
         var actions = (canManage
           ? '<button class="mini" data-lock="' + esc(p.id) + '">Lock</button> '
-            + '<button class="mini" data-promote="' + esc(p.id) + '">Promote</button> '
             + '<button class="mini danger" data-destroy="' + esc(p.id) + '">Destroy</button> '
           : '')
           + '<button class="mini" data-ops="' + esc(p.id) + '">Ops</button>';
@@ -2987,7 +2986,7 @@ function adminRemoveAssignment(cfg: HostConfig, sessionId: string, body: Body, r
 // The human project-lifecycle surface of the unified web UI on the PUBLIC data
 // plane. Each thin portal handler resolves the browser session id and forwards to
 // the web project orchestrator (webproject.ts): projectList is a scoped read owned
-// there; create/lock/promote/destroy forward to the admin orchestrator with the
+// there; create/lock/destroy forward to the admin orchestrator with the
 // session as the credential, so its per-action grant-scope authorization applies
 // UNCHANGED (a caller lacking the grant is refused with AdminAuthError → 403).
 // Cookie-authenticated POSTs are CSRF-gated in http.ts (routeData) like /web/logout.
@@ -3429,7 +3428,7 @@ export async function handleWebRequest(
 
     // ── Project-lifecycle self-management (session-scoped) ───────────────────
     // The human project-lifecycle surface: list the projects the caller may manage
-    // and create / lock / promote / destroy within their grant scope. projectList is
+    // and create / lock / destroy within their grant scope. projectList is
     // a scoped read owned by the web project orchestrator; the mutations forward to
     // the admin orchestrator with the session as the credential (per-action grant
     // scope enforced there — a caller lacking the grant is refused 403). Cookie POSTs

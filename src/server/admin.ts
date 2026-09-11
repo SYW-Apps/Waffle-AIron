@@ -240,8 +240,8 @@ function boundLifecycleRoot(cfg: HostConfig, projectId: string, subproject?: str
  * authorization. Never routed from any portal.
  *
  * An optional `subproject` qualifier binds the CHAINED CHILD's tree instead of
- * the project's own, so every step below (validate-as-complete, promote,
- * StateId, lock record) concerns THAT tree. Note what falls out for free and is
+ * the project's own, so every step below (validate-as-complete, StateId,
+ * baseline, lock record) concerns THAT tree. Note what falls out for free and is
  * deliberately NOT special-cased: the git binding is read from the BOUND root, so
  * a child tree carries none and both the sync (step 2) and the publish (step 8)
  * no-op naturally — a subproject freeze never commits or pushes against the
@@ -510,8 +510,8 @@ export function listSecrets(_cfg: HostConfig, credential: string | null): string
 
 // ── Spec-tree transfer (.waitree) ─────────────────────────────────────────
 //
-// The hosted half of local↔hosted migration. Both are TREE-scoped like lock and
-// promote: a `subproject` qualifier binds the CHAINED CHILD's tree, so a
+// The hosted half of local↔hosted migration. Both are TREE-scoped like lock:
+// a `subproject` qualifier binds the CHAINED CHILD's tree, so a
 // credential narrowed to one child exports/imports exactly that child while
 // permission resolution stays anchored at the top project.
 

@@ -40,9 +40,10 @@ export interface LockOptions {
 }
 
 /**
- * cli_lock_adapter.lockTree — freeze the (scope-filtered) tree: promote every
- * in-scope spec to status `complete` and persist the commit-scoped lock
- * record. Returns the written record, or null when the human declined the
+ * cli_lock_adapter.lockTree — freeze the (scope-filtered) tree: record the
+ * approval baseline (what was approved, held OUTSIDE the working copy) and
+ * persist the commit-scoped lock record. Writes NOTHING into the spec tree.
+ * Returns the written record, or null when the human declined the
  * confirmation (nothing was changed).
  *
  * `gate` is the as-complete validation result the caller already gated on;

@@ -145,73 +145,6 @@ methods:
         targetComponent: lock_registry
         targetMethod: write
     conformance: 'off'
-  - name: promoteAllComplete
-    narrative:
-      - stepNumber: 1
-        description: Load subsystem specs
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadSubsystemSpecs
-      - stepNumber: 2
-        description: For each subsystem
-        type: loop
-        loopKind: forEach
-        over: subsystems
-        endStep: 3
-      - stepNumber: 3
-        description: Re-save the subsystem with status complete
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
-      - stepNumber: 4
-        description: Load component specs
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadComponentSpecs
-      - stepNumber: 5
-        description: For each component
-        type: loop
-        loopKind: forEach
-        over: components
-        endStep: 6
-      - stepNumber: 6
-        description: Re-save the component with status complete
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveComponentSpec
-      - stepNumber: 7
-        description: Load interface specs
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadInterfaceSpecs
-      - stepNumber: 8
-        description: For each interface
-        type: loop
-        loopKind: forEach
-        over: interfaces
-        endStep: 9
-      - stepNumber: 9
-        description: Re-save the interface with status complete
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveInterfaceSpec
-      - stepNumber: 10
-        description: Load implementation specs
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadImplementationSpecs
-      - stepNumber: 11
-        description: For each implementation
-        type: loop
-        loopKind: forEach
-        over: implementations
-        endStep: 12
-      - stepNumber: 12
-        description: Re-save the implementation with status complete
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveImplementationSpec
-    conformance: 'off'
   - name: renderDiagram
     narrative:
       - stepNumber: 1
@@ -504,4 +437,4 @@ methods:
     conformance: 'off'
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-30T16:01:07.806Z'
+updatedAt: '2026-09-11T23:33:40.549Z'

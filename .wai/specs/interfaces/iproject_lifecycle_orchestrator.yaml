@@ -1,11 +1,11 @@
 id: iproject_lifecycle_orchestrator
 name: Project Lifecycle Orchestrator Interface
 description: >-
-  Project lifecycle contract for initialize/lock/promote requested over MCP, CLI, or UI.
-  Execute-primary: every method authenticates the caller credential and resolves the caller's
-  permission — yes executes the action directly and returns its natural result, approval creates a
-  pending ApprovalRequest (the security exception), no raises Forbidden. Approved requests
-  auto-execute on decision.
+  Project lifecycle contract for initialize/lock requested over MCP, CLI, or UI. Execute-primary:
+  every method authenticates the caller credential and resolves the caller's permission — yes
+  executes the action directly and returns its natural result, approval creates a pending
+  ApprovalRequest (the security exception), no raises Forbidden. Approved requests auto-execute on
+  decision.
 component: project_lifecycle_orchestrator
 methods:
   - name: initializeProject
@@ -139,4 +139,4 @@ methods:
         type: number
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-09-11T21:00:00.666Z'
+updatedAt: '2026-09-11T23:36:33.042Z'
