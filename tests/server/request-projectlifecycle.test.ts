@@ -676,24 +676,4 @@ describe('handleMcpRequest subproject confinement (end-to-end)', () => {
     expect(fs.existsSync(path.join(childRoot, '.wai', 'lock.json'))).toBe(false);
   }, 20_000);
 
-  it('promote on a qualified binding reads and re-checks the CHILD’s lock', async () => {
-    // A qualified lock first, then a qualified promote: the child's own lock matches.
-    await send(qualTok, 'sdd_host_lock_project', {});
-    const body = await send(qualTok, 'sdd_host_promote_project', {});
-    const outcome = JSON.parse(text(body)) as ProjectActionOutcome;
-    expect(outcome.status).toBe('completed');
-    expect(outcome.promote?.status).toBe('ready');
-    expect(outcome.summary).toContain('subproject "billing"');
-
-    // The CHILD's record advanced to promoted …
-    const childLock = JSON.parse(fs.readFileSync(path.join(childRoot, '.wai', 'lock.json'), 'utf8')) as { status: string };
-    expect(childLock.status).toBe('promoted');
-    // DID NOT HAPPEN: the parent was neither locked nor promoted.
-    expect(fs.existsSync(path.join(demoRoot, '.wai', 'lock.json'))).toBe(false);
-
-    // An UNQUALIFIED promote of the same project finds no lock — proving the
-    // child's lock was never the parent's.
-    const parentBody = await send(plainTok, 'sdd_host_promote_project', {});
-    expect((JSON.parse(text(parentBody)) as ProjectActionOutcome).promote?.status).toBe('not-locked');
-  }, 20_000);
 });

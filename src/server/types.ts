@@ -1,4 +1,3 @@
-import type { StateId } from '../core/statehash.js';
 import type { LockRecord } from '../core/lockfile.js';
 import type { NamedOpenApiSpec } from '../models/index.js';
 
@@ -354,7 +353,7 @@ export interface AuditRetentionPolicy {
  *  The payload is redacted — never raw secrets or bearer tokens. */
 export interface ApprovalRequest {
   id: string;
-  /** Requested action kind: 'project:init' | 'project:lock' | 'project:promote' (more later). */
+  /** Requested action kind: 'project:init' | 'project:lock' (more later). */
   kind: string;
   /** 'pending' | 'approved' | 'denied' | 'expired' | 'completed' | 'cancelled' */
   status: string;
@@ -1116,13 +1115,6 @@ export interface InstanceIdentity {
   createdAt: string;
 }
 
-/** Outcome of a gated promote — never an actual merge. */
-export interface PromoteResult {
-  status: 'ready' | 'stale' | 'not-locked';
-  stateId?: StateId;
-  message: string;
-}
-
 /** The standardized result of a project lifecycle action (initialize/lock/promote).
  *  EXECUTE-PRIMARY: when the caller is authorized the action RUNS and status is
  *  'completed' with the natural result; when their effective permission is
@@ -1130,7 +1122,7 @@ export interface PromoteResult {
  *  the created request. A 'no' permission never returns this — it raises Forbidden. */
 export interface ProjectActionOutcome {
   status: 'completed' | 'pending-approval';
-  action: 'project:init' | 'project:lock' | 'project:promote';
+  action: 'project:init' | 'project:lock';
   /** Human-readable outcome: the result detail when completed, or that a
    *  request was submitted when pending-approval. */
   summary: string;
@@ -1138,8 +1130,6 @@ export interface ProjectActionOutcome {
   approval?: ApprovalRequest;
   /** The lock record, present when a project:lock completed. */
   lock?: LockRecord;
-  /** The promote result, present when a project:promote completed. */
-  promote?: PromoteResult;
 }
 
 /** A verified short-lived capability to view one project's diagram in a browser —

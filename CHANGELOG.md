@@ -9,6 +9,32 @@ a project that has not declared them, existing lock records read as stale, and a
 project referencing a global pack's profile can newly fail `validate --ci`. Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### Removed: `promote`, a second gate on an already-locked door
+
+`wairon host promote` re-read the lock, recomputed the `StateId`, and — if
+nothing had drifted — flipped `.wai/lock.json`'s `status` from `ready` to
+`promoted`. That was its entire effect. `'promoted'` appeared in four places in
+the whole codebase: the field's comment, its type union, the single write, and
+one UI function that treated `ready` and `promoted` **identically**. Nothing
+merged, published, deployed, or branched on it; its own success message read
+"change-set marked ready for promotion".
+
+It was designed as a separation-of-duties checkpoint, wired through the approval
+machinery so a second person could sign off. But `lock` is already the human
+gate — agents do not run it — so promote gated a door that was already locked.
+
+Removed end to end: the CLI command, the `sdd_host_promote_project` MCP tool,
+the admin and web HTTP routes, `executeApprovedPromote`, the lifecycle
+orchestrator action, the `project:promote` approval kind, `PromoteResult`, and
+the Promote button. `LockRecord.status` is now the single value `'ready'`.
+
+**Kept:** the `promote:mark-ready` → `project:write` alias in `migration.ts`, so
+stored permission grants on existing hosted instances still upgrade.
+
+Separation of duties is worth rebuilding — but on a baseline, where "approved by
+X at baseline B" is a reviewable fact, rather than as a status string nothing
+reads.
+
 ### Rule-matrix test tier: every finding code pinned by fire+control fixtures
 
 The validator can emit ~160 distinct finding codes; the rule tests covered some

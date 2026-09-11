@@ -18,7 +18,7 @@ import { UnitSelect } from '../components/UnitSelect';
 import type { OrganizationUnitRecord, ProjectRecord } from '../types';
 
 function statusTone(status: string): 'ok' | 'warn' | 'neutral' {
-  if (status === 'ready' || status === 'promoted') return 'ok';
+  if (status === 'ready') return 'ok';
   if (status === 'locked') return 'warn';
   return 'neutral';
 }
@@ -142,9 +142,6 @@ export function Projects() {
                     </Button>
                     <AsyncButton size="sm" action={() => lock(p.id)} onError={toast.bad}>
                       Lock
-                    </AsyncButton>
-                    <AsyncButton size="sm" action={() => promote(p.id)} onError={toast.bad}>
-                      Promote
                     </AsyncButton>
                     <ConfirmButton
                       label="Destroy"

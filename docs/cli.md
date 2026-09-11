@@ -174,7 +174,7 @@ and author specs directly.
 `wairon serve` runs wairon as an HTTP server that hosts many **fully-isolated**
 projects behind one endpoint — a public **data plane** (the `sdd_*` tools over
 streamable HTTP, per-project API-key scoped) and an admin **control plane**
-(project & key lifecycle, state-scoped lock/promote). See the
+(project & key lifecycle, state-scoped lock). See the
 [hosted server guide](design/hosted-mcp-server.md) for the architecture, Docker
 self-hosting, auth, and sizing.
 
@@ -199,7 +199,6 @@ Runs **in-process** (no running server needed), so it works over SSH /
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
 | `wairon host lock --project <id>` | Validate-as-complete + write the state-scoped lock record |
-| `wairon host promote --project <id>` | Promote a locked project after re-checking its StateId (never merges) |
 
 ---
 
