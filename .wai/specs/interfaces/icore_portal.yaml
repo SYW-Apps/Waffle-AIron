@@ -205,6 +205,37 @@ methods:
         type: bytes
       - name: options
         type: tree_import_options
+  - name: captureBaseline
+    description: >-
+      Capture the CURRENT spec tree as approved, with each chained child's approved StateId pinned.
+      A chained child's own specs are excluded — the trees are approved separately. Records a
+      decision; the caller gates it.
+    signature: 'captureBaseline(approvedBy: string, children: Record<string, string>): BaselineRecord'
+    returns: BaselineRecord
+    params:
+      - name: approvedBy
+        type: string
+      - name: children
+        type: Record<string, string>
+  - name: writeBaseline
+    description: >-
+      Persist an approval baseline OUTSIDE the project tree, returning the path written. Approving
+      must never dirty the working copy.
+    signature: 'writeBaseline(record: BaselineRecord): string'
+    returns: string
+    params:
+      - name: record
+        type: BaselineRecord
+  - name: currentChildPins
+    description: >-
+      The approved StateId of every chained child mounted under this root, keyed by mount id. A
+      child with no approval of its own contributes no pin — a parent can only record a decision the
+      child's owner actually made.
+    signature: 'currentChildPins(mounts: SubsystemSpec[]): Record<string, string>'
+    returns: Record<string, string>
+    params:
+      - name: mounts
+        type: SubsystemSpec[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-12T17:26:16.949Z'
+updatedAt: '2026-09-11T23:20:50.726Z'

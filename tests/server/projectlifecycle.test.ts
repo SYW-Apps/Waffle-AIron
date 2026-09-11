@@ -17,6 +17,7 @@ import { setPackPolicyRecord } from '../../src/server/policy.js';
 import { hostCore } from '../../src/server/adapters.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import { readBaseline } from '../../src/core/baseline.js';
 import { seedChainedMount, seedSubsystem } from './helpers.js';
 import { createUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { listProjectPacks } from '../../src/server/packs.js';
@@ -404,6 +405,50 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(fs.existsSync(lockPathOf(parent))).toBe(true);
     // DID NOT HAPPEN: a project-level lock never wrote a lock record into the child.
     expect(fs.existsSync(lockPathOf(child))).toBe(false);
+  });
+
+  it('a hosted lock records a baseline and writes NOTHING into the spec tree', () => {
+    // The local lock stopped ratcheting spec statuses; the hosted one had been
+    // left behind — and because a hosted lock also COMMITS AND PUSHES .wai/,
+    // that rewrite went straight into the repository. Hosted projects got the
+    // whole flood, published.
+    seedProject('hosted-baseline');
+    const root = existingProjectRoot(dataDir, 'hosted-baseline')!;
+    // A spec the old ratchet WOULD have rewritten: an explicit draft status.
+    // (A spec with no `status` at all loads as complete, so it is not promotable
+    // — the draft marker is what makes this fixture load-bearing.)
+    seedSubsystem(root, 'billing');
+    const billing = path.join(root, '.wai', 'specs', 'subsystems', 'billing.yaml');
+    fs.appendFileSync(billing, 'status: draft');
+    invalidateSpecCache();
+
+    const specsDir = path.join(root, '.wai', 'specs');
+    const snapshot = (): Map<string, string> => {
+      const out = new Map<string, string>();
+      const walk = (d: string): void => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          const p = path.join(d, e.name);
+          if (e.isDirectory()) walk(p);
+          else out.set(path.relative(specsDir, p), fs.readFileSync(p, 'utf8'));
+        }
+      };
+      walk(specsDir);
+      return out;
+    };
+    const before = snapshot();
+
+    executeApprovedLock(cfg, 'hosted-baseline');
+
+    // Every spec file is byte-identical…
+    const after = snapshot();
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+    for (const [rel, content] of before) expect(after.get(rel)).toBe(content);
+
+    // …and the approval was recorded instead, outside the tree.
+    const baseline = readBaseline(root);
+    expect(baseline).not.toBeNull();
+    expect(baseline!.approvedBy).toBe('hosted:hosted-baseline');
+    expect(Object.keys(baseline!.specs).length).toBeGreaterThan(0);
   });
 
   it('a qualified lock CONFINES to the CHILD tree: its own state governs, and drift makes only the child stale', () => {

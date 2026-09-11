@@ -264,6 +264,21 @@ methods:
         type: call
         targetComponent: tree_transfer_orchestrator
         targetMethod: importSpecTree
+  - name: captureBaseline
+    narrative:
+      - stepNumber: 1
+        description: Forward approval capture to the agent-facing baseline module (re-export)
+        type: local
+  - name: writeBaseline
+    narrative:
+      - stepNumber: 1
+        description: Forward baseline persistence outside the project tree (re-export)
+        type: local
+  - name: currentChildPins
+    narrative:
+      - stepNumber: 1
+        description: Forward chained-child pin resolution (re-export)
+        type: local
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-12T17:26:20.640Z'
+updatedAt: '2026-09-11T23:20:54.606Z'

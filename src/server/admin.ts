@@ -38,11 +38,11 @@ import type {
 // Admin Orchestrator (sdd_host)
 //
 // The control-plane workflows: master-credential auth, then project/key
-// lifecycle and the state-scoped lock / gated promote. Exported as plain
-// functions so BOTH entry points reach the same logic — the HTTP admin portal
+// lifecycle and the state-scoped lock. Exported as plain functions so BOTH
+// entry points reach the same logic — the HTTP admin portal
 // (src/server/http.ts) and the in-process CLI adapter (src/commands/host.ts).
-// Never performs a merge; promote only marks a change-set ready after the
-// StateId re-check.
+// Never performs a merge: a lock records an approval, and a human merges the PR
+// the git-backed publish opens.
 // ---------------------------------------------------------------------------
 
 // AdminAuthError lives with the shared control-plane errors; republished here
@@ -262,10 +262,21 @@ export function executeApprovedLock(cfg: HostConfig, projectId: string, subproje
     if (errors.length) {
       throw new LockValidationError(errors.map((e) => ({ code: e.code, message: e.message, specId: e.specId })));
     }
-    hostCore.promoteAllComplete();
     // The GATE identity: the lock certifies that these specs passed THIS gate,
     // so the governing doctrine is part of the frozen state.
     const stateId = hostCore.computeGateStateId();
+
+    // Record WHAT was approved, outside the tree. This used to ratchet every
+    // spec's `status` to `complete` on disk — and because a hosted lock also
+    // COMMITS AND PUSHES .wai/ (below), that rewrite went straight into the
+    // repository. The local lock stopped doing it; the hosted one had been
+    // left behind, so hosted projects still got the whole flood, published.
+    //
+    // Settledness is derived from this baseline instead, exactly as locally.
+    hostCore.writeBaseline(hostCore.captureBaseline(
+      `hosted:${projectId}${subproject ? `::${subproject}` : ''}`,
+      hostCore.currentChildPins(hostCore.loadSubsystemSpecs()),
+    ));
 
     // Git-backed: the lock is the semantic checkpoint — the auto-publish
     // trigger. Commit ONLY the .wai/ tree (pathspec-scoped, never the shared

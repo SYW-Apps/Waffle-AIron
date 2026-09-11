@@ -320,17 +320,18 @@ methods:
         type: return
         outcome: cannot lock — validation failed
       - stepNumber: 6
-        description: Promote every spec to complete
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: promoteAllComplete
-      - stepNumber: 7
-        description: >-
-          Compute the validated GATE StateId (spec content + governing doctrine) — the lock
-          certifies that these specs passed THIS gate
+        description: Compute the validated GATE StateId (spec content + governing doctrine)
         type: call
         targetComponent: host_core_adapter
         targetMethod: computeGateStateId
+      - stepNumber: 7
+        description: >-
+          Record the approved tree as the baseline, OUTSIDE the working tree. Nothing is written
+          into the spec files: a hosted lock also commits and pushes .wai/, so the old status
+          ratchet published the whole rewrite into the repository.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: writeBaseline
       - stepNumber: 8
         description: >-
           Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
@@ -489,19 +490,21 @@ methods:
         type: return
         outcome: cannot lock — validation failed
       - stepNumber: 10
-        description: Promote every spec to complete
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: promoteAllComplete
-      - stepNumber: 11
         description: Compute the validated GATE StateId (spec content + governing doctrine)
         type: call
         targetComponent: host_core_adapter
         targetMethod: computeGateStateId
+      - stepNumber: 11
+        description: >-
+          Record the approved tree as the baseline, OUTSIDE the working tree — the spec files are
+          never written to.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: writeBaseline
       - stepNumber: 12
         description: >-
-          Publish to git: commit the promoted working tree and push, returning the commit + compare
-          URL (no-op for native)
+          Publish to git: commit the .wai/-scoped tree and push the working branch, returning the
+          commit sha and compare URL
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
@@ -1009,4 +1012,4 @@ methods:
         outcome: imported tree
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-11T23:03:12.155Z'
+updatedAt: '2026-09-11T23:19:28.588Z'

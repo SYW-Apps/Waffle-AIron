@@ -146,6 +146,27 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: importSpecTree
+  - name: captureBaseline
+    narrative:
+      - stepNumber: 1
+        description: Forward approval capture to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: captureBaseline
+  - name: writeBaseline
+    narrative:
+      - stepNumber: 1
+        description: Forward baseline persistence to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: writeBaseline
+  - name: currentChildPins
+    narrative:
+      - stepNumber: 1
+        description: Forward chained-child pin resolution to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: currentChildPins
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-08-12T17:28:05.176Z'
+updatedAt: '2026-09-11T23:20:58.646Z'

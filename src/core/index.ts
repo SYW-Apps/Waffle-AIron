@@ -34,3 +34,15 @@ export { composeAgentBrief } from './agent_resolver.js';
 // forwards to the tree transfer orchestrator, stated explicitly for the same
 // anchored conformance check.
 export { exportSpecTree, importSpecTree } from './treetransfer.js';
+
+// The approval baseline (icore_portal captureBaseline / writeBaseline /
+// currentChildPins) — what a lock RECORDS instead of writing statuses into the
+// tree. Published on the portal because both the local lock and the hosted
+// admin plane (through host_core_adapter) approve through it.
+export {
+  captureBaseline,
+  writeBaseline,
+  currentChildPins,
+  readBaseline,
+  diffAgainstBaseline,
+} from './baseline.js';
