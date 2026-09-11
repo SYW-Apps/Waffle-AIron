@@ -89,11 +89,10 @@ methods:
       — a yes-permission caller executes directly and never enters the approval path, so this guard
       cannot deadlock); record the approve/deny decision; then AUTO-EXECUTE an approved request
       immediately by dispatching by kind to the pre-authorized entrypoints (project:init ->
-      executeApprovedInit; project:lock/project:promote -> the admin plane, forwarding any
-      subproject qualifier recorded on the request's payload so the execution stays confined to the
-      tree the requester was bound to) and mark it completed. Audit at security level. A
-      re-evaluation failure at execution leaves the approval approved, not completed (retryable via
-      executeApprovedRequest).
+      executeApprovedInit; project:lock -> the admin plane, forwarding any subproject qualifier
+      recorded on the request's payload so the execution stays confined to the tree the requester
+      was bound to) and mark it completed. Audit at security level. A re-evaluation failure at
+      execution leaves the approval approved, not completed (retryable via executeApprovedRequest).
     signature: 'decideRequest(credential: string, decision: ApprovalDecision): ApprovalRequest'
     returns: ApprovalRequest
     params:
@@ -109,11 +108,11 @@ methods:
       require the request to be approved and unexpired, then dispatch by kind: project:init to the
       policy orchestrator's pre-authorized executeApprovedInit (which enforces pack policy,
       provisions the project via the admin plane, applies required/default packs, and records the
-      profile selection), and project:lock / project:promote to the admin plane's pre-authorized
-      executeApprovedLock / executeApprovedPromote — forwarding any subproject qualifier recorded on
-      the request's payload, so this retry path confines exactly as the auto-execute path does; mark
-      the approval completed, and audit the execution at security level. Rejects pending, denied,
-      expired, completed, or unauthorized requests.
+      profile selection), and project:lock to the admin plane's pre-authorized executeApprovedLock —
+      forwarding any subproject qualifier recorded on the request's payload, so this retry path
+      confines exactly as the auto-execute path does; mark the approval completed, and audit the
+      execution at security level. Rejects pending, denied, expired, completed, or unauthorized
+      requests.
     signature: 'executeApprovedRequest(credential: string, requestId: string): string'
     returns: string
     params:
@@ -139,4 +138,4 @@ methods:
         type: number
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-09-11T23:36:33.042Z'
+updatedAt: '2026-09-11T23:39:14.304Z'

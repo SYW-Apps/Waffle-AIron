@@ -2,11 +2,10 @@ kind: value-object
 id: project_action_outcome
 name: ProjectActionOutcome
 description: >-
-  The standardized result of a project lifecycle action (initialize/lock/promote). Execute-primary:
-  when the caller is authorized the action runs and status is 'completed' with the natural result;
-  when the caller's effective permission is 'approval' the action is not run and status is
-  'pending-approval' carrying the created request. A 'no' permission never returns this — it raises
-  Forbidden.
+  The standardized result of a project lifecycle action (initialize/lock). Execute-primary: when the
+  caller is authorized the action runs and status is 'completed' with the natural result; when the
+  caller's effective permission is 'approval' the action is not run and status is 'pending-approval'
+  carrying the created request. A 'no' permission never returns this — it raises Forbidden.
 subsystem: sdd_host
 fields:
   - name: status
@@ -17,7 +16,7 @@ fields:
     optional: false
   - name: action
     type: string
-    description: project:init | project:lock | project:promote.
+    description: project:init | project:lock.
     optional: false
   - name: summary
     type: string
@@ -33,10 +32,6 @@ fields:
     type: LockRecord
     description: The lock record, present when a project:lock completed.
     optional: true
-  - name: promote
-    type: PromoteResult
-    description: The promote result, present when a project:promote completed.
-    optional: true
 methods: []
 createdAt: '2026-07-16T00:08:34.090Z'
-updatedAt: '2026-07-16T00:08:34.095Z'
+updatedAt: '2026-09-11T23:39:46.959Z'

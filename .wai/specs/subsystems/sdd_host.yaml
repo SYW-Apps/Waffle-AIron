@@ -25,8 +25,8 @@ publicInterfaces:
     details: >-
       Streamable HTTP MCP endpoint (POST /mcp) exposing the sdd_* tool surface request-scoped to the
       authenticated project, plus hosted landscape discovery tools and execute-primary
-      project-lifecycle tools (initialize/lock/promote/approval status/await). Discovery first lists
-      only reachable external project ids, then returns redacted public interface summaries for a
+      project-lifecycle tools (initialize/lock/approval status/await). Discovery first lists only
+      reachable external project ids, then returns redacted public interface summaries for a
       selected reachable project. Project-lifecycle tools execute the action directly when the
       caller's resolved permission is yes, create an approval request only when it resolves to
       'approval', and forbid on 'no'. Includes /healthz and /readyz.
@@ -34,8 +34,8 @@ publicInterfaces:
   - type: REST
     details: >-
       Control-plane admin API (separately bound and exposure-policy controlled): project lifecycle,
-      API-key lifecycle, pack management, producers, secrets, git backing, privileged lock/promote
-      actions, and the approval decision endpoints. Reached by operators and by the wairon CLI when
+      API-key lifecycle, pack management, producers, secrets, git backing, the privileged lock
+      action, and the approval decision endpoints. Reached by operators and by the wairon CLI when
       HTTP admin is enabled.
     component: admin_portal
   - type: REST
@@ -92,4 +92,4 @@ lifecycle:
 trustedLinks: []
 status: complete
 createdAt: '2026-07-04T12:33:06.563Z'
-updatedAt: '2026-07-16T00:25:06.382Z'
+updatedAt: '2026-09-11T23:40:24.297Z'

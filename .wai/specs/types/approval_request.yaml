@@ -14,8 +14,8 @@ fields:
   - name: kind
     type: string
     description: >-
-      Requested action kind, such as "project:init", "project:lock", "project:promote",
-      "token:mint", "pack:install", or "policy:change".
+      Requested action kind, such as "project:init", "project:lock", "token:mint", "pack:install",
+      or "policy:change".
     optional: false
   - name: status
     type: string
@@ -41,14 +41,14 @@ fields:
     type: string
     description: >-
       Redacted payload type identifier, such as ProjectInitRequest or TokenMintRequest — or the
-      subproject-scope shape a project:lock / project:promote request records when the requester was
-      bound to a chained subproject, so the approved execution stays confined to that child tree.
+      subproject-scope shape a project:lock request records when the requester was bound to a
+      chained subproject, so the approved execution stays confined to that child tree.
     optional: true
   - name: payload
     type: string
     description: >-
       Small redacted serialized payload required to execute the approved action. Must never contain
-      raw secrets or bearer tokens. For a subproject-scoped lock/promote request this carries the
+      raw secrets or bearer tokens. For a subproject-scoped lock request this carries the
       mount-chain qualifier the execution forwards, which is why an approval can never widen the
       scope the requester was bound to.
     optional: true
@@ -74,4 +74,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-09T07:18:44.031Z'
-updatedAt: '2026-07-25T17:26:50.256Z'
+updatedAt: '2026-09-11T23:40:06.840Z'

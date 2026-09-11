@@ -29,7 +29,7 @@ fields:
     optional: false
   - name: status
     type: string
-    description: '"ready" (locked, awaiting promotion) or "promoted"'
+    description: Always "ready". The lock IS the human gate; there is no second state.
     optional: false
   - name: commitSha
     type: string
@@ -56,4 +56,4 @@ invariants:
       write replaces the prior record wholesale — there is no append path, so a stale lock can never
       coexist with a fresh one.
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-07-18T14:33:34.055Z'
+updatedAt: '2026-09-11T23:39:51.912Z'

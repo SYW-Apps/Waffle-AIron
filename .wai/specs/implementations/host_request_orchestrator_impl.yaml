@@ -3,12 +3,12 @@ name: Host Request Orchestrator Implementation
 description: >-
   Per-request data-plane workflow: authenticate, resolve and bind the authorized project scope, then
   dispatch the sdd_* call — routing the execute-primary project-lifecycle tools
-  (sdd_host_initialize_project, sdd_host_lock_project, sdd_host_promote_project,
-  sdd_host_get_approval_status, sdd_host_await_approval) to the project lifecycle orchestrator, the
-  hosted landscape discovery tools to the surface exchange orchestrator (currentProjectId = the
-  bound project), and every other tool to the scoped MCP server after enforcing the granular
-  data-plane permission through the authorization specialist (project:read for reads, project:write
-  for writes — unknown tools fail closed as writes) over the bound project.
+  (sdd_host_initialize_project, sdd_host_lock_project, sdd_host_get_approval_status,
+  sdd_host_await_approval) to the project lifecycle orchestrator, the hosted landscape discovery
+  tools to the surface exchange orchestrator (currentProjectId = the bound project), and every other
+  tool to the scoped MCP server after enforcing the granular data-plane permission through the
+  authorization specialist (project:read for reads, project:write for writes — unknown tools fail
+  closed as writes) over the bound project.
 contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
 methods:
@@ -411,4 +411,4 @@ methods:
     symbol: handleMcpRequest
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-11T23:36:46.756Z'
+updatedAt: '2026-09-11T23:39:07.228Z'
