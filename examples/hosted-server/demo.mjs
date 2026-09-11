@@ -6,7 +6,7 @@
 // throwaway data dir it: provisions an isolated project, mints a scoped API key,
 // starts the server, drives the DATA PLANE over HTTP (auth rejection + MCP
 // initialize + a project-scoped `sdd_get_status` tool call), then exercises the
-// CONTROL PLANE (state-scoped lock → promote → edit → stale promote). No Docker
+// CONTROL PLANE (state-scoped lock → edit → the StateId moves). No Docker
 // required. Self-verifying: exits non-zero if any assertion fails.
 //
 //   npm run build            # once — the demo runs the built CLI
@@ -93,13 +93,23 @@ async function main() {
     server.kill();
   }
 
-  step('Control plane: state-scoped lock → promote (matches)');
-  console.log('  ' + cli(['host', 'lock', '--project', 'demo']));
-  ok(/marked ready/i.test(cli(['host', 'promote', '--project', 'demo'])), 'promote after lock → ready');
+  const stateIdOf = (out) => (out.match(/sha256\+doctrine:([0-9a-f]+)/) || [])[1];
 
-  step('TOCTOU guard: edit a spec after locking → promote must refuse as stale');
+  step('Control plane: state-scoped lock');
+  const firstLock = cli(['host', 'lock', '--project', 'demo']);
+  console.log('  ' + firstLock);
+  const firstId = stateIdOf(firstLock);
+  ok(Boolean(firstId), 'lock records the tree at a deterministic StateId');
+
+  // The TOCTOU property the gated `promote` step used to demonstrate: a lock is
+  // scoped to the exact state it validated, so any spec edit moves the StateId
+  // and the recorded lock no longer describes the tree. `promote` was removed —
+  // it only flipped a status string nothing read — so the guard is shown
+  // directly, on the identity itself.
+  step('TOCTOU guard: editing a spec after locking moves the StateId');
   writeFileSync(specPath, readFileSync(specPath, 'utf8').replace(/vision:.*/, 'vision: edited after lock'));
-  ok(/re-lock required/i.test(cli(['host', 'promote', '--project', 'demo'], { allowFail: true })), 'edit after lock → promote refuses (stale)');
+  const secondId = stateIdOf(cli(['host', 'lock', '--project', 'demo']));
+  ok(Boolean(secondId) && secondId !== firstId, 'edit after lock → StateId moved, so the old lock no longer matches');
 
   console.log(`\n${failures === 0 ? '✅ all checks passed' : `❌ ${failures} check(s) failed`}`);
 }

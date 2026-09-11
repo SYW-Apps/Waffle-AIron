@@ -88,11 +88,6 @@ export function Projects() {
     toast.ok(`Locked ${id}`);
     projects.reload();
   }
-  async function promote(id: string) {
-    await post('/web/projects/promote', { projectId: id });
-    toast.ok(`Promoted ${id}`);
-    projects.reload();
-  }
   async function destroy(id: string) {
     await post('/web/projects/destroy', { id });
     toast.ok(`Destroyed ${id}`);
