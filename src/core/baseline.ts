@@ -59,8 +59,8 @@ export interface BaselineDiff {
   changed: string[];
   /** Specs that existed at approval and are gone now. */
   removed: string[];
-  /** How many specs still match the approved copy exactly. */
-  unchanged: number;
+  /** Specs that still match the approved copy exactly. */
+  unchangedPaths: string[];
 }
 
 /** Total number of specs that differ from the approved tree. */
@@ -136,8 +136,27 @@ export function captureBaseline(
   approvedBy: string,
   children: Record<string, string> = {},
   root: string = getProjectRoot(),
+  scope?: { paths: Set<string> },
 ): BaselineRecord {
   const system = loadSystemSpec();
+  const current = currentSpecs(root);
+
+  // A SCOPED approval (`lock --subsystem x`) approves only what it covers.
+  // Everything outside keeps whatever approval it already had, so approving one
+  // subsystem can never silently mark the rest of the tree reviewed — and a
+  // spec deleted inside the scope leaves the baseline with it.
+  let specs = current;
+  if (scope) {
+    const previous = readBaseline(root)?.specs ?? {};
+    specs = { ...previous };
+    for (const rel of Object.keys(previous)) {
+      if (scope.paths.has(rel) && current[rel] === undefined) delete specs[rel];
+    }
+    for (const rel of scope.paths) {
+      if (current[rel] !== undefined) specs[rel] = current[rel];
+    }
+  }
+
   return {
     schemaVersion: SCHEMA_VERSION,
     projectRoot: path.resolve(root),
@@ -145,7 +164,7 @@ export function captureBaseline(
     approvedAt: new Date().toISOString(),
     approvedBy,
     stateId: computeGateStateId(),
-    specs: currentSpecs(root),
+    specs,
     children,
   };
 }
@@ -163,13 +182,13 @@ export function diffAgainstBaseline(root: string = getProjectRoot()): BaselineDi
   const added: string[] = [];
   const changed: string[] = [];
   const removed: string[] = [];
-  let unchanged = 0;
+  const unchangedPaths: string[] = [];
 
   for (const [rel, content] of Object.entries(current)) {
     const before = baseline.specs[rel];
     if (before === undefined) added.push(rel);
     else if (before !== content) changed.push(rel);
-    else unchanged++;
+    else unchangedPaths.push(rel);
   }
   for (const rel of Object.keys(baseline.specs)) {
     if (current[rel] === undefined) removed.push(rel);
@@ -179,6 +198,27 @@ export function diffAgainstBaseline(root: string = getProjectRoot()): BaselineDi
     added: added.sort(),
     changed: changed.sort(),
     removed: removed.sort(),
-    unchanged,
+    unchangedPaths: unchangedPaths.sort(),
   };
+}
+
+/**
+ * The spec paths a human has approved AND that have not moved since.
+ *
+ * This is what replaces the on-disk `status: draft → complete` ratchet. The
+ * ratchet existed so that, after approval, ordinary `validate` would stop
+ * relaxing completeness findings for specs the human had signed off — but it
+ * bought that by rewriting every spec file in the tree, and it was ONE-WAY:
+ * editing an approved spec left it marked complete, so the rules kept judging
+ * in-flux work at full strictness with no way back short of a manual demotion.
+ *
+ * Derived settledness is strictly better on both counts. Nothing is written,
+ * and a spec that drifts after approval returns to draft context by itself.
+ *
+ * null when the tree was never approved — then the authored status stands, which
+ * is the behaviour a project has before anyone has gated it.
+ */
+export function settledSpecPaths(root: string = getProjectRoot()): Set<string> | null {
+  const diff = diffAgainstBaseline(root);
+  return diff ? new Set(diff.unchangedPaths) : null;
 }

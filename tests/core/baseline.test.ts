@@ -88,7 +88,7 @@ describe('approval baseline', () => {
     const d = diffAgainstBaseline()!;
     expect(d).not.toBeNull();
     expect(diffSize(d)).toBe(0);
-    expect(d.unchanged).toBeGreaterThan(0);
+    expect(d.unchangedPaths.length).toBeGreaterThan(0);
   });
 
   it('names WHAT changed, not merely that something did', () => {

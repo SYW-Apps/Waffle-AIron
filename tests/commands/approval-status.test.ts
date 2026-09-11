@@ -100,7 +100,7 @@ describe('lock records an approval; status reports what moved since (real CLI)',
     expect(stdout).not.toContain('STALE');
   }, 180_000);
 
-  it('captures the approval OUTSIDE the project — no new or removed files', async () => {
+  it('captures the approval OUTSIDE the project — every spec byte-identical', async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approve-'));
     buildProject(root);
 
@@ -113,14 +113,28 @@ describe('lock records an approval; status reports what moved since (real CLI)',
     expect(fs.readdirSync(store)).toHaveLength(1);
     expect(snapshotDir(root).has('.wai/baseline.json')).toBe(false);
 
-    // The spec FILE SET is untouched by approving.
+    // The spec tree is byte-identical: approving is a decision, not an edit.
     const after = snapshotDir(specsDir);
     expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+    for (const [rel, content] of before) {
+      expect(after.get(rel)).toBe(content);
+    }
+  }, 180_000);
 
-    // Byte-identity is NOT asserted yet: `promoteAllComplete` still ratchets
-    // every spec's `status: draft → complete` during lock, which is the other
-    // half of the working-tree churn and goes next — it needs an authored
-    // `draft` flag to replace what the ratchet was standing in for.
+  it('an approved spec stops relaxing completeness findings, and an edited one relaxes again', async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approve-'));
+    buildProject(root);
+
+    // Before approval the component is draft, so DRAFT_COMPONENT_WARNING fires.
+    const pre = await run(root, 'validate');
+    expect(`${pre.stdout}${pre.stderr}`).toMatch(/DRAFT_COMPONENT_WARNING/);
+
+    await run(root, 'lock', '--yes');
+
+    // Approved and unchanged: the rules see it as complete WITHOUT the file
+    // having been rewritten, so the draft warning is gone.
+    const post = await run(root, 'validate');
+    expect(`${post.stdout}${post.stderr}`).not.toMatch(/DRAFT_COMPONENT_WARNING/);
   }, 180_000);
 
   it('reports no change right after approving', async () => {
