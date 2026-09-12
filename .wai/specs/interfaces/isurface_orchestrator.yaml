@@ -73,6 +73,17 @@ methods:
       surface externals CLI.
     signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
     returns: ExternalSurfaceEntry[]
+  - name: listMountSnapshots
+    description: >-
+      For each chained mount namespace, resolve the mount's project root through the core and read
+      the snapshots stored there, keyed by namespace. A mount that does not resolve, or holds no
+      snapshots, contributes nothing. Kept apart from the bound root's own snapshots so a contract a
+      child imported never decides the parent's own references to the same name.
+    signature: 'listMountSnapshots(mounts: string[]): MountSurfaceSnapshots[]'
+    returns: MountSurfaceSnapshots[]
+    params:
+      - name: mounts
+        type: string[]
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-07-24T17:53:56.767Z'
+updatedAt: '2026-09-12T12:00:13.095Z'

@@ -20,9 +20,13 @@ methods:
       - name: projectName
         type: string
   - name: listSnapshots
-    description: All stored snapshots.
-    signature: 'listSnapshots(): SurfaceSnapshot[]'
+    description: All stored snapshots at a project root — the bound root when omitted.
+    signature: 'listSnapshots(rootDir?: string): SurfaceSnapshot[]'
     returns: SurfaceSnapshot[]
+    params:
+      - name: rootDir
+        type: string
+        optional: true
   - name: removeSnapshot
     description: Delete the named project's snapshot (file and projection).
     signature: 'removeSnapshot(projectName: string): boolean'
@@ -38,4 +42,4 @@ methods:
     returns: void
 status: complete
 createdAt: '2026-07-10T23:13:27.580Z'
-updatedAt: '2026-07-11T09:04:02.688Z'
+updatedAt: '2026-09-12T11:59:20.857Z'

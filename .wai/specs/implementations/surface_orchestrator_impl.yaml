@@ -189,6 +189,33 @@ methods:
         description: Return the discovery entries
         type: return
         outcome: ExternalSurfaceEntry[]
+  - name: listMountSnapshots
+    narrative:
+      - stepNumber: 1
+        description: For each chained mount namespace
+        type: loop
+        loopKind: forEach
+        over: mount namespaces
+        endStep: 4
+      - stepNumber: 2
+        description: >-
+          Resolve the mount's namespace to its project root through the core; a mount that does not
+          resolve (missing, or escaping the project root) contributes nothing
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveSubprojectForNamespace
+      - stepNumber: 3
+        description: Read every snapshot stored at that mount's root
+        type: call
+        targetComponent: surface_repository
+        targetMethod: listSnapshots
+      - stepNumber: 4
+        description: Record the mount's snapshots under its namespace, skipping a mount that holds none
+        type: local
+      - stepNumber: 5
+        description: Return the per-mount snapshots
+        type: return
+        outcome: MountSurfaceSnapshots[]
 lint:
   allow:
     - code: CALL_STEP_UNREALIZED
@@ -198,4 +225,4 @@ lint:
         naming when the surfaces subsystem takes its final lock.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-07-24T17:55:48.414Z'
+updatedAt: '2026-09-12T12:00:17.157Z'

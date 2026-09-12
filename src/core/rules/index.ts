@@ -301,6 +301,8 @@ export interface BuildContextOptions {
   packSelections?: PackSelection[];
   /** Stored surface snapshots for cross-tree/remote reference resolution. */
   surfaceSnapshots?: import('../../models/index.js').SurfaceSnapshot[];
+  /** Snapshots each chained mount holds, keyed by mount namespace (see RuleContext.mountSurfaceSnapshots). */
+  mountSurfaceSnapshots?: import('./types.js').MountSurfaceSnapshots[];
   /** Source-code model for structural conformance; empty when not built. */
   codeModel?: CodeModel;
   /** Collector the context's addIssue pushes into. */
@@ -554,6 +556,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [] },
     variants: opts.variants ?? [],
     surfaceSnapshots: opts.surfaceSnapshots ?? [],
+    mountSurfaceSnapshots: opts.mountSurfaceSnapshots ?? [],
     codeModel: opts.codeModel ?? emptyCodeModel(),
     lintAllows,
     knownIssueCodes,

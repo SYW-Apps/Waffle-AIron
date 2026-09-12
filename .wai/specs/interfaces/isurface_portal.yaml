@@ -69,6 +69,15 @@ methods:
       catalog entries with origin, provenance, and freshness. Pure 1:1 forward to the orchestrator.
     signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
     returns: ExternalSurfaceEntry[]
+  - name: listMountSnapshots
+    description: >-
+      The surface snapshots each chained mount holds in its own .wai/surfaces/, keyed by the mount's
+      namespace. Pure 1:1 forward.
+    signature: 'listMountSnapshots(mounts: string[]): MountSurfaceSnapshots[]'
+    returns: MountSurfaceSnapshots[]
+    params:
+      - name: mounts
+        type: string[]
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-07-24T17:53:59.538Z'
+updatedAt: '2026-09-12T11:59:27.982Z'

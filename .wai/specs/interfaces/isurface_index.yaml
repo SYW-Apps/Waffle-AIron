@@ -11,9 +11,15 @@ methods:
       - name: projectName
         type: string
   - name: all
-    description: Every held snapshot.
-    signature: 'all(): SurfaceSnapshot[]'
+    description: >-
+      Every snapshot held at a project root — the bound root when omitted, or a chained mount's own
+      root when validation reads the surfaces that mount holds.
+    signature: 'all(rootDir?: string): SurfaceSnapshot[]'
     returns: SurfaceSnapshot[]
+    params:
+      - name: rootDir
+        type: string
+        optional: true
 status: complete
 createdAt: '2026-07-10T23:13:38.422Z'
-updatedAt: '2026-07-11T09:04:02.514Z'
+updatedAt: '2026-09-12T11:59:17.621Z'

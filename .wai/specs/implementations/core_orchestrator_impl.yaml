@@ -435,6 +435,13 @@ methods:
         type: return
         outcome: locked or stale
     conformance: 'off'
+  - name: resolveSubprojectForNamespace
+    narrative:
+      - stepNumber: 1
+        description: Resolve the mount through the spec loader's read face
+        type: call
+        targetComponent: spec_loader
+        targetMethod: resolveSubprojectForNamespace
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-11T23:33:40.549Z'
+updatedAt: '2026-09-12T12:01:08.550Z'

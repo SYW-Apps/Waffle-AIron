@@ -1,0 +1,20 @@
+kind: value-object
+id: mount_surface_snapshots
+name: MountSurfaceSnapshots
+description: >-
+  The surface snapshots one chained mount holds in its own .wai/surfaces/, keyed by the mount's
+  namespace. Kept apart from the bound root's own snapshots on purpose: a contract a child imported
+  decides only references made from inside that child, never the parent's own references to the same
+  name.
+fields:
+  - name: namespace
+    type: string
+    description: The mounting subsystem's qualified id (e.g. `kid`, `par::kid2`).
+    optional: false
+  - name: snapshots
+    type: SurfaceSnapshot[]
+    description: Every snapshot stored at that mount's root.
+    optional: false
+methods: []
+createdAt: '2026-09-12T11:59:25.862Z'
+updatedAt: '2026-09-12T11:59:25.874Z'

@@ -21,6 +21,7 @@ import {
   loadInterfaceSpecs,
   loadTypeSpecs,
   resolveChainingParent,
+  resolveSubprojectForNamespace,
   computeStateIdAt,
 } from './specs.js';
 import { computeStateId } from './statehash.js';
@@ -392,6 +393,35 @@ export function removeSnapshot(projectName: string, rootDir: string = getProject
 /** Validator-facing load (validator_surfaces_adapter realization). */
 export function loadSurfaceSnapshots(): SurfaceSnapshot[] {
   return listSnapshots();
+}
+
+/**
+ * surface_orchestrator.listMountSnapshots — the snapshots each chained mount
+ * holds in its OWN `.wai/surfaces/`, keyed by the mount's namespace.
+ *
+ * A chained child may import a foreign project's surface. From the child's
+ * root that snapshot is simply one of "this project's snapshots"; from the
+ * parent root nothing ever read it, so the child's `super::crm-portal` — which
+ * collapses to a bare `crm-portal` under the parent — was judged a local typo.
+ *
+ * Kept per mount, never pooled with the bound root's own snapshots: a contract
+ * the child imported decides only the child's references.
+ */
+export function listMountSnapshots(mounts: string[]): { namespace: string; snapshots: SurfaceSnapshot[] }[] {
+  const bound = path.resolve(getProjectRoot());
+  const out: { namespace: string; snapshots: SurfaceSnapshot[] }[] = [];
+  for (const namespace of mounts) {
+    const dir = resolveSubprojectForNamespace(namespace);
+    if (!dir || path.resolve(dir) === bound) continue;
+    const snapshots = listSnapshots(dir);
+    if (snapshots.length > 0) out.push({ namespace, snapshots });
+  }
+  return out;
+}
+
+/** validator_surfaces_adapter.loadMountSurfaceSnapshots — the validator's face of listMountSnapshots. */
+export function loadMountSurfaceSnapshots(mounts: string[]): { namespace: string; snapshots: SurfaceSnapshot[] }[] {
+  return listMountSnapshots(mounts);
 }
 
 // ---------------------------------------------------------------------------

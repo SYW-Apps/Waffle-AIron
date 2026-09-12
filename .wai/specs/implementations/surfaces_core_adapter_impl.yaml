@@ -55,6 +55,13 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: computeStateIdAt
+  - name: resolveSubprojectForNamespace
+    narrative:
+      - stepNumber: 1
+        description: Forward mount resolution to the core subsystem's published portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: resolveSubprojectForNamespace
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-07-24T18:02:21.009Z'
+updatedAt: '2026-09-12T12:01:15.932Z'

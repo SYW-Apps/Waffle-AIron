@@ -7,6 +7,16 @@ methods:
     description: All surface snapshots available to this project, via the surface portal.
     signature: 'loadSurfaceSnapshots(): SurfaceSnapshot[]'
     returns: SurfaceSnapshot[]
+  - name: loadMountSurfaceSnapshots
+    description: >-
+      The surface snapshots held inside each chained mount, keyed by mount namespace, via the
+      surface portal — so a reference made FROM inside a mount resolves against the contracts that
+      mount imported, and only such a reference.
+    signature: 'loadMountSurfaceSnapshots(mounts: string[]): MountSurfaceSnapshots[]'
+    returns: MountSurfaceSnapshots[]
+    params:
+      - name: mounts
+        type: string[]
 status: complete
 createdAt: '2026-07-10T23:14:09.299Z'
-updatedAt: '2026-07-11T09:04:02.783Z'
+updatedAt: '2026-09-12T11:59:32.178Z'

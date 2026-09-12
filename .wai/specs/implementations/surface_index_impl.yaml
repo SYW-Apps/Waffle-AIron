@@ -15,8 +15,10 @@ methods:
   - name: all
     narrative: []
     detail: intent
-    intent: Returns every held snapshot reference from the store.
+    intent: >-
+      Returns every snapshot reference held at the given project root (the bound root when omitted);
+      a malformed snapshot file is skipped, never fatal.
     symbol: listSnapshots
 status: complete
 createdAt: '2026-07-10T23:15:37.735Z'
-updatedAt: '2026-07-11T19:14:23.102Z'
+updatedAt: '2026-09-12T11:59:18.983Z'

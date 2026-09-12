@@ -182,6 +182,16 @@ methods:
     signature: 'readLockState(): LockStatus'
     returns: LockStatus
     params: []
+  - name: resolveSubprojectForNamespace
+    description: >-
+      Resolve a chained mount's qualified namespace to its project root (containment-checked against
+      the bound root), or null when the namespace names no mount. Read-only lookup through the spec
+      loader.
+    signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
+    returns: string | null
+    params:
+      - name: namespace
+        type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-11T23:33:50.961Z'
+updatedAt: '2026-09-12T12:01:06.799Z'

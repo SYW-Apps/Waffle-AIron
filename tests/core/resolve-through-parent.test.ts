@@ -222,3 +222,111 @@ describe('step 1a — a mount keeps its own loader issues when its parent valida
     expect(scoped.valid).toBe(false);
   });
 });
+
+describe('step 1b — a surface held inside a mount decides that mount\'s references from the parent root too', () => {
+  // A chained child may consume a FOREIGN project's surface: an authored or
+  // exchanged snapshot kept in its own `.wai/surfaces/`. From the child's root
+  // that works — `super::crm-portal` resolves against the snapshot. From the
+  // parent root it did not: the parent never read the child's surfaces folder,
+  // and `super::crm-portal` qualifies to a bare `crm-portal` there, which the
+  // rules take for a local typo. The same spec was clean from one root and an
+  // INVALID_*_REFERENCE error from the other.
+  //
+  // The fix must soften nothing: a child's surface decides ONLY references made
+  // from inside that mount, and a reference no surface covers stays the error
+  // it was.
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  function withChildHeldSurface(): { root: string; kidDir: string } {
+    const fam = family();
+    writeYamlFile(path.join(fam.kidDir, '.wai', 'surfaces', 'crm.yaml'), {
+      projectName: 'crm', origin: 'authored', generatedAt: now, types: [],
+      interfaces: [{
+        id: 'icrm', name: 'CRM', component: 'crm-portal', audience: 'external', type: 'REST', details: 'crm',
+        methods: [{ name: 'getCustomer', description: 'd', signature: 'getCustomer(): void', returns: 'void' }],
+      }],
+    });
+    const kid = workspaceFor(fam.kidDir);
+    // The legitimate consumer.
+    kid.saveComponentSpec(component('crm-adapter', 'k-core', { componentType: 'Adapter', dependsOn: ['super::crm-portal'] }));
+    // A non-Adapter crossing into the foreign surface.
+    kid.saveComponentSpec(component('crm-orch', 'k-core', { dependsOn: ['super::crm-portal'] }));
+    // An Adapter calling a method the foreign surface does not expose.
+    kid.saveComponentSpec(component('crm-caller', 'k-core', { componentType: 'Adapter', dependsOn: ['super::crm-portal'] }));
+    kid.saveInterfaceSpec({
+      id: 'icrm-caller', name: 'icc', description: 'd', component: 'crm-caller',
+      status: 'complete', createdAt: now, updatedAt: now,
+      methods: [{ name: 'fetch', description: 'd', signature: 'fetch(): void', returns: 'void' }],
+    } as InterfaceSpec);
+    kid.saveImplementationSpec({
+      id: 'crm-caller-impl', name: 'ci', description: 'd', contract: 'icrm-caller',
+      status: 'complete', createdAt: now, updatedAt: now,
+      methods: [{ name: 'fetch', narrative: [{
+        stepNumber: 1, description: 'ask crm', type: 'call',
+        targetComponent: 'super::crm-portal', targetMethod: 'noSuchCall',
+      }] }],
+    } as ImplementationSpec);
+    // The PARENT's own reference to the same name. The child imported crm; the
+    // parent did not, so the child's surface must not cover this.
+    setProjectRoot(fam.root);
+    saveComponentSpec(component('parent-crm-client', 'parent-sub', { componentType: 'Adapter', dependsOn: ['crm-portal'] }));
+    invalidateSpecCache();
+    return fam;
+  }
+
+  /** Errors on the child's crm-* specs as `CODE @localId`. */
+  function crmErrors(res: ValidationResult, stripPrefix = ''): string[] {
+    return errors(res, stripPrefix).filter((e) => / @crm-/.test(e));
+  }
+
+  /** Any finding on crm-adapter beyond it being unused — it should have none. */
+  function adapterNoise(res: ValidationResult, id: string): string[] {
+    return res.issues.filter((i) => i.specId === id && i.code !== 'UNUSED_COMPONENT').map((i) => i.code);
+  }
+
+  const SURFACE_VERDICT = [
+    'CROSS_SUBSYSTEM_NON_ADAPTER @crm-orch',
+    'SURFACE_REF_NOT_EXPOSED @crm-caller-impl',
+  ];
+
+  it('from the child root, the held surface decides each crm edge — the reference verdict', () => {
+    const fam = withChildHeldSurface();
+    root = fam.root;
+
+    const fromChild = verdict(fam.kidDir);
+
+    expect(crmErrors(fromChild)).toEqual(SURFACE_VERDICT);
+    expect(adapterNoise(fromChild, 'crm-adapter')).toEqual([]);
+  });
+
+  it('from the parent root, the same held surface decides the same edges the same way', () => {
+    const fam = withChildHeldSurface();
+    root = fam.root;
+
+    const fromParent = verdict(fam.root);
+
+    expect(crmErrors(fromParent, 'kid::')).toEqual(SURFACE_VERDICT);
+    expect(adapterNoise(fromParent, 'kid::crm-adapter')).toEqual([]);
+  });
+
+  it("the child's surface never covers the parent's own reference — that stays an error", () => {
+    const fam = withChildHeldSurface();
+    root = fam.root;
+
+    expect(errors(verdict(fam.root))).toContain('INVALID_DEPENDENCY_REFERENCE @parent-crm-client');
+  });
+
+  it('a reference inside the mount that no surface covers stays the error it was', () => {
+    const fam = withChildHeldSurface();
+    root = fam.root;
+
+    expect(errors(verdict(fam.root))).toEqual(expect.arrayContaining(PARENT_JUDGEMENT));
+  });
+});

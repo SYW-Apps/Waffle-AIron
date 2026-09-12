@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { resolveSurfaceRef, isExternalNamespaceRef } from './namespace.js';
+import { resolveSurfaceRef, isExternalNamespaceRef, isCollapsedCrossTreeRef } from './namespace.js';
 
 /**
  * Contract ↔ implementation symmetry, and narrative-step resolution: every
@@ -89,12 +89,18 @@ export const contractsRule: SddRule = {
           // e.g. `waffler_core::x` authored from a parent root, where
           // `waffler_core` is not present when validating from the child dir.
           const isCrossTreeForm = isExternalNamespaceRef(ctx, step.targetComponent);
+          // A reference made from inside a chained mount that the loader collapsed
+          // at this root may resolve against the snapshots that mount holds; one
+          // they do not cover keeps the error it always had.
+          const fromSubsystem = ctx.componentMap.get(contract.component)?.subsystem;
+          const isCollapsedForm = !isCrossTreeForm && fromSubsystem !== undefined
+            && isCollapsedCrossTreeRef(ctx, step.targetComponent, fromSubsystem);
 
           if (step.type === 'dispatch') {
             const dispatchTarget = ctx.componentMap.get(step.targetComponent);
             if (!dispatchTarget) {
-              if (isCrossTreeForm) {
-                const resolved = resolveSurfaceRef(ctx, step.targetComponent);
+              if (isCrossTreeForm || isCollapsedForm) {
+                const resolved = resolveSurfaceRef(ctx, step.targetComponent, fromSubsystem);
                 if (resolved) {
                   // Validate the capability against the DECLARED surface.
                   if (step.capability && !(resolved.entry.dispatch ?? []).some(b => b.capability === step.capability)) {
@@ -109,6 +115,8 @@ export const contractsRule: SddRule = {
                   }
                   continue;
                 }
+              }
+              if (isCrossTreeForm) {
                 ctx.addIssue(
                   'warning',
                   'CROSS_TREE_REF_UNRESOLVED',
@@ -159,8 +167,8 @@ export const contractsRule: SddRule = {
 
           const targetComp = ctx.componentMap.get(step.targetComponent);
           if (!targetComp) {
-            if (isCrossTreeForm) {
-              const resolved = resolveSurfaceRef(ctx, step.targetComponent);
+            if (isCrossTreeForm || isCollapsedForm) {
+              const resolved = resolveSurfaceRef(ctx, step.targetComponent, fromSubsystem);
               if (resolved) {
                 // Validate method + asserted guarantees against the DECLARED surface.
                 const surfaceMethod = resolved.entry.methods.find(m => m.name === step.targetMethod);
@@ -190,6 +198,8 @@ export const contractsRule: SddRule = {
                 }
                 continue;
               }
+            }
+            if (isCrossTreeForm) {
               ctx.addIssue(
                 'warning',
                 'CROSS_TREE_REF_UNRESOLVED',

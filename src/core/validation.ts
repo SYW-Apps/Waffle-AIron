@@ -35,7 +35,7 @@ function projectPackSelections(): PackSelection[] {
   }
 }
 import { loadProjectVariants } from './variants.js';
-import { loadSurfaceSnapshots } from './surfaces.js';
+import { loadSurfaceSnapshots, loadMountSurfaceSnapshots } from './surfaces.js';
 import { buildCodeModel } from './source-analysis.js';
 import { findChainingParent } from './specs.js';
 import { getProjectRoot } from '../utils/fs.js';
@@ -413,6 +413,14 @@ export function validateSddTree(
       issues.push(issue('error', 'EXTENSION_LOAD_ERROR', err));
     }
 
+    // The snapshots each chained mount holds, kept per mount so a contract a
+    // child imported decides only that child's references (see
+    // RuleContext.mountSurfaceSnapshots). Loaded after the loader issues were
+    // collected: resolving a mount that escapes the root raises its issue again.
+    const mountSurfaceSnapshots = loadMountSurfaceSnapshots(
+      subsystems.filter((s) => s.projectPath).map((s) => s.id),
+    );
+
     const ctx = buildRuleContext({
       system,
       subsystems,
@@ -428,6 +436,7 @@ export function validateSddTree(
       // By-name selections only: a legacy path ref pins nothing to check.
       packSelections: projectPackSelections(),
       surfaceSnapshots,
+      mountSurfaceSnapshots,
       codeModel,
       issues,
     });
