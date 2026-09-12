@@ -1499,6 +1499,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           valid: result.valid,
           errors: result.issues.filter((i) => i.severity === 'error'),
           warnings: result.issues.filter((i) => i.severity === 'warning'),
+          ...(result.resolvedThrough ? { resolvedThrough: result.resolvedThrough } : {}),
         });
       } catch (e) {
         return errText(String(e));

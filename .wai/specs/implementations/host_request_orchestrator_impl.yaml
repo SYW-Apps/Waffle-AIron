@@ -82,7 +82,12 @@ methods:
         type: return
         outcome: 403 Forbidden
       - stepNumber: 9
-        description: Bind the request-scoped project root
+        description: >-
+          Bind the request-scoped project root together with the request's REACH: the top project's
+          root and whether the credential is authorized for that top project. A credential narrowed
+          to a chained child binds the child root with no parent reach, so validation never resolves
+          the child's verdict through the parent tree — which would tell the child what its parent
+          contains.
         type: local
       - stepNumber: 10
         description: >-
@@ -411,4 +416,4 @@ methods:
     symbol: handleMcpRequest
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-11T23:39:07.228Z'
+updatedAt: '2026-09-12T12:22:39.399Z'

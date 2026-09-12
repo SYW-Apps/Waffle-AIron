@@ -1,0 +1,19 @@
+kind: value-object
+id: resolved_through
+name: ResolvedThrough
+description: >-
+  Where a chained subproject's verdict came from when it was resolved through its parent: the top
+  root that was validated and the mount chain that run was scoped to. Absent when the tree was
+  validated on its own.
+fields:
+  - name: root
+    type: string
+    description: The top project root the verdict was computed at.
+    optional: false
+  - name: scope
+    type: string
+    description: The mount chain the run was scoped to (e.g. `kid`, `par::kid2`).
+    optional: false
+methods: []
+createdAt: '2026-09-12T12:21:17.228Z'
+updatedAt: '2026-09-12T12:21:17.242Z'

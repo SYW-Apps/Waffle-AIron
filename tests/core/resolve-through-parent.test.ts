@@ -16,18 +16,17 @@ import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } 
 // A chained subproject must never be judged more leniently from its own root
 // than from its parent's.
 //
-// Today it is. With the parent on disk, validating the child standalone turns
-// every reference into the parent into an UNVERIFIED_EXTERNAL_REF warning that
-// `--ci` waives — including references the parent judges as hard boundary
-// violations. The child passes its gate; the same specs fail the parent's. And
-// nothing hosted ever delivers the surface snapshots that were meant to cover
-// the gap, so a hosted subproject lock passes with real violations in it.
+// It used to be. With the parent on disk, validating the child standalone
+// turned every reference into the parent into an UNVERIFIED_EXTERNAL_REF warning
+// that `--ci` waives — including references the parent judges as hard boundary
+// violations. The child passed its gate while the same specs failed the
+// parent's, and nothing hosted ever delivered the surface snapshots meant to
+// cover the gap, so a hosted subproject lock passed with real violations in it.
 //
-// The fix is to resolve through the parent that `findChainingParent` already
-// finds on this exact code path. Until it lands, the property is pinned with
-// `it.fails`: those tests PASS while the hole is open and start FAILING the
-// moment it closes — which forces whoever closes it to flip them to `it`, so
-// the fix cannot land without the property becoming a live assertion.
+// The fix resolves through the parent that `findChainingParent` already finds on
+// this exact code path. The property was pinned with `it.fails` before the fix
+// (step 0) — passing while the hole was open, failing the moment it closed — so
+// the fix could not land without these becoming live assertions.
 // ---------------------------------------------------------------------------
 
 const now = new Date().toISOString();
@@ -152,7 +151,7 @@ describe('a chained child judged from its own root vs its parent', () => {
     expect(fromParent.issues.filter((i) => i.specId === 'kid::k-adapter' && i.code !== 'UNUSED_COMPONENT')).toEqual([]);
   });
 
-  it.fails('THE HOLE: a child validated standalone reports every error its parent does', () => {
+  it('a child validated standalone reports every error its parent does', () => {
     const fam = family();
     root = fam.root;
     const parentErrors = errors(verdict(fam.root, { scopeSubsystem: 'kid', recursive: true }), 'kid::');
@@ -163,8 +162,8 @@ describe('a chained child judged from its own root vs its parent', () => {
     expect(fromChild.valid).toBe(false);
   });
 
-  it.fails('THE HOLE: an edge the parent resolves cleanly raises nothing from the child root', () => {
-    // Today the clean Adapter→published-Portal edge is reported as an unverified
+  it('an edge the parent resolves cleanly raises nothing from the child root', () => {
+    // The clean Adapter→published-Portal edge used to come back as an unverified
     // external reference, indistinguishable from the real violations beside it.
     const fam = family();
     root = fam.root;
@@ -328,5 +327,125 @@ describe('step 1b — a surface held inside a mount decides that mount\'s refere
     root = fam.root;
 
     expect(errors(verdict(fam.root))).toEqual(expect.arrayContaining(PARENT_JUDGEMENT));
+  });
+});
+
+describe('step 3 — a chained child is judged through its parent when the parent is on disk', () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  it('reports where the verdict came from', () => {
+    const fam = family();
+    root = fam.root;
+
+    const fromChild = verdict(fam.kidDir);
+
+    expect(fromChild.resolvedThrough).toEqual({ root: path.resolve(fam.root), scope: 'kid' });
+  });
+
+  it("names the parent's errors under the child's own ids — and the child is invalid", () => {
+    const fam = family();
+    root = fam.root;
+
+    const fromChild = verdict(fam.kidDir);
+
+    expect(errors(fromChild)).toEqual(PARENT_JUDGEMENT.map((e) => e.replace('@kid::', '@')));
+    expect(fromChild.valid).toBe(false);
+  });
+
+  it('rewrites nothing into an unverified-reference warning and prepends no notice', () => {
+    const fam = family();
+    root = fam.root;
+
+    const codes = verdict(fam.kidDir).issues.map((i) => i.code);
+
+    expect(codes).not.toContain('UNVERIFIED_EXTERNAL_REF');
+    expect(codes).not.toContain('CHAINED_SUBPROJECT_CONTEXT');
+  });
+
+  it("keeps the child's own findings the parent never judges — a union, not a replacement", () => {
+    // Code conformance is never judged from a parent for a chained child, so a
+    // verdict that REPLACED the child's with the parent's would lose this.
+    const fam = family();
+    root = fam.root;
+
+    const fromChild = verdict(fam.kidDir);
+
+    expect(fromChild.issues.some((i) => i.code === 'MISSING_SOURCE_PATH' && i.specId === 'k-caller-impl')).toBe(true);
+  });
+
+  it('never reports the same finding twice', () => {
+    const fam = family();
+    root = fam.root;
+
+    const keys = verdict(fam.kidDir).issues.map((i) => `${i.code}|${i.specId ?? ''}|${i.message}`);
+
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('a parent that cannot be loaded falls back to the standalone verdict', () => {
+    const fam = family();
+    root = fam.root;
+    // The mount stays discoverable — findChainingParent reads subsystem files —
+    // but the parent's L0 no longer parses, so there is no tree to resolve through.
+    fs.writeFileSync(path.join(fam.root, '.wai', 'specs', '.index.yaml'), 'name: root-system\n');
+
+    const fromChild = verdict(fam.kidDir);
+
+    expect(fromChild.resolvedThrough).toBeUndefined();
+    expect(fromChild.issues.some((i) => i.code === 'CHAINED_SUBPROJECT_CONTEXT')).toBe(true);
+  });
+
+  it('a grandchild resolves through the TOP root, scoped to the whole mount chain', () => {
+    const top = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-rtp3-'));
+    root = top;
+    fs.mkdirSync(path.join(top, '.wai', 'specs'), { recursive: true });
+    writeYamlFile(path.join(top, '.wai', 'project.yaml'), {
+      schemaVersion: '1.0.0', name: 'grand',
+      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now,
+    });
+    setProjectRoot(top);
+    saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'grand-system', vision: 'v',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    saveSubsystemSpec(subsystem('grand-sub', {
+      parentSystem: 'grand-system',
+      publicInterfaces: [{ type: 'Custom', details: 'the published portal', component: 'grand-portal' }],
+    } as Partial<SubsystemSpec>));
+    saveComponentSpec(component('grand-portal', 'grand-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    createChainedSubsystem(subsystem('par', { parentSystem: 'grand-system', projectPath: 'packages/par' }), 'par');
+
+    const parDir = path.join(top, 'packages', 'par');
+    invalidateSpecCache();
+    setProjectRoot(parDir);
+    saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'par-system', vision: 'v',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    createChainedSubsystem(subsystem('kid2', { parentSystem: 'par-system', projectPath: 'packages/kid2' }), 'kid2');
+
+    const kid2Dir = path.join(parDir, 'packages', 'kid2');
+    const kid2 = workspaceFor(kid2Dir);
+    kid2.saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'kid2-system', vision: 'v',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    kid2.saveSubsystemSpec(subsystem('k2-core', { parentSystem: 'kid2-system' }));
+    kid2.saveComponentSpec(component('k2-orch', 'k2-core', { dependsOn: ['super::super::grand-portal'] }));
+    kid2.saveComponentSpec(component('k2-adapter', 'k2-core', { componentType: 'Adapter', dependsOn: ['super::super::grand-portal'] }));
+    invalidateSpecCache();
+
+    const fromKid2 = verdict(kid2Dir);
+
+    expect(fromKid2.resolvedThrough).toEqual({ root: path.resolve(top), scope: 'par::kid2' });
+    expect(errors(fromKid2)).toEqual(['CROSS_SUBSYSTEM_NON_ADAPTER @k2-orch']);
   });
 });

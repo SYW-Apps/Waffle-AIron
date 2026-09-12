@@ -12,6 +12,7 @@ import {
   clearLoaderIssues,
   getLoaderIssues,
   scanAllSpecs,
+  invalidateSpecCache,
 } from './specs.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { registerBuiltinRules, registerPackRules, ruleSequence } from './rules/repository.js';
@@ -38,7 +39,7 @@ import { loadProjectVariants } from './variants.js';
 import { loadSurfaceSnapshots, loadMountSurfaceSnapshots } from './surfaces.js';
 import { buildCodeModel } from './source-analysis.js';
 import { findChainingParent } from './specs.js';
-import { getProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import * as path from 'path';
 import { settledSpecPaths } from './approval.js';
 import type { SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec } from '../models/index.js';
@@ -131,6 +132,12 @@ export interface ValidationIssue {
 export interface ValidationResult {
   valid: boolean;
   issues: ValidationIssue[];
+  /**
+   * Present when a chained subproject's verdict was resolved through its
+   * parent: the top root that was validated and the mount chain it was scoped
+   * to. Absent when the tree was validated on its own.
+   */
+  resolvedThrough?: { root: string; scope: string };
 }
 
 function issue(
@@ -278,6 +285,11 @@ export interface ValidationOptions {
    * observable to later callers).
    */
   treatAllAsComplete?: boolean;
+  /**
+   * Internal: 'off' skips resolving a chained subproject through its parent. Set
+   * on the run that IS the parent's verdict, so that run can never walk again.
+   */
+  crossTree?: 'off';
 }
 
 /**
@@ -301,8 +313,9 @@ export function validateSddTree(
   let recursive: boolean | number = true;
   let extensions: LoadedExtensions | undefined;
   let treatAllAsComplete = false;
+  let crossTree: 'off' | undefined;
 
-  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions)) {
+  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions || 'crossTree' in rulesOrOptions)) {
     const opts = rulesOrOptions as ValidationOptions;
     rules = opts.rules;
     projectType = opts.projectType ?? 'backend';
@@ -310,6 +323,7 @@ export function validateSddTree(
     recursive = opts.recursive ?? true;
     extensions = opts.extensions;
     treatAllAsComplete = opts.treatAllAsComplete ?? false;
+    crossTree = opts.crossTree;
   }
   extensions ??= loadProjectExtensions();
 
@@ -472,7 +486,52 @@ export function validateSddTree(
     const hasCrossTreeSuspects = issues.some(
       i => SUBPROJECT_REFERENCE_CODES.has(i.code) || SUBPROJECT_CONFORMANCE_CODES.has(i.code),
     );
-    const chainingParent = hasCrossTreeSuspects ? findChainingParent(getProjectRoot()) : null;
+    const chainingParent = hasCrossTreeSuspects && crossTree !== 'off' ? findChainingParent(getProjectRoot()) : null;
+
+    // RESOLVE THROUGH THE PARENT. When the parent is on disk, a reference this
+    // root cannot resolve is not "unverifiable" — it is judged by validating the
+    // parent scoped to this mount. The child keeps every finding of its own and
+    // gains the parent's verdict for what it could not see: a union, with no
+    // severity changed, so it is never judged more leniently than its parent.
+    // (It used to rewrite each such reference into a waived warning instead,
+    // including references the parent judged as hard boundary violations.)
+    const uncovered = (i: ValidationIssue): boolean => SUBPROJECT_REFERENCE_CODES.has(i.code) && !i.surfaceResolved;
+    const resolution = chainingParent && issues.some(uncovered)
+      ? resolveThroughParent(getProjectRoot(), treatAllAsComplete)
+      : null;
+    if (resolution) {
+      // A child finding verified against a snapshot is a verdict on a cross-tree
+      // edge the parent's run judges again, against the real component or the
+      // same snapshot the mount holds. Where the parent reached the same code on
+      // the same spec at least as severely, its verdict stands in for the
+      // child's: one finding worded from two roots is not two findings. Where it
+      // did not, the child's finding stays, so the union is never quieter.
+      const parentSeverity = new Map<string, ValidationIssue['severity']>();
+      for (const i of resolution.issues) {
+        const key = `${i.code}|${i.specId ?? ''}`;
+        if (i.severity === 'error' || !parentSeverity.has(key)) parentSeverity.set(key, i.severity);
+      }
+      const rejudged = (i: ValidationIssue): boolean => {
+        const judged = parentSeverity.get(`${i.code}|${i.specId ?? ''}`);
+        return judged === 'error' || (judged === 'warning' && i.severity === 'warning');
+      };
+      const kept = issues.filter((i) => !uncovered(i) && !(i.surfaceResolved && rejudged(i)));
+      for (const iss of kept) {
+        if (SUBPROJECT_CONFORMANCE_CODES.has(iss.code)) {
+          if (iss.severity === 'error') iss.severity = 'warning';
+          iss.crossTreeContext = true; // conformance keeps its downgrade (step 6 removes it)
+        }
+      }
+      const merged = dedupeIssues([...kept, ...resolution.issues]);
+      return {
+        valid: merged.every((i) => i.severity !== 'error'),
+        issues: merged,
+        resolvedThrough: { root: resolution.root, scope: resolution.scope },
+      };
+    }
+
+    // No usable parent (its L0 missing, the mount unknown, or reach denied): the
+    // standalone verdict.
     if (chainingParent) {
       let unverified = 0;
       let downgraded = 0;
@@ -537,6 +596,106 @@ export function validateSddTree(
   } finally {
     statusBearing.forEach((s, i) => { s.status = statusSnapshot[i]; });
   }
+}
+
+/**
+ * Validate a chained subproject's specs FROM ITS PARENT: walk up to the top root
+ * collecting the mount chain, validate there scoped to that chain, and rename
+ * the findings into the child's own ids. Null when no usable parent is reachable
+ * — the caller then keeps the standalone verdict.
+ *
+ * Reach: resolving reads the parent tree. A hosted request whose credential is
+ * narrowed to the child never gets here, and the walk never climbs above the
+ * request's own top project root.
+ */
+function resolveThroughParent(
+  boundRoot: string,
+  treatAllAsComplete: boolean,
+): { root: string; scope: string; issues: ValidationIssue[] } | null {
+  const reach = getRequestParentReach();
+  if (reach && !reach.parentReach) return null;
+  const ceiling = reach?.topRoot ? path.resolve(reach.topRoot) : undefined;
+
+  const chain: string[] = [];
+  let top = path.resolve(boundRoot);
+  while (top !== ceiling) {
+    const hop = findChainingParent(top);
+    if (!hop) break;
+    const next = path.resolve(hop.parentRoot);
+    if (ceiling && !isWithinOrEqual(ceiling, next)) break;
+    chain.unshift(hop.subsystemId);
+    top = next;
+  }
+  if (chain.length === 0) return null;
+  const scope = chain.join('::');
+
+  const inner = runWithProjectRoot(top, () => {
+    // Read the parent as it is NOW — the child was probably just edited, and a
+    // cached parent tree would judge it against the past.
+    invalidateSpecCache();
+    // The parent's own governing configuration: its rules and profile decide
+    // its verdict, not the child's.
+    let governing: { rules?: RulesConfig; projectType?: string } = {};
+    try {
+      const config = loadProjectConfig();
+      governing = { rules: config.rules, projectType: config.projectType };
+    } catch { /* an unconfigured parent validates with the defaults */ }
+    return validateSddTree({
+      ...governing,
+      scopeSubsystem: scope,
+      recursive: true,
+      crossTree: 'off',
+      treatAllAsComplete,
+    });
+  });
+  // No L0 to walk, or the mount is not in the parent's tree: nothing to resolve through.
+  if (inner.issues.some((i) => i.code === 'MISSING_SYSTEM_SPEC' || i.code === 'SUBSYSTEM_NOT_FOUND')) return null;
+
+  const local = scope.split('::').pop()!;
+  const issues = inner.issues.map((i) => ({
+    ...i,
+    message: stripNamespace(i.message, scope),
+    ...(i.specId !== undefined ? { specId: i.specId === scope ? local : stripNamespace(i.specId, scope) } : {}),
+  }));
+  return { root: top, scope, issues };
+}
+
+/**
+ * Remove a mount-chain prefix (`scope::`) wherever it begins an id in `text` —
+ * only at an id boundary, so `kid::` never bites into `bigkid::x` or into a
+ * deeper `par::kid::x` that names a different namespace.
+ */
+function stripNamespace(text: string, scope: string): string {
+  const prefix = `${scope}::`;
+  let out = '';
+  let from = 0;
+  for (let at = text.indexOf(prefix); at !== -1; at = text.indexOf(prefix, from)) {
+    const atBoundary = at === 0 || !isIdChar(text[at - 1]);
+    out += text.slice(from, at) + (atBoundary ? '' : prefix);
+    from = at + prefix.length;
+  }
+  return out + text.slice(from);
+}
+
+function isIdChar(ch: string): boolean {
+  return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')
+    || ch === '_' || ch === '-' || ch === '.' || ch === ':';
+}
+
+function isWithinOrEqual(dir: string, target: string): boolean {
+  const rel = path.relative(dir, target);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/** One finding per (code, spec, message): a union must never print the same verdict twice. */
+function dedupeIssues(list: ValidationIssue[]): ValidationIssue[] {
+  const seen = new Set<string>();
+  return list.filter((i) => {
+    const key = `${i.code}|${i.specId ?? ''}|${i.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**

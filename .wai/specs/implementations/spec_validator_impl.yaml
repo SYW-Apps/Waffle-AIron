@@ -190,21 +190,21 @@ methods:
         type: local
       - stepNumber: 20
         description: >-
-          Chained-subproject reference honesty: when this root is a chained subproject of a
-          discoverable parent (detected via the loader's findChainingParent), cross-tree references
-          COVERED by a vendored surface snapshot validate at FULL strength — contract mismatches and
-          boundary violations stay errors, because a snapshot IS the verifiable contract — while
-          each cross-tree reference NO snapshot covers is reported as ONE precise
-          UNVERIFIED_EXTERNAL_REF warning replacing the former blanket downgrade of the
-          reference-resolution family (undefined-type, invalid dependency/subsystem/target-component
-          references, undeclared-dependency-call, unresolved cross-tree refs), marked
-          crossTreeContext (--ci waives it) and naming the unverifiable reference plus the remedy
-          (re-lock the parent so fresh family/sibling snapshots ship, or inspect via
-          list-external-interfaces). The code↔spec conformance family (missing-source-file,
-          unrealized-method, undeclared-dependency and kin) KEEPS the crossTreeContext downgrade —
-          source paths stored relative to the parent root genuinely cannot resolve standalone. One
-          CHAINED_SUBPROJECT_CONTEXT notice is prepended, counting the unverified references — full
-          cross-tree verification runs from the parent root
+          Resolve a chained subproject's verdict through its parent. When this root is a chained
+          subproject (findChainingParent) and still holds reference-resolution findings no surface
+          snapshot covers, walk up to the TOP root collecting the mount chain — never above the
+          bound request's top project root, and not at all when the request's credential is narrowed
+          to the child — then validate the top root scoped to that chain, with the parent's own
+          project rules and doctrine and the same as-complete strictness, and without resolving
+          again. Its findings are renamed into the child's ids (the mount prefix stripped from spec
+          ids and messages) and merged with the child's own findings minus the uncovered references
+          the parent has now judged: a union, deduplicated, with no severity changed — so the child
+          is never judged more leniently than its parent. Snapshot-covered findings keep full
+          strength; the code↔spec conformance family keeps its crossTreeContext downgrade. The
+          result records the root and scope it was resolved through. When no usable parent is
+          reachable (its L0 missing, the mount unknown, or reach denied), the standalone path
+          remains: each uncovered reference becomes one UNVERIFIED_EXTERNAL_REF warning
+          (crossTreeContext) and one CHAINED_SUBPROJECT_CONTEXT notice is prepended
         type: local
       - stepNumber: 21
         description: Return the aggregated validation result
@@ -339,4 +339,4 @@ lint:
         when Level 3 models call indirection.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T12:00:20.531Z'
+updatedAt: '2026-09-12T12:21:26.083Z'

@@ -124,6 +124,12 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       scopeSubsystem: options.subsystem,
       recursive: options.recursive ?? true,
     });
+    if (sddResult.resolvedThrough) {
+      logger.info(
+        `Chained subproject — verified through the parent project at ${sddResult.resolvedThrough.root} ` +
+          `(mount "${sddResult.resolvedThrough.scope}").`,
+      );
+    }
     if (sddResult.issues.length === 0) {
       logger.success('Spec tree is valid and component type boundaries are enforced.');
     } else {

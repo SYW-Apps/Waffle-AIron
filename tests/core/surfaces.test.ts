@@ -479,7 +479,7 @@ describe('standalone-child validation against generated parent snapshots', () =>
     expect(res.valid).toBe(false);
   });
 
-  it('a cross-tree ref NO snapshot covers becomes one precise UNVERIFIED_EXTERNAL_REF warning', () => {
+  it('a cross-tree ref nothing covers is judged by the parent — a real INVALID_DEPENDENCY_REFERENCE, not a waived warning', () => {
     const childDir = buildFamily();
     setProjectRoot(childDir);
     saveComponentSpec(component('mystery-adapter', 'transpiler', {
@@ -488,21 +488,17 @@ describe('standalone-child validation against generated parent snapshots', () =>
     invalidateSpecCache();
     setProjectRoot(childDir);
     const res = validateSddTree();
-    const unverified = res.issues.filter(i => i.code === 'UNVERIFIED_EXTERNAL_REF');
-    expect(unverified).toHaveLength(1);
-    expect(unverified[0].severity).toBe('warning');
-    expect(unverified[0].crossTreeContext).toBe(true);
-    // Names the original finding + the unresolvable reference + the remedy.
-    expect(unverified[0].message).toContain('CROSS_TREE_REF_UNRESOLVED');
-    expect(unverified[0].message).toContain('super::no-such-portal');
-    expect(unverified[0].message).toMatch(/re-lock the parent/);
-    expect(unverified[0].message).toMatch(/surface externals/);
-    // The original code is REPLACED, not kept alongside.
-    expect(res.issues.map(i => i.code)).not.toContain('CROSS_TREE_REF_UNRESOLVED');
-    // One notice counts the unverified references.
-    const notice = res.issues.find(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT');
-    expect(notice).toBeDefined();
-    expect(notice!.message).toMatch(/1 cross-tree reference/);
+    // The parent is on disk, so the reference is judged there: no snapshot and
+    // no component answers to it, which is simply an invalid dependency. It used
+    // to become one UNVERIFIED_EXTERNAL_REF warning that --ci waived.
+    const invalid = res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
+    expect(invalid.map(i => [i.specId, i.severity])).toEqual([['mystery-adapter', 'error']]);
+    const codes = res.issues.map(i => i.code);
+    expect(codes).not.toContain('UNVERIFIED_EXTERNAL_REF');
+    expect(codes).not.toContain('CROSS_TREE_REF_UNRESOLVED');
+    expect(codes).not.toContain('CHAINED_SUBPROJECT_CONTEXT');
+    expect(res.resolvedThrough?.scope).toBe('transpiler');
+    expect(res.valid).toBe(false);
   });
 
   it('code-conformance findings KEEP the downgrade (never replaced by UNVERIFIED_EXTERNAL_REF)', () => {

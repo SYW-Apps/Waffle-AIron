@@ -94,19 +94,49 @@ let projectRootOverride: string | null = null;
 // concurrent requests would race). getProjectRoot() consults this FIRST, so the
 // entire existing flat spec/config API becomes request-scoped with no changes to
 // its call sites. Stdio/CLI paths set no scope and fall through to the override.
-const requestRootStore = new AsyncLocalStorage<string>();
+//
+// A hosted request also carries its REACH: the top project's root, and whether
+// the credential is authorized for that top project. A chained child's verdict
+// can be resolved through its parent tree, and a token narrowed to the child
+// must not learn what the parent contains that way.
+interface RequestScope {
+  root: string;
+  topRoot?: string;
+  parentReach?: boolean;
+}
+const requestRootStore = new AsyncLocalStorage<RequestScope>();
 
 /** Run `fn` with `dir` as the active project root for the current async context
  *  (and everything it awaits). The hosting server wraps each request in this so
  *  its sdd_* handlers resolve to the authenticated project's .wai/ tree without a
- *  mutable global. */
+ *  mutable global. A nested rebinding keeps the reach of the request it runs
+ *  inside, so rebinding can never lend a narrowed credential more than it had. */
 export function runWithProjectRoot<T>(dir: string, fn: () => T): T {
-  return requestRootStore.run(path.resolve(dir), fn);
+  return requestRootStore.run({ ...requestRootStore.getStore(), root: path.resolve(dir) }, fn);
+}
+
+/** Bind a hosted request's root together with its reach (see RequestScope). */
+export function runWithProjectBinding<T>(
+  dir: string,
+  reach: { topRoot: string; parentReach: boolean },
+  fn: () => T,
+): T {
+  return requestRootStore.run(
+    { root: path.resolve(dir), topRoot: path.resolve(reach.topRoot), parentReach: reach.parentReach },
+    fn,
+  );
 }
 
 /** The request-scoped root if one is bound, else null. */
 export function getRequestProjectRoot(): string | null {
-  return requestRootStore.getStore() ?? null;
+  return requestRootStore.getStore()?.root ?? null;
+}
+
+/** The current hosted request's reach, or null outside a hosted request binding. */
+export function getRequestParentReach(): { topRoot?: string; parentReach: boolean } | null {
+  const scope = requestRootStore.getStore();
+  if (!scope || scope.parentReach === undefined) return null;
+  return { topRoot: scope.topRoot, parentReach: scope.parentReach };
 }
 
 /** Override the project root. Pass an absolute path to the dir containing .wai/,
@@ -145,7 +175,7 @@ export function findSystemRoot(startDir: string): string | null {
 /** The resolved project root: the request-scoped root if bound (hosting server),
  *  else the explicit override if set, else the resolved system root, else cwd. */
 export function getProjectRoot(): string {
-  const scoped = requestRootStore.getStore();
+  const scoped = requestRootStore.getStore()?.root;
   if (scoped) return scoped;
   if (projectRootOverride) return projectRootOverride;
   const systemRoot = findSystemRoot(process.cwd());

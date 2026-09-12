@@ -103,18 +103,20 @@ the boilerplate (schemaVersion, timestamps, derived names/descriptions, status
 | `scopeSubsystem` / `treatAllAsComplete` | validateSddTree passthrough (scoped runs, the as-complete lock gate). |
 | `validateFromSubdir` | bind the VALIDATED root to a subdirectory of the temp root (relative, no `..`) — see below. |
 
-**`validateFromSubdir` — the chained-child seam.** Some findings only exist
-when the validated root is itself a CHAINED CHILD of an ancestor project:
-`CHAINED_SUBPROJECT_CONTEXT` and `UNVERIFIED_EXTERNAL_REF` come from a
-post-rule honesty pass gated on `findChainingParent`, which walks UP the
-filesystem from the validated root looking for an ancestor `.wai` project
-whose subsystem `projectPath` resolves to that exact root — impossible when
-the root is the temp-dir top (its ancestors are bare OS temp dirs). With
+**`validateFromSubdir` — the chained-child seam.** Some verdicts only exist
+when the validated root is itself a CHAINED CHILD of an ancestor project: such
+a child is judged THROUGH its parent, found by `findChainingParent`, which
+walks UP the filesystem from the validated root looking for an ancestor `.wai`
+project whose subsystem `projectPath` resolves to that exact root — impossible
+when the root is the temp-dir top (its ancestors are bare OS temp dirs). With
 `validateFromSubdir`, the tree still materializes at the temp root exactly as
 always — so the top-level tree plays the PARENT (declare the mount subsystem
 with `projectPath` there) — while the CHILD project is laid down as raw spec
-YAML under `tree.files` and validation is bound to its directory. See
-`families/references-chained-context.fixtures.ts` for the worked pair.
+YAML under `tree.files` and validation is bound to its directory. Override the
+parent's `.wai/specs/.index.yaml` through `tree.files` to make the parent
+unloadable: that is the standalone fallback, which emits
+`CHAINED_SUBPROJECT_CONTEXT` and `UNVERIFIED_EXTERNAL_REF`. See
+`families/references-chained-context.fixtures.ts` for both.
 
 **`anchoredTo: null`** (vs. omitting it) asserts the emitted finding carries
 NO `specId` at all — for tree-level findings like the prepended

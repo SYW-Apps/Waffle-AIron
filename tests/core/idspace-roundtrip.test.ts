@@ -358,9 +358,11 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
 
-  it('validating a chained subproject STANDALONE replaces uncovered parent-tree refs with UNVERIFIED_EXTERNAL_REF + a clear notice (does not explode)', async () => {
-    // Parent project mounts `kid` as a chained subproject; kid references a
-    // component that lives in the parent (absent when kid is validated alone).
+  it('with its parent on disk, a chained child is judged THROUGH the parent — a bare parent id is a real error, not a waived warning', async () => {
+    // Parent project mounts `kid` as a chained subproject; kid depends on a
+    // parent component BY BARE ID. From inside a mount a bare id qualifies to
+    // `kid::parent-portal`, which does not exist — a typo-grade error, and the
+    // parent says so.
     rootDir = makeRoot();
     saveSubsystemSpec(subsystem('parent-sub'));
     saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
@@ -380,36 +382,24 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
 
     const { validateSddTree } = await import('../../src/core/validation.js');
 
-    // From the PARENT root the whole tree resolves — no cross-tree noise.
+    // From the PARENT root: its verdict, and no chained-subproject notice.
     setProjectRoot(rootDir);
     invalidateSpecCache();
     const fromParent = validateSddTree();
     expect(fromParent.issues.filter(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT')).toHaveLength(0);
 
-    // From KID's own root the parent ref cannot resolve — no vendored surface
-    // snapshot covers it, so the finding is REPLACED by one precise
-    // UNVERIFIED_EXTERNAL_REF warning (the old behavior downgraded the original
-    // code in place) with one notice, so `validate` passes instead of exploding.
+    // From KID's own root the verdict is the same one — resolved through the
+    // parent and renamed into kid's ids. It used to be REPLACED by a waived
+    // UNVERIFIED_EXTERNAL_REF warning, and `validate --ci` passed.
     setProjectRoot(kidDir);
     invalidateSpecCache();
     const fromKid = validateSddTree();
-    expect(fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
-    const notice = fromKid.issues.find(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT');
-    expect(notice).toBeDefined();
-    expect(notice!.message).toMatch(/chained subproject/);
-    expect(notice!.message).toMatch(/1 cross-tree reference/);
-    expect(notice!.crossTreeContext).toBe(true);
-    // The replacement warning names the original finding, the unresolvable
-    // reference, and the remedy — and is marked cross-tree (so --ci waives it).
-    const unverified = fromKid.issues.filter(i => i.code === 'UNVERIFIED_EXTERNAL_REF');
-    expect(unverified).toHaveLength(1);
-    expect(unverified[0].severity).toBe('warning');
-    expect(unverified[0].crossTreeContext).toBe(true);
-    expect(unverified[0].message).toContain('INVALID_DEPENDENCY_REFERENCE');
-    expect(unverified[0].message).toContain('parent-portal');
-    expect(unverified[0].message).toMatch(/re-lock the parent/);
-    expect(unverified[0].message).toMatch(/surface externals/);
-    expect(fromKid.valid).toBe(true);
+    const invalid = fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
+    expect(invalid.map(i => [i.specId, i.severity])).toEqual([['k-orch', 'error']]);
+    expect(fromKid.issues.map(i => i.code)).not.toContain('UNVERIFIED_EXTERNAL_REF');
+    expect(fromKid.issues.map(i => i.code)).not.toContain('CHAINED_SUBPROJECT_CONTEXT');
+    expect(fromKid.resolvedThrough).toEqual({ root: path.resolve(rootDir), scope: 'kid' });
+    expect(fromKid.valid).toBe(false);
   });
 
   it('a root-name-qualified target (waffler_core::x form, authored from a parent) warns, not errors, from the child root', async () => {

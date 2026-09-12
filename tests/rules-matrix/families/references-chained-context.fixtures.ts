@@ -1,29 +1,22 @@
 /**
- * Chained-subproject reference honesty (the post-rule pass in
- * src/core/validation.ts; step-19 semantics in
- * .wai/specs/implementations/spec_validator_impl.yaml).
+ * Chained-subproject resolution (the post-rule pass in src/core/validation.ts;
+ * step-20 semantics in .wai/specs/implementations/spec_validator_impl.yaml).
  *
  * Documented intent:
- *  - When the VALIDATED ROOT is a chained subproject of a DISCOVERABLE parent
- *    (the loader's findChainingParent walks UP the filesystem from the root
- *    looking for an ancestor project whose subsystem projectPath resolves to
- *    this exact root), each cross-tree reference NO vendored surface snapshot
- *    covers is REPLACED by one precise UNVERIFIED_EXTERNAL_REF warning
- *    (crossTreeContext, --ci waives it; the replaced finding's specId is
- *    preserved), and ONE CHAINED_SUBPROJECT_CONTEXT warning notice is
- *    PREPENDED (tree-level: NO specId anchor), counting the unverified refs.
- *  - Snapshot-COVERED references never enter this path: they validate at full
- *    strength (contract mismatches and boundary violations stay errors).
- *  - The pass is gated on discoverability: a top-level root — and the parent
- *    root itself, which is authoritative — keeps every raw verdict.
- *
- * VERIFIED PRODUCT BEHAVIOR (ad-hoc probe through validateSddTree, parent
- * project on disk above the bound child root): intent and behavior AGREE —
- *   CHAINED_SUBPROJECT_CONTEXT  → severity 'warning', specId ABSENT, crossTreeContext true, first in the list
- *   UNVERIFIED_EXTERNAL_REF     → severity 'warning', specId = the replaced finding's anchor, crossTreeContext true
- *   (with a covering snapshot both codes disappear and the same edge produced
- *   a full-strength CROSS_SUBSYSTEM_NON_ADAPTER error — exactly as documented)
- * So there is NO product finding here.
+ *  - When the VALIDATED ROOT is a chained subproject of a DISCOVERABLE, LOADABLE
+ *    parent (the loader's findChainingParent walks UP the filesystem from the
+ *    root looking for an ancestor project whose subsystem projectPath resolves
+ *    to this exact root), references this root cannot resolve are judged
+ *    THROUGH that parent: the top root is validated scoped to the mount chain
+ *    and its findings are renamed into the child's own ids — so an edge the
+ *    parent rejects is the same error from the child.
+ *  - When the parent is discoverable but cannot be loaded, the standalone
+ *    fallback applies: each cross-tree reference NO vendored surface snapshot
+ *    covers is REPLACED by one UNVERIFIED_EXTERNAL_REF warning (crossTreeContext,
+ *    the replaced finding's specId preserved), and ONE tree-level
+ *    CHAINED_SUBPROJECT_CONTEXT notice (NO specId) is PREPENDED.
+ *  - Snapshot-COVERED references validate at full strength either way.
+ *  - A top-level root — and the parent root itself — keeps every raw verdict.
  *
  * The FIRE halves need the VALIDATED ROOT itself to be a chained child of an
  * ANCESTOR project, which the plain harness layout cannot express (fixture
@@ -31,18 +24,20 @@
  * dirs). They use the harness's `validateFromSubdir` seam: the PARENT project
  * (with the `projectPath` mount subsystem) materializes at the temp root as
  * usual, the CHILD project is laid down under `tree.files`, and the validated
- * root is bound to the child directory — so findChainingParent's walk-up
- * discovers the materialized parent. `anchoredTo: null` on the context-notice
- * fixture asserts the verified "NO specId anchor" (tree-level finding).
+ * root is bound to the child directory. The fallback fires additionally
+ * override the parent's own L0 through `tree.files`, so the parent is found but
+ * cannot be loaded. `anchoredTo: null` on the context-notice fixture asserts
+ * the tree-level finding carries NO specId.
  *
- * Also pinned live below are the documented QUIET
- * boundaries of the pass, which are exactly its dangerous regression
- * directions (the honesty rewrite softening verdicts where the root is
+ * Also pinned live below are the QUIET boundaries, which are exactly the
+ * dangerous regression directions (softening a verdict where a root is
  * authoritative would hide real defects):
- *  1. a TOP-LEVEL root keeps the raw cross-tree warning — no rewrite;
- *  2. a TOP-LEVEL root gets no context notice;
- *  3. a snapshot-covered reference is never rewritten (full-strength path);
- *  4. the PARENT root of a chained family is authoritative — no notice there.
+ *  1. a child whose parent LOADS gets the parent's verdict — no unverified
+ *     rewrite and no notice;
+ *  2. a TOP-LEVEL root keeps the raw cross-tree warning — no rewrite;
+ *  3. a TOP-LEVEL root gets no context notice;
+ *  4. a snapshot-covered reference is never rewritten (full-strength path);
+ *  5. the PARENT root of a chained family is authoritative — no notice there.
  */
 import * as yaml from 'js-yaml';
 import { defineRuleFixture } from '../harness.js';
@@ -181,6 +176,16 @@ const chainedChildTree = () => ({
   },
 });
 
+/**
+ * The same family, but the parent's own L0 no longer parses. The mount is still
+ * discoverable (findChainingParent reads subsystem files), so the child is known
+ * to be chained — yet there is no parent tree to resolve through.
+ */
+const unloadableParentTree = () => {
+  const tree = chainedChildTree();
+  return { ...tree, files: { ...tree.files, '.wai/specs/.index.yaml': 'name: FleetWorks\n' } };
+};
+
 export default [
   // -------------------------------------------------------------------------
   // UNVERIFIED_EXTERNAL_REF — fire: chained child below a discoverable parent
@@ -191,8 +196,8 @@ export default [
     anchoredTo: 'telemetry_forwarder_impl',
     expectFire: true,
     scenario:
-      'A chained edge-telemetry subproject validated standalone below its discoverable parent calls super::telemetry-hub with no vendored snapshot covering it, so the unresolvable finding is replaced by one honest unverified-external-ref warning.',
-    tree: chainedChildTree(),
+      'A chained edge-telemetry subproject calls super::telemetry-hub with no vendored snapshot covering it, below a discoverable parent whose own spec tree cannot be loaded, so there is nothing to resolve through and the finding is replaced by one honest unverified-external-ref warning.',
+    tree: unloadableParentTree(),
   }),
 
   // -------------------------------------------------------------------------
@@ -204,7 +209,50 @@ export default [
     anchoredTo: null, // verified: the context notice is tree-level, no specId
     expectFire: true,
     scenario:
-      'A chained edge-telemetry subproject validated standalone below its discoverable parent has unverifiable cross-tree references, so one chained-subproject context notice is prepended to the report.',
+      'A chained edge-telemetry subproject below a discoverable parent whose own spec tree cannot be loaded has unverifiable cross-tree references, so one chained-subproject context notice is prepended to the report.',
+    tree: unloadableParentTree(),
+  }),
+
+  // -------------------------------------------------------------------------
+  // Resolved THROUGH the parent — a loadable parent judges the child's edges
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'INVALID_DEPENDENCY_REFERENCE',
+    severity: 'error',
+    anchoredTo: 'telemetry-forwarder',
+    expectFire: true,
+    scenario:
+      'A chained edge-telemetry subproject depends on super::telemetry-hub while its FleetWorks parent is on disk and defines no telemetry-hub, so the dependency is judged through the parent as an invalid reference, reported under the child id.',
+    tree: chainedChildTree(),
+  }),
+
+  defineRuleFixture({
+    code: 'INVALID_TARGET_COMPONENT_REFERENCE',
+    severity: 'error',
+    anchoredTo: 'telemetry_forwarder_impl',
+    expectFire: true,
+    scenario:
+      'A chained edge-telemetry subproject calls streamTelemetry on super::telemetry-hub while its FleetWorks parent is on disk and defines no telemetry-hub, so the call target is judged through the parent as an invalid component reference, reported under the child id.',
+    tree: chainedChildTree(),
+  }),
+
+  defineRuleFixture({
+    code: 'UNVERIFIED_EXTERNAL_REF',
+    expectFire: false,
+    reason:
+      'With a loadable parent on disk the reference is not unverifiable — it is judged through the parent, and rewriting it into a waived warning would hide the real verdict of the parent.',
+    scenario:
+      'A chained edge-telemetry subproject whose FleetWorks parent loads calls super::telemetry-hub and receives the verdict of the parent instead of an unverified-external-ref warning.',
+    tree: chainedChildTree(),
+  }),
+
+  defineRuleFixture({
+    code: 'CHAINED_SUBPROJECT_CONTEXT',
+    expectFire: false,
+    reason:
+      'The context notice explains the standalone fallback; a child judged through its loadable parent has nothing to explain, because the verdict is the verdict of the parent.',
+    scenario:
+      'A chained edge-telemetry subproject whose FleetWorks parent loads is validated through it, so no chained-subproject context notice is prepended.',
     tree: chainedChildTree(),
   }),
 

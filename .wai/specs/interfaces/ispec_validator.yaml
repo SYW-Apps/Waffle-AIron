@@ -16,11 +16,14 @@ methods:
     description: >-
       Performs full SDD spec tree structural validation and returns results. A --subsystem scope
       that names no loaded subsystem fails fast with SUBSYSTEM_NOT_FOUND (listing the known
-      subsystems) rather than silently passing. When the tree is a chained subproject validated
-      standalone (detected via the loader’s findChainingParent), references and code↔spec
-      sourcePaths that resolve only in the absent parent tree are downgraded from errors to warnings
-      and one CHAINED_SUBPROJECT_CONTEXT notice is added — full cross-tree verification runs from
-      the parent root.
+      subsystems) rather than silently passing. When the tree is a chained subproject whose parent
+      is on disk (detected via the loader's findChainingParent) and it still holds references no
+      surface snapshot covers, the verdict is resolved THROUGH the parent: the top root is validated
+      scoped to the mount chain, its findings are renamed into the child's own ids, and they are
+      merged with the child's own findings — never replacing them, never changing a severity — and
+      the result names the root it was resolved through. A credential narrowed to the child alone
+      never reaches the parent this way. When no usable parent is reachable, uncovered references
+      fall back to the standalone verdict.
     signature: 'validateSddTree(): ValidationResult'
     returns: ValidationResult
   - name: validateRegistry
@@ -47,4 +50,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-08-11T15:25:45.817Z'
+updatedAt: '2026-09-12T12:21:21.581Z'
