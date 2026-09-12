@@ -15,7 +15,7 @@ import {
   invalidateSpecCache,
 } from './specs.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
-import { registerBuiltinRules, registerPackRules, ruleSequence } from './rules/repository.js';
+import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes } from './rules/repository.js';
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
 import type { PackSelection } from '../models/project.js';
 // Static, NOT a lazy require: a relative require does not resolve under the test
@@ -45,29 +45,74 @@ import { settledSpecPaths } from './approval.js';
 import type { SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec } from '../models/index.js';
 
 /**
- * Reference-resolution codes: their verdict is ROOT-DEPENDENT — they fire
- * because a referenced spec or dependency edge cannot be resolved in THIS tree,
- * but may resolve from the parent. A chained child whose parent is on disk is
- * judged through it (resolveThroughParent), and these are the findings the
- * parent's verdict replaces. With no usable parent they keep their raw verdict:
+ * Reference-RESOLUTION failures: the only findings whose verdict is
+ * ROOT-DEPENDENT. Each fires because a reference — a dependency, a call target,
+ * a type, a subsystem, a trusted link, or a cross-tree form — does not resolve
+ * in THIS tree, and it may resolve from the parent. A chained child holding one
+ * is judged through its parent when the parent is on disk
+ * (resolveThroughParent), and a failure the parent's run does not repeat is the
+ * reference resolving there. With no usable parent they keep their raw verdict:
  * a cross-tree form stays a CROSS_TREE_REF_UNRESOLVED warning and a typo stays
- * an error — never softened. References that DID resolve against a vendored
- * surface snapshot are verdicts in their own right (surfaceResolved).
+ * an error. References that DID resolve against a vendored surface snapshot are
+ * verdicts in their own right (surfaceResolved).
  *
- * Code↔spec conformance is not root-dependent: a chained child's source paths
- * are relative to its own root (the writer re-expresses a path authored through
- * a parent), so its conformance findings are judged there like any project's.
+ * A verdict on an edge this tree can see — a boundary crossing between its own
+ * subsystems (CROSS_SUBSYSTEM_NON_ADAPTER), a call its caller does not declare
+ * (UNDECLARED_DEPENDENCY_CALL) — is not root-dependent and is never replaced:
+ * listing those here let a leniently configured parent soften a child's own
+ * errors. Code↔spec conformance is not root-dependent either: a chained child's
+ * source paths are relative to its own root.
  */
-const SUBPROJECT_REFERENCE_CODES = new Set([
+const RESOLUTION_FAILURE_CODES = new Set([
   'UNDEFINED_TYPE_REFERENCE',
   'INVALID_DEPENDENCY_REFERENCE',
   'INVALID_TARGET_COMPONENT_REFERENCE',
   'INVALID_SUBSYSTEM_REFERENCE',
-  'UNDECLARED_DEPENDENCY_CALL',
   'INVALID_TRUSTED_LINK',
-  'CROSS_SUBSYSTEM_NON_ADAPTER',
   'CROSS_TREE_REF_UNRESOLVED',
 ]);
+
+const SEVERITY_RANK = { off: 0, warning: 1, error: 2 } as const;
+
+/** A finding's identity when merging two roots' verdicts: its code on its spec. */
+function issueKey(issue: ValidationIssue): string {
+  return `${issue.code}|${issue.specId ?? ''}`;
+}
+
+/** The most severe severity reported for each code on each spec. */
+function worstByKey(issues: ValidationIssue[]): Map<string, ValidationIssue['severity']> {
+  const worst = new Map<string, ValidationIssue['severity']>();
+  for (const issue of issues) {
+    const key = issueKey(issue);
+    const seen = worst.get(key);
+    if (!seen || SEVERITY_RANK[issue.severity] > SEVERITY_RANK[seen]) worst.set(key, issue.severity);
+  }
+  return worst;
+}
+
+/**
+ * The severities a resolve-through-parent run judges under: for every rule
+ * either project overrides, the stricter of the two effective severities. The
+ * parent's doctrine still decides what is judged, and its configuration can make
+ * the child's verdict stricter, never quieter — a rule the parent turns off must
+ * not make a child's failure look like a reference that resolved.
+ */
+function stricterSeverities(parent: RulesConfig | undefined, child: RulesConfig | undefined): RulesConfig | undefined {
+  const fromParent = parent?.sddRuleSeverity ?? {};
+  const fromChild = child?.sddRuleSeverity ?? {};
+  const codes = new Set([...Object.keys(fromParent), ...Object.keys(fromChild)]);
+  if (codes.size === 0) return parent ?? child;
+  const defaults = new Map(knownIssueCodes().map((rc) => [rc.code, rc.defaultSeverity]));
+  const merged: Record<string, 'error' | 'warning' | 'off'> = {};
+  for (const code of codes) {
+    const p = fromParent[code] ?? defaults.get(code);
+    const c = fromChild[code] ?? defaults.get(code);
+    merged[code] = p === undefined || c === undefined
+      ? (p ?? c)!
+      : SEVERITY_RANK[p] >= SEVERITY_RANK[c] ? p : c;
+  }
+  return { ...(parent ?? child)!, sddRuleSeverity: merged };
+}
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -445,38 +490,38 @@ export function validateSddTree(
     //
     // RESOLVE THROUGH THE PARENT. When the parent is on disk, a reference this
     // root cannot resolve is not "unverifiable" — it is judged by validating the
-    // parent scoped to this mount. The child keeps every finding of its own and
-    // gains the parent's verdict for what it could not see: a union, with no
-    // severity changed, so it is never judged more leniently than its parent.
-    // With no usable parent (its L0 missing, the mount unknown, or reach denied)
-    // every finding keeps its raw verdict: a chained child that cannot be judged
-    // through its parent pins its family surfaces or fails its gate. Nothing is
-    // softened on either path — code↔spec conformance included, because a
-    // chained child's source paths are relative to its own root.
+    // parent scoped to this mount. The child keeps what it judged on its own and
+    // gains the parent's verdict for what it could not see, so it is never judged
+    // more leniently than alone or than its parent. With no usable parent (its L0
+    // missing, the mount unknown, or reach denied) every finding keeps its raw
+    // verdict: a chained child that cannot be judged through its parent pins its
+    // family surfaces or fails its gate. Code↔spec conformance keeps full
+    // strength on both paths: a chained child's source paths are its own.
     //
-    // Gated on actually HAVING an uncovered reference, so a clean tree (or a
-    // hosted per-request validate) never pays the walk-up-the-filesystem cost.
-    const uncovered = (i: ValidationIssue): boolean => SUBPROJECT_REFERENCE_CODES.has(i.code) && !i.surfaceResolved;
-    const chainingParent = crossTree !== 'off' && issues.some(uncovered) ? findChainingParent(getProjectRoot()) : null;
-    const resolution = chainingParent ? resolveThroughParent(getProjectRoot(), treatAllAsComplete) : null;
+    // Gated on actually HAVING a resolution failure, so a clean tree (or a hosted
+    // per-request validate) never pays the walk-up-the-filesystem cost.
+    const unresolved = (i: ValidationIssue): boolean => RESOLUTION_FAILURE_CODES.has(i.code) && !i.surfaceResolved;
+    const chainingParent = crossTree !== 'off' && issues.some(unresolved) ? findChainingParent(getProjectRoot()) : null;
+    const resolution = chainingParent ? resolveThroughParent(getProjectRoot(), treatAllAsComplete, rules) : null;
     if (resolution) {
-      // A child finding verified against a snapshot is a verdict on a cross-tree
-      // edge the parent's run judges again, against the real component or the
-      // same snapshot the mount holds. Where the parent reached the same code on
-      // the same spec at least as severely, its verdict stands in for the
-      // child's: one finding worded from two roots is not two findings. Where it
-      // did not, the child's finding stays, so the union is never quieter.
-      const parentSeverity = new Map<string, ValidationIssue['severity']>();
-      for (const i of resolution.issues) {
-        const key = `${i.code}|${i.specId ?? ''}`;
-        if (i.severity === 'error' || !parentSeverity.has(key)) parentSeverity.set(key, i.severity);
-      }
-      const rejudged = (i: ValidationIssue): boolean => {
-        const judged = parentSeverity.get(`${i.code}|${i.specId ?? ''}`);
-        return judged === 'error' || (judged === 'warning' && i.severity === 'warning');
-      };
-      const kept = issues.filter((i) => !uncovered(i) && !(i.surfaceResolved && rejudged(i)));
-      const merged = dedupeIssues([...kept, ...resolution.issues]);
+      // A child finding gives way only to a parent finding on the same code and
+      // spec that is at least as severe — one finding worded from two roots — or,
+      // for a resolution failure, to the parent's run not repeating it: the
+      // reference resolved there. Everything else the child reached on its own
+      // stands, whatever severity or draft context the parent's run applied.
+      const judgedByParent = worstByKey(resolution.issues);
+      const kept = issues.filter((i) => {
+        const judged = judgedByParent.get(issueKey(i));
+        if (judged !== undefined) return SEVERITY_RANK[judged] < SEVERITY_RANK[i.severity];
+        return !unresolved(i);
+      });
+      // A parent finding the child already reports more severely adds nothing.
+      const keptByChild = worstByKey(kept);
+      const added = resolution.issues.filter((i) => {
+        const own = keptByChild.get(issueKey(i));
+        return own === undefined || SEVERITY_RANK[own] <= SEVERITY_RANK[i.severity];
+      });
+      const merged = dedupeIssues([...kept, ...added]);
       return {
         valid: merged.every((i) => i.severity !== 'error'),
         issues: merged,
@@ -506,6 +551,7 @@ export function validateSddTree(
 function resolveThroughParent(
   boundRoot: string,
   treatAllAsComplete: boolean,
+  childRules: RulesConfig | undefined,
 ): { root: string; scope: string; issues: ValidationIssue[] } | null {
   const reach = getRequestParentReach();
   if (reach && !reach.parentReach) return null;
@@ -528,13 +574,14 @@ function resolveThroughParent(
     // Read the parent as it is NOW — the child was probably just edited, and a
     // cached parent tree would judge it against the past.
     invalidateSpecCache();
-    // The parent's own governing configuration: its rules and profile decide
-    // its verdict, not the child's.
-    let governing: { rules?: RulesConfig; projectType?: string } = {};
+    // The parent's doctrine and profile decide what is judged; each rule's
+    // severity is the stricter of the parent's and the child's, so the parent's
+    // configuration can make the child's verdict stricter, never quieter.
+    let governing: { rules?: RulesConfig; projectType?: string } = { rules: stricterSeverities(undefined, childRules) };
     try {
       const config = loadProjectConfig();
-      governing = { rules: config.rules, projectType: config.projectType };
-    } catch { /* an unconfigured parent validates with the defaults */ }
+      governing = { rules: stricterSeverities(config.rules, childRules), projectType: config.projectType };
+    } catch { /* an unconfigured parent judges at the defaults, tightened by the child's severities */ }
     return validateSddTree({
       ...governing,
       scopeSubsystem: scope,
