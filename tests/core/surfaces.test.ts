@@ -10,6 +10,7 @@ import {
   saveInterfaceSpec,
   saveImplementationSpec,
   saveTypeSpec,
+  deleteSubsystemSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
 import {
@@ -936,7 +937,7 @@ describe('external interface discovery (listExternalInterfaces) + computeStateId
     return childDir;
   }
 
-  it('classifies parent | sibling | foreign and verdicts freshness against the parent CURRENT hash', () => {
+  it('classifies parent | sibling | foreign and verdicts freshness against what the parent projects now', () => {
     const childDir = buildChainedWorld();
 
     // A foreign import lives beside the generated snapshots in the child.
@@ -975,20 +976,67 @@ describe('external interface discovery (listExternalInterfaces) + computeStateId
     expect(foreign.freshness).toBe('unverifiable');
   });
 
-  it('generated snapshots turn stale when the parent tree changes after generation', () => {
-    const childDir = buildChainedWorld();
+  /** Each pin's freshness as the child sees it now, by storage key. */
+  function freshnessFrom(childDir: string): Record<string, string> {
+    invalidateSpecCache();
+    setProjectRoot(childDir);
+    return Object.fromEntries(listExternalInterfaces().map(e => [e.projectName, e.freshness]));
+  }
 
-    // Drift the parent AFTER delivery.
+  it('freshness is judged on content: an unrelated parent edit keeps pins fresh, a contract change stales them, a re-pin repairs them', () => {
+    const childDir = buildChainedWorld();
+    const allFresh = { 'root-system': 'fresh', 'root-system::core-sub': 'fresh' };
+    expect(freshnessFrom(childDir)).toEqual(allFresh);
+
+    // Edits no family surface carries: a private component and the parent's
+    // vision. The parent's state hash moves; what it publishes does not.
+    setProjectRoot(rootDir);
+    saveComponentSpec(component('audit-orch', 'core-sub'));
+    saveSystemSpec({ ...loadSystemSpec()!, vision: 'surface fixture, revised' });
+    expect(freshnessFrom(childDir)).toEqual(allFresh);
+    // A re-pin has nothing to rewrite, and the pins stay fresh.
+    expect(pinFamilySurfaces()).toEqual([]);
+    expect(freshnessFrom(childDir)).toEqual(allFresh);
+
+    // The consumed portal's contract changes: both surfaces that carry it go stale.
     setProjectRoot(rootDir);
     saveInterfaceSpec(iface('igateway-portal', 'gateway-portal', [
       { name: 'fetchRecordV2', description: 'renamed', signature: 'fetchRecordV2(id: string): json', returns: 'json' },
     ]));
-    invalidateSpecCache();
+    expect(freshnessFrom(childDir)).toEqual({ 'root-system': 'stale', 'root-system::core-sub': 'stale' });
 
+    // Re-pinning repairs them.
+    expect(pinFamilySurfaces()).toHaveLength(2);
+    expect(freshnessFrom(childDir)).toEqual(allFresh);
+  });
+
+  it('a pinned sibling the parent no longer projects is stale, and only that one', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
+    buildParent(rootDir);
+    saveSubsystemSpec(subsystem('aux-sub'));
+    createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
+    invalidateSpecCache();
+    const childDir = path.join(rootDir, 'packages', 'transpiler');
     setProjectRoot(childDir);
-    const entries = listExternalInterfaces();
-    expect(entries.find(e => e.projectName === 'root-system')!.freshness).toBe('stale');
-    expect(entries.find(e => e.projectName === 'root-system::core-sub')!.freshness).toBe('stale');
+    pinFamilySurfaces();
+
+    // The parent retires aux-sub, so nothing is projected under its key any more.
+    setProjectRoot(rootDir);
+    expect(deleteSubsystemSpec('aux-sub')).toBe(true);
+
+    expect(freshnessFrom(childDir)).toEqual({
+      'root-system': 'fresh',
+      'root-system::aux-sub': 'stale',
+      'root-system::core-sub': 'fresh',
+    });
+  });
+
+  it('a parent whose tree can no longer be projected leaves its pins unverifiable rather than failing the listing', () => {
+    const childDir = buildChainedWorld();
+    // The mount is still discoverable, but the parent's L0 no longer parses.
+    fs.writeFileSync(path.join(rootDir, '.wai', 'specs', '.index.yaml'), 'name: root-system\n');
+
+    expect(freshnessFrom(childDir)).toEqual({ 'root-system': 'unverifiable', 'root-system::core-sub': 'unverifiable' });
   });
 
   it('a standalone project (no chaining parent) verdicts every snapshot unverifiable', () => {

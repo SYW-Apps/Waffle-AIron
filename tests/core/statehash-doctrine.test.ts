@@ -16,7 +16,7 @@ import { SDD_RULES } from '../../src/core/rules/index.js';
 // the commit-scoped lock exists to close, entering through doctrine.
 //
 // Two identities therefore coexist, and this file guards both directions:
-//   computeStateId     — spec content only (surface snapshot stamps, freshness)
+//   computeStateId     — spec content only (surface snapshot stamps)
 //   computeGateStateId — spec content + governing doctrine (lock / promote)
 // ---------------------------------------------------------------------------
 

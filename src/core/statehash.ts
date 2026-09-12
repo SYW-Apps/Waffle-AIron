@@ -156,8 +156,7 @@ function doctrineIdentity(doctrine: LoadedExtensions, gate: GateConfig): Record<
  * strength of the earlier lock, because the spec digest never moved — and
  * without input coverage the same holds for swapping a pinned contract a
  * cross-tree reference resolved against. Content-only consumers (surface
- * snapshot stamps, freshness checks) stay on computeStateId, so a pack bump or
- * an unchanged re-pin never marks a vendored contract stale.
+ * snapshot stamps) stay on computeStateId.
  *
  * `inputs` takes no default: every producer of a gate StateId must decide what
  * it consumed and say so explicitly — there is no silent "hash without inputs"

@@ -3069,9 +3069,8 @@ function consumedSurfaceInputsAt(rootDir: string): string[] {
  * (icore_orchestrator/icore_portal.computeStateIdAt). The root is bound
  * strictly READ-ONLY for the duration of the computation via the async-scoped
  * project-root binding, which restores the previous binding unconditionally —
- * also on failure paths. Serves freshness comparisons of vendored surface
- * snapshots against what the (parent) tree looks like NOW; returns null when
- * the root holds no loadable spec tree.
+ * also on failure paths. Returns null when the root holds no loadable spec
+ * tree.
  */
 /**
  * Compute the GATE state identity of the current project
