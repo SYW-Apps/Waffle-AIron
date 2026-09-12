@@ -47,14 +47,6 @@ methods:
     params:
       - name: projectName
         type: string
-  - name: generateChildSnapshots
-    description: >-
-      Project and deliver the outward world into each chained child's .wai/surfaces/: the
-      family-scoped parent surface AND each SIBLING subsystem's published surface (every subsystem
-      except the child's own mount), all stamped with the parent tree's StateId provenance. Returns
-      the written file paths.
-    signature: 'generateChildSnapshots(): string[]'
-    returns: string[]
   - name: removeSnapshot
     description: Remove a stored surface snapshot through the repository.
     signature: 'removeSnapshot(projectName: string): boolean'
@@ -98,4 +90,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-09-12T12:07:43.460Z'
+updatedAt: '2026-09-12T12:38:08.126Z'

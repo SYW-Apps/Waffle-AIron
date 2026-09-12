@@ -1,8 +1,8 @@
 id: surface_orchestrator_impl
 name: Surface Orchestrator Implementation
 description: >-
-  Surface-exchange workflows: projection, codec rendering, import, child delivery, and consumer
-  queries.
+  Surface-exchange workflows: projection, codec rendering, import, child-pulled pins, per-mount
+  snapshot reads, and consumer queries.
 contract: isurface_orchestrator
 sourcePath: src/core/surfaces.ts
 methods:
@@ -98,49 +98,6 @@ methods:
         type: call
         targetComponent: surface_repository
         targetMethod: getSnapshot
-  - name: generateChildSnapshots
-    narrative:
-      - stepNumber: 1
-        description: Load the subsystem specs to find chained children
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: loadSubsystemSpecs
-      - stepNumber: 2
-        description: For each subsystem with a projectPath (chained child)
-        type: loop
-        loopKind: forEach
-        over: chained child subsystems
-        endStep: 7
-      - stepNumber: 3
-        description: Project the family-scoped parent surface for this child
-        type: call
-        targetComponent: surface_projector
-        targetMethod: projectChildSurface
-      - stepNumber: 4
-        description: Write the family snapshot into the child project's .wai/surfaces/
-        type: call
-        targetComponent: surface_transfer_adapter
-        targetMethod: writeSnapshotTo
-      - stepNumber: 5
-        description: For each SIBLING subsystem (every subsystem except this child's own mount)
-        type: loop
-        loopKind: forEach
-        over: sibling subsystems of this child
-        endStep: 7
-      - stepNumber: 6
-        description: Project the sibling subsystem's published surface at the family ceiling
-        type: call
-        targetComponent: surface_projector
-        targetMethod: projectSubsystemSurface
-      - stepNumber: 7
-        description: Write the sibling snapshot into the same child's .wai/surfaces/
-        type: call
-        targetComponent: surface_transfer_adapter
-        targetMethod: writeSnapshotTo
-      - stepNumber: 8
-        description: Return the written snapshot paths (family + siblings, per child)
-        type: return
-        outcome: written paths
   - name: removeSnapshot
     narrative:
       - stepNumber: 1
@@ -275,12 +232,7 @@ methods:
         type: return
         outcome: the changed snapshot paths
 lint:
-  allow:
-    - code: CALL_STEP_UNREALIZED
-      reason: >-
-        Child snapshot write-out is realized through the fs adapter's saveSnapshot in the same flow;
-        the transfer adapter's writeSnapshotTo names the cross-project export edge — reconcile the
-        naming when the surfaces subsystem takes its final lock.
+  allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-09-12T12:07:50.585Z'
+updatedAt: '2026-09-12T12:38:08.781Z'

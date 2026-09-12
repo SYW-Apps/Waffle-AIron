@@ -49,13 +49,6 @@ methods:
     params:
       - name: projectName
         type: string
-  - name: generateChildSnapshots
-    description: >-
-      Write the family-scoped parent surface AND each sibling subsystem's published surface into
-      every chained child project's .wai/surfaces/, so children can validate and consume cross-tree
-      references standalone against contract-grade snapshots.
-    signature: 'generateChildSnapshots(): string[]'
-    returns: string[]
   - name: removeSnapshot
     description: Remove a stored surface snapshot (file and projection).
     signature: 'removeSnapshot(projectName: string): boolean'
@@ -87,4 +80,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-09-12T12:07:52.527Z'
+updatedAt: '2026-09-12T12:38:09.905Z'

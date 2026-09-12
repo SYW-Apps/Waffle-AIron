@@ -43,8 +43,8 @@ methods:
       - stepNumber: 8
         description: >-
           Load the available surface snapshots via the surfaces adapter — unresolved cross-tree and
-          remote adapter references resolve against them (SURFACE_STALE warning on StateId mismatch;
-          CROSS_TREE_REF_UNRESOLVED remains only for references no snapshot covers)
+          remote adapter references resolve against them (CROSS_TREE_REF_UNRESOLVED remains only for
+          references no snapshot covers)
         type: call
         targetComponent: validator_surfaces_adapter
         targetMethod: loadSurfaceSnapshots
@@ -339,4 +339,4 @@ lint:
         when Level 3 models call indirection.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T12:21:26.083Z'
+updatedAt: '2026-09-12T12:38:21.224Z'

@@ -1,5 +1,5 @@
 /**
- * Namespace integrity and cross-tree freshness (src/core/rules/namespace.ts).
+ * Namespace integrity (src/core/rules/namespace.ts).
  *
  * Documented intents pinned here:
  *  - RESERVED_ID_SEGMENT (error): no id segment may be the reserved namespace
@@ -12,9 +12,6 @@
  *    through the exact writer pipeline — validate must predict every refusal a
  *    later save or lock would raise. Only the CONTROL is expressible from disk
  *    (see the note at that fixture).
- *  - SURFACE_STALE (warning): every chained child's stored parent-surface
- *    snapshot must match the parent's CURRENT exported contracts; a drifted
- *    snapshot means the child validates standalone against a stale truth.
  */
 import * as yaml from 'js-yaml';
 import { defineRuleFixture } from '../harness.js';
@@ -238,87 +235,6 @@ export default [
                 returns: 'void',
               },
             ],
-          }),
-        },
-      ),
-    },
-  }),
-
-  // -------------------------------------------------------------------------
-  // SURFACE_STALE
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'SURFACE_STALE',
-    severity: 'warning',
-    anchoredTo: 'field-ops',
-    expectFire: true,
-    scenario:
-      'The chained field-ops child still holds a parent surface snapshot exposing a harvest telemetry portal the parent no longer exports, so standalone validation would run against a stale truth.',
-    tree: {
-      system: { name: 'AgriFleetOS', vision: 'Agricultural fleet coordination platform with chained field operations.' },
-      subsystems: [
-        {
-          id: 'field-ops',
-          description: 'Chained field operations subproject mount.',
-          projectPath: 'apps/field-ops',
-        },
-      ],
-      files: childProject(
-        'apps/field-ops',
-        'FieldOps',
-        [{ id: 'field-ops', description: 'In-field harvest operations.' }],
-        {
-          // The defect: the held snapshot's contracts no longer match the
-          // parent's current (empty) exported surface.
-          'apps/field-ops/.wai/surfaces/AgriFleetOS.yaml': surfaceYaml({
-            projectName: 'AgriFleetOS',
-            interfaces: [
-              {
-                id: 'iharvest_telemetry',
-                name: 'Harvest Telemetry',
-                component: 'harvest-telemetry-portal',
-                audience: 'project',
-                type: 'REST',
-                details: 'Retired harvest telemetry ingestion surface.',
-                methods: [
-                  {
-                    name: 'ingestSample',
-                    description: 'Ingest one harvest telemetry sample.',
-                    signature: 'ingestSample(sampleId: string): void',
-                    returns: 'void',
-                  },
-                ],
-              },
-            ],
-          }),
-        },
-      ),
-    },
-  }),
-  defineRuleFixture({
-    code: 'SURFACE_STALE',
-    expectFire: false,
-    reason: 'The held snapshot matches the parent\'s current exported surface content, so the child validates against the current truth.',
-    scenario:
-      'The chained field-ops child holds a parent surface snapshot that matches the parent\'s current exported contracts.',
-    tree: {
-      system: { name: 'AgriFleetOS', vision: 'Agricultural fleet coordination platform with chained field operations.' },
-      subsystems: [
-        {
-          id: 'field-ops',
-          description: 'Chained field operations subproject mount.',
-          projectPath: 'apps/field-ops',
-        },
-      ],
-      files: childProject(
-        'apps/field-ops',
-        'FieldOps',
-        [{ id: 'field-ops', description: 'In-field harvest operations.' }],
-        {
-          // Matches the parent's current projection: no exported entries.
-          'apps/field-ops/.wai/surfaces/AgriFleetOS.yaml': surfaceYaml({
-            projectName: 'AgriFleetOS',
-            interfaces: [],
           }),
         },
       ),

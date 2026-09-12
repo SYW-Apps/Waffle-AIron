@@ -28,7 +28,6 @@ import {
 import { computeStateId } from './statehash.js';
 import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs, BUILTIN_TYPES } from './rules/type-analysis.js';
 import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
-import type { ValidationIssue } from './validation.js';
 
 // ---------------------------------------------------------------------------
 // Public Surface Exchange (sdd_surfaces)
@@ -326,15 +325,13 @@ function snapshotFilename(projectName: string): string {
  * Write a snapshot only when its CONTENT differs from what is already on disk.
  *
  * Every projection stamps a fresh `generatedAt` and the tree's current
- * `stateId`, so an unconditional write rewrites the bytes of every delivered
- * surface on every lock — even when the published contract is identical. On a
- * tree with several chained children that is (children × subsystems) files
- * showing as modified in git after a lock that changed one subsystem, which
- * buries the specs the human actually edited.
+ * `stateId`, so an unconditional write would rewrite the bytes of every pinned
+ * surface on every pin — even when the published contract is identical — and
+ * show a child's whole surface set as modified in git after a parent changed
+ * one subsystem.
  *
- * Provenance is exactly what `surfaceContentKey` strips, and it is also what
- * the SURFACE_STALE gate already ignores: staleness is judged on content, so a
- * file whose content still matches is not stale and does not need rewriting.
+ * Provenance is exactly what `surfaceContentKey` strips: a file whose content
+ * still matches does not need rewriting.
  */
 function writeSnapshotIfChanged(
   snapshot: SurfaceSnapshot,
@@ -536,58 +533,13 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
 }
 
 /**
- * Project and deliver the outward world into every chained child project's
- * .wai/surfaces/: the family-scoped parent surface AND each SIBLING
- * subsystem's published surface (every subsystem except the child's own
- * mount), so children can validate and consume cross-tree references
- * standalone against contract-grade snapshots. Returns all written paths.
- */
-export function generateChildSnapshots(rootDir: string = getProjectRoot()): string[] {
-  const topLevel = loadSubsystemSpecs().filter(s => !s.id.includes('::'));
-  const children = topLevel.filter(s => s.projectPath);
-  if (!children.length) return [];
-  const familySnapshot = projectChildSurface();
-  // Each sibling surface is identical for every receiving child — project once.
-  const siblingSnapshots = new Map<string, SurfaceSnapshot>();
-  const siblingSurface = (subsystemId: string): SurfaceSnapshot => {
-    let snap = siblingSnapshots.get(subsystemId);
-    if (!snap) {
-      snap = projectSubsystemSurface(subsystemId);
-      siblingSnapshots.set(subsystemId, snap);
-    }
-    return snap;
-  };
-  // Only CHANGED paths are reported. Every delivered surface is re-projected
-  // on every call (so a contract change can never be missed), but one whose
-  // content still matches is left untouched — regenerating everything and
-  // writing only what moved is both safer than scoping the regeneration and
-  // quieter than rewriting the lot.
-  const written: string[] = [];
-  const record = (r: { path: string; changed: boolean }): void => {
-    if (r.changed) written.push(r.path);
-  };
-  for (const child of children) {
-    const childDir = path.resolve(rootDir, child.projectPath!);
-    if (!fs.existsSync(childDir)) continue;
-    record(writeSnapshotIfChanged(familySnapshot, childDir));
-    // Per-sibling delivery: every OTHER subsystem's published surface (the
-    // child's own mount excluded — it does not consume itself).
-    for (const sibling of topLevel) {
-      if (sibling.id === child.id) continue;
-      record(writeSnapshotIfChanged(siblingSurface(sibling.id), childDir));
-    }
-  }
-  return written;
-}
-
-/**
  * surface_orchestrator.pinFamilySurfaces — a chained child PULLS its family's
  * surfaces into its own `.wai/surfaces/`.
  *
- * The inverse of generateChildSnapshots, and the reason that one can go:
- * delivery was pushed — every parent lock wrote (children x subsystems)
- * snapshots into every child's working tree on the parent's schedule, and the
- * hosted lock never delivered at all. A pin is the child owner's own import,
+ * It replaced delivery, which was pushed: every parent lock wrote (children x
+ * subsystems) snapshots into every child's working tree on the parent's
+ * schedule, and the hosted lock never delivered at all. A pin is the child
+ * owner's own import,
  * taken while the parent is on disk and committed with the child, so a child
  * cloned WITHOUT its parent still has contracts to validate against.
  *
@@ -699,40 +651,11 @@ export function listExternalInterfaces(): ExternalSurfaceEntry[] {
 }
 
 // ---------------------------------------------------------------------------
-// Freshness (SURFACE_STALE) — computable exactly where both sides are visible:
-// validating from the parent, each chained child's stored parent-snapshot can
-// be compared against the parent's CURRENT StateId.
+// Snapshot content identity
 // ---------------------------------------------------------------------------
 
-/** Snapshot content minus provenance — what staleness is actually about. */
+/** Snapshot content minus provenance — whether two snapshots say the same thing. */
 function surfaceContentKey(snapshot: SurfaceSnapshot): string {
   const { stateId, generatedAt, origin, ...content } = snapshot;
   return JSON.stringify(content);
-}
-
-export function checkChildSurfaceFreshness(rootDir: string = getProjectRoot()): ValidationIssue[] {
-  const system = loadSystemSpec();
-  if (!system) return [];
-  const children = loadSubsystemSpecs().filter(s => s.projectPath && !s.id.includes('::'));
-  if (!children.length) return [];
-
-  // Compare CONTENT, not tree StateIds: a child editing its own specs shifts
-  // the recursive StateId without changing the parent's exported contracts,
-  // and that must not read as staleness.
-  const current = surfaceContentKey(projectChildSurface());
-  const issues: ValidationIssue[] = [];
-  for (const child of children) {
-    const childDir = path.resolve(rootDir, child.projectPath!);
-    const held = getSnapshot(system.name, childDir);
-    if (!held || held.origin !== 'generated') continue;
-    if (surfaceContentKey(held) !== current) {
-      issues.push({
-        severity: 'warning',
-        code: 'SURFACE_STALE',
-        message: `Chained child "${child.id}" holds a parent surface snapshot whose contracts no longer match the current tree — rerun \`wairon surface generate-children\` so the child validates against the current surface.`,
-        specId: child.id,
-      });
-    }
-  }
-  return issues;
 }

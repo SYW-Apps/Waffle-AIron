@@ -16,6 +16,7 @@ import {
   readLockState,
 } from '../../src/core/specs.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
+import { pinFamilySurfaces } from '../../src/core/surfaces.js';
 import { runLock } from '../../src/commands/lock.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
 import type { ValidationResult } from '../../src/core/validation.js';
@@ -203,7 +204,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
   });
 });
 
-describe('cli_runner.runLock workflow (real CLI): gate, freeze, child surfaces', () => {
+describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery into children', () => {
   let rootDir: string;
 
   afterEach(() => {
@@ -215,53 +216,40 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, child surfaces',
   const runCli = (cwd: string, ...args: string[]) =>
     execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'lock', '--yes', ...args], { cwd, timeout: 180_000 });
 
-  it('a locked parent ships fresh surfaces: chained children get regenerated snapshots', async () => {
+  it('a locked parent writes nothing into a chained child — the child pins its own surfaces', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-e2e-'));
     buildLockableProject(rootDir);
     createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
     invalidateSpecCache();
     setProjectRoot(null);
+    const kidDir = path.join(rootDir, 'packages', 'kid');
+    const surfacesDir = path.join(kidDir, '.wai', 'surfaces');
 
+    // A parent lock used to push (children × subsystems) snapshots into every
+    // child's working tree, on the parent's schedule. It pushes nothing now.
     const { stdout } = await runCli(rootDir, '--no-recursive');
-
-    expect(stdout).toContain('Updated');
-    expect(stdout).toContain('delivered surface(s)');
-    const surfacesDir = path.join(rootDir, 'packages', 'kid', '.wai', 'surfaces');
-    expect(fs.existsSync(surfacesDir)).toBe(true);
-    const delivered = fs.readdirSync(surfacesDir);
-    expect(delivered.length).toBeGreaterThan(0);
+    expect(stdout).not.toContain('delivered surface(s)');
+    expect(fs.existsSync(surfacesDir)).toBe(false);
     const record = JSON.parse(fs.readFileSync(path.join(rootDir, '.wai', 'lock.json'), 'utf8'));
     expect(record.status).toBe('ready');
 
-    // A second lock over an unchanged tree must not rewrite a single delivered
-    // surface: the projection stamps fresh provenance every run, and writing
-    // that unconditionally is what buried real spec edits under a flood of
-    // modified files in git.
-    const before = delivered.map((f) => {
+    // The child pulls its own…
+    setProjectRoot(kidDir);
+    expect(pinFamilySurfaces()?.length).toBeGreaterThan(0);
+    setProjectRoot(null);
+    invalidateSpecCache();
+    const pinned = fs.readdirSync(surfacesDir).map((f) => {
       const p = path.join(surfacesDir, f);
-      return { f, bytes: fs.readFileSync(p, 'utf8'), mtime: fs.statSync(p).mtimeMs };
+      return { p, bytes: fs.readFileSync(p, 'utf8'), mtime: fs.statSync(p).mtimeMs };
     });
 
+    // …and a later parent lock leaves the pin exactly as the child committed it.
     const second = await runCli(rootDir, '--no-recursive');
     expect(second.stdout).not.toContain('delivered surface(s)');
-
-    for (const { f, bytes, mtime } of before) {
-      const p = path.join(surfacesDir, f);
+    for (const { p, bytes, mtime } of pinned) {
       expect(fs.readFileSync(p, 'utf8')).toBe(bytes);
       expect(fs.statSync(p).mtimeMs).toBe(mtime);
     }
-  }, 180_000);
-
-  it('does NOT regenerate child surfaces when the tree mounts no chained children', async () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-e2e-'));
-    buildLockableProject(rootDir);
-    setProjectRoot(null);
-
-    const { stdout } = await runCli(rootDir);
-
-    expect(stdout).not.toContain('Regenerated the family/sibling surfaces');
-    expect(fs.existsSync(path.join(rootDir, '.wai', 'lock.json'))).toBe(true);
-    expect(stdout).toContain('Lock record written');
   }, 180_000);
 
   it('refuses to lock a tree that does not validate as complete, changing nothing', async () => {

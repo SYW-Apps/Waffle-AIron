@@ -35,7 +35,7 @@ import { guaranteeTokensRule } from './guarantee-tokens.js';
 import { eventTopologyRule } from './event-topology.js';
 import { narrativeAntipatternsRule } from './narrative-antipatterns.js';
 import { callConformanceRule } from './call-conformance.js';
-import { roundtripRule, namespaceHygieneRule, surfaceFreshnessRule } from './namespace.js';
+import { roundtripRule, namespaceHygieneRule } from './namespace.js';
 import { couplingRule } from './coupling.js';
 import { languageRule } from './language.js';
 import { technologyRule } from './technology.js';
@@ -65,7 +65,6 @@ export const SDD_RULES: SddRule[] = [
   // explain many downstream findings, so surface them early in the list.
   namespaceHygieneRule,
   roundtripRule,
-  surfaceFreshnessRule,
   typeReferencesRule,
   contractsRule,
   // Vocabulary check right after contracts: an unknown token explains why the

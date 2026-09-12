@@ -1,18 +1,23 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { saveSnapshot, generateChildSnapshots } from '../../src/core/surfaces.js';
+import { pinFamilySurfaces } from '../../src/core/surfaces.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
 
 // ---------------------------------------------------------------------------
-// Delivered surfaces must not churn.
+// Pinned surfaces must not churn.
 //
 // A projection stamps a fresh `generatedAt` and the current `stateId` every
-// run. Writing those unconditionally rewrote every delivered surface on every
-// lock, so a lock scoped to one subsystem still showed (children × subsystems)
-// modified files in git and buried the specs the human actually edited.
+// run. Writing those unconditionally would rewrite every pinned surface on
+// every pin, so a child re-pinning after its parent changed one subsystem would
+// show its whole surface set as modified in git.
 // ---------------------------------------------------------------------------
+
+/** Pin from a chained child of the tree at `root`; the changed paths. */
+const pinFrom = (root: string, child: string): string[] =>
+  runWithProjectRoot(path.join(root, 'packages', child), () => pinFamilySurfaces() ?? []);
 
 const stamp = "createdAt: '2026-09-09T10:00:00Z'\nupdatedAt: '2026-09-09T10:00:00Z'";
 
@@ -44,36 +49,31 @@ function buildTree(subsystemCount: number, childCount: number): string {
   return root;
 }
 
-describe('delivered surface churn', () => {
+describe('pinned surface churn', () => {
   let root: string;
   afterEach(() => {
     invalidateSpecCache();
-    vi.restoreAllMocks();
     try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
   });
 
-  it('writes every delivered surface on the first run, and none on an unchanged re-run', () => {
+  it('pins every family surface on the first run, and none on an unchanged re-run', () => {
     root = buildTree(6, 3);
-    vi.spyOn(process, 'cwd').mockReturnValue(root);
 
-    const first = generateChildSnapshots(root);
-    // 3 children × (1 family + 5 siblings) = 18 files on a cold tree.
-    expect(first.length).toBe(18);
+    // One child pulls 1 family + 5 siblings = 6 surfaces on a cold tree.
+    expect(pinFrom(root, 'sub0').length).toBe(6);
 
-    // Nothing about the tree changed — a second lock must rewrite nothing.
-    const second = generateChildSnapshots(root);
-    expect(second).toEqual([]);
+    // Nothing about the parent changed — a second pin must rewrite nothing.
+    expect(pinFrom(root, 'sub0')).toEqual([]);
   });
 
   it('leaves the bytes on disk untouched when only provenance would differ', () => {
     root = buildTree(3, 1);
-    vi.spyOn(process, 'cwd').mockReturnValue(root);
 
-    const [firstPath] = generateChildSnapshots(root);
+    const [firstPath] = pinFrom(root, 'sub0');
     const before = fs.readFileSync(firstPath, 'utf8');
     const mtimeBefore = fs.statSync(firstPath).mtimeMs;
 
-    generateChildSnapshots(root);
+    pinFrom(root, 'sub0');
 
     expect(fs.readFileSync(firstPath, 'utf8')).toBe(before);
     expect(fs.statSync(firstPath).mtimeMs).toBe(mtimeBefore);
@@ -81,27 +81,25 @@ describe('delivered surface churn', () => {
 
   it('still rewrites once the published contract actually changes', () => {
     root = buildTree(3, 1);
-    vi.spyOn(process, 'cwd').mockReturnValue(root);
 
-    generateChildSnapshots(root);
-    expect(generateChildSnapshots(root)).toEqual([]);
+    pinFrom(root, 'sub0');
+    expect(pinFrom(root, 'sub0')).toEqual([]);
 
     // Add a subsystem: every child's sibling set genuinely changed.
     fs.writeFileSync(path.join(root, '.wai', 'specs', 'subsystems', 'late.yaml'),
       `schemaVersion: 1.0.0\nid: late\nname: late\ndescription: d\nparentSystem: Churn\n${stamp}\n`);
     invalidateSpecCache();
 
-    expect(generateChildSnapshots(root).length).toBeGreaterThan(0);
+    expect(pinFrom(root, 'sub0').length).toBeGreaterThan(0);
   });
 
   it('rewrites a snapshot whose on-disk copy is unparseable rather than leaving it broken', () => {
     root = buildTree(2, 1);
-    vi.spyOn(process, 'cwd').mockReturnValue(root);
 
-    const [p] = generateChildSnapshots(root);
+    const [p] = pinFrom(root, 'sub0');
     fs.writeFileSync(p, 'not: [valid surface\n');
 
-    expect(generateChildSnapshots(root)).toContain(p);
+    expect(pinFrom(root, 'sub0')).toContain(p);
     expect(fs.readFileSync(p, 'utf8')).not.toContain('not: [valid');
   });
 });

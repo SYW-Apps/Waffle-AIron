@@ -547,9 +547,10 @@ export function validateSddTree(
             ...(iss.draftContext ? { draftContext: true } : {}),
             message:
               `Unverified external reference (${iss.code}): ${iss.message} No vendored surface snapshot ` +
-              `covers this reference, so it cannot be verified from this chained subproject standalone — ` +
-              `re-lock the parent so fresh family/sibling snapshots ship, or inspect what this project can ` +
-              `consume via \`wairon surface externals\` / sdd_list_external_interfaces.`,
+              `covers this reference, so it cannot be verified from this chained subproject without resolving ` +
+              `through its parent — pin the family surfaces with \`wairon surface pin\` while the parent is on ` +
+              `disk, or inspect what this project can consume via \`wairon surface externals\` / ` +
+              `sdd_list_external_interfaces.`,
           };
           unverified++;
           continue;
@@ -567,8 +568,8 @@ export function validateSddTree(
         if (unverified > 0) {
           notes.push(
             `${unverified} cross-tree reference(s) have no vendored surface snapshot covering them and were ` +
-            `reported as UNVERIFIED_EXTERNAL_REF warnings — re-lock the parent so fresh family/sibling ` +
-            `snapshots ship, or inspect via \`wairon surface externals\` / sdd_list_external_interfaces.`,
+            `reported as UNVERIFIED_EXTERNAL_REF warnings — pin the family surfaces with \`wairon surface pin\` ` +
+            `while the parent is on disk, or inspect via \`wairon surface externals\` / sdd_list_external_interfaces.`,
           );
         }
         if (downgraded > 0) {

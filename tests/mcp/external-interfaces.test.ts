@@ -13,7 +13,7 @@ import {
   saveInterfaceSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
-import { generateChildSnapshots } from '../../src/core/surfaces.js';
+import { pinFamilySurfaces } from '../../src/core/surfaces.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -83,10 +83,13 @@ function buildChainedWorld(rootDir: string): string {
   ]));
   createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid', status: 'draft' }), 'kid');
   invalidateSpecCache();
-  setProjectRoot(rootDir);
-  generateChildSnapshots();
+  // The child pulls its family surfaces; nothing is pushed into it any more.
+  const kidDir = path.join(rootDir, 'packages', 'kid');
+  setProjectRoot(kidDir);
+  pinFamilySurfaces();
   invalidateSpecCache();
-  return path.join(rootDir, 'packages', 'kid');
+  setProjectRoot(rootDir);
+  return kidDir;
 }
 
 async function connectInMemory(server: McpServer): Promise<Client> {

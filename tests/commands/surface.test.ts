@@ -213,9 +213,9 @@ describe('wairon surface externals — external-surface discovery', () => {
     buildTwoPortalProject(rootDir);
     createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid', status: 'draft' }), 'kid');
     invalidateSpecCache();
-    setProjectRoot(rootDir);
-    await runSurface('generate-children', {});
     childDir = path.join(rootDir, 'packages', 'kid');
+    setProjectRoot(childDir);
+    await runSurface('pin', {});
     logged = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { logged.push(args.join(' ')); });
   });
@@ -232,7 +232,7 @@ describe('wairon surface externals — external-surface discovery', () => {
     await runSurface('externals', {});
 
     const output = logged.join('\n');
-    // The family surface delivered by the chaining parent...
+    // The family surface pinned from the chaining parent...
     expect(output).toMatch(/parent\s+.*multi-portal-system/);
     // ...and the core-sub sibling surface, both generated and fresh.
     expect(output).toMatch(/sibling\s+.*multi-portal-system::core-sub/);
@@ -245,7 +245,7 @@ describe('wairon surface externals — external-surface discovery', () => {
   });
 
   it('says so when no external surfaces are stored', async () => {
-    // The PARENT holds no vendored snapshots — generation writes into children.
+    // The PARENT holds no vendored snapshots — a pin writes into the child.
     setProjectRoot(rootDir);
     await runSurface('externals', {});
     expect(logged.join('\n')).toContain('No external surfaces available');

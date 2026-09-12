@@ -32,13 +32,6 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: getSnapshot
-  - name: generateChildSnapshots
-    narrative:
-      - stepNumber: 1
-        description: Forward generateChildSnapshots to the surface orchestrator
-        type: call
-        targetComponent: surface_orchestrator
-        targetMethod: generateChildSnapshots
   - name: removeSnapshot
     narrative:
       - stepNumber: 1
@@ -69,4 +62,4 @@ methods:
         targetMethod: pinFamilySurfaces
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-09-12T12:07:54.142Z'
+updatedAt: '2026-09-12T12:38:11.029Z'

@@ -21,7 +21,7 @@ import {
   listSnapshots,
   saveSnapshot,
   removeSnapshot,
-  generateChildSnapshots,
+  pinFamilySurfaces,
   listExternalInterfaces,
 } from '../../src/core/surfaces.js';
 import { computeStateIdAt, loadSystemSpec } from '../../src/core/specs.js';
@@ -379,7 +379,7 @@ describe('OpenAPI round-trip of x-wairon-* contract keys', () => {
   });
 });
 
-describe('standalone-child validation against generated parent snapshots', () => {
+describe('standalone-child validation against pinned parent snapshots', () => {
   let rootDir: string;
   afterEach(() => {
     setProjectRoot(null);
@@ -414,10 +414,10 @@ describe('standalone-child validation against generated parent snapshots', () =>
     } as ImplementationSpec);
     invalidateSpecCache();
 
-    // Parent generates the outward world into the child: the family surface
-    // AND the sibling surface of every other subsystem (here: core-sub).
-    setProjectRoot(rootDir);
-    const written = generateChildSnapshots();
+    // The child pins its outward world: the family surface AND the sibling
+    // surface of every other subsystem (here: core-sub).
+    setProjectRoot(childDir);
+    const written = pinFamilySurfaces();
     expect(written).toHaveLength(2);
     invalidateSpecCache();
     return childDir;
@@ -530,34 +530,9 @@ describe('standalone-child validation against generated parent snapshots', () =>
     expect(notice!.message).toMatch(/code↔spec conformance finding/);
   });
 
-  it('parent-side SURFACE_STALE fires when the exported contracts drift after generation', () => {
-    buildFamily();
-
-    // Parent context first: fresh snapshot → no staleness.
-    setProjectRoot(rootDir);
-    expect(validateSddTree().issues.some(i => i.code === 'SURFACE_STALE')).toBe(false);
-
-    // Drift the exported contract: rename the gateway method.
-    saveInterfaceSpec(iface('igateway-portal', 'gateway-portal', [
-      {
-        name: 'fetchRecordV2',
-        description: 'Fetches a record by id (renamed).',
-        signature: 'fetchRecordV2(id: string): invoice-record',
-        returns: 'invoice-record',
-        params: [{ name: 'id', type: 'string' }],
-        endpoint: { transport: 'HTTP', method: 'GET', path: '/records/{id}' },
-      },
-    ]));
-    invalidateSpecCache();
-    setProjectRoot(rootDir);
-    const stale = validateSddTree().issues.filter(i => i.code === 'SURFACE_STALE');
-    expect(stale).toHaveLength(1);
-    expect(stale[0].specId).toBe('transpiler');
-    expect(stale[0].message).toMatch(/generate-children/);
-  });
 });
 
-describe('sibling surface projection + per-sibling delivery', () => {
+describe('sibling surface projection + pinned siblings', () => {
   let rootDir: string;
   afterEach(() => {
     setProjectRoot(null);
@@ -721,7 +696,7 @@ describe('sibling surface projection + per-sibling delivery', () => {
     expect(() => projectSubsystemSurface('no-such-subsystem')).toThrow(/no-such-subsystem/);
   });
 
-  it('generateChildSnapshots delivers family + every sibling surface to each chained child (own mount excluded)', () => {
+  it('a pin pulls family + every sibling surface into its chained child (own mount excluded)', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
     // A second internal subsystem with its own published portal.
@@ -738,12 +713,14 @@ describe('sibling surface projection + per-sibling delivery', () => {
     invalidateSpecCache();
     setProjectRoot(rootDir);
 
-    const written = generateChildSnapshots();
-    // Per child: family + 3 siblings (core-sub, aux-sub, the OTHER kid) = 4 → 8 total.
-    expect(written).toHaveLength(8);
-
     const kidA = path.join(rootDir, 'packages', 'kid-a');
     const kidB = path.join(rootDir, 'packages', 'kid-b');
+    // Each child pulls its own: family + 3 siblings (core-sub, aux-sub, the OTHER kid).
+    setProjectRoot(kidA);
+    expect(pinFamilySurfaces()).toHaveLength(4);
+    setProjectRoot(kidB);
+    expect(pinFamilySurfaces()).toHaveLength(4);
+    setProjectRoot(rootDir);
     expect(listSnapshots(kidA).map(s => s.projectName).sort()).toEqual([
       'root-system',
       'root-system::aux-sub',
@@ -786,16 +763,17 @@ describe('external interface discovery (listExternalInterfaces) + computeStateId
     if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  /** Parent + chained child with generated family/sibling snapshots delivered. */
+  /** Parent + chained child that has pinned its family/sibling snapshots. */
   function buildChainedWorld(): string {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
     createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
     invalidateSpecCache();
-    setProjectRoot(rootDir);
-    generateChildSnapshots();
+    const childDir = path.join(rootDir, 'packages', 'transpiler');
+    setProjectRoot(childDir);
+    pinFamilySurfaces();
     invalidateSpecCache();
-    return path.join(rootDir, 'packages', 'transpiler');
+    return childDir;
   }
 
   it('classifies parent | sibling | foreign and verdicts freshness against the parent CURRENT hash', () => {

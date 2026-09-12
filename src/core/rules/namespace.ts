@@ -1,7 +1,6 @@
 import { SurfaceContractEntry, SurfaceSnapshot } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
 import { dryRunSerializeSpecs } from '../specs.js';
-import { checkChildSurfaceFreshness } from '../surfaces.js';
 
 /**
  * True when an unresolved reference points OUTSIDE the current loading root,
@@ -110,27 +109,6 @@ export const roundtripRule: SddRule = {
   check(ctx) {
     for (const issue of dryRunSerializeSpecs(ctx.isSpecInScope)) {
       ctx.addIssue('error', 'ROUNDTRIP_SERIALIZATION', issue.message, issue.specId);
-    }
-  },
-};
-
-/**
- * Parent-side surface freshness: a chained child holds the parent-surface
- * snapshot it validates against standalone; when the parent's exported
- * contracts change without regenerating, the child is verifying against a
- * stale truth. Computable exactly here — the only context where both sides
- * (the live parent tree and the child's held snapshot) are visible.
- */
-export const surfaceFreshnessRule: SddRule = {
-  name: 'surface-freshness',
-  description:
-    'Every chained child\'s stored parent-surface snapshot must match the parent\'s CURRENT exported contracts — a drifted snapshot means the child validates standalone against a stale truth. Regenerate with `wairon surface generate-children`.',
-  codes: [
-    { code: 'SURFACE_STALE', defaultSeverity: 'warning', summary: 'A chained child holds a parent surface snapshot whose contracts no longer match the current tree' },
-  ],
-  check(ctx) {
-    for (const issue of checkChildSurfaceFreshness()) {
-      ctx.addIssue('warning', 'SURFACE_STALE', issue.message, issue.specId);
     }
   },
 };
