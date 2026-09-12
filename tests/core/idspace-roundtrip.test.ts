@@ -358,9 +358,11 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
 
-  it('validating a chained subproject STANDALONE replaces uncovered parent-tree refs with UNVERIFIED_EXTERNAL_REF + a clear notice (does not explode)', async () => {
-    // Parent project mounts `kid` as a chained subproject; kid references a
-    // component that lives in the parent (absent when kid is validated alone).
+  it('with its parent on disk, a chained child is judged THROUGH the parent — a bare parent id is a real error, not a waived warning', async () => {
+    // Parent project mounts `kid` as a chained subproject; kid depends on a
+    // parent component BY BARE ID. From inside a mount a bare id qualifies to
+    // `kid::parent-portal`, which does not exist — a typo-grade error, and the
+    // parent says so.
     rootDir = makeRoot();
     saveSubsystemSpec(subsystem('parent-sub'));
     saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
@@ -380,36 +382,22 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
 
     const { validateSddTree } = await import('../../src/core/validation.js');
 
-    // From the PARENT root the whole tree resolves — no cross-tree noise.
+    // From the PARENT root: its verdict, and no chained-subproject notice.
     setProjectRoot(rootDir);
     invalidateSpecCache();
     const fromParent = validateSddTree();
-    expect(fromParent.issues.filter(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT')).toHaveLength(0);
+    expect(fromParent.resolvedThrough).toBeUndefined();
 
-    // From KID's own root the parent ref cannot resolve — no vendored surface
-    // snapshot covers it, so the finding is REPLACED by one precise
-    // UNVERIFIED_EXTERNAL_REF warning (the old behavior downgraded the original
-    // code in place) with one notice, so `validate` passes instead of exploding.
+    // From KID's own root the verdict is the same one — resolved through the
+    // parent and renamed into kid's ids. It used to be REPLACED by a waived
+    // UNVERIFIED_EXTERNAL_REF warning, and `validate --ci` passed.
     setProjectRoot(kidDir);
     invalidateSpecCache();
     const fromKid = validateSddTree();
-    expect(fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
-    const notice = fromKid.issues.find(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT');
-    expect(notice).toBeDefined();
-    expect(notice!.message).toMatch(/chained subproject/);
-    expect(notice!.message).toMatch(/1 cross-tree reference/);
-    expect(notice!.crossTreeContext).toBe(true);
-    // The replacement warning names the original finding, the unresolvable
-    // reference, and the remedy — and is marked cross-tree (so --ci waives it).
-    const unverified = fromKid.issues.filter(i => i.code === 'UNVERIFIED_EXTERNAL_REF');
-    expect(unverified).toHaveLength(1);
-    expect(unverified[0].severity).toBe('warning');
-    expect(unverified[0].crossTreeContext).toBe(true);
-    expect(unverified[0].message).toContain('INVALID_DEPENDENCY_REFERENCE');
-    expect(unverified[0].message).toContain('parent-portal');
-    expect(unverified[0].message).toMatch(/re-lock the parent/);
-    expect(unverified[0].message).toMatch(/surface externals/);
-    expect(fromKid.valid).toBe(true);
+    const invalid = fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
+    expect(invalid.map(i => [i.specId, i.severity])).toEqual([['k-orch', 'error']]);
+    expect(fromKid.resolvedThrough).toEqual({ root: path.resolve(rootDir), scope: 'kid' });
+    expect(fromKid.valid).toBe(false);
   });
 
   it('a root-name-qualified target (waffler_core::x form, authored from a parent) warns, not errors, from the child root', async () => {
@@ -617,5 +605,106 @@ describe('narrative insert vs jump targets (captureJumps)', () => {
     expect(run.narrative.find(s => s.type === 'branch')!.onFalseStep).toBe(3);
     // captureJumps is merge instruction, not narrative content.
     expect((run.narrative.find(s => s.description === 'inserted cleanup') as any).captureJumps).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// File paths across the id space: a chained child's implementation file paths
+// are relative to the CHILD root. A write through the parent re-expresses a
+// parent-relative path that lands inside the child and leaves every other path
+// verbatim — so the child's own gate checks the file the author named, and
+// load → save stays a fixpoint.
+// ---------------------------------------------------------------------------
+
+describe("a chained child's implementation file paths are relative to its own root", () => {
+  let rootDir: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+    rootDir = undefined;
+  });
+
+  function mountKid(): string {
+    rootDir = makeRoot();
+    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    const kidDir = path.join(rootDir, 'packages', 'kid');
+    const kid = workspaceFor(kidDir);
+    kid.saveSubsystemSpec(subsystem('kid', { parentSystem: 'kid' }));
+    kid.saveComponentSpec(component('kid-orch', 'kid'));
+    kid.saveInterfaceSpec(iface('ikid-orch', 'kid-orch', [
+      { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
+    ]));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    return kidDir;
+  }
+
+  const kidImpl = (over: Partial<ImplementationSpec> = {}): ImplementationSpec => ({
+    id: 'kid::kid-impl', name: 'impl', description: 'd', contract: 'kid::ikid-orch',
+    methods: [{ name: 'run', narrative: [{ stepNumber: 1, description: 'run it', type: 'local' }] }],
+    status: 'draft', createdAt: now, updatedAt: now, ...over,
+  } as ImplementationSpec);
+
+  /** The implementation as the CHILD reads it from its own root. */
+  const fromKid = (kidDir: string): ImplementationSpec | null => {
+    invalidateSpecCache();
+    return workspaceFor(kidDir).loadImplementationSpec('kid-impl');
+  };
+
+  it('a path written through the parent, relative to the parent root, is stored relative to the child root', () => {
+    const kidDir = mountKid();
+    saveImplementationSpec(kidImpl({ sourcePath: 'packages/kid/src/run.ts', simPath: 'packages/kid/sim/run.sim.ts' }));
+
+    const own = fromKid(kidDir);
+    expect(own?.sourcePath).toBe('src/run.ts');
+    expect(own?.simPath).toBe('sim/run.sim.ts');
+    // The parent reads the same child-relative path back.
+    setProjectRoot(rootDir!);
+    expect(loadImplementationSpec('kid::kid-impl')?.sourcePath).toBe('src/run.ts');
+  });
+
+  it('load → save through the parent keeps a child-relative path as it is', () => {
+    const kidDir = mountKid();
+    workspaceFor(kidDir).saveImplementationSpec(kidImpl({ id: 'kid-impl', contract: 'ikid-orch', sourcePath: 'src/run.ts' }));
+    invalidateSpecCache();
+    setProjectRoot(rootDir!);
+
+    const loaded = loadImplementationSpec('kid::kid-impl')!;
+    expect(loaded.sourcePath).toBe('src/run.ts');
+    saveImplementationSpec(loaded);
+    saveImplementationSpec(loadImplementationSpec('kid::kid-impl')!);
+
+    expect(fromKid(kidDir)?.sourcePath).toBe('src/run.ts');
+  });
+
+  it('a path that does not land inside the child is taken as child-relative and kept verbatim', () => {
+    const kidDir = mountKid();
+    saveImplementationSpec(kidImpl({ sourcePath: 'src/elsewhere.ts' }));
+    expect(fromKid(kidDir)?.sourcePath).toBe('src/elsewhere.ts');
+  });
+
+  it("the child's own gate checks the file the parent's author named", async () => {
+    const { validateSddTree } = await import('../../src/core/validation.js');
+    const kidDir = mountKid();
+    fs.mkdirSync(path.join(kidDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(kidDir, 'src', 'run.ts'), 'export function run(): void {}\n');
+    const missingFromKid = (): string[] => {
+      invalidateSpecCache();
+      setProjectRoot(kidDir);
+      return validateSddTree().issues
+        .filter((i) => i.code === 'MISSING_SOURCE_FILE' || i.code === 'SOURCE_PATH_ESCAPES_ROOT')
+        .map((i) => `${i.code} @${i.specId}`);
+    };
+
+    // Named from the parent root, it resolves to the real file from the child's.
+    saveImplementationSpec(kidImpl({ sourcePath: 'packages/kid/src/run.ts' }));
+    expect(missingFromKid()).toEqual([]);
+
+    // The control: a file that does not exist is still reported from the child.
+    setProjectRoot(rootDir!);
+    saveImplementationSpec(kidImpl({ sourcePath: 'packages/kid/src/missing.ts' }));
+    expect(missingFromKid()).toEqual(['MISSING_SOURCE_FILE @kid-impl']);
   });
 });

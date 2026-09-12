@@ -21,7 +21,7 @@ import {
   listSnapshots,
   saveSnapshot,
   removeSnapshot,
-  generateChildSnapshots,
+  pinFamilySurfaces,
   listExternalInterfaces,
 } from '../../src/core/surfaces.js';
 import { computeStateIdAt, loadSystemSpec } from '../../src/core/specs.js';
@@ -379,7 +379,7 @@ describe('OpenAPI round-trip of x-wairon-* contract keys', () => {
   });
 });
 
-describe('standalone-child validation against generated parent snapshots', () => {
+describe('standalone-child validation against pinned parent snapshots', () => {
   let rootDir: string;
   afterEach(() => {
     setProjectRoot(null);
@@ -414,10 +414,10 @@ describe('standalone-child validation against generated parent snapshots', () =>
     } as ImplementationSpec);
     invalidateSpecCache();
 
-    // Parent generates the outward world into the child: the family surface
-    // AND the sibling surface of every other subsystem (here: core-sub).
-    setProjectRoot(rootDir);
-    const written = generateChildSnapshots();
+    // The child pins its outward world: the family surface AND the sibling
+    // surface of every other subsystem (here: core-sub).
+    setProjectRoot(childDir);
+    const written = pinFamilySurfaces();
     expect(written).toHaveLength(2);
     invalidateSpecCache();
     return childDir;
@@ -434,8 +434,6 @@ describe('standalone-child validation against generated parent snapshots', () =>
     expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
     expect(codes).not.toContain('INVALID_TARGET_COMPONENT_REFERENCE');
     expect(codes).not.toContain('CROSS_SUBSYSTEM_NON_ADAPTER');
-    // Everything is covered by vendored snapshots — nothing is "unverified".
-    expect(codes).not.toContain('UNVERIFIED_EXTERNAL_REF');
 
     // Now call a method the surface does not expose.
     saveImplementationSpec({
@@ -456,9 +454,8 @@ describe('standalone-child validation against generated parent snapshots', () =>
     expect(notExposed[0].message).toMatch(/noSuchMethod.*root-system/s);
     // Covered-but-wrong keeps FULL strength: the vendored snapshot is the
     // verifiable contract, so the mismatch is a hard error even in a chained
-    // subproject — never softened into UNVERIFIED_EXTERNAL_REF.
+    // subproject — never softened.
     expect(notExposed[0].severity).toBe('error');
-    expect(res2.issues.map(i => i.code)).not.toContain('UNVERIFIED_EXTERNAL_REF');
   });
 
   it('a non-Adapter crossing the project boundary is still a FULL-STRENGTH boundary violation', () => {
@@ -474,12 +471,12 @@ describe('standalone-child validation against generated parent snapshots', () =>
     expect(violation).toHaveLength(1);
     // The ref RESOLVED against a vendored snapshot, so even in a chained
     // subproject validated standalone the boundary verdict stays an error —
-    // it is neither downgraded nor replaced by UNVERIFIED_EXTERNAL_REF.
+    // it is neither downgraded nor waived.
     expect(violation[0].severity).toBe('error');
     expect(res.valid).toBe(false);
   });
 
-  it('a cross-tree ref NO snapshot covers becomes one precise UNVERIFIED_EXTERNAL_REF warning', () => {
+  it('a cross-tree ref nothing covers is judged by the parent — a real INVALID_DEPENDENCY_REFERENCE, not a waived warning', () => {
     const childDir = buildFamily();
     setProjectRoot(childDir);
     saveComponentSpec(component('mystery-adapter', 'transpiler', {
@@ -488,29 +485,23 @@ describe('standalone-child validation against generated parent snapshots', () =>
     invalidateSpecCache();
     setProjectRoot(childDir);
     const res = validateSddTree();
-    const unverified = res.issues.filter(i => i.code === 'UNVERIFIED_EXTERNAL_REF');
-    expect(unverified).toHaveLength(1);
-    expect(unverified[0].severity).toBe('warning');
-    expect(unverified[0].crossTreeContext).toBe(true);
-    // Names the original finding + the unresolvable reference + the remedy.
-    expect(unverified[0].message).toContain('CROSS_TREE_REF_UNRESOLVED');
-    expect(unverified[0].message).toContain('super::no-such-portal');
-    expect(unverified[0].message).toMatch(/re-lock the parent/);
-    expect(unverified[0].message).toMatch(/surface externals/);
-    // The original code is REPLACED, not kept alongside.
-    expect(res.issues.map(i => i.code)).not.toContain('CROSS_TREE_REF_UNRESOLVED');
-    // One notice counts the unverified references.
-    const notice = res.issues.find(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT');
-    expect(notice).toBeDefined();
-    expect(notice!.message).toMatch(/1 cross-tree reference/);
+    // The parent is on disk, so the reference is judged there: no snapshot and
+    // no component answers to it, which is simply an invalid dependency. It used
+    // to become one UNVERIFIED_EXTERNAL_REF warning that --ci waived.
+    const invalid = res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
+    expect(invalid.map(i => [i.specId, i.severity])).toEqual([['mystery-adapter', 'error']]);
+    const codes = res.issues.map(i => i.code);
+    expect(codes).not.toContain('CROSS_TREE_REF_UNRESOLVED');
+    expect(res.resolvedThrough?.scope).toBe('transpiler');
+    expect(res.valid).toBe(false);
   });
 
-  it('code-conformance findings KEEP the downgrade (never replaced by UNVERIFIED_EXTERNAL_REF)', () => {
+  it("a chained child's source paths are its own: a file missing from its root is an error, never downgraded", () => {
     const childDir = buildFamily();
     setProjectRoot(childDir);
     // A complete implementation whose sourcePath resolves nowhere in the child
-    // root — from the parent root it would resolve (parent-root-relative paths),
-    // so the finding is root-dependent and keeps the downgrade behavior.
+    // root. A chained child's source paths are relative to its own root, so this
+    // is simply code that does not exist — not a path only the parent can read.
     saveComponentSpec(component('trans-orch', 'transpiler'));
     saveInterfaceSpec(iface('itrans-orch', 'trans-orch', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -526,42 +517,14 @@ describe('standalone-child validation against generated parent snapshots', () =>
     const res = validateSddTree();
     const missing = res.issues.filter(i => i.code === 'MISSING_SOURCE_FILE');
     expect(missing).toHaveLength(1);
-    // Downgraded in place (code preserved), marked cross-tree — NOT replaced.
-    expect(missing[0].severity).toBe('warning');
-    expect(missing[0].crossTreeContext).toBe(true);
-    const notice = res.issues.find(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT');
-    expect(notice).toBeDefined();
-    expect(notice!.message).toMatch(/code↔spec conformance finding/);
+    // It used to be downgraded to a warning --ci waived.
+    expect(missing[0].severity).toBe('error');
+    expect(res.valid).toBe(false);
   });
 
-  it('parent-side SURFACE_STALE fires when the exported contracts drift after generation', () => {
-    buildFamily();
-
-    // Parent context first: fresh snapshot → no staleness.
-    setProjectRoot(rootDir);
-    expect(validateSddTree().issues.some(i => i.code === 'SURFACE_STALE')).toBe(false);
-
-    // Drift the exported contract: rename the gateway method.
-    saveInterfaceSpec(iface('igateway-portal', 'gateway-portal', [
-      {
-        name: 'fetchRecordV2',
-        description: 'Fetches a record by id (renamed).',
-        signature: 'fetchRecordV2(id: string): invoice-record',
-        returns: 'invoice-record',
-        params: [{ name: 'id', type: 'string' }],
-        endpoint: { transport: 'HTTP', method: 'GET', path: '/records/{id}' },
-      },
-    ]));
-    invalidateSpecCache();
-    setProjectRoot(rootDir);
-    const stale = validateSddTree().issues.filter(i => i.code === 'SURFACE_STALE');
-    expect(stale).toHaveLength(1);
-    expect(stale[0].specId).toBe('transpiler');
-    expect(stale[0].message).toMatch(/generate-children/);
-  });
 });
 
-describe('sibling surface projection + per-sibling delivery', () => {
+describe('sibling surface projection + pinned siblings', () => {
   let rootDir: string;
   afterEach(() => {
     setProjectRoot(null);
@@ -725,7 +688,7 @@ describe('sibling surface projection + per-sibling delivery', () => {
     expect(() => projectSubsystemSurface('no-such-subsystem')).toThrow(/no-such-subsystem/);
   });
 
-  it('generateChildSnapshots delivers family + every sibling surface to each chained child (own mount excluded)', () => {
+  it('a pin pulls family + every sibling surface into its chained child (own mount excluded)', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
     // A second internal subsystem with its own published portal.
@@ -742,12 +705,14 @@ describe('sibling surface projection + per-sibling delivery', () => {
     invalidateSpecCache();
     setProjectRoot(rootDir);
 
-    const written = generateChildSnapshots();
-    // Per child: family + 3 siblings (core-sub, aux-sub, the OTHER kid) = 4 → 8 total.
-    expect(written).toHaveLength(8);
-
     const kidA = path.join(rootDir, 'packages', 'kid-a');
     const kidB = path.join(rootDir, 'packages', 'kid-b');
+    // Each child pulls its own: family + 3 siblings (core-sub, aux-sub, the OTHER kid).
+    setProjectRoot(kidA);
+    expect(pinFamilySurfaces()).toHaveLength(4);
+    setProjectRoot(kidB);
+    expect(pinFamilySurfaces()).toHaveLength(4);
+    setProjectRoot(rootDir);
     expect(listSnapshots(kidA).map(s => s.projectName).sort()).toEqual([
       'root-system',
       'root-system::aux-sub',
@@ -790,16 +755,17 @@ describe('external interface discovery (listExternalInterfaces) + computeStateId
     if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  /** Parent + chained child with generated family/sibling snapshots delivered. */
+  /** Parent + chained child that has pinned its family/sibling snapshots. */
   function buildChainedWorld(): string {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
     createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
     invalidateSpecCache();
-    setProjectRoot(rootDir);
-    generateChildSnapshots();
+    const childDir = path.join(rootDir, 'packages', 'transpiler');
+    setProjectRoot(childDir);
+    pinFamilySurfaces();
     invalidateSpecCache();
-    return path.join(rootDir, 'packages', 'transpiler');
+    return childDir;
   }
 
   it('classifies parent | sibling | foreign and verdicts freshness against the parent CURRENT hash', () => {

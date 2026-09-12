@@ -188,6 +188,13 @@ methods:
         description: Return the project-relative roots in walk order
         type: return
         outcome: string[]
+  - name: resolveSubprojectForNamespace
+    narrative: []
+    detail: intent
+    intent: >-
+      Walks the namespace segment by segment through the scanned index, resolving each mount's
+      projectPath against the previous mount's directory; an escaping hop raises PROJECTPATH_ESCAPE
+      and is skipped, and a namespace in which no segment is a mount yields null.
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-08-12T17:25:03.172Z'
+updatedAt: '2026-09-12T12:01:01.111Z'

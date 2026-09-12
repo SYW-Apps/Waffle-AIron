@@ -1309,7 +1309,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     name: z.string().describe('Human-readable implementation name'),
     description: z.string().describe('Implementation details'),
     contract: z.string().describe('The L3 Interface contract ID this implements'),
-    sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root'),
+    sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root — for a chained subproject\'s implementation (qualified id), relative to that subproject\'s root; a path given relative to this root that lands inside the subproject is re-expressed for you'),
     simPath: z.string().optional().describe('Optional: the committed integration-sim harness file (project-relative; N:1 sharing allowed). The validator proves it exists and its import graph wires the REAL modules (this component + each direct dependency; technology adapters may stay faked) — running it is CI\'s job. Declaring the first simPath in a subsystem activates MISSING_INTEGRATION_SIM for its other complete non-leaf implementations'),
     technologies: z.array(z.string()).optional().describe('External technologies this implementation binds to (e.g. ["mysql"]) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components.'),
     detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
@@ -1499,6 +1499,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           valid: result.valid,
           errors: result.issues.filter((i) => i.severity === 'error'),
           warnings: result.issues.filter((i) => i.severity === 'warning'),
+          ...(result.resolvedThrough ? { resolvedThrough: result.resolvedThrough } : {}),
         });
       } catch (e) {
         return errText(String(e));

@@ -1,10 +1,10 @@
 id: validator_surfaces_adapter
 name: Validator Surfaces Client Adapter
 description: >-
-  Client adapter loading the available surface snapshots from the surface-exchange subsystem's
-  published portal, so validation can resolve cross-tree and remote adapter references against
-  declared contracts (SURFACE_STALE on StateId mismatch; CROSS_TREE_REF_UNRESOLVED only when no
-  snapshot covers a reference).
+  Client adapter loading the available surface snapshots — the bound root's own, and those each
+  chained mount holds — from the surface-exchange subsystem's published portal, so validation can
+  resolve cross-tree and remote adapter references against declared contracts
+  (CROSS_TREE_REF_UNRESOLVED only when no snapshot covers a reference).
 subsystem: sdd_validator
 componentType: Adapter
 owns: []
@@ -12,4 +12,4 @@ dependsOn:
   - surface_portal
 status: complete
 createdAt: '2026-07-10T23:12:44.720Z'
-updatedAt: '2026-07-11T09:04:02.354Z'
+updatedAt: '2026-09-12T12:38:16.595Z'

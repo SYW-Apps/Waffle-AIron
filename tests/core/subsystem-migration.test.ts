@@ -7,10 +7,14 @@ import {
   saveSystemSpec,
   saveSubsystemSpec,
   saveComponentSpec,
+  saveInterfaceSpec,
+  saveImplementationSpec,
   loadComponentSpecs,
   loadSubsystemSpec,
+  loadImplementationSpec,
   scanAllSpecs,
   invalidateSpecCache,
+  workspaceFor,
 } from '../../src/core/specs.js';
 import { externalizeSubsystem, internalizeSubsystem } from '../../src/core/provision.js';
 
@@ -105,5 +109,36 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     invalidateSpecCache();
     expect(() => externalizeSubsystem('core', 'packages/core2')).toThrow(/already external/);
     expect(() => internalizeSubsystem('cli')).toThrow(/not external/);
+  });
+
+  it("re-expresses the moved implementations' file paths against the new root — the same files — and back", () => {
+    seed();
+    saveInterfaceSpec({
+      id: 'icore_orch', name: 'icore_orch', description: 'd', component: 'core_orch',
+      methods: [{ name: 'run', description: 'd', signature: 'run(): void', returns: 'void' }],
+      createdAt: now, updatedAt: now,
+    } as any);
+    saveImplementationSpec({
+      id: 'core_orch_impl', name: 'impl', description: 'd', contract: 'icore_orch',
+      // The code already lives under the mount-to-be…
+      sourcePath: 'packages/core/src/orch.ts',
+      // …and its harness stays outside it.
+      simPath: 'sim/orch.sim.ts',
+      methods: [{ name: 'run', narrative: [] }],
+      createdAt: now, updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    externalizeSubsystem('core', 'packages/core');
+    invalidateSpecCache();
+    const own = workspaceFor(path.join(root, 'packages', 'core')).loadImplementationSpec('core_orch_impl');
+    expect(own?.sourcePath).toBe('src/orch.ts');
+    expect(own?.simPath).toBe('../../sim/orch.sim.ts');
+
+    internalizeSubsystem('core');
+    invalidateSpecCache();
+    const back = loadImplementationSpec('core_orch_impl');
+    expect(back?.sourcePath).toBe('packages/core/src/orch.ts');
+    expect(back?.simPath).toBe('sim/orch.sim.ts');
   });
 });

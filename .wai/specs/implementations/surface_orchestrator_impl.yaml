@@ -1,8 +1,8 @@
 id: surface_orchestrator_impl
 name: Surface Orchestrator Implementation
 description: >-
-  Surface-exchange workflows: projection, codec rendering, import, child delivery, and consumer
-  queries.
+  Surface-exchange workflows: projection, codec rendering, import, child-pulled pins, per-mount
+  snapshot reads, and consumer queries.
 contract: isurface_orchestrator
 sourcePath: src/core/surfaces.ts
 methods:
@@ -98,49 +98,6 @@ methods:
         type: call
         targetComponent: surface_repository
         targetMethod: getSnapshot
-  - name: generateChildSnapshots
-    narrative:
-      - stepNumber: 1
-        description: Load the subsystem specs to find chained children
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: loadSubsystemSpecs
-      - stepNumber: 2
-        description: For each subsystem with a projectPath (chained child)
-        type: loop
-        loopKind: forEach
-        over: chained child subsystems
-        endStep: 7
-      - stepNumber: 3
-        description: Project the family-scoped parent surface for this child
-        type: call
-        targetComponent: surface_projector
-        targetMethod: projectChildSurface
-      - stepNumber: 4
-        description: Write the family snapshot into the child project's .wai/surfaces/
-        type: call
-        targetComponent: surface_transfer_adapter
-        targetMethod: writeSnapshotTo
-      - stepNumber: 5
-        description: For each SIBLING subsystem (every subsystem except this child's own mount)
-        type: loop
-        loopKind: forEach
-        over: sibling subsystems of this child
-        endStep: 7
-      - stepNumber: 6
-        description: Project the sibling subsystem's published surface at the family ceiling
-        type: call
-        targetComponent: surface_projector
-        targetMethod: projectSubsystemSurface
-      - stepNumber: 7
-        description: Write the sibling snapshot into the same child's .wai/surfaces/
-        type: call
-        targetComponent: surface_transfer_adapter
-        targetMethod: writeSnapshotTo
-      - stepNumber: 8
-        description: Return the written snapshot paths (family + siblings, per child)
-        type: return
-        outcome: written paths
   - name: removeSnapshot
     narrative:
       - stepNumber: 1
@@ -189,13 +146,93 @@ methods:
         description: Return the discovery entries
         type: return
         outcome: ExternalSurfaceEntry[]
+  - name: listMountSnapshots
+    narrative:
+      - stepNumber: 1
+        description: For each chained mount namespace
+        type: loop
+        loopKind: forEach
+        over: mount namespaces
+        endStep: 4
+      - stepNumber: 2
+        description: >-
+          Resolve the mount's namespace to its project root through the core; a mount that does not
+          resolve (missing, or escaping the project root) contributes nothing
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveSubprojectForNamespace
+      - stepNumber: 3
+        description: Read every snapshot stored at that mount's root
+        type: call
+        targetComponent: surface_repository
+        targetMethod: listSnapshots
+      - stepNumber: 4
+        description: Record the mount's snapshots under its namespace, skipping a mount that holds none
+        type: local
+      - stepNumber: 5
+        description: Return the per-mount snapshots
+        type: return
+        outcome: MountSurfaceSnapshots[]
+  - name: pinFamilySurfaces
+    narrative:
+      - stepNumber: 1
+        description: Detect the chaining-mount context of the current (child) root
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 2
+        description: Only a chained subproject has a family to pin
+        type: branch
+        condition: no chaining parent — the bound root is a top root
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Nothing to pin
+        type: return
+        outcome: 'null'
+      - stepNumber: 4
+        description: >-
+          Bind the parent root read-only for the projection, restoring the child's binding
+          afterwards
+        type: local
+      - stepNumber: 5
+        description: Load the parent's top-level subsystems
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 6
+        description: Project the family-scoped parent surface this child may consume
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectChildSurface
+      - stepNumber: 7
+        description: For each SIBLING subsystem
+        type: loop
+        loopKind: forEach
+        over: every top-level parent subsystem except this child's own mount
+        endStep: 8
+      - stepNumber: 8
+        description: Project the sibling's published surface at the family ceiling
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectSubsystemSurface
+      - stepNumber: 9
+        description: For each projected snapshot
+        type: loop
+        loopKind: forEach
+        over: the projected family and sibling snapshots
+        endStep: 10
+      - stepNumber: 10
+        description: Store it in the CHILD's .wai/surfaces/, leaving an unchanged snapshot untouched
+        type: call
+        targetComponent: surface_repository
+        targetMethod: saveSnapshot
+      - stepNumber: 11
+        description: Return the paths that changed
+        type: return
+        outcome: the changed snapshot paths
 lint:
-  allow:
-    - code: CALL_STEP_UNREALIZED
-      reason: >-
-        Child snapshot write-out is realized through the fs adapter's saveSnapshot in the same flow;
-        the transfer adapter's writeSnapshotTo names the cross-project export edge — reconcile the
-        naming when the surfaces subsystem takes its final lock.
+  allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-07-24T17:55:48.414Z'
+updatedAt: '2026-09-12T12:38:08.781Z'

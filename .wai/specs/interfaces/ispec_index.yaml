@@ -56,6 +56,17 @@ methods:
     returns: string[]
     guarantees:
       - idempotent
+  - name: resolveSubprojectForNamespace
+    description: >-
+      Resolve a chained mount's qualified namespace (e.g. `kid`, `par::kid2`) to that mount's
+      project root, walking each segment through the scanned index and resolving every mount's
+      projectPath against the previous mount's directory. A hop that escapes the bound root is
+      refused as a loader issue and skipped; returns null when no segment is a mount.
+    signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
+    returns: string | null
+    params:
+      - name: namespace
+        type: string
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-08-12T17:24:44.641Z'
+updatedAt: '2026-09-12T12:00:59.955Z'

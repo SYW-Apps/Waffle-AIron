@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { resolveSurfaceRef, isExternalNamespaceRef } from './namespace.js';
+import { resolveSurfaceRef, isExternalNamespaceRef, isCollapsedCrossTreeRef } from './namespace.js';
 
 // The one shortcut agents reach for when a Store link is refused is the one
 // that must never happen: folding the store's state into the consumer. Say so
@@ -53,8 +53,14 @@ export const stereotypeDepsRule: SddRule = {
           // against the stored surface snapshots — a hit is a DECLARED remote
           // portal, and the cross-boundary shape rule (source must be an
           // Adapter) applies exactly as it does for cross-subsystem deps.
-          if (isExternalNamespaceRef(ctx, depId)) {
-            const resolved = resolveSurfaceRef(ctx, depId);
+          // A reference made from inside a chained mount that the loader
+          // collapsed at this root is resolved the same way, against the
+          // snapshots that mount holds — but only a HIT changes anything: from
+          // this root the whole tree is loaded, so a collapsed reference no
+          // snapshot covers is genuinely missing and keeps its error.
+          const external = isExternalNamespaceRef(ctx, depId);
+          if (external || isCollapsedCrossTreeRef(ctx, depId, comp.subsystem)) {
+            const resolved = resolveSurfaceRef(ctx, depId, comp.subsystem);
             if (resolved) {
               if (comp.componentType !== 'Adapter') {
                 // surfaceResolved: verified against the vendored snapshot — a
@@ -71,14 +77,16 @@ export const stereotypeDepsRule: SddRule = {
               }
               continue;
             }
-            ctx.addIssue(
-              'warning',
-              'CROSS_TREE_REF_UNRESOLVED',
-              `Component "${comp.id}" depends on cross-tree component "${depId}", and no surface snapshot covers it — validate from the parent project, or import/generate the producing project's surface.`,
-              comp.id,
-              isDraftCtx,
-            );
-            continue;
+            if (external) {
+              ctx.addIssue(
+                'warning',
+                'CROSS_TREE_REF_UNRESOLVED',
+                `Component "${comp.id}" depends on cross-tree component "${depId}", and no surface snapshot covers it — validate from the parent project, pin the family surfaces ("wairon surface pin"), or import the producing project's surface.`,
+                comp.id,
+                isDraftCtx,
+              );
+              continue;
+            }
           }
           ctx.addIssue(
             'error',

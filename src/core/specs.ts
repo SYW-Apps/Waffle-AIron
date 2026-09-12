@@ -436,6 +436,28 @@ function stripNamespaceFromImplementation(spec: ImplementationSpec, prefix: stri
   };
 }
 
+/**
+ * A chained subproject's implementation file paths are relative to ITS root:
+ * the loader reads them against it, and the child's own gate checks them there.
+ * A path authored through a parent — relative to the authoring root — that
+ * lands inside the mounted child is re-expressed against the child root. Any
+ * other path is taken as already child-relative (as every loaded one is) and
+ * kept verbatim, so load → save stays a fixpoint.
+ */
+function childRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string, childRoot: string): ImplementationSpec {
+  const reexpress = (p: string): string => {
+    if (path.isAbsolute(p)) return p;
+    const rel = path.relative(childRoot, path.resolve(authoringRoot, p));
+    const inside = rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+    return inside ? rel.replace(/\\/g, '/') : p;
+  };
+  return {
+    ...spec,
+    ...(spec.sourcePath ? { sourcePath: reexpress(spec.sourcePath) } : {}),
+    ...(spec.simPath ? { simPath: reexpress(spec.simPath) } : {}),
+  };
+}
+
 function stripNamespaceFromType(spec: TypeSpec, prefix: string): TypeSpec {
   return {
     ...spec,
@@ -652,6 +674,19 @@ export class SpecWorkspace {
     return this.cachedIndex;
   }
 
+  /**
+   * The id a scan-time loader issue is anchored to: the refused spec's own id
+   * when the file got far enough to carry one, else its name on disk (the
+   * containing directory in the nested layout, where every file is `.index` /
+   * `.interface`), qualified into the mount's namespace exactly as the loader
+   * qualifies the spec itself — so scoping a validate to a mount keeps it.
+   */
+  private loaderIssueSpecId(file: string, rawId: string | undefined, namespacePrefix: string): string {
+    const stem = path.basename(file, '.yaml');
+    const local = rawId ?? (stem.startsWith('.') ? path.basename(path.dirname(file)) : stem);
+    return namespacePrefix ? qualifyId(local, namespacePrefix, this.rootSubsystems) : local;
+  }
+
   private scanSpecsForProject(
     projectDir: string,
     namespacePrefix: string,
@@ -678,6 +713,12 @@ export class SpecWorkspace {
       if (normFile === systemYaml) continue;
 
       let detectedType = 'spec';
+      // The refused spec's own id, once the file got far enough to have one. An
+      // issue anchored to the FILE STEM instead is unplaceable: in the nested
+      // layout every stem is `.index`, and no scope filter can map a bare stem to
+      // the mount it came from — so validating a parent scoped to a mount
+      // silently dropped that mount's schema errors.
+      let rawId: string | undefined;
       try {
         const raw = readYamlFile(file);
         if (raw === null || typeof raw !== 'object') {
@@ -685,10 +726,12 @@ export class SpecWorkspace {
             severity: 'error',
             code: 'INVALID_YAML',
             message: `Spec file "${file}" is not a valid YAML object or is empty.`,
-            specId: path.basename(file, '.yaml'),
+            specId: this.loaderIssueSpecId(file, undefined, namespacePrefix),
           });
           continue;
         }
+        const idField = (raw as { id?: unknown }).id;
+        if (typeof idField === 'string' && idField) rawId = idField;
 
         if ('parentSystem' in raw) {
           detectedType = 'subsystem';
@@ -742,16 +785,15 @@ export class SpecWorkspace {
             severity: 'error',
             code: 'UNKNOWN_SPEC_TYPE',
             message: `Spec file "${file}" does not match any recognized L1-L4 schema structure.`,
-            specId: path.basename(file, '.yaml'),
+            specId: this.loaderIssueSpecId(file, rawId, namespacePrefix),
           });
         }
       } catch (e: any) {
-        const filename = path.basename(file, '.yaml');
         this.loaderIssues.push({
           severity: 'error',
           code: 'SCHEMA_VALIDATION_ERROR',
           message: `Failed to parse ${detectedType} spec "${file}": ${e.message || String(e)}`,
-          specId: filename,
+          specId: this.loaderIssueSpecId(file, rawId, namespacePrefix),
         });
       }
     }
@@ -1327,7 +1369,13 @@ export class SpecWorkspace {
 
   prepareImplementationForWrite(spec: ImplementationSpec): ImplementationSpec {
     const prefix = this.writePrefixFor(spec.id);
-    return prefix ? stripNamespaceFromImplementation(spec, prefix) : spec;
+    if (!prefix) return spec;
+    const stripped = stripNamespaceFromImplementation(spec, prefix);
+    // A chained subproject's implementation lives in the child's tree, where its
+    // file paths are read against the child root.
+    const mount = this.getSubprojectPrefix(spec.id);
+    const childRoot = mount ? this.resolveSubprojectForNamespace(mount) : null;
+    return childRoot ? childRelativeFilePaths(stripped, this.rootDir, childRoot) : stripped;
   }
 
   prepareTypeForWrite(spec: TypeSpec): TypeSpec {

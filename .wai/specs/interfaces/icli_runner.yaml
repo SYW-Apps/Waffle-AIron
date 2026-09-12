@@ -90,10 +90,11 @@ methods:
   - name: runSurface
     description: >-
       Surface exchange commands: export (own surface, optionally as OpenAPI), import
-      (exchanged/authored foreign surface), list (stored snapshots), generate-children (write parent
-      snapshots into chained children). For an OpenAPI export of a multi-portal project, `--portal
-      <id>` selects one API; without it `--out` writes one file per portal and stdout lists the
-      available portals instead of printing nothing.
+      (exchanged/authored foreign surface), list (stored snapshots), externals (the consumable
+      outward world with freshness), and pin (pull the chaining parent's family and sibling surfaces
+      into THIS chained child, on the child owner's schedule). For an OpenAPI export of a
+      multi-portal project, `--portal <id>` selects one API; without it `--out` writes one file per
+      portal and stdout lists the available portals instead of printing nothing.
     signature: >-
       runSurface(action: string, options: { audience?: string; format?: string; out?: string;
       source?: string; origin?: string; portal?: string }): Promise<void>
@@ -137,11 +138,11 @@ methods:
   - name: runLock
     description: >-
       The local `wairon lock` workflow: gate on the as-complete dry-run validation (refusing to
-      freeze an invalid tree), lock the tree through the lock adapter, regenerate the family and
-      sibling surface snapshots into every chained child when the tree mounts any, and refresh the
-      generated agent/skill outputs. Post-lock guidance points sessions at the live MCP briefs
-      (sdd_get_agent_brief) — it no longer instructs a session restart, because brief content is
-      composed per call and is already current.
+      freeze an invalid tree), lock the tree through the lock adapter, and refresh the generated
+      agent/skill outputs. A parent lock writes nothing into its chained children — each child pins
+      its own family surfaces, on its own schedule. Post-lock guidance points sessions at the live
+      MCP briefs (sdd_get_agent_brief) — it no longer instructs a session restart, because brief
+      content is composed per call and is already current.
     signature: 'runLock(options: LockOptions): void'
     returns: void
     params:
@@ -245,4 +246,4 @@ methods:
         type: status_command_options
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-11T23:01:54.493Z'
+updatedAt: '2026-09-12T12:42:53.601Z'

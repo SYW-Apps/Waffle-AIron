@@ -35,7 +35,7 @@ import { guaranteeTokensRule } from './guarantee-tokens.js';
 import { eventTopologyRule } from './event-topology.js';
 import { narrativeAntipatternsRule } from './narrative-antipatterns.js';
 import { callConformanceRule } from './call-conformance.js';
-import { roundtripRule, namespaceHygieneRule, surfaceFreshnessRule } from './namespace.js';
+import { roundtripRule, namespaceHygieneRule } from './namespace.js';
 import { couplingRule } from './coupling.js';
 import { languageRule } from './language.js';
 import { technologyRule } from './technology.js';
@@ -65,7 +65,6 @@ export const SDD_RULES: SddRule[] = [
   // explain many downstream findings, so surface them early in the list.
   namespaceHygieneRule,
   roundtripRule,
-  surfaceFreshnessRule,
   typeReferencesRule,
   contractsRule,
   // Vocabulary check right after contracts: an unknown token explains why the
@@ -301,6 +300,8 @@ export interface BuildContextOptions {
   packSelections?: PackSelection[];
   /** Stored surface snapshots for cross-tree/remote reference resolution. */
   surfaceSnapshots?: import('../../models/index.js').SurfaceSnapshot[];
+  /** Snapshots each chained mount holds, keyed by mount namespace (see RuleContext.mountSurfaceSnapshots). */
+  mountSurfaceSnapshots?: import('./types.js').MountSurfaceSnapshots[];
   /** Source-code model for structural conformance; empty when not built. */
   codeModel?: CodeModel;
   /** Collector the context's addIssue pushes into. */
@@ -475,12 +476,6 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     // Declarative assertions bring their own namespaced codes — lint.allow
     // and severity overrides treat them exactly like builtins.
     ...extensions.assertions.map(a => a.fullCode),
-    // Entry-point emitted codes: validateSddTree's chained-subproject pass
-    // raises these AFTER the rule run (it post-processes the aggregated issue
-    // list), so no registered rule declares them — but lint.allow validation
-    // must still recognize them as real codes.
-    'CHAINED_SUBPROJECT_CONTEXT',
-    'UNVERIFIED_EXTERNAL_REF',
   ]);
 
   const addIssue = (
@@ -554,6 +549,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [] },
     variants: opts.variants ?? [],
     surfaceSnapshots: opts.surfaceSnapshots ?? [],
+    mountSurfaceSnapshots: opts.mountSurfaceSnapshots ?? [],
     codeModel: opts.codeModel ?? emptyCodeModel(),
     lintAllows,
     knownIssueCodes,

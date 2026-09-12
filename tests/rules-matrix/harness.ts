@@ -105,13 +105,14 @@ export interface FixtureTree {
    * instead of the temp root itself (relative, forward-slash, no '..' — same
    * hygiene as `files`). The tree still materializes at the temp root exactly
    * as always, so the top-level tree becomes an ANCESTOR project of the
-   * validated one. This is the seam for the chained-subproject honesty pass
-   * (CHAINED_SUBPROJECT_CONTEXT / UNVERIFIED_EXTERNAL_REF): those codes only
-   * fire when the validated root is itself a chained child — the loader's
-   * findChainingParent walks UP from the root looking for an ancestor project
-   * whose subsystem `projectPath` resolves to that exact root. Materialize the
-   * parent (with the mount subsystem) at the top, the child project under
-   * `files`, and point this at the child directory.
+   * validated one. This is the seam for chained-subproject resolution: the
+   * loader's findChainingParent walks UP from the root looking for an ancestor
+   * project whose subsystem `projectPath` resolves to that exact root, and a
+   * child found that way is judged THROUGH that parent. Materialize the parent
+   * (with the mount subsystem) at the top, the child project under `files`, and
+   * point this at the child directory. Overriding the parent's own
+   * `.wai/specs/.index.yaml` through `files` makes the parent unloadable — the
+   * seam for the standalone fallback, where references keep their raw verdicts.
    */
   validateFromSubdir?: string;
 }
@@ -124,8 +125,8 @@ export interface RuleFixture {
   /**
    * Asserted against the emitted finding's specId when given (fire fixtures
    * only). `null` asserts the OPPOSITE: the finding carries NO specId anchor
-   * (a tree-level finding, e.g. the prepended CHAINED_SUBPROJECT_CONTEXT
-   * notice). Omit to not assert on the anchor at all.
+   * (a tree-level finding, e.g. MISSING_SYSTEM_SPEC). Omit to not assert on the
+   * anchor at all.
    */
   anchoredTo?: string | null;
   /**

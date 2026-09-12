@@ -520,4 +520,73 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
     expect(fs.existsSync(path.join(billingDir, '.wai', 'specs', '.index.yaml'))).toBe(true);
     expect(fs.existsSync(path.join(demoRoot, '.wai', 'specs', '.index.yaml'))).toBe(false);
   }, 120_000);
+
+  it('parent reach: only a credential for the TOP project gets a chained child judged through its parent', async () => {
+    // A boundary violation only the parent tree can show: the child's
+    // Orchestrator depends on a Portal the PARENT publishes. Judging it means
+    // reading the parent — which a token narrowed to the child must not do.
+    const stamp = ["createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'"];
+    const writeLines = (file: string, lines: string[]): void => {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, [...lines, ''].join('\n'));
+    };
+    const writeConfig = (root: string, name: string): void => {
+      const file = path.join(root, '.wai', 'project.yaml');
+      if (fs.existsSync(file)) return;
+      fs.writeFileSync(file, JSON.stringify({
+        schemaVersion: '1.0.0', name, projectType: 'backend',
+        targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+        rules: {}, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+      }));
+    };
+
+    const parentSpecs = path.join(demoRoot, '.wai', 'specs');
+    writeConfig(demoRoot, 'demo');
+    writeLines(path.join(parentSpecs, '.index.yaml'), [
+      'schemaVersion: 1.0.0', 'name: root-system', 'vision: the parent', 'boundaries: []', 'globalRequirements: []', ...stamp]);
+    writeLines(path.join(parentSpecs, 'subsystems', 'parent-sub.yaml'), [
+      'id: parent-sub', 'name: parent-sub', 'description: the parent domain', 'parentSystem: root-system',
+      'publicInterfaces:', '  - type: Custom', '    details: the published portal', '    component: parent-portal', ...stamp]);
+    writeLines(path.join(parentSpecs, 'components', 'parent-portal.yaml'), [
+      'id: parent-portal', 'name: parent-portal', 'description: the published portal', 'subsystem: parent-sub',
+      'componentType: Portal', 'portalType: Custom', 'owns: []', 'dependsOn: []', ...stamp]);
+
+    const childSpecs = path.join(billingDir, '.wai', 'specs');
+    writeConfig(billingDir, 'billing');
+    writeLines(path.join(childSpecs, '.index.yaml'), [
+      'schemaVersion: 1.0.0', 'name: billing-system', 'vision: the child', 'boundaries: []', 'globalRequirements: []', ...stamp]);
+    writeLines(path.join(childSpecs, 'subsystems', 'k-core.yaml'), [
+      'id: k-core', 'name: k-core', 'description: the child domain', 'parentSystem: billing-system', ...stamp]);
+    writeLines(path.join(childSpecs, 'components', 'k-orch.yaml'), [
+      'id: k-orch', 'name: k-orch', 'description: crosses into the parent', 'subsystem: k-core',
+      'componentType: Orchestrator', 'owns: []', "dependsOn: ['super::parent-portal']", ...stamp]);
+
+    interface Verdict {
+      errors: { code: string; specId?: string }[];
+      resolvedThrough?: { root: string; scope: string };
+    }
+    const validate = async (tok: string, selector?: string): Promise<Verdict> => {
+      const r = await callTool(tok, selector, 'sdd_validate_tree');
+      expect(r.isError, r.text).toBe(false);
+      return JSON.parse(r.text) as Verdict;
+    };
+    const showsViolation = (v: Verdict): boolean =>
+      v.errors.some((e) => e.code === 'CROSS_SUBSYSTEM_NON_ADAPTER' && e.specId === 'k-orch');
+
+    // Authorized for the TOP project, narrowing through a selector: judged through the parent.
+    const viaTop = await validate(token, 'demo::billing');
+    expect(viaTop.resolvedThrough?.scope).toBe('billing');
+    expect(showsViolation(viaTop)).toBe(true);
+
+    // '*' covers the top project as well.
+    const viaStar = await validate(starToken, 'demo::billing');
+    expect(viaStar.resolvedThrough?.scope).toBe('billing');
+    expect(showsViolation(viaStar)).toBe(true);
+
+    // NARROWED to the child: the child is bound, the parent is never read, and
+    // so no parent-derived finding comes back.
+    const viaNarrowed = await validate(qualToken);
+    expect(viaNarrowed.resolvedThrough).toBeUndefined();
+    expect(showsViolation(viaNarrowed)).toBe(false);
+  }, 120_000);
 });

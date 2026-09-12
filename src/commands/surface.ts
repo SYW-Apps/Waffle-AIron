@@ -6,8 +6,8 @@ import {
   exportSurface,
   importSurface,
   listSnapshots,
-  generateChildSnapshots,
   listExternalInterfaces,
+  pinFamilySurfaces,
 } from '../core/surfaces.js';
 import { SURFACE_AUDIENCES, SurfaceOrigin } from '../models/index.js';
 
@@ -17,15 +17,11 @@ import { SURFACE_AUDIENCES, SurfaceOrigin } from '../models/index.js';
 // export           — project the own L0 gateway surface (native | openapi)
 // import           — store a foreign surface (native snapshot or OpenAPI)
 // list             — stored snapshots available to this project
-// generate-children — write the family surface into every chained child
 // externals        — the project's consumable external surfaces (parent
 //                    family, siblings, foreign imports) with freshness
+// pin              — a chained child pulls its parent's family and sibling
+//                    surfaces into its own .wai/surfaces/, on its own schedule
 // ---------------------------------------------------------------------------
-
-// cli_surfaces_client_adapter.generateChildSnapshots — also consumed by the
-// runner's lock workflow (`wairon lock`: a locked parent ships fresh
-// surfaces), so the adapter republishes the surface portal's function here.
-export { generateChildSnapshots };
 
 export interface SurfaceOptions {
   audience?: string;
@@ -114,19 +110,6 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       return;
     }
 
-    case 'generate-children': {
-      // Only CHANGED paths come back — an empty list means every delivered
-      // surface already matched, which is not the same as having no children.
-      const written = generateChildSnapshots();
-      if (!written.length) {
-        logger.info('Delivered surfaces are already up to date — nothing rewritten.');
-        return;
-      }
-      logger.success(`Updated ${written.length} delivered surface(s):`);
-      for (const p of written) logger.info(`  ${p}`);
-      return;
-    }
-
     case 'externals': {
       const entries = listExternalInterfaces();
       if (!entries.length) {
@@ -145,7 +128,23 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       return;
     }
 
+    case 'pin': {
+      // Only CHANGED paths come back; null means this root has no parent at all.
+      const written = pinFamilySurfaces();
+      if (written === null) {
+        logger.info('This project is not a chained subproject — there is no parent family to pin.');
+        return;
+      }
+      if (!written.length) {
+        logger.info('Pinned family surfaces are already up to date — nothing rewritten.');
+        return;
+      }
+      logger.success(`Pinned ${written.length} family surface(s) from the parent:`);
+      for (const p of written) logger.info(`  ${p}`);
+      return;
+    }
+
     default:
-      throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list, generate-children, externals).`);
+      throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list, externals, pin).`);
   }
 }

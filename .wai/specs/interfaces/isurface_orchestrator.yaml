@@ -47,14 +47,6 @@ methods:
     params:
       - name: projectName
         type: string
-  - name: generateChildSnapshots
-    description: >-
-      Project and deliver the outward world into each chained child's .wai/surfaces/: the
-      family-scoped parent surface AND each SIBLING subsystem's published surface (every subsystem
-      except the child's own mount), all stamped with the parent tree's StateId provenance. Returns
-      the written file paths.
-    signature: 'generateChildSnapshots(): string[]'
-    returns: string[]
   - name: removeSnapshot
     description: Remove a stored surface snapshot through the repository.
     signature: 'removeSnapshot(projectName: string): boolean'
@@ -73,6 +65,29 @@ methods:
       surface externals CLI.
     signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
     returns: ExternalSurfaceEntry[]
+  - name: listMountSnapshots
+    description: >-
+      For each chained mount namespace, resolve the mount's project root through the core and read
+      the snapshots stored there, keyed by namespace. A mount that does not resolve, or holds no
+      snapshots, contributes nothing. Kept apart from the bound root's own snapshots so a contract a
+      child imported never decides the parent's own references to the same name.
+    signature: 'listMountSnapshots(mounts: string[]): MountSurfaceSnapshots[]'
+    returns: MountSurfaceSnapshots[]
+    params:
+      - name: mounts
+        type: string[]
+  - name: pinFamilySurfaces
+    description: >-
+      Pin the outward world of a chained child into its OWN .wai/surfaces/, pulled by the child
+      rather than pushed by the parent's lock: resolve the chaining parent, bind the parent root
+      read-only, project the family-scoped parent surface and every SIBLING subsystem's published
+      surface (all but this child's own mount), and store each into the child, leaving an unchanged
+      snapshot untouched. Returns the changed paths, or null when the bound root is not a chained
+      subproject. This is what a child cloned WITHOUT its parent validates its cross-tree references
+      against — a versioned import its owner commits on their own schedule.
+    signature: 'pinFamilySurfaces(): string[] | null'
+    returns: string[] | null
+    params: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-07-24T17:53:56.767Z'
+updatedAt: '2026-09-12T12:38:08.126Z'

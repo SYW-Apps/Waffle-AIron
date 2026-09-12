@@ -83,6 +83,13 @@ export interface RuleContext {
   /** Stored surface snapshots (.wai/surfaces/) — declared contracts that unresolved cross-tree/remote references validate against. */
   surfaceSnapshots: SurfaceSnapshot[];
   /**
+   * The snapshots each chained mount holds in its own `.wai/surfaces/`, keyed
+   * by mount namespace. Consulted ONLY for references made from inside that
+   * mount — never pooled into `surfaceSnapshots`, so a contract a child
+   * imported can never decide the bound root's own references.
+   */
+  mountSurfaceSnapshots: MountSurfaceSnapshots[];
+  /**
    * The pure source-code model (per-sourcePath declaration/export/import/
    * anchor facts) built by the source analysis adapter — what the
    * structural-conformance family checks realization against. Empty when the
@@ -160,8 +167,8 @@ export interface RuleContext {
    *
    * `surfaceResolved` marks a finding whose reference DID resolve against a
    * vendored surface snapshot — a genuine contract/boundary verdict rather
-   * than a resolution failure, so the chained-subproject pass never replaces
-   * it with UNVERIFIED_EXTERNAL_REF.
+   * than a resolution failure, so it keeps full strength in a chained
+   * subproject.
    */
   addIssue(
     defaultSeverity: Severity,
@@ -205,4 +212,10 @@ export interface SddRule {
   /** Every issue code this rule can emit, with default severity and summary. */
   codes: RuleCode[];
   check(ctx: RuleContext): void;
+}
+
+/** The surface snapshots one chained mount holds, keyed by the mount's namespace. */
+export interface MountSurfaceSnapshots {
+  namespace: string;
+  snapshots: SurfaceSnapshot[];
 }

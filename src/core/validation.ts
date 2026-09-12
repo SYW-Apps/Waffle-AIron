@@ -12,6 +12,7 @@ import {
   clearLoaderIssues,
   getLoaderIssues,
   scanAllSpecs,
+  invalidateSpecCache,
 } from './specs.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { registerBuiltinRules, registerPackRules, ruleSequence } from './rules/repository.js';
@@ -35,27 +36,27 @@ function projectPackSelections(): PackSelection[] {
   }
 }
 import { loadProjectVariants } from './variants.js';
-import { loadSurfaceSnapshots } from './surfaces.js';
+import { loadSurfaceSnapshots, loadMountSurfaceSnapshots } from './surfaces.js';
 import { buildCodeModel } from './source-analysis.js';
 import { findChainingParent } from './specs.js';
-import { getProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import * as path from 'path';
 import { settledSpecPaths } from './approval.js';
 import type { SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec } from '../models/index.js';
 
 /**
- * Codes whose verdict is ROOT-DEPENDENT: they fail because a referenced spec, a
- * source file, or a dependency edge cannot be resolved in THIS tree, but resolve
- * fine from the parent. When the tree is a chained subproject validated
- * standalone, the target legitimately lives in the absent parent (or is reached
- * by a parent-root-relative sourcePath). Two families with DIFFERENT handling:
+ * Reference-resolution codes: their verdict is ROOT-DEPENDENT — they fire
+ * because a referenced spec or dependency edge cannot be resolved in THIS tree,
+ * but may resolve from the parent. A chained child whose parent is on disk is
+ * judged through it (resolveThroughParent), and these are the findings the
+ * parent's verdict replaces. With no usable parent they keep their raw verdict:
+ * a cross-tree form stays a CROSS_TREE_REF_UNRESOLVED warning and a typo stays
+ * an error — never softened. References that DID resolve against a vendored
+ * surface snapshot are verdicts in their own right (surfaceResolved).
  *
- * REFERENCE RESOLUTION — each issue a snapshot does NOT cover is REPLACED by
- * one precise UNVERIFIED_EXTERNAL_REF warning (crossTreeContext, so --ci waives
- * it) naming the original finding and the remedy. References that DID resolve
- * against a vendored surface snapshot never enter this path: a snapshot IS the
- * verifiable contract, so contract mismatches and boundary violations keep
- * full strength (issues marked surfaceResolved are skipped).
+ * Code↔spec conformance is not root-dependent: a chained child's source paths
+ * are relative to its own root (the writer re-expresses a path authored through
+ * a parent), so its conformance findings are judged there like any project's.
  */
 const SUBPROJECT_REFERENCE_CODES = new Set([
   'UNDEFINED_TYPE_REFERENCE',
@@ -66,23 +67,6 @@ const SUBPROJECT_REFERENCE_CODES = new Set([
   'INVALID_TRUSTED_LINK',
   'CROSS_SUBSYSTEM_NON_ADAPTER',
   'CROSS_TREE_REF_UNRESOLVED',
-]);
-
-/**
- * CODE↔SPEC CONFORMANCE (sourcePaths + realization + dependency graph) — these
- * KEEP the error→warning downgrade with crossTreeContext: sourcePaths are
- * stored relative to the authoring (parent) root and genuinely cannot resolve
- * standalone. The parent root remains the authoritative gate.
- */
-const SUBPROJECT_CONFORMANCE_CODES = new Set([
-  'MISSING_SOURCE_FILE',
-  'SOURCE_PATH_ESCAPES_ROOT',
-  'MISSING_SOURCE_PATH',
-  'UNREALIZED_METHOD',
-  'CONFORMANCE_ANALYSIS_SKIPPED',
-  'CONFORMANCE_DEGRADED',
-  'UNDECLARED_DEPENDENCY',
-  'UNREALIZED_DEPENDENCY',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -111,19 +95,11 @@ export interface ValidationIssue {
    */
   draftContext?: boolean;
   /**
-   * True when this issue reflects a reference that cannot be resolved because the
-   * tree is being validated STANDALONE as a chained subproject — the referenced
-   * spec lives in the (absent) parent tree. Downgraded from error to warning and
-   * marked so the --ci gate can waive it: a subproject is fully verified from the
-   * parent root, not standalone.
-   */
-  crossTreeContext?: boolean;
-  /**
    * True when this finding was verified AGAINST a vendored surface snapshot —
    * the reference resolved to a declared cross-tree contract, so the finding is
    * a genuine contract/boundary verdict, not a resolution failure. Such issues
-   * keep full strength in the chained-subproject pass (they are never replaced
-   * by UNVERIFIED_EXTERNAL_REF).
+   * keep full strength in a chained subproject; the parent's re-judgement of the
+   * same edge stands in for one only when it is at least as severe.
    */
   surfaceResolved?: boolean;
 }
@@ -131,6 +107,12 @@ export interface ValidationIssue {
 export interface ValidationResult {
   valid: boolean;
   issues: ValidationIssue[];
+  /**
+   * Present when a chained subproject's verdict was resolved through its
+   * parent: the top root that was validated and the mount chain it was scoped
+   * to. Absent when the tree was validated on its own.
+   */
+  resolvedThrough?: { root: string; scope: string };
 }
 
 function issue(
@@ -278,6 +260,11 @@ export interface ValidationOptions {
    * observable to later callers).
    */
   treatAllAsComplete?: boolean;
+  /**
+   * Internal: 'off' skips resolving a chained subproject through its parent. Set
+   * on the run that IS the parent's verdict, so that run can never walk again.
+   */
+  crossTree?: 'off';
 }
 
 /**
@@ -301,8 +288,9 @@ export function validateSddTree(
   let recursive: boolean | number = true;
   let extensions: LoadedExtensions | undefined;
   let treatAllAsComplete = false;
+  let crossTree: 'off' | undefined;
 
-  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions)) {
+  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions || 'crossTree' in rulesOrOptions)) {
     const opts = rulesOrOptions as ValidationOptions;
     rules = opts.rules;
     projectType = opts.projectType ?? 'backend';
@@ -310,6 +298,7 @@ export function validateSddTree(
     recursive = opts.recursive ?? true;
     extensions = opts.extensions;
     treatAllAsComplete = opts.treatAllAsComplete ?? false;
+    crossTree = opts.crossTree;
   }
   extensions ??= loadProjectExtensions();
 
@@ -413,6 +402,14 @@ export function validateSddTree(
       issues.push(issue('error', 'EXTENSION_LOAD_ERROR', err));
     }
 
+    // The snapshots each chained mount holds, kept per mount so a contract a
+    // child imported decides only that child's references (see
+    // RuleContext.mountSurfaceSnapshots). Loaded after the loader issues were
+    // collected: resolving a mount that escapes the root raises its issue again.
+    const mountSurfaceSnapshots = loadMountSurfaceSnapshots(
+      subsystems.filter((s) => s.projectPath).map((s) => s.id),
+    );
+
     const ctx = buildRuleContext({
       system,
       subsystems,
@@ -428,6 +425,7 @@ export function validateSddTree(
       // By-name selections only: a legacy path ref pins nothing to check.
       packSelections: projectPackSelections(),
       surfaceSnapshots,
+      mountSurfaceSnapshots,
       codeModel,
       issues,
     });
@@ -440,85 +438,50 @@ export function validateSddTree(
       rule.check(ctx);
     }
 
-    // Chained-subproject reference honesty: when this tree is being validated
-    // STANDALONE but is actually a chained subproject of a discoverable parent,
-    // references INTO the parent (shared types, sibling subsystems, cross-tree
-    // components) point at specs that physically live ABOVE this root. That is
-    // the "different root, different verdict" surprise: from the parent these
-    // resolve and the tree is clean; from the subproject's own dir they explode
-    // into hundreds of hard errors.
+    // Chained subprojects: when this tree is validated from its own root but is a
+    // chained subproject of a discoverable parent, references INTO the parent
+    // (shared types, sibling subsystems, cross-tree components) point at specs
+    // that physically live ABOVE this root.
     //
-    // Two families, two treatments:
-    //  - REFERENCE RESOLUTION: each cross-tree reference NO vendored surface
-    //    snapshot covers is REPLACED by one precise UNVERIFIED_EXTERNAL_REF
-    //    warning (crossTreeContext, so --ci waives it) naming the original
-    //    finding and the remedy. References that DID resolve against a snapshot
-    //    never enter this path (surfaceResolved) — a snapshot IS the verifiable
-    //    contract, so contract mismatches and boundary violations stay errors.
-    //  - CODE↔SPEC CONFORMANCE: downgraded error→warning + crossTreeContext as
-    //    before — parent-root-relative sourcePaths genuinely cannot resolve here.
+    // RESOLVE THROUGH THE PARENT. When the parent is on disk, a reference this
+    // root cannot resolve is not "unverifiable" — it is judged by validating the
+    // parent scoped to this mount. The child keeps every finding of its own and
+    // gains the parent's verdict for what it could not see: a union, with no
+    // severity changed, so it is never judged more leniently than its parent.
+    // With no usable parent (its L0 missing, the mount unknown, or reach denied)
+    // every finding keeps its raw verdict: a chained child that cannot be judged
+    // through its parent pins its family surfaces or fails its gate. Nothing is
+    // softened on either path — code↔spec conformance included, because a
+    // chained child's source paths are relative to its own root.
     //
-    // Gated on actually HAVING such issues, so a clean tree (or a hosted per-
-    // request validate) never pays the walk-up-the-filesystem cost.
-    const hasCrossTreeSuspects = issues.some(
-      i => SUBPROJECT_REFERENCE_CODES.has(i.code) || SUBPROJECT_CONFORMANCE_CODES.has(i.code),
-    );
-    const chainingParent = hasCrossTreeSuspects ? findChainingParent(getProjectRoot()) : null;
-    if (chainingParent) {
-      let unverified = 0;
-      let downgraded = 0;
-      for (let at = 0; at < issues.length; at++) {
-        const iss = issues[at];
-        if (SUBPROJECT_REFERENCE_CODES.has(iss.code) && !iss.surfaceResolved) {
-          issues[at] = {
-            severity: 'warning',
-            code: 'UNVERIFIED_EXTERNAL_REF',
-            crossTreeContext: true, // --ci waives it (parent root is authoritative)
-            specId: iss.specId,
-            ...(iss.agentId ? { agentId: iss.agentId } : {}),
-            ...(iss.draftContext ? { draftContext: true } : {}),
-            message:
-              `Unverified external reference (${iss.code}): ${iss.message} No vendored surface snapshot ` +
-              `covers this reference, so it cannot be verified from this chained subproject standalone — ` +
-              `re-lock the parent so fresh family/sibling snapshots ship, or inspect what this project can ` +
-              `consume via \`wairon surface externals\` / sdd_list_external_interfaces.`,
-          };
-          unverified++;
-          continue;
-        }
-        if (SUBPROJECT_CONFORMANCE_CODES.has(iss.code)) {
-          if (iss.severity === 'error') {
-            iss.severity = 'warning';
-            downgraded++;
-          }
-          iss.crossTreeContext = true; // mark so --ci waives it (parent root is authoritative)
-        }
+    // Gated on actually HAVING an uncovered reference, so a clean tree (or a
+    // hosted per-request validate) never pays the walk-up-the-filesystem cost.
+    const uncovered = (i: ValidationIssue): boolean => SUBPROJECT_REFERENCE_CODES.has(i.code) && !i.surfaceResolved;
+    const chainingParent = crossTree !== 'off' && issues.some(uncovered) ? findChainingParent(getProjectRoot()) : null;
+    const resolution = chainingParent ? resolveThroughParent(getProjectRoot(), treatAllAsComplete) : null;
+    if (resolution) {
+      // A child finding verified against a snapshot is a verdict on a cross-tree
+      // edge the parent's run judges again, against the real component or the
+      // same snapshot the mount holds. Where the parent reached the same code on
+      // the same spec at least as severely, its verdict stands in for the
+      // child's: one finding worded from two roots is not two findings. Where it
+      // did not, the child's finding stays, so the union is never quieter.
+      const parentSeverity = new Map<string, ValidationIssue['severity']>();
+      for (const i of resolution.issues) {
+        const key = `${i.code}|${i.specId ?? ''}`;
+        if (i.severity === 'error' || !parentSeverity.has(key)) parentSeverity.set(key, i.severity);
       }
-      if (unverified > 0 || downgraded > 0) {
-        const notes: string[] = [];
-        if (unverified > 0) {
-          notes.push(
-            `${unverified} cross-tree reference(s) have no vendored surface snapshot covering them and were ` +
-            `reported as UNVERIFIED_EXTERNAL_REF warnings — re-lock the parent so fresh family/sibling ` +
-            `snapshots ship, or inspect via \`wairon surface externals\` / sdd_list_external_interfaces.`,
-          );
-        }
-        if (downgraded > 0) {
-          notes.push(
-            `${downgraded} code↔spec conformance finding(s) (parent-root-relative source paths) were ` +
-            `downgraded to warnings.`,
-          );
-        }
-        issues.unshift({
-          severity: 'warning',
-          code: 'CHAINED_SUBPROJECT_CONTEXT',
-          crossTreeContext: true,
-          message:
-            `This project is a chained subproject ("${chainingParent.subsystemId}") of the parent project at ` +
-            `"${chainingParent.parentRoot}". ${notes.join(' ')} Full cross-tree verification runs from the ` +
-            `parent root.`,
-        });
-      }
+      const rejudged = (i: ValidationIssue): boolean => {
+        const judged = parentSeverity.get(`${i.code}|${i.specId ?? ''}`);
+        return judged === 'error' || (judged === 'warning' && i.severity === 'warning');
+      };
+      const kept = issues.filter((i) => !uncovered(i) && !(i.surfaceResolved && rejudged(i)));
+      const merged = dedupeIssues([...kept, ...resolution.issues]);
+      return {
+        valid: merged.every((i) => i.severity !== 'error'),
+        issues: merged,
+        resolvedThrough: { root: resolution.root, scope: resolution.scope },
+      };
     }
 
     return {
@@ -528,6 +491,106 @@ export function validateSddTree(
   } finally {
     statusBearing.forEach((s, i) => { s.status = statusSnapshot[i]; });
   }
+}
+
+/**
+ * Validate a chained subproject's specs FROM ITS PARENT: walk up to the top root
+ * collecting the mount chain, validate there scoped to that chain, and rename
+ * the findings into the child's own ids. Null when no usable parent is reachable
+ * — the caller then keeps the standalone verdict.
+ *
+ * Reach: resolving reads the parent tree. A hosted request whose credential is
+ * narrowed to the child never gets here, and the walk never climbs above the
+ * request's own top project root.
+ */
+function resolveThroughParent(
+  boundRoot: string,
+  treatAllAsComplete: boolean,
+): { root: string; scope: string; issues: ValidationIssue[] } | null {
+  const reach = getRequestParentReach();
+  if (reach && !reach.parentReach) return null;
+  const ceiling = reach?.topRoot ? path.resolve(reach.topRoot) : undefined;
+
+  const chain: string[] = [];
+  let top = path.resolve(boundRoot);
+  while (top !== ceiling) {
+    const hop = findChainingParent(top);
+    if (!hop) break;
+    const next = path.resolve(hop.parentRoot);
+    if (ceiling && !isWithinOrEqual(ceiling, next)) break;
+    chain.unshift(hop.subsystemId);
+    top = next;
+  }
+  if (chain.length === 0) return null;
+  const scope = chain.join('::');
+
+  const inner = runWithProjectRoot(top, () => {
+    // Read the parent as it is NOW — the child was probably just edited, and a
+    // cached parent tree would judge it against the past.
+    invalidateSpecCache();
+    // The parent's own governing configuration: its rules and profile decide
+    // its verdict, not the child's.
+    let governing: { rules?: RulesConfig; projectType?: string } = {};
+    try {
+      const config = loadProjectConfig();
+      governing = { rules: config.rules, projectType: config.projectType };
+    } catch { /* an unconfigured parent validates with the defaults */ }
+    return validateSddTree({
+      ...governing,
+      scopeSubsystem: scope,
+      recursive: true,
+      crossTree: 'off',
+      treatAllAsComplete,
+    });
+  });
+  // No L0 to walk, or the mount is not in the parent's tree: nothing to resolve through.
+  if (inner.issues.some((i) => i.code === 'MISSING_SYSTEM_SPEC' || i.code === 'SUBSYSTEM_NOT_FOUND')) return null;
+
+  const local = scope.split('::').pop()!;
+  const issues = inner.issues.map((i) => ({
+    ...i,
+    message: stripNamespace(i.message, scope),
+    ...(i.specId !== undefined ? { specId: i.specId === scope ? local : stripNamespace(i.specId, scope) } : {}),
+  }));
+  return { root: top, scope, issues };
+}
+
+/**
+ * Remove a mount-chain prefix (`scope::`) wherever it begins an id in `text` —
+ * only at an id boundary, so `kid::` never bites into `bigkid::x` or into a
+ * deeper `par::kid::x` that names a different namespace.
+ */
+function stripNamespace(text: string, scope: string): string {
+  const prefix = `${scope}::`;
+  let out = '';
+  let from = 0;
+  for (let at = text.indexOf(prefix); at !== -1; at = text.indexOf(prefix, from)) {
+    const atBoundary = at === 0 || !isIdChar(text[at - 1]);
+    out += text.slice(from, at) + (atBoundary ? '' : prefix);
+    from = at + prefix.length;
+  }
+  return out + text.slice(from);
+}
+
+function isIdChar(ch: string): boolean {
+  return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')
+    || ch === '_' || ch === '-' || ch === '.' || ch === ':';
+}
+
+function isWithinOrEqual(dir: string, target: string): boolean {
+  const rel = path.relative(dir, target);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/** One finding per (code, spec, message): a union must never print the same verdict twice. */
+function dedupeIssues(list: ValidationIssue[]): ValidationIssue[] {
+  const seen = new Set<string>();
+  return list.filter((i) => {
+    const key = `${i.code}|${i.specId ?? ''}|${i.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**

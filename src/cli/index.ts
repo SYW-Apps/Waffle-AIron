@@ -45,7 +45,7 @@ import {
   runHostPacks,
 } from '../commands/host.js';
 import { runProduce } from '../commands/produce.js';
-import { runSurface, generateChildSnapshots } from '../commands/surface.js';
+import { runSurface } from '../commands/surface.js';
 import {
   runRemote,
   runLogin,
@@ -136,9 +136,9 @@ program
 
 // cli_runner.runLock — the local `wairon lock` workflow: gate on the
 // as-complete dry-run validation (an invalid tree is never frozen), freeze the
-// tree through the lock adapter, and — when the tree mounts chained children —
-// regenerate the family and sibling surface snapshots into every child so a
-// locked parent ships fresh surfaces.
+// tree through the lock adapter, and refresh the generated outputs. A parent
+// lock writes nothing into its chained children: each child pins its own family
+// surfaces (`wairon surface pin`) on its own schedule.
 //
 // Why validate-as-complete: the conformance gate downgrades completeness
 // errors to warnings while a spec is `draft`, so a draft tree can "pass" yet
@@ -192,18 +192,6 @@ async function runLock(options: LockOptions): Promise<void> {
   if (!record) {
     logger.info('Cancelled. Nothing was changed.');
     return;
-  }
-
-  // --- A locked parent ships fresh surfaces: regenerate the family and
-  // sibling snapshots into every chained child (no-op when none are mounted).
-  // Every delivered surface is re-projected, but only the ones whose published
-  // contract actually moved are rewritten — a lock that changed one subsystem
-  // should not show every child's whole surface set as modified in git.
-  const childPaths = generateChildSnapshots();
-  if (childPaths.length > 0) {
-    logger.blank();
-    logger.success(`Updated ${childPaths.length} delivered surface(s) in the chained children:`);
-    for (const p of childPaths) logger.info(`  ${p}`);
   }
 
   logger.blank();
@@ -798,7 +786,7 @@ program
 
 program
   .command('surface <action>')
-  .description('public surface exchange: export | import | list | generate-children | externals')
+  .description('public surface exchange: export | import | list | externals | pin')
   .option('--audience <level>', 'export ceiling: project | department | instance | partner | external (default instance)')
   .option('--format <fmt>', 'export format: native | openapi (default native)')
   .option('--out <path>', 'export output path (else print)')

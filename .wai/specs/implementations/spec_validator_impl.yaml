@@ -43,12 +43,21 @@ methods:
       - stepNumber: 8
         description: >-
           Load the available surface snapshots via the surfaces adapter — unresolved cross-tree and
-          remote adapter references resolve against them (SURFACE_STALE warning on StateId mismatch;
-          CROSS_TREE_REF_UNRESOLVED remains only for references no snapshot covers)
+          remote adapter references resolve against them (CROSS_TREE_REF_UNRESOLVED remains only for
+          references no snapshot covers)
         type: call
         targetComponent: validator_surfaces_adapter
         targetMethod: loadSurfaceSnapshots
       - stepNumber: 9
+        description: >-
+          Load the surface snapshots each chained mount holds, keyed by mount namespace. A reference
+          made from INSIDE a mount in a super::/:: form collapses to a bare id at this root, and
+          resolves against the contracts that mount imported; a reference no surface covers stays
+          the error it was, and the bound root's own references never consult a mount's surfaces
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: loadMountSurfaceSnapshots
+      - stepNumber: 10
         description: >-
           Build the source code model via the source analysis adapter — every distinct L4 sourcePath
           resolved and containment-checked within the project root, analyzed at the best available
@@ -57,10 +66,10 @@ methods:
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: buildCodeModel
-      - stepNumber: 10
+      - stepNumber: 11
         description: Integrate Zod schema loader errors
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
           in-scope spec through the writer relativization + schema pipeline via the core adapter (no
@@ -69,43 +78,43 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Reject a --subsystem scope that names no loaded subsystem (SUBSYSTEM_NOT_FOUND, listing
           the known subsystems) and return early
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
           and pattern definitions — to populate the rule context's ext for this run
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectExtensions
-      - stepNumber: 14
+      - stepNumber: 15
         description: Seed the built-in SDD conformance rule set into the in-memory rule set
         type: call
         targetComponent: rule_repository
         targetMethod: registerBuiltinRules
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Register the loaded programmatic pack rules after the built-ins (project pack order is
           precedence)
         type: call
         targetComponent: rule_repository
         targetMethod: registerPackRules
-      - stepNumber: 16
+      - stepNumber: 17
         description: Read the composed, ordered rule run sequence to execute
         type: call
         targetComponent: rule_repository
         targetMethod: ruleSequence
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           Read the aggregate known-issue-code set into the rule context, so lint.allow references
           are validated against every code the active rules can emit (UNKNOWN_LINT_ALLOW_CODE)
         type: call
         targetComponent: rule_repository
         targetMethod: knownIssueCodes
-      - stepNumber: 18
+      - stepNumber: 19
         description: >-
           Run hierarchy, namespace-hygiene, round-trip, type-reference, contract (incl. cross-tree
           ref recognition), narrative, boundary, graph, naming, documentation, complexity,
@@ -179,25 +188,27 @@ methods:
           downgrade, else the rule default), each rule's check running against the shared rule
           context
         type: local
-      - stepNumber: 19
-        description: >-
-          Chained-subproject reference honesty: when this root is a chained subproject of a
-          discoverable parent (detected via the loader's findChainingParent), cross-tree references
-          COVERED by a vendored surface snapshot validate at FULL strength — contract mismatches and
-          boundary violations stay errors, because a snapshot IS the verifiable contract — while
-          each cross-tree reference NO snapshot covers is reported as ONE precise
-          UNVERIFIED_EXTERNAL_REF warning replacing the former blanket downgrade of the
-          reference-resolution family (undefined-type, invalid dependency/subsystem/target-component
-          references, undeclared-dependency-call, unresolved cross-tree refs), marked
-          crossTreeContext (--ci waives it) and naming the unverifiable reference plus the remedy
-          (re-lock the parent so fresh family/sibling snapshots ship, or inspect via
-          list-external-interfaces). The code↔spec conformance family (missing-source-file,
-          unrealized-method, undeclared-dependency and kin) KEEPS the crossTreeContext downgrade —
-          source paths stored relative to the parent root genuinely cannot resolve standalone. One
-          CHAINED_SUBPROJECT_CONTEXT notice is prepended, counting the unverified references — full
-          cross-tree verification runs from the parent root
-        type: local
       - stepNumber: 20
+        description: >-
+          Resolve a chained subproject's verdict through its parent. When this root is a chained
+          subproject (findChainingParent) and still holds reference-resolution findings no surface
+          snapshot covers, walk up to the TOP root collecting the mount chain — never above the
+          bound request's top project root, and not at all when the request's credential is narrowed
+          to the child — then validate the top root scoped to that chain, with the parent's own
+          project rules and doctrine and the same as-complete strictness, and without resolving
+          again. Its findings are renamed into the child's ids (the mount prefix stripped from spec
+          ids and messages) and merged with the child's own findings minus the uncovered references
+          the parent has now judged: a union, deduplicated, with no severity changed — so the child
+          is never judged more leniently than its parent. Snapshot-covered findings and code↔spec
+          conformance findings keep full strength: a chained child's source paths are relative to
+          its own root, so they are judged there like any project's. The result records the root and
+          scope it was resolved through. When no usable parent is reachable (its L0 missing, the
+          mount unknown, or reach denied), every reference keeps its raw verdict — a cross-tree form
+          stays an unwaived CROSS_TREE_REF_UNRESOLVED warning and a typo stays an error — so a child
+          that cannot be judged through its parent pins its family surfaces or fails its gate;
+          nothing is rewritten and no notice is prepended
+        type: local
+      - stepNumber: 21
         description: Return the aggregated validation result
         type: return
         outcome: ValidationResult
@@ -263,11 +274,16 @@ methods:
         targetComponent: validator_surfaces_adapter
         targetMethod: loadSurfaceSnapshots
       - stepNumber: 9
+        description: Load the surface snapshots each chained mount holds, identical to validateSddTree
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: loadMountSurfaceSnapshots
+      - stepNumber: 10
         description: Build the source code model via the source analysis adapter, identical to validateSddTree
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: buildCodeModel
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
           in-scope spec through the writer pipeline via the core adapter, identical to
@@ -275,16 +291,16 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
-      - stepNumber: 11
+      - stepNumber: 12
         description: Treat every spec as complete (suppress the draft severity relaxation), mutating nothing
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Run the same active rule sequence as validateSddTree at full strictness, including
           namespace-hygiene, round-trip, naming, documentation, complexity, and the semantic-edge
           rules
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: Return the as-complete validation result
         type: return
         outcome: as-complete ValidationResult
@@ -325,4 +341,4 @@ lint:
         when Level 3 models call indirection.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-08-11T15:26:13.045Z'
+updatedAt: '2026-09-12T13:06:34.112Z'

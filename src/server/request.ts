@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { runWithProjectRoot } from '../utils/fs.js';
+import { runWithProjectRoot, runWithProjectBinding } from '../utils/fs.js';
 import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
 import { authorize } from './authorization.js';
 import { WEB_SESSION_PREFIX } from './types.js';
@@ -634,7 +634,14 @@ export async function handleMcpRequest(
     return;
   }
 
-  await runWithProjectRoot(binding.rootPath, async () => {
+  // Parent reach: validating a chained child can resolve its verdict through the
+  // parent tree. Only a credential authorized for the TOP project may do that — a
+  // token narrowed to 'proj::kid' binds the child and must not learn what the
+  // parent contains through a validation result.
+  const topRoot = existingProjectRoot(cfg.dataDir, binding.projectId) ?? binding.rootPath;
+  const parentReach = principal.projects.includes('*') || principal.projects.includes(binding.projectId);
+
+  await runWithProjectBinding(binding.rootPath, { topRoot, parentReach }, async () => {
     // The TOP project id from the resolved binding — permission capabilities and
     // audit provenance always anchor here, even when the bound root is a chained
     // subproject's child tree (binding.subproject carries the qualifier).

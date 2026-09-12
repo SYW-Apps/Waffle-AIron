@@ -6,9 +6,17 @@ fields:
   - name: valid
     type: boolean
     description: True when no error-severity issues were found
+    optional: false
   - name: issues
     type: ValidationIssue[]
     description: All findings (errors and warnings) collected during the run
+    optional: false
+  - name: resolvedThrough
+    type: ResolvedThrough
+    description: >-
+      Present when a chained subproject's verdict was resolved through its parent: the root it was
+      validated at and the mount chain it was scoped to.
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-02T00:00:00.000Z'
+updatedAt: '2026-09-12T12:21:18.549Z'

@@ -21,7 +21,7 @@ methods:
   - name: listSnapshots
     narrative:
       - stepNumber: 1
-        description: Read through the index
+        description: Read through the index at the given project root
         type: call
         targetComponent: surface_index
         targetMethod: all
@@ -42,4 +42,4 @@ methods:
     symbol: loadSurfaceSnapshots
 status: complete
 createdAt: '2026-07-10T23:14:40.814Z'
-updatedAt: '2026-07-11T19:14:23.138Z'
+updatedAt: '2026-09-12T11:59:22.418Z'

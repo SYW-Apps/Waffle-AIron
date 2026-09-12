@@ -32,13 +32,6 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: getSnapshot
-  - name: generateChildSnapshots
-    narrative:
-      - stepNumber: 1
-        description: Forward generateChildSnapshots to the surface orchestrator
-        type: call
-        targetComponent: surface_orchestrator
-        targetMethod: generateChildSnapshots
   - name: removeSnapshot
     narrative:
       - stepNumber: 1
@@ -53,6 +46,20 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: listExternalInterfaces
+  - name: listMountSnapshots
+    narrative:
+      - stepNumber: 1
+        description: Forward listMountSnapshots to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listMountSnapshots
+  - name: pinFamilySurfaces
+    narrative:
+      - stepNumber: 1
+        description: Forward pinFamilySurfaces to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: pinFamilySurfaces
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-07-24T17:55:31.278Z'
+updatedAt: '2026-09-12T12:38:11.029Z'

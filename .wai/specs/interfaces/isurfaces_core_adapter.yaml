@@ -42,6 +42,16 @@ methods:
     params:
       - name: parentRoot
         type: string
+  - name: resolveSubprojectForNamespace
+    description: >-
+      Resolve a chained mount's qualified namespace to its project root through the core portal, or
+      null — how the surfaces plane finds the `.wai/surfaces/` a mount holds without walking the
+      filesystem itself.
+    signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
+    returns: string | null
+    params:
+      - name: namespace
+        type: string
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-07-24T17:53:48.508Z'
+updatedAt: '2026-09-12T12:01:14.388Z'

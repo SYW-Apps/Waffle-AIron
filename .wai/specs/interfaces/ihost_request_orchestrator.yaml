@@ -11,13 +11,14 @@ methods:
       access), bind the request-scoped root, then dispatch the sdd_* tool call within that scope. A
       subproject-qualified narrowing binds the mounted CHILD root: every scoped tool — validation
       included — then operates on the subtree, where the chained-subproject reference model applies
-      (covered refs verified against vendored surfaces, uncovered refs reported
-      UNVERIFIED_EXTERNAL_REF). Permission capabilities keep resolving over the TOP project (a
-      subproject qualifier narrows reach, never refines grants). For an ordinary scoped sdd_* tool
-      the tool is classified as a read (sdd_get_*/sdd_validate_*) or a write (every other name — the
-      explicit write prefixes AND any unrecognized or newly added name, failing closed) and the
-      caller's resolved permission for the matching capability (project:read for reads,
-      project:write for writes) over the bound project MUST be yes, resolved through the
+      (refs covered by the child's pinned surfaces are verified against them; uncovered refs are
+      judged through the parent when the credential reaches the top project, and keep their raw
+      verdicts when it is narrowed to the child). Permission capabilities keep resolving over the
+      TOP project (a subproject qualifier narrows reach, never refines grants). For an ordinary
+      scoped sdd_* tool the tool is classified as a read (sdd_get_*/sdd_validate_*) or a write
+      (every other name — the explicit write prefixes AND any unrecognized or newly added name,
+      failing closed) and the caller's resolved permission for the matching capability (project:read
+      for reads, project:write for writes) over the bound project MUST be yes, resolved through the
       authorization specialist; a missing permission is rejected with a clear MCP error before
       dispatch. The execute-primary project-lifecycle MCP tools and the hosted landscape discovery
       MCP tools are dispatched to their orchestrators (already gated) instead of the scoped MCP tool
@@ -38,4 +39,4 @@ methods:
     returns: HttpResponse
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-07-24T18:20:56.326Z'
+updatedAt: '2026-09-12T12:52:50.084Z'

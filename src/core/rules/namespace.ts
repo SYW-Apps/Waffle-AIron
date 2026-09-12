@@ -1,7 +1,6 @@
 import { SurfaceContractEntry, SurfaceSnapshot } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
 import { dryRunSerializeSpecs } from '../specs.js';
-import { checkChildSurfaceFreshness } from '../surfaces.js';
 
 /**
  * True when an unresolved reference points OUTSIDE the current loading root,
@@ -33,14 +32,59 @@ export function isExternalNamespaceRef(ctx: RuleContext, ref: string): boolean {
 export function resolveSurfaceRef(
   ctx: RuleContext,
   ref: string,
+  fromSubsystem?: string,
 ): { snapshot: SurfaceSnapshot; entry: SurfaceContractEntry } | null {
   const local = ref.split('::').filter(seg => seg && seg !== 'super').pop();
   if (!local) return null;
-  for (const snapshot of ctx.surfaceSnapshots) {
-    const entry = snapshot.interfaces.find(e => e.component === local || e.id === local);
-    if (entry) return { snapshot, entry };
+  // For a reference made from inside a chained mount, the snapshots that mount
+  // holds come first, nearest mount first — what the child authored against,
+  // exactly as it resolves from the child's own root — then the bound root's
+  // own. A mount's snapshots are never consulted for a reference made outside it.
+  const mountPools = fromSubsystem
+    ? enclosingMounts(ctx, fromSubsystem)
+      .reverse()
+      .map((ns) => ctx.mountSurfaceSnapshots.find((m) => m.namespace === ns)?.snapshots ?? [])
+    : [];
+  for (const pool of [...mountPools, ctx.surfaceSnapshots]) {
+    for (const snapshot of pool) {
+      const entry = snapshot.interfaces.find(e => e.component === local || e.id === local);
+      if (entry) return { snapshot, entry };
+    }
   }
   return null;
+}
+
+/**
+ * The chained mounts enclosing a subsystem, outermost first: every prefix of
+ * its qualified id that is a subsystem carrying `projectPath`.
+ */
+export function enclosingMounts(ctx: RuleContext, subsystemId: string): string[] {
+  const mounts: string[] = [];
+  let prefix = '';
+  for (const segment of subsystemId.split('::')) {
+    prefix = prefix ? `${prefix}::${segment}` : segment;
+    if (ctx.subsystems.some((s) => s.id === prefix && s.projectPath)) mounts.push(prefix);
+  }
+  return mounts;
+}
+
+/**
+ * True when an unresolved reference made from inside a chained mount was
+ * authored in a cross-tree form that the loader collapsed at THIS root.
+ *
+ * The loader qualifies every reference a mount's spec authors locally into the
+ * mount's own namespace (`kid::x`). Only a `super::` / `::` form climbs out of
+ * it — and at a parent root that climb lands on an id WITHOUT the mount prefix,
+ * typically a bare `x`, which isExternalNamespaceRef cannot tell from a local
+ * typo. So: made from inside mount M and not under `M::` means it was authored
+ * to leave M.
+ *
+ * This only licenses consulting the snapshots M holds. A reference they do not
+ * cover is judged exactly as it was before.
+ */
+export function isCollapsedCrossTreeRef(ctx: RuleContext, ref: string, fromSubsystem: string): boolean {
+  const nearest = enclosingMounts(ctx, fromSubsystem).pop();
+  return nearest !== undefined && ref !== nearest && !ref.startsWith(`${nearest}::`);
 }
 
 // ---------------------------------------------------------------------------
@@ -65,27 +109,6 @@ export const roundtripRule: SddRule = {
   check(ctx) {
     for (const issue of dryRunSerializeSpecs(ctx.isSpecInScope)) {
       ctx.addIssue('error', 'ROUNDTRIP_SERIALIZATION', issue.message, issue.specId);
-    }
-  },
-};
-
-/**
- * Parent-side surface freshness: a chained child holds the parent-surface
- * snapshot it validates against standalone; when the parent's exported
- * contracts change without regenerating, the child is verifying against a
- * stale truth. Computable exactly here — the only context where both sides
- * (the live parent tree and the child's held snapshot) are visible.
- */
-export const surfaceFreshnessRule: SddRule = {
-  name: 'surface-freshness',
-  description:
-    'Every chained child\'s stored parent-surface snapshot must match the parent\'s CURRENT exported contracts — a drifted snapshot means the child validates standalone against a stale truth. Regenerate with `wairon surface generate-children`.',
-  codes: [
-    { code: 'SURFACE_STALE', defaultSeverity: 'warning', summary: 'A chained child holds a parent surface snapshot whose contracts no longer match the current tree' },
-  ],
-  check(ctx) {
-    for (const issue of checkChildSurfaceFreshness()) {
-      ctx.addIssue('warning', 'SURFACE_STALE', issue.message, issue.specId);
     }
   },
 };

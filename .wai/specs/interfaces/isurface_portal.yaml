@@ -49,13 +49,6 @@ methods:
     params:
       - name: projectName
         type: string
-  - name: generateChildSnapshots
-    description: >-
-      Write the family-scoped parent surface AND each sibling subsystem's published surface into
-      every chained child project's .wai/surfaces/, so children can validate and consume cross-tree
-      references standalone against contract-grade snapshots.
-    signature: 'generateChildSnapshots(): string[]'
-    returns: string[]
   - name: removeSnapshot
     description: Remove a stored surface snapshot (file and projection).
     signature: 'removeSnapshot(projectName: string): boolean'
@@ -69,6 +62,22 @@ methods:
       catalog entries with origin, provenance, and freshness. Pure 1:1 forward to the orchestrator.
     signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
     returns: ExternalSurfaceEntry[]
+  - name: listMountSnapshots
+    description: >-
+      The surface snapshots each chained mount holds in its own .wai/surfaces/, keyed by the mount's
+      namespace. Pure 1:1 forward.
+    signature: 'listMountSnapshots(mounts: string[]): MountSurfaceSnapshots[]'
+    returns: MountSurfaceSnapshots[]
+    params:
+      - name: mounts
+        type: string[]
+  - name: pinFamilySurfaces
+    description: >-
+      Pin the chaining parent's family and sibling surfaces into the chained child's own
+      .wai/surfaces/, or null at a top root. Pure 1:1 forward.
+    signature: 'pinFamilySurfaces(): string[] | null'
+    returns: string[] | null
+    params: []
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-07-24T17:53:59.538Z'
+updatedAt: '2026-09-12T12:38:09.905Z'

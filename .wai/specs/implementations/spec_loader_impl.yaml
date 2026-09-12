@@ -140,8 +140,15 @@ methods:
         targetComponent: spec_registry
         targetMethod: invalidateCache
     symbol: invalidateSpecCache
+  - name: resolveSubprojectForNamespace
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: resolveSubprojectForNamespace
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-08-12T18:07:58.216Z'
+updatedAt: '2026-09-12T12:01:04.736Z'

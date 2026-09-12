@@ -107,19 +107,22 @@ methods:
   - name: externalizeSubsystem
     description: >-
       Externalize an internal subsystem into a standalone subproject: provision a child wairon
-      project at projectPath, move the subsystem's spec subtree (L1-L4 + types) there, reduce the
-      parent entry to a projectPath mount, and rewrite cross-subsystem references to the new
-      namespaced ids. Throws if the subsystem is missing or already external, or if projectPath does
-      not resolve strictly within the owning project root (absolute or ../-escaping paths are
-      rejected). Source code is not moved.
+      project at projectPath, move the subsystem's spec subtree (L1-L4 + types) there, re-express
+      each moved implementation's file paths (sourcePath, simPath) relative to the child root — the
+      same files, so code left outside the child now reads as escaping it — reduce the parent entry
+      to a projectPath mount, and rewrite cross-subsystem references to the new namespaced ids.
+      Throws if the subsystem is missing or already external, or if projectPath does not resolve
+      strictly within the owning project root (absolute or ../-escaping paths are rejected). Source
+      code is not moved.
     signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
     returns: void
   - name: internalizeSubsystem
     description: >-
       Internalize an external subsystem back into the parent tree: move the subproject's spec
-      subtree back under the parent subsystem, drop projectPath, delete the child .wai project, and
-      rewrite references back to bare ids. Throws if the subsystem is not external or its subproject
-      is not a single flat subsystem.
+      subtree back under the parent subsystem, re-express each moved implementation's file paths
+      (sourcePath, simPath) relative to the parent root, drop projectPath, delete the child .wai
+      project, and rewrite references back to bare ids. Throws if the subsystem is not external or
+      its subproject is not a single flat subsystem.
     signature: 'internalizeSubsystem(subsystemId: string): void'
     returns: void
   - name: loadTypeSpecs
@@ -182,6 +185,16 @@ methods:
     signature: 'readLockState(): LockStatus'
     returns: LockStatus
     params: []
+  - name: resolveSubprojectForNamespace
+    description: >-
+      Resolve a chained mount's qualified namespace to its project root (containment-checked against
+      the bound root), or null when the namespace names no mount. Read-only lookup through the spec
+      loader.
+    signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
+    returns: string | null
+    params:
+      - name: namespace
+        type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-11T23:33:50.961Z'
+updatedAt: '2026-09-12T13:06:44.233Z'

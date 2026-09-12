@@ -272,6 +272,13 @@ methods:
       - stepNumber: 1
         description: Forward approver resolution to the approver identity module (re-export)
         type: local
+  - name: resolveSubprojectForNamespace
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's mount resolution
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveSubprojectForNamespace
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-12T00:21:32.101Z'
+updatedAt: '2026-09-12T12:01:12.120Z'
