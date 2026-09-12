@@ -174,3 +174,51 @@ describe('a chained child judged from its own root vs its parent', () => {
     expect(fromChild.issues.filter((i) => i.specId === 'k-adapter' && i.code !== 'UNUSED_COMPONENT')).toEqual([]);
   });
 });
+
+describe('step 1a — a mount keeps its own loader issues when its parent validates it', () => {
+  // Union with the parent's verdict is only never-quieter if the parent's run
+  // actually carries the child's own findings. A malformed spec inside a mount
+  // was reported under a bare FILE STEM — `.index`, in the nested layout — which
+  // no scope filter can place, so validating the parent scoped to the mount
+  // silently dropped the child's schema error.
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  function withBrokenChildSpec(): { root: string; kidDir: string } {
+    const fam = family();
+    const dir = path.join(fam.kidDir, '.wai', 'specs', 'k-core', 'broken');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.index.yaml'), [
+      'schemaVersion: 1.0.0', 'id: broken', 'name: Broken', 'description: d',
+      'subsystem: k-core', 'componentType: NotAStereotype', 'owns: []', 'dependsOn: []',
+      'status: complete', `createdAt: '${now}'`, `updatedAt: '${now}'`, '',
+    ].join('\n'));
+    invalidateSpecCache();
+    return fam;
+  }
+
+  it('from the child root, the issue names the spec — not the `.index` file it lives in', () => {
+    const fam = withBrokenChildSpec();
+    root = fam.root;
+
+    const schema = verdict(fam.kidDir).issues.filter((i) => i.code === 'SCHEMA_VALIDATION_ERROR');
+
+    expect(schema.map((i) => i.specId)).toEqual(['broken']);
+  });
+
+  it('from the parent root scoped to the mount, the schema error survives the scope', () => {
+    const fam = withBrokenChildSpec();
+    root = fam.root;
+
+    const scoped = verdict(fam.root, { scopeSubsystem: 'kid', recursive: true });
+
+    expect(scoped.issues.filter((i) => i.code === 'SCHEMA_VALIDATION_ERROR').map((i) => i.specId)).toEqual(['kid::broken']);
+    expect(scoped.valid).toBe(false);
+  });
+});
