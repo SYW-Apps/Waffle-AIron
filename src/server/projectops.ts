@@ -45,8 +45,9 @@ export function exportProjectTree(
   project: string,
   subproject?: string,
   includeDerived?: boolean,
+  allowPartial?: boolean,
 ): TreeExportResult {
-  return admin.exportProjectTree(cfg, credential, project, subproject, includeDerived);
+  return admin.exportProjectTree(cfg, credential, project, subproject, includeDerived, allowPartial);
 }
 
 export function importProjectTree(

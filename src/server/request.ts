@@ -595,7 +595,14 @@ export async function dispatchProjectLifecycleTool(
         // JSON-RPC result as base64 and is therefore bounded by the same body
         // cap as every other data-plane response — a tree too large for that is
         // an honest failure pointing at the raw-upload route, never a truncation.
-        const exported = projectops.exportProjectTree(cfg, credential, projectId, subproject);
+        const exported = projectops.exportProjectTree(
+          cfg,
+          credential,
+          projectId,
+          subproject,
+          undefined,
+          args.allowPartial === true,
+        );
         value = {
           projectName: exported.projectName,
           roots: exported.roots,
@@ -603,6 +610,7 @@ export async function dispatchProjectLifecycleTool(
           stateId: exported.stateId,
           suggestedFileName: exported.suggestedFileName,
           archiveBase64: Buffer.from(exported.archive).toString('base64'),
+          skipped: exported.skipped,
         };
         break;
       }

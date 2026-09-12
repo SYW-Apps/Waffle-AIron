@@ -1792,9 +1792,11 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         message: z.string().optional().describe('Commit message; defaults to a timestamped wairon message'),
       },
     }, hostedStub);
-    reg<Record<string, never>>(server, 'sdd_host_export_tree', {
-      description: 'Hosted spec-tree transfer: pack the BOUND project\'s WHOLE spec tree — its own .wai plus every chained subproject — into a .waitree archive, returned as base64 with its roots, file count and state id. The migration counterpart of an import: use it to take a hosted project local, or to move it to another instance. Requires project:read over the project. Bounded by the data-plane body cap; a very large tree exports through the web download route instead.',
-      inputSchema: {},
+    reg<{ allowPartial?: boolean }>(server, 'sdd_host_export_tree', {
+      description: 'Hosted spec-tree transfer: pack the BOUND project\'s WHOLE spec tree — its own .wai plus every chained subproject — into a .waitree archive, returned as base64 with its roots, file count and state id. The migration counterpart of an import: use it to take a hosted project local, or to move it to another instance. Requires project:read over the project. Bounded by the data-plane body cap; a very large tree exports through the web download route instead. Refuses when a chained mount cannot be packed (escaping, missing, cyclic, too deep, or holding no .wai), naming every one and why, unless allowPartial is set — then the archive is built anyway and the result lists what was skipped.',
+      inputSchema: {
+        allowPartial: z.boolean().optional().describe('Build the archive even when some chained mounts cannot be packed, listing them as skipped; default false (refuse and name them)'),
+      },
     }, hostedStub);
     reg<{ archiveBase64: string; replaceExisting?: boolean }>(server, 'sdd_host_import_tree', {
       description: 'Hosted spec-tree transfer: REPLACE the BOUND project\'s spec tree from a base64 .waitree archive. Requires project:admin over the project (strictly above project:write — this replaces the whole design, not one spec). Refuses an occupied destination unless replaceExisting is set, always refuses executable entries (rule/code packs install only through the trusted filesystem), and moves the previous tree aside to a backup whose path is returned.',

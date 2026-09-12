@@ -45,6 +45,8 @@ export interface RemoteTransferOptions {
   createUnitId?: string;
   replaceExisting?: boolean;
   includeDerived?: boolean;
+  /** Build the archive even when some chained mounts cannot be packed. */
+  allowPartial?: boolean;
   archivePath?: string;
   destDir?: string;
 }
@@ -62,6 +64,8 @@ export interface RemoteTransferOutcome {
   archivePath?: string;
   /** Pull only: where the tree landed — a pull may target another directory. */
   destDir?: string;
+  /** Mounts the export left out — present only when allowPartial let a partial export through. */
+  skipped?: { mount: string; projectPath: string; reason: string }[];
 }
 
 // ── cli_remote_adapter: the HTTP edge onto a remote data plane ──────────────
@@ -141,15 +145,16 @@ async function callTool(target: RemoteTarget, name: string, args: Record<string,
 }
 
 /** cli_remote_adapter.exportRemoteTree — sdd_host_export_tree, decoded. */
-export async function exportRemoteTree(target: RemoteTarget): Promise<TreeExportResult> {
+export async function exportRemoteTree(target: RemoteTarget, allowPartial?: boolean): Promise<TreeExportResult> {
   // Step 1: call the hosted export tool and decode the base64 archive.
-  const payload = (await callTool(target, 'sdd_host_export_tree', {})) as {
+  const payload = (await callTool(target, 'sdd_host_export_tree', { allowPartial: allowPartial === true })) as {
     projectName?: string;
     roots?: string[];
     fileCount?: number;
     stateId?: string;
     suggestedFileName?: string;
     archiveBase64?: string;
+    skipped?: { mount: string; projectPath: string; reason: string }[];
   };
   if (!payload || typeof payload.archiveBase64 !== 'string' || !payload.archiveBase64) {
     throw new WaironError(`The hosted export returned no archive for project "${target.projectId}".`);
@@ -160,6 +165,7 @@ export async function exportRemoteTree(target: RemoteTarget): Promise<TreeExport
     projectName: payload.projectName ?? target.projectId,
     roots: payload.roots ?? ['.'],
     fileCount: payload.fileCount ?? 0,
+    skipped: (payload.skipped ?? []) as TreeExportResult['skipped'],
   };
   if (payload.stateId) result.stateId = payload.stateId;
   return result;
@@ -265,7 +271,7 @@ export async function pushTree(
 ): Promise<RemoteTransferOutcome> {
   // Step 1: export the local tree FIRST — nothing is created or changed on the
   // instance until there is something complete to send.
-  const exported = exportSpecTree(options.includeDerived);
+  const exported = exportSpecTree(options.includeDerived, options.allowPartial);
   // Steps 2–3: optionally write the archive to a file as well.
   const archivePath = writeArchiveIfAsked(exported.archive, options.archivePath, exported.suggestedFileName);
   // Steps 4–5: optionally initialize the destination project first.
@@ -289,6 +295,7 @@ export async function pushTree(
   };
   if (imported.backupPath) result.backupPath = imported.backupPath;
   if (archivePath) result.archivePath = archivePath;
+  if (exported.skipped.length > 0) result.skipped = exported.skipped;
   return result;
 }
 
@@ -299,7 +306,7 @@ export async function pullTree(
 ): Promise<RemoteTransferOutcome> {
   // Step 1: export the hosted tree FIRST — the local root is not touched until
   // a complete archive is in hand.
-  const exported = await exportRemoteTree(target);
+  const exported = await exportRemoteTree(target, options.allowPartial);
   // Steps 2–3: optionally write the archive to a file as well.
   const archivePath = writeArchiveIfAsked(exported.archive, options.archivePath, exported.suggestedFileName);
   // Step 4 (land): import it locally. The executable-entry guard is deliberately
@@ -321,6 +328,7 @@ export async function pullTree(
   };
   if (imported.backupPath) result.backupPath = imported.backupPath;
   if (archivePath) result.archivePath = archivePath;
+  if (exported.skipped.length > 0) result.skipped = exported.skipped;
   return result;
 }
 
@@ -471,6 +479,7 @@ export interface RemoteCommandOptions {
   unit?: string;
   force?: boolean;
   includeDerived?: boolean;
+  allowPartial?: boolean;
   archive?: string;
   dir?: string;
 }
@@ -511,6 +520,7 @@ export async function runRemote(action: string, options: RemoteCommandOptions = 
       const transfer: RemoteTransferOptions = {
         replaceExisting: options.force === true,
         includeDerived: options.includeDerived === true,
+        allowPartial: options.allowPartial === true,
       };
       if (options.unit) transfer.createUnitId = options.unit;
       if (options.archive) transfer.archivePath = options.archive;
@@ -519,7 +529,10 @@ export async function runRemote(action: string, options: RemoteCommandOptions = 
       return;
     }
     case 'pull': {
-      const transfer: RemoteTransferOptions = { replaceExisting: options.force === true };
+      const transfer: RemoteTransferOptions = {
+        replaceExisting: options.force === true,
+        allowPartial: options.allowPartial === true,
+      };
       if (options.archive) transfer.archivePath = options.archive;
       if (options.dir) transfer.destDir = path.resolve(options.dir);
       // Step 5: migrate the hosted tree down.
@@ -674,5 +687,11 @@ function report(outcome: RemoteTransferOutcome): void {
   }
   if (outcome.backupPath) {
     logger.info(`The replaced tree was backed up to ${chalk.cyan(outcome.backupPath)} — restore it by moving it back.`);
+  }
+  if (outcome.skipped && outcome.skipped.length > 0) {
+    logger.warn(
+      `Skipped ${outcome.skipped.length} mount(s) — allowPartial let this through: ` +
+        outcome.skipped.map((s) => `${s.mount} (${s.reason})`).join(', '),
+    );
   }
 }
