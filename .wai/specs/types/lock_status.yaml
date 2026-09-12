@@ -3,10 +3,10 @@ id: lock_status
 name: LockStatus
 description: >-
   The resolved verdict on a project's lock, plus the evidence it was decided from. Exists so every
-  surface answers "is this locked?" identically: the promote gate, the hosted project config view,
-  `wairon status`, and `wairon doctor`. Before it, promotion compared state identities while the
-  config view answered from record existence alone — so a stale lock reported as locked, claiming a
-  freeze that no longer held.
+  surface answers "is this locked?" identically: the hosted project config view, `wairon status`,
+  and `wairon doctor`. Before it, the gated re-check compared state identities while the config view
+  answered from record existence alone — so a stale lock reported as locked, claiming a freeze that
+  no longer held.
 fields:
   - name: state
     type: string
@@ -29,4 +29,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-30T15:58:52.007Z'
-updatedAt: '2026-07-30T15:58:52.105Z'
+updatedAt: '2026-09-11T23:39:54.997Z'

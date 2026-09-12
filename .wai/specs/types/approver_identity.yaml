@@ -1,0 +1,27 @@
+kind: value-object
+id: approver_identity
+name: ApproverIdentity
+description: >-
+  Who approved a lock, and HOW that identity was established — because the two are different claims.
+  A `hosted` identity was authenticated by the instance that issued the caller's credential; `git`
+  and `os` are self-declared, read from the machine's own config; `legacy` is a record written
+  before this shape existed, carrying an opaque string. Recording the source keeps the record honest
+  about how much it proves instead of leaving a bare name to imply more than it can. The actual
+  proof is the commit that introduces the lock record — signed commits or a protected branch
+  establish it; no field inside the file ever can.
+fields:
+  - name: id
+    type: string
+    description: Git author line, hosted subject id, or user@hostname — per `source`.
+    optional: false
+  - name: name
+    type: string
+    description: Display name when the source carries one separately from the id.
+    optional: true
+  - name: source
+    type: string
+    description: '"git" | "hosted" | "os" | "legacy" — how the identity was established.'
+    optional: false
+methods: []
+createdAt: '2026-09-12T00:19:23.550Z'
+updatedAt: '2026-09-12T00:19:23.567Z'

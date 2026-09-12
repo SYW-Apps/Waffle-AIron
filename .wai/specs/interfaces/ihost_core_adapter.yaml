@@ -23,10 +23,6 @@ methods:
     description: Persist a lock record.
     signature: 'writeLockRecord(record: LockRecord): void'
     returns: void
-  - name: promoteAllComplete
-    description: Promote every spec to status complete.
-    signature: 'promoteAllComplete(): void'
-    returns: void
   - name: renderDiagram
     description: Render the bound project's spec tree into a diagram artifact string.
     signature: 'renderDiagram(format: string): string'
@@ -124,14 +120,14 @@ methods:
   - name: computeGateStateId
     description: >-
       Compute the current GATE StateId (spec tree + governing doctrine) — what the hosted lock is
-      scoped to and what promotion re-checks.
+      scoped to.
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
   - name: readLockState
     description: >-
       Resolve the bound project's lock verdict (unlocked | locked | stale) through the core portal —
-      the shared authority the promote gate and every reporting surface answer from.
+      the shared authority every reporting surface answers from.
     signature: 'readLockState(): LockStatus'
     returns: LockStatus
     params: []
@@ -157,6 +153,29 @@ methods:
         type: bytes
       - name: options
         type: tree_import_options
+  - name: currentChildPins
+    description: >-
+      The approved StateId of every chained child mounted under this root, keyed by mount id — what
+      a parent approval pins. A child with no approval of its own contributes no pin.
+    signature: 'currentChildPins(mounts: SubsystemSpec[]): Record<string, string>'
+    returns: Record<string, string>
+    params:
+      - name: mounts
+        type: SubsystemSpec[]
+  - name: captureApprovedSpecs
+    description: >-
+      Capture the CURRENT spec tree as approved: one content digest per spec file, keyed by path
+      relative to the project root. A chained child's own specs are excluded. Records a decision;
+      the caller is responsible for having gated it, and persists it on the lock record.
+    signature: 'captureApprovedSpecs(root?: string, scope?: ApprovalScope): Record<string, string>'
+    returns: Record<string, string>
+    params:
+      - name: root
+        type: string
+        optional: true
+      - name: scope
+        type: ApprovalScope
+        optional: true
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-08-12T17:27:23.850Z'
+updatedAt: '2026-09-12T00:19:47.018Z'

@@ -25,7 +25,7 @@ to the artifacts the host AI tool consumes:
 |-----------|----------------|
 | `cli/` | Commander entrypoint; wires commands |
 | `commands/` | Command implementations (init, validate, status, generate, lock, doctor, diagram, rules, packs, list, show, domains, skills, mcp, update, aliases, and the hosting commands `serve` / `host`) |
-| `core/` | The engine: `specs` (load/scan the tree), `validation` (conformance + `validateAsComplete`), `agent_resolver` (spec → agents), `domains` (resolve + free-standing CRUD), `skills` (export), `statehash` (deterministic StateId), `lockfile` (commit-scoped lock record), `provision` (bootstrap a project + bulk promote), `context`, `detection`, `templates` |
+| `core/` | The engine: `specs` (load/scan the tree), `validation` (conformance + `validateAsComplete`), `agent_resolver` (spec → agents), `domains` (resolve + free-standing CRUD), `skills` (export), `statehash` (deterministic StateId), `lockfile` (commit-scoped lock record), `provision` (bootstrap a project), `approval` (the per-spec approval carried on the lock record), `approver` (who to record as having approved), `context`, `detection`, `templates` |
 | `config/` | `loader` (paths, request-scoped project root, project config, topology config, derived registry), defaults |
 | `models/` | Zod schemas: `specs`, `agent`, `domain`/topology, `project`, `template`, `registry` |
 | `exporters/` | Render an agent into a tool-specific file (Claude, Gemini, custom) |

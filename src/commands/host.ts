@@ -34,10 +34,10 @@ import type {
 // CLI Host Client Adapter + host command runners (sdd_cli → sdd_host)
 //
 // The wairon CLI as an in-process client of the hosting control plane: `wairon
-// serve` boots the server; `wairon host project|key …`, `wairon host lock`, and
-// `wairon host promote` drive the same admin orchestrator functions the HTTP
-// admin API uses. The master credential is read from WAIRON_ADMIN_TOKEN, so an
-// operator on the box (or via `docker exec`) administers without extra flags.
+// serve` boots the server; `wairon host project|key …` and `wairon host lock`
+// drive the same admin orchestrator functions the HTTP admin API uses. The
+// master credential is read from WAIRON_ADMIN_TOKEN, so an operator on the box
+// (or via `docker exec`) administers without extra flags.
 // ---------------------------------------------------------------------------
 
 export interface HostOptions {
@@ -642,7 +642,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
   }
 }
 
-// ── wairon host lock / promote ────────────────────────────────────────────────
+// ── wairon host lock ────────────────────────────────────────────────────────
 
 export async function runHostLock(options: HostOptions = {}): Promise<void> {
   const cfg = resolveHostConfig(options);

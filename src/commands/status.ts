@@ -11,7 +11,8 @@ import {
   getLoaderIssues,
   scanAllSpecs,
 } from '../core/specs.js';
-import { readBaseline, diffAgainstBaseline, diffSize, movedChildren } from '../core/baseline.js';
+import { approvalRecord, diffAgainstApproval, diffSize, movedChildren } from '../core/approval.js';
+import { describeApprover } from '../core/lockfile.js';
 
 export interface StatusOptions {
   subsystem?: string;
@@ -180,11 +181,11 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
 
   // The same approval verdict the MCP report carries — the CLI is where a
   // human actually looks, so it must not be the surface that stays quiet.
-  const lock = lockLine().trim();
-  if (lock) {
+  const lock = lockReport();
+  if (lock.text.trim()) {
     logger.blank();
-    if (lock.includes('changed since approval')) logger.warn(lock);
-    else logger.info(lock);
+    if (lock.drifted) logger.warn(lock.text.trim());
+    else logger.info(lock.text.trim());
   }
 
   logger.blank();
@@ -196,7 +197,7 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
  * This used to report the lock's StateId verdict, which could only ever say
  * `STALE` — a banner that fired on a tree validating 0 errors / 0 warnings,
  * named nothing to look at, and asked for work that produced no new
- * information. With the approved tree stored as a baseline, the same line can
+ * information. With a digest per spec in the lock record, the same line can
  * name the specs that actually moved, which is the only form a human can act
  * on.
  *
@@ -204,9 +205,17 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
  * normal state of a tree still being designed, not news.
  */
 function lockLine(): string {
+  return lockReport().text;
+}
+
+/** The same verdict, plus whether it IS drift — so the caller picks its severity
+ *  from the fact rather than by matching this function's own wording. */
+function lockReport(): { text: string; drifted: boolean } {
+  const quiet = { text: '', drifted: false };
   try {
-    const baseline = readBaseline();
-    if (!baseline) return '';
+    const approval = approvalRecord();
+    if (!approval) return quiet;
+    const by = describeApprover(approval.lockedBy);
 
     // A moved chained child is a change the parent should review even when none
     // of the parent's OWN specs shifted — the trees are approved separately, and
@@ -216,9 +225,22 @@ function lockLine(): string {
       ? `\n${moved.length} chained child project(s) moved since approval: ${moved.map((m) => m.id).join(', ')}.`
       : '';
 
-    const diff = diffAgainstBaseline();
-    if (!diff || diffSize(diff) === 0) {
-      return `\nApproved: ${baseline.approvedAt} by ${baseline.approvedBy} — no spec has changed since.${childNote}\n`;
+    const diff = diffAgainstApproval();
+    if (!diff) {
+      // Locked, but by a record written before per-spec approval existed: it
+      // proves the tree validated, not which specs still match it. Say exactly
+      // that rather than implying either answer.
+      return {
+        text: `\nApproved: ${approval.lockedAt} by ${by} — this lock predates per-spec approval, so `
+          + `drift is only visible at whole-tree level. Re-lock to record it.${childNote}\n`,
+        drifted: moved.length > 0,
+      };
+    }
+    if (diffSize(diff) === 0) {
+      return {
+        text: `\nApproved: ${approval.lockedAt} by ${by} — no spec has changed since.${childNote}\n`,
+        drifted: moved.length > 0,
+      };
     }
 
     const parts: string[] = [];
@@ -231,14 +253,25 @@ function lockLine(): string {
     const named = [...diff.changed, ...diff.added, ...diff.removed].slice(0, 5);
     const rest = diffSize(diff) - named.length;
 
-    return `\n${diffSize(diff)} spec(s) changed since approval (${parts.join(', ')}) `
-      + `— approved ${baseline.approvedAt} by ${baseline.approvedBy}:\n`
-      + named.map((p) => `  ${p}`).join('\n')
-      + (rest > 0 ? `\n  … and ${rest} more` : '')
-      + childNote
-      + '\n';
+    // One category needs no breakdown: "1 spec changed since approval (1
+    // changed)" says the same thing twice. The parenthetical earns its place
+    // only when the diff actually mixes kinds.
+    const n = diffSize(diff);
+    const noun = `${n} spec${n === 1 ? '' : 's'}`;
+    const headline = parts.length === 1
+      ? `${noun} ${parts[0].slice(String(diffSize(diff)).length + 1)} since approval`
+      : `${noun} changed since approval (${parts.join(', ')})`;
+
+    return {
+      text: `\n${headline} — approved ${approval.lockedAt} by ${by}:\n`
+        + named.map((p) => `  ${p}`).join('\n')
+        + (rest > 0 ? `\n  … and ${rest} more` : '')
+        + childNote
+        + '\n',
+      drifted: true,
+    };
   } catch {
-    return ''; // never let a report line break the report
+    return quiet; // never let a report line break the report
   }
 }
 

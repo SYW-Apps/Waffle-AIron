@@ -179,7 +179,7 @@ const PROJECT_OPS_TOOLS = new Set<string>([
 
 /** The two spec-tree transfer tools. Dispatched like the project-ops tools, but
  *  TREE-scoped rather than record-level: they act on the BOUND tree and receive
- *  the binding's subproject qualifier, exactly as lock/promote do, so a
+ *  the binding's subproject qualifier, exactly as lock does, so a
  *  credential narrowed to a chained child transfers precisely that child. That
  *  is why they are deliberately absent from PROJECT_RECORD_TOOLS. */
 const TREE_TRANSFER_TOOLS = new Set<string>([
@@ -647,7 +647,7 @@ export async function handleMcpRequest(
     // through them — the qualifier would narrow nothing. Refuse BEFORE any
     // dispatch (and before the ordinary permission gate) as an isError tool result
     // (HTTP still 200), flowing through the SAME best-effort audit path every other
-    // outcome uses. The TREE-scoped lock/promote are NOT refused: they are confined
+    // outcome uses. The TREE-scoped lock is NOT refused: it is confined
     // by forwarding the qualifier below.
     const confinementError = subprojectConfinementError(projectId, subproject, body);
     if (confinementError !== undefined) {
@@ -659,7 +659,7 @@ export async function handleMcpRequest(
     // Steps 12–24: the five execute-primary project-lifecycle tools and the hosted
     // landscape discovery tools are handled here, bypassing the scoped sdd_* MCP
     // server. The record-level ones receive the TOP project id; the TREE-scoped
-    // lock/promote additionally receive the bound qualifier. The response still
+    // lock additionally receives the bound qualifier. The response still
     // flows through the SAME best-effort audit path (auditToolCall) the scoped
     // dispatch uses.
     const dispatchedResponse = await dispatchProjectLifecycleTool(cfg, cred, projectId, body, subproject);

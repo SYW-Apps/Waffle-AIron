@@ -1426,7 +1426,7 @@ export class SpecWorkspace {
     // A flat external subsystem carries projectPath ONLY in its parent mount.
     // getSubsystemPath routes a bare id whose realization lives in a subproject to
     // the child file; never write projectPath there or the child becomes a mount
-    // that recurses into itself (e.g. lock's promote re-saving every subsystem).
+    // that recurses into itself (e.g. a bulk re-save touching every subsystem).
     if (!spec.id.includes('::') && specToWrite.projectPath && !isWithin(this.paths.specsDir(), p)) {
       specToWrite = { ...specToWrite, projectPath: undefined };
     }
@@ -2843,17 +2843,17 @@ export function resolveChainingParent(): ChainingParentRef | null {
  * (icore_orchestrator/icore_portal.computeGateStateId): load the governing
  * extension packs, then digest the spec tree together with that doctrine.
  *
- * This is the identity `wairon lock` records and promotion re-checks, so a
+ * This is the identity `wairon lock` records and every staleness check re-computes, so a
  * doctrine change invalidates a lock by state mismatch exactly as a spec edit
  * does — nobody has to remember to invalidate it. Loading the doctrine here (not
  * inside the hash specialist) keeps that specialist pure and makes every caller
- * use the same doctrine source, so a lock and its promote-time re-check can never
- * disagree about which rule set applied.
+ * use the same doctrine source, so a lock and the re-check that later judges it
+ * stale can never disagree about which rule set applied.
  */
 export function computeGateStateId(): StateId {
   // The gate is the packs AND the project's own governing configuration: which
   // profile applies, and how it tuned the rules. A lock taken under one and
-  // promoted under another was never validated by the gate it claims to have
+  // honoured under another was never validated by the gate it claims to have
   // passed. Config is read here and passed in, so the hash itself stays pure.
   let gate: GateConfig = {};
   try {
@@ -2878,8 +2878,8 @@ export interface LockStatus {
  * Resolve the project's lock into one of three honest states, comparing the
  * recorded gate identity against the current one.
  *
- * The ONE authority for the question "is this project locked?". Before this,
- * `promote` compared StateIds while the project config view answered from the mere
+ * The ONE authority for the question "is this project locked?". Before this, the
+ * promote gate compared StateIds while the project config view answered from the mere
  * EXISTENCE of a record — so a project whose specs changed after locking still
  * reported itself locked, and the freeze it claimed did not exist. Two answers to
  * one question is how a time-of-check gap gets reintroduced after being closed, so

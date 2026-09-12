@@ -23,7 +23,7 @@ import type {
 // first-class data-plane credential that resolves to a Principal exactly like a
 // bearer token).
 //
-// create/lock/promote/destroy are THIN forwards to the admin orchestrator,
+// create/lock/destroy are THIN forwards to the admin orchestrator,
 // passing the session id AS the credential. Those admin functions authorize
 // through the permission resolver (project:create / project:write /
 // project:admin over the org tree) and re-validate, so a signed-in human manages

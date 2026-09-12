@@ -23,6 +23,12 @@ import { hostCore } from '../../src/server/adapters.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
 import { seedChainedMount } from './helpers.js';
 import type { HostConfig } from '../../src/server/types.js';
+import type { ApproverIdentity } from '../../src/core/lockfile.js';
+
+/** A hosted approver, the way the lifecycle orchestrator resolves one from an
+ *  authenticated principal. */
+const TEST_APPROVER: ApproverIdentity = { id: 'u-test', name: 'Tester', source: 'hosted' };
+
 
 // ---------------------------------------------------------------------------
 // Integration test for git-backed projects (sdd_git). Exercises the real git
@@ -231,7 +237,7 @@ describe('git-backed projects (sdd_git)', () => {
 
     const headBefore = git(['rev-parse', 'wairon/work'], root);
 
-    const rec = admin.executeApprovedLock(cfg, 'demo', 'billing');
+    const rec = admin.executeApprovedLock(cfg, 'demo', TEST_APPROVER, 'billing');
 
     // The child really froze …
     expect(rec.status).toBe('ready');
@@ -251,7 +257,7 @@ describe('git-backed projects (sdd_git)', () => {
 
     // The repository was live and capable all along: an UNQUALIFIED lock of the
     // same project commits and pushes exactly as before (no regression).
-    const parentRec = admin.executeApprovedLock(cfg, 'demo');
+    const parentRec = admin.executeApprovedLock(cfg, 'demo', TEST_APPROVER);
     expect(parentRec.commitSha).toMatch(/^[0-9a-f]{40}$/);
     expect(git(['rev-parse', 'wairon/work'], root)).not.toBe(headBefore);
     expect(git(['branch'], remote)).toContain('wairon/work');

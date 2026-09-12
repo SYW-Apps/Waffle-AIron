@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -70,25 +70,18 @@ function snapshotDir(dir: string): Map<string, string> {
 
 describe('lock records an approval; status reports what moved since (real CLI)', () => {
   let root: string;
-  let store: string;
-
-  beforeEach(() => {
-    store = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-astore-'));
-  });
 
   afterEach(() => {
     setProjectRoot(null);
     invalidateSpecCache();
-    for (const d of [root, store]) {
-      try { if (d) fs.rmSync(d, { recursive: true, force: true }); } catch { /* win locks */ }
-    }
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
   });
 
   const run = (cwd: string, ...args: string[]) =>
     execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, ...args], {
       cwd,
       timeout: 180_000,
-      env: { ...process.env, WAIRON_BASELINE_DIR: store },
+      env: process.env,
     });
 
   it('says nothing about approval before there is one', async () => {
@@ -100,7 +93,7 @@ describe('lock records an approval; status reports what moved since (real CLI)',
     expect(stdout).not.toContain('STALE');
   }, 180_000);
 
-  it('captures the approval OUTSIDE the project — every spec byte-identical', async () => {
+  it('captures the approval in ONE committed record — every spec byte-identical', async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approve-'));
     buildProject(root);
 
@@ -109,9 +102,11 @@ describe('lock records an approval; status reports what moved since (real CLI)',
 
     await run(root, 'lock', '--yes');
 
-    // The approved tree landed in the baseline store, not the repo.
-    expect(fs.readdirSync(store)).toHaveLength(1);
-    expect(snapshotDir(root).has('.wai/baseline.json')).toBe(false);
+    // The approval is IN the repo — that is what lets a teammate, a fresh clone
+    // and CI see the same decision — but it is one file, not a rewritten tree.
+    const lock = JSON.parse(fs.readFileSync(path.join(root, '.wai', 'lock.json'), 'utf8'));
+    expect(Object.keys(lock.specs).length).toBeGreaterThan(0);
+    expect(lock.lockedBy.source).toBeTruthy();
 
     // The spec tree is byte-identical: approving is a decision, not an edit.
     const after = snapshotDir(specsDir);
@@ -161,8 +156,10 @@ describe('lock records an approval; status reports what moved since (real CLI)',
 
     const { stdout, stderr } = await run(root, 'status');
     const out = `${stdout}\n${stderr}`;
-    expect(out).toMatch(/1 spec\(s\) changed since approval/);
-    expect(out).toMatch(/1 changed/);
+    // Singular, and with no redundant "(1 changed)" breakdown — one category
+    // says it once.
+    expect(out).toMatch(/1 spec changed since approval/);
+    expect(out).not.toMatch(/\(1 changed\)/);
     expect(out).toMatch(/worker/);
     // The old banner is gone for good.
     expect(out).not.toContain('STALE');

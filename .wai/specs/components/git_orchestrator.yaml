@@ -3,7 +3,7 @@ name: Git Orchestrator
 description: >-
   Owns the git-backing workflows: enable (clone the remote and set up the isolated working branch),
   disable, sync (fetch + integrate the default branch into the working branch), and publish (commit
-  the promoted working tree, push the working branch, and produce the compare URL). Each read/write
+  the approved working tree, push the working branch, and produce the compare URL). Each read/write
   of git state goes through the config registry and the git adapter; sync and publish no-op when the
   project is not git-backed.
 subsystem: sdd_git
@@ -14,4 +14,4 @@ dependsOn:
   - git_config_registry
 status: complete
 createdAt: '2026-07-04T16:31:15.201Z'
-updatedAt: '2026-07-04T16:37:37.162Z'
+updatedAt: '2026-09-11T23:40:36.268Z'

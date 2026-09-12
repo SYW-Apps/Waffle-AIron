@@ -8,10 +8,11 @@ component: cli_lock_adapter
 methods:
   - name: lockTree
     description: >-
-      Freeze the (scope-filtered) tree: promote every in-scope spec to status complete and persist
-      the commit-scoped lock record carrying the tree's current GATE StateId — spec content plus the
-      governing doctrine, so a later doctrine change invalidates the lock by state mismatch exactly
-      as a spec edit does. Returns the written record.
+      Freeze the (scope-filtered) tree: record the approval baseline — the approved spec content,
+      held OUTSIDE the working copy — and persist the commit-scoped lock record carrying the tree's
+      current GATE StateId (spec content plus the governing doctrine, so a later doctrine change
+      invalidates the lock by state mismatch exactly as a spec edit does). Writes NOTHING into the
+      spec tree. Returns the written record.
     signature: 'lockTree(subsystem?: string): LockRecord'
     returns: LockRecord
     params:
@@ -21,4 +22,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-07-29T14:55:44.925Z'
+updatedAt: '2026-09-11T23:36:24.243Z'

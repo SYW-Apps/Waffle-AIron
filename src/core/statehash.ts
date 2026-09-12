@@ -20,9 +20,9 @@ import type { RulesConfig } from '../models/project.js';
 // Computes the deterministic content identity (StateId) of the current
 // project's spec tree. Two trees with identical spec CONTENT produce the same
 // StateId; any edit changes it. This backs the commit-scoped lock record and
-// the promote-time re-check: a lock is scoped to the StateId it validated, and
-// promotion recomputes it, so any change after locking auto-invalidates the
-// lock. Volatile metadata (createdAt/updatedAt) is excluded so a no-op re-save
+// the staleness re-check: a lock is scoped to the StateId it validated, and
+// every later read recomputes it, so any change after locking auto-invalidates
+// the lock. Volatile metadata (createdAt/updatedAt) is excluded so a no-op re-save
 // that only bumps a timestamp does not shift the identity.
 // ---------------------------------------------------------------------------
 
@@ -49,7 +49,7 @@ const CONTENT_ALGORITHM = 'sha256';
  * validated it. Distinct on purpose — `stateIdEquals` compares the algorithm, so
  * a content-only StateId can never satisfy a gate comparison. That makes every
  * lock record written before doctrine was covered read as STALE (forcing a
- * re-lock) instead of silently passing the promote-time re-check.
+ * re-lock) instead of silently passing the staleness re-check.
  */
 const GATE_ALGORITHM = 'sha256+doctrine';
 
@@ -115,7 +115,7 @@ function doctrineIdentity(doctrine: LoadedExtensions, gate: GateConfig): Record<
      * Which profile GOVERNS, and the project's own rule tuning. Both decide
      * verdicts — a projectType switch changes the doctrine family outright, and
      * `rules` carries severity overrides, complexity caps, and designDepth — so a
-     * lock taken under one and promoted under another was never validated by the
+     * lock taken under one and honoured under another was never validated by the
      * gate it claims to have passed.
      */
     projectType: gate.projectType ?? null,
@@ -148,7 +148,7 @@ function doctrineIdentity(doctrine: LoadedExtensions, gate: GateConfig): Record<
  * This is what a lock must be scoped to. A lock asserts "these specs pass this
  * gate", and the pack set IS part of the gate: without doctrine coverage you
  * could lock a tree validated under one rule set, change the packs, and still
- * promote on the strength of the earlier lock, because the spec digest never
+ * act on the strength of the earlier lock, because the spec digest never
  * moved. Content-only consumers (surface snapshot stamps, freshness checks) stay
  * on computeStateId, so a pack bump never marks a vendored contract stale.
  */

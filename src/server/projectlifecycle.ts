@@ -9,7 +9,8 @@ import {
 } from './approvals.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { executeApprovedLock } from './admin.js';
+import { executeApprovedLock, hostedApprover } from './admin.js';
+import type { ApproverIdentity } from '../core/lockfile.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
 import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds } from './authorization.js';
@@ -334,8 +335,8 @@ export function lockProject(
     verb: 'Lock',
     noun: 'lock',
     subproject,
-    execute: () => {
-      const lock = executeApprovedLock(cfg, projectId, subproject);
+    execute: (approver) => {
+      const lock = executeApprovedLock(cfg, projectId, approver, subproject);
       return {
         status: 'completed',
         action: 'project:lock',
@@ -352,7 +353,7 @@ function subprojectSuffix(subproject?: string): string {
   return subproject ? ` subproject "${subproject}"` : '';
 }
 
-/** The payloadType a lock/promote ApprovalRequest carries when its requester was
+/** The payloadType a lock ApprovalRequest carries when its requester was
  *  confined to a chained subproject. */
 const SUBPROJECT_SCOPE_PAYLOAD = 'SubprojectScope';
 
@@ -372,7 +373,7 @@ function subprojectScopePayload(subproject?: string): { payloadType?: string; pa
   return { payloadType: SUBPROJECT_SCOPE_PAYLOAD, payload: JSON.stringify({ subproject }) };
 }
 
-/** The subproject qualifier recorded on an approved lock/promote request, or
+/** The subproject qualifier recorded on an approved lock request, or
  *  undefined for an unqualified one (or a payload that does not parse — a
  *  malformed payload must not silently widen the action to the whole project,
  *  so the caller treats undefined as "no confinement was requested" only when
@@ -390,7 +391,7 @@ function readSubprojectScope(req: ApprovalRequest): string | undefined {
   return parsed.subproject;
 }
 
-/** Shared body for the lock/promote lifecycle actions: authenticate → resolve
+/** Shared body for the gated lifecycle actions: authenticate → resolve
  *  project:write over the project → switch on the resolved value (yes executes
  *  through the supplied pre-authorized entry, no forbids, approval creates the
  *  pending request), differing only in the kind, wording, and execution.
@@ -412,7 +413,7 @@ function lifecycleAction(
     action: 'project:lock';
     verb: string;
     noun: string;
-    execute: () => ProjectActionOutcome;
+    execute: (approver: ApproverIdentity) => ProjectActionOutcome;
     /** The bound mount chain, when the caller is confined to a chained subproject.
      *  Recorded onto an APPROVAL request so the approved execution stays confined
      *  (see subprojectScopePayload) — the direct path is confined by `execute`. */
@@ -429,7 +430,7 @@ function lifecycleAction(
   switch (effective.value) {
     case 'yes': {
       // The pre-authorized entries validate existence themselves (Unknown project).
-      const outcome = opts.execute();
+      const outcome = opts.execute(hostedApprover(principal.subject));
       tryAppendAudit(
         cfg,
         buildAuditEvent(principal, 'lifecycle.completed', 'security', {
@@ -441,7 +442,7 @@ function lifecycleAction(
       return outcome;
     }
     case 'no':
-      throw new ForbiddenError(`caller may not ${opts.noun === 'promotion' ? 'promote' : opts.noun} this project`);
+      throw new ForbiddenError(`caller may not ${opts.noun} this project`);
     default: {
       if (!existingProjectRoot(cfg.dataDir, projectId)) {
         throw new Error(`Unknown project "${projectId}".`);
@@ -615,7 +616,10 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
       // subproject-scoped request freezes THAT child tree — an approval must never
       // widen the scope its requester was bound to.
       const scope = readSubprojectScope(req);
-      const lock = executeApprovedLock(cfg, req.projectId ?? '', scope);
+      // The DECIDER is the approver: in the approval path the requester did not
+      // have the authority, and the decision is what conferred it. The requester
+      // is not lost — the ApprovalRequest and the audit event both carry them.
+      const lock = executeApprovedLock(cfg, req.projectId ?? '', hostedApprover(req.decidedBy), scope);
       return `Locked project "${req.projectId}"${subprojectSuffix(scope)} (status: ${lock.status}).`;
     }
     default:

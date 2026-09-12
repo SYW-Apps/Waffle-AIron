@@ -3,8 +3,8 @@ name: Web Project Orchestrator Interface
 description: >-
   Contract for the web UI's project-lifecycle workflows. Every method is session-authenticated.
   listProjects is owned here (scoped read); create routes through the project policy orchestrator's
-  profile-aware initialization; lock/promote/destroy forward to the admin orchestrator with the
-  session as the credential, so the resolver authorization applies unchanged.
+  profile-aware initialization; lock/destroy forward to the admin orchestrator with the session as
+  the credential, so the resolver authorization applies unchanged.
 component: web_project_orchestrator
 methods:
   - name: listProjects
@@ -68,4 +68,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-09-11T21:00:06.734Z'
+updatedAt: '2026-09-11T23:39:17.156Z'

@@ -40,7 +40,7 @@ import { buildCodeModel } from './source-analysis.js';
 import { findChainingParent } from './specs.js';
 import { getProjectRoot } from '../utils/fs.js';
 import * as path from 'path';
-import { settledSpecPaths } from './baseline.js';
+import { settledSpecPaths } from './approval.js';
 import type { SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec } from '../models/index.js';
 
 /**
@@ -345,9 +345,9 @@ export function validateSddTree(
   // ONE-WAY: an edited spec stayed marked complete, so in-flux work kept being
   // judged at full strictness with no way back short of a manual demotion.
   //
-  // Deriving it from the baseline writes nothing and is bidirectional: a spec
+  // Deriving it from the lock record writes nothing and is bidirectional: a spec
   // that drifts after approval returns to draft context by itself. With no
-  // baseline the authored status stands, which is how a tree behaves before
+  // approval the authored status stands, which is how a tree behaves before
   // anyone has gated it.
   const statusBearing: { status?: 'draft' | 'design' | 'complete' }[] = treatAllAsComplete
     ? [...subsystems, ...components, ...interfaces, ...implementations]
@@ -548,7 +548,7 @@ function settledStatusBearing(loaded: {
   try {
     settled = settledSpecPaths();
   } catch {
-    return []; // a baseline problem must never break validation
+    return []; // an unreadable approval must never break validation
   }
   if (!settled || settled.size === 0) return [];
 

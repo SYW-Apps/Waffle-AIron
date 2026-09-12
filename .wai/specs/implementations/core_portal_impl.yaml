@@ -137,13 +137,6 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: writeLockRecord
-  - name: promoteAllComplete
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: promoteAllComplete
   - name: renderDiagram
     narrative:
       - stepNumber: 1
@@ -264,6 +257,21 @@ methods:
         type: call
         targetComponent: tree_transfer_orchestrator
         targetMethod: importSpecTree
+  - name: currentChildPins
+    narrative:
+      - stepNumber: 1
+        description: Forward chained-child pin resolution (re-export)
+        type: local
+  - name: captureApprovedSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward approval capture to the agent-facing approval module (re-export)
+        type: local
+  - name: localApprover
+    narrative:
+      - stepNumber: 1
+        description: Forward approver resolution to the approver identity module (re-export)
+        type: local
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-12T17:26:20.640Z'
+updatedAt: '2026-09-12T00:21:32.101Z'

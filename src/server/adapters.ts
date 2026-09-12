@@ -3,7 +3,8 @@ import { computeGateStateId, readLockState } from '../core/specs.js';
 import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph, assertContainedProjectPath } from '../core/specs.js';
 import { exportSpecTree, importSpecTree } from '../core/treetransfer.js';
-import { provisionProject, promoteAllComplete } from '../core/provision.js';
+import { provisionProject } from '../core/provision.js';
+import { captureApprovedSpecs, currentChildPins } from '../core/index.js';
 import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
@@ -31,15 +32,19 @@ export const hostCore = {
   // Two identities, deliberately both exposed: computeStateId is the spec-tree
   // CONTENT hash (surface/landscape snapshot stamps, where doctrine is
   // irrelevant); computeGateStateId adds the governing doctrine and is what
-  // lock records and the promote-time re-check must use.
+  // lock records and the staleness re-check must use.
   computeStateId,
   computeGateStateId,
-  // The shared lock verdict (unlocked | locked | stale). Reporting surfaces and
-  // the promote gate resolve it here rather than each comparing StateIds.
+  // The shared lock verdict (unlocked | locked | stale). Every reporting surface
+  // resolves it here rather than each comparing StateIds for itself.
   readLockState,
   readLockRecord,
   writeLockRecord,
-  promoteAllComplete,
+  // The approval — the per-spec digests a lock RECORDS instead of writing
+  // statuses into the tree. Forwarded here so the hosted lock crosses into
+  // sdd_core through this adapter rather than importing the module directly.
+  captureApprovedSpecs,
+  currentChildPins,
   renderDiagram,
   // The full CanvasModel as data (the JSON sibling of renderDiagram('canvas')) —
   // consumed by the web app's in-React canvas renderer.

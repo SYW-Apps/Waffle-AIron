@@ -33,11 +33,20 @@ SDD skills. Filters limit generation to a target type or to specific domains.
 ### `wairon lock [-y, --yes] [--subsystem <id>] [--no-recursive]`
 Review and approve the design. Validates the spec tree **as if complete** (full
 strictness, no draft-status relaxation) and — only if it passes — records the
-current tree as the approved **baseline** and regenerates the agent topology.
+current tree as approved and regenerates the agent topology.
 
-It writes **nothing into your spec tree**. The approval is stored outside the
-working copy (`WAIRON_BASELINE_DIR`, else `~/.wairon/baselines`), so approving
-adds nothing to `git status`. A failed or cancelled lock changes nothing at all.
+It writes **nothing into your spec tree**. The approval is one sha256 per spec
+file on `.wai/lock.json`, the record that was always committed — so your
+teammates, a fresh clone and CI all see the same approval you gave, and
+`wairon status` elsewhere can name what has drifted from it. Keys are sorted, so
+re-approving a one-spec change shows up as a two-line diff. A failed or
+cancelled lock changes nothing at all.
+
+`lockedBy` records who approved **and how that identity was established**: your
+git author identity where there is one (so a reviewer can match it against the
+author of the commit carrying the lock), else `user@hostname`. On a hosted
+instance it is the authenticated subject. None of it is proof — the commit that
+introduces `lock.json` is what carries that.
 
 Before approving, it reports what moved since the last approval — the question
 a human is actually answering:

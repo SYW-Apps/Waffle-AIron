@@ -9,8 +9,6 @@ import {
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadTypeSpecs,
-  collectPromotableSpecs,
-  applySpecStatus,
   invalidateSpecCache,
   assertContainedProjectPath,
 } from './specs.js';
@@ -22,13 +20,18 @@ import type { ProjectConfig } from '../models/project.js';
 import type { SubsystemSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
-// Project provisioning + bulk status promotion (sdd_core, used by sdd_host)
+// Project provisioning (sdd_core, used by sdd_host)
 //
 // provisionProject bootstraps a fresh isolated project at the currently-bound
-// root: a default project.yaml plus an L0 system spec. promoteAllComplete is the
-// lock status write — every promotable spec → complete. Both operate on the
-// active (request-scoped) project root, so the hosting server binds the target
-// root first and these Just Work against it.
+// root: a default project.yaml plus an L0 system spec. It operates on the active
+// (request-scoped) project root, so the hosting server binds the target root
+// first and this Just Works against it.
+//
+// There is deliberately no bulk status promotion here any more. A lock used to
+// ratchet every spec to `status: complete` on disk; approval is recorded in a
+// digest per spec in the committed lock record instead (core/approval.ts),
+// and settledness is derived from that. collectPromotableSpecs/applySpecStatus
+// remain as per-spec primitives — the bulk sweep is what was the bug.
 // ---------------------------------------------------------------------------
 
 function defaultProjectConfig(name: string, now: string): ProjectConfig {
@@ -115,14 +118,6 @@ export function ensureProjectInitialized(fallbackName: string): { wroteConfig: b
   }
   if (wroteConfig || wroteSystem) invalidateSpecCache();
   return { wroteConfig, wroteSystem };
-}
-
-/** Promote every promotable spec in the bound project to status complete. */
-export function promoteAllComplete(): void {
-  for (const p of collectPromotableSpecs()) {
-    applySpecStatus(p.kind, p.id, 'complete');
-  }
-  invalidateSpecCache();
 }
 
 // ---------------------------------------------------------------------------

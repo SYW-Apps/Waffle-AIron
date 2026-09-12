@@ -2,14 +2,13 @@ kind: value-object
 id: state_id
 name: StateId
 description: >-
-  Content-addressed identity of a project state: a deterministic hash over canonicalized content.
-  Two states with identical content produce the same StateId; any change alters it. Two flavours
-  exist, distinguished by `algorithm` so they can never compare equal: the CONTENT identity over the
-  spec tree alone (surface/landscape snapshot stamps and freshness comparisons, where doctrine is
-  irrelevant), and the GATE identity over the spec tree PLUS the governing doctrine (pack
-  identities, profiles, languages, patterns, guarantees, assertions, rule codes) — what the
-  commit-scoped lock record is scoped to and what the promote-time re-check recomputes, because a
-  lock asserts that these specs pass THIS gate.
+  The deterministic content identity of a spec-tree state. Two states with identical content produce
+  the same StateId; any change alters it. Two flavours exist, distinguished by `algorithm` so they
+  can never compare equal: the CONTENT identity over the spec tree alone (surface/landscape snapshot
+  stamps and freshness comparisons, where doctrine is irrelevant), and the GATE identity over the
+  spec tree PLUS the governing doctrine (pack identities, profiles, languages, patterns, guarantees,
+  assertions, rule codes) — what the commit-scoped lock record is scoped to and what every staleness
+  re-check recomputes, because a lock asserts that these specs pass THIS gate.
 fields:
   - name: algorithm
     type: string
@@ -27,4 +26,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-04T12:44:18.502Z'
-updatedAt: '2026-07-29T14:55:35.484Z'
+updatedAt: '2026-09-11T23:39:59.034Z'

@@ -581,7 +581,7 @@ export function placeProject(
   // The caller must cover BOTH the target unit AND the project being placed.
   // Checking only the destination unit was a scope-capture hole: a unit admin
   // could adopt any project into their unit and thereby pull it into their
-  // reach (→ destroy/lock/promote/audit it). The project's authority comes from
+  // reach (→ destroy/lock/audit it). The project's authority comes from
   // its CURRENT placements, so require project:admin over it as it stands; an
   // instance-admin places anything anywhere (the resolver bypass).
   if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'unit', placement.unitId)) {

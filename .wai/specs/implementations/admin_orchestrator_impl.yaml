@@ -320,41 +320,72 @@ methods:
         type: return
         outcome: cannot lock — validation failed
       - stepNumber: 6
-        description: Promote every spec to complete
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: promoteAllComplete
-      - stepNumber: 7
-        description: >-
-          Compute the validated GATE StateId (spec content + governing doctrine) — the lock
-          certifies that these specs passed THIS gate
+        description: Compute the validated GATE StateId (spec content + governing doctrine)
         type: call
         targetComponent: host_core_adapter
         targetMethod: computeGateStateId
+      - stepNumber: 7
+        description: >-
+          Capture the approved tree as one content digest per spec file. Nothing is written into the
+          spec files: a hosted lock also commits and pushes .wai/, so the old status ratchet
+          published the whole rewrite into the repository.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: captureApprovedSpecs
       - stepNumber: 8
         description: >-
-          Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
-          the PR from — the lock is the semantic checkpoint that triggers the auto-publish. A no-op
-          for a native project, and for a subproject-scoped lock (no binding at the bound child
-          root), so a subproject freeze never commits or pushes against the parent's repository; the
-          parent's next lock or scoped commit carries the frozen child tree.
+          Pin each chained child's approved StateId — the parent records the decision the child's
+          owner made, not the child's specs.
         type: call
-        targetComponent: host_git_adapter
-        targetMethod: publish
+        targetComponent: host_core_adapter
+        targetMethod: currentChildPins
       - stepNumber: 9
         description: >-
-          Assemble a LockRecord (stateId, lockedAt, lockedBy, validatorVersion, validationResult,
-          status ready, plus commitSha/compareUrl when git-backed)
+          Assemble a LockRecord: stateId, lockedAt, the AUTHENTICATED approver the caller resolved
+          from the credential, validatorVersion, validationResult, status ready, plus the captured
+          specs and child pins.
         type: local
       - stepNumber: 10
-        description: Persist the lock record
+        description: >-
+          Persist the record BEFORE publishing, so the commit that ships the specs also contains the
+          approval that certifies them.
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
       - stepNumber: 11
-        description: Return the lock record (with the compare URL to open the PR when git-backed)
+        description: >-
+          Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
+          the PR from — the lock is the semantic checkpoint that triggers the auto-publish. A no-op
+          for a native project, and for a subproject-scoped lock (no binding at the bound child
+          root), so a subproject freeze never commits or pushes against the parent's repository.
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+        outcome: lock record
+      - stepNumber: 12
+        description: Only a real publish has a commit to record.
+        type: branch
+        condition: nothing was published (native project, or a subproject-scoped lock)
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: Return the persisted record unchanged.
         type: return
         outcome: lock record
+      - stepNumber: 14
+        description: >-
+          Extend the record with commitSha and compareUrl — known only AFTER the commit, so these
+          two fields are re-written into a record the commit already carries.
+        type: local
+      - stepNumber: 15
+        description: Persist the two published fields.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: writeLockRecord
+      - stepNumber: 16
+        description: Return the published record.
+        type: return
+        outcome: lock record with the compare URL to open the PR
   - name: createProject
     narrative:
       - stepNumber: 1
@@ -489,36 +520,65 @@ methods:
         type: return
         outcome: cannot lock — validation failed
       - stepNumber: 10
-        description: Promote every spec to complete
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: promoteAllComplete
-      - stepNumber: 11
         description: Compute the validated GATE StateId (spec content + governing doctrine)
         type: call
         targetComponent: host_core_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 12
+      - stepNumber: 11
         description: >-
-          Publish to git: commit the promoted working tree and push, returning the commit + compare
-          URL (no-op for native)
+          Capture the approved tree as one content digest per spec file — the spec files themselves
+          are never written to.
         type: call
-        targetComponent: host_git_adapter
-        targetMethod: publish
+        targetComponent: host_core_adapter
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 12
+        description: Pin each chained child's approved StateId.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: currentChildPins
       - stepNumber: 13
         description: >-
-          Assemble a LockRecord (stateId, lockedAt, lockedBy, validatorVersion, validationResult,
-          status ready, plus commitSha/compareUrl when git-backed)
+          Assemble a LockRecord: stateId, lockedAt, the AUTHENTICATED approver resolved from the
+          caller's credential, validatorVersion, validationResult, status ready, plus the captured
+          specs and child pins.
         type: local
       - stepNumber: 14
-        description: Persist the lock record
+        description: >-
+          Persist the record BEFORE publishing, so the commit that ships the specs also contains the
+          approval.
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
       - stepNumber: 15
-        description: Return the lock record (with the compare URL to open the PR when git-backed)
+        description: >-
+          Commit the .wai/-scoped tree and push the working branch, returning the commit sha and
+          compare URL.
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+        outcome: lock record
+      - stepNumber: 16
+        description: Only a real publish has a commit to record.
+        type: branch
+        condition: nothing was published (native project)
+        onTrueStep: 17
+        onFalseStep: 18
+      - stepNumber: 17
+        description: Return the persisted record unchanged.
         type: return
         outcome: lock record
+      - stepNumber: 18
+        description: Extend the record with commitSha and compareUrl, known only after the commit.
+        type: local
+      - stepNumber: 19
+        description: Persist the two published fields.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: writeLockRecord
+      - stepNumber: 20
+        description: Return the published record.
+        type: return
+        outcome: lock record with the compare URL
     detail: full
   - name: enableGit
     narrative:
@@ -1009,4 +1069,4 @@ methods:
         outcome: imported tree
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-11T23:03:12.155Z'
+updatedAt: '2026-09-12T00:20:39.406Z'

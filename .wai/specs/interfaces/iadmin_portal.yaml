@@ -1,9 +1,9 @@
 id: iadmin_portal
 name: Admin Portal Interface
 description: >-
-  Control-plane admin API contract: project, API-key (token), pack, producer, secret, git, lock, and
-  promote workflows. Every method authenticates a bootstrap/admin (master) credential and rejects
-  any non-admin principal before any effect.
+  Control-plane admin API contract: project, API-key (token), pack, producer, secret, git and lock
+  workflows. Every method authenticates a bootstrap/admin (master) credential and rejects any
+  non-admin principal before any effect.
 component: admin_portal
 methods:
   - name: createProject
@@ -348,4 +348,4 @@ methods:
       path: /admin/projects/{id}/tree
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-09-11T23:01:52.438Z'
+updatedAt: '2026-09-11T23:36:30.128Z'
