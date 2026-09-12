@@ -1,0 +1,176 @@
+import { describe, it, expect, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { setProjectRoot } from '../../src/utils/fs.js';
+import {
+  saveSystemSpec, saveSubsystemSpec, saveComponentSpec, saveInterfaceSpec,
+  invalidateSpecCache, workspaceFor,
+} from '../../src/core/specs.js';
+import { createChainedSubsystem } from '../../src/core/provision.js';
+import { validateSddTree, type ValidationOptions, type ValidationResult } from '../../src/core/validation.js';
+import { writeYamlFile } from '../../src/utils/yaml.js';
+import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
+
+// ---------------------------------------------------------------------------
+// A chained subproject must never be judged more leniently from its own root
+// than from its parent's.
+//
+// Today it is. With the parent on disk, validating the child standalone turns
+// every reference into the parent into an UNVERIFIED_EXTERNAL_REF warning that
+// `--ci` waives — including references the parent judges as hard boundary
+// violations. The child passes its gate; the same specs fail the parent's. And
+// nothing hosted ever delivers the surface snapshots that were meant to cover
+// the gap, so a hosted subproject lock passes with real violations in it.
+//
+// The fix is to resolve through the parent that `findChainingParent` already
+// finds on this exact code path. Until it lands, the property is pinned with
+// `it.fails`: those tests PASS while the hole is open and start FAILING the
+// moment it closes — which forces whoever closes it to flip them to `it`, so
+// the fix cannot land without the property becoming a live assertion.
+// ---------------------------------------------------------------------------
+
+const now = new Date().toISOString();
+
+const subsystem = (id: string, over: Partial<SubsystemSpec> = {}): SubsystemSpec => ({
+  id, name: id, description: `subsystem ${id}`, parentSystem: 'root-system',
+  publicInterfaces: [], trustedLinks: [], status: 'complete', createdAt: now, updatedAt: now, ...over,
+});
+const component = (id: string, sub: string, over: Partial<ComponentSpec> = {}): ComponentSpec => ({
+  id, name: id, description: 'd', subsystem: sub, componentType: 'Orchestrator',
+  owns: [], dependsOn: [], status: 'complete', createdAt: now, updatedAt: now, ...over,
+} as ComponentSpec);
+
+/**
+ * A parent that publishes one Portal and keeps one Store private, mounting a
+ * chained child `kid` whose components exercise each way of crossing into it.
+ */
+function family(): { root: string; kidDir: string } {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-rtp-'));
+  fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
+  writeYamlFile(path.join(root, '.wai', 'project.yaml'), {
+    schemaVersion: '1.0.0', name: 'parent',
+    targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now,
+  });
+  setProjectRoot(root);
+  saveSystemSpec({
+    schemaVersion: '1.0.0', name: 'root-system', vision: 'v',
+    boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+  });
+  saveSubsystemSpec(subsystem('parent-sub', {
+    publicInterfaces: [{ type: 'Custom', details: 'the published portal', component: 'parent-portal' }],
+  } as Partial<SubsystemSpec>));
+  saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+  saveComponentSpec(component('parent-store', 'parent-sub', { componentType: 'Store' }));
+  saveInterfaceSpec({
+    id: 'iparent-portal', name: 'ip', description: 'd', component: 'parent-portal',
+    status: 'complete', createdAt: now, updatedAt: now,
+    methods: [{ name: 'realMethod', description: 'd', signature: 'realMethod(): void', returns: 'void' }],
+  } as InterfaceSpec);
+  createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+
+  const kidDir = path.join(root, 'packages', 'kid');
+  const kid = workspaceFor(kidDir);
+  kid.saveSystemSpec({
+    schemaVersion: '1.0.0', name: 'kid-system', vision: 'v',
+    boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+  });
+  kid.saveSubsystemSpec(subsystem('k-core', { parentSystem: 'kid-system' }));
+  // An Orchestrator crossing a subsystem boundary: only Adapters may.
+  kid.saveComponentSpec(component('k-orch', 'k-core', { dependsOn: ['super::parent-portal'] }));
+  // The legitimate crossing — an Adapter into the PUBLISHED portal. The control.
+  kid.saveComponentSpec(component('k-adapter', 'k-core', { componentType: 'Adapter', dependsOn: ['super::parent-portal'] }));
+  // An Adapter reaching a Store the parent never published.
+  kid.saveComponentSpec(component('k-store-adapter', 'k-core', { componentType: 'Adapter', dependsOn: ['super::parent-store'] }));
+  // A BARE id: from inside a mount it qualifies to `kid::parent-portal`, which
+  // does not exist — a typo-grade error, not a cross-tree reference at all.
+  kid.saveComponentSpec(component('k-bare', 'k-core', { dependsOn: ['parent-portal'] }));
+  // A legitimate crossing whose narrative calls a method the portal lacks.
+  kid.saveComponentSpec(component('k-caller', 'k-core', { componentType: 'Adapter', dependsOn: ['super::parent-portal'] }));
+  kid.saveInterfaceSpec({
+    id: 'ik-caller', name: 'ik', description: 'd', component: 'k-caller',
+    status: 'complete', createdAt: now, updatedAt: now,
+    methods: [{ name: 'go', description: 'd', signature: 'go(): void', returns: 'void' }],
+  } as InterfaceSpec);
+  kid.saveImplementationSpec({
+    id: 'k-caller-impl', name: 'i', description: 'd', contract: 'ik-caller',
+    status: 'complete', createdAt: now, updatedAt: now,
+    methods: [{ name: 'go', narrative: [{
+      stepNumber: 1, description: 'call the parent', type: 'call',
+      targetComponent: 'super::parent-portal', targetMethod: 'noSuchMethod',
+    }] }],
+  } as ImplementationSpec);
+  invalidateSpecCache();
+  return { root, kidDir };
+}
+
+function verdict(root: string, opts?: ValidationOptions): ValidationResult {
+  invalidateSpecCache();
+  setProjectRoot(root);
+  return opts ? validateSddTree(opts) : validateSddTree();
+}
+
+/** The errors as `CODE @specId`, with a mount prefix stripped so both roots compare. */
+function errors(res: ValidationResult, stripPrefix = ''): string[] {
+  return res.issues
+    .filter((i) => i.severity === 'error')
+    .map((i) => {
+      const id = i.specId ?? '(none)';
+      return `${i.code} @${stripPrefix && id.startsWith(stripPrefix) ? id.slice(stripPrefix.length) : id}`;
+    })
+    .sort();
+}
+
+const PARENT_JUDGEMENT = [
+  'CROSS_SUBSYSTEM_NON_ADAPTER @kid::k-orch',
+  'CROSS_SUBSYSTEM_PRIVATE_ACCESS @kid::k-store-adapter',
+  'INVALID_DEPENDENCY_REFERENCE @kid::k-bare',
+  'INVALID_TARGET_METHOD_REFERENCE @kid::k-caller-impl',
+];
+
+describe('a chained child judged from its own root vs its parent', () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  it('the parent, scoped to the mount, judges each violation as an error — and the clean edge as clean', () => {
+    // The fixture's soundness, and the reference verdict. This is true today and
+    // must stay true: it is what the child's own verdict is measured against.
+    const fam = family();
+    root = fam.root;
+
+    const fromParent = verdict(fam.root, { scopeSubsystem: 'kid', recursive: true });
+
+    expect(errors(fromParent)).toEqual(PARENT_JUDGEMENT);
+    expect(fromParent.valid).toBe(false);
+    expect(fromParent.issues.filter((i) => i.specId === 'kid::k-adapter' && i.code !== 'UNUSED_COMPONENT')).toEqual([]);
+  });
+
+  it.fails('THE HOLE: a child validated standalone reports every error its parent does', () => {
+    const fam = family();
+    root = fam.root;
+    const parentErrors = errors(verdict(fam.root, { scopeSubsystem: 'kid', recursive: true }), 'kid::');
+
+    const fromChild = verdict(fam.kidDir);
+
+    expect(errors(fromChild)).toEqual(expect.arrayContaining(parentErrors));
+    expect(fromChild.valid).toBe(false);
+  });
+
+  it.fails('THE HOLE: an edge the parent resolves cleanly raises nothing from the child root', () => {
+    // Today the clean Adapter→published-Portal edge is reported as an unverified
+    // external reference, indistinguishable from the real violations beside it.
+    const fam = family();
+    root = fam.root;
+
+    const fromChild = verdict(fam.kidDir);
+
+    expect(fromChild.issues.filter((i) => i.specId === 'k-adapter' && i.code !== 'UNUSED_COMPONENT')).toEqual([]);
+  });
+});
