@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
-import type { LockRecord } from '../core/lockfile.js';
+import type { LockRecord, ApproverIdentity } from '../core/lockfile.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
 import { placeProject, listOrganizationUnits } from './organization.js';
@@ -210,7 +210,28 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
   if (authorize(cfg.dataDir, principal, 'project:write', 'project', project).value !== 'yes') {
     throw new AdminAuthError('Forbidden — locking a project requires project:write over it');
   }
-  return executeApprovedLock(cfg, project);
+  return executeApprovedLock(cfg, project, hostedApprover(principal.subject));
+}
+
+/**
+ * The hosted caller as the identity a lock records.
+ *
+ * This is the one surface where wairon actually AUTHENTICATED who is approving —
+ * the instance issued the credential and resolved it to a subject — so the
+ * record says so (`source: 'hosted'`) rather than settling for the self-declared
+ * git or machine identity a local lock has to use. It previously wrote the
+ * constant 'admin:master' and threw the real identity away.
+ *
+ * No subject means the bootstrap master credential: a real actor, but an
+ * instance-wide one belonging to no user, and named as exactly that.
+ */
+export function hostedApprover(subject?: PrincipalSubject): ApproverIdentity {
+  if (!subject) return { id: 'master', name: 'instance master credential', source: 'hosted' };
+  return {
+    id: subject.userId,
+    ...(subject.displayName ? { name: subject.displayName } : {}),
+    source: 'hosted',
+  };
 }
 
 /**
@@ -250,7 +271,12 @@ function boundLifecycleRoot(cfg: HostConfig, projectId: string, subproject?: str
  * chained child lives outside that pathspec (e.g. packages/billing/.wai/), so
  * reaching a remote takes a commit whose scope covers the child's path.
  */
-export function executeApprovedLock(cfg: HostConfig, projectId: string, subproject?: string): LockRecord {
+export function executeApprovedLock(
+  cfg: HostConfig,
+  projectId: string,
+  approver: ApproverIdentity,
+  subproject?: string,
+): LockRecord {
   const root = boundLifecycleRoot(cfg, projectId, subproject);
   return runWithProjectRoot(root, () => {
     // Git-backed: pull the default branch into the working branch first so the
@@ -266,17 +292,37 @@ export function executeApprovedLock(cfg: HostConfig, projectId: string, subproje
     // so the governing doctrine is part of the frozen state.
     const stateId = hostCore.computeGateStateId();
 
-    // Record WHAT was approved, outside the tree. This used to ratchet every
-    // spec's `status` to `complete` on disk — and because a hosted lock also
-    // COMMITS AND PUSHES .wai/ (below), that rewrite went straight into the
-    // repository. The local lock stopped doing it; the hosted one had been
-    // left behind, so hosted projects still got the whole flood, published.
+    // THE APPROVAL, recorded in the committed lock record below rather than
+    // written across the spec tree. This used to ratchet every spec's `status`
+    // to `complete` on disk — and because a hosted lock also COMMITS AND PUSHES
+    // .wai/ (below), that rewrite went straight into the repository. The local
+    // lock stopped doing it; the hosted one had been left behind, so hosted
+    // projects still got the whole flood, published.
     //
-    // Settledness is derived from this baseline instead, exactly as locally.
-    hostCore.writeBaseline(hostCore.captureBaseline(
-      `hosted:${projectId}${subproject ? `::${subproject}` : ''}`,
-      hostCore.currentChildPins(hostCore.loadSubsystemSpecs()),
-    ));
+    // Settledness is derived from these digests instead, exactly as locally.
+    const specs = hostCore.captureApprovedSpecs();
+    const children = hostCore.currentChildPins(hostCore.loadSubsystemSpecs());
+
+    // Write the record BEFORE publishing, so the commit that ships the specs
+    // also contains the approval that certifies them. Publishing first (as this
+    // did) pushed a spec change whose approval was still only in memory, to
+    // arrive one lock later — tolerable when the record was four bookkeeping
+    // fields, not when it IS the approval.
+    const record: LockRecord = {
+      stateId,
+      lockedAt: new Date().toISOString(),
+      lockedBy: approver,
+      validatorVersion: WAIRON_VERSION,
+      validationResult: {
+        valid: true,
+        errors: 0,
+        warnings: result.issues.filter((i) => i.severity === 'warning').length,
+      },
+      status: 'ready',
+      specs,
+      children,
+    };
+    hostCore.writeLockRecord(record);
 
     // Git-backed: the lock is the semantic checkpoint — the auto-publish
     // trigger. Commit ONLY the .wai/ tree (pathspec-scoped, never the shared
@@ -285,22 +331,18 @@ export function executeApprovedLock(cfg: HostConfig, projectId: string, subproje
     // for native projects, and a backup failure never fails the lock (publish
     // itself no-ops rather than throwing on a clean scope).
     const publish = hostGit.publish(`wairon lock: ${projectId} @ ${stateId}`);
+    if (!publish.published) return record;
 
-    const record: LockRecord = {
-      stateId,
-      lockedAt: new Date().toISOString(),
-      lockedBy: 'admin:master',
-      validatorVersion: WAIRON_VERSION,
-      validationResult: {
-        valid: true,
-        errors: 0,
-        warnings: result.issues.filter((i) => i.severity === 'warning').length,
-      },
-      status: 'ready',
-      ...(publish.published ? { commitSha: publish.commitSha, compareUrl: publish.compareUrl } : {}),
+    // Where the push landed. Known only AFTER the commit, so these two fields
+    // are re-written into a record the commit already carries — a two-line
+    // delta that the next publish picks up. The approval itself is already in.
+    const published: LockRecord = {
+      ...record,
+      commitSha: publish.commitSha,
+      compareUrl: publish.compareUrl,
     };
-    hostCore.writeLockRecord(record);
-    return record;
+    hostCore.writeLockRecord(published);
+    return published;
   });
 }
 

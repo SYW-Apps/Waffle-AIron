@@ -9,7 +9,8 @@ import {
 } from './approvals.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { executeApprovedLock } from './admin.js';
+import { executeApprovedLock, hostedApprover } from './admin.js';
+import type { ApproverIdentity } from '../core/lockfile.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
 import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds } from './authorization.js';
@@ -334,8 +335,8 @@ export function lockProject(
     verb: 'Lock',
     noun: 'lock',
     subproject,
-    execute: () => {
-      const lock = executeApprovedLock(cfg, projectId, subproject);
+    execute: (approver) => {
+      const lock = executeApprovedLock(cfg, projectId, approver, subproject);
       return {
         status: 'completed',
         action: 'project:lock',
@@ -412,7 +413,7 @@ function lifecycleAction(
     action: 'project:lock';
     verb: string;
     noun: string;
-    execute: () => ProjectActionOutcome;
+    execute: (approver: ApproverIdentity) => ProjectActionOutcome;
     /** The bound mount chain, when the caller is confined to a chained subproject.
      *  Recorded onto an APPROVAL request so the approved execution stays confined
      *  (see subprojectScopePayload) — the direct path is confined by `execute`. */
@@ -429,7 +430,7 @@ function lifecycleAction(
   switch (effective.value) {
     case 'yes': {
       // The pre-authorized entries validate existence themselves (Unknown project).
-      const outcome = opts.execute();
+      const outcome = opts.execute(hostedApprover(principal.subject));
       tryAppendAudit(
         cfg,
         buildAuditEvent(principal, 'lifecycle.completed', 'security', {
@@ -615,7 +616,10 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
       // subproject-scoped request freezes THAT child tree — an approval must never
       // widen the scope its requester was bound to.
       const scope = readSubprojectScope(req);
-      const lock = executeApprovedLock(cfg, req.projectId ?? '', scope);
+      // The DECIDER is the approver: in the approval path the requester did not
+      // have the authority, and the decision is what conferred it. The requester
+      // is not lost — the ApprovalRequest and the audit event both carry them.
+      const lock = executeApprovedLock(cfg, req.projectId ?? '', hostedApprover(req.decidedBy), scope);
       return `Locked project "${req.projectId}"${subprojectSuffix(scope)} (status: ${lock.status}).`;
     }
     default:

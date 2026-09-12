@@ -201,27 +201,6 @@ methods:
         type: bytes
       - name: options
         type: tree_import_options
-  - name: captureBaseline
-    description: >-
-      Capture the CURRENT spec tree as approved, with each chained child's approved StateId pinned.
-      A chained child's own specs are excluded — the trees are approved separately. Records a
-      decision; the caller gates it.
-    signature: 'captureBaseline(approvedBy: string, children: Record<string, string>): BaselineRecord'
-    returns: BaselineRecord
-    params:
-      - name: approvedBy
-        type: string
-      - name: children
-        type: Record<string, string>
-  - name: writeBaseline
-    description: >-
-      Persist an approval baseline OUTSIDE the project tree, returning the path written. Approving
-      must never dirty the working copy.
-    signature: 'writeBaseline(record: BaselineRecord): string'
-    returns: string
-    params:
-      - name: record
-        type: BaselineRecord
   - name: currentChildPins
     description: >-
       The approved StateId of every chained child mounted under this root, keyed by mount id. A
@@ -232,6 +211,33 @@ methods:
     params:
       - name: mounts
         type: SubsystemSpec[]
+  - name: captureApprovedSpecs
+    description: >-
+      Capture the CURRENT spec tree as approved: one content digest per spec file, keyed by path
+      relative to the project root. A chained child's own specs are excluded — the trees are
+      approved separately, and the parent pins the child's StateId instead. An optional scope
+      narrows the capture to one subsystem, leaving everything outside with whatever approval it
+      already had. Records a decision; the caller gates it, and the caller persists it on the lock
+      record.
+    signature: 'captureApprovedSpecs(root?: string, scope?: ApprovalScope): Record<string, string>'
+    returns: Record<string, string>
+    params:
+      - name: root
+        type: string
+        optional: true
+      - name: scope
+        type: ApprovalScope
+        optional: true
+  - name: localApprover
+    description: >-
+      Who to record as having approved a lock taken on THIS machine, where wairon has no account of
+      its own. Prefers the git author identity (`user.name <user.email>`) — the one identity the
+      repository already attributes work to, so a reviewer can match it against the author of the
+      commit carrying the lock — and falls back to user@hostname. Never throws and never prompts: a
+      lock must not fail because a name could not be resolved.
+    signature: 'localApprover(): ApproverIdentity'
+    returns: ApproverIdentity
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-11T23:33:49.043Z'
+updatedAt: '2026-09-12T00:21:29.800Z'

@@ -11,7 +11,8 @@ import {
   getLoaderIssues,
   scanAllSpecs,
 } from '../core/specs.js';
-import { readBaseline, diffAgainstBaseline, diffSize, movedChildren } from '../core/baseline.js';
+import { approvalRecord, diffAgainstApproval, diffSize, movedChildren } from '../core/approval.js';
+import { describeApprover } from '../core/lockfile.js';
 
 export interface StatusOptions {
   subsystem?: string;
@@ -196,7 +197,7 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
  * This used to report the lock's StateId verdict, which could only ever say
  * `STALE` — a banner that fired on a tree validating 0 errors / 0 warnings,
  * named nothing to look at, and asked for work that produced no new
- * information. With the approved tree stored as a baseline, the same line can
+ * information. With a digest per spec in the lock record, the same line can
  * name the specs that actually moved, which is the only form a human can act
  * on.
  *
@@ -212,8 +213,9 @@ function lockLine(): string {
 function lockReport(): { text: string; drifted: boolean } {
   const quiet = { text: '', drifted: false };
   try {
-    const baseline = readBaseline();
-    if (!baseline) return quiet;
+    const approval = approvalRecord();
+    if (!approval) return quiet;
+    const by = describeApprover(approval.lockedBy);
 
     // A moved chained child is a change the parent should review even when none
     // of the parent's OWN specs shifted — the trees are approved separately, and
@@ -223,10 +225,20 @@ function lockReport(): { text: string; drifted: boolean } {
       ? `\n${moved.length} chained child project(s) moved since approval: ${moved.map((m) => m.id).join(', ')}.`
       : '';
 
-    const diff = diffAgainstBaseline();
-    if (!diff || diffSize(diff) === 0) {
+    const diff = diffAgainstApproval();
+    if (!diff) {
+      // Locked, but by a record written before per-spec approval existed: it
+      // proves the tree validated, not which specs still match it. Say exactly
+      // that rather than implying either answer.
       return {
-        text: `\nApproved: ${baseline.approvedAt} by ${baseline.approvedBy} — no spec has changed since.${childNote}\n`,
+        text: `\nApproved: ${approval.lockedAt} by ${by} — this lock predates per-spec approval, so `
+          + `drift is only visible at whole-tree level. Re-lock to record it.${childNote}\n`,
+        drifted: moved.length > 0,
+      };
+    }
+    if (diffSize(diff) === 0) {
+      return {
+        text: `\nApproved: ${approval.lockedAt} by ${by} — no spec has changed since.${childNote}\n`,
         drifted: moved.length > 0,
       };
     }
@@ -251,7 +263,7 @@ function lockReport(): { text: string; drifted: boolean } {
       : `${noun} changed since approval (${parts.join(', ')})`;
 
     return {
-      text: `\n${headline} — approved ${baseline.approvedAt} by ${baseline.approvedBy}:\n`
+      text: `\n${headline} — approved ${approval.lockedAt} by ${by}:\n`
         + named.map((p) => `  ${p}`).join('\n')
         + (rest > 0 ? `\n  … and ${rest} more` : '')
         + childNote

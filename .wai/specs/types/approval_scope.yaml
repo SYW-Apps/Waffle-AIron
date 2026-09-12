@@ -1,0 +1,18 @@
+kind: value-object
+id: approval_scope
+name: ApprovalScope
+description: >-
+  The spec paths a SCOPED approval (`wairon lock --subsystem x`) covers. Everything outside keeps
+  whatever approval it already had, so approving one subsystem can never silently mark the rest of
+  the tree reviewed — and a spec deleted inside the scope leaves the record with it. Absent means
+  the whole tree.
+fields:
+  - name: paths
+    type: Set<string>
+    description: >-
+      Spec paths in scope, relative to the project root with POSIX separators — the same keys the
+      approval is recorded under.
+    optional: false
+methods: []
+createdAt: '2026-09-12T00:19:27.640Z'
+updatedAt: '2026-09-12T00:19:27.656Z'

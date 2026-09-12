@@ -186,11 +186,17 @@ export function findProjectRoot(startDir: string): string | null {
  * If neither exists (e.g. during `wairon init`), defaults to .wai/.
  */
 export function aiDir(...segments: string[]): string {
-  const waiPath = fromProjectRoot('.wai');
-  const waiironPath = fromProjectRoot('.wairon');
+  return aiDirAt(getProjectRoot(), ...segments);
+}
 
-  const base =
-    !fs.existsSync(waiPath) && fs.existsSync(waiironPath) ? '.wairon' : '.wai';
-
-  return fromProjectRoot(base, ...segments);
+/**
+ * The same resolution against an EXPLICIT root — how one project reads another's
+ * `.wai` (a parent resolving a chained child's lock, say). Kept here with
+ * `aiDir` so the `.wai` / legacy `.wairon` choice is made in exactly one place.
+ */
+export function aiDirAt(root: string, ...segments: string[]): string {
+  const waiPath = path.join(root, '.wai');
+  const waironPath = path.join(root, '.wairon');
+  const base = !fs.existsSync(waiPath) && fs.existsSync(waironPath) ? waironPath : waiPath;
+  return path.join(base, ...segments);
 }

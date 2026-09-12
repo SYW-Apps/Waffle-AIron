@@ -42,31 +42,51 @@ And a second gate had grown on top of the first — see
 
 ## The model
 
-One addition retires five concepts: **store the approved tree, not a hash of it.**
+One addition retires five concepts: **record what was approved per spec, not one
+hash of the whole tree.**
 
 A review needs two things — the current tree and the tree as it stood when
-someone approved it. wairon had the first and only a fingerprint of the second.
-With the tree itself stored, the question changes from *"did anything move?"*
-to *"what moved?"*, which is the only form a human can review.
+someone approved it. wairon had the first and only a whole-tree fingerprint of
+the second. With **one content digest per spec file**, the question changes from
+*"did anything move?"* to *"what moved?"*, which is the only form a human can
+review.
 
-`src/core/baseline.ts` holds it. Three properties are load-bearing.
+`src/core/approval.ts` derives it; `.wai/lock.json` carries it. Three properties
+are load-bearing.
 
-### It lives outside the working tree
+### It is committed, and it is one file
 
-`WAIRON_BASELINE_DIR`, else `~/.wairon/baselines`, keyed by a hash of the
-project root's path. Nothing is ever written under the project root, so
-approving adds nothing to `git status`. A test asserts the spec tree is
-byte-identical after `lock`.
+The approval rides in the lock record, which was always committed. That is what
+lets a **teammate, a fresh clone and CI** see the same approval the approver saw
+— an earlier revision of this design kept it in `~/.wairon/baselines/`, where
+nobody else could read it, so every other checkout judged an approved tree as
+unapproved.
 
-Deriving the key from the path means resolving a baseline needs nothing but the
-root you are already standing in — no registry, no id to keep in sync, and no
-file inside the project to lose.
+Digests rather than content is what makes that affordable: for this project's
+786 specs, **~90 KB instead of ~2 MB**. And no consumer ever needed the content
+— `diffAgainstApproval` and `settledSpecPaths` only ever ask whether a spec
+still matches. For the content itself there is already git: the record is
+committed, so `git diff <lock commit> -- .wai/specs` is the real diff, and
+better.
+
+Keys are written **sorted**, so re-approving a one-spec change produces a
+**two-line diff** — the timestamp and that spec's digest — in a 96 KB file.
+Measured on this repo. That is a good signal in a PR rather than noise, and it
+is categorically different from the ratchet this replaced, which rewrote
+hundreds of *spec* files for a decision that changed no design. A test asserts
+the spec tree is byte-identical after `lock`.
+
+Digests **normalize line endings** before hashing. This is not tidiness: git
+rewrites line endings on checkout (`core.autocrlf`), so an approval taken on
+Windows would otherwise report every spec as drifted on a Linux CI runner. The
+defect was unreachable while the record was machine-local — sharing it is what
+made it live.
 
 ### It is per project root, and children are pinned
 
-Every `.wai` owns its own baseline, including each chained subproject. A
+Every `.wai` owns its own lock record, including each chained subproject. A
 parent's approval never freezes a child's in-flight work, and a child cloned on
-its own still has somewhere to keep its approval.
+its own carries its approval with it.
 
 What crosses between them is a **pin**: a parent approval records each mounted
 child's approved `StateId`, the way a git submodule pins a commit. So a child
@@ -90,7 +110,7 @@ the only thing that ever promoted. Delete it naively and the gate goes
 **permanently soft** — which is exactly how an `UNEXPECTED_IMPLEMENTATION_METHOD`
 came to surface days late in real use.
 
-The baseline already knows which specs were approved and which have moved, so a
+The record already knows which specs were approved and which have moved, so a
 spec that is *approved and unchanged* is presented to the rules as `complete` —
 in memory, restored in `finally`, the same mechanism `treatAllAsComplete`
 already used (`src/core/validation.ts`). Nothing is written.
@@ -111,7 +131,8 @@ Two things get strictly better than the ratchet:
 1. Validate as complete (full strictness, no draft relaxation, mutates nothing).
 2. Report what moved since the last approval, and which children moved.
 3. Ask.
-4. Record the approved tree as the baseline — outside the working copy.
+4. Record the approval — a digest per spec — on `.wai/lock.json`, together with
+   who approved and how that identity was established.
 5. Regenerate the derived topology.
 
 A scoped approval (`--subsystem x`) approves **only what it covers**; everything
@@ -121,7 +142,63 @@ than the one being removed.
 
 ---
 
+## Who approved
+
+`lockedBy` is `{ id, name?, source }`, and the `source` is the point. A `hosted`
+identity was **authenticated** by the instance that issued the caller's
+credential. `git` and `os` are self-declared, read from the machine's own
+config. Recording which keeps the record honest instead of leaving a bare name
+to imply more than it can.
+
+Locally the preference is the **git author identity**, because it is the one
+identity the repository already attributes work to — a reviewer can match it
+against the author of the commit that carries the lock, and that matching is the
+whole value. The fallback is `user@hostname`, which is what Terraform records as
+a lock's holder and what git itself synthesizes when no identity is configured; a
+bare OS username is strictly worse, because in CI it is `runner` and identifies
+nobody. Deliberately not a MAC address or other hardware id: modern systems
+randomize MACs, they differ per interface and VPN, and collecting one is device
+fingerprinting for a field that is not authentication anyway.
+
+Hosted is the one surface where wairon genuinely authenticated the approver, and
+it was **throwing that away** — `executeApprovedLock` wrote the constant
+`admin:master` while its caller held a resolved principal. It now records the
+subject. On the approval path the **decider** is recorded, not the requester:
+the requester did not have the authority, and the decision is what conferred it.
+The requester is not lost — the `ApprovalRequest` and the audit event carry them.
+
+None of this is proof. The trust anchor is the commit that introduces
+`lock.json` — signed commits, a protected branch, a reviewed PR. `lockedBy` is a
+convenience copy that earns its place only where git does not follow: a
+`.waitree` archive, a `remote push` into a hosted instance, a tarball.
+
+---
+
 ## Reversals worth recording
+
+**Keeping the approval outside the repo was wrong, and only sharing it showed
+why.** The first revision put it in `~/.wairon/baselines/` on the reasoning that
+"approving must not dirty the repo". That reasoning conflated two very different
+writes: rewriting 786 *spec* files, and one lockfile changing the way lockfiles
+do. The cost was that no teammate, clone or CI run could see the approval at
+all. Moving it into the committed record — as digests, so it fits — keeps the
+property that mattered and drops the one that did not.
+
+**Two defects were only reachable once the record was shared.** Hashing raw
+bytes meant a Windows approval reported all 786 specs as drifted on a Linux
+checkout; digests now normalize line endings, and a test rewrites the whole
+fixture tree to CRLF to hold that. And the hosted lock **published before
+writing the record**, so the commit shipping the specs did not contain the
+approval certifying them — harmless when the record was four bookkeeping fields,
+not when it *is* the approval. Neither was observable while the approval sat on
+one machine.
+
+**The signature change was caught by a test, not by the compiler.** Adding an
+`approver` parameter to `executeApprovedLock` silently re-bound an existing
+three-argument call to the new slot. `tsconfig.json` excludes `tests/`, so
+nothing typechecks the suite — vitest transpiles without checking. The test
+failed loudly and the fix was obvious, but the compiler should have said so
+first.
 
 **`--subsystem` nearly became a silent whole-tree approval.** Removing the
 ratchet left nothing scoping the capture. Two existing lock tests failed and
@@ -138,13 +215,16 @@ one that admits its scope.
 
 ## Deliberately out of scope
 
-**Trimming `lock.json` itself.** `lockedBy`, `validatorVersion`,
-`validationResult` and `commitSha` are now largely vestigial, but
-`readLockState` is still consulted by the hosted policy plane and by `doctor`.
-Reducing the record to a baseline reference is a separate change with hosted
-consequences.
+**A local wairon account.** The CLI has no identity of its own: `remote attach`
+stores a bearer token, but resolving it to a person would need a `whoami`
+endpoint and a network call, and `lock` is deliberately an offline command. The
+git identity is the honest local answer until that changes.
+
+**Storing the approved content.** Digests cannot show what changed *inside* a
+spec. Git already can, against the lock's own commit, so keeping a second copy
+of the tree to duplicate it is not worth its weight.
 
 **Separation of duties.** `promote` was the hook for "two people must sign off".
 It never worked, and it was removed rather than kept as a placeholder. If it
-returns, it belongs on the baseline — where *"approved by X at baseline B"* is a
-reviewable fact — not as a status string nothing reads.
+returns, it belongs on the approval — where *"approved by X at StateId S"* is a
+reviewable, committed fact — not as a status string nothing reads.

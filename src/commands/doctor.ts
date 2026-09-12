@@ -16,6 +16,7 @@ import { readStampVersion } from '../core/stamp.js';
 import { localGuideFilePath, reinjectLocalGuides } from '../utils/ai-guide.js';
 import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
 import { findLegacySpecFiles, readLockState } from '../core/specs.js';
+import { describeApprover } from '../core/lockfile.js';
 import { diagnoseProjectPacks, pinInstalledPacksAsSelections } from '../core/extensions.js';
 import { claudeMcpConfigPath } from './mcp.js';
 
@@ -222,17 +223,36 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       const lock = readLockState();
       if (lock.state === 'locked') {
         console.log(chalk.bold('Lock'));
-        line(tally, 'ok', `frozen at ${lock.record!.lockedAt} by ${lock.record!.lockedBy}`);
+        line(tally, 'ok', `frozen at ${lock.record!.lockedAt} by ${describeApprover(lock.record!.lockedBy)}`);
+        if (!lock.record!.specs) {
+          line(tally, 'warn', 'this lock predates per-spec approval — re-lock so `wairon status` can name what drifts');
+        }
         logger.blank();
       } else if (lock.state === 'stale') {
         console.log(chalk.bold('Lock'));
         line(tally, 'warn',
-          `stale — the specs or the governing doctrine changed since ${lock.record!.lockedAt}, so this lock no longer holds `
-          + 'and promotion will refuse it. Re-run `wairon lock` to freeze the current state.');
+          `stale — the specs or the governing doctrine changed since ${lock.record!.lockedAt}, so this lock no longer holds. `
+          + 'Re-run `wairon lock` to freeze the current state.');
         logger.blank();
       }
     } catch { /* a health check must never break the health report */ }
   }
+
+  // Approvals used to be kept outside every project, in ~/.wairon/baselines/.
+  // They live in the committed lock record now, so anything still there is dead
+  // weight from an older install — reported, never deleted: it is the user's
+  // data and removing it is their call, not a health check's.
+  try {
+    const legacy = path.join(os.homedir(), '.wairon', 'baselines');
+    const leftovers = fs.existsSync(legacy) ? fs.readdirSync(legacy).filter((f) => f.endsWith('.json')) : [];
+    if (leftovers.length) {
+      console.log(chalk.bold('Approvals'));
+      line(tally, 'warn',
+        `${leftovers.length} leftover approval baseline(s) in ${legacy} — approvals moved into `
+        + '.wai/lock.json, so these are no longer read. Safe to delete.');
+      logger.blank();
+    }
+  } catch { /* a health check must never break the health report */ }
 
   // ── Extension packs ─────────────────────────────────────────────────────────
   // The migration surface: which packs govern this project, and which govern it

@@ -103,20 +103,23 @@ had not changed. `.wai/phased_design.md` records that blanket freeze being
 reverted by hand four times, once annotated "product gap: lock needs phase
 awareness".
 
-The fix is one addition that retires several concepts: **store the approved
-tree, not a hash of it.**
+The fix is one addition that retires several concepts: **record what was
+approved per spec, not one hash of the whole tree.**
 
-- **Approval baselines** (`src/core/baseline.ts`) keep the approved tree
-  OUTSIDE the working copy (`WAIRON_BASELINE_DIR`, else `~/.wairon/baselines`).
-  Approving adds nothing to `git status`; a test asserts the spec tree is
-  byte-identical afterwards.
+- **The approval lives on the committed lock record** (`src/core/approval.ts` →
+  `.wai/lock.json`): one sha256 per spec file, ~90 KB for this project's 786
+  specs. Being committed is the point — a teammate, a fresh clone and CI all see
+  the same approval the approver saw. Keys are sorted, so re-approving a
+  one-spec change is a two-line diff; digests normalize line endings, so an
+  approval taken on Windows survives a Linux checkout. A test asserts the spec
+  tree is byte-identical after `lock`.
 - **`wairon status` names what moved** instead of asserting that something did.
   `Lock: STALE` — which fired on a tree validating 0 errors / 0 warnings, named
   nothing, and asked for work producing no new information — is gone:
 
   ```
-  3 spec(s) changed since approval (2 changed, 1 added) — approved … by robbe:
-    sdd_core/spec_loader/.index.yaml
+  3 specs changed since approval (2 changed, 1 added) — approved … by Robbe <…>:
+    .wai/specs/sdd_core/spec_loader/.index.yaml
     ...
   ```
 
@@ -130,11 +133,18 @@ tree, not a hash of it.**
   memory. It is also bidirectional, which the one-way on-disk ratchet could
   never be: a spec that drifts after approval returns to draft context by
   itself.
-- **Per `.wai`, with children pinned.** Every project root owns its own
-  baseline, so a parent's approval never freezes a child's in-flight work and a
-  child cloned alone still has one. A parent pins each child's approved
-  `StateId` the way a submodule pins a commit: a child edit does not dirty the
-  parent, but the parent still sees the child move.
+- **`lockedBy` records the identity AND its source.** `hosted` was
+  authenticated by the instance; `git` and `os` are self-declared. Locally the
+  git author identity is preferred, because it is what a reviewer can match
+  against the commit carrying the lock, falling back to `user@hostname`. The
+  hosted lock previously wrote a constant `admin:master` while its caller held a
+  resolved principal; it now records the subject, and on the approval path the
+  decider rather than the requester.
+- **Per `.wai`, with children pinned.** Every project root owns its own lock
+  record, so a parent's approval never freezes a child's in-flight work and a
+  child cloned alone carries its approval with it. A parent pins each child's
+  approved `StateId` the way a submodule pins a commit: a child edit does not
+  dirty the parent, but the parent still sees the child move.
 - **`lock --subsystem` approves only its own scope.** Everything outside keeps
   the approval it already had.
 

@@ -141,20 +141,6 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: importSpecTree
-  - name: captureBaseline
-    narrative:
-      - stepNumber: 1
-        description: Forward approval capture to the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: captureBaseline
-  - name: writeBaseline
-    narrative:
-      - stepNumber: 1
-        description: Forward baseline persistence to the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: writeBaseline
   - name: currentChildPins
     narrative:
       - stepNumber: 1
@@ -162,6 +148,13 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: currentChildPins
+  - name: captureApprovedSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward approval capture to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: captureApprovedSpecs
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-09-11T23:33:32.226Z'
+updatedAt: '2026-09-12T00:19:49.783Z'

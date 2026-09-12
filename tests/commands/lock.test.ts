@@ -17,7 +17,7 @@ import {
 } from '../../src/core/specs.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
 import { runLock } from '../../src/commands/lock.js';
-import { readBaseline } from '../../src/core/baseline.js';
+import { readLockRecordAt } from '../../src/core/lockfile.js';
 import type { ValidationResult } from '../../src/core/validation.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -107,8 +107,6 @@ function buildLockableProject(rootDir: string, withEndpoint = true): void {
   setProjectRoot(rootDir);
 }
 
-process.env['WAIRON_BASELINE_DIR'] = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockstore-'));
-
 describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
   let rootDir: string;
 
@@ -137,17 +135,18 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     // and a later pack change invalidates the lock by state mismatch.
     expect(record!.stateId.algorithm).toBe('sha256+doctrine');
     expect(record!.stateId.digest).toMatch(/^[0-9a-f]{64}$/);
-    expect(record!.lockedBy).toMatch(/^local/);
+    // Whoever git says is authoring here, or user@host when git has no identity —
+    // never a bare OS username, which names nobody in CI.
+    expect(['git', 'os']).toContain(record!.lockedBy.source);
+    expect(record!.lockedBy.id).toBeTruthy();
     expect(record!.validationResult).toEqual({ valid: true, errors: 0, warnings: 1 });
 
     // Approving writes NOTHING into the spec tree — the status ratchet that
-    // used to rewrite every file is gone, and the approval lives in the
-    // baseline instead.
+    // used to rewrite every file is gone, and the approval rides in this one
+    // record as a digest per spec.
     invalidateSpecCache();
     expect(loadComponentSpec('gateway-portal')?.status).toBe('draft');
-    const baseline = readBaseline(rootDir);
-    expect(baseline).not.toBeNull();
-    expect(Object.keys(baseline!.specs).some((p) => p.includes('gateway-portal'))).toBe(true);
+    expect(Object.keys(record!.specs!).some((p) => p.includes('gateway-portal'))).toBe(true);
 
     // ...and the record persisted to .wai/lock.json.
     const onDisk = JSON.parse(fs.readFileSync(path.join(rootDir, '.wai', 'lock.json'), 'utf8'));
@@ -168,7 +167,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
 
     // The approval covers core-sub's specs and nothing outside it: a scoped
     // approval must never silently mark the rest of the tree reviewed.
-    const approved = Object.keys(readBaseline(rootDir)!.specs);
+    const approved = Object.keys(readLockRecordAt(rootDir)!.specs!);
     expect(approved.some((p) => p.includes('gateway-portal'))).toBe(true);
     expect(approved.some((p) => p.includes('aux-orchestrator'))).toBe(false);
     expect(approved.some((p) => p.includes('aux-sub'))).toBe(false);
@@ -197,9 +196,10 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     expect(promptMock).toHaveBeenCalledTimes(1);
     invalidateSpecCache();
     expect(collectPromotableSpecs()).toHaveLength(promotableBefore);
+    // Declining records no approval — and since the approval IS the lock
+    // record, that is the same statement twice over.
     expect(fs.existsSync(path.join(rootDir, '.wai', 'lock.json'))).toBe(false);
-    // Declining records no approval.
-    expect(readBaseline(rootDir)).toBeNull();
+    expect(readLockRecordAt(rootDir)).toBeNull();
   });
 });
 

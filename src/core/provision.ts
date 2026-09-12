@@ -29,9 +29,9 @@ import type { SubsystemSpec } from '../models/index.js';
 //
 // There is deliberately no bulk status promotion here any more. A lock used to
 // ratchet every spec to `status: complete` on disk; approval is recorded in a
-// baseline outside the tree instead (core/baseline.ts), and settledness is
-// derived from it. collectPromotableSpecs/applySpecStatus remain as per-spec
-// primitives — the bulk sweep is what was the bug.
+// digest per spec in the committed lock record instead (core/approval.ts),
+// and settledness is derived from that. collectPromotableSpecs/applySpecStatus
+// remain as per-spec primitives — the bulk sweep is what was the bug.
 // ---------------------------------------------------------------------------
 
 function defaultProjectConfig(name: string, now: string): ProjectConfig {

@@ -2,9 +2,12 @@ kind: entity
 id: lock_record
 name: LockRecord
 description: >-
-  A commit-scoped lock: proof that the spec tree validated as-complete at one exact state. Scoped to
-  the StateId it validated, so any later edit makes it stale automatically. Promotion re-checks the
-  current StateId against this record and refuses on drift. Never itself performs a merge.
+  The commit-scoped lock record (.wai/lock.json): proof that the spec tree validated as-complete at
+  one exact gate StateId, AND the approval itself. `specs` carries a digest per spec file, so "which
+  specs did the human sign off, and which have moved since?" is answered from a COMMITTED file —
+  which is what lets a teammate, a fresh clone and CI see the same approval the approver saw.
+  Written with sorted keys, so a re-lock diffs one line per spec actually re-approved rather than a
+  rewritten blob.
 subsystem: sdd_core
 fields:
   - name: stateId
@@ -16,8 +19,10 @@ fields:
     description: ISO-8601 lock timestamp
     optional: false
   - name: lockedBy
-    type: string
-    description: Audit id of the principal that locked
+    type: ApproverIdentity
+    description: >-
+      The principal that authorized the lock, with the source that established them (never a raw
+      credential).
     optional: false
   - name: validatorVersion
     type: string
@@ -47,6 +52,21 @@ fields:
     type: string
     description: Credential id used to create the lock, if the action came through MCP or HTTP auth.
     optional: true
+  - name: specs
+    type: Record<string, string>
+    description: >-
+      THE APPROVAL: spec path (relative to the project root, POSIX separators) → sha256 of that
+      file's content when approved. Absent on a record written before approval moved in here — such
+      a lock still proves the tree validated, but cannot say WHICH specs moved, only that the
+      whole-tree StateId did.
+    optional: true
+  - name: children
+    type: Record<string, string>
+    description: >-
+      Chained child mount id → that child's approved StateId, pinned the way a git submodule pins a
+      commit. A child edit does not dirty the parent's own diff; it moves this pin, which is the
+      parent's review signal.
+    optional: true
 methods: []
 componentClass: lock_registry
 invariants:
@@ -56,4 +76,4 @@ invariants:
       write replaces the prior record wholesale — there is no append path, so a stale lock can never
       coexist with a fresh one.
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-09-11T23:39:51.912Z'
+updatedAt: '2026-09-12T00:19:35.555Z'

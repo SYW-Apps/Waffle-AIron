@@ -1,13 +1,13 @@
-import * as os from 'os';
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import {
-  captureBaseline, writeBaseline, diffAgainstBaseline, diffSize, currentChildPins, movedChildren,
-} from '../core/baseline.js';
+  captureApprovedSpecs, diffAgainstApproval, diffSize, currentChildPins, movedChildren,
+} from '../core/approval.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import * as path from 'path';
 import {
   computeGateStateId,
+  localApprover,
   writeLockRecord,
   specPathsInScope,
   loadSubsystemSpecs,
@@ -20,8 +20,8 @@ import type { ValidationResult } from '../core/validation.js';
 // cli_lock_adapter — the core-side half of `wairon lock` (lockTree, realized
 // by runLock): summarize what CHANGED since the last approval, confirm with
 // the human (skipped under --yes), and record the current tree as approved.
-// It writes nothing into the spec tree — the approval lives in the baseline,
-// outside the working copy.
+// It writes nothing into the spec tree: the approval is one digest per spec
+// inside the committed lock record, so the whole decision is a single file.
 //
 // Callers gate on an as-complete validation FIRST — the runner routes the
 // dry-run through the validator adapter's validateAsComplete before this
@@ -54,9 +54,10 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
   // --- Summarize what is actually being approved ---
   // Against the previous approval, not against each spec's stored status: the
   // human is deciding about a CHANGE, and "3 specs moved since you last said
-  // yes" is the question they can answer. A first approval has no baseline to
-  // compare with, so it reports the size of the tree instead.
-  const diff = diffAgainstBaseline();
+  // yes" is the question they can answer. A first approval has nothing to
+  // compare with, and neither does a lock written before the per-spec record
+  // existed — both say so rather than inventing a diff.
+  const diff = diffAgainstApproval();
   if (!diff) {
     logger.info('First approval of this tree — the whole spec tree becomes the approved baseline.');
   } else if (diffSize(diff) === 0) {
@@ -101,40 +102,10 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
   // Nothing is written into the spec tree. Approval used to ratchet every
   // spec's `status` to `complete` on disk — up to hundreds of rewritten files
   // for a decision that changed no design — so that later validate runs would
-  // stop relaxing completeness findings. The baseline carries that fact now,
-  // and derives it per spec, so an edit after approval returns that spec to
-  // draft context on its own instead of staying frozen complete.
+  // stop relaxing completeness findings. The lock record carries that fact now,
+  // per spec, so an edit after approval returns that spec to draft context on
+  // its own instead of staying frozen complete.
 
-  // --- Persist the commit-scoped lock record at the tree's CURRENT StateId ---
-  // Computed AFTER the freeze (like the hosted lock): the promotion is part of
-  // the state the record certifies, and promotion re-checks against it.
-  // The GATE identity, not the content one: the record certifies "these specs
-  // passed THIS gate", so the governing doctrine is part of what is frozen —
-  // change a pack afterwards and the lock goes stale on its own.
-  let lockedBy = 'local';
-  try {
-    lockedBy = `local:${os.userInfo().username}`;
-  } catch { /* keep 'local' */ }
-  const record: LockRecord = {
-    stateId: computeGateStateId(),
-    lockedAt: new Date().toISOString(),
-    lockedBy,
-    validatorVersion: WAIRON_VERSION,
-    validationResult: {
-      valid: true,
-      errors: 0,
-      warnings: gate ? gate.issues.filter((i) => i.severity === 'warning').length : 0,
-    },
-    status: 'ready',
-  };
-  writeLockRecord(record);
-
-  // Record WHAT was approved, not just that something was. The lock record
-  // carries an identity, which can only ever answer "did anything move?"; the
-  // baseline carries the tree, so `wairon status` can name the specs that
-  // moved and a human can review a change instead of a banner.
-  //
-  // Written outside the working tree, so approving adds nothing to `git status`.
   // A scoped approval covers only its subsystem; everything else keeps the
   // approval it already had.
   const root = getProjectRoot();
@@ -145,6 +116,31 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
       ),
     }
     : undefined;
-  writeBaseline(captureBaseline(lockedBy, currentChildPins(loadSubsystemSpecs(), root), root, scope));
+
+  // --- Persist the commit-scoped lock record at the tree's CURRENT StateId ---
+  // The GATE identity, not the content one: the record certifies "these specs
+  // passed THIS gate", so the governing doctrine is part of what is frozen —
+  // change a pack afterwards and the lock goes stale on its own.
+  //
+  // `specs` is the approval itself: one digest per spec file, so `wairon status`
+  // can name what moved instead of printing a banner, and validate can tell
+  // settled specs from in-flux ones. It is recorded HERE rather than beside it
+  // because the lock record is committed — which is what lets a teammate, a
+  // fresh clone and CI all see the same approval the approver saw.
+  const record: LockRecord = {
+    stateId: computeGateStateId(),
+    lockedAt: new Date().toISOString(),
+    lockedBy: localApprover(),
+    validatorVersion: WAIRON_VERSION,
+    validationResult: {
+      valid: true,
+      errors: 0,
+      warnings: gate ? gate.issues.filter((i) => i.severity === 'warning').length : 0,
+    },
+    status: 'ready',
+    specs: captureApprovedSpecs(root, scope),
+    children: currentChildPins(loadSubsystemSpecs(), root),
+  };
+  writeLockRecord(record);
   return record;
 }

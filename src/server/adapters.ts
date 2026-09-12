@@ -4,7 +4,7 @@ import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph, assertContainedProjectPath } from '../core/specs.js';
 import { exportSpecTree, importSpecTree } from '../core/treetransfer.js';
 import { provisionProject } from '../core/provision.js';
-import { captureBaseline, writeBaseline, currentChildPins } from '../core/index.js';
+import { captureApprovedSpecs, currentChildPins } from '../core/index.js';
 import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
@@ -40,11 +40,10 @@ export const hostCore = {
   readLockState,
   readLockRecord,
   writeLockRecord,
-  // The approval baseline — what a lock RECORDS instead of writing statuses
-  // into the tree. Forwarded here so the hosted lock crosses into sdd_core
-  // through this adapter rather than importing the module directly.
-  captureBaseline,
-  writeBaseline,
+  // The approval — the per-spec digests a lock RECORDS instead of writing
+  // statuses into the tree. Forwarded here so the hosted lock crosses into
+  // sdd_core through this adapter rather than importing the module directly.
+  captureApprovedSpecs,
   currentChildPins,
   renderDiagram,
   // The full CanvasModel as data (the JSON sibling of renderDiagram('canvas')) —
