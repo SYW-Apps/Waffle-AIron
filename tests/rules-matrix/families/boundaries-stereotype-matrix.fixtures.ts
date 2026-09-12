@@ -21,8 +21,12 @@
  *  - An Observer forwards to one Orchestrator/Supervisor and may use a
  *    message-bus Adapter to subscribe; Store/Registry/Repository/Index are
  *    forbidden (ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP).
- *  - A Specialist may use Repositories, Indexes, and Adapters but not
- *    Orchestrators, Supervisors, Stores, Portals, or Observers
+ *  - A Specialist is the wildcard block and stays a PURE capability: it may
+ *    use Repository facades, Indexes, Adapters, and other Specialists, but
+ *    never workflow/runtime blocks (Orchestrator, Supervisor, Actor) and
+ *    never persistence directly (Store, Registry) — all storage, even
+ *    in-memory, goes through the Store/Registry/Index/Repository mechanism,
+ *    reached from a Specialist only via the Repository facade
  *    (ARCHITECTURE_VIOLATION_SPECIALIST_DEP).
  *  - A Store may depend only on another Store or a backend Adapter
  *    (ARCHITECTURE_VIOLATION_STORE_DEP).
@@ -186,7 +190,7 @@ const err = (code: string): Verdict => ({ code, severity: 'error' });
 function verdictFor(consumer: MatrixType, target: MatrixType): Verdict | null {
   // Consumer-side matrices first: where both a consumer-side code and the
   // universal PORTAL_DEP would fire, the more specific code is asserted.
-  if (consumer === 'Specialist' && (['Portal', 'Observer', 'Orchestrator', 'Store', 'Supervisor'] as MatrixType[]).includes(target)) {
+  if (consumer === 'Specialist' && (['Portal', 'Observer', 'Orchestrator', 'Store', 'Registry', 'Supervisor', 'Actor'] as MatrixType[]).includes(target)) {
     return err(SPECIALIST_DEP);
   }
   if (consumer === 'Store' && !(['Store', 'Adapter'] as MatrixType[]).includes(target)) {

@@ -3,12 +3,13 @@
 ## Unreleased (from v5.1.0)
 
 **Breaking.** Merge dev → main with `[major]` in the merge commit message →
-**v6.0.0**. Four changes are visible on upgrade without any action by the user,
+**v6.0.0**. Five changes are visible on upgrade without any action by the user,
 and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
 a project that has not declared them, existing lock records read as stale, a
 project referencing a global pack's profile can newly fail `validate --ci`, and so
-can a chained subproject whose gate was waving cross-tree findings through.
-Nothing here is purely additive, so `[minor]` would understate it.
+can a chained subproject whose gate was waving cross-tree findings through, or a
+Specialist that depends on a Registry or an Actor. Nothing here is purely
+additive, so `[minor]` would understate it.
 
 ### A chained subproject is judged through its parent — never waved through
 
@@ -44,10 +45,12 @@ surfaces, so a hosted subproject lock approved real violations.
   changed — so a child cloned without its parent (a submodule checked out alone
   in CI) still has contracts to validate against. A surface held inside a mount
   now also decides that mount's references when validating from the parent root.
-- **A parent lock writes nothing into its children.** Pushed delivery is gone:
-  the lock hook, `wairon surface generate-children`, and `SURFACE_STALE`. So is
-  the git flood a scoped lock used to cause — (children × subsystems) snapshots
-  rewritten into other people's working trees on the parent's schedule.
+- **A parent lock no longer pushes surfaces into its children.** Pushed delivery
+  is gone: the lock hook, `wairon surface generate-children`, and `SURFACE_STALE`.
+  So is the git flood a scoped lock used to cause — (children × subsystems)
+  snapshots rewritten into other people's working trees on the parent's schedule.
+  An unscoped lock still regenerates each direct child's derived files (skills,
+  context and guides) and initializes a child that is missing its project files.
 - **A child's source paths are its own.** They are read against the child root,
   as the loader always did. An implementation written through the parent (a
   `child::` id) now stores its `sourcePath` and `simPath` relative to the child
@@ -57,6 +60,40 @@ surfaces, so a hosted subproject lock approved real violations.
 - **A loader refusal is anchored to its spec id**, qualified into the mount, so
   `wairon validate --subsystem <mount>` no longer drops a malformed child spec
   that the child's own validate reports.
+
+### Chained subprojects, continued: never softer with the parent on disk, flat at every depth, confined when narrowed
+
+Checking the change above against the code found that it could do the opposite of
+what it promised. Three more gaps sat close by, one of them in hosted confinement.
+
+- **A leniently configured parent could soften a child's own findings.** The walk
+  to the parent was triggered by — and replaced — a family of codes that included
+  verdicts on edges entirely inside the child (`CROSS_SUBSYSTEM_NON_ADAPTER`,
+  `UNDECLARED_DEPENDENCY_CALL`). With a parent that set such a code to `warning` or
+  `off`, a child that failed alone passed with its parent checked out. Now only a
+  reference-resolution failure triggers the walk; the parent-side run judges each
+  rule at the stricter of the parent's and the child's severity; and a child
+  finding gives way only to an equally or more severe parent finding on the same
+  spec, or to a resolution failure the parent's run did not repeat.
+- **A flat chained child now works at every depth.** A grandchild whose subsystem
+  is named after its mount loaded from the top as two subsystems, and with the
+  shadowing fix below its components would have pointed at an id nothing
+  declares. A reference to the mount's own name is now the mount at any depth.
+- **A credential narrowed to a chained child reads nothing above the child.**
+  Validation already honored this; discovering the parent did not. Surface
+  freshness in `sdd_list_external_interfaces` and the bind-time announcement now
+  answer for a child-scoped credential as a top root would, and the four landscape
+  discovery tools are refused under a subproject-qualified binding, like the other
+  record-level tools, instead of answering for the whole project.
+- **Hosted reads are gated as reads.** `sdd_list_external_interfaces` and the
+  topology tools (`listAgents`, `getAgent`, `listDomains`, `validateTopology`,
+  `getProjectConfig`) fell into the fail-closed default and required
+  `project:write`. They require `project:read` now, and a test fails when a tool the
+  hosted server advertises relies on that default.
+- **Two August fixes are finally on `dev`.** Their pull request was merged into a
+  branch that had already been merged, so neither landed: namespace shadowing
+  detectable from disk with the `--ci` draft-subsystem waiver, and the closed
+  Specialist dependency matrix. Their entries follow below.
 
 ### Execution budgets: the topology gains a resource axis
 
@@ -314,6 +351,60 @@ hidden.
   is unreachable in local mode: an unauthenticated boot probes the dev-only
   re-establish route once, recovering silently on a dev server and falling
   through to the real login only on a hosted one.
+
+### Validator fixes: --ci draft parity + namespace shadowing detectable from disk
+
+Two intent/implementation gaps the rule-matrix and e2e tiers surfaced, both
+fixed to match the documented intent.
+
+- **`validate --ci` waives `DRAFT_SUBSYSTEM_WARNING` like the component
+  variant** — `isCiDraftWaivable` waived `DRAFT_COMPONENT_WARNING` but not
+  `DRAFT_SUBSYSTEM_WARNING`, so any fresh draft tree failed `--ci` on a pure
+  status notice while the CLI simultaneously printed "N draft-related
+  warning(s) (non-fatal in --ci)". Both codes (the whole `DRAFT_*_WARNING`
+  family — hierarchy.ts emits each with the same unconditional draft context)
+  are now waived identically; every other warning, including draft-downgraded
+  completeness findings like an unbound Portal method, stays fatal. The e2e
+  authoring journey's `lint.allow` workaround for this is gone.
+- **Declaration-site ids always mount-qualify, so `NAMESPACE_SHADOWING` is
+  reachable** — the loader ran a chained child's DECLARED spec ids through the
+  same `qualifyId` used for references, whose root-subsystem anchor returned
+  any bare id colliding with a root subsystem name UNQUALIFIED. A child
+  subsystem named like a root subsystem therefore silently merged into the
+  root's id space (duplicate subsystem + `ORPHANED_SUBSYSTEM` noise, no
+  shadowing warning) — the exact hazard `NAMESPACE_SHADOWING` documents, with
+  its tripwire structurally unreachable from disk. Declarations now qualify
+  through a dedicated `qualifyDeclaredId` (mount realizations — a child
+  subsystem under the mount's own name — still collapse onto the mount);
+  reference resolution is untouched, so `::`-absolute and bare root-anchored
+  references from a child to root subsystems resolve exactly as before.
+  **Behavior change:** a colliding chained-child subsystem (or component/
+  interface/implementation/type) id now loads qualified (e.g.
+  `partner-billing::ledger`) and trips `NAMESPACE_SHADOWING` instead of
+  silently merging into the root subsystem's id space.
+
+### Specialist dependency matrix closed: Registry and Actor edges now flag
+
+The Specialist is the wildcard block and was historically misused as a god
+component (up to holding entity state in memory); the deliberate
+counter-doctrine is that ALL storage — even in-memory — goes through the
+Store/Registry/Index/Repository mechanism and Specialists stay pure
+capabilities. The enforced forbidden list said so for Store but left the
+persistence WRITE path and one runtime block open — an oversight the
+rule-matrix sweep surfaced, now closed.
+
+- **Behavior change:** `Specialist → Registry` and `Specialist → Actor`
+  `dependsOn` edges now flag `ARCHITECTURE_VIOLATION_SPECIALIST_DEP` (error),
+  joining Portal/Observer/Orchestrator/Store/Supervisor. This closes the
+  wildcard god-component channel; Repository facades (plus Indexes, Adapters,
+  and other Specialists) remain the legal way for a Specialist to reach held
+  state. The rule message, doc comment, and the architecture standard's
+  dependency-rules bullet now state the closed list.
+- **Migration:** an existing tree with a deliberate `Specialist → Registry`/
+  `Actor` edge acknowledges it with a `lint.allow` reason on the spec — or,
+  better, retypes/rewires per the message's Repository-facade resolution.
+  (Note errors are not locally suppressible by default; re-tune the code via
+  `rules.sddRuleSeverity` first if a transition period is needed.)
 
 ### Rule-matrix test tier: every finding code pinned by fire+control fixtures
 
@@ -719,9 +810,9 @@ method's narrative. Two mechanisms close that honestly:
    otherwise resolve to zero permissions, and units without slugs break the
    organizations page. `wairon serve` now warns when this is pending.
 2. **Re-lock any locked project.** The lock now covers doctrine, so records written
-   before this release read as *stale* and `promote` refuses until you re-lock. This
-   fails closed by design: those locks were taken without doctrine coverage and
-   cannot be retro-verified.
+   before this release read as *stale* until you re-lock. This fails closed by
+   design: those locks were taken without doctrine coverage and cannot be
+   retro-verified.
 3. **Declare the packs your projects apply.** Machine-wide packs no longer apply
    unless a project selects them. Run `wairon doctor` to see what is installed but
    unapplied and `wairon doctor --fix` to record it as explicit selections — or set
@@ -745,6 +836,10 @@ method's narrative. Two mechanisms close that honestly:
      pin` run from the child, and drop `lint.allow` entries naming
      `UNVERIFIED_EXTERNAL_REF` or `CHAINED_SUBPROJECT_CONTEXT` (now reported as
      unknown codes).
+6. **A Specialist that depends on a Registry or an Actor is now an error**
+   (`ARCHITECTURE_VIOLATION_SPECIALIST_DEP`). Route storage through a Repository or
+   a Store and runtime work through a Supervisor, or retune the code in
+   `rules.sddRuleSeverity` while you migrate.
 
 ## v5.1.0 (from v5.0.1)
 

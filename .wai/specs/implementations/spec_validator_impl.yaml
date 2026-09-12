@@ -191,22 +191,28 @@ methods:
       - stepNumber: 20
         description: >-
           Resolve a chained subproject's verdict through its parent. When this root is a chained
-          subproject (findChainingParent) and still holds reference-resolution findings no surface
-          snapshot covers, walk up to the TOP root collecting the mount chain — never above the
-          bound request's top project root, and not at all when the request's credential is narrowed
-          to the child — then validate the top root scoped to that chain, with the parent's own
-          project rules and doctrine and the same as-complete strictness, and without resolving
-          again. Its findings are renamed into the child's ids (the mount prefix stripped from spec
-          ids and messages) and merged with the child's own findings minus the uncovered references
-          the parent has now judged: a union, deduplicated, with no severity changed — so the child
-          is never judged more leniently than its parent. Snapshot-covered findings and code↔spec
-          conformance findings keep full strength: a chained child's source paths are relative to
-          its own root, so they are judged there like any project's. The result records the root and
-          scope it was resolved through. When no usable parent is reachable (its L0 missing, the
-          mount unknown, or reach denied), every reference keeps its raw verdict — a cross-tree form
-          stays an unwaived CROSS_TREE_REF_UNRESOLVED warning and a typo stays an error — so a child
-          that cannot be judged through its parent pins its family surfaces or fails its gate;
-          nothing is rewritten and no notice is prepended
+          subproject (findChainingParent) and still holds a reference-resolution failure no surface
+          snapshot covers — an unresolved cross-tree reference, or a dependency, call-target, type,
+          subsystem or trusted-link reference that does not resolve in this tree — walk up to the
+          TOP root collecting the mount chain (never above the bound request's top project root, and
+          not at all when the request's credential is narrowed to the child), then validate the top
+          root scoped to that chain with the parent's own doctrine, for each rule the stricter of
+          the parent's and this project's severity, the same as-complete strictness, and without
+          resolving again. A verdict on an edge this root can already see — a boundary crossing
+          between its own subsystems, an undeclared dependency call — never triggers the walk. The
+          parent's findings are renamed into the child's ids (the mount prefix stripped from spec
+          ids and messages) and merged with the child's own: a child finding gives way only where
+          the parent reported the same code on the same spec at least as severely, or where it is a
+          resolution failure the parent's run did not repeat (the reference resolved from the
+          parent); every other child finding stands, and a parent finding that a stricter child
+          finding already covers is dropped — so the child is never judged more leniently than alone
+          or than its parent. Code↔spec conformance findings keep full strength: a chained child's
+          source paths are relative to its own root. The result records the root and scope it was
+          resolved through. When no usable parent is reachable (its L0 missing, the mount unknown,
+          or reach denied), every reference keeps its raw verdict — a cross-tree form stays an
+          unwaived CROSS_TREE_REF_UNRESOLVED warning and a typo stays an error — so a child that
+          cannot be judged through its parent pins its family surfaces or fails its gate; nothing is
+          rewritten and no notice is prepended
         type: local
       - stepNumber: 21
         description: Return the aggregated validation result
@@ -341,4 +347,4 @@ lint:
         when Level 3 models call indirection.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T13:06:34.112Z'
+updatedAt: '2026-09-12T15:15:57.177Z'

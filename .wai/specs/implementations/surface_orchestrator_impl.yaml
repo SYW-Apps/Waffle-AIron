@@ -113,7 +113,9 @@ methods:
         targetComponent: surface_repository
         targetMethod: listSnapshots
       - stepNumber: 2
-        description: Detect the chaining-mount context of the current root
+        description: >-
+          Detect the chaining-mount context of the current root — null when the bound request may
+          not read above its root
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveChainingParent
@@ -235,4 +237,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-09-12T12:38:08.781Z'
+updatedAt: '2026-09-12T15:16:05.193Z'

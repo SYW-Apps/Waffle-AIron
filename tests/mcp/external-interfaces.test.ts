@@ -5,15 +5,16 @@ import * as path from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { setProjectRoot } from '../../src/utils/fs.js';
+import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
   saveSubsystemSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   invalidateSpecCache,
+  resolveChainingParent,
 } from '../../src/core/specs.js';
-import { pinFamilySurfaces } from '../../src/core/surfaces.js';
+import { pinFamilySurfaces, listExternalInterfaces } from '../../src/core/surfaces.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -174,5 +175,37 @@ describe('sdd_list_external_interfaces + chained-subproject announcement', () =>
     } finally {
       await client.close();
     }
+  });
+
+  // Reach: a hosted request binds the child's root together with whether its
+  // credential reaches the top project. Reading above the bound root — the
+  // parent's current state hash behind freshness, or the parent's location in the
+  // announcement — is exactly what a child-narrowed credential must not do.
+
+  it('a credential narrowed to the child reads nothing above it: no parent, and no freshness verdict', () => {
+    runWithProjectBinding(childDir, { topRoot: rootDir, parentReach: false }, () => {
+      expect(resolveChainingParent()).toBeNull();
+      const entries = listExternalInterfaces();
+      expect(entries.length).toBeGreaterThan(0);
+      expect(entries.map((e) => e.freshness)).toEqual(entries.map(() => 'unverifiable'));
+    });
+  });
+
+  it('a credential that reaches the top project still sees the parent and the freshness of each pin', () => {
+    runWithProjectBinding(childDir, { topRoot: rootDir, parentReach: true }, () => {
+      expect(resolveChainingParent()?.subsystemId).toBe('kid');
+      expect(listExternalInterfaces().find((e) => e.sourceKind === 'parent')?.freshness).toBe('fresh');
+    });
+  });
+
+  it("never reads above the request's top project root, whatever the credential reaches", () => {
+    runWithProjectBinding(childDir, { topRoot: childDir, parentReach: true }, () => {
+      expect(resolveChainingParent()).toBeNull();
+    });
+  });
+
+  it('does not announce the parent from a server bound for a child-scoped credential', () => {
+    runWithProjectBinding(childDir, { topRoot: rootDir, parentReach: false }, () => createMcpServer());
+    expect(stderrLines.find((l) => l.includes('chained subproject'))).toBeUndefined();
   });
 });

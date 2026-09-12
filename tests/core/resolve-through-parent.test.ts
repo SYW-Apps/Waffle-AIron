@@ -456,3 +456,114 @@ describe('step 3 — a chained child is judged through its parent when the paren
     expect(errors(fromKid2)).toEqual(['CROSS_SUBSYSTEM_NON_ADAPTER @k2-orch']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// …and never more leniently with its parent checked out than alone.
+//
+// Resolving through the parent used to be triggered by, and to replace, a family
+// of codes that included verdicts on edges entirely inside the child. A parent
+// configured more leniently then lowered or removed the child's own errors: the
+// same child failed cloned alone and passed with its parent on disk.
+// ---------------------------------------------------------------------------
+
+describe('a leniently configured parent never softens what the child judged alone', () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (root) fs.rmSync(root, { recursive: true, force: true });
+    root = undefined;
+  });
+
+  /**
+   * A parent whose configuration overrides `severities`, mounting a child with
+   * two subsystems where an Orchestrator in one depends directly on the published
+   * Portal of the other — a boundary verdict the child reaches on its own.
+   * `extras` adds components to the child.
+   */
+  function lenientFamily(
+    severities: Record<string, 'error' | 'warning' | 'off'>,
+    extras: ComponentSpec[] = [],
+  ): { root: string; kidDir: string } {
+    const top = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-rtp-lenient-'));
+    fs.mkdirSync(path.join(top, '.wai', 'specs'), { recursive: true });
+    writeYamlFile(path.join(top, '.wai', 'project.yaml'), {
+      schemaVersion: '1.0.0', name: 'parent',
+      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules: { sddRuleSeverity: severities }, extensions: { packs: [], useGlobalPacks: false },
+      createdAt: now, updatedAt: now,
+    });
+    setProjectRoot(top);
+    saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'root-system', vision: 'v',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    saveSubsystemSpec(subsystem('parent-sub', {
+      publicInterfaces: [{ type: 'Custom', details: 'the published portal', component: 'parent-portal' }],
+    } as Partial<SubsystemSpec>));
+    saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+
+    const kidDir = path.join(top, 'packages', 'kid');
+    const kid = workspaceFor(kidDir);
+    kid.saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'kid-system', vision: 'v',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    kid.saveSubsystemSpec(subsystem('k-a', { parentSystem: 'kid-system' }));
+    kid.saveSubsystemSpec(subsystem('k-b', {
+      parentSystem: 'kid-system',
+      publicInterfaces: [{ type: 'Custom', details: 'the k-b portal', component: 'k-b-portal' }],
+    } as Partial<SubsystemSpec>));
+    kid.saveComponentSpec(component('k-b-portal', 'k-b', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    kid.saveComponentSpec(component('k-orch', 'k-a', { dependsOn: ['k-b-portal'] }));
+    for (const extra of extras) kid.saveComponentSpec(extra);
+    invalidateSpecCache();
+    return { root: top, kidDir };
+  }
+
+  /** The severities of every finding of `code` on `specId`, sorted. */
+  const severitiesOf = (res: ValidationResult, code: string, specId: string): string[] =>
+    res.issues.filter((i) => i.code === code && i.specId === specId).map((i) => i.severity).sort();
+
+  it("a boundary verdict on the child's own edge never sends it to the parent, and stays an error", () => {
+    const fam = lenientFamily({ CROSS_SUBSYSTEM_NON_ADAPTER: 'off' });
+    root = fam.root;
+
+    const fromChild = verdict(fam.kidDir);
+
+    expect(fromChild.resolvedThrough).toBeUndefined();
+    expect(errors(fromChild)).toContain('CROSS_SUBSYSTEM_NON_ADAPTER @k-orch');
+    expect(fromChild.valid).toBe(false);
+  });
+
+  it("resolving a cross-tree reference through a lenient parent leaves the child's own boundary error an error", () => {
+    const fam = lenientFamily({ CROSS_SUBSYSTEM_NON_ADAPTER: 'warning' }, [
+      component('k-adapter', 'k-a', { componentType: 'Adapter', dependsOn: ['super::parent-portal'] }),
+    ]);
+    root = fam.root;
+
+    const fromChild = verdict(fam.kidDir);
+
+    expect(fromChild.resolvedThrough?.scope).toBe('kid');
+    // One finding, at the child's own severity: the parent's warning adds nothing.
+    expect(severitiesOf(fromChild, 'CROSS_SUBSYSTEM_NON_ADAPTER', 'k-orch')).toEqual(['error']);
+    // The cross-tree reference itself was judged by the parent, and is clean.
+    expect(fromChild.issues.some((i) => i.code === 'CROSS_TREE_REF_UNRESOLVED')).toBe(false);
+  });
+
+  it("a parent that turns a rule off cannot make the child's resolution failure look resolved", () => {
+    const fam = lenientFamily({ INVALID_DEPENDENCY_REFERENCE: 'off' }, [
+      component('k-adapter', 'k-a', { componentType: 'Adapter', dependsOn: ['super::parent-portal'] }),
+      component('k-typo', 'k-a', { dependsOn: ['no-such-component'] }),
+    ]);
+    root = fam.root;
+
+    const fromChild = verdict(fam.kidDir);
+
+    expect(fromChild.resolvedThrough?.scope).toBe('kid');
+    expect(errors(fromChild)).toContain('INVALID_DEPENDENCY_REFERENCE @k-typo');
+    expect(fromChild.valid).toBe(false);
+  });
+});

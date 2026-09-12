@@ -147,8 +147,9 @@ methods:
   - name: resolveChainingParent
     description: >-
       Report whether the currently bound project root is a chained subproject of a parent project
-      (parent root + mounting subsystem id), or null for a genuine top root. Read-only detection
-      through the spec loader.
+      (parent root + mounting subsystem id), or null for a genuine top root. Null too when the bound
+      request may not read above its root: a hosted credential narrowed to the child, or a parent
+      that lies above the request's top project root. Read-only detection through the spec loader.
     signature: 'resolveChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef | null
   - name: computeStateIdAt
@@ -197,4 +198,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-12T13:06:44.233Z'
+updatedAt: '2026-09-12T15:16:07.070Z'
