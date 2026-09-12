@@ -60,6 +60,13 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: listMountSnapshots
+  - name: pinFamilySurfaces
+    narrative:
+      - stepNumber: 1
+        description: Forward pinFamilySurfaces to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: pinFamilySurfaces
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-09-12T11:59:29.735Z'
+updatedAt: '2026-09-12T12:07:54.142Z'

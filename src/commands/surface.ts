@@ -8,6 +8,7 @@ import {
   listSnapshots,
   generateChildSnapshots,
   listExternalInterfaces,
+  pinFamilySurfaces,
 } from '../core/surfaces.js';
 import { SURFACE_AUDIENCES, SurfaceOrigin } from '../models/index.js';
 
@@ -20,6 +21,8 @@ import { SURFACE_AUDIENCES, SurfaceOrigin } from '../models/index.js';
 // generate-children — write the family surface into every chained child
 // externals        — the project's consumable external surfaces (parent
 //                    family, siblings, foreign imports) with freshness
+// pin              — a chained child pulls its parent's family and sibling
+//                    surfaces into its own .wai/surfaces/, on its own schedule
 // ---------------------------------------------------------------------------
 
 // cli_surfaces_client_adapter.generateChildSnapshots — also consumed by the
@@ -145,7 +148,23 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       return;
     }
 
+    case 'pin': {
+      // Only CHANGED paths come back; null means this root has no parent at all.
+      const written = pinFamilySurfaces();
+      if (written === null) {
+        logger.info('This project is not a chained subproject — there is no parent family to pin.');
+        return;
+      }
+      if (!written.length) {
+        logger.info('Pinned family surfaces are already up to date — nothing rewritten.');
+        return;
+      }
+      logger.success(`Pinned ${written.length} family surface(s) from the parent:`);
+      for (const p of written) logger.info(`  ${p}`);
+      return;
+    }
+
     default:
-      throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list, generate-children, externals).`);
+      throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list, generate-children, externals, pin).`);
   }
 }

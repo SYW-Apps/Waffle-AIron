@@ -78,6 +78,13 @@ methods:
     params:
       - name: mounts
         type: string[]
+  - name: pinFamilySurfaces
+    description: >-
+      Pin the chaining parent's family and sibling surfaces into the chained child's own
+      .wai/surfaces/, or null at a top root. Pure 1:1 forward.
+    signature: 'pinFamilySurfaces(): string[] | null'
+    returns: string[] | null
+    params: []
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-09-12T11:59:27.982Z'
+updatedAt: '2026-09-12T12:07:52.527Z'

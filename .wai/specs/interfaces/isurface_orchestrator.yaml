@@ -84,6 +84,18 @@ methods:
     params:
       - name: mounts
         type: string[]
+  - name: pinFamilySurfaces
+    description: >-
+      Pin the outward world of a chained child into its OWN .wai/surfaces/, pulled by the child
+      rather than pushed by the parent's lock: resolve the chaining parent, bind the parent root
+      read-only, project the family-scoped parent surface and every SIBLING subsystem's published
+      surface (all but this child's own mount), and store each into the child, leaving an unchanged
+      snapshot untouched. Returns the changed paths, or null when the bound root is not a chained
+      subproject. This is what a child cloned WITHOUT its parent validates its cross-tree references
+      against — a versioned import its owner commits on their own schedule.
+    signature: 'pinFamilySurfaces(): string[] | null'
+    returns: string[] | null
+    params: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-09-12T12:00:13.095Z'
+updatedAt: '2026-09-12T12:07:43.460Z'

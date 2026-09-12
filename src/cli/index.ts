@@ -798,7 +798,7 @@ program
 
 program
   .command('surface <action>')
-  .description('public surface exchange: export | import | list | generate-children | externals')
+  .description('public surface exchange: export | import | list | generate-children | externals | pin')
   .option('--audience <level>', 'export ceiling: project | department | instance | partner | external (default instance)')
   .option('--format <fmt>', 'export format: native | openapi (default native)')
   .option('--out <path>', 'export output path (else print)')

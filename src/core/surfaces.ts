@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { safeFilenamePart } from '../utils/filenames.js';
 import {
@@ -23,6 +23,7 @@ import {
   resolveChainingParent,
   resolveSubprojectForNamespace,
   computeStateIdAt,
+  invalidateSpecCache,
 } from './specs.js';
 import { computeStateId } from './statehash.js';
 import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs, BUILTIN_TYPES } from './rules/type-analysis.js';
@@ -577,6 +578,46 @@ export function generateChildSnapshots(rootDir: string = getProjectRoot()): stri
     }
   }
   return written;
+}
+
+/**
+ * surface_orchestrator.pinFamilySurfaces — a chained child PULLS its family's
+ * surfaces into its own `.wai/surfaces/`.
+ *
+ * The inverse of generateChildSnapshots, and the reason that one can go:
+ * delivery was pushed — every parent lock wrote (children x subsystems)
+ * snapshots into every child's working tree on the parent's schedule, and the
+ * hosted lock never delivered at all. A pin is the child owner's own import,
+ * taken while the parent is on disk and committed with the child, so a child
+ * cloned WITHOUT its parent still has contracts to validate against.
+ *
+ * Projects exactly what a child may consume: the family-scoped parent surface,
+ * and every sibling's published surface except the child's own mount. Returns
+ * the paths whose content changed, or null when this root has no parent.
+ */
+export function pinFamilySurfaces(): string[] | null {
+  const parent = resolveChainingParent();
+  if (!parent) return null;
+  const childRoot = getProjectRoot();
+
+  const projected = runWithProjectRoot(parent.parentRoot, () => {
+    // The parent is read as it is NOW — its tree may have moved since this
+    // process last looked, and a pin of a stale cache would pin the past.
+    invalidateSpecCache();
+    const siblings = loadSubsystemSpecs()
+      .filter((s) => !s.id.includes('::') && s.id !== parent.subsystemId);
+    return [projectChildSurface(), ...siblings.map((s) => projectSubsystemSurface(s.id))];
+  });
+
+  const before = new Map(listSnapshots(childRoot).map((s) => [s.projectName, surfaceContentKey(s)]));
+  const changed: string[] = [];
+  for (const snapshot of projected) {
+    const stored = saveSnapshot(snapshot, childRoot);
+    if (before.get(snapshot.projectName) !== surfaceContentKey(SurfaceSnapshotSchema.parse(snapshot))) {
+      changed.push(stored);
+    }
+  }
+  return changed;
 }
 
 // ---------------------------------------------------------------------------

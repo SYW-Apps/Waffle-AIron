@@ -395,7 +395,9 @@ methods:
             step: 8
           - value: externals
             step: 10
-        defaultStep: 12
+          - value: pin
+            step: 12
+        defaultStep: 14
       - stepNumber: 2
         description: Export the own surface (audience/format/out/portal from options)
         type: call
@@ -450,6 +452,17 @@ methods:
         type: return
         outcome: externals listed
       - stepNumber: 12
+        description: Pin the chaining parent's family and sibling surfaces into this chained child
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: pinFamilySurfaces
+      - stepNumber: 13
+        description: >-
+          Print the changed pinned paths — or that they were already up to date, or that a top root
+          has no family to pin
+        type: return
+        outcome: pinned
+      - stepNumber: 14
         description: Unknown surface action
         type: throw
         error: UnknownSurfaceActionError
@@ -1014,4 +1027,4 @@ methods:
         targetMethod: reportMcpStatus
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-11T23:02:03.216Z'
+updatedAt: '2026-09-12T12:10:46.522Z'

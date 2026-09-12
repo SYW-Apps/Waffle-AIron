@@ -39,6 +39,13 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: listExternalInterfaces
+  - name: pinFamilySurfaces
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: pinFamilySurfaces
 status: complete
 createdAt: '2026-07-10T23:16:03.846Z'
-updatedAt: '2026-07-24T18:14:58.210Z'
+updatedAt: '2026-09-12T12:07:57.519Z'

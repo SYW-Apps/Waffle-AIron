@@ -216,6 +216,64 @@ methods:
         description: Return the per-mount snapshots
         type: return
         outcome: MountSurfaceSnapshots[]
+  - name: pinFamilySurfaces
+    narrative:
+      - stepNumber: 1
+        description: Detect the chaining-mount context of the current (child) root
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 2
+        description: Only a chained subproject has a family to pin
+        type: branch
+        condition: no chaining parent — the bound root is a top root
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Nothing to pin
+        type: return
+        outcome: 'null'
+      - stepNumber: 4
+        description: >-
+          Bind the parent root read-only for the projection, restoring the child's binding
+          afterwards
+        type: local
+      - stepNumber: 5
+        description: Load the parent's top-level subsystems
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 6
+        description: Project the family-scoped parent surface this child may consume
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectChildSurface
+      - stepNumber: 7
+        description: For each SIBLING subsystem
+        type: loop
+        loopKind: forEach
+        over: every top-level parent subsystem except this child's own mount
+        endStep: 8
+      - stepNumber: 8
+        description: Project the sibling's published surface at the family ceiling
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectSubsystemSurface
+      - stepNumber: 9
+        description: For each projected snapshot
+        type: loop
+        loopKind: forEach
+        over: the projected family and sibling snapshots
+        endStep: 10
+      - stepNumber: 10
+        description: Store it in the CHILD's .wai/surfaces/, leaving an unchanged snapshot untouched
+        type: call
+        targetComponent: surface_repository
+        targetMethod: saveSnapshot
+      - stepNumber: 11
+        description: Return the paths that changed
+        type: return
+        outcome: the changed snapshot paths
 lint:
   allow:
     - code: CALL_STEP_UNREALIZED
@@ -225,4 +283,4 @@ lint:
         naming when the surfaces subsystem takes its final lock.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-09-12T12:00:17.157Z'
+updatedAt: '2026-09-12T12:07:50.585Z'

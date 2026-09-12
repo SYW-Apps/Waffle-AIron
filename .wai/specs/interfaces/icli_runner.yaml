@@ -91,9 +91,11 @@ methods:
     description: >-
       Surface exchange commands: export (own surface, optionally as OpenAPI), import
       (exchanged/authored foreign surface), list (stored snapshots), generate-children (write parent
-      snapshots into chained children). For an OpenAPI export of a multi-portal project, `--portal
-      <id>` selects one API; without it `--out` writes one file per portal and stdout lists the
-      available portals instead of printing nothing.
+      snapshots into chained children), externals (the consumable outward world with freshness), and
+      pin (pull the chaining parent's family and sibling surfaces into THIS chained child, on the
+      child owner's schedule). For an OpenAPI export of a multi-portal project, `--portal <id>`
+      selects one API; without it `--out` writes one file per portal and stdout lists the available
+      portals instead of printing nothing.
     signature: >-
       runSurface(action: string, options: { audience?: string; format?: string; out?: string;
       source?: string; origin?: string; portal?: string }): Promise<void>
@@ -245,4 +247,4 @@ methods:
         type: status_command_options
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-11T23:01:54.493Z'
+updatedAt: '2026-09-12T12:08:51.925Z'
