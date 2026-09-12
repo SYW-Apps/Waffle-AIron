@@ -11,6 +11,7 @@ import {
   loadTypeSpecs,
   invalidateSpecCache,
   assertContainedProjectPath,
+  rebaseReference,
 } from './specs.js';
 import { saveProjectConfig, aiPathsAt } from '../config/loader.js';
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
@@ -333,15 +334,17 @@ function isWithinDir(dir: string, file: string): boolean {
 // Subsystem migration: externalize (internal -> subproject) and internalize
 // (subproject -> internal). Only the .wai specs move; the source code is the
 // user's responsibility. Both directions keep the tree valid by rewriting the
-// cross-subsystem references that change when component ids gain/lose the
-// `<subsystem>::` namespace prefix.
+// references that change: the parent's cross-subsystem references, whose
+// targets gain/lose the `<subsystem>::` namespace prefix, and the moved
+// subtree's own references, which now load one mount deeper/shallower.
 // ---------------------------------------------------------------------------
 
 /**
  * Externalize an internal subsystem into a standalone subproject: provision a
  * child wairon project at projectPath, move the subsystem's spec subtree there,
- * reduce the parent entry to a projectPath mount, and rewrite cross-subsystem
- * references to the new namespaced ids. Source code is not moved.
+ * reduce the parent entry to a projectPath mount, rewrite cross-subsystem
+ * references to the new namespaced ids, and rewrite the moved subtree's outgoing
+ * references into super:: form. Source code is not moved.
  */
 export function externalizeSubsystem(subsystemId: string, projectPath: string): void {
   if (subsystemId.includes('::')) {
@@ -405,15 +408,19 @@ export function externalizeSubsystem(subsystemId: string, projectPath: string): 
     updatedAt: new Date().toISOString(),
   });
 
-  // Rewrite cross-subsystem references in the remaining parent specs.
+  // Rewrite cross-subsystem references in the remaining parent specs…
   rewriteRefsInDir(parentSpecsDir, renameMap, fooDir);
+  // …and the moved subtree's own, which now load one mount deeper: a reference
+  // leaving the subtree climbs out with super::, one inside it stays as written.
+  rebaseMovedRefs(childFooDir, subsystemId, 'into');
   invalidateSpecCache();
 }
 
 /**
  * Internalize an external subsystem back into the parent tree: move the
  * subproject's spec subtree back under the parent subsystem, drop projectPath,
- * delete the child .wai project, and rewrite references back to bare ids. Only
+ * delete the child .wai project, rewrite references back to bare ids, and take
+ * the moved subtree's super:: references back to their parent-local form. Only
  * a flat subproject (whose sole subsystem is the mount id) can be internalized.
  */
 export function internalizeSubsystem(subsystemId: string): void {
@@ -464,8 +471,11 @@ export function internalizeSubsystem(subsystemId: string): void {
   // Delete the child .wai project entirely (project.yaml + specs).
   fs.rmSync(childWai, { recursive: true, force: true });
 
-  // Rewrite references back to bare ids.
+  // Rewrite references back to bare ids…
   rewriteRefsInDir(parentSpecsDir, renameMap, fooDir);
+  // …and the moved subtree's own, one mount shallower: each super:: hop it took
+  // out of the subproject is one it no longer needs.
+  rebaseMovedRefs(fooDir, subsystemId, 'outOf');
   invalidateSpecCache();
 }
 
@@ -499,11 +509,61 @@ function buildRenameMap(subsystemId: string, externalize: boolean): Map<string, 
   return map;
 }
 
+/** Where a reference field sits: a component id, or a type a method parameter or type field names. */
+type RefPosition = 'component' | 'type';
+
 /** Rewrite cross-subsystem reference fields in every spec under `specsDir`, skipping `excludeDir`. */
 function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excludeDir?: string): void {
   if (renameMap.size === 0) return;
-  const remap = (id: string | undefined): string | undefined =>
-    id !== undefined && renameMap.has(id) ? renameMap.get(id)! : id;
+  rewriteRefFields(specsDir, (ref) => renameMap.get(ref) ?? ref, excludeDir);
+}
+
+/**
+ * Re-express the references a moved subtree's specs store for the namespace the
+ * subtree now loads in — one mount deeper (`into`) or shallower (`outOf`) — so
+ * each names the target it named before; rebaseReference does the id-space
+ * arithmetic. Going into the mount, the components the subtree declares travel
+ * with it; going out, everything inside the mount does.
+ *
+ * Only component positions are rebased. A type is matched by name against every
+ * loaded type, whichever namespace the naming spec sits in — the loader never
+ * qualifies a parameter or field type — so moving the spec cannot change what it
+ * resolves to, and a super:: hop written into one would match no type at all.
+ */
+function rebaseMovedRefs(movedDir: string, mount: string, direction: 'into' | 'outOf'): void {
+  const declared = componentIdsUnder(movedDir);
+  rewriteRefFields(movedDir, (ref, position) =>
+    (position === 'component' ? rebaseReference(ref, mount, direction, (id) => declared.has(id)) : ref));
+}
+
+/** The ids of the components declared by the spec files under `dir`. */
+function componentIdsUnder(dir: string): Set<string> {
+  const ids = new Set<string>();
+  for (const file of listFilesRecursive(dir, '.yaml')) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    if (raw && typeof raw === 'object' && 'componentType' in raw && typeof raw.id === 'string') ids.add(raw.id);
+  }
+  return ids;
+}
+
+/**
+ * Rewrite the reference fields of every spec under `specsDir` through `remap`,
+ * skipping `excludeDir`: dependsOn, dispatch and lifecycle components and
+ * narrative call targets (component positions), and method parameter and type
+ * field types (type positions).
+ */
+function rewriteRefFields(
+  specsDir: string,
+  remap: (ref: string, position: RefPosition) => string,
+  excludeDir?: string,
+): void {
+  const at = (ref: unknown, position: RefPosition): unknown =>
+    (typeof ref === 'string' ? remap(ref, position) : ref);
 
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
     if (excludeDir && isWithinDir(excludeDir, file)) continue;
@@ -517,15 +577,15 @@ function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excl
     let changed = false;
 
     if ('componentType' in raw && Array.isArray(raw.dependsOn)) {
-      const next = raw.dependsOn.map((d: string) => remap(d));
-      if (next.some((v: string, i: number) => v !== raw.dependsOn[i])) {
+      const next = raw.dependsOn.map((d: unknown) => at(d, 'component'));
+      if (next.some((v: unknown, i: number) => v !== raw.dependsOn[i])) {
         raw.dependsOn = next;
         changed = true;
       }
       // A Portal's dispatch table carries component refs of its own.
       if (Array.isArray(raw.dispatch)) {
         for (const b of raw.dispatch) {
-          const nc = remap(b.component);
+          const nc = at(b.component, 'component');
           if (nc !== b.component) {
             b.component = nc;
             changed = true;
@@ -537,7 +597,7 @@ function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excl
       // by rule, but rewrite defensively so a legacy/misdeclared tree can't
       // silently dangle across a migration).
       for (const le of raw.lifecycle) {
-        const nc = remap(le.component);
+        const nc = at(le.component, 'component');
         if (nc !== le.component) {
           le.component = nc;
           changed = true;
@@ -547,7 +607,7 @@ function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excl
       for (const m of raw.methods) {
         if (!Array.isArray(m.params)) continue;
         for (const p of m.params) {
-          const nt = remap(p.type);
+          const nt = at(p.type, 'type');
           if (nt !== p.type) {
             p.type = nt;
             changed = true;
@@ -558,7 +618,7 @@ function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excl
       for (const m of raw.methods) {
         if (!Array.isArray(m.narrative)) continue;
         for (const step of m.narrative) {
-          const nt = remap(step.targetComponent);
+          const nt = at(step.targetComponent, 'component');
           if (nt !== step.targetComponent) {
             step.targetComponent = nt;
             changed = true;
@@ -567,7 +627,7 @@ function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excl
       }
     } else if ('kind' in raw && Array.isArray(raw.fields)) {
       for (const f of raw.fields) {
-        const nt = remap(f.type);
+        const nt = at(f.type, 'type');
         if (nt !== f.type) {
           f.type = nt;
           changed = true;

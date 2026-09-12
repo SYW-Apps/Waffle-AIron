@@ -38,7 +38,7 @@ function projectPackSelections(): PackSelection[] {
 import { loadProjectVariants } from './variants.js';
 import { loadSurfaceSnapshots, loadMountSurfaceSnapshots } from './surfaces.js';
 import { buildCodeModel } from './source-analysis.js';
-import { findChainingParent } from './specs.js';
+import { findChainingParent, resolveChainingParent } from './specs.js';
 import { getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import * as path from 'path';
 import { settledSpecPaths } from './approval.js';
@@ -499,9 +499,11 @@ export function validateSddTree(
     // strength on both paths: a chained child's source paths are its own.
     //
     // Gated on actually HAVING a resolution failure, so a clean tree (or a hosted
-    // per-request validate) never pays the walk-up-the-filesystem cost.
+    // per-request validate) never pays the walk-up-the-filesystem cost. Discovery
+    // itself goes through the reach gate: a request whose credential is narrowed
+    // to the child reads nothing above its root, not even to find the parent.
     const unresolved = (i: ValidationIssue): boolean => RESOLUTION_FAILURE_CODES.has(i.code) && !i.surfaceResolved;
-    const chainingParent = crossTree !== 'off' && issues.some(unresolved) ? findChainingParent(getProjectRoot()) : null;
+    const chainingParent = crossTree !== 'off' && issues.some(unresolved) ? resolveChainingParent() : null;
     const resolution = chainingParent ? resolveThroughParent(getProjectRoot(), treatAllAsComplete, rules) : null;
     if (resolution) {
       // A child finding gives way only to a parent finding on the same code and
@@ -560,7 +562,7 @@ function resolveThroughParent(
   const chain: string[] = [];
   let top = path.resolve(boundRoot);
   while (top !== ceiling) {
-    const hop = findChainingParent(top);
+    const hop = findChainingParent(top, ceiling);
     if (!hop) break;
     const next = path.resolve(hop.parentRoot);
     if (ceiling && !isWithinOrEqual(ceiling, next)) break;

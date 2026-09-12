@@ -3084,7 +3084,7 @@ function opsInstallProjectPackArchive(cfg: HostConfig, sessionId: string, req: I
 // replace it from an uploaded archive. Export answers raw bytes (the archive IS
 // the payload); import takes a raw application/zip body like the pack upload.
 
-/** GET /web/projects/tree/export?projectId=[&includeDerived=1] — project:read. */
+/** GET /web/projects/tree/export?projectId=[&includeDerived=1][&allowPartial=1] — project:read. */
 function opsExportProjectTree(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
   const result = projectops.exportProjectTree(
     cfg,
@@ -3092,6 +3092,7 @@ function opsExportProjectTree(cfg: HostConfig, sessionId: string, url: URL, res:
     q(url, 'projectId') ?? '',
     undefined,
     q(url, 'includeDerived') === '1',
+    q(url, 'allowPartial') === '1',
   );
   res.writeHead(200, {
     'content-type': 'application/zip',

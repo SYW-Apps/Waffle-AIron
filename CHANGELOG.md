@@ -7,9 +7,10 @@
 and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
 a project that has not declared them, existing lock records read as stale, a
 project referencing a global pack's profile can newly fail `validate --ci`, and so
-can a chained subproject whose gate was waving cross-tree findings through, or a
-Specialist that depends on a Registry or an Actor. Nothing here is purely
-additive, so `[minor]` would understate it.
+can a chained subproject whose gate was waving cross-tree findings through or whose
+nested mount reaches outside its own project, or a Specialist that depends on a
+Registry or an Actor. Nothing here is purely additive, so `[minor]` would
+understate it.
 
 ### A chained subproject is judged through its parent — never waved through
 
@@ -49,8 +50,9 @@ surfaces, so a hosted subproject lock approved real violations.
   is gone: the lock hook, `wairon surface generate-children`, and `SURFACE_STALE`.
   So is the git flood a scoped lock used to cause — (children × subsystems)
   snapshots rewritten into other people's working trees on the parent's schedule.
-  An unscoped lock still regenerates each direct child's derived files (skills,
-  context and guides) and initializes a child that is missing its project files.
+  An unscoped lock still regenerates the derived files (skills, context and
+  guides) of every chained descendant — each child's layer, then its own
+  subprojects' — and initializes a child that is missing its project files.
 - **A child's source paths are its own.** They are read against the child root,
   as the loader always did. An implementation written through the parent (a
   `child::` id) now stores its `sourcePath` and `simPath` relative to the child
@@ -94,6 +96,70 @@ what it promised. Three more gaps sat close by, one of them in hosted confinemen
   branch that had already been merged, so neither landed: namespace shadowing
   detectable from disk with the `--ci` draft-subsystem waiver, and the closed
   Specialist dependency matrix. Their entries follow below.
+
+### Chained subprojects: correct on the current model before it changes
+
+A repository-backed review of the chaining code, taken after the fixes above,
+found places where one tree got different answers depending on where it was read
+from, and checks that did less than they said. These are fixed without changing
+the chaining model itself, which is being redesigned separately.
+
+- **A mount is contained by the project that declares it.** A nested child's
+  `projectPath` was checked against whichever root loaded the tree, so a child
+  declaring `../sibling` loaded from the top project and was refused from its own
+  root. Loading, namespace resolution, parent detection, whole-tree walks and the
+  writers now all decide containment against the declaring project, both as the
+  path is written and as the filesystem resolves it. **Breaking:** that `../`
+  mount is now refused from the top root too.
+- **Findings about a nested mount carry its qualified id**, so
+  `validate --subsystem <mount>` keeps a missing, cyclic or escaping grandchild
+  instead of dropping it.
+- **Finding a parent is gated like reading one.** A credential narrowed to a
+  chained child no longer reads the parent's spec files to learn whether a parent
+  exists, and no request looks above its own top project root.
+- **A pinned surface is matched by the provider a reference names.**
+  `super::billing::invoice_portal` was resolved against whichever pinned surface
+  exposed an `invoice_portal` first, even another sibling's. It now consults
+  billing's surface alone, and a reference that names no provider while several
+  pinned surfaces expose that name with different contracts is the new error
+  `SURFACE_REF_AMBIGUOUS` instead of a silent pick.
+- **Pin freshness is judged on content.** `sdd_list_external_interfaces` and
+  `wairon surface externals` compared a pin's recorded state with the parent's
+  whole-tree state, so any unrelated parent edit made every pin stale — and
+  re-pinning could not repair it, because an unchanged contract is not rewritten.
+  A pin is now fresh exactly when its contracts equal what the parent publishes
+  now, so `wairon surface pin` always repairs a stale entry.
+- **The lock covers the contracts a verdict consulted.** The gate identity now
+  also digests the stored surface snapshots of the project and of every chained
+  mount, provenance excluded: swapping a pinned contract invalidates a lock, while
+  re-pinning an unchanged one does not. The algorithm marker becomes
+  `sha256+doctrine+inputs`, so every existing lock reads stale once.
+- **Externalizing a subsystem keeps its own references pointing where they did.**
+  `subsystem externalize` rewrote the parent's references to the moved subsystem
+  but left the moved specs' own references as written, so once they loaded from
+  the new child root, a reference to a sibling subsystem or to another chained
+  project no longer resolved. Those are now rewritten into `super::` form (one
+  already in `super::` form gains a hop), and `internalize` restores them exactly.
+  Type names resolve by name wherever they live and are left as written.
+- **A tree archive is complete, or says it is not.** A `.waitree` export silently
+  left out any chained mount it could not follow — escaping its project, missing,
+  cyclic, nested too deep, or holding no spec tree. It now refuses, naming each
+  one and why, unless `--allow-partial` (`wairon remote push|pull`) or
+  `allowPartial` (`sdd_host_export_tree` and the admin and web export routes) is
+  given; then the archive is built and the result lists what was skipped.
+- **Hosted git commits the approval.** Git backing kept `.wai/lock.json` out of
+  commits, so a hosted approval never reached the bound remote. Only
+  `.wai/git.json` stays local now, and an exclusion left by an earlier version is
+  removed with a warning.
+- **`sdd_get_status` opens with the family context** — the mount a child is known
+  by and its parent's name (within the credential's reach), and the subprojects a
+  root mounts — because a connected agent never sees the startup log line that
+  used to be the only place this was said.
+- **A narrowed credential is served only tools that act on its tree.** Hosted
+  confinement refused a fixed list of record-level tools and served everything
+  else. Every tool now declares whether it acts on the bound tree or on the
+  project record, and under a `proj::child` credential a tool that declares
+  neither is refused, so a newly added tool fails closed.
 
 ### Execution budgets: the topology gains a resource axis
 
@@ -809,10 +875,10 @@ method's narrative. Two mechanisms close that honestly:
    if you upgraded from a pre-permission-model version — legacy users and API tokens
    otherwise resolve to zero permissions, and units without slugs break the
    organizations page. `wairon serve` now warns when this is pending.
-2. **Re-lock any locked project.** The lock now covers doctrine, so records written
-   before this release read as *stale* until you re-lock. This fails closed by
-   design: those locks were taken without doctrine coverage and cannot be
-   retro-verified.
+2. **Re-lock any locked project.** The lock now covers doctrine and the surface
+   contracts a verdict consulted, so records written before this release read as
+   *stale* until you re-lock. This fails closed by design: those locks were taken
+   without that coverage and cannot be retro-verified.
 3. **Declare the packs your projects apply.** Machine-wide packs no longer apply
    unless a project selects them. Run `wairon doctor` to see what is installed but
    unapplied and `wairon doctor --fix` to record it as explicit selections — or set
@@ -835,7 +901,17 @@ method's narrative. Two mechanisms close that honestly:
    - replace `wairon surface generate-children` in scripts with `wairon surface
      pin` run from the child, and drop `lint.allow` entries naming
      `UNVERIFIED_EXTERNAL_REF` or `CHAINED_SUBPROJECT_CONTEXT` (now reported as
-     unknown codes).
+     unknown codes);
+   - a nested child whose `projectPath` leaves its own project (a `../sibling`)
+     is now `PROJECTPATH_ESCAPE` from every root, the top one included: mount the
+     sibling from the project that contains both;
+   - a reference that names no provider, where two pinned surfaces expose that
+     name with different contracts, is now `SURFACE_REF_AMBIGUOUS`: name its
+     provider (`super::<provider>::<name>`);
+   - a `.waitree` export (`wairon remote push|pull`, `sdd_host_export_tree`, the
+     admin and web export routes) that would leave out a chained mount now
+     refuses: fix the mount, or pass `--allow-partial` / `allowPartial` to export
+     without it.
 6. **A Specialist that depends on a Registry or an Actor is now an error**
    (`ARCHITECTURE_VIOLATION_SPECIALIST_DEP`). Route storage through a Repository or
    a Store and runtime work through a Supervisor, or retune the code in

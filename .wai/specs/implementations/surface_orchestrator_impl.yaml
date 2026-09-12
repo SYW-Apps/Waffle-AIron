@@ -125,10 +125,13 @@ methods:
         condition: a chaining parent was resolved
         onFalseStep: 5
       - stepNumber: 4
-        description: Compute the parent tree's CURRENT state hash as the freshness comparison source
+        description: >-
+          Bind the parent root read-only and project what it publishes NOW — its family surface and
+          each sibling's published surface, exactly as pinFamilySurfaces would store them — as the
+          content every generated snapshot is compared with
         type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: computeParentStateId
+        targetComponent: surface_projector
+        targetMethod: projectChildSurface
       - stepNumber: 5
         description: For each stored snapshot
         type: loop
@@ -140,9 +143,10 @@ methods:
           Build the ExternalSurfaceEntry: classify sourceKind (parent = the generated family surface
           keyed by the parent system name; sibling = a generated '<systemName>::<subsystemId>' key;
           foreign = exchanged/authored imports), carry origin, generatedAt, stateId/version
-          provenance and the exposed interface ids, and compute freshness — 'fresh' when a generated
-          snapshot's vendored StateId equals the parent's current hash, 'stale' when it differs,
-          'unverifiable' when no parent hash is available or the snapshot is foreign
+          provenance and the exposed interface ids, and compute freshness on content — 'fresh' when
+          a generated snapshot's contracts equal the current projection for its key, 'stale' when
+          they differ or the key is no longer projected, 'unverifiable' when no projection is
+          available or the snapshot is foreign
         type: local
       - stepNumber: 7
         description: Return the discovery entries
@@ -237,4 +241,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-09-12T15:16:05.193Z'
+updatedAt: '2026-09-12T17:36:28.213Z'

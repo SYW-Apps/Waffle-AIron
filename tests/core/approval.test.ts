@@ -88,7 +88,7 @@ function approve(
 /** Write a lock record into ANOTHER root (a chained child approving itself). */
 function approveAt(root: string, stateDigest = 'a'.repeat(64)): LockRecord {
   const record: LockRecord = {
-    stateId: { algorithm: 'sha256+doctrine', digest: stateDigest },
+    stateId: { algorithm: 'sha256+doctrine+inputs', digest: stateDigest },
     lockedAt: now,
     lockedBy: { id: 'child <c@example.com>', source: 'git' },
     validatorVersion: 'test',

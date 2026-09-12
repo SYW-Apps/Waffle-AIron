@@ -134,7 +134,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     // The GATE flavour, not the content one: a lock certifies that these specs
     // passed THIS gate, so the governing doctrine is part of the frozen identity
     // and a later pack change invalidates the lock by state mismatch.
-    expect(record!.stateId.algorithm).toBe('sha256+doctrine');
+    expect(record!.stateId.algorithm).toBe('sha256+doctrine+inputs');
     expect(record!.stateId.digest).toMatch(/^[0-9a-f]{64}$/);
     // Whoever git says is authoring here, or user@host when git has no identity —
     // never a bare OS username, which names nobody in CI.
@@ -312,7 +312,7 @@ describe('readLockState (the shared lock verdict)', () => {
     const { state, record, current } = readLockState();
     expect(state).toBe('locked');
     // The verdict is decided against the gate flavour, and they agree.
-    expect(current.algorithm).toBe('sha256+doctrine');
+    expect(current.algorithm).toBe('sha256+doctrine+inputs');
     expect(record!.stateId.digest).toBe(current.digest);
   });
 

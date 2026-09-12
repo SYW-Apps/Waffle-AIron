@@ -31,7 +31,13 @@ fields:
     type: string
     description: The tree's content state at export time
     optional: true
+  - name: skipped
+    type: object[]
+    description: >-
+      Mounts that were not packed, each { mount, projectPath, reason: escapes | missing | cyclic |
+      too-deep | no-spec-tree } — empty unless allowPartial let a partial export through.
+    optional: false
 methods: []
 componentClass: tree_transfer_orchestrator
 createdAt: '2026-08-12T17:23:35.826Z'
-updatedAt: '2026-08-12T17:23:35.837Z'
+updatedAt: '2026-09-12T17:38:26.248Z'

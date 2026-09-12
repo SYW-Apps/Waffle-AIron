@@ -10,6 +10,7 @@ import {
   saveInterfaceSpec,
   saveImplementationSpec,
   saveTypeSpec,
+  deleteSubsystemSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
 import {
@@ -26,9 +27,12 @@ import {
 } from '../../src/core/surfaces.js';
 import { computeStateIdAt, loadSystemSpec } from '../../src/core/specs.js';
 import { toOpenApi, toOpenApiSet, fromOpenApi, isOpenApiDocument } from '../../src/core/openapi.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateSddTree, type ValidationResult } from '../../src/core/validation.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
-import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
+import { SurfaceSnapshotSchema } from '../../src/models/index.js';
+import type {
+  ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SurfaceContractEntry, SurfaceSnapshot,
+} from '../../src/models/index.js';
 
 const now = new Date().toISOString();
 
@@ -524,6 +528,171 @@ describe('standalone-child validation against pinned parent snapshots', () => {
 
 });
 
+describe('cross-tree references are matched by the provider they name', () => {
+  // Two siblings of one family publish an `invoice-portal` with different
+  // contracts: billing's serves invoice.void, archive's also exposes
+  // purgeInvoice and serves no capability. A third sibling, ledger, publishes
+  // something else. The client below calls purgeInvoice and dispatches
+  // invoice.void, so judged against either invoice-portal one of its two steps
+  // is not exposed — a verdict against neither shows as no SURFACE_REF_NOT_EXPOSED.
+  const dirs: string[] = [];
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    for (const dir of dirs.splice(0)) {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* win file locks */ }
+    }
+  });
+
+  const portalEntry = (component: string, methods: string[], capabilities: string[] = []): SurfaceContractEntry => ({
+    id: component, name: component, audience: 'project', type: 'Custom', component, details: '',
+    methods: methods.map((name) => ({ name, description: `${name} by id`, signature: `${name}(id: string): void`, returns: 'void' })),
+    ...(capabilities.length
+      ? { dispatch: capabilities.map((capability) => ({ capability, component: 'invoice-orch', method: 'handle' })) }
+      : {}),
+  });
+  const pin = (projectName: string, interfaces: SurfaceContractEntry[]): SurfaceSnapshot => SurfaceSnapshotSchema.parse({
+    projectName, origin: 'generated', stateId: 'sha256:pinned', generatedAt: now, interfaces, types: [],
+  });
+
+  const BILLING = pin('root-system::billing', [portalEntry('invoice-portal', ['fetchInvoice'], ['invoice.void'])]);
+  const ARCHIVE = pin('root-system::archive', [portalEntry('invoice-portal', ['fetchInvoice', 'purgeInvoice'])]);
+  const LEDGER = pin('root-system::ledger', [portalEntry('ledger-portal', ['postEntry'])]);
+
+  /**
+   * A parent mounting a chained child whose Adapter consumes `ref`: it depends
+   * on it, calls `callMethod` on it and dispatches invoice.void through it. The
+   * child holds `pins` in its own .wai/surfaces/.
+   */
+  function family(ref: string, callMethod: string, pins: SurfaceSnapshot[]): { root: string; kidDir: string } {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-provider-'));
+    dirs.push(root);
+    fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(root);
+    saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'root-system', vision: 'provider matching fixture',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    const kidDir = path.join(root, 'packages', 'kid');
+
+    setProjectRoot(kidDir);
+    saveSubsystemSpec(subsystem('desk', { parentSystem: 'kid' }));
+    saveComponentSpec(component('invoice-client', 'desk', {
+      componentType: 'Adapter', dependsOn: [ref],
+    } as Partial<ComponentSpec>));
+    saveInterfaceSpec(iface('iinvoice-client', 'invoice-client', [
+      { name: 'settle', description: 'settles an invoice', signature: 'settle(id: string): void', returns: 'void' },
+    ]));
+    saveImplementationSpec({
+      id: 'invoice-client-impl', name: 'impl', description: 'd', contract: 'iinvoice-client',
+      methods: [{
+        name: 'settle',
+        narrative: [
+          { stepNumber: 1, description: 'call the invoice portal', type: 'call', targetComponent: ref, targetMethod: callMethod },
+          { stepNumber: 2, description: 'void through the invoice portal', type: 'dispatch', targetComponent: ref, capability: 'invoice.void' },
+        ],
+      }],
+      status: 'complete', createdAt: now, updatedAt: now,
+    } as ImplementationSpec);
+    for (const snapshot of pins) saveSnapshot(snapshot, kidDir);
+    invalidateSpecCache();
+    return { root, kidDir };
+  }
+
+  /** The child as a clone that never had its parent: the pins are all it has. */
+  function cloneWithoutParent(kidDir: string): string {
+    const clone = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-clone-'));
+    dirs.push(clone);
+    fs.cpSync(kidDir, clone, { recursive: true });
+    return clone;
+  }
+
+  function verdict(root: string): ValidationResult {
+    invalidateSpecCache();
+    setProjectRoot(root);
+    return validateSddTree();
+  }
+
+  /** The findings of one code as `severity @specId`, sorted. */
+  function findings(res: ValidationResult, code: string): string[] {
+    return res.issues.filter((i) => i.code === code).map((i) => `${i.severity} @${i.specId}`).sort();
+  }
+
+  it('a super:: reference two providers answer with different contracts is SURFACE_REF_AMBIGUOUS, judged against neither', () => {
+    const res = verdict(cloneWithoutParent(family('super::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir));
+
+    // The dependency, the call and the dispatch each report it.
+    expect(findings(res, 'SURFACE_REF_AMBIGUOUS')).toEqual([
+      'error @invoice-client', 'error @invoice-client-impl', 'error @invoice-client-impl',
+    ]);
+    for (const finding of res.issues.filter((i) => i.code === 'SURFACE_REF_AMBIGUOUS')) {
+      expect(finding.message).toContain('"root-system::billing"');
+      expect(finding.message).toContain('"root-system::archive"');
+      expect(finding.message).not.toContain('root-system::ledger');
+      expect(finding.surfaceResolved).toBeUndefined();
+    }
+    const codes = res.issues.map((i) => i.code);
+    expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
+    expect(codes).not.toContain('CROSS_TREE_REF_UNRESOLVED');
+    expect(res.valid).toBe(false);
+  });
+
+  it('from the parent root, where the reference collapses to a bare id, the same pins are just as ambiguous', () => {
+    const res = verdict(family('super::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).root);
+
+    expect(findings(res, 'SURFACE_REF_AMBIGUOUS')).toEqual([
+      'error @kid::invoice-client', 'error @kid::invoice-client-impl', 'error @kid::invoice-client-impl',
+    ]);
+    expect(findings(res, 'SURFACE_REF_NOT_EXPOSED')).toEqual([]);
+  });
+
+  it('a reference that names its provider is judged against that provider alone', () => {
+    // billing never exposed purgeInvoice, and archive — which does — is not consulted.
+    const billing = verdict(cloneWithoutParent(
+      family('super::billing::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir,
+    ));
+    expect(findings(billing, 'SURFACE_REF_AMBIGUOUS')).toEqual([]);
+    const billingGaps = billing.issues.filter((i) => i.code === 'SURFACE_REF_NOT_EXPOSED');
+    expect(billingGaps.map((i) => i.specId)).toEqual(['invoice-client-impl']);
+    expect(billingGaps[0].message).toMatch(/purgeInvoice.*"root-system::billing"/s);
+
+    // archive serves no invoice.void, and billing — which does — is not consulted.
+    const archive = verdict(cloneWithoutParent(
+      family('super::archive::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir,
+    ));
+    expect(findings(archive, 'SURFACE_REF_AMBIGUOUS')).toEqual([]);
+    const archiveGaps = archive.issues.filter((i) => i.code === 'SURFACE_REF_NOT_EXPOSED');
+    expect(archiveGaps.map((i) => i.specId)).toEqual(['invoice-client-impl']);
+    expect(archiveGaps[0].message).toMatch(/invoice\.void.*"root-system::archive"/s);
+  });
+
+  it("a provider that does not expose the name never borrows another provider's contract", () => {
+    // ledger publishes no invoice-portal; billing and archive do, and neither stands in for it.
+    const res = verdict(cloneWithoutParent(
+      family('super::ledger::invoice-portal', 'fetchInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir,
+    ));
+
+    expect(findings(res, 'CROSS_TREE_REF_UNRESOLVED')).toEqual([
+      'warning @invoice-client', 'warning @invoice-client-impl', 'warning @invoice-client-impl',
+    ]);
+    const codes = res.issues.map((i) => i.code);
+    expect(codes).not.toContain('SURFACE_REF_AMBIGUOUS');
+    expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
+  });
+
+  it('providers exposing the name with the same contract leave nothing ambiguous', () => {
+    const sameAsBilling = pin('root-system::archive', BILLING.interfaces);
+    const res = verdict(cloneWithoutParent(
+      family('super::invoice-portal', 'purgeInvoice', [BILLING, sameAsBilling]).kidDir,
+    ));
+
+    expect(findings(res, 'SURFACE_REF_AMBIGUOUS')).toEqual([]);
+    // It resolved: the one contract both declare judges the call it does not expose.
+    expect(findings(res, 'SURFACE_REF_NOT_EXPOSED')).toEqual(['error @invoice-client-impl']);
+  });
+});
+
 describe('sibling surface projection + pinned siblings', () => {
   let rootDir: string;
   afterEach(() => {
@@ -768,7 +937,7 @@ describe('external interface discovery (listExternalInterfaces) + computeStateId
     return childDir;
   }
 
-  it('classifies parent | sibling | foreign and verdicts freshness against the parent CURRENT hash', () => {
+  it('classifies parent | sibling | foreign and verdicts freshness against what the parent projects now', () => {
     const childDir = buildChainedWorld();
 
     // A foreign import lives beside the generated snapshots in the child.
@@ -807,20 +976,67 @@ describe('external interface discovery (listExternalInterfaces) + computeStateId
     expect(foreign.freshness).toBe('unverifiable');
   });
 
-  it('generated snapshots turn stale when the parent tree changes after generation', () => {
-    const childDir = buildChainedWorld();
+  /** Each pin's freshness as the child sees it now, by storage key. */
+  function freshnessFrom(childDir: string): Record<string, string> {
+    invalidateSpecCache();
+    setProjectRoot(childDir);
+    return Object.fromEntries(listExternalInterfaces().map(e => [e.projectName, e.freshness]));
+  }
 
-    // Drift the parent AFTER delivery.
+  it('freshness is judged on content: an unrelated parent edit keeps pins fresh, a contract change stales them, a re-pin repairs them', () => {
+    const childDir = buildChainedWorld();
+    const allFresh = { 'root-system': 'fresh', 'root-system::core-sub': 'fresh' };
+    expect(freshnessFrom(childDir)).toEqual(allFresh);
+
+    // Edits no family surface carries: a private component and the parent's
+    // vision. The parent's state hash moves; what it publishes does not.
+    setProjectRoot(rootDir);
+    saveComponentSpec(component('audit-orch', 'core-sub'));
+    saveSystemSpec({ ...loadSystemSpec()!, vision: 'surface fixture, revised' });
+    expect(freshnessFrom(childDir)).toEqual(allFresh);
+    // A re-pin has nothing to rewrite, and the pins stay fresh.
+    expect(pinFamilySurfaces()).toEqual([]);
+    expect(freshnessFrom(childDir)).toEqual(allFresh);
+
+    // The consumed portal's contract changes: both surfaces that carry it go stale.
     setProjectRoot(rootDir);
     saveInterfaceSpec(iface('igateway-portal', 'gateway-portal', [
       { name: 'fetchRecordV2', description: 'renamed', signature: 'fetchRecordV2(id: string): json', returns: 'json' },
     ]));
-    invalidateSpecCache();
+    expect(freshnessFrom(childDir)).toEqual({ 'root-system': 'stale', 'root-system::core-sub': 'stale' });
 
+    // Re-pinning repairs them.
+    expect(pinFamilySurfaces()).toHaveLength(2);
+    expect(freshnessFrom(childDir)).toEqual(allFresh);
+  });
+
+  it('a pinned sibling the parent no longer projects is stale, and only that one', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
+    buildParent(rootDir);
+    saveSubsystemSpec(subsystem('aux-sub'));
+    createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
+    invalidateSpecCache();
+    const childDir = path.join(rootDir, 'packages', 'transpiler');
     setProjectRoot(childDir);
-    const entries = listExternalInterfaces();
-    expect(entries.find(e => e.projectName === 'root-system')!.freshness).toBe('stale');
-    expect(entries.find(e => e.projectName === 'root-system::core-sub')!.freshness).toBe('stale');
+    pinFamilySurfaces();
+
+    // The parent retires aux-sub, so nothing is projected under its key any more.
+    setProjectRoot(rootDir);
+    expect(deleteSubsystemSpec('aux-sub')).toBe(true);
+
+    expect(freshnessFrom(childDir)).toEqual({
+      'root-system': 'fresh',
+      'root-system::aux-sub': 'stale',
+      'root-system::core-sub': 'fresh',
+    });
+  });
+
+  it('a parent whose tree can no longer be projected leaves its pins unverifiable rather than failing the listing', () => {
+    const childDir = buildChainedWorld();
+    // The mount is still discoverable, but the parent's L0 no longer parses.
+    fs.writeFileSync(path.join(rootDir, '.wai', 'specs', '.index.yaml'), 'name: root-system\n');
+
+    expect(freshnessFrom(childDir)).toEqual({ 'root-system': 'unverifiable', 'root-system::core-sub': 'unverifiable' });
   });
 
   it('a standalone project (no chaining parent) verdicts every snapshot unverifiable', () => {

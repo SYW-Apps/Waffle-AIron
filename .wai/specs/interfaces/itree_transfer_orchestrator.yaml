@@ -10,13 +10,22 @@ methods:
       Pack the bound project's spec tree — its own .wai plus the .wai of every chained subproject —
       into a .waitree archive, stamped with the tree's current content state. Throws when the bound
       root holds no spec tree, rather than returning an empty archive that would look like a
-      successful export of nothing.
-    signature: 'exportSpecTree(includeDerived?: boolean): TreeExportResult'
+      successful export of nothing. Refuses, naming every mount it would leave out and why (escaping
+      its project, missing on disk, cyclic, nested too deep, or holding no spec tree), rather than
+      returning an archive that looks complete but is not — unless allowPartial is set, in which
+      case the archive is built and the result lists what was skipped.
+    signature: 'exportSpecTree(includeDerived?: boolean, allowPartial?: boolean): TreeExportResult'
     returns: TreeExportResult
     params:
       - name: includeDerived
         type: boolean
         description: Pack regenerable artifacts (generated/, docs/) too; default false
+        optional: true
+      - name: allowPartial
+        type: boolean
+        description: >-
+          Build the archive even when some mounts cannot be packed, listing them in the result;
+          default false
         optional: true
   - name: importSpecTree
     description: >-
@@ -33,4 +42,4 @@ methods:
         type: tree_import_options
 status: complete
 createdAt: '2026-08-12T17:24:29.791Z'
-updatedAt: '2026-08-12T18:28:00.500Z'
+updatedAt: '2026-09-12T17:38:24.574Z'

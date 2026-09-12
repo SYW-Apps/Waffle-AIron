@@ -2,13 +2,14 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { setProjectRoot } from '../../src/utils/fs.js';
+import { setProjectRoot, listFilesRecursive } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
   saveSubsystemSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
+  saveTypeSpec,
   loadComponentSpecs,
   loadSubsystemSpec,
   loadImplementationSpec,
@@ -16,7 +17,10 @@ import {
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { externalizeSubsystem, internalizeSubsystem } from '../../src/core/provision.js';
+import { createChainedSubsystem, externalizeSubsystem, internalizeSubsystem } from '../../src/core/provision.js';
+import { validateSddTree, type ValidationResult } from '../../src/core/validation.js';
+import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
+import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, TypeSpec } from '../../src/models/index.js';
 
 const now = new Date().toISOString();
 
@@ -140,5 +144,255 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     const back = loadImplementationSpec('core_orch_impl');
     expect(back?.sourcePath).toBe('packages/core/src/orch.ts');
     expect(back?.simPath).toBe('sim/orch.sim.ts');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A moved subtree's own references.
+//
+// Externalize used to rewrite only what the parent's remaining specs point at,
+// so a moved spec kept its references exactly as the parent wrote them. Loaded
+// from the child's namespace, a bare id into a sibling subsystem then named a
+// component the child does not have. A reference that leaves the moved subtree
+// now climbs out with super::, and internalize takes that hop back.
+// ---------------------------------------------------------------------------
+
+const sub = (id: string, over: Partial<SubsystemSpec> = {}): SubsystemSpec => ({
+  id, name: id, description: `subsystem ${id}`, parentSystem: 'root-sys',
+  publicInterfaces: [], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now, ...over,
+});
+const comp = (id: string, subsystem: string, componentType: string, over: Record<string, unknown> = {}): ComponentSpec => ({
+  id, name: id, description: 'd', subsystem, componentType, owns: [], dependsOn: [], createdAt: now, updatedAt: now, ...over,
+} as ComponentSpec);
+const intf = (id: string, component: string, method: string, params: { name: string; type: string }[] = []): InterfaceSpec => ({
+  id, name: id, description: 'd', component, createdAt: now, updatedAt: now,
+  methods: [{
+    name: method, description: 'd', returns: 'void',
+    signature: `${method}(${params.map((p) => `${p.name}: ${p.type}`).join(', ')}): void`,
+    ...(params.length ? { params } : {}),
+  }],
+} as InterfaceSpec);
+const calls = (id: string, contract: string, method: string, targets: [string, string][]): ImplementationSpec => ({
+  id, name: id, description: 'd', contract, createdAt: now, updatedAt: now,
+  methods: [{
+    name: method,
+    narrative: targets.map(([targetComponent, targetMethod], i) => ({
+      stepNumber: i + 1, description: `call ${targetComponent}`, type: 'call', targetComponent, targetMethod,
+    })),
+  }],
+} as ImplementationSpec);
+const valueType = (id: string, subsystem: string, fields: { name: string; type: string }[]): TypeSpec => ({
+  id, name: id, description: 'd', kind: 'value-object', subsystem, fields, createdAt: now, updatedAt: now,
+} as TypeSpec);
+
+/** A fresh project root with packs pinned off, so no machine-level pack changes a verdict. */
+function projectRoot(prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
+  writeYamlFile(path.join(dir, '.wai', 'project.yaml'), {
+    schemaVersion: '1.0.0', name: path.basename(dir),
+    targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now,
+  });
+  return dir;
+}
+
+/**
+ * A parent whose `billing` subsystem is about to move out. Billing reaches beyond
+ * itself in each form a stored reference takes — a bare id into the sibling
+ * `shared`, an id qualified by the chained project `ledger`, a root-anchored id —
+ * and uses a type `shared` owns, beside references that stay inside billing.
+ */
+function family(): { root: string; childDir: string } {
+  const top = projectRoot('migrate-out-');
+  setProjectRoot(top);
+  saveSystemSpec({ schemaVersion: '1.0.0', name: 'root-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+
+  saveSubsystemSpec(sub('shared', { publicInterfaces: [{ type: 'Custom', details: 'shared api', component: 'shared_portal' }] } as Partial<SubsystemSpec>));
+  saveComponentSpec(comp('shared_portal', 'shared', 'Portal', { portalType: 'Custom' }));
+  saveInterfaceSpec(intf('ishared_portal', 'shared_portal', 'pay', [{ name: 'amount', type: 'money' }]));
+  saveTypeSpec(valueType('money', 'shared', [{ name: 'amount', type: 'number' }]));
+
+  createChainedSubsystem(sub('ledger', { projectPath: 'packages/ledger' }), 'ledger');
+  const ledger = workspaceFor(path.join(top, 'packages', 'ledger'));
+  ledger.saveSubsystemSpec(sub('ledger', { parentSystem: 'ledger', publicInterfaces: [{ type: 'Custom', details: 'ledger api', component: 'ledger_portal' }] } as Partial<SubsystemSpec>));
+  ledger.saveComponentSpec(comp('ledger_portal', 'ledger', 'Portal', { portalType: 'Custom' }));
+  ledger.saveInterfaceSpec(intf('iledger_portal', 'ledger_portal', 'post'));
+
+  saveSubsystemSpec(sub('billing', {
+    publicInterfaces: [{ type: 'Custom', details: 'billing api', component: 'billing_portal' }],
+    lifecycle: [{ phase: 'init', component: 'billing_portal', method: 'open' }],
+  } as Partial<SubsystemSpec>));
+  saveComponentSpec(comp('billing_portal', 'billing', 'Portal', {
+    portalType: 'Custom', dependsOn: ['billing_orch'],
+    dispatch: [{ capability: 'billing.charge', component: 'billing_orch', method: 'charge' }],
+  }));
+  saveInterfaceSpec(intf('ibilling_portal', 'billing_portal', 'open'));
+  saveComponentSpec(comp('billing_orch', 'billing', 'Orchestrator', { dependsOn: ['billing_adapter'] }));
+  saveInterfaceSpec(intf('ibilling_orch', 'billing_orch', 'charge', [{ name: 'amount', type: 'money' }]));
+  saveImplementationSpec(calls('billing_orch_impl', 'ibilling_orch', 'charge', [['billing_adapter', 'charge']]));
+  saveComponentSpec(comp('billing_adapter', 'billing', 'Adapter', { dependsOn: ['shared_portal', 'ledger::ledger_portal'] }));
+  saveInterfaceSpec(intf('ibilling_adapter', 'billing_adapter', 'charge', [{ name: 'amount', type: 'money' }]));
+  saveImplementationSpec(calls('billing_adapter_impl', 'ibilling_adapter', 'charge', [['shared_portal', 'pay'], ['ledger::ledger_portal', 'post']]));
+  saveComponentSpec(comp('billing_audit', 'billing', 'Adapter', { dependsOn: ['::shared_portal'] }));
+  saveTypeSpec(valueType('invoice', 'billing', [{ name: 'total', type: 'money' }]));
+  invalidateSpecCache();
+  return { root: top, childDir: path.join(top, 'packages', 'billing') };
+}
+
+function verdict(at: string): ValidationResult {
+  invalidateSpecCache();
+  setProjectRoot(at);
+  return validateSddTree();
+}
+
+/** Findings on whether a reference resolves, and on the edge it resolves to, as `CODE @specId` with `strip` removed. */
+function referenceFindings(res: ValidationResult, strip = ''): string[] {
+  return res.issues
+    .filter((i) => /REFERENCE|UNRESOLVED|ENTRYPOINT|DISPATCH|CAPABILITY|CROSS_SUBSYSTEM/.test(i.code))
+    .map((i) => `${i.code} @${strip && i.specId?.startsWith(strip) ? i.specId.slice(strip.length) : i.specId}`)
+    .sort();
+}
+
+/** A spec file under a project's specs dir, as stored. */
+const stored = (projectDir: string, rel: string): any =>
+  readYamlFile(path.join(projectDir, '.wai', 'specs', ...rel.split('/')));
+
+const callTargets = (impl: any): string[] =>
+  impl.methods.flatMap((m: any) => m.narrative.map((s: any) => s.targetComponent));
+
+/** Every reference a subsystem's spec files store, per file — each field a migration may rewrite. */
+function storedReferences(projectDir: string, subsystem: string): Record<string, unknown> {
+  const dir = path.join(projectDir, '.wai', 'specs', subsystem);
+  const out: Record<string, unknown> = {};
+  for (const file of listFilesRecursive(dir, '.yaml')) {
+    const raw = readYamlFile(file) as any;
+    out[path.relative(dir, file).replace(/\\/g, '/')] = {
+      dependsOn: raw.dependsOn,
+      dispatch: raw.dispatch?.map((b: any) => b.component),
+      lifecycle: raw.lifecycle?.map((le: any) => le.component),
+      paramTypes: raw.component ? raw.methods?.flatMap((m: any) => (m.params ?? []).map((p: any) => p.type)) : undefined,
+      callTargets: raw.contract ? callTargets(raw) : undefined,
+      fieldTypes: raw.fields?.map((f: any) => f.type),
+    };
+  }
+  return out;
+}
+
+describe("externalize/internalize keep the moved subtree's outgoing references", () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  it('from the parent root, each moved reference resolves to the target it had — no new reference findings', () => {
+    const fam = family();
+    root = fam.root;
+    const before = referenceFindings(verdict(fam.root));
+    // The fixture's one finding: a root-anchored id at the top root points above it.
+    expect(before).toEqual(['CROSS_TREE_REF_UNRESOLVED @billing_audit']);
+
+    externalizeSubsystem('billing', 'packages/billing');
+
+    expect(referenceFindings(verdict(fam.root), 'billing::').filter((f) => !before.includes(f))).toEqual([]);
+    // What the child stores: out of the mount with super::, whether the parent
+    // wrote the target bare or qualified by another chained project…
+    expect(stored(fam.childDir, 'billing/billing_adapter/.index.yaml').dependsOn)
+      .toEqual(['super::shared_portal', 'super::ledger::ledger_portal']);
+    expect(callTargets(stored(fam.childDir, 'billing/billing_adapter/.implementation.yaml')))
+      .toEqual(['super::shared_portal', 'super::ledger::ledger_portal']);
+    // …a root-anchored target as written: it names the same spec at every depth…
+    expect(stored(fam.childDir, 'billing/billing_audit/.index.yaml').dependsOn).toEqual(['::shared_portal']);
+    // …and a type as written: types resolve by name, from whichever namespace.
+    expect(stored(fam.childDir, 'billing/billing_adapter/.interface.yaml').methods[0].params)
+      .toEqual([{ name: 'amount', type: 'money' }]);
+    expect(stored(fam.childDir, 'billing/types/invoice.yaml').fields.map((f: any) => f.type)).toEqual(['money']);
+  });
+
+  it('from the child root, with the parent on disk, the same references resolve through it', () => {
+    const fam = family();
+    root = fam.root;
+    externalizeSubsystem('billing', 'packages/billing');
+
+    const fromChild = verdict(fam.childDir);
+
+    expect(fromChild.resolvedThrough).toEqual({ root: path.resolve(fam.root), scope: 'billing' });
+    expect(referenceFindings(fromChild)).toEqual([]);
+  });
+
+  it('internalizing afterwards restores every reference as the parent wrote it', () => {
+    const fam = family();
+    root = fam.root;
+    const authored = storedReferences(fam.root, 'billing');
+    const before = referenceFindings(verdict(fam.root));
+
+    externalizeSubsystem('billing', 'packages/billing');
+    expect(storedReferences(fam.childDir, 'billing')).not.toEqual(authored);
+    internalizeSubsystem('billing');
+
+    expect(storedReferences(fam.root, 'billing')).toEqual(authored);
+    expect(referenceFindings(verdict(fam.root))).toEqual(before);
+  });
+
+  it('references inside the moved subtree stay bare beside the ones that leave it', () => {
+    const fam = family();
+    root = fam.root;
+    // One list naming both a billing component and a component outside billing.
+    saveComponentSpec(comp('billing_orch', 'billing', 'Orchestrator', { dependsOn: ['billing_adapter', 'shared_portal'] }));
+
+    externalizeSubsystem('billing', 'packages/billing');
+
+    expect(stored(fam.childDir, 'billing/billing_orch/.index.yaml').dependsOn).toEqual(['billing_adapter', 'super::shared_portal']);
+    expect(callTargets(stored(fam.childDir, 'billing/billing_orch/.implementation.yaml'))).toEqual(['billing_adapter']);
+    const portal = stored(fam.childDir, 'billing/billing_portal/.index.yaml');
+    expect(portal.dependsOn).toEqual(['billing_orch']);
+    expect(portal.dispatch.map((b: any) => b.component)).toEqual(['billing_orch']);
+    const index = stored(fam.childDir, 'billing/.index.yaml');
+    expect(index.lifecycle.map((le: any) => le.component)).toEqual(['billing_portal']);
+    // The subsystem a moved component belongs to is the mount itself.
+    expect(stored(fam.childDir, 'billing/billing_adapter/.index.yaml').subsystem).toBe('billing');
+  });
+
+  it('a reference that already climbs out of a chained parent climbs one hop further', () => {
+    // top ─mounts─▶ par, whose billing subsystem moves out into a project of its own.
+    const top = projectRoot('migrate-hop-');
+    root = top;
+    setProjectRoot(top);
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'top-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec(sub('top_sub', { parentSystem: 'top-sys', publicInterfaces: [{ type: 'Custom', details: 'top api', component: 'top_portal' }] } as Partial<SubsystemSpec>));
+    saveComponentSpec(comp('top_portal', 'top_sub', 'Portal', { portalType: 'Custom' }));
+    saveInterfaceSpec(intf('itop_portal', 'top_portal', 'fetch'));
+    createChainedSubsystem(sub('par', { parentSystem: 'top-sys', projectPath: 'packages/par' }), 'par');
+
+    const parDir = path.join(top, 'packages', 'par');
+    invalidateSpecCache();
+    setProjectRoot(parDir);
+    saveSubsystemSpec(sub('billing', { parentSystem: 'par' }));
+    saveComponentSpec(comp('billing_adapter', 'billing', 'Adapter', { dependsOn: ['super::top_portal'] }));
+    saveInterfaceSpec(intf('ibilling_adapter', 'billing_adapter', 'charge'));
+    saveImplementationSpec(calls('billing_adapter_impl', 'ibilling_adapter', 'charge', [['super::top_portal', 'fetch']]));
+    invalidateSpecCache();
+    expect(referenceFindings(verdict(top))).toEqual([]);
+
+    setProjectRoot(parDir);
+    externalizeSubsystem('billing', 'packages/billing');
+
+    const billingDir = path.join(parDir, 'packages', 'billing');
+    expect(stored(billingDir, 'billing/billing_adapter/.index.yaml').dependsOn).toEqual(['super::super::top_portal']);
+    expect(callTargets(stored(billingDir, 'billing/billing_adapter/.implementation.yaml'))).toEqual(['super::super::top_portal']);
+    // The same target from the top root, from the parent project, and from the new child.
+    expect(referenceFindings(verdict(top))).toEqual([]);
+    expect(referenceFindings(verdict(parDir))).toEqual([]);
+    expect(referenceFindings(verdict(billingDir))).toEqual([]);
+
+    // And back: one hop fewer, as the parent wrote it.
+    setProjectRoot(parDir);
+    internalizeSubsystem('billing');
+    expect(stored(parDir, 'billing/billing_adapter/.index.yaml').dependsOn).toEqual(['super::top_portal']);
+    expect(referenceFindings(verdict(top))).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { resolveSurfaceRef, isExternalNamespaceRef, isCollapsedCrossTreeRef } from './namespace.js';
+import { resolveSurfaceRef, reportAmbiguousSurfaceRef, isExternalNamespaceRef, isCollapsedCrossTreeRef } from './namespace.js';
 
 /**
  * Contract ↔ implementation symmetry, and narrative-step resolution: every
@@ -18,6 +18,7 @@ export const contractsRule: SddRule = {
     { code: 'INVALID_TARGET_COMPONENT_REFERENCE', defaultSeverity: 'error', summary: 'Call/register step targets a non-existent component' },
     { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree reference (super::/:: form) with no surface snapshot covering it — only the parent project can verify it' },
     { code: 'SURFACE_REF_NOT_EXPOSED', defaultSeverity: 'error', summary: 'Cross-tree reference resolves to a surface snapshot that does not expose the called method/capability' },
+    { code: 'SURFACE_REF_AMBIGUOUS', defaultSeverity: 'error', summary: 'Cross-tree call/dispatch/register target matched by surface snapshots of several providers with different contracts' },
     { code: 'UNDECLARED_DEPENDENCY_CALL', defaultSeverity: 'error', summary: 'Call step targets a component the caller does not depend on or own' },
     { code: 'INVALID_TARGET_METHOD_REFERENCE', defaultSeverity: 'error', summary: 'Call step targets a method not on any target interface' },
     { code: 'NARRATIVE_SEMANTIC_UNBACKED', defaultSeverity: 'warning', summary: 'Narrative asserts a guarantee the called contract does not declare' },
@@ -101,7 +102,18 @@ export const contractsRule: SddRule = {
             if (!dispatchTarget) {
               if (isCrossTreeForm || isCollapsedForm) {
                 const resolved = resolveSurfaceRef(ctx, step.targetComponent, fromSubsystem);
-                if (resolved) {
+                if (resolved.kind === 'ambiguous') {
+                  reportAmbiguousSurfaceRef(
+                    ctx,
+                    `Method "${implMethod.name}" in implementation "${impl.id}" dispatches (step ${step.stepNumber}) through`,
+                    step.targetComponent,
+                    resolved.providers,
+                    impl.id,
+                    isDraftCtx,
+                  );
+                  continue;
+                }
+                if (resolved.kind === 'resolved') {
                   // Validate the capability against the DECLARED surface.
                   if (step.capability && !(resolved.entry.dispatch ?? []).some(b => b.capability === step.capability)) {
                     ctx.addIssue(
@@ -169,7 +181,18 @@ export const contractsRule: SddRule = {
           if (!targetComp) {
             if (isCrossTreeForm || isCollapsedForm) {
               const resolved = resolveSurfaceRef(ctx, step.targetComponent, fromSubsystem);
-              if (resolved) {
+              if (resolved.kind === 'ambiguous') {
+                reportAmbiguousSurfaceRef(
+                  ctx,
+                  `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} "${step.targetMethod}" (step ${step.stepNumber}) on`,
+                  step.targetComponent,
+                  resolved.providers,
+                  impl.id,
+                  isDraftCtx,
+                );
+                continue;
+              }
+              if (resolved.kind === 'resolved') {
                 // Validate method + asserted guarantees against the DECLARED surface.
                 const surfaceMethod = resolved.entry.methods.find(m => m.name === step.targetMethod);
                 if (!surfaceMethod) {

@@ -833,6 +833,10 @@ program
   .option('--unit <id>', 'push: create the destination project first, owned by this organization unit')
   .option('--force', 'replace an authored spec tree at the destination (it is backed up first)')
   .option('--include-derived', 'push: pack regenerable artifacts (diagrams, generated topology) too')
+  .option(
+    '--allow-partial',
+    'build the archive even when some chained mounts cannot be packed, listing them as skipped (default: refuse)',
+  )
   .option('--archive <path>', 'also write the transferred archive to this path (file or directory)')
   .option('--dir <path>', 'pull: the local project root to import into (default: this project)')
   .action(async (action: string, opts) => {
@@ -843,6 +847,7 @@ program
       unit: opts.unit,
       force: opts.force,
       includeDerived: opts.includeDerived,
+      allowPartial: opts.allowPartial,
       archive: opts.archive,
       dir: opts.dir,
     });

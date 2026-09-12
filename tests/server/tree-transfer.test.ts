@@ -9,7 +9,7 @@ import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { createWebSession } from '../../src/server/websessions.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { assembleArchive } from '../../sdk/src/archive.js';
-import { allow, mintUserToken, createPlacedProject, seedChainedMount } from './helpers.js';
+import { allow, mintUserToken, createPlacedProject, seedChainedMount, seedSubsystem } from './helpers.js';
 import type { HostConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -284,6 +284,28 @@ describe('hosted spec-tree transfer', () => {
     // The CHILD's own tree, not the parent's — the qualifier bound the child root.
     expect(payload.projectName).toBe('Billing');
     expect(payload.roots).toEqual(['.']);
+  });
+
+  it('honours allowPartial: refuses a partial export by default, builds it when set', async () => {
+    createPlacedProject(cfg, MASTER, 'demo');
+    const root = seedTree('demo', 'Demo');
+    // 'ghost' declares a mount whose directory was never created — a chained
+    // root the export cannot follow.
+    seedSubsystem(root, 'ghost', 'packages/missing');
+    invalidateSpecCache();
+    allow(dataDir, 'u-owner', 'project:read', 'project', 'demo');
+    const token = mintUserToken(dataDir, { id: 'k-owner', userId: 'u-owner', projects: ['demo'] });
+
+    const refused = await call(token, 'demo', 'sdd_host_export_tree');
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/ghost/);
+
+    const allowed = await call(token, 'demo', 'sdd_host_export_tree', { allowPartial: true });
+    expect(allowed.isError, allowed.text).toBe(false);
+    const payload = JSON.parse(allowed.text);
+    expect(payload.roots).toEqual(['.']);
+    expect(payload.skipped).toEqual([{ mount: 'ghost', projectPath: 'packages/missing', reason: 'missing' }]);
+    expect(payload.archiveBase64.length).toBeGreaterThan(0);
   });
 
   it('serves the web download + upload routes for a session', async () => {

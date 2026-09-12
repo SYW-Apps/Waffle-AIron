@@ -82,15 +82,18 @@ methods:
     description: >-
       Detect whether the CURRENTLY BOUND project root is a chained subproject: walk the filesystem
       upward (bounded) for an ancestor project holding a subsystem spec whose projectPath resolves
-      exactly to this root. Returns the parent root and the mounting subsystem id, or null for a
-      genuine top root. Pure detection — never rebinds, never mutates.
+      exactly to this root and stays within that ancestor's own root. Returns the parent root and
+      the mounting subsystem id, or null for a genuine top root. Pure detection — never rebinds,
+      never mutates, and not reach-gated: a request-scoped caller discovers its parent through
+      resolveChainingParent, which checks the request's reach before reading anything above the
+      bound root.
     signature: 'findChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef | null
   - name: listChainedRoots
     description: >-
       Every chained subproject root beneath the bound project, as project-relative directories in
       walk order (recursing through nested mounts). The downward companion to findChainingParent,
-      and what a whole-tree operation needs to know which trees belong to this project.
+      and the roots half of inspectChainedRoots.
     signature: 'listChainedRoots(): string[]'
     returns: string[]
     guarantees:
@@ -112,6 +115,16 @@ methods:
     params:
       - name: namespace
         type: string
+  - name: inspectChainedRoots
+    description: >-
+      Every chained mount beneath the bound project: the followable project-relative roots in walk
+      order, and every mount that cannot be followed — with its qualified id, declared path and
+      reason (escapes, missing, cyclic, too-deep) — so a whole-tree operation can refuse a partial
+      result.
+    signature: 'inspectChainedRoots(): ChainedRootsInspection'
+    returns: ChainedRootsInspection
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T12:01:02.986Z'
+updatedAt: '2026-09-12T17:38:19.025Z'

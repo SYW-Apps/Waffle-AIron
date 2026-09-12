@@ -16,7 +16,7 @@ import {
 } from '../../src/core/specs.js';
 import { pinFamilySurfaces, listExternalInterfaces } from '../../src/core/surfaces.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
-import { createMcpServer } from '../../src/mcp/server.js';
+import { createMcpServer, statusFamilyContext } from '../../src/mcp/server.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -207,5 +207,38 @@ describe('sdd_list_external_interfaces + chained-subproject announcement', () =>
   it('does not announce the parent from a server bound for a child-scoped credential', () => {
     runWithProjectBinding(childDir, { topRoot: rootDir, parentReach: false }, () => createMcpServer());
     expect(stderrLines.find((l) => l.includes('chained subproject'))).toBeUndefined();
+  });
+
+  // sdd_get_status tells a connected agent where its root sits among chained
+  // projects, in-band — the agent never sees the startup log above.
+
+  it('opens sdd_get_status with the family context when the bound root is a chained child', async () => {
+    setProjectRoot(childDir);
+    const client = await connectInMemory(createMcpServer());
+    try {
+      const status = unwrapText(await client.callTool({ name: 'sdd_get_status', arguments: {} }) as never);
+      expect(status).toContain('mounted as subsystem "kid" of the parent project "ext-root-system"');
+      expect(status).toContain('sdd_list_external_interfaces');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('lists the chained subprojects a parent root mounts, and names no parent for a top root', async () => {
+    setProjectRoot(rootDir);
+    const client = await connectInMemory(createMcpServer());
+    try {
+      const status = unwrapText(await client.callTool({ name: 'sdd_get_status', arguments: {} }) as never);
+      expect(status).toContain('chained subprojects mounted here — kid (packages/kid)');
+      expect(status).not.toContain('mounted as subsystem');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('keeps the parent out of the family context for a credential narrowed to the child', () => {
+    runWithProjectBinding(childDir, { topRoot: rootDir, parentReach: false }, () => {
+      expect(statusFamilyContext()).not.toContain('mounted as subsystem');
+    });
   });
 });

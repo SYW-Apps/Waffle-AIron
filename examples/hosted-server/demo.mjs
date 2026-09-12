@@ -93,7 +93,10 @@ async function main() {
     server.kill();
   }
 
-  const stateIdOf = (out) => (out.match(/sha256\+doctrine:([0-9a-f]+)/) || [])[1];
+  // The digest after the gate identity's algorithm marker, whatever that marker
+  // currently covers (sha256+doctrine+inputs today) — the demo checks that the
+  // identity moves, not how it is spelled.
+  const stateIdOf = (out) => (out.match(/sha256[+a-z]*:([0-9a-f]+)/) || [])[1];
 
   step('Control plane: state-scoped lock');
   const firstLock = cli(['host', 'lock', '--project', 'demo']);

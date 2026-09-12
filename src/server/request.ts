@@ -299,20 +299,49 @@ export function requiredDataPlaneCapability(toolName: string): 'project:read' | 
   return 'project:write';
 }
 
+/** Where a hosted tool acts: on the bound spec TREE — which a subproject
+ *  qualifier narrows to the child — or on the hosted project RECORD, its
+ *  repository, or its relations to other projects. */
+export type ToolScope = 'tree' | 'record';
+
+/** The TREE-scoped hosted tools the data plane dispatches itself. They receive
+ *  the binding's subproject qualifier, so under a narrowed credential they act on
+ *  exactly the bound child tree. */
+const TREE_SCOPED_HOST_TOOLS = new Set<string>([
+  'sdd_host_lock_project',
+  ...TREE_TRANSFER_TOOLS,
+]);
+
 /**
- * Whether a tool is classified on purpose — an explicit read, an explicit write
- * prefix, or a hosted tool the data plane dispatches itself — rather than by the
- * fail-closed default. The default is a safety net, not a classification: a tool
- * the server advertises must never depend on it.
+ * The scope a tool declares, or undefined when it declares none. Every ordinary
+ * sdd_* tool the scoped server serves — each explicit read and each explicit
+ * write prefix — acts on the bound tree; the hosted tools are declared one by
+ * one. Confinement reads this and fails closed on undefined: a tool added
+ * without a declared scope is refused under a narrowed credential until it
+ * declares one.
+ */
+export function toolScope(toolName: string): ToolScope | undefined {
+  if (PROJECT_RECORD_TOOLS.has(toolName)) return 'record';
+  if (TREE_SCOPED_HOST_TOOLS.has(toolName)) return 'tree';
+  if (
+    READ_TOOL_NAMES.has(toolName) ||
+    READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p)) ||
+    WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))
+  ) {
+    return 'tree';
+  }
+  return undefined;
+}
+
+/**
+ * Whether a tool is classified on purpose — it declares its scope, which also
+ * makes it an explicit read, an explicit write prefix, or a hosted tool the data
+ * plane dispatches itself — rather than leaning on a fail-closed default. The
+ * defaults are safety nets, not classifications: a tool the server advertises
+ * must never depend on them.
  */
 export function isExplicitlyClassifiedTool(toolName: string): boolean {
-  return READ_TOOL_NAMES.has(toolName)
-    || READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))
-    || WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))
-    || PROJECT_LIFECYCLE_TOOLS.has(toolName)
-    || LANDSCAPE_DISCOVERY_TOOLS.has(toolName)
-    || PROJECT_OPS_TOOLS.has(toolName)
-    || TREE_TRANSFER_TOOLS.has(toolName);
+  return toolScope(toolName) !== undefined;
 }
 
 /** Lifecycle/ops tools whose SUCCESS changes state other live views are
@@ -394,15 +423,16 @@ function dataPlanePermissionError(
 // So they are refused BEFORE any dispatch.
 
 /**
- * Steps 10–11: refuse a RECORD-level hosted tool when the resolved binding carries
- * a subproject qualifier. Returns the `isError` tool-result response to send (HTTP
- * still 200; the caller still runs the SAME best-effort audit path), or undefined
- * to let the call proceed.
+ * Steps 10–11: under a subproject-qualified binding, serve only a tool that
+ * declares itself TREE-scoped (toolScope). A RECORD-scoped tool acts on the whole
+ * project, and a tool that declares no scope cannot be trusted not to, so both
+ * are refused — confinement fails closed. Returns the `isError` tool-result
+ * response to send (HTTP still 200; the caller still runs the SAME best-effort
+ * audit path), or undefined to let the call proceed.
  *
  * Never a silent success and never a partial action: the refusal happens before the
  * lifecycle dispatch AND before the ordinary permission gate, so nothing the tool
- * would have done can have started. An unqualified binding is untouched, and the
- * two TREE-scoped lifecycle tools are never refused here (see PROJECT_RECORD_TOOLS).
+ * would have done can have started. An unqualified binding is untouched.
  */
 export function subprojectConfinementError(
   projectId: string,
@@ -413,8 +443,15 @@ export function subprojectConfinementError(
   const msg = jsonRpcRequest(body);
   if (!msg || msg.method !== 'tools/call') return undefined;
   const name = msg.params?.name;
-  if (typeof name !== 'string' || !PROJECT_RECORD_TOOLS.has(name)) return undefined;
+  if (typeof name !== 'string') return undefined;
+  const scope = toolScope(name);
+  if (scope === 'tree') return undefined;
 
+  const bound = `${projectId}${SUBPROJECT_SEPARATOR}${subproject}`;
+  const why = scope === 'record'
+    ? `${name} acts on the whole project "${projectId}", but this credential is bound to subproject "${bound}". `
+    : `${name} declares no scope, and this credential is bound to subproject "${bound}", which serves only ` +
+      `tools that act on the bound tree. `;
   return {
     jsonrpc: '2.0',
     id: msg.id ?? null,
@@ -422,10 +459,7 @@ export function subprojectConfinementError(
       content: [
         {
           type: 'text',
-          text:
-            `Refused — ${name} acts on the whole project "${projectId}", but this credential is ` +
-            `bound to subproject "${projectId}${SUBPROJECT_SEPARATOR}${subproject}". ` +
-            `An unqualified credential for "${projectId}" is required to call ${name}.`,
+          text: `Refused — ${why}An unqualified credential for "${projectId}" is required to call ${name}.`,
         },
       ],
       isError: true,
@@ -561,7 +595,14 @@ export async function dispatchProjectLifecycleTool(
         // JSON-RPC result as base64 and is therefore bounded by the same body
         // cap as every other data-plane response — a tree too large for that is
         // an honest failure pointing at the raw-upload route, never a truncation.
-        const exported = projectops.exportProjectTree(cfg, credential, projectId, subproject);
+        const exported = projectops.exportProjectTree(
+          cfg,
+          credential,
+          projectId,
+          subproject,
+          undefined,
+          args.allowPartial === true,
+        );
         value = {
           projectName: exported.projectName,
           roots: exported.roots,
@@ -569,6 +610,7 @@ export async function dispatchProjectLifecycleTool(
           stateId: exported.stateId,
           suggestedFileName: exported.suggestedFileName,
           archiveBase64: Buffer.from(exported.archive).toString('base64'),
+          skipped: exported.skipped,
         };
         break;
       }
@@ -680,14 +722,16 @@ export async function handleMcpRequest(
     const projectId = binding.projectId;
     const subproject = binding.subproject;
 
-    // Steps 10–11: confine a subproject-qualified credential. The RECORD-level
-    // hosted tools act on the hosted project record with the TOP project id, never
-    // on the bound tree, so a qualified credential would reach the WHOLE parent
-    // through them — the qualifier would narrow nothing. Refuse BEFORE any
-    // dispatch (and before the ordinary permission gate) as an isError tool result
-    // (HTTP still 200), flowing through the SAME best-effort audit path every other
-    // outcome uses. The TREE-scoped lock is NOT refused: it is confined
-    // by forwarding the qualifier below.
+    // Steps 10–11: confine a subproject-qualified credential by the called tool's
+    // declared scope. A RECORD-scoped tool acts on the hosted project record with
+    // the TOP project id, never on the bound tree, so a qualified credential would
+    // reach the WHOLE parent through it — the qualifier would narrow nothing — and
+    // a tool that declares no scope is treated the same way (fail closed). Refuse
+    // BEFORE any dispatch (and before the ordinary permission gate) as an isError
+    // tool result (HTTP still 200), flowing through the SAME best-effort audit
+    // path every other outcome uses. TREE-scoped tools pass: lock and tree
+    // transfer are confined by forwarding the qualifier below, and the ordinary
+    // sdd_* tools act on the bound child tree.
     const confinementError = subprojectConfinementError(projectId, subproject, body);
     if (confinementError !== undefined) {
       sendJson(res, 200, confinementError);

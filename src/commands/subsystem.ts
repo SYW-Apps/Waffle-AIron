@@ -45,8 +45,8 @@ export function composeAgentBrief(agentId: string): AgentBrief {
 // through. Refusing a bundled code pack here would make a hosted project
 // unpullable, while the hosted import (which accepts archives from anyone with
 // project:admin) always applies it.
-export function exportSpecTree(includeDerived?: boolean): TreeExportResult {
-  return coreExportSpecTree(includeDerived);
+export function exportSpecTree(includeDerived?: boolean, allowPartial?: boolean): TreeExportResult {
+  return coreExportSpecTree(includeDerived, allowPartial);
 }
 
 export function importSpecTree(archive: Uint8Array, options: TreeImportOptions): TreeImportResult {

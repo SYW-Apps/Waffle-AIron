@@ -3,7 +3,7 @@ import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, loadProjectConfig, WaiPaths } from '../config/loader.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
-import { computeStateId, hashGateState, stateIdEquals, type StateId, type GateConfig } from './statehash.js';
+import { computeStateId, hashGateState, stateIdEquals, canonicalize, type StateId, type GateConfig } from './statehash.js';
 import { loadProjectExtensions } from './extensions.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
@@ -23,6 +23,8 @@ import {
   GroupSpec,
   GroupSpecSchema,
   SpecStatus,
+  SurfaceSnapshot,
+  SurfaceSnapshotSchema,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -218,6 +220,49 @@ function relativizeId(id: string, prefix: string): string {
   return `${'super::'.repeat(prefixParts.length - common)}${idParts.slice(common).join('::')}`;
 }
 
+/**
+ * Re-express a reference stored by a spec that moves ONE mount hop — from a
+ * namespace N into the mount `mount` beneath it (`into`), or from `N::mount` back
+ * out to N (`outOf`) — so it names the same target from where the spec now
+ * loads. The target never changes, only the namespace the reference is written
+ * relative to. The primitive behind externalize/internalize.
+ *
+ * - A root-anchored `::x` names the same target at every depth: kept as written.
+ * - Every other form is resolved where it was written (qualifyId) and written
+ *   again relative to where it is now read (relativizeId). A target that travels
+ *   with the spec moves first: going `into` the mount, the ids `isMoved` accepts
+ *   (named relative to N); going `outOf` it, everything inside the mount, whose
+ *   namespace the move dissolves into N.
+ * - Only the hop between the two namespaces decides the result, never where N
+ *   sits — the property that makes relativizeId's super:: chains root-invariant.
+ *   So N is a stand-in: deep enough that the reference's own super:: hops stay
+ *   inside it, spelled with segments no spec id can contain so no common ancestor
+ *   is found by accident, and without the root-subsystem anchor, which belongs
+ *   to whichever root happens to be loading.
+ */
+export function rebaseReference(
+  ref: string,
+  mount: string,
+  direction: 'into' | 'outOf',
+  isMoved: (id: string) => boolean = () => false,
+): string {
+  if (!ref || ref.startsWith('::')) return ref;
+  const segments = ref.split('::');
+  let hops = 0;
+  while (segments[hops] === 'super') hops++;
+  if (hops === segments.length) return ref; // hops alone name nothing
+
+  const outer = Array.from({ length: hops + 1 }, (_, i) => `<n${i}>`).join('::');
+  const inner = `${outer}::${mount}`;
+  const [from, to] = direction === 'into' ? [outer, inner] : [inner, outer];
+  const target = qualifyId(ref, from, NO_ROOT_SUBSYSTEMS);
+  // The target as named from the namespace the spec leaves — a super:: form
+  // exactly when it lies outside that namespace, and then it stays put.
+  const left = relativizeId(target, from);
+  const travels = !left.startsWith('super::') && (direction === 'outOf' || isMoved(left));
+  return relativizeId(travels ? qualifyId(left, to, NO_ROOT_SUBSYSTEMS) : target, to);
+}
+
 /** True when `file` is the same as, or nested under, directory `dir`. */
 function isWithin(dir: string, file: string): boolean {
   const d = path.resolve(dir);
@@ -233,30 +278,71 @@ function isWithin(dir: string, file: string): boolean {
 // escape the bound project root and federate — and, via a code pack living
 // there, execute — another tenant's spec tree. The single invariant enforced
 // everywhere a projectPath is written or resolved: the child directory must
-// stay strictly within its owning project root. Empty/undefined projectPath is
-// not chaining and is never checked here (callers skip it).
+// stay strictly within its OWNING project root — the project that declares the
+// mount, not whichever root the tree happens to be loaded from, so one
+// declaration is accepted or refused identically from every root — both
+// lexically and as the filesystem resolves it (through links). Empty/undefined
+// projectPath is not chaining and is never checked here (callers skip it).
 // ---------------------------------------------------------------------------
 
 /**
- * Whether a subproject's already-resolved child directory escapes `projectRoot`.
- * `resolvedChildDir` is resolved by the caller because for multi-hop chains the
- * resolution base is an intermediate parent, while the containment boundary is
- * always the bound top root. An absolute `projectPath` or a `../`-escape fails.
+ * A path as the filesystem resolves it: its nearest existing ancestor followed
+ * through links, with the part that does not exist yet re-appended. Null when an
+ * entry exists but cannot be resolved (a dangling link), which containment
+ * treats as escaping.
+ */
+function canonicalPath(target: string): string | null {
+  let existing = path.resolve(target);
+  const rest: string[] = [];
+  for (;;) {
+    try {
+      fs.lstatSync(existing);
+      break;
+    } catch {
+      const up = path.dirname(existing);
+      if (up === existing) return path.resolve(target);
+      rest.unshift(path.basename(existing));
+      existing = up;
+    }
+  }
+  try {
+    return path.join(fs.realpathSync.native(existing), ...rest);
+  } catch {
+    return null;
+  }
+}
+
+/** A chained directory's identity for cycle detection: reached through a link, it is still the same directory. */
+function chainDirKey(dir: string): string {
+  return canonicalPath(dir) ?? path.resolve(dir);
+}
+
+/**
+ * Whether a subproject's already-resolved child directory escapes `projectRoot`,
+ * the root of the project that DECLARES the mount; `resolvedChildDir` is
+ * resolved by the caller against that same project. An absolute `projectPath`, a
+ * `../`-escape, or a path that leaves the root through a link fails. Each hop is
+ * contained by its own declaring project, which is itself contained, so no chain
+ * however deep leaves the bound root.
  */
 function projectPathEscapesRoot(
   projectRoot: string,
   projectPath: string,
   resolvedChildDir: string,
 ): boolean {
-  return path.isAbsolute(projectPath) || !isWithin(projectRoot, resolvedChildDir);
+  if (path.isAbsolute(projectPath) || !isWithin(projectRoot, resolvedChildDir)) return true;
+  const root = canonicalPath(projectRoot);
+  const child = canonicalPath(resolvedChildDir);
+  return root === null || child === null || !isWithin(root, child);
 }
 
 /**
  * Assert a subsystem `projectPath` resolves strictly within `projectRoot`, and
  * return the resolved absolute child directory. Throws a clear Error naming the
- * offending path when `projectPath` is absolute or `../`-escapes the root.
- * Applied on every write/setter path that persists a projectPath; the load-time
- * loader uses projectPathEscapesRoot directly (it collects issues, not throws).
+ * offending path when `projectPath` is absolute, `../`-escapes the root, or
+ * leaves it through a link. Applied on every write/setter path that persists a
+ * projectPath; the load-time loader uses projectPathEscapesRoot directly (it
+ * collects issues, not throws).
  */
 export function assertContainedProjectPath(projectRoot: string, projectPath: string): string {
   const root = path.resolve(projectRoot);
@@ -264,7 +350,7 @@ export function assertContainedProjectPath(projectRoot: string, projectPath: str
   if (projectPathEscapesRoot(root, projectPath, resolved)) {
     throw new Error(
       `projectPath "${projectPath}" must resolve within the project root "${root}", but resolves ` +
-        `to "${resolved}"; absolute paths and ../-escaping paths are rejected so a chained ` +
+        `to "${resolved}"; absolute, ../-escaping and link-escaping paths are rejected so a chained ` +
         `subproject is always contained by its parent.`,
     );
   }
@@ -294,16 +380,24 @@ export interface ChainingParentRef {
  * components — all of which live ABOVE this root and are physically absent here)
  * cannot be resolved standalone, so they are honest cross-tree edges to warn on,
  * not spec defects to error on. Pure filesystem read; no cache mutation.
+ *
+ * Only a mount the ancestor itself would follow counts: its projectPath stays
+ * within that ancestor's own root. `ceiling`, when given, bounds the walk — no
+ * directory above it is probed, so a caller confined to a root reads nothing
+ * outside it to find a parent. Request-scoped callers go through
+ * resolveChainingParent, which supplies both the ceiling and the reach gate.
  */
-export function findChainingParent(childRoot: string): ChainingParentRef | null {
+export function findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef | null {
   let childResolved: string;
   try {
     childResolved = path.resolve(childRoot);
   } catch {
     return null;
   }
+  const bound = ceiling ? path.resolve(ceiling) : undefined;
   let dir = path.dirname(childResolved);
   for (let hops = 0; hops < 32; hops++) {
+    if (bound && !isWithin(bound, dir)) break;
     const specsDir = aiPathsAt(dir).specsDir();
     if (pathExists(specsDir)) {
       for (const file of listFilesRecursive(specsDir, '.yaml')) {
@@ -318,7 +412,8 @@ export function findChainingParent(childRoot: string): ChainingParentRef | null 
           const projectPath = (raw as { projectPath?: unknown }).projectPath;
           if (typeof projectPath === 'string' && projectPath.trim() !== '') {
             try {
-              if (path.resolve(dir, projectPath) === childResolved) {
+              const mountDir = path.resolve(dir, projectPath);
+              if (mountDir === childResolved && !projectPathEscapesRoot(dir, projectPath, mountDir)) {
                 const id = (raw as { id?: unknown }).id;
                 return { parentRoot: dir, subsystemId: typeof id === 'string' ? id : '?' };
               }
@@ -336,26 +431,39 @@ export function findChainingParent(childRoot: string): ChainingParentRef | null 
   return null;
 }
 
-/**
- * Walk DOWN from a project root and list every chained subproject root beneath
- * it, as project-relative POSIX directories in walk order (parents before their
- * own children). The downward companion to findChainingParent, and what a
- * WHOLE-TREE operation — archiving a project for transfer — needs in order to
- * know which trees belong to this project.
- *
- * Mirrors the loader's recursion guards exactly, but silently: a mount that
- * escapes the root (absolute / `../`), points at a missing directory, or forms a
- * cycle is SKIPPED rather than reported, because this is a pure locator and the
- * loader already raises those as issues on every scan. Returns [] for a project
- * that chains nothing.
- */
-export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
-  const root = path.resolve(rootDir);
-  const found: string[] = [];
-  const visited = new Set<string>([root]);
+/** Why a whole-tree walk cannot follow a chained mount. */
+export type ChainedRootSkipReason = 'escapes' | 'missing' | 'cyclic' | 'too-deep';
 
-  const walk = (projectDir: string, depth: number): void => {
-    if (depth > 32) return; // the loader's own bound on chain depth
+/**
+ * Every chained mount beneath a project root (ispec_index.inspectChainedRoots):
+ * the roots a whole-tree walk follows, and the mounts it cannot.
+ */
+export interface ChainedRootsInspection {
+  /** Project-relative POSIX roots in walk order, parents before their own children. */
+  roots: string[];
+  /** Mounts that cannot be followed: the mount's qualified id, its projectPath as declared, and why. */
+  skipped: { mount: string; projectPath: string; reason: ChainedRootSkipReason }[];
+}
+
+/**
+ * Walk DOWN from a project root over every chained mount beneath it, exactly as
+ * the loader recurses: each projectPath resolved against the project that
+ * declares it and contained by that project's root. The downward companion to
+ * findChainingParent, and what a WHOLE-TREE operation — archiving a project for
+ * transfer — needs to know which trees belong to the project, and whether it
+ * is seeing all of them.
+ *
+ * A mount that escapes its project, points at a missing directory, forms a
+ * cycle, or nests past the walk bound is reported in `skipped` rather than
+ * silently dropped, so a caller can refuse a result that would only look
+ * complete. A directory two mounts reach is listed once.
+ */
+export function inspectChainedRoots(rootDir: string = getProjectRoot()): ChainedRootsInspection {
+  const root = path.resolve(rootDir);
+  const inspection: ChainedRootsInspection = { roots: [], skipped: [] };
+  const listed = new Set<string>();
+
+  const walk = (projectDir: string, prefix: string, ancestors: ReadonlySet<string>, depth: number): void => {
     const specsDir = aiPathsAt(projectDir).specsDir();
     if (!pathExists(specsDir)) return;
     for (const file of listFilesRecursive(specsDir, '.yaml')) {
@@ -367,8 +475,9 @@ export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
       }
       // A subsystem spec (has parentSystem) that mounts a child via projectPath.
       if (!raw || typeof raw !== 'object' || !('parentSystem' in raw)) continue;
-      const projectPath = (raw as { projectPath?: unknown }).projectPath;
+      const { id, projectPath } = raw as { id?: unknown; projectPath?: unknown };
       if (typeof projectPath !== 'string' || projectPath.trim() === '') continue;
+      const localId = typeof id === 'string' ? id : '?';
 
       let childDir: string;
       try {
@@ -376,20 +485,36 @@ export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
       } catch {
         continue; // malformed projectPath — not a resolvable mount
       }
-      // Containment is checked against the BOUND root, so no hop however deep
-      // may escape it; nesting still resolves against the immediate parent.
-      if (projectPathEscapesRoot(root, projectPath, childDir)) continue;
-      if (visited.has(childDir)) continue;
-      if (!fs.existsSync(childDir)) continue;
+      let reason: ChainedRootSkipReason | undefined;
+      if (projectPathEscapesRoot(projectDir, projectPath, childDir)) reason = 'escapes';
+      else if (ancestors.has(chainDirKey(childDir))) reason = 'cyclic';
+      else if (!fs.existsSync(childDir)) reason = 'missing';
+      else if (depth >= 32) reason = 'too-deep'; // the bound on chain depth
+      if (reason) {
+        const mount = prefix ? qualifyDeclaredId(localId, prefix, true) : localId;
+        inspection.skipped.push({ mount, projectPath, reason });
+        continue;
+      }
 
-      visited.add(childDir);
-      found.push(path.relative(root, childDir).split(path.sep).join('/'));
-      walk(childDir, depth + 1);
+      const key = chainDirKey(childDir);
+      if (listed.has(key)) continue;
+      listed.add(key);
+      inspection.roots.push(path.relative(root, childDir).split(path.sep).join('/'));
+      walk(childDir, prefix ? `${prefix}::${localId}` : localId, new Set([...ancestors, key]), depth + 1);
     }
   };
 
-  walk(root, 0);
-  return found;
+  walk(root, '', new Set([chainDirKey(root)]), 0);
+  return inspection;
+}
+
+/**
+ * Every chained subproject root beneath a project root, in walk order — the
+ * roots half of inspectChainedRoots. Returns [] for a project that chains
+ * nothing.
+ */
+export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
+  return inspectChainedRoots(rootDir).roots;
 }
 
 /**
@@ -714,7 +839,7 @@ export class SpecWorkspace {
     this.rootSubsystems.clear();
     this.cachedRecursive = recursive;
     this.scanVisitedSpecDirs = [];
-    const visited = new Set<string>([path.resolve(this.rootDir)]);
+    const visited = new Set<string>([chainDirKey(this.rootDir)]);
 
     const maxDepth = typeof recursive === 'number' ? recursive : (recursive ? Infinity : 0);
     this.cachedIndex = this.scanSpecsForProject(this.rootDir, '', visited, maxDepth, 0);
@@ -950,29 +1075,36 @@ export class SpecWorkspace {
     if (currentDepth < maxDepth) {
       for (const subproj of localSubprojects) {
         const childDir = path.resolve(projectDir, subproj.projectPath);
+        // Every issue about this mount names it by its QUALIFIED id, exactly as
+        // the loader names the subsystem itself — so a validation scoped to an
+        // enclosing mount keeps it.
+        const mountId = namespacePrefix
+          ? qualifyDeclaredId(subproj.subsystemId, namespacePrefix, true)
+          : subproj.subsystemId;
 
-        // Containment guard (Fix B2) — THE critical read-time defense. The
-        // resolution base is the immediate parent (projectDir) so nested chains
-        // compose, but containment is always checked against this.rootDir, the
-        // workspace's bound root (the tenant project root when hosted). No hop,
-        // however deep, may escape it via an absolute or ../ projectPath. On a
-        // violation, surface a loader error and SKIP the child (do not recurse).
-        if (projectPathEscapesRoot(this.rootDir, subproj.projectPath, childDir)) {
+        // Containment guard (Fix B2) — THE critical read-time defense. Both the
+        // resolution base and the containment boundary are the project that
+        // DECLARES the mount (projectDir), so a declaration is accepted or
+        // refused identically whichever root loads it; projectDir was itself
+        // contained by its own declaring project, so no hop, however deep,
+        // leaves the bound root. On a violation, surface a loader error and SKIP
+        // the child (do not recurse).
+        if (projectPathEscapesRoot(projectDir, subproj.projectPath, childDir)) {
           this.loaderIssues.push({
             severity: 'error',
             code: 'PROJECTPATH_ESCAPE',
-            message: `Subproject path "${subproj.projectPath}" declared by subsystem "${subproj.subsystemId}" escapes the project root "${this.rootDir}" (resolves to "${childDir}"); absolute and ../-escaping projectPaths are rejected. Skipping this subproject.`,
-            specId: subproj.subsystemId,
+            message: `Subproject path "${subproj.projectPath}" declared by subsystem "${mountId}" escapes the root of the project declaring it, "${projectDir}" (resolves to "${childDir}"); absolute, ../-escaping and link-escaping projectPaths are rejected. Skipping this subproject.`,
+            specId: mountId,
           });
           continue;
         }
 
-        if (visitedDirs.has(childDir)) {
+        if (visitedDirs.has(chainDirKey(childDir))) {
           this.loaderIssues.push({
             severity: 'error',
             code: 'CIRCULAR_SUBPROJECT_REFERENCE',
-            message: `Circular reference detected: Subsystem "${subproj.subsystemId}" refers to subproject "${childDir}" which is already loaded.`,
-            specId: subproj.subsystemId,
+            message: `Circular reference detected: Subsystem "${mountId}" refers to subproject "${childDir}" which is already loaded.`,
+            specId: mountId,
           });
           continue;
         }
@@ -981,8 +1113,8 @@ export class SpecWorkspace {
           this.loaderIssues.push({
             severity: 'error',
             code: 'SUBPROJECT_NOT_FOUND',
-            message: `Subproject directory "${childDir}" declared by subsystem "${subproj.subsystemId}" does not exist.`,
-            specId: subproj.subsystemId,
+            message: `Subproject directory "${childDir}" declared by subsystem "${mountId}" does not exist.`,
+            specId: mountId,
           });
           continue;
         }
@@ -992,7 +1124,7 @@ export class SpecWorkspace {
           : subproj.subsystemId;
 
         const newVisited = new Set(visitedDirs);
-        newVisited.add(childDir);
+        newVisited.add(chainDirKey(childDir));
 
         const childIndex = this.scanSpecsForProject(childDir, childNamespace, newVisited, maxDepth, currentDepth + 1);
 
@@ -1037,14 +1169,16 @@ export class SpecWorkspace {
       if (sub && sub.projectPath) {
         const nextDir = path.resolve(currentDir, sub.projectPath);
         // Containment guard (Fix B2): never resolve a namespace into a directory
-        // that escapes the bound top root (this.rootDir). Surface a loader error
-        // and SKIP the escaping hop, leaving currentDir contained, rather than
-        // handing back an out-of-root directory for a save/lookup.
-        if (projectPathEscapesRoot(this.rootDir, sub.projectPath, nextDir)) {
+        // that escapes the project declaring the hop (currentDir) — the same
+        // boundary the loader applies, so a namespace resolves here exactly when
+        // its tree loads. Surface a loader error and SKIP the escaping hop,
+        // leaving currentDir contained, rather than handing back an out-of-root
+        // directory for a save/lookup.
+        if (projectPathEscapesRoot(currentDir, sub.projectPath, nextDir)) {
           this.loaderIssues.push({
             severity: 'error',
             code: 'PROJECTPATH_ESCAPE',
-            message: `Subproject path "${sub.projectPath}" declared by subsystem "${currentPrefix}" escapes the project root "${this.rootDir}" (resolves to "${nextDir}"); absolute and ../-escaping projectPaths are rejected. Skipping this subproject.`,
+            message: `Subproject path "${sub.projectPath}" declared by subsystem "${currentPrefix}" escapes the root of the project declaring it, "${currentDir}" (resolves to "${nextDir}"); absolute, ../-escaping and link-escaping projectPaths are rejected. Skipping this subproject.`,
             specId: currentPrefix,
           });
           continue;
@@ -2927,19 +3061,50 @@ export function buildProjectGraph(level: number): WebGraphModel {
  *
  * Reach: the parent is out of bounds for a hosted request whose credential is
  * narrowed to the child, and so is anything above the request's top project
- * root — both answer null, exactly as a top root would. Every caller that reads
- * above the bound root through here (surface freshness, pinning, the bind-time
+ * root — both answer null, exactly as a top root would, and neither is so much
+ * as probed: a narrowed request returns before the walk, and every other walk
+ * stops at the request's top root. Every caller that reads above the bound root
+ * through here (validation, surface freshness, pinning, the bind-time
  * announcement) inherits the gate instead of having to remember it.
  */
 export function resolveChainingParent(): ChainingParentRef | null {
   const reach = getRequestParentReach();
   if (reach && !reach.parentReach) return null;
-  const parent = findChainingParent(getProjectRoot());
-  if (parent && reach?.topRoot) {
-    const fromTop = path.relative(path.resolve(reach.topRoot), path.resolve(parent.parentRoot));
-    if (fromTop === '..' || fromTop.startsWith(`..${path.sep}`) || path.isAbsolute(fromTop)) return null;
+  return findChainingParent(getProjectRoot(), reach?.topRoot);
+}
+
+/**
+ * Reduce a stored surface snapshot to its content key: provenance (stateId,
+ * generatedAt, origin) stripped, then canonicalized so YAML key order never
+ * moves the identity. Mirrors `surfaceContentKey` in src/core/surfaces.ts, but
+ * lives here rather than being imported from it — sdd_core must not depend on
+ * sdd_surfaces, and importing that module would cycle straight back through
+ * this one.
+ */
+function snapshotInputKey(snapshot: SurfaceSnapshot): string {
+  const { stateId, generatedAt, origin, ...content } = snapshot;
+  return canonicalize(content);
+}
+
+/**
+ * Every consumed contract input a project root holds: its stored surface
+ * snapshots under .wai/surfaces, reduced to content keys. A malformed file is
+ * skipped exactly as the surface repository's own listSnapshots skips one — a
+ * corrupt pin never blocks (or silently varies) the gate identity.
+ */
+function consumedSurfaceInputsAt(rootDir: string): string[] {
+  const dir = path.join(rootDir, '.wai', 'surfaces');
+  if (!pathExists(dir)) return [];
+  const keys: string[] = [];
+  for (const file of fs.readdirSync(dir)) {
+    if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
+    try {
+      keys.push(snapshotInputKey(SurfaceSnapshotSchema.parse(readYamlFile(path.join(dir, file)))));
+    } catch {
+      // A malformed snapshot never aborts the read — it simply is not a consumed input.
+    }
   }
-  return parent;
+  return keys;
 }
 
 /**
@@ -2947,21 +3112,21 @@ export function resolveChainingParent(): ChainingParentRef | null {
  * (icore_orchestrator/icore_portal.computeStateIdAt). The root is bound
  * strictly READ-ONLY for the duration of the computation via the async-scoped
  * project-root binding, which restores the previous binding unconditionally —
- * also on failure paths. Serves freshness comparisons of vendored surface
- * snapshots against what the (parent) tree looks like NOW; returns null when
- * the root holds no loadable spec tree.
+ * also on failure paths. Returns null when the root holds no loadable spec
+ * tree.
  */
 /**
  * Compute the GATE state identity of the current project
  * (icore_orchestrator/icore_portal.computeGateStateId): load the governing
- * extension packs, then digest the spec tree together with that doctrine.
+ * extension packs and the consumed contract inputs, then digest the spec tree
+ * together with that doctrine and those inputs.
  *
  * This is the identity `wairon lock` records and every staleness check re-computes, so a
- * doctrine change invalidates a lock by state mismatch exactly as a spec edit
- * does — nobody has to remember to invalidate it. Loading the doctrine here (not
- * inside the hash specialist) keeps that specialist pure and makes every caller
- * use the same doctrine source, so a lock and the re-check that later judges it
- * stale can never disagree about which rule set applied.
+ * doctrine change, or swapping a pinned contract a verdict consulted, invalidates a lock by
+ * state mismatch exactly as a spec edit does — nobody has to remember to invalidate it. Loading
+ * the doctrine and inputs here (not inside the hash specialist) keeps that specialist pure and
+ * makes every caller use the same sources, so a lock and the re-check that later judges it stale
+ * can never disagree about which rule set or which contracts applied.
  */
 export function computeGateStateId(): StateId {
   // The gate is the packs AND the project's own governing configuration: which
@@ -2973,7 +3138,15 @@ export function computeGateStateId(): StateId {
     const config = loadProjectConfig();
     gate = { projectType: config.projectType, rules: config.rules };
   } catch { /* uninitialized project: the tree hash still stands on its own */ }
-  return hashGateState(loadProjectExtensions(), gate);
+
+  // The consumed contract inputs: this root's own stored snapshots, plus every
+  // chained mount's — a whole-tree validation can consult any of them when
+  // resolving a cross-tree reference, so the gate identity must too.
+  const root = getProjectRoot();
+  const roots = [root, ...listChainedRoots(root).map((rel) => path.join(root, rel))];
+  const inputs = roots.flatMap(consumedSurfaceInputsAt);
+
+  return hashGateState(loadProjectExtensions(), inputs, gate);
 }
 
 /** Whether a lock is in force, void, or absent. */

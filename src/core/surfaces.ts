@@ -22,8 +22,8 @@ import {
   loadTypeSpecs,
   resolveChainingParent,
   resolveSubprojectForNamespace,
-  computeStateIdAt,
   invalidateSpecCache,
+  type ChainingParentRef,
 } from './specs.js';
 import { computeStateId } from './statehash.js';
 import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs, BUILTIN_TYPES } from './rules/type-analysis.js';
@@ -533,6 +533,25 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
 }
 
 /**
+ * What a chained child's family publishes to it NOW, keyed as a pin stores it:
+ * the family-scoped parent surface under the parent system name, then the
+ * published surface of every sibling — each top-level parent subsystem but the
+ * child's own mount — under '<systemName>::<subsystemId>'. The parent root is
+ * bound read-only for the projection and the child's binding is restored
+ * afterwards. A pin stores exactly this, and freshness is judged against it.
+ */
+function projectFamilySurfaces(parent: ChainingParentRef): SurfaceSnapshot[] {
+  return runWithProjectRoot(parent.parentRoot, () => {
+    // The parent is read as it is NOW — its tree may have moved since this
+    // process last looked, and projecting a stale cache would report the past.
+    invalidateSpecCache();
+    const siblings = loadSubsystemSpecs()
+      .filter((s) => !s.id.includes('::') && s.id !== parent.subsystemId);
+    return [projectChildSurface(), ...siblings.map((s) => projectSubsystemSurface(s.id))];
+  });
+}
+
+/**
  * surface_orchestrator.pinFamilySurfaces — a chained child PULLS its family's
  * surfaces into its own `.wai/surfaces/`.
  *
@@ -552,14 +571,7 @@ export function pinFamilySurfaces(): string[] | null {
   if (!parent) return null;
   const childRoot = getProjectRoot();
 
-  const projected = runWithProjectRoot(parent.parentRoot, () => {
-    // The parent is read as it is NOW — its tree may have moved since this
-    // process last looked, and a pin of a stale cache would pin the past.
-    invalidateSpecCache();
-    const siblings = loadSubsystemSpecs()
-      .filter((s) => !s.id.includes('::') && s.id !== parent.subsystemId);
-    return [projectChildSurface(), ...siblings.map((s) => projectSubsystemSurface(s.id))];
-  });
+  const projected = projectFamilySurfaces(parent);
 
   const before = new Map(listSnapshots(childRoot).map((s) => [s.projectName, surfaceContentKey(s)]));
   const changed: string[] = [];
@@ -598,21 +610,27 @@ export interface ExternalSurfaceEntry {
   stateId?: string;
   /** Producer-declared version, for authored/exchanged snapshots carrying one. */
   version?: string;
-  /** 'fresh' | 'stale' (parent tree changed since generation) | 'unverifiable'. */
+  /**
+   * 'fresh' when the snapshot's content equals what the chaining parent projects
+   * for the same key now; 'stale' when it differs or that key is no longer
+   * projected; 'unverifiable' when no parent is in reach or the snapshot is foreign.
+   */
   freshness: 'fresh' | 'stale' | 'unverifiable';
   /** Ids of the interfaces the snapshot exposes — the discovery summary. */
   interfaceIds: string[];
 }
 
 /**
- * surfaces_core_adapter.computeParentStateId: bind the given parent project
- * root READ-ONLY and compute its current spec-tree state hash through the core
- * subsystem's published portal — the comparison source for freshness-checking
- * vendored parent/sibling snapshots against what the parent tree looks like
- * NOW. Never mutates either root's binding.
+ * The content of every surface the chaining parent projects for this child
+ * now, by storage key. Null when the parent's tree cannot be projected at all —
+ * its L0 no longer loads, say — so there is nothing to judge a pin against.
  */
-export function computeParentStateId(parentRoot: string): string | null {
-  return computeStateIdAt(parentRoot);
+function projectedFamilyContent(parent: ChainingParentRef): Map<string, string> | null {
+  try {
+    return new Map(projectFamilySurfaces(parent).map((s) => [s.projectName, surfaceContentKey(s)]));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -620,22 +638,31 @@ export function computeParentStateId(parentRoot: string): string | null {
  * surface snapshot as an ExternalSurfaceEntry. sourceKind classification:
  * 'parent' is the generated family surface keyed by the parent system name;
  * 'sibling' is a generated '<systemName>::<subsystemId>' key; 'foreign' is an
- * exchanged/authored import. Freshness compares the vendored StateId against
- * the chaining parent's CURRENT state hash when a chaining parent is
- * reachable; entries are 'unverifiable' when standalone or foreign.
+ * exchanged/authored import.
+ *
+ * Freshness is judged on content. When the chaining parent is in reach, what it
+ * publishes now is projected exactly as a pin would store it, and a generated
+ * snapshot is 'fresh' when its content equals the projection under the same
+ * key, 'stale' when it differs or that key is no longer projected. Provenance
+ * never decides: a pin leaves a snapshot whose content is unchanged untouched,
+ * so its stateId rightly predates any unrelated parent edit — which is why a
+ * re-pin always repairs a stale entry. Entries are 'unverifiable' when no
+ * parent is in reach (standalone, or a request narrowed to the child), when the
+ * parent cannot be projected, or when the snapshot is foreign.
  */
 export function listExternalInterfaces(): ExternalSurfaceEntry[] {
   const snapshots = listSnapshots();
+  // Reach-gated: null for a top root, and for a request that may not read above its root.
   const chainingParent = resolveChainingParent();
-  const parentStateId = chainingParent ? computeParentStateId(chainingParent.parentRoot) : null;
+  const projected = chainingParent ? projectedFamilyContent(chainingParent) : null;
 
   return snapshots.map(snapshot => {
     const generated = snapshot.origin === 'generated';
     const sourceKind: ExternalSurfaceEntry['sourceKind'] = !generated
       ? 'foreign'
       : snapshot.projectName.includes('::') ? 'sibling' : 'parent';
-    const freshness: ExternalSurfaceEntry['freshness'] = generated && parentStateId
-      ? (snapshot.stateId === parentStateId ? 'fresh' : 'stale')
+    const freshness: ExternalSurfaceEntry['freshness'] = generated && projected
+      ? (projected.get(snapshot.projectName) === surfaceContentKey(snapshot) ? 'fresh' : 'stale')
       : 'unverifiable';
     return {
       projectName: snapshot.projectName,

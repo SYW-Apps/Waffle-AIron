@@ -141,7 +141,10 @@ describe('exportSpecTree', () => {
     invalidateSpecCache();
     saveSubsystemSpec(subsystem('billing', 'parent', 'packages/billing'));
 
-    expect(exportSpecTree().roots).toEqual(['.', 'packages/billing']);
+    const result = exportSpecTree();
+    expect(result.roots).toEqual(['.', 'packages/billing']);
+    // A complete family: nothing was left out.
+    expect(result.skipped).toEqual([]);
   });
 
   it('refuses to export a root that holds no spec tree', () => {
@@ -149,6 +152,42 @@ describe('exportSpecTree', () => {
     setProjectRoot(root);
     invalidateSpecCache();
     expect(() => exportSpecTree()).toThrow(/no spec tree to export/);
+  });
+
+  it('refuses a partial export, naming the missing mount, unless allowPartial is set', () => {
+    const root = mkTmp('wai-export-missing-');
+    initProject(root, 'parent');
+    setProjectRoot(root);
+    invalidateSpecCache();
+    // 'ghost' declares a mount whose directory was never created.
+    saveSubsystemSpec(subsystem('ghost', 'parent', 'packages/missing'));
+
+    expect(() => exportSpecTree()).toThrow(/ghost/);
+    expect(() => exportSpecTree()).toThrow(/missing/);
+
+    // allowPartial builds the archive anyway and lists what was left out.
+    const result = exportSpecTree(undefined, true);
+    expect(result.roots).toEqual(['.']);
+    expect(result.skipped).toEqual([{ mount: 'ghost', projectPath: 'packages/missing', reason: 'missing' }]);
+    expect(result.archive.byteLength).toBeGreaterThan(0);
+  });
+
+  it('skips a chained root whose directory exists but holds no .wai, as no-spec-tree', () => {
+    const root = mkTmp('wai-export-nospec-');
+    initProject(root, 'parent');
+    // The directory is real, but never provisioned as a wairon project.
+    fs.mkdirSync(path.join(root, 'packages', 'empty'), { recursive: true });
+    setProjectRoot(root);
+    invalidateSpecCache();
+    saveSubsystemSpec(subsystem('empty', 'parent', 'packages/empty'));
+
+    expect(() => exportSpecTree()).toThrow(/no-spec-tree/);
+
+    const result = exportSpecTree(undefined, true);
+    expect(result.roots).toEqual(['.']);
+    expect(result.skipped).toEqual([
+      { mount: 'packages/empty', projectPath: 'packages/empty', reason: 'no-spec-tree' },
+    ]);
   });
 });
 

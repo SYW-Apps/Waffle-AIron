@@ -33,16 +33,6 @@ methods:
       detection — the surfaces plane never walks the filesystem itself.
     signature: 'resolveChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef | null
-  - name: computeParentStateId
-    description: >-
-      Bind the given parent project root READ-ONLY and compute its current spec-tree state hash
-      through the core portal — the comparison source for freshness-checking vendored parent/sibling
-      snapshots against what the parent tree looks like NOW. Never mutates either root's binding.
-    signature: 'computeParentStateId(parentRoot: string): string | null'
-    returns: string | null
-    params:
-      - name: parentRoot
-        type: string
   - name: resolveSubprojectForNamespace
     description: >-
       Resolve a chained mount's qualified namespace to its project root through the core portal, or
@@ -55,4 +45,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-09-12T15:16:09.516Z'
+updatedAt: '2026-09-12T17:43:21.175Z'

@@ -10,7 +10,8 @@ import type {
 } from '@wairon/sdk';
 import { aiPathsAt } from '../config/loader.js';
 import { getProjectRoot, pathExists, listFilesRecursive } from '../utils/fs.js';
-import { loadSystemSpec, listChainedRoots, invalidateSpecCache } from './specs.js';
+import { loadSystemSpec, inspectChainedRoots, invalidateSpecCache } from './specs.js';
+import type { ChainedRootSkipReason } from './specs.js';
 import { computeStateId } from './statehash.js';
 
 // ---------------------------------------------------------------------------
@@ -38,6 +39,18 @@ export interface TreeImportOptions {
   destDir?: string;
 }
 
+/**
+ * A chained mount an export left out of the archive: named by `mount` (its
+ * qualified subsystem id, or — for a mount that has no `.wai` at all — its
+ * project-relative root path, since it never gets a qualified id) with the
+ * `projectPath` as declared and why it could not be packed.
+ */
+export interface SkippedTreeMount {
+  mount: string;
+  projectPath: string;
+  reason: ChainedRootSkipReason | 'no-spec-tree';
+}
+
 /** One project's spec tree packed for transfer, with the provenance to place it. */
 export interface TreeExportResult {
   archive: Uint8Array;
@@ -47,6 +60,8 @@ export interface TreeExportResult {
   roots: string[];
   fileCount: number;
   stateId?: string;
+  /** Mounts left out of the archive — always [] unless allowPartial let a partial export through. */
+  skipped: SkippedTreeMount[];
 }
 
 /** What an import actually did, including where a replaced tree was backed up. */
@@ -216,8 +231,12 @@ export function discardStagingDir(stagingDir: string): void {
 /**
  * Pack the bound project's spec tree — its own .wai plus the .wai of every
  * chained subproject — into a .waitree archive stamped with its content state.
+ *
+ * Refuses when any mount cannot be packed (escaping, missing, cyclic, too deep,
+ * or holding no .wai at all) unless `allowPartial` is set, in which case the
+ * archive is built from whatever CAN be packed and the result lists the rest.
  */
-export function exportSpecTree(includeDerived?: boolean): TreeExportResult {
+export function exportSpecTree(includeDerived?: boolean, allowPartial?: boolean): TreeExportResult {
   // Step 1: load the bound project's L0 system spec — its name is the identity.
   const system = loadSystemSpec();
   // Step 2: is there no system spec at the bound root?
@@ -225,16 +244,37 @@ export function exportSpecTree(includeDerived?: boolean): TreeExportResult {
     // Step 3: refuse rather than produce an archive of nothing.
     throw new Error('no spec tree to export at this project root');
   }
-  // Step 4: list every chained subproject root beneath this project.
-  const chained = listChainedRoots();
-  // Step 5: assemble the root set — the top project first, each entry paired
-  // with the absolute .wai directory it names (skipping any that is absent).
+  // Step 4: inspect every chained subproject root beneath this project — the
+  // roots to pack, and the mounts that cannot be (escaping, missing, cyclic,
+  // too deep).
+  const inspection = inspectChainedRoots();
+  // Step 5: assemble the root set — the top project at '.' first, then each
+  // chained root, every entry paired with the absolute .wai directory it
+  // names — and count any root without a .wai as skipped (no-spec-tree). A
+  // root that reached this point already cleared inspectChainedRoots' own
+  // checks, so the only way it can still fail here is holding no .wai at all;
+  // unlike the mounts inspectChainedRoots itself skips, it never resolved to a
+  // qualified subsystem id, so it is identified by its project-relative root
+  // path instead.
   const root = getProjectRoot();
-  const candidates: TreeRootSource[] = [
-    { relativePath: '.', waiDir: aiPathsAt(root).root() },
-    ...chained.map((rel) => ({ relativePath: rel, waiDir: aiPathsAt(path.resolve(root, rel)).root() })),
-  ];
-  const roots = candidates.filter((source) => pathExists(source.waiDir));
+  const skipped: SkippedTreeMount[] = [...inspection.skipped];
+  const roots: TreeRootSource[] = [{ relativePath: '.', waiDir: aiPathsAt(root).root() }];
+  for (const rel of inspection.roots) {
+    const waiDir = aiPathsAt(path.resolve(root, rel)).root();
+    if (pathExists(waiDir)) {
+      roots.push({ relativePath: rel, waiDir });
+    } else {
+      skipped.push({ mount: rel, projectPath: rel, reason: 'no-spec-tree' });
+    }
+  }
+  // When a mount is skipped and allowPartial is not set, refuse, naming each
+  // skipped mount and why, rather than pack an archive that looks complete.
+  if (skipped.length > 0 && !allowPartial) {
+    const detail = skipped.map((s) => `${s.mount} (${s.reason})`).join(', ');
+    throw new Error(
+      `cannot export the whole spec tree — skipped: ${detail}. Pass allowPartial to export the rest anyway.`,
+    );
+  }
   // Step 6: digest the tree's content as provenance for the far end.
   const stateId = computeStateId();
   // Step 7: pack the roots into .waitree archive bytes.
@@ -247,6 +287,7 @@ export function exportSpecTree(includeDerived?: boolean): TreeExportResult {
     roots: built.manifest.roots,
     fileCount: built.fileCount,
     stateId: stateId.digest,
+    skipped,
   };
   // Step 9: return the archive and its provenance.
   return result;

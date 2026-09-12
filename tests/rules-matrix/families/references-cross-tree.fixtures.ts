@@ -17,6 +17,12 @@
  *    called method (call/register shape) or does not serve the dispatched
  *    capability (dispatch shape). A snapshot is the declared contract, so this
  *    stays a hard error. Both documented behaviors get a pair.
+ *  - SURFACE_REF_AMBIGUOUS (error): snapshots are matched by provider. A
+ *    reference that names no provider (`super::telemetry-hub`) while several
+ *    snapshots expose the name with different contracts matches more than one
+ *    declared contract, so none may judge it — whichever loaded first used to
+ *    win silently. Fired on the dependency and the call; controlled by naming
+ *    the provider, and by providers that agree on the contract.
  */
 import * as yaml from 'js-yaml';
 import { defineRuleFixture } from '../harness.js';
@@ -69,6 +75,43 @@ function telemetryTree(
     ...(files ? { files } : {}),
   };
 }
+
+/** A sibling subsystem's pinned surface, exposing the family telemetry-hub with the given methods. */
+function telemetryHubPin(sibling: string, methods: string[]): string {
+  return surfaceYaml({
+    projectName: `FleetWorks::${sibling}`,
+    interfaces: [
+      {
+        id: 'itelemetry_hub',
+        name: 'Telemetry Hub',
+        component: 'telemetry-hub',
+        audience: 'project',
+        type: 'MessageBus',
+        details: `Telemetry ingestion published by the ${sibling} subsystem.`,
+        methods: methods.map((name) => ({
+          name,
+          description: `${name} for one telemetry batch from a family member.`,
+          signature: `${name}(batchId: string): void`,
+          returns: 'void',
+        })),
+      },
+    ],
+  });
+}
+
+/** route-ingest and yard-ingest both pin a telemetry-hub; yard-ingest's also purges. */
+const DIVERGENT_HUB_PINS = {
+  '.wai/surfaces/FleetWorks-route-ingest.yaml': telemetryHubPin('route-ingest', ['streamTelemetry']),
+  '.wai/surfaces/FleetWorks-yard-ingest.yaml': telemetryHubPin('yard-ingest', ['streamTelemetry', 'purgeTelemetry']),
+};
+
+const streamToHub = (targetComponent: string) => ({
+  stepNumber: 1,
+  type: 'call',
+  description: 'Stream the enriched batch to the family telemetry hub.',
+  targetComponent,
+  targetMethod: 'streamTelemetry',
+});
 
 export default [
   // -------------------------------------------------------------------------
@@ -351,5 +394,52 @@ export default [
         }),
       },
     ),
+  }),
+
+  // -------------------------------------------------------------------------
+  // SURFACE_REF_AMBIGUOUS — no provider named, and the providers disagree
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'SURFACE_REF_AMBIGUOUS',
+    severity: 'error',
+    anchoredTo: 'telemetry_forwarder_impl',
+    expectFire: true,
+    scenario:
+      'A chained telemetry subproject calls super::telemetry-hub without naming a provider, while the pinned surfaces of its route-ingest and yard-ingest siblings both expose a telemetry-hub with different methods.',
+    tree: telemetryTree(streamToHub('super::telemetry-hub'), DIVERGENT_HUB_PINS),
+  }),
+  defineRuleFixture({
+    code: 'SURFACE_REF_AMBIGUOUS',
+    severity: 'error',
+    anchoredTo: 'telemetry-forwarder',
+    expectFire: true,
+    scenario:
+      'A chained telemetry forwarder depends on super::telemetry-hub without naming a provider, while two sibling subsystems pin telemetry-hub surfaces with different contracts.',
+    tree: telemetryTree(streamToHub('super::telemetry-hub'), DIVERGENT_HUB_PINS),
+  }),
+  defineRuleFixture({
+    code: 'SURFACE_REF_AMBIGUOUS',
+    expectFire: false,
+    reason:
+      'The reference names its provider, so only the route-ingest snapshot is consulted and its one contract judges the edge.',
+    scenario:
+      'A chained telemetry subproject depends on and calls super::route-ingest::telemetry-hub while two sibling subsystems pin telemetry-hub surfaces with different contracts.',
+    tree: telemetryTree(
+      streamToHub('super::route-ingest::telemetry-hub'),
+      DIVERGENT_HUB_PINS,
+      ['super::route-ingest::telemetry-hub'],
+    ),
+  }),
+  defineRuleFixture({
+    code: 'SURFACE_REF_AMBIGUOUS',
+    expectFire: false,
+    reason:
+      'Both siblings expose telemetry-hub with the same contract, so whichever snapshot judges the edge reaches the same verdict.',
+    scenario:
+      'A chained telemetry subproject calls super::telemetry-hub while two sibling subsystems pin telemetry-hub surfaces declaring the identical streamTelemetry contract.',
+    tree: telemetryTree(streamToHub('super::telemetry-hub'), {
+      '.wai/surfaces/FleetWorks-route-ingest.yaml': telemetryHubPin('route-ingest', ['streamTelemetry']),
+      '.wai/surfaces/FleetWorks-yard-ingest.yaml': telemetryHubPin('yard-ingest', ['streamTelemetry']),
+    }),
   }),
 ];

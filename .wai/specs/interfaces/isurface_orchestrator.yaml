@@ -58,12 +58,14 @@ methods:
     description: >-
       Scope-aware discovery of this project's outward world: enumerate every vendored surface
       snapshot as an ExternalSurfaceEntry — origin, family role (parent | sibling | foreign),
-      provenance, exposed interface ids — with a per-entry freshness verdict. Freshness compares the
-      vendored StateId against the chaining parent's CURRENT state hash when a chaining parent is
-      reachable and the bound request may read above its root (resolveChainingParent +
-      computeParentStateId); entries are 'unverifiable' when standalone, when the parent is out of
-      the request's reach (a hosted credential narrowed to the child), or when foreign. The read
-      behind the sdd_list_external_interfaces MCP tool and the surface externals CLI.
+      provenance, exposed interface ids — with a per-entry freshness verdict judged on CONTENT. When
+      a chaining parent is reachable and the bound request may read above its root
+      (resolveChainingParent), the parent's current family surface and each sibling's published
+      surface are projected at the parent root, bound read-only, and each generated snapshot is
+      'fresh' when its contracts equal that projection and 'stale' otherwise; entries are
+      'unverifiable' when standalone, out of reach, or foreign. Re-pinning therefore always repairs
+      a stale entry. The read behind the sdd_list_external_interfaces MCP tool and the surface
+      externals CLI.
     signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
     returns: ExternalSurfaceEntry[]
   - name: listMountSnapshots
@@ -91,4 +93,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-09-12T15:16:03.286Z'
+updatedAt: '2026-09-12T17:36:24.278Z'

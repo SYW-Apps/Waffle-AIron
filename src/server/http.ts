@@ -485,7 +485,8 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
       // admin plane is uniformly JSON, and the browser/CLI paths that want a
       // raw stream use /web/projects/tree/import.
       if (req.method === 'GET' && parts.length === 4 && parts[3] === 'tree') {
-        const exported = admin.exportProjectTree(cfg, cred, parts[2]);
+        const allowPartial = url.searchParams.get('allowPartial') === '1';
+        const exported = admin.exportProjectTree(cfg, cred, parts[2], undefined, undefined, allowPartial);
         res.writeHead(200, {
           'content-type': 'application/zip',
           'content-disposition': `attachment; filename="${exported.suggestedFileName}"`,

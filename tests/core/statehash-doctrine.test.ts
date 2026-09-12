@@ -16,7 +16,7 @@ import { SDD_RULES } from '../../src/core/rules/index.js';
 // the commit-scoped lock exists to close, entering through doctrine.
 //
 // Two identities therefore coexist, and this file guards both directions:
-//   computeStateId     — spec content only (surface snapshot stamps, freshness)
+//   computeStateId     — spec content only (surface snapshot stamps)
 //   computeGateStateId — spec content + governing doctrine (lock / promote)
 // ---------------------------------------------------------------------------
 
@@ -91,7 +91,7 @@ describe('gate StateId vs content StateId', () => {
       const content = computeStateId();
       const gate = computeGateStateId();
       expect(content.algorithm).toBe('sha256');
-      expect(gate.algorithm).toBe('sha256+doctrine');
+      expect(gate.algorithm).toBe('sha256+doctrine+inputs');
       expect(stateIdEquals(content, gate)).toBe(false);
     } finally { proj.cleanup(); }
   });

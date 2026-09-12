@@ -47,9 +47,13 @@ fields:
   - name: freshness
     type: string
     description: >-
-      Freshness verdict: 'fresh' (vendored stateId matches the chaining parent's CURRENT state hash)
-      | 'stale' (parent tree changed since generation) | 'unverifiable' (no reachable chaining
-      parent to compare against, or a foreign snapshot with no comparison source).
+      Freshness verdict, judged on content: 'fresh' when the snapshot's contracts equal what the
+      chaining parent would project for the same key NOW (its family surface, or the named sibling's
+      published surface); 'stale' when they differ or that sibling no longer publishes;
+      'unverifiable' when no chaining parent is in reach (standalone, or a hosted credential
+      narrowed to the child) or the snapshot is foreign. Provenance (stateId, generatedAt) never
+      decides it, so re-pinning always repairs a stale entry and an unrelated edit elsewhere in the
+      family never makes one.
     optional: false
   - name: interfaceIds
     type: string[]
@@ -59,4 +63,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-24T17:53:32.174Z'
-updatedAt: '2026-07-24T17:53:32.190Z'
+updatedAt: '2026-09-12T17:36:20.838Z'

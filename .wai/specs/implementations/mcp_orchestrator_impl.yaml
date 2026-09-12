@@ -91,7 +91,12 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: loadImplementationSpecs
       - stepNumber: 5
-        description: Compose the hierarchical completeness report
+        description: >-
+          Compose the hierarchical completeness report, opened by the project's family context: when
+          this root is a chained subproject within the request's reach (resolveChainingParent), the
+          mount it is known by and its parent project's name; and the chained subprojects this root
+          mounts, each with its path — so a connected agent learns in-band where it sits, instead of
+          from a startup log it never sees
         type: local
     symbol: sdd_get_status
   - name: addSubsystem
@@ -221,4 +226,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-08-08T11:13:40.000Z'
+updatedAt: '2026-09-12T17:37:04.775Z'

@@ -92,13 +92,38 @@ export function compareUrl(remote: string, defaultBranch: string, workingBranch:
   return `${web}/compare/${encodeURIComponent(defaultBranch)}...${encodeURIComponent(workingBranch)}`;
 }
 
-/** Keep container-local files (lock.json, git.json) out of commits, without
- *  touching the repo's own .gitignore. */
+/**
+ * Keep CONTAINER-LOCAL files out of commits, without touching the repo's own
+ * .gitignore. Only .wai/git.json qualifies — it holds this container's own
+ * connection config, meaningless (and potentially stale) anywhere else.
+ *
+ * .wai/lock.json is DELIBERATELY not excluded: approvals live there now, and a
+ * hosted project's approval must reach the remote for the record to mean
+ * anything outside this container. An earlier wairon version excluded it; that
+ * exclusion is actively removed (with a warning) rather than left in place, so
+ * an upgraded container stops silently hiding an approval that should ship.
+ * Idempotent — re-enabling never duplicates the git.json line.
+ */
 export function excludeLocalFiles(): void {
   const excludePath = path.join(getProjectRoot(), '.git', 'info', 'exclude');
   try {
     fs.mkdirSync(path.dirname(excludePath), { recursive: true });
-    fs.appendFileSync(excludePath, '\n.wai/lock.json\n.wai/git.json\n');
+    const existing = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : '';
+    const lines = existing.split(/\r?\n/).filter((line) => line.length > 0);
+
+    const hadLegacyLockExclusion = lines.some((line) => line.trim() === '.wai/lock.json');
+    const kept = lines.filter((line) => line.trim() !== '.wai/lock.json');
+    if (!kept.some((line) => line.trim() === '.wai/git.json')) {
+      kept.push('.wai/git.json');
+    }
+    fs.writeFileSync(excludePath, kept.join('\n') + '\n');
+
+    if (hadLegacyLockExclusion) {
+      console.warn(
+        '[wairon git] removed a .wai/lock.json exclusion left by an earlier version — the approval it ' +
+          'records is committed with the rest of .wai/ now, so it reaches the remote.',
+      );
+    }
   } catch {
     /* best effort */
   }

@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { resolveSurfaceRef, isExternalNamespaceRef, isCollapsedCrossTreeRef } from './namespace.js';
+import { resolveSurfaceRef, reportAmbiguousSurfaceRef, isExternalNamespaceRef, isCollapsedCrossTreeRef } from './namespace.js';
 
 // The one shortcut agents reach for when a Store link is refused is the one
 // that must never happen: folding the store's state into the consumer. Say so
@@ -28,6 +28,7 @@ export const stereotypeDepsRule: SddRule = {
   codes: [
     { code: 'INVALID_DEPENDENCY_REFERENCE', defaultSeverity: 'error', summary: 'dependsOn names a non-existent component' },
     { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree dependsOn (super::/:: form) with no surface snapshot covering it' },
+    { code: 'SURFACE_REF_AMBIGUOUS', defaultSeverity: 'error', summary: 'Cross-tree dependsOn matched by surface snapshots of several providers with different contracts' },
     { code: 'CROSS_SUBSYSTEM_NON_ADAPTER', defaultSeverity: 'error', summary: 'Non-Adapter component crossing a subsystem boundary' },
     { code: 'CROSS_SUBSYSTEM_PRIVATE_ACCESS', defaultSeverity: 'error', summary: 'Cross-subsystem dependency on an unpublished component' },
     { code: 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL', defaultSeverity: 'error', summary: 'Cross-subsystem hop entering through a non-Portal' },
@@ -58,10 +59,16 @@ export const stereotypeDepsRule: SddRule = {
           // snapshots that mount holds — but only a HIT changes anything: from
           // this root the whole tree is loaded, so a collapsed reference no
           // snapshot covers is genuinely missing and keeps its error.
+          // Snapshots that answer the reference with different contracts decide
+          // nothing either way: the ambiguity is the finding.
           const external = isExternalNamespaceRef(ctx, depId);
           if (external || isCollapsedCrossTreeRef(ctx, depId, comp.subsystem)) {
             const resolved = resolveSurfaceRef(ctx, depId, comp.subsystem);
-            if (resolved) {
+            if (resolved.kind === 'ambiguous') {
+              reportAmbiguousSurfaceRef(ctx, `Component "${comp.id}" depends on`, depId, resolved.providers, comp.id, isDraftCtx);
+              continue;
+            }
+            if (resolved.kind === 'resolved') {
               if (comp.componentType !== 'Adapter') {
                 // surfaceResolved: verified against the vendored snapshot — a
                 // genuine boundary verdict that keeps full strength even when

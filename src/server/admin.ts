@@ -568,13 +568,14 @@ export function exportProjectTree(
   project: string,
   subproject?: string,
   includeDerived?: boolean,
+  allowPartial?: boolean,
 ): TreeExportResult {
   const principal = requirePrincipal(cfg, credential);
   if (authorize(cfg.dataDir, principal, 'project:read', 'project', project).value !== 'yes') {
     throw new AdminAuthError("Forbidden — exporting a project's spec tree requires project:read over it");
   }
   const root = boundLifecycleRoot(cfg, project, subproject);
-  return runWithProjectRoot(root, () => hostCore.exportSpecTree(includeDerived));
+  return runWithProjectRoot(root, () => hostCore.exportSpecTree(includeDerived, allowPartial));
 }
 
 /**
