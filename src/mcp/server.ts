@@ -15,6 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
+import { readYamlFile } from '../utils/yaml.js';
 import { getStatusReport } from '../commands/status.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
@@ -63,6 +64,37 @@ import {
 // Transport: stdio (for use with Claude Code / Gemini CLI MCP config)
 // Usage: wairon mcp serve  (add to .claude/settings.json mcpServers)
 // ---------------------------------------------------------------------------
+
+/**
+ * The family context sdd_get_status opens with (mcp_orchestrator getStatus step
+ * 5): where the bound root sits among chained projects, told in-band, because a
+ * connected agent never sees the startup log. The parent appears only within the
+ * request's reach (resolveChainingParent); the mounts listed are this root's
+ * own. A detection failure leaves the header out rather than break the report.
+ */
+export function statusFamilyContext(): string {
+  const lines: string[] = [];
+  try {
+    const parent = resolveChainingParent();
+    if (parent) {
+      let parentName: string | undefined;
+      try {
+        const system = readYamlFile(loaderModule.aiPathsAt(parent.parentRoot).specsSystem()) as { name?: unknown } | null;
+        if (typeof system?.name === 'string') parentName = system.name;
+      } catch { /* the parent's name stays unknown */ }
+      lines.push(
+        `Family: this project is a chained subproject, mounted as subsystem "${parent.subsystemId}" of ` +
+          `${parentName ? `the parent project "${parentName}"` : 'its parent project'} — ` +
+          'the surfaces it can consume are listed by sdd_list_external_interfaces.',
+      );
+    }
+    const mounts = specsModule.loadSubsystemSpecs().filter((s) => s.projectPath && !s.id.includes('::'));
+    if (mounts.length > 0) {
+      lines.push(`Family: chained subprojects mounted here — ${mounts.map((s) => `${s.id} (${s.projectPath})`).join(', ')}.`);
+    }
+  } catch { /* the family context must never break the status report */ }
+  return lines.length > 0 ? `${lines.join('\n')}\n\n` : '';
+}
 
 // STATIC, not lazily required — for the reason spelled out on requireSpecs
 // below: these modules read the request-scoped project root at CALL time, so a
@@ -1610,10 +1642,11 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // (whose bundle happened to contain it) and failed on the HOSTED data
         // plane, where sdd_get_status answered "Cannot find module" instead of
         // the dashboard.
-        return text(getStatusReport({
+        const report = getStatusReport({
           subsystem,
           recursive: recursive ?? true,
-        }));
+        });
+        return text(`${statusFamilyContext()}${report}`);
       } catch (e) {
         return errText(String(e));
       }
