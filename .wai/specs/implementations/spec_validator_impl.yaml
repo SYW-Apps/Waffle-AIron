@@ -202,9 +202,10 @@ methods:
           is never judged more leniently than its parent. Snapshot-covered findings keep full
           strength; the code↔spec conformance family keeps its crossTreeContext downgrade. The
           result records the root and scope it was resolved through. When no usable parent is
-          reachable (its L0 missing, the mount unknown, or reach denied), the standalone path
-          remains: each uncovered reference becomes one UNVERIFIED_EXTERNAL_REF warning
-          (crossTreeContext) and one CHAINED_SUBPROJECT_CONTEXT notice is prepended
+          reachable (its L0 missing, the mount unknown, or reach denied), every reference keeps its
+          raw verdict — a cross-tree form stays an unwaived CROSS_TREE_REF_UNRESOLVED warning and a
+          typo stays an error — so a child that cannot be judged through its parent pins its family
+          surfaces or fails its gate; nothing is rewritten and no notice is prepended
         type: local
       - stepNumber: 21
         description: Return the aggregated validation result
@@ -339,4 +340,4 @@ lint:
         when Level 3 models call indirection.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T12:38:21.224Z'
+updatedAt: '2026-09-12T12:47:49.887Z'

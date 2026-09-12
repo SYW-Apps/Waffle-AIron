@@ -81,7 +81,7 @@ export const stereotypeDepsRule: SddRule = {
               ctx.addIssue(
                 'warning',
                 'CROSS_TREE_REF_UNRESOLVED',
-                `Component "${comp.id}" depends on cross-tree component "${depId}", and no surface snapshot covers it — validate from the parent project, or import/generate the producing project's surface.`,
+                `Component "${comp.id}" depends on cross-tree component "${depId}", and no surface snapshot covers it — validate from the parent project, pin the family surfaces ("wairon surface pin"), or import the producing project's surface.`,
                 comp.id,
                 isDraftCtx,
               );

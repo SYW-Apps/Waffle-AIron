@@ -9,6 +9,7 @@ import {
 } from '../../src/core/specs.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
 import { validateSddTree, type ValidationOptions, type ValidationResult } from '../../src/core/validation.js';
+import { isCiDraftWaivable } from '../../src/commands/validate.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -359,14 +360,13 @@ describe('step 3 — a chained child is judged through its parent when the paren
     expect(fromChild.valid).toBe(false);
   });
 
-  it('rewrites nothing into an unverified-reference warning and prepends no notice', () => {
+  it("leaves no raw cross-tree warning behind for an edge the parent judged", () => {
     const fam = family();
     root = fam.root;
 
     const codes = verdict(fam.kidDir).issues.map((i) => i.code);
 
-    expect(codes).not.toContain('UNVERIFIED_EXTERNAL_REF');
-    expect(codes).not.toContain('CHAINED_SUBPROJECT_CONTEXT');
+    expect(codes).not.toContain('CROSS_TREE_REF_UNRESOLVED');
   });
 
   it("keeps the child's own findings the parent never judges — a union, not a replacement", () => {
@@ -389,7 +389,7 @@ describe('step 3 — a chained child is judged through its parent when the paren
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('a parent that cannot be loaded falls back to the standalone verdict', () => {
+  it('a parent that cannot be loaded leaves every raw verdict standing — nothing rewritten, nothing waived', () => {
     const fam = family();
     root = fam.root;
     // The mount stays discoverable — findChainingParent reads subsystem files —
@@ -399,7 +399,14 @@ describe('step 3 — a chained child is judged through its parent when the paren
     const fromChild = verdict(fam.kidDir);
 
     expect(fromChild.resolvedThrough).toBeUndefined();
-    expect(fromChild.issues.some((i) => i.code === 'CHAINED_SUBPROJECT_CONTEXT')).toBe(true);
+    // A cross-tree form stays the raw warning, and --ci does not waive it: a
+    // child that cannot be judged through its parent pins, or fails its gate.
+    const crossTree = fromChild.issues.filter((i) => i.code === 'CROSS_TREE_REF_UNRESOLVED');
+    expect(crossTree.length).toBeGreaterThan(0);
+    expect(crossTree.every((i) => i.severity === 'warning' && !isCiDraftWaivable(i))).toBe(true);
+    // A bare typo stays the error it is.
+    expect(errors(fromChild)).toContain('INVALID_DEPENDENCY_REFERENCE @k-bare');
+    expect(fromChild.valid).toBe(false);
   });
 
   it('a grandchild resolves through the TOP root, scoped to the whole mount chain', () => {

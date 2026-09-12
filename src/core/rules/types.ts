@@ -167,8 +167,8 @@ export interface RuleContext {
    *
    * `surfaceResolved` marks a finding whose reference DID resolve against a
    * vendored surface snapshot — a genuine contract/boundary verdict rather
-   * than a resolution failure, so the chained-subproject pass never replaces
-   * it with UNVERIFIED_EXTERNAL_REF.
+   * than a resolution failure, so it keeps full strength in a chained
+   * subproject.
    */
   addIssue(
     defaultSeverity: Severity,

@@ -114,13 +114,11 @@ always — so the top-level tree plays the PARENT (declare the mount subsystem
 with `projectPath` there) — while the CHILD project is laid down as raw spec
 YAML under `tree.files` and validation is bound to its directory. Override the
 parent's `.wai/specs/.index.yaml` through `tree.files` to make the parent
-unloadable: that is the standalone fallback, which emits
-`CHAINED_SUBPROJECT_CONTEXT` and `UNVERIFIED_EXTERNAL_REF`. See
-`families/references-chained-context.fixtures.ts` for both.
+unloadable: that is the standalone fallback, where references keep their raw
+verdicts. See `families/references-chained-context.fixtures.ts` for both.
 
 **`anchoredTo: null`** (vs. omitting it) asserts the emitted finding carries
-NO `specId` at all — for tree-level findings like the prepended
-`CHAINED_SUBPROJECT_CONTEXT` notice.
+NO `specId` at all — for tree-level findings like `MISSING_SYSTEM_SPEC`.
 
 Defaults are `complete`-status and depth `narratives`, so both soundness and
 expectation codes are live; use spec `status: draft` or `rules.designDepth` when

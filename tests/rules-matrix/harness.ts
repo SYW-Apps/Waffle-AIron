@@ -112,8 +112,7 @@ export interface FixtureTree {
    * (with the mount subsystem) at the top, the child project under `files`, and
    * point this at the child directory. Overriding the parent's own
    * `.wai/specs/.index.yaml` through `files` makes the parent unloadable — the
-   * seam for the standalone fallback (CHAINED_SUBPROJECT_CONTEXT /
-   * UNVERIFIED_EXTERNAL_REF).
+   * seam for the standalone fallback, where references keep their raw verdicts.
    */
   validateFromSubdir?: string;
 }
@@ -126,8 +125,8 @@ export interface RuleFixture {
   /**
    * Asserted against the emitted finding's specId when given (fire fixtures
    * only). `null` asserts the OPPOSITE: the finding carries NO specId anchor
-   * (a tree-level finding, e.g. the prepended CHAINED_SUBPROJECT_CONTEXT
-   * notice). Omit to not assert on the anchor at all.
+   * (a tree-level finding, e.g. MISSING_SYSTEM_SPEC). Omit to not assert on the
+   * anchor at all.
    */
   anchoredTo?: string | null;
   /**

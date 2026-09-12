@@ -434,8 +434,6 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
     expect(codes).not.toContain('INVALID_TARGET_COMPONENT_REFERENCE');
     expect(codes).not.toContain('CROSS_SUBSYSTEM_NON_ADAPTER');
-    // Everything is covered by vendored snapshots — nothing is "unverified".
-    expect(codes).not.toContain('UNVERIFIED_EXTERNAL_REF');
 
     // Now call a method the surface does not expose.
     saveImplementationSpec({
@@ -456,9 +454,8 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     expect(notExposed[0].message).toMatch(/noSuchMethod.*root-system/s);
     // Covered-but-wrong keeps FULL strength: the vendored snapshot is the
     // verifiable contract, so the mismatch is a hard error even in a chained
-    // subproject — never softened into UNVERIFIED_EXTERNAL_REF.
+    // subproject — never softened.
     expect(notExposed[0].severity).toBe('error');
-    expect(res2.issues.map(i => i.code)).not.toContain('UNVERIFIED_EXTERNAL_REF');
   });
 
   it('a non-Adapter crossing the project boundary is still a FULL-STRENGTH boundary violation', () => {
@@ -474,7 +471,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     expect(violation).toHaveLength(1);
     // The ref RESOLVED against a vendored snapshot, so even in a chained
     // subproject validated standalone the boundary verdict stays an error —
-    // it is neither downgraded nor replaced by UNVERIFIED_EXTERNAL_REF.
+    // it is neither downgraded nor waived.
     expect(violation[0].severity).toBe('error');
     expect(res.valid).toBe(false);
   });
@@ -494,14 +491,12 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     const invalid = res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
     expect(invalid.map(i => [i.specId, i.severity])).toEqual([['mystery-adapter', 'error']]);
     const codes = res.issues.map(i => i.code);
-    expect(codes).not.toContain('UNVERIFIED_EXTERNAL_REF');
     expect(codes).not.toContain('CROSS_TREE_REF_UNRESOLVED');
-    expect(codes).not.toContain('CHAINED_SUBPROJECT_CONTEXT');
     expect(res.resolvedThrough?.scope).toBe('transpiler');
     expect(res.valid).toBe(false);
   });
 
-  it('code-conformance findings KEEP the downgrade (never replaced by UNVERIFIED_EXTERNAL_REF)', () => {
+  it('code-conformance findings in a chained child keep their downgrade, in place and code preserved', () => {
     const childDir = buildFamily();
     setProjectRoot(childDir);
     // A complete implementation whose sourcePath resolves nowhere in the child
@@ -525,9 +520,6 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     // Downgraded in place (code preserved), marked cross-tree — NOT replaced.
     expect(missing[0].severity).toBe('warning');
     expect(missing[0].crossTreeContext).toBe(true);
-    const notice = res.issues.find(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT');
-    expect(notice).toBeDefined();
-    expect(notice!.message).toMatch(/code↔spec conformance finding/);
   });
 
 });

@@ -386,7 +386,7 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     setProjectRoot(rootDir);
     invalidateSpecCache();
     const fromParent = validateSddTree();
-    expect(fromParent.issues.filter(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT')).toHaveLength(0);
+    expect(fromParent.resolvedThrough).toBeUndefined();
 
     // From KID's own root the verdict is the same one — resolved through the
     // parent and renamed into kid's ids. It used to be REPLACED by a waived
@@ -396,8 +396,6 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     const fromKid = validateSddTree();
     const invalid = fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
     expect(invalid.map(i => [i.specId, i.severity])).toEqual([['k-orch', 'error']]);
-    expect(fromKid.issues.map(i => i.code)).not.toContain('UNVERIFIED_EXTERNAL_REF');
-    expect(fromKid.issues.map(i => i.code)).not.toContain('CHAINED_SUBPROJECT_CONTEXT');
     expect(fromKid.resolvedThrough).toEqual({ root: path.resolve(rootDir), scope: 'kid' });
     expect(fromKid.valid).toBe(false);
   });

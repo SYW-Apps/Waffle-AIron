@@ -46,17 +46,15 @@ import type { SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec } 
 
 /**
  * Codes whose verdict is ROOT-DEPENDENT: they fail because a referenced spec, a
- * source file, or a dependency edge cannot be resolved in THIS tree, but resolve
- * fine from the parent. When the tree is a chained subproject validated
- * standalone, the target legitimately lives in the absent parent (or is reached
- * by a parent-root-relative sourcePath). Two families with DIFFERENT handling:
+ * source file, or a dependency edge cannot be resolved in THIS tree, but may
+ * resolve from the parent. Two families with DIFFERENT handling:
  *
- * REFERENCE RESOLUTION — each issue a snapshot does NOT cover is REPLACED by
- * one precise UNVERIFIED_EXTERNAL_REF warning (crossTreeContext, so --ci waives
- * it) naming the original finding and the remedy. References that DID resolve
- * against a vendored surface snapshot never enter this path: a snapshot IS the
- * verifiable contract, so contract mismatches and boundary violations keep
- * full strength (issues marked surfaceResolved are skipped).
+ * REFERENCE RESOLUTION — a chained child whose parent is on disk is judged
+ * through it (resolveThroughParent), and these are the findings the parent's
+ * verdict replaces. With no usable parent they keep their raw verdict: a
+ * cross-tree form stays a CROSS_TREE_REF_UNRESOLVED warning and a typo stays an
+ * error — never softened. References that DID resolve against a vendored surface
+ * snapshot are verdicts in their own right (surfaceResolved).
  */
 const SUBPROJECT_REFERENCE_CODES = new Set([
   'UNDEFINED_TYPE_REFERENCE',
@@ -112,19 +110,19 @@ export interface ValidationIssue {
    */
   draftContext?: boolean;
   /**
-   * True when this issue reflects a reference that cannot be resolved because the
-   * tree is being validated STANDALONE as a chained subproject — the referenced
-   * spec lives in the (absent) parent tree. Downgraded from error to warning and
-   * marked so the --ci gate can waive it: a subproject is fully verified from the
-   * parent root, not standalone.
+   * True when a code↔spec conformance finding was downgraded to a warning
+   * because the tree is a chained subproject whose source paths may be authored
+   * relative to the parent root — marked so the --ci gate waives it. References
+   * are never marked: a chained child is judged through its parent, or keeps its
+   * raw verdict.
    */
   crossTreeContext?: boolean;
   /**
    * True when this finding was verified AGAINST a vendored surface snapshot —
    * the reference resolved to a declared cross-tree contract, so the finding is
    * a genuine contract/boundary verdict, not a resolution failure. Such issues
-   * keep full strength in the chained-subproject pass (they are never replaced
-   * by UNVERIFIED_EXTERNAL_REF).
+   * keep full strength in a chained subproject; the parent's re-judgement of the
+   * same edge stands in for one only when it is at least as severe.
    */
   surfaceResolved?: boolean;
 }
@@ -463,23 +461,17 @@ export function validateSddTree(
       rule.check(ctx);
     }
 
-    // Chained-subproject reference honesty: when this tree is being validated
-    // STANDALONE but is actually a chained subproject of a discoverable parent,
-    // references INTO the parent (shared types, sibling subsystems, cross-tree
-    // components) point at specs that physically live ABOVE this root. That is
-    // the "different root, different verdict" surprise: from the parent these
-    // resolve and the tree is clean; from the subproject's own dir they explode
-    // into hundreds of hard errors.
+    // Chained subprojects: when this tree is validated from its own root but is a
+    // chained subproject of a discoverable parent, references INTO the parent
+    // (shared types, sibling subsystems, cross-tree components) point at specs
+    // that physically live ABOVE this root.
     //
     // Two families, two treatments:
-    //  - REFERENCE RESOLUTION: each cross-tree reference NO vendored surface
-    //    snapshot covers is REPLACED by one precise UNVERIFIED_EXTERNAL_REF
-    //    warning (crossTreeContext, so --ci waives it) naming the original
-    //    finding and the remedy. References that DID resolve against a snapshot
-    //    never enter this path (surfaceResolved) — a snapshot IS the verifiable
-    //    contract, so contract mismatches and boundary violations stay errors.
-    //  - CODE↔SPEC CONFORMANCE: downgraded error→warning + crossTreeContext as
-    //    before — parent-root-relative sourcePaths genuinely cannot resolve here.
+    //  - REFERENCE RESOLUTION: judged through the parent when it is usable;
+    //    otherwise every such finding keeps its raw verdict. References that DID
+    //    resolve against a snapshot are verdicts in their own right.
+    //  - CODE↔SPEC CONFORMANCE: downgraded error→warning + crossTreeContext —
+    //    source paths may be authored relative to the parent root.
     //
     // Gated on actually HAVING such issues, so a clean tree (or a hosted per-
     // request validate) never pays the walk-up-the-filesystem cost.
@@ -519,7 +511,7 @@ export function validateSddTree(
       for (const iss of kept) {
         if (SUBPROJECT_CONFORMANCE_CODES.has(iss.code)) {
           if (iss.severity === 'error') iss.severity = 'warning';
-          iss.crossTreeContext = true; // conformance keeps its downgrade (step 6 removes it)
+          iss.crossTreeContext = true; // conformance findings keep their downgrade
         }
       }
       const merged = dedupeIssues([...kept, ...resolution.issues]);
@@ -530,63 +522,17 @@ export function validateSddTree(
       };
     }
 
-    // No usable parent (its L0 missing, the mount unknown, or reach denied): the
-    // standalone verdict.
+    // No usable parent (its L0 missing, the mount unknown, or reach denied):
+    // every reference keeps its raw verdict. A chained child that cannot be
+    // judged through its parent pins its family surfaces or fails its gate — it
+    // is never quietly passed. (It used to rewrite each such reference into a
+    // warning --ci waived, and prepend a notice explaining why.)
     if (chainingParent) {
-      let unverified = 0;
-      let downgraded = 0;
-      for (let at = 0; at < issues.length; at++) {
-        const iss = issues[at];
-        if (SUBPROJECT_REFERENCE_CODES.has(iss.code) && !iss.surfaceResolved) {
-          issues[at] = {
-            severity: 'warning',
-            code: 'UNVERIFIED_EXTERNAL_REF',
-            crossTreeContext: true, // --ci waives it (parent root is authoritative)
-            specId: iss.specId,
-            ...(iss.agentId ? { agentId: iss.agentId } : {}),
-            ...(iss.draftContext ? { draftContext: true } : {}),
-            message:
-              `Unverified external reference (${iss.code}): ${iss.message} No vendored surface snapshot ` +
-              `covers this reference, so it cannot be verified from this chained subproject without resolving ` +
-              `through its parent — pin the family surfaces with \`wairon surface pin\` while the parent is on ` +
-              `disk, or inspect what this project can consume via \`wairon surface externals\` / ` +
-              `sdd_list_external_interfaces.`,
-          };
-          unverified++;
-          continue;
-        }
+      for (const iss of issues) {
         if (SUBPROJECT_CONFORMANCE_CODES.has(iss.code)) {
-          if (iss.severity === 'error') {
-            iss.severity = 'warning';
-            downgraded++;
-          }
-          iss.crossTreeContext = true; // mark so --ci waives it (parent root is authoritative)
+          if (iss.severity === 'error') iss.severity = 'warning';
+          iss.crossTreeContext = true; // conformance findings keep their downgrade
         }
-      }
-      if (unverified > 0 || downgraded > 0) {
-        const notes: string[] = [];
-        if (unverified > 0) {
-          notes.push(
-            `${unverified} cross-tree reference(s) have no vendored surface snapshot covering them and were ` +
-            `reported as UNVERIFIED_EXTERNAL_REF warnings — pin the family surfaces with \`wairon surface pin\` ` +
-            `while the parent is on disk, or inspect via \`wairon surface externals\` / sdd_list_external_interfaces.`,
-          );
-        }
-        if (downgraded > 0) {
-          notes.push(
-            `${downgraded} code↔spec conformance finding(s) (parent-root-relative source paths) were ` +
-            `downgraded to warnings.`,
-          );
-        }
-        issues.unshift({
-          severity: 'warning',
-          code: 'CHAINED_SUBPROJECT_CONTEXT',
-          crossTreeContext: true,
-          message:
-            `This project is a chained subproject ("${chainingParent.subsystemId}") of the parent project at ` +
-            `"${chainingParent.parentRoot}". ${notes.join(' ')} Full cross-tree verification runs from the ` +
-            `parent root.`,
-        });
       }
     }
 

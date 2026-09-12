@@ -476,12 +476,6 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     // Declarative assertions bring their own namespaced codes — lint.allow
     // and severity overrides treat them exactly like builtins.
     ...extensions.assertions.map(a => a.fullCode),
-    // Entry-point emitted codes: validateSddTree's chained-subproject pass
-    // raises these AFTER the rule run (it post-processes the aggregated issue
-    // list), so no registered rule declares them — but lint.allow validation
-    // must still recognize them as real codes.
-    'CHAINED_SUBPROJECT_CONTEXT',
-    'UNVERIFIED_EXTERNAL_REF',
   ]);
 
   const addIssue = (

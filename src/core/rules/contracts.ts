@@ -120,7 +120,7 @@ export const contractsRule: SddRule = {
                 ctx.addIssue(
                   'warning',
                   'CROSS_TREE_REF_UNRESOLVED',
-                  `Method "${implMethod.name}" in implementation "${impl.id}" dispatches through cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, or import/generate the producing project's surface.`,
+                  `Method "${implMethod.name}" in implementation "${impl.id}" dispatches through cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, pin the family surfaces ("wairon surface pin"), or import the producing project's surface.`,
                   impl.id,
                   isDraftCtx,
                 );
@@ -203,7 +203,7 @@ export const contractsRule: SddRule = {
               ctx.addIssue(
                 'warning',
                 'CROSS_TREE_REF_UNRESOLVED',
-                `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, or import/generate the producing project's surface.`,
+                `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, pin the family surfaces ("wairon surface pin"), or import the producing project's surface.`,
                 impl.id,
                 isDraftCtx,
               );
