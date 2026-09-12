@@ -3,38 +3,60 @@
 ## Unreleased (from v5.1.0)
 
 **Breaking.** Merge dev → main with `[major]` in the merge commit message →
-**v6.0.0**. Three changes are visible on upgrade without any action by the user,
+**v6.0.0**. Four changes are visible on upgrade without any action by the user,
 and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
-a project that has not declared them, existing lock records read as stale, and a
-project referencing a global pack's profile can newly fail `validate --ci`. Nothing
-here is purely additive, so `[minor]` would understate it.
+a project that has not declared them, existing lock records read as stale, a
+project referencing a global pack's profile can newly fail `validate --ci`, and so
+can a chained subproject whose gate was waving cross-tree findings through.
+Nothing here is purely additive, so `[minor]` would understate it.
 
-### `wairon lock` no longer floods git with rewritten surfaces
+### A chained subproject is judged through its parent — never waved through
 
-A lock scoped to one subsystem still showed every chained child's entire
-surface set as modified. The specs actually edited were buried under files
-whose *content* had not changed at all.
+Validated from its own root, a chained child could not fail its gate for anything
+that crossed into its parent. Every reference into the parent became an
+`UNVERIFIED_EXTERNAL_REF` warning that `--ci` waives — including references the
+parent judges as hard boundary violations. On the regression fixture the parent,
+scoped to the mount, reported `CROSS_SUBSYSTEM_NON_ADAPTER`,
+`CROSS_SUBSYSTEM_PRIVATE_ACCESS`, `INVALID_DEPENDENCY_REFERENCE` and
+`INVALID_TARGET_METHOD_REFERENCE` as errors; the child reported `valid: true`.
+Every code↔spec conformance error was downgraded and waived the same way, so a
+child naming code that did not exist passed too. Nothing hosted ever delivered
+surfaces, so a hosted subproject lock approved real violations.
 
-Three things compounded. `generateChildSnapshots` ships the family surface plus
-**every** sibling subsystem's published surface into **every** chained child, so
-the delivered set is (children x subsystems) files. It takes no scope, so
-`--subsystem` never narrowed it. And each projection stamps a fresh
-`generatedAt` and the tree's current `stateId`, which an unconditional
-`writeYamlFile` then wrote — so every one of those files changed bytes on every
-lock regardless of whether a contract moved.
-
-- **Delivered surfaces are now written only when their content differs.**
-  Provenance (`generatedAt`, `stateId`, `origin`) is exactly what
-  `surfaceContentKey` already strips, and exactly what the SURFACE_STALE gate
-  already ignores — staleness is judged on content, so a surface whose content
-  still matches is not stale and does not need rewriting.
-- **Scoping was the wrong fix and is not applied.** Every delivered surface is
-  still re-projected on every lock, so a contract change can never be missed;
-  only the ones that actually moved are written. That is safer than narrowing
-  the regeneration, which could leave a stale surface behind.
-- `wairon surface generate-children` and the lock summary now report what was
-  *updated* rather than what was visited, and an empty result reads as "already
-  up to date" instead of the previous, wrong "no chained child projects found".
+- **Judged through the parent.** When a chained child holds references it cannot
+  resolve and its parent is on disk, validation walks to the top root, validates
+  there scoped to the mount chain — with the parent's own rules and doctrine and
+  the same strictness — and merges the result into the child's own findings,
+  under the child's ids. It is a union with no severity changed, so a child is
+  never judged more leniently than its parent. The result names where it came
+  from: `resolvedThrough`, printed by `wairon validate` and returned by
+  `sdd_validate_tree`.
+- **Hosted reach is the credential's.** Resolving reads the parent tree, so a
+  token for the top project (or `*`) resolves through it, a token narrowed to
+  `project::child` never does, and the walk never climbs above the tenant root.
+- **No usable parent, no softening.** Every reference keeps its raw verdict: a
+  cross-tree form stays a `CROSS_TREE_REF_UNRESOLVED` warning that `--ci` does not
+  waive, and a typo stays an error. `UNVERIFIED_EXTERNAL_REF` and
+  `CHAINED_SUBPROJECT_CONTEXT` are retired.
+- **A child pins its own surfaces: `wairon surface pin`.** Run in a chained child
+  while its parent is on disk, it stores the family surface and every sibling's
+  published surface into the child's `.wai/surfaces/`, rewriting only what
+  changed — so a child cloned without its parent (a submodule checked out alone
+  in CI) still has contracts to validate against. A surface held inside a mount
+  now also decides that mount's references when validating from the parent root.
+- **A parent lock writes nothing into its children.** Pushed delivery is gone:
+  the lock hook, `wairon surface generate-children`, and `SURFACE_STALE`. So is
+  the git flood a scoped lock used to cause — (children × subsystems) snapshots
+  rewritten into other people's working trees on the parent's schedule.
+- **A child's source paths are its own.** They are read against the child root,
+  as the loader always did. An implementation written through the parent (a
+  `child::` id) now stores its `sourcePath` and `simPath` relative to the child
+  when the path lands inside it, and `subsystem externalize` / `internalize`
+  rebase the moved paths exactly. The conformance downgrade, its
+  `crossTreeContext` marker and the `--ci` waiver are gone.
+- **A loader refusal is anchored to its spec id**, qualified into the mount, so
+  `wairon validate --subsystem <mount>` no longer drops a malformed child spec
+  that the child's own validate reports.
 
 ### Execution budgets: the topology gains a resource axis
 
@@ -709,6 +731,20 @@ method's narrative. Two mechanisms close that honestly:
 4. **Embedding wairon as a library:** `LoadedExtensions` gained required
    `instructions` and `selectionFailures` fields. Use the exported
    `emptyExtensions()` rather than hand-constructing one.
+5. **Chained subprojects: re-run `validate --ci` in each child.** It can newly
+   fail, by design — it was waving these through:
+   - a reference into the parent now carries the parent's verdict; fix the edge
+     the parent rejects;
+   - a child validated without its parent on disk keeps raw
+     `CROSS_TREE_REF_UNRESOLVED` warnings — run `wairon surface pin` in the child
+     while the parent is available, and commit the pinned surfaces;
+   - a `MISSING_SOURCE_FILE` on a path written relative to the parent root: make
+     it child-relative, or re-save the implementation through the parent, which
+     now re-expresses it;
+   - replace `wairon surface generate-children` in scripts with `wairon surface
+     pin` run from the child, and drop `lint.allow` entries naming
+     `UNVERIFIED_EXTERNAL_REF` or `CHAINED_SUBPROJECT_CONTEXT` (now reported as
+     unknown codes).
 
 ## v5.1.0 (from v5.0.1)
 
