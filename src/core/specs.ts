@@ -294,16 +294,23 @@ export interface ChainingParentRef {
  * components — all of which live ABOVE this root and are physically absent here)
  * cannot be resolved standalone, so they are honest cross-tree edges to warn on,
  * not spec defects to error on. Pure filesystem read; no cache mutation.
+ *
+ * `ceiling`, when given, bounds the walk — no directory above it is probed, so a
+ * caller confined to a root reads nothing outside it to find a parent.
+ * Request-scoped callers go through resolveChainingParent, which supplies both
+ * the ceiling and the reach gate.
  */
-export function findChainingParent(childRoot: string): ChainingParentRef | null {
+export function findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef | null {
   let childResolved: string;
   try {
     childResolved = path.resolve(childRoot);
   } catch {
     return null;
   }
+  const bound = ceiling ? path.resolve(ceiling) : undefined;
   let dir = path.dirname(childResolved);
   for (let hops = 0; hops < 32; hops++) {
+    if (bound && !isWithin(bound, dir)) break;
     const specsDir = aiPathsAt(dir).specsDir();
     if (pathExists(specsDir)) {
       for (const file of listFilesRecursive(specsDir, '.yaml')) {
@@ -2927,19 +2934,16 @@ export function buildProjectGraph(level: number): WebGraphModel {
  *
  * Reach: the parent is out of bounds for a hosted request whose credential is
  * narrowed to the child, and so is anything above the request's top project
- * root — both answer null, exactly as a top root would. Every caller that reads
- * above the bound root through here (surface freshness, pinning, the bind-time
+ * root — both answer null, exactly as a top root would, and neither is so much
+ * as probed: a narrowed request returns before the walk, and every other walk
+ * stops at the request's top root. Every caller that reads above the bound root
+ * through here (validation, surface freshness, pinning, the bind-time
  * announcement) inherits the gate instead of having to remember it.
  */
 export function resolveChainingParent(): ChainingParentRef | null {
   const reach = getRequestParentReach();
   if (reach && !reach.parentReach) return null;
-  const parent = findChainingParent(getProjectRoot());
-  if (parent && reach?.topRoot) {
-    const fromTop = path.relative(path.resolve(reach.topRoot), path.resolve(parent.parentRoot));
-    if (fromTop === '..' || fromTop.startsWith(`..${path.sep}`) || path.isAbsolute(fromTop)) return null;
-  }
-  return parent;
+  return findChainingParent(getProjectRoot(), reach?.topRoot);
 }
 
 /**
