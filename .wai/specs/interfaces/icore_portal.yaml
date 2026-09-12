@@ -145,7 +145,7 @@ methods:
   - name: resolveChainingParent
     description: >-
       Report the chaining-mount context of the bound root (parent root + mounting subsystem id), or
-      null. Pure 1:1 forward.
+      null — including when the bound request may not read above its root. Pure 1:1 forward.
     signature: 'resolveChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef | null
   - name: computeStateIdAt
@@ -247,4 +247,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-12T12:01:10.362Z'
+updatedAt: '2026-09-12T15:16:11.000Z'

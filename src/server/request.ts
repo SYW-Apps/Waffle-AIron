@@ -188,20 +188,24 @@ const TREE_TRANSFER_TOOLS = new Set<string>([
 ]);
 
 /** The RECORD-level hosted tools: they act on the hosted project RECORD (or its
- *  repository), never on the bound spec tree, so they always receive the TOP
- *  project id. A subproject-qualified credential is REFUSED them (steps 10–11) —
- *  serving them would let a token scoped to one chained child act on the whole
- *  parent, i.e. the qualifier would narrow nothing.
+ *  repository), or answer for that project's relations to other projects, never
+ *  on the bound spec tree, so they always receive the TOP project id. A
+ *  subproject-qualified credential is REFUSED them (steps 10–11) — serving them
+ *  would let a token scoped to one chained child act on, or see, the whole
+ *  parent, i.e. the qualifier would narrow nothing. The landscape discovery tools
+ *  belong here: a chained child is no hosted project of its own, so a credential
+ *  narrowed to it has no landscape to discover.
  *
- *  The two TREE-scoped lifecycle tools — sdd_host_lock_project and
- *  — are deliberately ABSENT: they are confined by
- *  FORWARDING the qualifier (steps 16/18) so the action lands on exactly the child
- *  tree the credential is scoped to. */
+ *  The TREE-scoped tools — sdd_host_lock_project and the two tree transfer tools —
+ *  are deliberately ABSENT: they are confined by FORWARDING the qualifier (steps
+ *  16/18) so the action lands on exactly the child tree the credential is scoped
+ *  to. */
 const PROJECT_RECORD_TOOLS = new Set<string>([
   'sdd_host_initialize_project',
   'sdd_host_get_approval_status',
   'sdd_host_await_approval',
   ...PROJECT_OPS_TOOLS,
+  ...LANDSCAPE_DISCOVERY_TOOLS,
 ]);
 
 /** The MCP tool-result envelope — the exact shape the scoped sdd_* server returns:
@@ -269,18 +273,46 @@ const WRITE_TOOL_PREFIXES = [
  *  (sdd_get_status is a read). */
 const READ_TOOL_PREFIXES = ['sdd_get_', 'sdd_validate_'];
 
+/** Read tools whose names carry no read prefix, listed one by one so the
+ *  fail-closed default stays in force for every other name. */
+const READ_TOOL_NAMES = new Set<string>([
+  'sdd_list_external_interfaces',
+  'listAgents',
+  'getAgent',
+  'listDomains',
+  'validateTopology',
+  'getProjectConfig',
+]);
+
 /**
  * The data-plane capability a tool requires: `project:read` for a read tool (a
- * name starting with sdd_get_ / sdd_validate_), otherwise `project:write`.
+ * name starting with sdd_get_ / sdd_validate_, or one of READ_TOOL_NAMES),
+ * otherwise `project:write`.
  *
- * FAIL CLOSED: a read is ONLY the explicit read prefixes. The known write
+ * FAIL CLOSED: a read is ONLY an explicit read prefix or name. The known write
  * prefixes and any unrecognized or newly added tool name are all treated as
  * writes, so a novel tool can never slip past on read-level permission.
  */
-function requiredDataPlaneCapability(toolName: string): 'project:read' | 'project:write' {
-  if (READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:read';
+export function requiredDataPlaneCapability(toolName: string): 'project:read' | 'project:write' {
+  if (READ_TOOL_NAMES.has(toolName) || READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:read';
   if (WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:write';
   return 'project:write';
+}
+
+/**
+ * Whether a tool is classified on purpose — an explicit read, an explicit write
+ * prefix, or a hosted tool the data plane dispatches itself — rather than by the
+ * fail-closed default. The default is a safety net, not a classification: a tool
+ * the server advertises must never depend on it.
+ */
+export function isExplicitlyClassifiedTool(toolName: string): boolean {
+  return READ_TOOL_NAMES.has(toolName)
+    || READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))
+    || WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))
+    || PROJECT_LIFECYCLE_TOOLS.has(toolName)
+    || LANDSCAPE_DISCOVERY_TOOLS.has(toolName)
+    || PROJECT_OPS_TOOLS.has(toolName)
+    || TREE_TRANSFER_TOOLS.has(toolName);
 }
 
 /** Lifecycle/ops tools whose SUCCESS changes state other live views are

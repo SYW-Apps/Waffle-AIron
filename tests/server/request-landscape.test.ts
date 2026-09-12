@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
-import { handleMcpRequest } from '../../src/server/request.js';
+import { handleMcpRequest, subprojectConfinementError } from '../../src/server/request.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
 import { createProject } from '../../src/server/admin.js';
 import { mintUserToken, allow, seedUnit } from './helpers.js';
@@ -348,4 +348,33 @@ describe('handleMcpRequest landscape discovery dispatch (end-to-end)', () => {
     expect(jsonBody.result).toBeDefined();
     expect(jsonBody.result?.content?.[0]?.text).toBeTypeOf('string');
   }, 20_000);
+});
+
+describe('landscape discovery under a subproject-qualified binding (confinement)', () => {
+  const LANDSCAPE_TOOLS = [
+    'sdd_landscape_list_reachable_projects',
+    'sdd_landscape_list_reachable_project_interfaces',
+    'sdd_landscape_list_visible_surfaces',
+    'sdd_landscape_get_project_surface',
+  ];
+
+  it('refuses every landscape tool: a chained child is no hosted project, so its credential has no landscape', () => {
+    for (const name of LANDSCAPE_TOOLS) {
+      const refused = subprojectConfinementError('alpha', 'kid', call(name));
+      expect(refused?.result.isError).toBe(true);
+      expect(refused?.result.content[0].text).toContain(name);
+    }
+  });
+
+  it('serves them unchanged on an unqualified binding', () => {
+    for (const name of LANDSCAPE_TOOLS) {
+      expect(subprojectConfinementError('alpha', undefined, call(name))).toBeUndefined();
+    }
+  });
+
+  it('keeps serving the tools a qualified credential is confined by forwarding or by its bound tree', () => {
+    for (const name of ['sdd_host_lock_project', 'sdd_host_export_tree', 'sdd_get_status']) {
+      expect(subprojectConfinementError('alpha', 'kid', call(name))).toBeUndefined();
+    }
+  });
 });

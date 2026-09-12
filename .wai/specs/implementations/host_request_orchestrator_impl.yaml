@@ -92,14 +92,16 @@ methods:
       - stepNumber: 10
         description: >-
           Confine a subproject-qualified credential. These tools act on the project RECORD or its
-          repository, never on the bound tree, so serving them would let a token scoped to one
-          chained child reach the whole parent — the qualifier would narrow nothing. The TREE-scoped
-          lifecycle tool (lock) is excluded: it is confined instead by forwarding the qualifier.
+          repository, or answer for the hosted project's relations to other projects, never on the
+          bound tree, so serving them would let a token scoped to one chained child reach the whole
+          parent — the qualifier would narrow nothing. The TREE-scoped lifecycle tool (lock) and the
+          tree transfer tools are excluded: they are confined instead by forwarding the qualifier.
         type: branch
         condition: >-
           the resolved binding carries a subproject qualifier AND the called tool acts on the hosted
-          project RECORD (initialize, approval status, await approval, or any of the six project-ops
-          tools: pack list/install, policy evaluate/reconcile, produce, commit)
+          project RECORD or its relations (initialize, approval status, await approval, any of the
+          six project-ops tools: pack list/install, policy evaluate/reconcile, produce, commit, or
+          any of the four landscape discovery tools)
         onFalseStep: 12
       - stepNumber: 11
         description: >-
@@ -347,9 +349,10 @@ methods:
         toStep: 54
       - stepNumber: 48
         description: >-
-          Classify the called sdd_* tool: a read ONLY when its name starts with sdd_get_ or
-          sdd_validate_ (required capability project:read); ANY other tool — the explicit write
-          prefixes
+          Classify the called tool: a read when its name starts with sdd_get_ or sdd_validate_, or
+          when it is one of the explicitly listed read tools — sdd_list_external_interfaces and the
+          topology reads listAgents, getAgent, listDomains, validateTopology and getProjectConfig —
+          requiring project:read; ANY other tool — the explicit write prefixes
           (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_)
           AND any unrecognized or newly added name — is treated as a write requiring project:write
           (fail closed: an unknown tool never falls through to read-level gating)
@@ -416,4 +419,4 @@ methods:
     symbol: handleMcpRequest
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-12T12:22:39.399Z'
+updatedAt: '2026-09-12T15:19:06.858Z'

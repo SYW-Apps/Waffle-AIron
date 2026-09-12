@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, loadProjectConfig, WaiPaths } from '../config/loader.js';
-import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
+import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import { computeStateId, hashGateState, stateIdEquals, type StateId, type GateConfig } from './statehash.js';
 import { loadProjectExtensions } from './extensions.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
@@ -2924,9 +2924,22 @@ export function buildProjectGraph(level: number): WebGraphModel {
  * top root (icore_orchestrator/icore_portal.resolveChainingParent). Read-only
  * detection through the spec loader's chaining walk — never rebinds, never
  * mutates.
+ *
+ * Reach: the parent is out of bounds for a hosted request whose credential is
+ * narrowed to the child, and so is anything above the request's top project
+ * root — both answer null, exactly as a top root would. Every caller that reads
+ * above the bound root through here (surface freshness, pinning, the bind-time
+ * announcement) inherits the gate instead of having to remember it.
  */
 export function resolveChainingParent(): ChainingParentRef | null {
-  return findChainingParent(getProjectRoot());
+  const reach = getRequestParentReach();
+  if (reach && !reach.parentReach) return null;
+  const parent = findChainingParent(getProjectRoot());
+  if (parent && reach?.topRoot) {
+    const fromTop = path.relative(path.resolve(reach.topRoot), path.resolve(parent.parentRoot));
+    if (fromTop === '..' || fromTop.startsWith(`..${path.sep}`) || path.isAbsolute(fromTop)) return null;
+  }
+  return parent;
 }
 
 /**
