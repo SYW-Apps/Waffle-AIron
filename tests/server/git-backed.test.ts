@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { excludeLocalFiles } from '../../src/git/adapter.js';
 import {
   invalidateSpecCache,
   saveSubsystemSpec,
@@ -184,6 +185,44 @@ describe('git-backed projects (sdd_git)', () => {
     expect(fs.existsSync(path.join(root, '.wai', 'specs', '.index.yaml'))).toBe(true);
   });
 
+  // ── exclude-file doctrine: only git.json stays local; lock.json is committed ──
+
+  it('enable on a fresh repo excludes only git.json — not lock.json', () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+    const excludeContent = fs.readFileSync(path.join(root, '.git', 'info', 'exclude'), 'utf8');
+    expect(excludeContent).toContain('.wai/git.json');
+    expect(excludeContent).not.toContain('.wai/lock.json');
+  });
+
+  it('removes a lock.json exclusion left by an earlier wairon version, with a warning, and never duplicates git.json', () => {
+    // A directory standing in for a repo an earlier wairon version already
+    // configured — no real clone needed, since excludeLocalFiles works purely
+    // against .git/info/exclude on the bound root.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-git-exclude-'));
+    const excludePath = path.join(dir, '.git', 'info', 'exclude');
+    fs.mkdirSync(path.dirname(excludePath), { recursive: true });
+    // The legacy exclusion, alongside an unrelated line a human might have
+    // added by hand — that one must survive untouched.
+    fs.writeFileSync(excludePath, '*.local\n.wai/lock.json\n.wai/git.json\n');
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    runWithProjectRoot(dir, () => excludeLocalFiles());
+    // Re-enabling (excludeLocalFiles running again on the same root) must not
+    // duplicate the git.json line, and there is nothing left to warn about.
+    runWithProjectRoot(dir, () => excludeLocalFiles());
+
+    const after = fs.readFileSync(excludePath, 'utf8');
+    expect(after).not.toContain('lock.json');
+    expect(after).toContain('*.local'); // untouched
+    expect(after.match(/\.wai\/git\.json/g)).toHaveLength(1); // not duplicated
+    expect(warn).toHaveBeenCalledTimes(1); // only the first call found something to remove
+    expect(warn.mock.calls[0]?.[0]).toMatch(/lock\.json/);
+
+    warn.mockRestore();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   // Real git subprocess work (commit + push + log) sits at the default 5s
   // timeout boundary under full-suite worker contention — a timing flake, not
   // a logic risk; the generous ceiling keeps the verdict about correctness.
@@ -206,9 +245,10 @@ describe('git-backed projects (sdd_git)', () => {
     // ...and the remote received the working branch.
     expect(git(['branch'], remote)).toContain('wairon/work');
 
-    // Container-local files never enter the repo.
+    // git.json (container-local connection config) never enters the repo, but
+    // lock.json — the approval record — IS committed, so it reaches the remote.
     const tracked = git(['ls-files'], root);
-    expect(tracked).not.toContain('lock.json');
+    expect(tracked).toContain('.wai/lock.json');
     expect(tracked).not.toContain('git.json');
   });
 
@@ -575,8 +615,10 @@ describe('git-backed projects (sdd_git)', () => {
     expect(fs.readFileSync(path.join(clone, '.wai', 'specs', '.index.yaml'), 'utf8')).toBe(INDEX_YAML);
 
     // 3. The clone's .wai file SET matches the project's (nothing dropped),
-    // minus the container-local files that must never enter the repo.
-    const containerLocal = new Set(['git.json', 'lock.json']);
+    // minus git.json — the one file that must never enter the repo. (No lock
+    // was taken in this scenario, so lock.json is not in play here either way;
+    // see git-backed's other tests for it being committed.)
+    const containerLocal = new Set(['git.json']);
     expect(listTree(path.join(clone, '.wai'))).toStrictEqual(
       listTree(path.join(root, '.wai')).filter((f) => !containerLocal.has(f)),
     );
