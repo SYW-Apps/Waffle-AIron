@@ -233,30 +233,71 @@ function isWithin(dir: string, file: string): boolean {
 // escape the bound project root and federate — and, via a code pack living
 // there, execute — another tenant's spec tree. The single invariant enforced
 // everywhere a projectPath is written or resolved: the child directory must
-// stay strictly within its owning project root. Empty/undefined projectPath is
-// not chaining and is never checked here (callers skip it).
+// stay strictly within its OWNING project root — the project that declares the
+// mount, not whichever root the tree happens to be loaded from, so one
+// declaration is accepted or refused identically from every root — both
+// lexically and as the filesystem resolves it (through links). Empty/undefined
+// projectPath is not chaining and is never checked here (callers skip it).
 // ---------------------------------------------------------------------------
 
 /**
- * Whether a subproject's already-resolved child directory escapes `projectRoot`.
- * `resolvedChildDir` is resolved by the caller because for multi-hop chains the
- * resolution base is an intermediate parent, while the containment boundary is
- * always the bound top root. An absolute `projectPath` or a `../`-escape fails.
+ * A path as the filesystem resolves it: its nearest existing ancestor followed
+ * through links, with the part that does not exist yet re-appended. Null when an
+ * entry exists but cannot be resolved (a dangling link), which containment
+ * treats as escaping.
+ */
+function canonicalPath(target: string): string | null {
+  let existing = path.resolve(target);
+  const rest: string[] = [];
+  for (;;) {
+    try {
+      fs.lstatSync(existing);
+      break;
+    } catch {
+      const up = path.dirname(existing);
+      if (up === existing) return path.resolve(target);
+      rest.unshift(path.basename(existing));
+      existing = up;
+    }
+  }
+  try {
+    return path.join(fs.realpathSync.native(existing), ...rest);
+  } catch {
+    return null;
+  }
+}
+
+/** A chained directory's identity for cycle detection: reached through a link, it is still the same directory. */
+function chainDirKey(dir: string): string {
+  return canonicalPath(dir) ?? path.resolve(dir);
+}
+
+/**
+ * Whether a subproject's already-resolved child directory escapes `projectRoot`,
+ * the root of the project that DECLARES the mount; `resolvedChildDir` is
+ * resolved by the caller against that same project. An absolute `projectPath`, a
+ * `../`-escape, or a path that leaves the root through a link fails. Each hop is
+ * contained by its own declaring project, which is itself contained, so no chain
+ * however deep leaves the bound root.
  */
 function projectPathEscapesRoot(
   projectRoot: string,
   projectPath: string,
   resolvedChildDir: string,
 ): boolean {
-  return path.isAbsolute(projectPath) || !isWithin(projectRoot, resolvedChildDir);
+  if (path.isAbsolute(projectPath) || !isWithin(projectRoot, resolvedChildDir)) return true;
+  const root = canonicalPath(projectRoot);
+  const child = canonicalPath(resolvedChildDir);
+  return root === null || child === null || !isWithin(root, child);
 }
 
 /**
  * Assert a subsystem `projectPath` resolves strictly within `projectRoot`, and
  * return the resolved absolute child directory. Throws a clear Error naming the
- * offending path when `projectPath` is absolute or `../`-escapes the root.
- * Applied on every write/setter path that persists a projectPath; the load-time
- * loader uses projectPathEscapesRoot directly (it collects issues, not throws).
+ * offending path when `projectPath` is absolute, `../`-escapes the root, or
+ * leaves it through a link. Applied on every write/setter path that persists a
+ * projectPath; the load-time loader uses projectPathEscapesRoot directly (it
+ * collects issues, not throws).
  */
 export function assertContainedProjectPath(projectRoot: string, projectPath: string): string {
   const root = path.resolve(projectRoot);
@@ -264,7 +305,7 @@ export function assertContainedProjectPath(projectRoot: string, projectPath: str
   if (projectPathEscapesRoot(root, projectPath, resolved)) {
     throw new Error(
       `projectPath "${projectPath}" must resolve within the project root "${root}", but resolves ` +
-        `to "${resolved}"; absolute paths and ../-escaping paths are rejected so a chained ` +
+        `to "${resolved}"; absolute, ../-escaping and link-escaping paths are rejected so a chained ` +
         `subproject is always contained by its parent.`,
     );
   }
@@ -295,10 +336,11 @@ export interface ChainingParentRef {
  * cannot be resolved standalone, so they are honest cross-tree edges to warn on,
  * not spec defects to error on. Pure filesystem read; no cache mutation.
  *
- * `ceiling`, when given, bounds the walk — no directory above it is probed, so a
- * caller confined to a root reads nothing outside it to find a parent.
- * Request-scoped callers go through resolveChainingParent, which supplies both
- * the ceiling and the reach gate.
+ * Only a mount the ancestor itself would follow counts: its projectPath stays
+ * within that ancestor's own root. `ceiling`, when given, bounds the walk — no
+ * directory above it is probed, so a caller confined to a root reads nothing
+ * outside it to find a parent. Request-scoped callers go through
+ * resolveChainingParent, which supplies both the ceiling and the reach gate.
  */
 export function findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef | null {
   let childResolved: string;
@@ -325,7 +367,8 @@ export function findChainingParent(childRoot: string, ceiling?: string): Chainin
           const projectPath = (raw as { projectPath?: unknown }).projectPath;
           if (typeof projectPath === 'string' && projectPath.trim() !== '') {
             try {
-              if (path.resolve(dir, projectPath) === childResolved) {
+              const mountDir = path.resolve(dir, projectPath);
+              if (mountDir === childResolved && !projectPathEscapesRoot(dir, projectPath, mountDir)) {
                 const id = (raw as { id?: unknown }).id;
                 return { parentRoot: dir, subsystemId: typeof id === 'string' ? id : '?' };
               }
@@ -343,26 +386,39 @@ export function findChainingParent(childRoot: string, ceiling?: string): Chainin
   return null;
 }
 
-/**
- * Walk DOWN from a project root and list every chained subproject root beneath
- * it, as project-relative POSIX directories in walk order (parents before their
- * own children). The downward companion to findChainingParent, and what a
- * WHOLE-TREE operation — archiving a project for transfer — needs in order to
- * know which trees belong to this project.
- *
- * Mirrors the loader's recursion guards exactly, but silently: a mount that
- * escapes the root (absolute / `../`), points at a missing directory, or forms a
- * cycle is SKIPPED rather than reported, because this is a pure locator and the
- * loader already raises those as issues on every scan. Returns [] for a project
- * that chains nothing.
- */
-export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
-  const root = path.resolve(rootDir);
-  const found: string[] = [];
-  const visited = new Set<string>([root]);
+/** Why a whole-tree walk cannot follow a chained mount. */
+export type ChainedRootSkipReason = 'escapes' | 'missing' | 'cyclic' | 'too-deep';
 
-  const walk = (projectDir: string, depth: number): void => {
-    if (depth > 32) return; // the loader's own bound on chain depth
+/**
+ * Every chained mount beneath a project root (ispec_index.inspectChainedRoots):
+ * the roots a whole-tree walk follows, and the mounts it cannot.
+ */
+export interface ChainedRootsInspection {
+  /** Project-relative POSIX roots in walk order, parents before their own children. */
+  roots: string[];
+  /** Mounts that cannot be followed: the mount's qualified id, its projectPath as declared, and why. */
+  skipped: { mount: string; projectPath: string; reason: ChainedRootSkipReason }[];
+}
+
+/**
+ * Walk DOWN from a project root over every chained mount beneath it, exactly as
+ * the loader recurses: each projectPath resolved against the project that
+ * declares it and contained by that project's root. The downward companion to
+ * findChainingParent, and what a WHOLE-TREE operation — archiving a project for
+ * transfer — needs to know which trees belong to the project, and whether it
+ * is seeing all of them.
+ *
+ * A mount that escapes its project, points at a missing directory, forms a
+ * cycle, or nests past the walk bound is reported in `skipped` rather than
+ * silently dropped, so a caller can refuse a result that would only look
+ * complete. A directory two mounts reach is listed once.
+ */
+export function inspectChainedRoots(rootDir: string = getProjectRoot()): ChainedRootsInspection {
+  const root = path.resolve(rootDir);
+  const inspection: ChainedRootsInspection = { roots: [], skipped: [] };
+  const listed = new Set<string>();
+
+  const walk = (projectDir: string, prefix: string, ancestors: ReadonlySet<string>, depth: number): void => {
     const specsDir = aiPathsAt(projectDir).specsDir();
     if (!pathExists(specsDir)) return;
     for (const file of listFilesRecursive(specsDir, '.yaml')) {
@@ -374,8 +430,9 @@ export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
       }
       // A subsystem spec (has parentSystem) that mounts a child via projectPath.
       if (!raw || typeof raw !== 'object' || !('parentSystem' in raw)) continue;
-      const projectPath = (raw as { projectPath?: unknown }).projectPath;
+      const { id, projectPath } = raw as { id?: unknown; projectPath?: unknown };
       if (typeof projectPath !== 'string' || projectPath.trim() === '') continue;
+      const localId = typeof id === 'string' ? id : '?';
 
       let childDir: string;
       try {
@@ -383,20 +440,36 @@ export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
       } catch {
         continue; // malformed projectPath — not a resolvable mount
       }
-      // Containment is checked against the BOUND root, so no hop however deep
-      // may escape it; nesting still resolves against the immediate parent.
-      if (projectPathEscapesRoot(root, projectPath, childDir)) continue;
-      if (visited.has(childDir)) continue;
-      if (!fs.existsSync(childDir)) continue;
+      let reason: ChainedRootSkipReason | undefined;
+      if (projectPathEscapesRoot(projectDir, projectPath, childDir)) reason = 'escapes';
+      else if (ancestors.has(chainDirKey(childDir))) reason = 'cyclic';
+      else if (!fs.existsSync(childDir)) reason = 'missing';
+      else if (depth >= 32) reason = 'too-deep'; // the bound on chain depth
+      if (reason) {
+        const mount = prefix ? qualifyDeclaredId(localId, prefix, true) : localId;
+        inspection.skipped.push({ mount, projectPath, reason });
+        continue;
+      }
 
-      visited.add(childDir);
-      found.push(path.relative(root, childDir).split(path.sep).join('/'));
-      walk(childDir, depth + 1);
+      const key = chainDirKey(childDir);
+      if (listed.has(key)) continue;
+      listed.add(key);
+      inspection.roots.push(path.relative(root, childDir).split(path.sep).join('/'));
+      walk(childDir, prefix ? `${prefix}::${localId}` : localId, new Set([...ancestors, key]), depth + 1);
     }
   };
 
-  walk(root, 0);
-  return found;
+  walk(root, '', new Set([chainDirKey(root)]), 0);
+  return inspection;
+}
+
+/**
+ * Every chained subproject root beneath a project root, in walk order — the
+ * roots half of inspectChainedRoots. Returns [] for a project that chains
+ * nothing.
+ */
+export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
+  return inspectChainedRoots(rootDir).roots;
 }
 
 /**
@@ -721,7 +794,7 @@ export class SpecWorkspace {
     this.rootSubsystems.clear();
     this.cachedRecursive = recursive;
     this.scanVisitedSpecDirs = [];
-    const visited = new Set<string>([path.resolve(this.rootDir)]);
+    const visited = new Set<string>([chainDirKey(this.rootDir)]);
 
     const maxDepth = typeof recursive === 'number' ? recursive : (recursive ? Infinity : 0);
     this.cachedIndex = this.scanSpecsForProject(this.rootDir, '', visited, maxDepth, 0);
@@ -957,29 +1030,36 @@ export class SpecWorkspace {
     if (currentDepth < maxDepth) {
       for (const subproj of localSubprojects) {
         const childDir = path.resolve(projectDir, subproj.projectPath);
+        // Every issue about this mount names it by its QUALIFIED id, exactly as
+        // the loader names the subsystem itself — so a validation scoped to an
+        // enclosing mount keeps it.
+        const mountId = namespacePrefix
+          ? qualifyDeclaredId(subproj.subsystemId, namespacePrefix, true)
+          : subproj.subsystemId;
 
-        // Containment guard (Fix B2) — THE critical read-time defense. The
-        // resolution base is the immediate parent (projectDir) so nested chains
-        // compose, but containment is always checked against this.rootDir, the
-        // workspace's bound root (the tenant project root when hosted). No hop,
-        // however deep, may escape it via an absolute or ../ projectPath. On a
-        // violation, surface a loader error and SKIP the child (do not recurse).
-        if (projectPathEscapesRoot(this.rootDir, subproj.projectPath, childDir)) {
+        // Containment guard (Fix B2) — THE critical read-time defense. Both the
+        // resolution base and the containment boundary are the project that
+        // DECLARES the mount (projectDir), so a declaration is accepted or
+        // refused identically whichever root loads it; projectDir was itself
+        // contained by its own declaring project, so no hop, however deep,
+        // leaves the bound root. On a violation, surface a loader error and SKIP
+        // the child (do not recurse).
+        if (projectPathEscapesRoot(projectDir, subproj.projectPath, childDir)) {
           this.loaderIssues.push({
             severity: 'error',
             code: 'PROJECTPATH_ESCAPE',
-            message: `Subproject path "${subproj.projectPath}" declared by subsystem "${subproj.subsystemId}" escapes the project root "${this.rootDir}" (resolves to "${childDir}"); absolute and ../-escaping projectPaths are rejected. Skipping this subproject.`,
-            specId: subproj.subsystemId,
+            message: `Subproject path "${subproj.projectPath}" declared by subsystem "${mountId}" escapes the root of the project declaring it, "${projectDir}" (resolves to "${childDir}"); absolute, ../-escaping and link-escaping projectPaths are rejected. Skipping this subproject.`,
+            specId: mountId,
           });
           continue;
         }
 
-        if (visitedDirs.has(childDir)) {
+        if (visitedDirs.has(chainDirKey(childDir))) {
           this.loaderIssues.push({
             severity: 'error',
             code: 'CIRCULAR_SUBPROJECT_REFERENCE',
-            message: `Circular reference detected: Subsystem "${subproj.subsystemId}" refers to subproject "${childDir}" which is already loaded.`,
-            specId: subproj.subsystemId,
+            message: `Circular reference detected: Subsystem "${mountId}" refers to subproject "${childDir}" which is already loaded.`,
+            specId: mountId,
           });
           continue;
         }
@@ -988,8 +1068,8 @@ export class SpecWorkspace {
           this.loaderIssues.push({
             severity: 'error',
             code: 'SUBPROJECT_NOT_FOUND',
-            message: `Subproject directory "${childDir}" declared by subsystem "${subproj.subsystemId}" does not exist.`,
-            specId: subproj.subsystemId,
+            message: `Subproject directory "${childDir}" declared by subsystem "${mountId}" does not exist.`,
+            specId: mountId,
           });
           continue;
         }
@@ -999,7 +1079,7 @@ export class SpecWorkspace {
           : subproj.subsystemId;
 
         const newVisited = new Set(visitedDirs);
-        newVisited.add(childDir);
+        newVisited.add(chainDirKey(childDir));
 
         const childIndex = this.scanSpecsForProject(childDir, childNamespace, newVisited, maxDepth, currentDepth + 1);
 
@@ -1044,14 +1124,16 @@ export class SpecWorkspace {
       if (sub && sub.projectPath) {
         const nextDir = path.resolve(currentDir, sub.projectPath);
         // Containment guard (Fix B2): never resolve a namespace into a directory
-        // that escapes the bound top root (this.rootDir). Surface a loader error
-        // and SKIP the escaping hop, leaving currentDir contained, rather than
-        // handing back an out-of-root directory for a save/lookup.
-        if (projectPathEscapesRoot(this.rootDir, sub.projectPath, nextDir)) {
+        // that escapes the project declaring the hop (currentDir) — the same
+        // boundary the loader applies, so a namespace resolves here exactly when
+        // its tree loads. Surface a loader error and SKIP the escaping hop,
+        // leaving currentDir contained, rather than handing back an out-of-root
+        // directory for a save/lookup.
+        if (projectPathEscapesRoot(currentDir, sub.projectPath, nextDir)) {
           this.loaderIssues.push({
             severity: 'error',
             code: 'PROJECTPATH_ESCAPE',
-            message: `Subproject path "${sub.projectPath}" declared by subsystem "${currentPrefix}" escapes the project root "${this.rootDir}" (resolves to "${nextDir}"); absolute and ../-escaping projectPaths are rejected. Skipping this subproject.`,
+            message: `Subproject path "${sub.projectPath}" declared by subsystem "${currentPrefix}" escapes the root of the project declaring it, "${currentDir}" (resolves to "${nextDir}"); absolute, ../-escaping and link-escaping projectPaths are rejected. Skipping this subproject.`,
             specId: currentPrefix,
           });
           continue;
