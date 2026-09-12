@@ -23,19 +23,63 @@ export function isExternalNamespaceRef(ctx: RuleContext, ref: string): boolean {
 }
 
 /**
+ * How a cross-tree reference fared against the stored surface snapshots.
+ *
+ * `ambiguous` is a verdict of its own, not a kind of resolution: several
+ * snapshots expose the name with different contracts and the reference does not
+ * single one out, so no declared contract may judge the edge.
+ */
+export type SurfaceRefResolution =
+  | { kind: 'resolved'; snapshot: SurfaceSnapshot; entry: SurfaceContractEntry }
+  | { kind: 'ambiguous'; providers: string[] }
+  | { kind: 'unresolved' };
+
+/**
+ * True when a snapshot was published by the named provider. A snapshot's key is
+ * its projectName: the family surface is keyed by the parent system name and a
+ * sibling's by `<systemName>::<subsystemId>`, so a reference names a sibling by
+ * its subsystem id and the family surface or a foreign import by its name.
+ */
+function isProvidedBy(snapshot: SurfaceSnapshot, provider: string): boolean {
+  return snapshot.projectName === provider || snapshot.projectName.split('::').pop() === provider;
+}
+
+/**
+ * Two entries carry the same contract when they front the same component with
+ * the same methods and the same dispatch table — whichever of them judges an
+ * edge, the verdict is the same. Snapshots carry a component's local name, so
+ * that is what identifies it.
+ */
+function sameContract(a: SurfaceContractEntry, b: SurfaceContractEntry): boolean {
+  return a.component.split('::').pop() === b.component.split('::').pop()
+    && JSON.stringify(a.methods) === JSON.stringify(b.methods)
+    && JSON.stringify(a.dispatch ?? []) === JSON.stringify(b.dispatch ?? []);
+}
+
+/**
  * Resolve an unresolved cross-tree reference (a `super::`/`::` form whose
- * target is outside this loading root) against the stored surface snapshots:
- * the ref's final segment is matched against each snapshot's exported entry
- * ids and backing component names. A hit means the edge is validated against
- * the DECLARED contract instead of falling back to the unresolvable warning.
+ * target is outside this loading root) against the stored surface snapshots,
+ * matched by provider. The final segment is the local name, matched against
+ * each snapshot's exported entry ids and backing component names; the segment
+ * before it, when there is one, names the provider, and only that provider's
+ * snapshots are consulted — never another's that happens to expose the same
+ * name.
+ *
+ * A hit means the edge is validated against the DECLARED contract instead of
+ * falling back to the unresolvable warning. When the matching snapshots of the
+ * first pool that has any disagree on the contract, the reference is ambiguous:
+ * picking whichever loaded first would judge the edge against a contract its
+ * author may never have meant.
  */
 export function resolveSurfaceRef(
   ctx: RuleContext,
   ref: string,
   fromSubsystem?: string,
-): { snapshot: SurfaceSnapshot; entry: SurfaceContractEntry } | null {
-  const local = ref.split('::').filter(seg => seg && seg !== 'super').pop();
-  if (!local) return null;
+): SurfaceRefResolution {
+  const segments = ref.split('::').filter(seg => seg && seg !== 'super');
+  const local = segments.pop();
+  if (!local) return { kind: 'unresolved' };
+  const provider = segments.pop();
   // For a reference made from inside a chained mount, the snapshots that mount
   // holds come first, nearest mount first — what the child authored against,
   // exactly as it resolves from the child's own root — then the bound root's
@@ -46,12 +90,47 @@ export function resolveSurfaceRef(
       .map((ns) => ctx.mountSurfaceSnapshots.find((m) => m.namespace === ns)?.snapshots ?? [])
     : [];
   for (const pool of [...mountPools, ctx.surfaceSnapshots]) {
+    const candidates: { snapshot: SurfaceSnapshot; entry: SurfaceContractEntry }[] = [];
     for (const snapshot of pool) {
+      if (provider !== undefined && !isProvidedBy(snapshot, provider)) continue;
       const entry = snapshot.interfaces.find(e => e.component === local || e.id === local);
-      if (entry) return { snapshot, entry };
+      if (entry) candidates.push({ snapshot, entry });
     }
+    if (candidates.length === 0) continue;
+    const [first] = candidates;
+    if (candidates.every((c) => sameContract(c.entry, first.entry))) {
+      return { kind: 'resolved', ...first };
+    }
+    return { kind: 'ambiguous', providers: [...new Set(candidates.map((c) => c.snapshot.projectName))] };
   }
-  return null;
+  return { kind: 'unresolved' };
+}
+
+/**
+ * Report a cross-tree reference whose matching surface snapshots disagree on
+ * the contract. Every rule that resolves references against snapshots reports
+ * it through here, so the finding reads the same whatever kind of edge it is on.
+ * It is never surface-resolved: no contract judged the edge.
+ *
+ * `subject` is the clause that leads up to the reference, e.g.
+ * `Component "invoice-client" depends on`.
+ */
+export function reportAmbiguousSurfaceRef(
+  ctx: RuleContext,
+  subject: string,
+  ref: string,
+  providers: string[],
+  specId: string,
+  isDraftContext: boolean,
+): void {
+  const local = ref.split('::').filter(seg => seg && seg !== 'super').pop() ?? ref;
+  ctx.addIssue(
+    'error',
+    'SURFACE_REF_AMBIGUOUS',
+    `${subject} cross-tree component "${ref}", which the surface snapshots of ${providers.map((p) => `"${p}"`).join(', ')} expose with different contracts — the reference matches more than one declared contract, so none of them can judge it. Name the provider it means (super::<provider>::${local}), or remove the snapshot that no longer applies.`,
+    specId,
+    isDraftContext,
+  );
 }
 
 /**
