@@ -5,25 +5,27 @@ description: >-
   The deterministic content identity of a spec-tree state. Two states with identical content produce
   the same StateId; any change alters it. Two flavours exist, distinguished by `algorithm` so they
   can never compare equal: the CONTENT identity over the spec tree alone (surface/landscape snapshot
-  stamps and freshness comparisons, where doctrine is irrelevant), and the GATE identity over the
-  spec tree PLUS the governing doctrine (pack identities, profiles, languages, patterns, guarantees,
-  assertions, rule codes) — what the commit-scoped lock record is scoped to and what every staleness
-  re-check recomputes, because a lock asserts that these specs pass THIS gate.
+  stamps, where doctrine is irrelevant), and the GATE identity over the spec tree PLUS the governing
+  doctrine (pack identities, profiles, languages, patterns, guarantees, assertions, rule codes) PLUS
+  the consumed contract inputs (the content of the stored surface snapshots a verdict can consult) —
+  what the commit-scoped lock record is scoped to and what every staleness re-check recomputes,
+  because a lock asserts that these specs pass THIS gate against THESE contracts.
 fields:
   - name: algorithm
     type: string
     description: >-
       Hash algorithm identifier, also distinguishing the flavour: "sha256" = spec-tree content only;
-      "sha256+doctrine" = tree plus governing doctrine. stateIdEquals compares this, so a
-      content-only identity never satisfies a gate comparison — which is what makes lock records
-      written before doctrine coverage read as stale instead of as valid.
+      "sha256+doctrine+inputs" = tree plus governing doctrine plus consumed contract inputs (the
+      earlier "sha256+doctrine" is no longer produced). stateIdEquals compares this, so neither a
+      content-only identity nor a gate identity taken before inputs were covered satisfies a gate
+      comparison — which makes such lock records read as stale instead of as valid.
     optional: false
   - name: digest
     type: string
     description: >-
-      Hex digest over the canonicalized content (spec tree, plus the doctrine projection for the
-      gate flavour)
+      Hex digest over the canonicalized content (spec tree, plus the doctrine projection and the
+      consumed contract inputs for the gate flavour)
     optional: false
 methods: []
 createdAt: '2026-07-04T12:44:18.502Z'
-updatedAt: '2026-09-11T23:39:59.034Z'
+updatedAt: '2026-09-12T17:36:50.401Z'

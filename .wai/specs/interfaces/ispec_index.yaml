@@ -14,7 +14,11 @@ methods:
       Loads all L1 subsystem specifications, including those of chained subprojects under their
       mount's namespace. A subsystem a child declares under its mount's own local name is that mount
       — merged with it at any nesting depth — and every reference to that name inside the child
-      resolves to the mount id.
+      resolves to the mount id. A mount whose path escapes the project that DECLARES it — absolute,
+      ../-escaping, or through a link — is refused as PROJECTPATH_ESCAPE and not followed,
+      identically from every loading root; every loader issue about a mount (escaping, cyclic,
+      missing) carries the mount's qualified id, so a validation scope that includes the mount keeps
+      it.
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
     returns: SubsystemSpec[]
   - name: loadSubsystemSpec
@@ -53,9 +57,8 @@ methods:
     description: >-
       Every chained subproject root beneath the bound project, as project-relative directories in
       walk order, recursing through nested mounts (a child that itself chains a grandchild
-      contributes both). Empty for a project that chains nothing. Pure read over the same recursive
-      scan the loader already performs — the one place that knows where a project's trees physically
-      live.
+      contributes both). Empty for a project that chains nothing. The roots half of
+      inspectChainedRoots.
     signature: 'listChainedRoots(): string[]'
     returns: string[]
     guarantees:
@@ -64,13 +67,25 @@ methods:
     description: >-
       Resolve a chained mount's qualified namespace (e.g. `kid`, `par::kid2`) to that mount's
       project root, walking each segment through the scanned index and resolving every mount's
-      projectPath against the previous mount's directory. A hop that escapes the bound root is
-      refused as a loader issue and skipped; returns null when no segment is a mount.
+      projectPath against the previous mount's directory. A hop whose path escapes the project that
+      declares it — absolute, ../-escaping, or through a link — is refused as a loader issue and
+      skipped; returns null when no segment is a mount.
     signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
     returns: string | null
     params:
       - name: namespace
         type: string
+  - name: inspectChainedRoots
+    description: >-
+      Walk every chained mount beneath the bound project, in walk order, and report both halves: the
+      project-relative roots that can be followed, and every mount that cannot — escaping the
+      project that declares it (absolute, ../-escaping, or through a link), missing on disk, cyclic,
+      or nested past the depth bound — each with its qualified mount id, declared path and reason.
+      The one place a whole-tree operation learns whether it is seeing the whole tree.
+    signature: 'inspectChainedRoots(): ChainedRootsInspection'
+    returns: ChainedRootsInspection
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-09-12T15:19:15.213Z'
+updatedAt: '2026-09-12T17:38:09.947Z'

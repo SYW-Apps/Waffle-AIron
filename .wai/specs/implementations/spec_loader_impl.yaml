@@ -147,8 +147,15 @@ methods:
         type: call
         targetComponent: spec_index
         targetMethod: resolveSubprojectForNamespace
+  - name: inspectChainedRoots
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: inspectChainedRoots
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T12:01:04.736Z'
+updatedAt: '2026-09-12T17:38:20.626Z'

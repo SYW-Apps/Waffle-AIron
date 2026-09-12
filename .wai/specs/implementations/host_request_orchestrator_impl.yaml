@@ -91,26 +91,28 @@ methods:
         type: local
       - stepNumber: 10
         description: >-
-          Confine a subproject-qualified credential. These tools act on the project RECORD or its
-          repository, or answer for the hosted project's relations to other projects, never on the
-          bound tree, so serving them would let a token scoped to one chained child reach the whole
-          parent — the qualifier would narrow nothing. The TREE-scoped lifecycle tool (lock) and the
-          tree transfer tools are excluded: they are confined instead by forwarding the qualifier.
+          Confine a subproject-qualified credential by the called tool's declared scope. A
+          TREE-scoped tool — every scoped spec tool, lock, and the two tree transfer tools — acts on
+          the bound child tree (lock and transfer receive the qualifier). A RECORD-scoped tool acts
+          on the project record or its repository, or answers for the hosted project's relations to
+          other projects, so serving it would let a token scoped to one chained child reach the
+          whole parent — the qualifier would narrow nothing. A tool with no declared scope is
+          treated as record-scoped: confinement fails closed, so a tool added later is refused under
+          a narrowed credential until it declares its scope.
         type: branch
         condition: >-
-          the resolved binding carries a subproject qualifier AND the called tool acts on the hosted
-          project RECORD or its relations (initialize, approval status, await approval, any of the
-          six project-ops tools: pack list/install, policy evaluate/reconcile, produce, commit, or
-          any of the four landscape discovery tools)
+          the resolved binding carries a subproject qualifier AND the called tool is not declared
+          TREE-scoped (a record-scoped tool — initialize, approval status, await approval, the six
+          project-ops tools, the four landscape discovery tools — or a tool with no declared scope)
         onFalseStep: 12
       - stepNumber: 11
         description: >-
           Refuse as an isError tool result (HTTP still 200, and the refusal still flows through the
-          SAME best-effort audit path) naming the tool and the bound qualifier, and stating that it
-          acts on the whole project so an unqualified credential is required. Never a silent success
-          and never a partial action.
+          SAME best-effort audit path) naming the tool and the bound qualifier, and stating that the
+          tool acts on the whole project or declares no scope, so an unqualified credential is
+          required. Never a silent success and never a partial action.
         type: return
-        outcome: refused record-level tool on a subproject-qualified binding
+        outcome: refused a tool outside the bound child on a subproject-qualified binding
       - stepNumber: 12
         description: >-
           If the called tool is an execute-primary project-lifecycle tool, a hosted landscape tool,
@@ -419,4 +421,4 @@ methods:
     symbol: handleMcpRequest
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-12T15:19:06.858Z'
+updatedAt: '2026-09-12T17:36:55.652Z'

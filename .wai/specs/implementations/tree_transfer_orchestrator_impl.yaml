@@ -27,14 +27,18 @@ methods:
         type: throw
         error: no spec tree to export at this project root
       - stepNumber: 4
-        description: List every chained subproject root beneath this project.
+        description: >-
+          Inspect every chained subproject root beneath this project — the roots to pack, and the
+          mounts that cannot be (escaping, missing, cyclic, too deep).
         type: call
         targetComponent: spec_loader
-        targetMethod: listChainedRoots
+        targetMethod: inspectChainedRoots
       - stepNumber: 5
         description: >-
-          Assemble the root set: the top project at '.' first, then each chained root, every entry
-          paired with the absolute .wai directory it names.
+          Assemble the root set — the top project at '.' first, then each chained root, every entry
+          paired with the absolute .wai directory it names — and count any root without a .wai as
+          skipped (no-spec-tree). When a mount is skipped and allowPartial is not set, refuse,
+          naming each skipped mount and why, rather than pack an archive that looks complete.
         type: local
       - stepNumber: 6
         description: >-
@@ -171,4 +175,4 @@ methods:
         error: the original extraction failure
 status: complete
 createdAt: '2026-08-12T17:26:02.381Z'
-updatedAt: '2026-08-12T18:28:00.712Z'
+updatedAt: '2026-09-12T17:38:29.381Z'

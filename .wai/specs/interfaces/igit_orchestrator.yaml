@@ -6,7 +6,11 @@ description: >-
 component: git_orchestrator
 methods:
   - name: enable
-    description: Clone + set up the working branch + persist config.
+    description: >-
+      Clone + set up the working branch + persist config. Only container-local files (git.json) are
+      kept out of commits: the approval record .wai/lock.json is committed with the rest of .wai/,
+      so an approval reaches the remote, and an exclusion of it written by an earlier version is
+      removed with a warning.
     signature: 'enable(remote: string, branch: string): void'
     returns: void
   - name: disable
@@ -52,4 +56,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T16:31:53.451Z'
-updatedAt: '2026-07-16T15:24:20.921Z'
+updatedAt: '2026-09-12T17:38:32.677Z'

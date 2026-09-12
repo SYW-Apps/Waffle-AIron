@@ -46,15 +46,6 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: resolveChainingParent
-  - name: computeParentStateId
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Forward the read-only cross-root state-hash computation to the core subsystem's published
-          portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: computeStateIdAt
   - name: resolveSubprojectForNamespace
     narrative:
       - stepNumber: 1
@@ -64,4 +55,4 @@ methods:
         targetMethod: resolveSubprojectForNamespace
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-09-12T12:01:15.932Z'
+updatedAt: '2026-09-12T17:43:22.125Z'

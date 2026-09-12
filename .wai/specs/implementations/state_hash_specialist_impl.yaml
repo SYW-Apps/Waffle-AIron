@@ -69,14 +69,15 @@ methods:
         type: local
       - stepNumber: 4
         description: >-
-          Canonicalize the tree and the doctrine projection together (stable key ordering, volatile
-          timestamps stripped) and digest them into one identity.
+          Canonicalize the tree, the doctrine projection and the consumed contract inputs together
+          (stable key ordering, volatile timestamps and snapshot provenance stripped, snapshots
+          ordered by key) and digest them into one identity.
         type: local
       - stepNumber: 5
         description: >-
-          Mark the algorithm as doctrine-covering so a content-only StateId can never compare equal
-          — which makes every lock record written before doctrine was covered read as STALE rather
-          than as silently valid.
+          Mark the algorithm as covering doctrine and inputs (sha256+doctrine+inputs) so a
+          content-only StateId, or a gate StateId taken before inputs were covered, can never
+          compare equal — every earlier lock record reads as STALE rather than as silently valid.
         type: local
       - stepNumber: 6
         description: Return the gate StateId.
@@ -85,4 +86,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:31.981Z'
-updatedAt: '2026-07-29T14:54:29.608Z'
+updatedAt: '2026-09-12T17:36:45.338Z'

@@ -15,21 +15,31 @@ methods:
       - idempotent
   - name: hashGateState
     description: >-
-      Digest the spec tree TOGETHER WITH the governing doctrine into a gate StateId: what the
-      conformance gate actually consisted of when it passed. Doctrine is a parameter, not a load, so
-      this stays pure and reproducible. Only doctrine that can change a conformance verdict
-      participates — pack identities, merged profiles and language tables, patterns, guarantee
-      tokens, assertions, and programmatic rule names/codes; pack skills and instruction blocks are
-      excluded because they never affect a verdict. The returned algorithm is marked so a
-      content-only StateId can never compare equal to a gate StateId.
-    signature: 'hashGateState(doctrine: LoadedExtensions): StateId'
+      Digest the spec tree TOGETHER WITH the governing doctrine and the consumed contract inputs
+      into a gate StateId: what the conformance gate actually consisted of when it passed. Doctrine
+      and inputs are parameters, not loads, so this stays pure and reproducible. Only doctrine that
+      can change a conformance verdict participates — pack identities, merged profiles and language
+      tables, patterns, guarantee tokens, assertions, and programmatic rule names/codes; pack skills
+      and instruction blocks are excluded because they never affect a verdict. The inputs are the
+      CONTENT of the stored surface snapshots a verdict can consult (provenance excluded), so
+      swapping a pinned contract that changes a verdict changes the identity, while re-pinning an
+      unchanged one does not. The returned algorithm is marked (sha256+doctrine+inputs) so a
+      content-only StateId, or a gate StateId taken before inputs were covered, never compares
+      equal.
+    signature: 'hashGateState(doctrine: LoadedExtensions, inputs: string[]): StateId'
     returns: StateId
     params:
       - name: doctrine
         type: LoadedExtensions
         description: The governing extension packs, already loaded and merged by the caller.
+      - name: inputs
+        type: string[]
+        description: >-
+          The consumed contract inputs: one provenance-free content key per stored surface snapshot
+          a verdict can consult (this root's and each chained mount's), in any order — the
+          specialist orders them.
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:48:43.305Z'
-updatedAt: '2026-07-29T14:54:11.964Z'
+updatedAt: '2026-09-12T17:43:43.423Z'

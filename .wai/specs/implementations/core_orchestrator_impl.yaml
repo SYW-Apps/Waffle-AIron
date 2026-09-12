@@ -277,7 +277,9 @@ methods:
       - stepNumber: 8
         description: >-
           Rewrite cross-subsystem references across the remaining parent specs (dependsOn, narrative
-          call targets, type refs) from bare ids to the subsystem-namespaced ids
+          call targets, type refs) from bare ids to the subsystem-namespaced ids, and the moved
+          subtree's own outgoing references (to the parent's other subsystems and to other chained
+          projects) into super:: form
         type: local
       - stepNumber: 9
         description: Invalidate the spec cache
@@ -330,7 +332,9 @@ methods:
         description: Delete the child .wai project (project.yaml + specs)
         type: local
       - stepNumber: 10
-        description: Rewrite references across the parent specs from the namespaced ids back to bare ids
+        description: >-
+          Rewrite references across the parent specs from the namespaced ids back to bare ids, and
+          the moved subtree's super:: references back to their parent-local form
         type: local
       - stepNumber: 11
         description: Invalidate the spec cache
@@ -399,12 +403,26 @@ methods:
         targetMethod: loadProjectExtensions
       - stepNumber: 2
         description: >-
-          Hand that doctrine to the state hash specialist, which digests it together with the spec
-          tree.
+          List every chained mount root beneath this project — each holds stored surface snapshots a
+          verdict can consult alongside this root's own.
+        type: call
+        targetComponent: spec_loader
+        targetMethod: listChainedRoots
+      - stepNumber: 3
+        description: >-
+          Read the consumed contract inputs: every stored surface snapshot under .wai/surfaces of
+          this root and of each chained root, reduced to its content key — provenance (stateId,
+          generatedAt, origin) stripped, so re-pinning an unchanged contract never moves the
+          identity.
+        type: local
+      - stepNumber: 4
+        description: >-
+          Hand the doctrine and those inputs to the state hash specialist, which digests them
+          together with the spec tree.
         type: call
         targetComponent: state_hash_specialist
         targetMethod: hashGateState
-      - stepNumber: 3
+      - stepNumber: 5
         description: Return the gate StateId.
         type: return
         outcome: gate StateId
@@ -426,7 +444,9 @@ methods:
         type: return
         outcome: unlocked
       - stepNumber: 4
-        description: Compute the GATE identity as it stands now — spec content plus governing doctrine.
+        description: >-
+          Compute the GATE identity as it stands now — spec content plus governing doctrine plus the
+          consumed contract inputs.
         type: call
         targetComponent: state_hash_specialist
         targetMethod: hashGateState
@@ -447,4 +467,4 @@ methods:
         targetMethod: resolveSubprojectForNamespace
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-12T13:06:46.983Z'
+updatedAt: '2026-09-12T17:43:44.724Z'

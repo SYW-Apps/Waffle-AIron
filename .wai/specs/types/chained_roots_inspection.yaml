@@ -1,0 +1,22 @@
+kind: value-object
+id: chained_roots_inspection
+name: ChainedRootsInspection
+description: >-
+  The result of walking a project's chained mounts: what can be followed and what cannot, so a
+  whole-tree operation can refuse a partial result instead of silently producing one.
+subsystem: sdd_core
+fields:
+  - name: roots
+    type: string[]
+    description: Project-relative chained subproject roots in walk order, parents before their own children.
+    optional: false
+  - name: skipped
+    type: object[]
+    description: >-
+      Mounts that cannot be followed, each { mount: the mount's qualified id, projectPath: as
+      declared, reason: escapes | missing | cyclic | too-deep } — 'escapes' meaning the path leaves
+      the project that declares it, absolute, ../-escaping, or through a link.
+    optional: false
+methods: []
+createdAt: '2026-09-12T17:38:03.363Z'
+updatedAt: '2026-09-12T17:38:03.374Z'

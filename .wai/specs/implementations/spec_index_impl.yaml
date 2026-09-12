@@ -176,8 +176,9 @@ methods:
         targetMethod: listTree
       - stepNumber: 2
         description: >-
-          Resolve each mount's projectPath against the project root, under the containment guard,
-          and skip a mount whose directory does not exist
+          Resolve each mount's projectPath against the project that declares it, under the
+          containment guard against THAT project's root (lexically and through links), and skip a
+          mount whose directory does not exist
         type: local
       - stepNumber: 3
         description: >-
@@ -193,8 +194,18 @@ methods:
     detail: intent
     intent: >-
       Walks the namespace segment by segment through the scanned index, resolving each mount's
-      projectPath against the previous mount's directory; an escaping hop raises PROJECTPATH_ESCAPE
-      and is skipped, and a namespace in which no segment is a mount yields null.
+      projectPath against the previous mount's directory; a hop whose path escapes the project
+      declaring it (lexically or through a link) raises PROJECTPATH_ESCAPE and is skipped, and a
+      namespace in which no segment is a mount yields null.
+  - name: inspectChainedRoots
+    narrative: []
+    detail: intent
+    intent: >-
+      Walks the chained mounts exactly as the loader recurses — each projectPath resolved against
+      its declaring project and contained by that project's root, lexically and through links —
+      collecting the followable roots in walk order and every refused mount (escapes, missing,
+      cyclic, too-deep) with its qualified id, declared path and reason; listChainedRoots returns
+      the roots half.
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-12T12:01:01.111Z'
+updatedAt: '2026-09-12T17:38:14.066Z'

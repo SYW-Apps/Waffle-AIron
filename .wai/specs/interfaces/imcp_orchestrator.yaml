@@ -30,7 +30,10 @@ methods:
     signature: 'validateTree(): ValidationResult'
     returns: ValidationResult
   - name: getStatus
-    description: Compose the spec-tree completeness dashboard
+    description: >-
+      Compose the spec-tree completeness dashboard, opened by the project's family context: the
+      mount this root is known by in its parent and the parent project's name (only within the
+      request's reach), and the chained subprojects this root mounts with their paths.
     signature: 'getStatus(): string'
     returns: string
   - name: moveSubsystemProject
@@ -85,4 +88,4 @@ methods:
         description: The resolved agent id to brief.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-08-08T11:12:49.479Z'
+updatedAt: '2026-09-12T17:38:31.123Z'

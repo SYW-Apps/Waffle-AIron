@@ -110,10 +110,12 @@ methods:
       project at projectPath, move the subsystem's spec subtree (L1-L4 + types) there, re-express
       each moved implementation's file paths (sourcePath, simPath) relative to the child root — the
       same files, so code left outside the child now reads as escaping it — reduce the parent entry
-      to a projectPath mount, and rewrite cross-subsystem references to the new namespaced ids.
-      Throws if the subsystem is missing or already external, or if projectPath does not resolve
-      strictly within the owning project root (absolute or ../-escaping paths are rejected). Source
-      code is not moved.
+      to a projectPath mount, rewrite cross-subsystem references in the parent's remaining specs to
+      the new namespaced ids, and rewrite the moved subtree's own OUTGOING references — to the
+      parent's other subsystems and to other chained projects — into super:: form, since the moved
+      specs now load from the child root. Throws if the subsystem is missing or already external, or
+      if projectPath does not resolve strictly within the owning project root (absolute,
+      ../-escaping and link-escaping paths are rejected). Source code is not moved.
     signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
     returns: void
   - name: internalizeSubsystem
@@ -121,7 +123,8 @@ methods:
       Internalize an external subsystem back into the parent tree: move the subproject's spec
       subtree back under the parent subsystem, re-express each moved implementation's file paths
       (sourcePath, simPath) relative to the parent root, drop projectPath, delete the child .wai
-      project, and rewrite references back to bare ids. Throws if the subsystem is not external or
+      project, rewrite the parent's references back to bare ids, and rewrite the moved subtree's
+      super:: references back to their parent-local form. Throws if the subsystem is not external or
       its subproject is not a single flat subsystem.
     signature: 'internalizeSubsystem(subsystemId: string): void'
     returns: void
@@ -165,12 +168,13 @@ methods:
         type: string
   - name: computeGateStateId
     description: >-
-      Compute the GATE state identity of the current project: load the governing extension packs,
-      then digest the spec tree together with that doctrine via the state hash specialist. This is
-      the identity a lock must be scoped to — a lock asserts "these specs pass this gate", and the
-      pack set IS part of the gate. Content-only consumers (surface snapshots, freshness
-      comparisons) keep using computeStateId, so a pack bump never marks a vendored contract
-      snapshot stale.
+      Compute the GATE state identity of the current project: load the governing extension packs and
+      read the consumed contract inputs — the content of every stored surface snapshot this root and
+      each of its chained mounts hold — then digest the spec tree together with that doctrine and
+      those inputs via the state hash specialist. This is the identity a lock must be scoped to — a
+      lock asserts "these specs pass this gate", and both the pack set and the contracts the verdict
+      was judged against ARE part of the gate. Content-only consumers keep using computeStateId, so
+      a pack bump never marks a vendored contract snapshot stale.
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
@@ -198,4 +202,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-12T15:16:07.070Z'
+updatedAt: '2026-09-12T17:36:38.465Z'
