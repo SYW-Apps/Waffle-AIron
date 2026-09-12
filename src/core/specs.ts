@@ -220,6 +220,49 @@ function relativizeId(id: string, prefix: string): string {
   return `${'super::'.repeat(prefixParts.length - common)}${idParts.slice(common).join('::')}`;
 }
 
+/**
+ * Re-express a reference stored by a spec that moves ONE mount hop — from a
+ * namespace N into the mount `mount` beneath it (`into`), or from `N::mount` back
+ * out to N (`outOf`) — so it names the same target from where the spec now
+ * loads. The target never changes, only the namespace the reference is written
+ * relative to. The primitive behind externalize/internalize.
+ *
+ * - A root-anchored `::x` names the same target at every depth: kept as written.
+ * - Every other form is resolved where it was written (qualifyId) and written
+ *   again relative to where it is now read (relativizeId). A target that travels
+ *   with the spec moves first: going `into` the mount, the ids `isMoved` accepts
+ *   (named relative to N); going `outOf` it, everything inside the mount, whose
+ *   namespace the move dissolves into N.
+ * - Only the hop between the two namespaces decides the result, never where N
+ *   sits — the property that makes relativizeId's super:: chains root-invariant.
+ *   So N is a stand-in: deep enough that the reference's own super:: hops stay
+ *   inside it, spelled with segments no spec id can contain so no common ancestor
+ *   is found by accident, and without the root-subsystem anchor, which belongs
+ *   to whichever root happens to be loading.
+ */
+export function rebaseReference(
+  ref: string,
+  mount: string,
+  direction: 'into' | 'outOf',
+  isMoved: (id: string) => boolean = () => false,
+): string {
+  if (!ref || ref.startsWith('::')) return ref;
+  const segments = ref.split('::');
+  let hops = 0;
+  while (segments[hops] === 'super') hops++;
+  if (hops === segments.length) return ref; // hops alone name nothing
+
+  const outer = Array.from({ length: hops + 1 }, (_, i) => `<n${i}>`).join('::');
+  const inner = `${outer}::${mount}`;
+  const [from, to] = direction === 'into' ? [outer, inner] : [inner, outer];
+  const target = qualifyId(ref, from, NO_ROOT_SUBSYSTEMS);
+  // The target as named from the namespace the spec leaves — a super:: form
+  // exactly when it lies outside that namespace, and then it stays put.
+  const left = relativizeId(target, from);
+  const travels = !left.startsWith('super::') && (direction === 'outOf' || isMoved(left));
+  return relativizeId(travels ? qualifyId(left, to, NO_ROOT_SUBSYSTEMS) : target, to);
+}
+
 /** True when `file` is the same as, or nested under, directory `dir`. */
 function isWithin(dir: string, file: string): boolean {
   const d = path.resolve(dir);
