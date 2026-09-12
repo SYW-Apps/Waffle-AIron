@@ -63,7 +63,11 @@ methods:
       - stepNumber: 1
         description: >-
           Qualify ids, relativize namespaces, stamp updatedAt (unless preserved for a mechanical
-          re-save), re-parse through the writer schema, and collect placement notices
+          re-save), re-parse through the writer schema, and collect placement notices. A chained
+          subproject's implementation keeps its file paths (sourcePath, simPath) relative to that
+          subproject's root: a path written relative to this root that lands inside the mounted
+          child is re-expressed against the child root, and any other path is taken as already
+          child-relative and kept verbatim, so load → save stays a fixpoint
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its implementation spec path through the file store
@@ -105,4 +109,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-08-12T20:05:24.999Z'
+updatedAt: '2026-09-12T13:06:38.297Z'

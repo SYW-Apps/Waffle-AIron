@@ -45,16 +45,18 @@ import { settledSpecPaths } from './approval.js';
 import type { SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec } from '../models/index.js';
 
 /**
- * Codes whose verdict is ROOT-DEPENDENT: they fail because a referenced spec, a
- * source file, or a dependency edge cannot be resolved in THIS tree, but may
- * resolve from the parent. Two families with DIFFERENT handling:
+ * Reference-resolution codes: their verdict is ROOT-DEPENDENT — they fire
+ * because a referenced spec or dependency edge cannot be resolved in THIS tree,
+ * but may resolve from the parent. A chained child whose parent is on disk is
+ * judged through it (resolveThroughParent), and these are the findings the
+ * parent's verdict replaces. With no usable parent they keep their raw verdict:
+ * a cross-tree form stays a CROSS_TREE_REF_UNRESOLVED warning and a typo stays
+ * an error — never softened. References that DID resolve against a vendored
+ * surface snapshot are verdicts in their own right (surfaceResolved).
  *
- * REFERENCE RESOLUTION — a chained child whose parent is on disk is judged
- * through it (resolveThroughParent), and these are the findings the parent's
- * verdict replaces. With no usable parent they keep their raw verdict: a
- * cross-tree form stays a CROSS_TREE_REF_UNRESOLVED warning and a typo stays an
- * error — never softened. References that DID resolve against a vendored surface
- * snapshot are verdicts in their own right (surfaceResolved).
+ * Code↔spec conformance is not root-dependent: a chained child's source paths
+ * are relative to its own root (the writer re-expresses a path authored through
+ * a parent), so its conformance findings are judged there like any project's.
  */
 const SUBPROJECT_REFERENCE_CODES = new Set([
   'UNDEFINED_TYPE_REFERENCE',
@@ -65,23 +67,6 @@ const SUBPROJECT_REFERENCE_CODES = new Set([
   'INVALID_TRUSTED_LINK',
   'CROSS_SUBSYSTEM_NON_ADAPTER',
   'CROSS_TREE_REF_UNRESOLVED',
-]);
-
-/**
- * CODE↔SPEC CONFORMANCE (sourcePaths + realization + dependency graph) — these
- * KEEP the error→warning downgrade with crossTreeContext: sourcePaths are
- * stored relative to the authoring (parent) root and genuinely cannot resolve
- * standalone. The parent root remains the authoritative gate.
- */
-const SUBPROJECT_CONFORMANCE_CODES = new Set([
-  'MISSING_SOURCE_FILE',
-  'SOURCE_PATH_ESCAPES_ROOT',
-  'MISSING_SOURCE_PATH',
-  'UNREALIZED_METHOD',
-  'CONFORMANCE_ANALYSIS_SKIPPED',
-  'CONFORMANCE_DEGRADED',
-  'UNDECLARED_DEPENDENCY',
-  'UNREALIZED_DEPENDENCY',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -109,14 +94,6 @@ export interface ValidationIssue {
    * that merely reflect declared, unfinished work without silencing the rule.
    */
   draftContext?: boolean;
-  /**
-   * True when a code↔spec conformance finding was downgraded to a warning
-   * because the tree is a chained subproject whose source paths may be authored
-   * relative to the parent root — marked so the --ci gate waives it. References
-   * are never marked: a chained child is judged through its parent, or keeps its
-   * raw verdict.
-   */
-  crossTreeContext?: boolean;
   /**
    * True when this finding was verified AGAINST a vendored surface snapshot —
    * the reference resolved to a declared cross-tree contract, so the finding is
@@ -466,31 +443,22 @@ export function validateSddTree(
     // (shared types, sibling subsystems, cross-tree components) point at specs
     // that physically live ABOVE this root.
     //
-    // Two families, two treatments:
-    //  - REFERENCE RESOLUTION: judged through the parent when it is usable;
-    //    otherwise every such finding keeps its raw verdict. References that DID
-    //    resolve against a snapshot are verdicts in their own right.
-    //  - CODE↔SPEC CONFORMANCE: downgraded error→warning + crossTreeContext —
-    //    source paths may be authored relative to the parent root.
-    //
-    // Gated on actually HAVING such issues, so a clean tree (or a hosted per-
-    // request validate) never pays the walk-up-the-filesystem cost.
-    const hasCrossTreeSuspects = issues.some(
-      i => SUBPROJECT_REFERENCE_CODES.has(i.code) || SUBPROJECT_CONFORMANCE_CODES.has(i.code),
-    );
-    const chainingParent = hasCrossTreeSuspects && crossTree !== 'off' ? findChainingParent(getProjectRoot()) : null;
-
     // RESOLVE THROUGH THE PARENT. When the parent is on disk, a reference this
     // root cannot resolve is not "unverifiable" — it is judged by validating the
     // parent scoped to this mount. The child keeps every finding of its own and
     // gains the parent's verdict for what it could not see: a union, with no
     // severity changed, so it is never judged more leniently than its parent.
-    // (It used to rewrite each such reference into a waived warning instead,
-    // including references the parent judged as hard boundary violations.)
+    // With no usable parent (its L0 missing, the mount unknown, or reach denied)
+    // every finding keeps its raw verdict: a chained child that cannot be judged
+    // through its parent pins its family surfaces or fails its gate. Nothing is
+    // softened on either path — code↔spec conformance included, because a
+    // chained child's source paths are relative to its own root.
+    //
+    // Gated on actually HAVING an uncovered reference, so a clean tree (or a
+    // hosted per-request validate) never pays the walk-up-the-filesystem cost.
     const uncovered = (i: ValidationIssue): boolean => SUBPROJECT_REFERENCE_CODES.has(i.code) && !i.surfaceResolved;
-    const resolution = chainingParent && issues.some(uncovered)
-      ? resolveThroughParent(getProjectRoot(), treatAllAsComplete)
-      : null;
+    const chainingParent = crossTree !== 'off' && issues.some(uncovered) ? findChainingParent(getProjectRoot()) : null;
+    const resolution = chainingParent ? resolveThroughParent(getProjectRoot(), treatAllAsComplete) : null;
     if (resolution) {
       // A child finding verified against a snapshot is a verdict on a cross-tree
       // edge the parent's run judges again, against the real component or the
@@ -508,32 +476,12 @@ export function validateSddTree(
         return judged === 'error' || (judged === 'warning' && i.severity === 'warning');
       };
       const kept = issues.filter((i) => !uncovered(i) && !(i.surfaceResolved && rejudged(i)));
-      for (const iss of kept) {
-        if (SUBPROJECT_CONFORMANCE_CODES.has(iss.code)) {
-          if (iss.severity === 'error') iss.severity = 'warning';
-          iss.crossTreeContext = true; // conformance findings keep their downgrade
-        }
-      }
       const merged = dedupeIssues([...kept, ...resolution.issues]);
       return {
         valid: merged.every((i) => i.severity !== 'error'),
         issues: merged,
         resolvedThrough: { root: resolution.root, scope: resolution.scope },
       };
-    }
-
-    // No usable parent (its L0 missing, the mount unknown, or reach denied):
-    // every reference keeps its raw verdict. A chained child that cannot be
-    // judged through its parent pins its family surfaces or fails its gate — it
-    // is never quietly passed. (It used to rewrite each such reference into a
-    // warning --ci waived, and prepend a notice explaining why.)
-    if (chainingParent) {
-      for (const iss of issues) {
-        if (SUBPROJECT_CONFORMANCE_CODES.has(iss.code)) {
-          if (iss.severity === 'error') iss.severity = 'warning';
-          iss.crossTreeContext = true; // conformance findings keep their downgrade
-        }
-      }
     }
 
     return {

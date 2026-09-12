@@ -22,7 +22,9 @@ fields:
     optional: false
   - name: sourcePath
     type: string
-    description: Concrete source file realizing it
+    description: >-
+      Concrete source file realizing it, relative to the root of the project that holds the spec —
+      for a chained subproject's implementation, that subproject's own root
     optional: true
   - name: detail
     type: string
@@ -56,4 +58,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-08-11T15:25:39.357Z'
+updatedAt: '2026-09-12T13:06:35.664Z'

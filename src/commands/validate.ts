@@ -42,11 +42,6 @@ export function isCiDraftWaivable(issue: ValidationIssue): boolean {
   if (issue.severity !== 'warning') return false;
   if (issue.code === 'DRAFT_COMPONENT_WARNING') return true;
   if (issue.code === 'UNUSED_COMPONENT') return issue.draftContext === true;
-  // Code↔spec conformance findings downgraded because this is a chained
-  // subproject whose source paths may be authored relative to the parent root.
-  // References are never waived: a chained child is judged through its parent,
-  // or keeps its raw verdict.
-  if (issue.crossTreeContext === true) return true;
   return false;
 }
 

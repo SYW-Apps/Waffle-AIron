@@ -436,6 +436,28 @@ function stripNamespaceFromImplementation(spec: ImplementationSpec, prefix: stri
   };
 }
 
+/**
+ * A chained subproject's implementation file paths are relative to ITS root:
+ * the loader reads them against it, and the child's own gate checks them there.
+ * A path authored through a parent — relative to the authoring root — that
+ * lands inside the mounted child is re-expressed against the child root. Any
+ * other path is taken as already child-relative (as every loaded one is) and
+ * kept verbatim, so load → save stays a fixpoint.
+ */
+function childRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string, childRoot: string): ImplementationSpec {
+  const reexpress = (p: string): string => {
+    if (path.isAbsolute(p)) return p;
+    const rel = path.relative(childRoot, path.resolve(authoringRoot, p));
+    const inside = rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+    return inside ? rel.replace(/\\/g, '/') : p;
+  };
+  return {
+    ...spec,
+    ...(spec.sourcePath ? { sourcePath: reexpress(spec.sourcePath) } : {}),
+    ...(spec.simPath ? { simPath: reexpress(spec.simPath) } : {}),
+  };
+}
+
 function stripNamespaceFromType(spec: TypeSpec, prefix: string): TypeSpec {
   return {
     ...spec,
@@ -1347,7 +1369,13 @@ export class SpecWorkspace {
 
   prepareImplementationForWrite(spec: ImplementationSpec): ImplementationSpec {
     const prefix = this.writePrefixFor(spec.id);
-    return prefix ? stripNamespaceFromImplementation(spec, prefix) : spec;
+    if (!prefix) return spec;
+    const stripped = stripNamespaceFromImplementation(spec, prefix);
+    // A chained subproject's implementation lives in the child's tree, where its
+    // file paths are read against the child root.
+    const mount = this.getSubprojectPrefix(spec.id);
+    const childRoot = mount ? this.resolveSubprojectForNamespace(mount) : null;
+    return childRoot ? childRelativeFilePaths(stripped, this.rootDir, childRoot) : stripped;
   }
 
   prepareTypeForWrite(spec: TypeSpec): TypeSpec {

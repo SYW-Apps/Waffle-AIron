@@ -379,6 +379,10 @@ export function externalizeSubsystem(subsystemId: string, projectPath: string): 
   });
   ensureDir(path.dirname(childFooDir));
   fs.renameSync(fooDir, childFooDir);
+  // The moved implementations' file paths were read against the parent root; a
+  // chained child's are read against its own. Re-express them — the same files,
+  // so code left outside the child now reads as escaping it.
+  rebaseImplementationPaths(childFooDir, parentRoot, childDir);
 
   // Re-home the moved subsystem under the child system; it must not carry projectPath.
   patchSubsystemIndex(path.join(childFooDir, '.index.yaml'), (s) => {
@@ -448,6 +452,8 @@ export function internalizeSubsystem(subsystemId: string): void {
   fs.rmSync(fooDir, { recursive: true, force: true });
   ensureDir(path.dirname(fooDir));
   fs.renameSync(childFooDir, fooDir);
+  // …and back: the child's paths were read against its own root.
+  rebaseImplementationPaths(fooDir, childDir, parentRoot);
 
   // Re-home the internalized subsystem under the parent system; drop projectPath.
   patchSubsystemIndex(path.join(fooDir, '.index.yaml'), (s) => {
@@ -569,6 +575,34 @@ function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excl
       }
     }
 
+    if (changed) writeYamlFile(file, raw);
+  }
+}
+
+/**
+ * Re-express every implementation file path (sourcePath, simPath) under
+ * `specsDir` so it is read against `toRoot` instead of `fromRoot`. The file a
+ * path names never changes — only the root it is relative to.
+ */
+function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: string): void {
+  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    if (!raw || typeof raw !== 'object' || !('contract' in raw)) continue;
+    let changed = false;
+    for (const key of ['sourcePath', 'simPath']) {
+      const p = raw[key];
+      if (typeof p !== 'string' || p === '' || path.isAbsolute(p)) continue;
+      const next = toPosixPath(path.relative(toRoot, path.resolve(fromRoot, p)));
+      if (next !== p) {
+        raw[key] = next;
+        changed = true;
+      }
+    }
     if (changed) writeYamlFile(file, raw);
   }
 }

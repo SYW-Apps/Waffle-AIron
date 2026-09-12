@@ -260,7 +260,9 @@ methods:
       - stepNumber: 5
         description: >-
           Move the subsystem's spec subtree (its .index.yaml, components, interfaces,
-          implementations, and types) from the parent specs dir into the child specs dir
+          implementations, and types) from the parent specs dir into the child specs dir,
+          re-expressing each moved implementation's sourcePath and simPath relative to the child
+          root (the same files; code is never moved)
         type: local
       - stepNumber: 6
         description: >-
@@ -313,7 +315,8 @@ methods:
       - stepNumber: 6
         description: >-
           Move the subproject's spec subtree back under the parent subsystem folder, stripping the
-          namespace
+          namespace and re-expressing each moved implementation's sourcePath and simPath relative to
+          the parent root
         type: local
       - stepNumber: 7
         description: Restore the parent subsystem spec from the child's realization, dropping projectPath
@@ -444,4 +447,4 @@ methods:
         targetMethod: resolveSubprojectForNamespace
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-12T12:01:08.550Z'
+updatedAt: '2026-09-12T13:06:46.983Z'

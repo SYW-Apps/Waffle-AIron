@@ -29,14 +29,6 @@ fields:
       True when the issue was raised on a draft/design spec (or an ancestor) — lets the --ci gate
       waive warnings that merely reflect declared, unfinished work.
     optional: true
-  - name: crossTreeContext
-    type: Boolean
-    description: >-
-      True when a code↔spec conformance finding was downgraded to a warning because the tree is a
-      chained subproject whose source paths may be authored relative to the parent root — waived by
-      --ci. References are never marked: a chained child is judged through its parent or keeps its
-      raw verdict.
-    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-12T12:47:51.952Z'
+updatedAt: '2026-09-12T13:08:51.001Z'

@@ -22,7 +22,11 @@ methods:
     signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
     returns: void
   - name: saveImplementationSpec
-    description: Validates and persists an implementation specification, returning placement notices.
+    description: >-
+      Validates and persists an implementation specification, returning placement notices. A
+      namespaced implementation that lives in a chained subproject is written with its file paths
+      (sourcePath, simPath) relative to that subproject's root — a path given relative to this root
+      that lands inside the child is re-expressed against it.
     signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
     returns: void
   - name: dryRunSerializeSpecs
@@ -48,4 +52,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-08-12T17:24:47.413Z'
+updatedAt: '2026-09-12T13:06:40.101Z'

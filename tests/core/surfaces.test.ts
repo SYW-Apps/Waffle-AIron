@@ -496,12 +496,12 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     expect(res.valid).toBe(false);
   });
 
-  it('code-conformance findings in a chained child keep their downgrade, in place and code preserved', () => {
+  it("a chained child's source paths are its own: a file missing from its root is an error, never downgraded", () => {
     const childDir = buildFamily();
     setProjectRoot(childDir);
     // A complete implementation whose sourcePath resolves nowhere in the child
-    // root — from the parent root it would resolve (parent-root-relative paths),
-    // so the finding is root-dependent and keeps the downgrade behavior.
+    // root. A chained child's source paths are relative to its own root, so this
+    // is simply code that does not exist — not a path only the parent can read.
     saveComponentSpec(component('trans-orch', 'transpiler'));
     saveInterfaceSpec(iface('itrans-orch', 'trans-orch', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -517,9 +517,9 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     const res = validateSddTree();
     const missing = res.issues.filter(i => i.code === 'MISSING_SOURCE_FILE');
     expect(missing).toHaveLength(1);
-    // Downgraded in place (code preserved), marked cross-tree — NOT replaced.
-    expect(missing[0].severity).toBe('warning');
-    expect(missing[0].crossTreeContext).toBe(true);
+    // It used to be downgraded to a warning --ci waived.
+    expect(missing[0].severity).toBe('error');
+    expect(res.valid).toBe(false);
   });
 
 });
