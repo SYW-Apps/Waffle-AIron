@@ -141,6 +141,20 @@ function qualifyDeclaredId(id: string, prefix: string, mountRealization = false)
   return `${prefix}::${id}`;
 }
 
+/**
+ * Qualification for a REFERENCE to a subsystem — a component's or a type's
+ * `subsystem` field. A bare reference to the mount's own local name is the mount
+ * itself at ANY depth, mirroring qualifyDeclaredId's mountRealization: a child's
+ * flat realization of its mount loads as the mount id, so its members must point
+ * there too. The root-subsystem anchor in qualifyId only ever covered the first
+ * level, which left a same-id grandchild's components pointing at a subsystem id
+ * nothing declares.
+ */
+function qualifySubsystemRef(id: string, prefix: string, rootSubsystems: ReadonlySet<string>): string {
+  if (prefix && !id.includes('::') && id === prefix.split('::').pop()) return prefix;
+  return qualifyId(id, prefix, rootSubsystems);
+}
+
 export function splitNamespace(qualifiedId: string): { prefix: string; localId: string } {
   if (!qualifiedId.includes('::')) {
     return { prefix: '', localId: qualifiedId };
@@ -866,7 +880,7 @@ export class SpecWorkspace {
       index.components = index.components.map(comp => ({
         ...comp,
         id: qualifyDeclaredId(comp.id, namespacePrefix),
-        subsystem: qualifyId(comp.subsystem, namespacePrefix, this.rootSubsystems),
+        subsystem: qualifySubsystemRef(comp.subsystem, namespacePrefix, this.rootSubsystems),
         owns: comp.owns.map(o => qualifyId(o, namespacePrefix, this.rootSubsystems)),
         dependsOn: comp.dependsOn.map(d => qualifyId(d, namespacePrefix, this.rootSubsystems)),
         dispatch: comp.dispatch?.map(b => ({
@@ -897,7 +911,7 @@ export class SpecWorkspace {
       index.types = index.types.map(t => ({
         ...t,
         id: qualifyDeclaredId(t.id, namespacePrefix),
-        subsystem: t.subsystem ? qualifyId(t.subsystem, namespacePrefix, this.rootSubsystems) : undefined,
+        subsystem: t.subsystem ? qualifySubsystemRef(t.subsystem, namespacePrefix, this.rootSubsystems) : undefined,
         group: t.group ? qualifyId(t.group, namespacePrefix, this.rootSubsystems) : undefined,
       }));
 

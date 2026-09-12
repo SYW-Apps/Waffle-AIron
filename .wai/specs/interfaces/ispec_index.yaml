@@ -10,7 +10,11 @@ methods:
     signature: 'loadSystemSpec(): SystemSpec | null'
     returns: SystemSpec | null
   - name: loadSubsystemSpecs
-    description: Loads all L1 subsystem specifications.
+    description: >-
+      Loads all L1 subsystem specifications, including those of chained subprojects under their
+      mount's namespace. A subsystem a child declares under its mount's own local name is that mount
+      — merged with it at any nesting depth — and every reference to that name inside the child
+      resolves to the mount id.
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
     returns: SubsystemSpec[]
   - name: loadSubsystemSpec
@@ -69,4 +73,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-09-12T12:00:59.955Z'
+updatedAt: '2026-09-12T15:19:15.213Z'

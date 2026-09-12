@@ -708,3 +708,62 @@ describe("a chained child's implementation file paths are relative to its own ro
     expect(missingFromKid()).toEqual(['MISSING_SOURCE_FILE @kid-impl']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A flat chained child is its mount at every depth: a grandchild whose own
+// subsystem is named after its mount loads, validates and round-trips exactly
+// as a first-level flat child does.
+// ---------------------------------------------------------------------------
+
+describe('a flat chained child is its mount at every depth', () => {
+  let rootDir: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+    rootDir = undefined;
+  });
+
+  /** top → kid (flat) → extra (flat, mounted inside kid). */
+  function nestedFlatFamily(): { extraDir: string } {
+    rootDir = makeRoot();
+    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    const kidDir = path.join(rootDir, 'packages', 'kid');
+    const kid = workspaceFor(kidDir);
+    kid.saveSubsystemSpec(subsystem('kid', { parentSystem: 'kid' }));
+    kid.saveComponentSpec(component('kid-comp', 'kid'));
+    invalidateSpecCache();
+
+    setProjectRoot(kidDir);
+    createChainedSubsystem(subsystem('extra', { parentSystem: 'kid', projectPath: 'packages/extra' }), 'extra');
+    const extraDir = path.join(kidDir, 'packages', 'extra');
+    const extra = workspaceFor(extraDir);
+    extra.saveSubsystemSpec(subsystem('extra', { parentSystem: 'extra' }));
+    extra.saveComponentSpec(component('extra-comp', 'extra'));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    return { extraDir };
+  }
+
+  it('loads the grandchild as one subsystem, with its components pointing at it', () => {
+    nestedFlatFamily();
+
+    const index = workspaceFor(rootDir!).scanAll();
+    const extras = index.subsystems.filter((s) => s.id.startsWith('kid::extra'));
+    expect(extras.map((s) => [s.id, s.projectPath])).toEqual([['kid::extra', 'packages/extra']]);
+    expect(index.components.find((c) => c.id === 'kid::extra::extra-comp')?.subsystem).toBe('kid::extra');
+  });
+
+  it('validates with no dangling subsystem reference and round-trips the member through the top root', async () => {
+    const { extraDir } = nestedFlatFamily();
+    const { validateSddTree } = await import('../../src/core/validation.js');
+
+    const res = validateSddTree();
+    expect(res.issues.filter((i) => i.code === 'INVALID_SUBSYSTEM_REFERENCE').map((i) => i.specId)).toEqual([]);
+
+    saveComponentSpec(loadComponentSpec('kid::extra::extra-comp')!);
+    invalidateSpecCache();
+    expect(workspaceFor(extraDir).loadComponentSpec('extra-comp')?.subsystem).toBe('extra');
+  });
+});
