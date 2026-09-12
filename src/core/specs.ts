@@ -3,7 +3,7 @@ import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, loadProjectConfig, WaiPaths } from '../config/loader.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
-import { computeStateId, hashGateState, stateIdEquals, type StateId, type GateConfig } from './statehash.js';
+import { computeStateId, hashGateState, stateIdEquals, canonicalize, type StateId, type GateConfig } from './statehash.js';
 import { loadProjectExtensions } from './extensions.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
@@ -23,6 +23,8 @@ import {
   GroupSpec,
   GroupSpecSchema,
   SpecStatus,
+  SurfaceSnapshot,
+  SurfaceSnapshotSchema,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -3029,6 +3031,40 @@ export function resolveChainingParent(): ChainingParentRef | null {
 }
 
 /**
+ * Reduce a stored surface snapshot to its content key: provenance (stateId,
+ * generatedAt, origin) stripped, then canonicalized so YAML key order never
+ * moves the identity. Mirrors `surfaceContentKey` in src/core/surfaces.ts, but
+ * lives here rather than being imported from it — sdd_core must not depend on
+ * sdd_surfaces, and importing that module would cycle straight back through
+ * this one.
+ */
+function snapshotInputKey(snapshot: SurfaceSnapshot): string {
+  const { stateId, generatedAt, origin, ...content } = snapshot;
+  return canonicalize(content);
+}
+
+/**
+ * Every consumed contract input a project root holds: its stored surface
+ * snapshots under .wai/surfaces, reduced to content keys. A malformed file is
+ * skipped exactly as the surface repository's own listSnapshots skips one — a
+ * corrupt pin never blocks (or silently varies) the gate identity.
+ */
+function consumedSurfaceInputsAt(rootDir: string): string[] {
+  const dir = path.join(rootDir, '.wai', 'surfaces');
+  if (!pathExists(dir)) return [];
+  const keys: string[] = [];
+  for (const file of fs.readdirSync(dir)) {
+    if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
+    try {
+      keys.push(snapshotInputKey(SurfaceSnapshotSchema.parse(readYamlFile(path.join(dir, file)))));
+    } catch {
+      // A malformed snapshot never aborts the read — it simply is not a consumed input.
+    }
+  }
+  return keys;
+}
+
+/**
  * Compute the CURRENT spec-tree state hash of the project at the given root
  * (icore_orchestrator/icore_portal.computeStateIdAt). The root is bound
  * strictly READ-ONLY for the duration of the computation via the async-scoped
@@ -3040,14 +3076,15 @@ export function resolveChainingParent(): ChainingParentRef | null {
 /**
  * Compute the GATE state identity of the current project
  * (icore_orchestrator/icore_portal.computeGateStateId): load the governing
- * extension packs, then digest the spec tree together with that doctrine.
+ * extension packs and the consumed contract inputs, then digest the spec tree
+ * together with that doctrine and those inputs.
  *
  * This is the identity `wairon lock` records and every staleness check re-computes, so a
- * doctrine change invalidates a lock by state mismatch exactly as a spec edit
- * does — nobody has to remember to invalidate it. Loading the doctrine here (not
- * inside the hash specialist) keeps that specialist pure and makes every caller
- * use the same doctrine source, so a lock and the re-check that later judges it
- * stale can never disagree about which rule set applied.
+ * doctrine change, or swapping a pinned contract a verdict consulted, invalidates a lock by
+ * state mismatch exactly as a spec edit does — nobody has to remember to invalidate it. Loading
+ * the doctrine and inputs here (not inside the hash specialist) keeps that specialist pure and
+ * makes every caller use the same sources, so a lock and the re-check that later judges it stale
+ * can never disagree about which rule set or which contracts applied.
  */
 export function computeGateStateId(): StateId {
   // The gate is the packs AND the project's own governing configuration: which
@@ -3059,7 +3096,15 @@ export function computeGateStateId(): StateId {
     const config = loadProjectConfig();
     gate = { projectType: config.projectType, rules: config.rules };
   } catch { /* uninitialized project: the tree hash still stands on its own */ }
-  return hashGateState(loadProjectExtensions(), gate);
+
+  // The consumed contract inputs: this root's own stored snapshots, plus every
+  // chained mount's — a whole-tree validation can consult any of them when
+  // resolving a cross-tree reference, so the gate identity must too.
+  const root = getProjectRoot();
+  const roots = [root, ...listChainedRoots(root).map((rel) => path.join(root, rel))];
+  const inputs = roots.flatMap(consumedSurfaceInputsAt);
+
+  return hashGateState(loadProjectExtensions(), inputs, gate);
 }
 
 /** Whether a lock is in force, void, or absent. */

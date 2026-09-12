@@ -46,12 +46,15 @@ const CONTENT_ALGORITHM = 'sha256';
 
 /**
  * Algorithm marker for the GATE identity: the spec tree PLUS the doctrine that
- * validated it. Distinct on purpose — `stateIdEquals` compares the algorithm, so
- * a content-only StateId can never satisfy a gate comparison. That makes every
- * lock record written before doctrine was covered read as STALE (forcing a
- * re-lock) instead of silently passing the staleness re-check.
+ * validated it PLUS the consumed contract inputs a verdict can consult.
+ * Distinct on purpose — `stateIdEquals` compares the algorithm, so a
+ * content-only StateId can never satisfy a gate comparison, and neither can a
+ * gate StateId computed before inputs were covered. The earlier
+ * "sha256+doctrine" is no longer produced, so every lock record written under
+ * it reads as STALE (forcing a re-lock) instead of silently passing the
+ * staleness re-check.
  */
-const GATE_ALGORITHM = 'sha256+doctrine';
+const GATE_ALGORITHM = 'sha256+doctrine+inputs';
 
 /** The spec-tree content both identities digest — one loader path, so they can never disagree about the specs. */
 function loadTree(): Record<string, unknown> {
@@ -143,17 +146,28 @@ function doctrineIdentity(doctrine: LoadedExtensions, gate: GateConfig): Record<
 
 /**
  * Deterministic GATE StateId: the spec tree together with the doctrine that
- * governs it. Pure — the caller loads the doctrine and passes it in.
+ * governs it AND the consumed contract inputs a verdict can consult. Pure —
+ * the caller loads the doctrine, reads the inputs, and passes both in.
  *
  * This is what a lock must be scoped to. A lock asserts "these specs pass this
- * gate", and the pack set IS part of the gate: without doctrine coverage you
- * could lock a tree validated under one rule set, change the packs, and still
- * act on the strength of the earlier lock, because the spec digest never
- * moved. Content-only consumers (surface snapshot stamps, freshness checks) stay
- * on computeStateId, so a pack bump never marks a vendored contract stale.
+ * gate", and both the pack set and the contracts the verdict was judged
+ * against ARE part of the gate: without doctrine coverage you could lock a
+ * tree validated under one rule set, change the packs, and still act on the
+ * strength of the earlier lock, because the spec digest never moved — and
+ * without input coverage the same holds for swapping a pinned contract a
+ * cross-tree reference resolved against. Content-only consumers (surface
+ * snapshot stamps, freshness checks) stay on computeStateId, so a pack bump or
+ * an unchanged re-pin never marks a vendored contract stale.
+ *
+ * `inputs` takes no default: every producer of a gate StateId must decide what
+ * it consumed and say so explicitly — there is no silent "hash without inputs"
+ * fallback to drift out of sync with what validation actually consulted.
  */
-export function hashGateState(doctrine: LoadedExtensions, gate: GateConfig = {}): StateId {
-  const payload = { tree: loadTree(), doctrine: doctrineIdentity(doctrine, gate) };
+export function hashGateState(doctrine: LoadedExtensions, inputs: string[], gate: GateConfig = {}): StateId {
+  // Order-independent: callers gather inputs from the bound root and every
+  // chained mount in no particular order, so the specialist is the one place
+  // that fixes an order — sorting the (already canonical) content keys.
+  const payload = { tree: loadTree(), doctrine: doctrineIdentity(doctrine, gate), inputs: [...inputs].sort() };
   const digest = crypto.createHash('sha256').update(canonicalize(payload)).digest('hex');
   return { algorithm: GATE_ALGORITHM, digest };
 }
@@ -163,9 +177,16 @@ export function stateIdEquals(a: StateId | null | undefined, b: StateId | null |
   return !!a && !!b && a.algorithm === b.algorithm && a.digest === b.digest;
 }
 
-/** Stable serialization: object keys sorted recursively (so key/formatting
- *  order never changes the digest), with volatile timestamps stripped. */
-function canonicalize(value: unknown): string {
+/**
+ * Stable serialization: object keys sorted recursively (so key/formatting
+ * order never changes the digest), with volatile timestamps stripped.
+ *
+ * Exported so the core orchestrator can reduce a stored surface snapshot to
+ * the same kind of canonical content key before handing it to `hashGateState`
+ * as one of `inputs` — without importing the surfaces subsystem, which would
+ * cycle back through this file (sdd_core must not depend on sdd_surfaces).
+ */
+export function canonicalize(value: unknown): string {
   return JSON.stringify(sortKeys(value));
 }
 
