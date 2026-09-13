@@ -8,7 +8,7 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import { expandSource } from '../../src/commands/packs.js';
 import { defaultPackSelections } from '../../src/core/extensions.js';
 import { validateSddTree, loadProjectConfig as validatorLoadProjectConfig } from '../../src/core/validation.js';
-import { loadProjectConfig } from '../../src/config/loader.js';
+import { loadProjectConfig } from '../../src/core/index.js';
 
 // ---------------------------------------------------------------------------
 // Pack SELECTION (A2) — the project declares which packs apply, by name.
@@ -396,7 +396,7 @@ describe('enforceReproducibility finally enforces something (A6)', () => {
     invalidateSpecCache();
     // Pass rules exactly as the validate command and the MCP tool do — otherwise
     // the project's opt-out never reaches the rule.
-    return validateSddTree({ rules: loadProjectConfig().rules }).issues.map((i) => i.code);
+    return validateSddTree({ rules: loadProjectConfig()?.rules }).issues.map((i) => i.code);
   }
 
   it('warns on a floating selection — it resolves off whatever this machine has', () => {

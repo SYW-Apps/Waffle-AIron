@@ -4,18 +4,13 @@ import { pathExists, getProjectRoot } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import {
-  ProjectConfig,
   Registry,
   createEmptyRegistry,
   TopologyConfig,
   TopologyConfigSchema,
   createEmptyTopologyConfig,
 } from '../models/index.js';
-import {
-  projectConfigRepository,
-  projectConfigRepositoryAt,
-  replaceProjectConfigTransitional,
-} from './project-config.js';
+import { projectConfigRepository, projectConfigRepositoryAt } from './project-config.js';
 
 // ---------------------------------------------------------------------------
 // Paths within the .wai/ directory
@@ -126,33 +121,6 @@ export function assertProjectInitialized(): void {
   if (!isProjectInitialized()) {
     throw new ProjectNotInitializedError();
   }
-}
-
-/**
- * Load and validate the project config through the Repository, throwing
- * ProjectNotInitializedError when the project has none.
- *
- * @deprecated Stage 2a-0 keeps this only so unmigrated callers still compile; wave 3
- * deletes it. Read through the core portal's `loadProjectConfig` (null when absent).
- * Call-step conformance matches callees by name, so a call to this function also
- * satisfies a `core_portal.loadProjectConfig` step. Deleting it is what lets the
- * check see the migration finished.
- */
-export function loadProjectConfig(): ProjectConfig {
-  const config = projectConfigRepository.load();
-  if (!config) throw new ProjectNotInitializedError();
-  return config;
-}
-
-/**
- * Save the whole project config through the Repository's store, validated and with
- * unknown keys round-tripped.
- *
- * @deprecated Stage 2a-0 keeps this only so unmigrated callers still compile; wave 3
- * deletes it. Write through the core portal's intent-level configuration writes.
- */
-export function saveProjectConfig(config: ProjectConfig): void {
-  replaceProjectConfigTransitional(config);
 }
 
 // ---------------------------------------------------------------------------

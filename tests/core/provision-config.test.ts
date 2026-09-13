@@ -2,7 +2,6 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as yaml from 'js-yaml';
 import { setProjectRoot, runWithProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSubsystemSpec, loadSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import {
@@ -13,8 +12,7 @@ import {
   externalizeSubsystem,
 } from '../../src/core/provision.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { loadProjectConfig, saveProjectConfig, isProjectInitialized, aiPathsAt } from '../../src/config/loader.js';
-import { ProjectNotInitializedError } from '../../src/utils/errors.js';
+import { isProjectInitialized, aiPathsAt } from '../../src/config/loader.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -196,16 +194,14 @@ describe('provisioning through the project config Repository', () => {
 });
 
 describe('loader wrappers over the project config Repository', () => {
-  it('loader loadProjectConfig throws ProjectNotInitializedError without a configuration', () => {
+  it('loader isProjectInitialized reflects whether the project has a configuration', () => {
     const root = tempRoot();
     runWithProjectRoot(root, () => {
       expect(isProjectInitialized()).toBe(false);
-      expect(() => loadProjectConfig()).toThrow(ProjectNotInitializedError);
     });
     writeConfig(root, 'demo');
     runWithProjectRoot(root, () => {
       expect(isProjectInitialized()).toBe(true);
-      expect(loadProjectConfig().name).toBe('demo');
     });
   });
 
@@ -215,20 +211,5 @@ describe('loader wrappers over the project config Repository', () => {
 
     expect(aiPathsAt(root).specsDir()).toBe(path.resolve(root, 'design/specs'));
     expect(aiPathsAt(root).specsSystem()).toBe(path.join(path.resolve(root, 'design/specs'), '.index.yaml'));
-  });
-
-  it('loader saveProjectConfig keeps unknown keys', () => {
-    const root = tempRoot();
-    writeConfig(root, 'demo', 'futureTopLevel: keep');
-
-    runWithProjectRoot(root, () => {
-      const config = loadProjectConfig();
-      config.projectType = 'monorepo';
-      saveProjectConfig(config);
-    });
-
-    const doc = yaml.load(fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8')) as Record<string, unknown>;
-    expect(doc.futureTopLevel).toBe('keep');
-    expect(doc.projectType).toBe('monorepo');
   });
 });

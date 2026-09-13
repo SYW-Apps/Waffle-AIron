@@ -439,17 +439,6 @@ export const projectConfigRepository: ProjectConfigRepository = {
   pinGlobalPacksAsSelections(selections) { bound().pinGlobalPacksAsSelections(selections); },
 };
 
-/**
- * @deprecated Transitional seam for loader.ts's `saveProjectConfig` only; wave 3 of
- * stage 2a-0 deletes both. Saves the whole document at the ambient root through the
- * store: validated, with unknown keys round-tripped. It bypasses the registry's intent
- * methods, so it has no contract. Write through `projectConfigRepository` instead.
- */
-export function replaceProjectConfigTransitional(config: ProjectConfig): void {
-  const root = path.resolve(getProjectRoot());
-  storeOver(projectConfigFsAdapterAt(root), root).write(config);
-}
-
 // ── project_config type behaviour ───────────────────────────────────────────
 
 /** The extension a pack path reference carries — the pattern server/packs.ts's stem() strips. */
