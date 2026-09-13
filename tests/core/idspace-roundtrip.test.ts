@@ -685,6 +685,52 @@ describe("a chained child's implementation file paths are relative to its own ro
     expect(fromKid(kidDir)?.sourcePath).toBe('src/elsewhere.ts');
   });
 
+  // A method may name its own source file; that path follows exactly the rules
+  // of the implementation's own sourcePath.
+  const runStep = [{ stepNumber: 1, description: 'run it', type: 'local' as const }];
+
+  it("each method's own sourcePath is re-expressed against the child root exactly like the implementation's", () => {
+    const kidDir = mountKid();
+    saveImplementationSpec(kidImpl({
+      sourcePath: 'packages/kid/src/run.ts',
+      methods: [{ name: 'run', sourcePath: 'packages/kid/src/commands/run.ts', narrative: runStep }],
+    }));
+
+    const own = fromKid(kidDir);
+    expect(own?.sourcePath).toBe('src/run.ts');
+    expect(own?.methods[0].sourcePath).toBe('src/commands/run.ts');
+  });
+
+  it('a method sourcePath that does not land inside the child is kept verbatim', () => {
+    const kidDir = mountKid();
+    saveImplementationSpec(kidImpl({
+      methods: [{ name: 'run', sourcePath: 'src/commands/elsewhere.ts', narrative: runStep }],
+    }));
+    expect(fromKid(kidDir)?.methods[0].sourcePath).toBe('src/commands/elsewhere.ts');
+  });
+
+  it("load normalizes a method's sourcePath like the implementation's, and load → save through the parent is a fixpoint", () => {
+    const kidDir = mountKid();
+    workspaceFor(kidDir).saveImplementationSpec(kidImpl({
+      id: 'kid-impl', contract: 'ikid-orch', sourcePath: './src/run.ts',
+      methods: [{ name: 'run', sourcePath: './src/commands/run.ts', narrative: runStep }],
+    }));
+    invalidateSpecCache();
+    setProjectRoot(rootDir!);
+
+    const loaded = loadImplementationSpec('kid::kid-impl')!;
+    expect(loaded.sourcePath).toBe('src/run.ts');
+    expect(loaded.methods[0].sourcePath).toBe('src/commands/run.ts');
+
+    saveImplementationSpec(loaded);
+    invalidateSpecCache();
+    const again = loadImplementationSpec('kid::kid-impl')!;
+    expect(again.methods[0].sourcePath).toBe('src/commands/run.ts');
+    saveImplementationSpec(again);
+
+    expect(fromKid(kidDir)?.methods[0].sourcePath).toBe('src/commands/run.ts');
+  });
+
   it("the child's own gate checks the file the parent's author named", async () => {
     const { validateSddTree } = await import('../../src/core/validation.js');
     const kidDir = mountKid();
