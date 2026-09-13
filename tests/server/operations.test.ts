@@ -20,6 +20,7 @@ import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { mintUserToken, allow, seedUnit, createPlacedProject } from './helpers.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
+import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type {
   ApiKeyRecord,
   HostConfig,
@@ -412,6 +413,24 @@ describe('operations orchestrator (sdd_host)', () => {
     expect(report.checks.find((c) => c.id === 'pack-shadowing')!.status).toBe('pass');
     expect(report.checks.find((c) => c.id === 'missing-pack-references')!.status).toBe('pass');
     expect(report.status).toBe('ok');
+  });
+
+  it("getHealthReport: a by-name pack selection keeps the project's references, its profile selection included", () => {
+    // A selection is an object, not a path. Deriving a file stem from it threw, and
+    // the catch dropped every reference the project declares — its profile ids too.
+    const rec = createProject(cfg, MASTER, 'proj-sel', seedUnit(dataDir, 'unit-proj-sel').id);
+    const file = path.join(rec.rootPath, '.wai', 'project.yaml');
+    writeYamlFile(file, {
+      ...(readYamlFile(file) as Record<string, unknown>),
+      extensions: { packs: [{ name: 'ghost-selection' }], useGlobalPacks: false },
+      profileSelection: { profileIds: ['prof-sel'], requiredPackNames: [], selectedAt: '' },
+    });
+
+    const missing = getHealthReport(cfg, MASTER).checks.find((c) => c.id === 'missing-pack-references')!;
+    expect(missing.status).toBe('fail');
+    expect(missing.message).toMatch(/proj-sel/);
+    expect(missing.message).toMatch(/ghost-selection/);
+    expect(missing.message).toMatch(/prof-sel/);
   });
 
   it('getUsage: returns the instance snapshot with the active project count', () => {

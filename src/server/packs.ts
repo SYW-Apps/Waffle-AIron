@@ -518,12 +518,12 @@ function storeRemoveProjectPack(name: string): void {
 
 /**
  * Read the given project's declared pack/profile references as a
- * ProjectPackReference: the pack names registered under extensions.packs (by file
- * stem), unioned with the required/default pack names recorded in its
- * profileSelection, plus the selected profile ids. Returns empty reference lists
- * (never throws) when the project has no config or no extensions/profile
- * selection. Reads the raw project.yaml (policy.ts pattern) so the un-schema'd
- * profileSelection survives the read.
+ * ProjectPackReference: the pack names registered under extensions.packs (a path
+ * ref by its file stem, a by-name selection by its name), unioned with the
+ * required/default pack names recorded in its profileSelection, plus the selected
+ * profile ids. Returns empty reference lists (never throws) when the project has no
+ * config or no extensions/profile selection. Reads the raw project.yaml (policy.ts
+ * pattern) so the un-schema'd profileSelection survives the read.
  */
 export function readProjectReferences(rootPath: string): ProjectPackReference {
   const projectId = path.basename(rootPath);
@@ -531,13 +531,14 @@ export function readProjectReferences(rootPath: string): ProjectPackReference {
   try {
     return runWithProjectRoot(rootPath, () => {
       const raw = readYamlFile(AI_PATHS.projectConfig()) as
-        | { extensions?: { packs?: string[] }; profileSelection?: ProjectProfileSelection }
+        | { extensions?: { packs?: Array<string | { name: string }> }; profileSelection?: ProjectProfileSelection }
         | null;
       if (!raw) return empty;
       const sel = raw.profileSelection;
       const packNames = [
         ...new Set([
-          ...(raw.extensions?.packs ?? []).map((ref) => stem(ref)),
+          // A selection is an object: it contributes its name, never a file stem.
+          ...(raw.extensions?.packs ?? []).map((entry) => (typeof entry === 'string' ? stem(entry) : entry.name)),
           ...(sel?.requiredPackNames ?? []),
           ...(sel?.defaultPackNames ?? []),
         ]),
