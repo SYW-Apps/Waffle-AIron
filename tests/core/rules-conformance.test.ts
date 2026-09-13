@@ -315,6 +315,153 @@ describe('structural conformance — method realization (exact TS analysis)', ()
   });
 });
 
+// A method naming its own source file (extra lines ride under the same list item).
+const INTENT_AT = (m: string, file: string, extra = '') => `${INTENT(m)}\n    sourcePath: ${file}${extra}`;
+
+describe('structural conformance — each method against its own source file', () => {
+  it('checks a method against the file it names, not the implementation file, and names that file', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    // the implementation file still carries a stale lockSpecs; the file the method names does not
+    proj.source('src/cli.ts', 'export function listTargets(): void {}\nexport function lockSpecs(): void {}\n');
+    proj.source('src/commands/lock.ts', 'export function readLockFile(): void {}\n');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code)).toEqual(['UNREALIZED_METHOD']);
+      expect(found[0].message).toContain('"lockSpecs"');
+      expect(found[0].message).toContain('"src/commands/lock.ts"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a method realized in the file it names passes even when the implementation file lacks it', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
+    proj.source('src/commands/lock.ts', 'export function lockSpecs(): void {}\n');
+    proj.activate();
+    try {
+      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('reports a missing method file once, naming the file and every method using it', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs', 'unlockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}\n${INTENT_AT('unlockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      expect(found[0].severity).toBe('error');
+      expect(found[0].specId).toBe('impl-cli-orch');
+      expect(found[0].message).toContain('"src/commands/lock.ts"');
+      expect(found[0].message).toContain('methods "lockSpecs", "unlockSpecs"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a missing implementation file blocks only the methods realized in it', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/gone.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/commands/lock.ts', 'export function readLockFile(): void {}\n');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_FILE', 'UNREALIZED_METHOD']);
+      const unrealized = found.find(i => i.code === 'UNREALIZED_METHOD')!;
+      expect(unrealized.message).toContain('"lockSpecs"');
+      expect(found.some(i => i.message.includes('"listTargets"'))).toBe(false);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a missing method file blocks only that method — the implementation file is still checked', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/cli.ts', 'export function printBanner(): void {}\n');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_FILE', 'UNREALIZED_METHOD']);
+      const unrealized = found.find(i => i.code === 'UNREALIZED_METHOD')!;
+      expect(unrealized.message).toContain('"listTargets"');
+      expect(unrealized.message).toContain('"src/cli.ts"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('escaping and unreadable method files report once each, naming the method', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs', 'exportBundle']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', '../outside/lock.ts')}\n${INTENT_AT('exportBundle', 'native/bundle.node')}`);
+    proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
+    proj.source('native/bundle.node', 'MZ\u0000\u0003bundle\u0000');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code).sort()).toEqual(['CONFORMANCE_ANALYSIS_SKIPPED', 'SOURCE_PATH_ESCAPES_ROOT']);
+      const escaped = found.find(i => i.code === 'SOURCE_PATH_ESCAPES_ROOT')!;
+      expect(escaped.message).toContain('method "lockSpecs"');
+      expect(escaped.message).toContain('"../outside/lock.ts"');
+      const skipped = found.find(i => i.code === 'CONFORMANCE_ANALYSIS_SKIPPED')!;
+      expect(skipped.message).toContain('method "exportBundle"');
+      expect(skipped.message).toContain('"native/bundle.node"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('the existence check of a method file applies at the off tier', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts', '\n    conformance: off')}`);
+    proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
+    proj.activate();
+    try {
+      expect(conformanceIssues(validateSddTree()).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+    } finally { proj.cleanup(); }
+  });
+
+  it('no MISSING_SOURCE_PATH when the implementation has no path but every contract method names its own file', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `methods:\n${INTENT_AT('listTargets', 'src/commands/list.ts')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/commands/list.ts', 'export function listTargets(): void {}\n');
+    proj.source('src/commands/lock.ts', 'export function lockSpecs(): void {}\n');
+    proj.activate();
+    try {
+      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('MISSING_SOURCE_PATH names only the contract methods left without a file, and the rest are still checked', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs', 'unlockSpecs']);
+    // unlockSpecs has no L4 method entry at all, so it has no file either
+    proj.impl('cli-orch', `methods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/commands/lock.ts', 'export function readLockFile(): void {}\n');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_PATH', 'UNREALIZED_METHOD']);
+      const missingPath = found.find(i => i.code === 'MISSING_SOURCE_PATH')!;
+      expect(missingPath.message).toContain('"listTargets", "unlockSpecs"');
+      expect(missingPath.message).not.toContain('"lockSpecs"');
+      expect(found.find(i => i.code === 'UNREALIZED_METHOD')!.message).toContain('"src/commands/lock.ts"');
+    } finally { proj.cleanup(); }
+  });
+});
+
 describe('conformance degradation visibility', () => {
   it('fires CONFORMANCE_DEGRADED once when ts/js files were analyzed below exact grade', () => {
     // The dev environment always resolves the TypeScript compiler, so the

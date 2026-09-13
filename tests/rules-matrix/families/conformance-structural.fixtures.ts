@@ -3,22 +3,28 @@
  *
  * Documented intents pinned here (rule description + doc comments + the
  * ConformanceTierSchema doc in src/models/specs.ts):
- *  - MISSING_SOURCE_PATH (warning): an implementation declares no sourcePath,
- *    so its contract cannot be structurally linked to code. An
+ *  - MISSING_SOURCE_PATH (warning): a contract method has no source file —
+ *    its implementation declares no sourcePath and the method names none — so
+ *    it cannot be structurally linked to code. When every contract method
+ *    names its own file there is nothing to report. An
  *    `implementation`-type externalLink on the component is the external
  *    source-of-record and suppresses the finding.
- *  - MISSING_SOURCE_FILE (error): an L4 sourcePath does not resolve to a file
- *    on disk — the spec names code that does not exist.
- *  - SOURCE_PATH_ESCAPES_ROOT (error): an L4 sourcePath is absolute or
- *    escapes the project root (containment refusal).
- *  - UNREALIZED_METHOD (warning): an L3 contract method has no anchor in the
- *    implementation's source file at the required conformance tier.
- *    `declared` needs a declaration-tier anchor; `anchored` (the Portal
- *    stereotype default) also accepts exact string-literal occurrences;
- *    `off` skips method checks; a per-method `symbol` maps the intent-language
- *    contract name to the code-level name and is authoritative when given.
- *  - CONFORMANCE_ANALYSIS_SKIPPED (warning): a sourcePath file is binary or
- *    unreadable — method realization was not checked.
+ *  - MISSING_SOURCE_FILE (error): a source file an implementation or one of
+ *    its methods names does not resolve to a file on disk — the spec names
+ *    code that does not exist.
+ *  - SOURCE_PATH_ESCAPES_ROOT (error): a source file an implementation or one
+ *    of its methods names is absolute or escapes the project root
+ *    (containment refusal).
+ *  - UNREALIZED_METHOD (warning): an L3 contract method has no anchor in its
+ *    own source file (the method's sourcePath, else the implementation's) at
+ *    the required conformance tier. `declared` needs a declaration-tier
+ *    anchor; `anchored` (the Portal stereotype default) also accepts exact
+ *    string-literal occurrences; `off` skips method checks; a per-method
+ *    `symbol` maps the intent-language contract name to the code-level name
+ *    and is authoritative when given.
+ *  - CONFORMANCE_ANALYSIS_SKIPPED (warning): a source file an implementation
+ *    or one of its methods names is binary or unreadable — realization of the
+ *    methods in it was not checked.
  *  - CONFORMANCE_DEGRADED (warning): TypeScript/JavaScript files were
  *    analyzed below exact grade — structural findings stay honest via their
  *    grade, but dependency conformance skips those files. (In this test
@@ -956,4 +962,197 @@ export default [
       },
     },
   }),
+
+  // -------------------------------------------------------------------------
+  // Method source files: a method may name its own source file, and is then
+  // checked against that file rather than the implementation's
+  // -------------------------------------------------------------------------
+
+  // MISSING_SOURCE_PATH — control: every contract method names its own file
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_PATH',
+    expectFire: false,
+    reason:
+      'Every contract method names its own source file, so each one links to code even though the implementation declares no sourcePath of its own.',
+    scenario:
+      'Each refund command body lives in its own module and every method names that module, so the refund orchestrator implementation needs no sourcePath of its own.',
+    tree: refundOrchestratorTree({
+      approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',
+      issueRefundSourcePath: 'src/payments/refunds/issue-refund.ts',
+      files: {
+        'src/payments/refunds/approve-refund.ts': [
+          'export function approveRefund(refundId: string): boolean {',
+          '  return refundId.length > 0;',
+          '}',
+          '',
+        ].join('\n'),
+        'src/payments/refunds/issue-refund.ts': [
+          'export function issueRefund(refundId: string): void {',
+          '  // hand the payout to the PSP',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    }),
+  }),
+
+  // MISSING_SOURCE_FILE — a method's own file does not exist
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_FILE',
+    severity: 'error',
+    anchoredTo: 'refund_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The refund orchestrator\'s approveRefund names its own module src/payments/refunds/approve-refund.ts, but that module was never committed, so the method points at code that does not exist.',
+    tree: refundOrchestratorTree({
+      sourcePath: 'src/payments/refund-orchestrator.ts',
+      approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',
+      files: {
+        // deliberately NO src/payments/refunds/approve-refund.ts on disk
+        'src/payments/refund-orchestrator.ts': [
+          'export function issueRefund(refundId: string): void {',
+          '  // hand the payout to the PSP',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    }),
+  }),
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_FILE',
+    expectFire: false,
+    reason: 'The module the method names exists inside the project root, next to the implementation\'s own module.',
+    scenario:
+      'The refund orchestrator\'s approveRefund names its own module src/payments/refunds/approve-refund.ts, which is committed and declares the method.',
+    tree: refundOrchestratorTree({
+      sourcePath: 'src/payments/refund-orchestrator.ts',
+      approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',
+      files: {
+        'src/payments/refund-orchestrator.ts': [
+          'export function issueRefund(refundId: string): void {',
+          '  // hand the payout to the PSP',
+          '}',
+          '',
+        ].join('\n'),
+        'src/payments/refunds/approve-refund.ts': [
+          'export function approveRefund(refundId: string): boolean {',
+          '  return refundId.length > 0;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    }),
+  }),
+
+  // UNREALIZED_METHOD — pair F: a method is judged against the file it names
+  defineRuleFixture({
+    code: 'UNREALIZED_METHOD',
+    severity: 'warning',
+    anchoredTo: 'refund_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The refund orchestrator\'s approveRefund names its own module, but the function still lives only in the orchestrator module — the module the method names never declares it.',
+    tree: refundOrchestratorTree({
+      sourcePath: 'src/payments/refund-orchestrator.ts',
+      approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',
+      files: {
+        'src/payments/refund-orchestrator.ts': [
+          'export function approveRefund(refundId: string): boolean {',
+          '  return refundId.length > 0;',
+          '}',
+          '',
+          'export function issueRefund(refundId: string): void {',
+          '  // hand the payout to the PSP',
+          '}',
+          '',
+        ].join('\n'),
+        'src/payments/refunds/approve-refund.ts': [
+          'export function loadRefundPolicy(merchantId: string): number {',
+          '  return 30;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    }),
+  }),
+  defineRuleFixture({
+    code: 'UNREALIZED_METHOD',
+    expectFire: false,
+    reason:
+      'A method that names its own source file is realized there; the implementation\'s module is not where it lives, so its absence from that module is correct.',
+    scenario:
+      'The refund orchestrator\'s approveRefund is declared in the module it names, while the orchestrator module keeps only issueRefund.',
+    tree: refundOrchestratorTree({
+      sourcePath: 'src/payments/refund-orchestrator.ts',
+      approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',
+      files: {
+        'src/payments/refund-orchestrator.ts': [
+          'export function issueRefund(refundId: string): void {',
+          '  // hand the payout to the PSP',
+          '}',
+          '',
+        ].join('\n'),
+        'src/payments/refunds/approve-refund.ts': [
+          'export function approveRefund(refundId: string): boolean {',
+          '  return refundId.length > 0;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    }),
+  }),
 ];
+
+/**
+ * The refund orchestrator of a payments subsystem: approveRefund and
+ * issueRefund, each optionally naming its own source file. Only the paths and
+ * the files on disk vary between the method-source-file fixtures above.
+ */
+function refundOrchestratorTree(opts: {
+  sourcePath?: string;
+  approveRefundSourcePath?: string;
+  issueRefundSourcePath?: string;
+  files: Record<string, string>;
+}): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'payments', description: 'Payment capture, refunds and chargebacks for placed orders.' }],
+    components: [
+      {
+        id: 'refund-orchestrator',
+        componentType: 'Orchestrator',
+        subsystem: 'payments',
+        description: 'Drives refund approval and payout for returned orders.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'irefund_orchestrator',
+        component: 'refund-orchestrator',
+        methods: [
+          { name: 'approveRefund', description: 'Approve a refund request against the merchant refund policy.' },
+          { name: 'issueRefund', description: 'Pay out an approved refund to the original payment method.' },
+        ],
+      },
+    ],
+    implementations: [
+      {
+        id: 'refund_orchestrator_impl',
+        contract: 'irefund_orchestrator',
+        ...(opts.sourcePath ? { sourcePath: opts.sourcePath } : {}),
+        methods: [
+          {
+            name: 'approveRefund',
+            ...(opts.approveRefundSourcePath ? { sourcePath: opts.approveRefundSourcePath } : {}),
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Check the request against the merchant refund policy window.' }],
+          },
+          {
+            name: 'issueRefund',
+            ...(opts.issueRefundSourcePath ? { sourcePath: opts.issueRefundSourcePath } : {}),
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Send the payout for the approved refund to the PSP.' }],
+          },
+        ],
+      },
+    ],
+    files: opts.files,
+  };
+}
