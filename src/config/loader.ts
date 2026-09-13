@@ -2,16 +2,20 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { pathExists, getProjectRoot } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
-import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
+import { ProjectNotInitializedError } from '../utils/errors.js';
 import {
   ProjectConfig,
-  ProjectConfigSchema,
   Registry,
   createEmptyRegistry,
   TopologyConfig,
   TopologyConfigSchema,
   createEmptyTopologyConfig,
 } from '../models/index.js';
+import {
+  projectConfigRepository,
+  projectConfigRepositoryAt,
+  replaceProjectConfigTransitional,
+} from './project-config.js';
 
 // ---------------------------------------------------------------------------
 // Paths within the .wai/ directory
@@ -53,20 +57,10 @@ export function aiPathsAt(rootDir: string): WaiPaths {
     const base = !fs.existsSync(waiPath) && fs.existsSync(waironPath) ? waironPath : waiPath;
     return path.join(base, ...segments);
   };
-  const specsDir = (): string => {
-    try {
-      const projConfig = aiDirAt('project.yaml');
-      if (pathExists(projConfig)) {
-        const raw = readYamlFile(projConfig) as any;
-        if (raw && raw.paths && raw.paths.specsDir) {
-          return path.resolve(resolvedRoot, raw.paths.specsDir);
-        }
-      }
-    } catch {
-      // ignore and fallback
-    }
-    return aiDirAt('specs');
-  };
+  // Where the specs live is configuration (`paths.specsDir`, else .wai/specs), so it
+  // is resolved through the project config Repository bound to THIS root. Its index
+  // never throws, and still reads the folder from a configuration that fails the schema.
+  const specsDir = (): string => projectConfigRepositoryAt(resolvedRoot).specsDir();
   return {
     root: () => aiDirAt(),
     projectConfig: () => aiDirAt('project.yaml'),
@@ -114,14 +108,15 @@ export const AI_PATHS: WaiPaths = {
 };
 
 // ---------------------------------------------------------------------------
-// Project config
+// Project config — held by the project config Repository (config/project-config.ts)
 // ---------------------------------------------------------------------------
 
 /**
- * Check whether the current directory has been initialized as a wairon project.
+ * Whether the current project is an initialized wairon project, meaning it has a
+ * project configuration.
  */
 export function isProjectInitialized(): boolean {
-  return pathExists(AI_PATHS.root()) && pathExists(AI_PATHS.projectConfig());
+  return projectConfigRepository.exists();
 }
 
 /**
@@ -134,23 +129,30 @@ export function assertProjectInitialized(): void {
 }
 
 /**
- * Load and validate the project config from .wai/project.yaml.
+ * Load and validate the project config through the Repository, throwing
+ * ProjectNotInitializedError when the project has none.
+ *
+ * @deprecated Stage 2a-0 keeps this only so unmigrated callers still compile; wave 3
+ * deletes it. Read through the core portal's `loadProjectConfig` (null when absent).
+ * Call-step conformance matches callees by name, so a call to this function also
+ * satisfies a `core_portal.loadProjectConfig` step. Deleting it is what lets the
+ * check see the migration finished.
  */
 export function loadProjectConfig(): ProjectConfig {
-  assertProjectInitialized();
-  const raw = readYamlFile(AI_PATHS.projectConfig());
-  try {
-    return ProjectConfigSchema.parse(raw);
-  } catch (e: unknown) {
-    throw new WaironError(`Invalid .wai/project.yaml: ${e instanceof Error ? e.message : String(e)}`);
-  }
+  const config = projectConfigRepository.load();
+  if (!config) throw new ProjectNotInitializedError();
+  return config;
 }
 
 /**
- * Write the project config to .wai/project.yaml.
+ * Save the whole project config through the Repository's store, validated and with
+ * unknown keys round-tripped.
+ *
+ * @deprecated Stage 2a-0 keeps this only so unmigrated callers still compile; wave 3
+ * deletes it. Write through the core portal's intent-level configuration writes.
  */
 export function saveProjectConfig(config: ProjectConfig): void {
-  writeYamlFile(AI_PATHS.projectConfig(), config);
+  replaceProjectConfigTransitional(config);
 }
 
 // ---------------------------------------------------------------------------

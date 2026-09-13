@@ -5,7 +5,7 @@ import { createRequire } from 'module';
 import { z } from 'zod';
 import { readYamlFile } from '../utils/yaml.js';
 import { getProjectRoot } from '../utils/fs.js';
-import { loadProjectConfig, saveProjectConfig, AI_PATHS } from '../config/loader.js';
+import { projectConfigRepository } from '../config/project-config.js';
 import { isNewerVersion } from '../utils/version.js';
 import type { SddRule } from './rules/types.js';
 import { RulesConfigSchema, type PackSelection } from '../models/project.js';
@@ -576,7 +576,9 @@ export function loadExtensions(packRefs: string[], projectRoot: string): LoadedE
  */
 export function loadProjectExtensions(): LoadedExtensions {
   try {
-    const config = loadProjectConfig();
+    const config = projectConfigRepository.load();
+    // An uninitialized project simply has no packs.
+    if (!config) return emptyExtensions();
     const projectRoot = getProjectRoot();
     const refs: PackRef[] = [];
     const unresolved: PackSelectionFailure[] = [];
@@ -645,21 +647,6 @@ export interface PackDiagnosis {
 }
 
 /**
- * Whether `extensions.useGlobalPacks` is absent from the project file. The parsed
- * config defaults it to true, so the raw file is the only place that distinguishes
- * "never decided" (will change under a new default) from "explicitly true" (will
- * not) — and only the former needs migrating.
- */
-function globalPacksLeftUnset(): boolean {
-  try {
-    const raw = readYamlFile(AI_PATHS.projectConfig()) as { extensions?: Record<string, unknown> } | null;
-    return raw?.extensions?.useGlobalPacks === undefined;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * The store packs whose manifests declare `applyByDefault: true`, as selections
  * ready to seed into a NEW project (`wairon init`).
  *
@@ -696,10 +683,15 @@ export function defaultPackSelections(): PackSelection[] {
 export function diagnoseProjectPacks(): PackDiagnosis {
   const empty: PackDiagnosis = { globalsUndeclared: false, notApplied: [], unresolved: [], globalsApplied: [] };
   try {
-    const config = loadProjectConfig();
+    const config = projectConfigRepository.load();
+    if (!config) return empty;
+    // Whether `extensions.useGlobalPacks` is set in the document itself. The schema
+    // defaults it to false, so the parsed configuration cannot tell "never decided"
+    // from "explicitly false". Only a project that never decided may have relied on
+    // machine-wide packs applying by default, so only that project needs migrating.
+    const globalsUndeclared = !projectConfigRepository.declaresGlobalPacks();
     const projectRoot = getProjectRoot();
     const entries = config.extensions?.packs ?? [];
-    const globalsUndeclared = globalPacksLeftUnset();
 
     // Selections that do not resolve — reported with the same message the gate uses.
     const unresolved: PackDiagnosis['unresolved'] = [];
@@ -749,9 +741,6 @@ export function pinInstalledPacksAsSelections(): string[] {
   // apply, must not have selections invented for it.
   if (!diagnosis.globalsUndeclared || diagnosis.notApplied.length === 0) return [];
 
-  const config = loadProjectConfig();
-  const existing = config.extensions?.packs ?? [];
-
   const added: string[] = [];
   const selections: PackSelection[] = [];
   for (const pack of diagnosis.notApplied) {
@@ -765,8 +754,10 @@ export function pinInstalledPacksAsSelections(): string[] {
     added.push(`${pack.name}@${pack.version}`);
   }
 
-  config.extensions = { packs: [...existing, ...selections], useGlobalPacks: false };
-  saveProjectConfig(config);
+  // Append the selections and turn machine-wide loading off in ONE write through the
+  // repository. The doctrine governing this project is then declared by the project
+  // itself: visible in a diff, and reproducible for a clone.
+  projectConfigRepository.pinGlobalPacksAsSelections(selections);
   return added;
 }
 

@@ -15,7 +15,7 @@ import {
 import { buildCanvasModel, renderCanvasHtml, type CanvasModel } from './canvas.js';
 import { generateDrawioXml, generateExcalidrawScene } from './diagram-export.js';
 import { validateSddTree, type ValidationIssue } from './validation.js';
-import { loadProjectConfig } from '../config/loader.js';
+import { projectConfigRepository } from '../config/project-config.js';
 // Pure interface types for the web UI graph payload. Type-only import: erased at
 // compile time, so this adds no runtime core→server coupling.
 import type { WebGraphModel, WebGraphNode, LandscapeEdge } from '../server/types.js';
@@ -52,7 +52,8 @@ export function buildCanvasDataModel(): CanvasModel {
 
 function diagramIssues(): ValidationIssue[] {
   try {
-    const config = loadProjectConfig();
+    const config = projectConfigRepository.load();
+    if (!config) return [];
     return validateSddTree({ rules: config.rules, projectType: config.projectType }).issues;
   } catch {
     return [];

@@ -5,6 +5,7 @@ import { versionStamp } from './stamp.js';
 // dependency, but domains.ts imports nothing from here — there is no cycle to
 // break, and the lazy form does not resolve once the module is bundled.
 import { resolveDomains } from './domains.js';
+import { projectConfigRepository } from '../config/project-config.js';
 
 // ---------------------------------------------------------------------------
 // Context — shared project context under .wai/context/
@@ -109,16 +110,14 @@ export function renderDomainsDoc(): string {
  */
 export function renderWaironGuide(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { loadProjectConfig } = require('../config/loader.js') as typeof import('../config/loader.js');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { resolveDomains } = require('./domains.js') as typeof import('./domains.js');
 
   const domains = resolveDomains();
 
   let projectName = 'this project';
   try {
-    projectName = loadProjectConfig().name;
-  } catch { /* not initialized or broken — use fallback */ }
+    projectName = projectConfigRepository.load()?.name ?? projectName;
+  } catch { /* a configuration that fails the schema — use the fallback */ }
 
   const projectCtx = readProjectContext();
   const archCtx = readArchitectureContext();

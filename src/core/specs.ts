@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
-import { aiPathsAt, loadProjectConfig, WaiPaths } from '../config/loader.js';
+import { aiPathsAt, WaiPaths } from '../config/loader.js';
 import { projectConfigRepository } from '../config/project-config.js';
 import type { ProjectConfig, PackSelection, ProjectProfileSelection } from '../models/project.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
@@ -3137,9 +3137,9 @@ export function computeGateStateId(): StateId {
   // passed. Config is read here and passed in, so the hash itself stays pure.
   let gate: GateConfig = {};
   try {
-    const config = loadProjectConfig();
-    gate = { projectType: config.projectType, rules: config.rules };
-  } catch { /* uninitialized project: the tree hash still stands on its own */ }
+    const config = projectConfigRepository.load();
+    if (config) gate = { projectType: config.projectType, rules: config.rules };
+  } catch { /* a configuration that fails the schema: the tree hash still stands on its own */ }
 
   // The consumed contract inputs: this root's own stored snapshots, plus every
   // chained mount's — a whole-tree validation can consult any of them when
