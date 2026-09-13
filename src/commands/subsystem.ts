@@ -2,7 +2,6 @@ import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 import { getProjectRoot } from '../utils/fs.js';
-import { isProjectInitialized } from '../config/loader.js';
 import { loadSystemSpec } from '../core/specs.js';
 import { composeAgentBrief as coreComposeAgentBrief } from '../core/agent_resolver.js';
 import {
@@ -16,7 +15,13 @@ import {
   externalizeSubsystem,
   internalizeSubsystem,
 } from '../core/provision.js';
-import type { AgentBrief, SubsystemSpec } from '../models/index.js';
+import {
+  loadProjectConfig as coreLoadProjectConfig,
+  createProjectConfig as coreCreateProjectConfig,
+  setExecutionTier as coreSetExecutionTier,
+  projectConfigExists as coreProjectConfigExists,
+} from '../core/index.js';
+import type { AgentBrief, ProjectConfig, SubsystemSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // subsystem command — create/relocate external (chained) subprojects
@@ -53,6 +58,25 @@ export function importSpecTree(archive: Uint8Array, options: TreeImportOptions):
   return coreImportSpecTree(archive, options);
 }
 
+// cli_core_adapter's project configuration methods — 1:1 forwards to the core
+// portal, the only way sdd_cli reaches .wai/project.yaml. A read answers null for
+// a project without a configuration; every write is an intent the core names.
+export function loadProjectConfig(): ProjectConfig | null {
+  return coreLoadProjectConfig();
+}
+
+export function createProjectConfig(config: ProjectConfig): void {
+  coreCreateProjectConfig(config);
+}
+
+export function setExecutionTier(tier: string): void {
+  coreSetExecutionTier(tier);
+}
+
+export function projectConfigExists(): boolean {
+  return coreProjectConfigExists();
+}
+
 interface SubsystemAddOptions {
   projectPath?: string;
   name?: string;
@@ -65,7 +89,7 @@ interface SubsystemMoveOptions {
 export async function runSubsystemAdd(id: string, options: SubsystemAddOptions = {}): Promise<void> {
   logger.header('wairon subsystem add');
 
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     throw new WaironError('Not inside an initialized wairon project. Run `wairon init` first.');
   }
   if (!options.projectPath) {
@@ -105,7 +129,7 @@ export async function runSubsystemAdd(id: string, options: SubsystemAddOptions =
 export async function runSubsystemMove(id: string, options: SubsystemMoveOptions = {}): Promise<void> {
   logger.header('wairon subsystem move');
 
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     throw new WaironError('Not inside an initialized wairon project.');
   }
   if (!options.projectPath) {
@@ -119,7 +143,7 @@ export async function runSubsystemMove(id: string, options: SubsystemMoveOptions
 export async function runSubsystemExternalize(id: string, options: SubsystemAddOptions = {}): Promise<void> {
   logger.header('wairon subsystem externalize');
 
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     throw new WaironError('Not inside an initialized wairon project.');
   }
   if (!options.projectPath) {
@@ -137,7 +161,7 @@ export async function runSubsystemExternalize(id: string, options: SubsystemAddO
 export async function runSubsystemInternalize(id: string): Promise<void> {
   logger.header('wairon subsystem internalize');
 
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     throw new WaironError('Not inside an initialized wairon project.');
   }
 
