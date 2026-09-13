@@ -161,6 +161,46 @@ the chaining model itself, which is being redesigned separately.
   project record, and under a `proj::child` credential a tool that declares
   neither is refused, so a newly added tool fails closed.
 
+### Project configuration goes through one Repository
+
+`.wai/project.yaml` was read and written directly from about 35 files — the CLI,
+the core, the validator, the skills exporter, the MCP server and the hosted
+server — each with its own parse, merge or raw write. Wairon's own rule, that held
+state lives in a Store and never in the components using it, did not hold for
+wairon. Every reader and writer now goes through one `project_config_repository`
+in sdd_core (a Store, a Registry, an Index and a filesystem Adapter), reached
+through each subsystem's core adapter. Behaviour is kept, except as listed here.
+
+- **A key wairon does not know survives every write.** A typed save used to drop
+  any key the schema did not model, anywhere in the file, while the hosted raw
+  merges kept them. Every write now carries unknown keys over verbatim and keeps
+  the file's key order.
+- **Pack writes do what they did, in one place.** `pack add` registers a path once,
+  `pack use` moves a re-selected pack to the highest precedence, `pack unuse` and
+  `pack remove` each touch only their own kind of entry, `pack bundle` and
+  `doctor --fix` write once, and every pack write records `useGlobalPacks`. The
+  hosted pack registry now stores pack files only; the pack and policy workflows
+  register what it vendored.
+- **`wairon init` keeps an existing configuration.** A folder holding
+  `.wai/project.yaml` but no spec tree had its configuration overwritten with
+  defaults; init now keeps it and bootstraps only the missing tree.
+- **Creating a configuration never overwrites one.** Provisioning a root that
+  already has a `project.yaml` is refused before anything is written, and so is
+  externalizing a subsystem into a folder that already holds one — which used to
+  overwrite that configuration and its L0.
+- **Hosted policy reads and writes go through the schema.** `setProjectType`, the
+  recorded profile selection and policy evaluation read the configuration through
+  the Repository, so a `project.yaml` that fails the schema is reported instead of
+  read partially, and a write puts the schema's defaults in the file, as any CLI
+  save already does — one diff in a git-backed project, then stable.
+- **The specs folder is resolved once, when a project root is bound**, still from
+  `paths.specsDir`, and still found when the configuration fails the schema.
+- **Fixed: a project selecting a pack by name lost its health references.** The
+  hosted health report took each pack entry's file stem; a by-name selection threw
+  inside a swallowed error, so the project reported no pack or profile references
+  at all. It now reports the selection's name, and a `wairon dev` project's
+  references carry its project id instead of its folder name.
+
 ### Execution budgets: the topology gains a resource axis
 
 The derived topology said who owns what, and nothing about what their work costs
@@ -916,6 +956,15 @@ method's narrative. Two mechanisms close that honestly:
    (`ARCHITECTURE_VIOLATION_SPECIALIST_DEP`). Route storage through a Repository or
    a Store and runtime work through a Supervisor, or retune the code in
    `rules.sddRuleSeverity` while you migrate.
+7. **Embedding wairon as a library: `saveProjectConfig` is removed** from the
+   package's main entry. It replaced the whole `.wai/project.yaml` without
+   validation and dropped keys the schema does not know. Write through the
+   intent-level functions the core surface now exports instead:
+   `createProjectConfig`, `setProjectType`, `recordProfileSelection`,
+   `setExecutionTier`, `registerPackRef` / `deregisterPackRef`,
+   `upsertPackSelection` / `removePackSelection` and `markSelectionsBundled`.
+   `loadProjectConfig` from the main entry still throws when a project has no
+   configuration; `projectConfigExists()` answers that question directly.
 
 ## v5.1.0 (from v5.0.1)
 
