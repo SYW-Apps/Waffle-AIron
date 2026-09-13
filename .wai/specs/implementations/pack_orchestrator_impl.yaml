@@ -5,7 +5,10 @@ description: >-
   permission resolver (instance-level project:admin for server-global packs; project:admin over the
   project for per-project install/remove, project:read for the per-project listing), then delegate
   to the pack registry at global scope, or bind the project's isolated root first for project scope.
-  Installs are declarative-only; the registry enforces the schema and rejects code packs.
+  At project scope it also owns the pack registration: it loads the project configuration and
+  registers or deregisters each pack through the core adapter, because the pack registry only stores
+  pack files. Installs are declarative-only; the registry enforces the schema and rejects code
+  packs.
 contract: ipack_orchestrator
 sourcePath: src/server/packs.ts
 methods:
@@ -130,11 +133,18 @@ methods:
         description: Bind the project's isolated root
         type: local
       - stepNumber: 6
-        description: List the project's registered packs
+        description: >-
+          Load the bound project's configuration through the core adapter — the pack registrations
+          the listing probes
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: Probe each pack the loaded configuration registers
         type: call
         targetComponent: pack_registry
         targetMethod: listProjectPacks
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the project pack descriptors
         type: return
         outcome: project pack list
@@ -164,11 +174,20 @@ methods:
         description: Bind the project's isolated root
         type: local
       - stepNumber: 6
-        description: Install the declarative pack into the project (the registry rejects code packs)
+        description: >-
+          Install the declarative pack into the project's .wai/packs/ (the registry rejects code
+          packs), yielding its descriptor, whose ref is the path reference to register
         type: call
         targetComponent: pack_registry
         targetMethod: installProjectPack
       - stepNumber: 7
+        description: >-
+          Register that path reference in the project configuration through the core adapter
+          (appended only when absent, so a re-install leaves a single registration)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: registerPackRef
+      - stepNumber: 8
         description: Return the installed pack descriptor
         type: return
         outcome: installed pack descriptor
@@ -198,11 +217,61 @@ methods:
         description: Bind the project's isolated root
         type: local
       - stepNumber: 6
-        description: Remove one of the project's registered packs
+        description: >-
+          Load the bound project's configuration through the core adapter — the pack registrations
+          the removal is matched against
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: >-
+          Find the one registration naming the pack, as the store always matched it: a path
+          reference equal to .wai/packs/<name>.yaml or whose file stem or basename is the name, or a
+          by-name selection with that name
+        type: local
+      - stepNumber: 8
+        description: If the project registers no such pack, reject
+        type: branch
+        condition: no registration names the pack
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Reject the removal of an unregistered pack
+        type: throw
+        error: Project has no registered pack with that name
+      - stepNumber: 10
+        description: >-
+          Deregister according to the match's kind: a path reference by that exact reference, a
+          selection by its name
+        type: branch
+        condition: the matched registration is a path reference
+        onFalseStep: 13
+      - stepNumber: 11
+        description: >-
+          Deregister the matched path reference from the project configuration through the core
+          adapter
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: deregisterPackRef
+      - stepNumber: 12
+        description: Continue to the vendored-file removal
+        type: jump
+        toStep: 14
+      - stepNumber: 13
+        description: >-
+          Deregister the matched by-name selection from the project configuration through the core
+          adapter
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: removePackSelection
+      - stepNumber: 14
+        description: >-
+          Delete the matched registration's vendored files (at the path reference when the match is
+          one, otherwise the selection's bundle directory) — never a path outside .wai/packs
         type: call
         targetComponent: pack_registry
         targetMethod: removeProjectPack
-      - stepNumber: 7
+      - stepNumber: 15
         description: Return once removed
         type: return
         outcome: removed
@@ -266,12 +335,20 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
-          Install the declarative pack from the .wpack archive into the project (the registry
-          inspects + rejects code packs)
+          Install the declarative pack from the .wpack archive into the project's .wai/packs/ (the
+          registry inspects + rejects code packs), yielding its descriptor, whose ref is the
+          directory reference to register
         type: call
         targetComponent: pack_registry
         targetMethod: installProjectPackArchive
       - stepNumber: 7
+        description: >-
+          Register that directory reference in the project configuration through the core adapter
+          (appended only when absent, so a re-install leaves a single registration)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: registerPackRef
+      - stepNumber: 8
         description: Return the installed pack descriptor
         type: return
         outcome: installed pack descriptor
@@ -338,11 +415,20 @@ methods:
         type: throw
         error: no such server-global pack — cannot adopt a pack the instance does not carry
       - stepNumber: 9
-        description: Vendor and register the resolved pack into the project by its canonical name
+        description: >-
+          Vendor the resolved pack into the project by its canonical name, yielding its descriptor,
+          whose ref is the path reference to register
         type: call
         targetComponent: pack_registry
         targetMethod: executeApprovedInstallProjectPack
       - stepNumber: 10
+        description: >-
+          Register that path reference in the project configuration through the core adapter
+          (appended only when absent)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: registerPackRef
+      - stepNumber: 11
         description: Return the installed pack descriptor
         type: return
         outcome: the installed pack descriptor
@@ -400,14 +486,24 @@ methods:
         type: throw
         error: Forbidden — listing a project's selectable profiles requires project:read over the project
       - stepNumber: 5
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 6
         description: >-
-          List the profiles selectable for this project through the pre-authorized store read:
-          built-ins, the profiles contributed by the project's own registered packs (installed), and
-          those contributed by the server-global packs (adoptable on selection)
+          Load the project's configuration through the core adapter — the registrations whose packs
+          form the installed half of the catalog
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: >-
+          List the profiles selectable for this project through the pre-authorized store read, given
+          the loaded configuration: built-ins, the profiles contributed by the packs it registers
+          (installed), and those contributed by the server-global packs (adoptable on selection)
         type: call
         targetComponent: pack_registry
         targetMethod: executeApprovedListProjectProfiles
-      - stepNumber: 6
+      - stepNumber: 8
         description: Return the project-scoped profile catalog
         type: return
         outcome: project-scoped profile catalog
@@ -415,4 +511,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-07-24T23:39:17.658Z'
+updatedAt: '2026-09-13T11:51:35.898Z'

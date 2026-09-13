@@ -43,6 +43,16 @@ methods:
     signature: 'loadProjectExtensions(): LoadedExtensions'
     returns: LoadedExtensions
     params: []
+  - name: loadProjectConfig
+    description: >-
+      The bound project's configuration, or null when it has none. Forwarded to the core portal;
+      validation reads its rule severities, including a parent project's when resolving through the
+      parent.
+    signature: 'loadProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-14T19:21:19.038Z'
+updatedAt: '2026-09-13T11:17:29.406Z'

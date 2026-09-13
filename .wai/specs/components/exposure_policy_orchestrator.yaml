@@ -1,0 +1,18 @@
+id: exposure_policy_orchestrator
+name: Exposure Policy Orchestrator
+description: >-
+  Workflow owner for the instance EXPOSURE-policy administration: it authenticates each caller and
+  requires instance-level project:admin, then reads or replaces the webUiEnabled/requireTls posture
+  through the policy repository, auditing a replacement at security level. The exposure write is its
+  only mutation.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - authorization_specialist
+  - policy_repository
+  - audit_repository
+status: complete
+createdAt: '2026-09-13T12:07:48.838Z'
+updatedAt: '2026-09-13T12:08:31.920Z'

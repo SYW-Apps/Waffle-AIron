@@ -257,3 +257,46 @@ Robbe on the Arbiter/Projector proposal: not convinced for first-class ("Project
 - [x] docs/standards/architecture.md §8: "The four registered Specialist shapes (variants)" table + promotion criterion.
 - [x] sdd_validate_tree 0 errors / 0 warnings (UNKNOWN_VARIANT/VARIANT_BASE_MISMATCH clean).
 - NOTE: statehash re-dirtied by the 14 variant tags → wairon lock before/with the merge.
+
+## Chained subsystems — stage 2a-0: project configuration as held state (ACTIVE) — decisions from Robbe 2026-09-13, branch feat/stage2a0-config-repository
+Wairon's own tree read and wrote `.wai/project.yaml` directly from 10 components in 4 subsystems (76 code sites in 26 files) with no Store — its own "no persistence shortcuts" rule broken. It ships as its own behaviour-neutral PR before stage 2a; the parked 2a draft (6ad0f67 on feat/stage2a-identity-exports) builds on it. Design record: `docs/design/chained-subsystems/decisions.md` § Wairon modeling decisions.
+- [x] L2 (approved 2026-09-13): `project_config_repository` (Repository) owning `project_config_store` (Store, read-through), `project_config_registry` (Registry), `project_config_index` (Index) and `project_config_fs_adapter` (Adapter)
+- [x] L3 (approved 2026-09-13): store, registry, index and facade methods, sized to every current reader and writer (map in `docs/design/chained-subsystems/stage-2a0-config-map.md`); `core_portal` reads, `core_orchestrator` writes, plus the sdd_cli, sdd_host, sdd_skills and sdd_validator adapters. Decided 2026-09-13:
+  - the Store round-trips keys the schema does not know — no write erases data;
+  - the specs folder (`paths.specsDir`) is resolved once at binding through `project_config_index.specsDir()` and handed to the spec repository, which never reads configuration itself.
+- [x] L3 refinement (approved 2026-09-13):
+  - the registry's pack writes mirror today's code (config map § Registry write semantics): `registerPackRef`/`deregisterPackRef` for path strings; `upsertPackSelection`/`removePackSelection` for selections, returning booleans, with upsert moving a re-selected pack last; `markSelectionsBundled` and `pinGlobalPacksAsSelections` as single writes; every pack write records `useGlobalPacks`; `setGlobalPacksEnabled` dropped;
+  - `icli_core_adapter.projectConfigExists` for the "is this a project" guards;
+  - `icli_runner.runExecutionShow` / `runExecutionSetTier` — the execution-tier CLI had no spec.
+- [x] Spec text corrected: `tree_archive_manifest` (the project name comes from L0); `spec_file_store` (its specs folder is fixed at binding).
+- [x] Migrate every spec reader and writer:
+  - [x] `core_orchestrator` (provision, chained scaffold, externalize)
+  - [x] consumers agent: `extension_orchestrator`, `agent_resolver`, `cli_packs_adapter`, `cli_runner`, `cli_core_adapter`, `cli_validator_adapter`, `cli_mcp_adapter`, `skills_exporter`, `instructions_specialist`, `spec_validator` — on the refined registry; `pack use`/`unuse`/`bundle` given calls-only narratives so their writes are in the call graph; sdd_cli, sdd_core, sdd_skills, sdd_validator at 0 errors (remaining warnings name code not yet migrated)
+  - [x] sdd_host: `pack_registry` (reduced to pack storage), `pack_orchestrator`, `project_policy_orchestrator`, `operations_orchestrator` — the whole tree validates with 0 errors.
+    - [x] `ProfileApplication.adoptedPackRef`, so orchestrators never compose the storage path
+    - [x] exposure-policy administration split into `exposure_policy_orchestrator` (approved 2026-09-13 — `operations_orchestrator` had crossed GOD_COMPONENT with the config edge; now 9 dependencies)
+    - [x] `readProjectReferences` left `pack_registry`: `project_config` gains `declaredPackNames()` / `declaredProfileIds()`, and the health report builds the reference in a local step (decided 2026-09-13)
+  - stay as they are: `tree_archive_adapter.hasSpecTree` (checks archive roots, not the bound project) and internalize deleting a child's `.wai` (a project removal); `web_project_orchestrator` and `web_portal` only forward
+- [ ] Code: every direct site behind `src/config/project-config.ts`, behaviour-neutral; delete `loader.ts`'s `loadProjectConfig`/`saveProjectConfig` (no aliases, so name-matched call conformance cannot hide a leftover reader); correct the stale `useGlobalPacks` comment in `core/extensions.ts`; tests proven by revert; CHANGELOG; PR to dev
+
+## Wairon authoring fixes (after 2a-0 merges, before stage 2a) — decided by Robbe 2026-09-13
+Every agent authoring 2a-0 hit the same `sdd_update_spec` traps, and stage 2a leans on that tool. Record: `docs/design/chained-subsystems/decisions.md` § Stage 2a-0.
+- [ ] A write that changes nothing reports "no change" and names the ignored keys; nested `[]` and step-level `unset` work.
+- [ ] Changing a step's `type` replaces the step instead of merging the old type's fields into it.
+- [ ] A per-type narrative field check replaces `MALFORMED_FLOW_STEP`; fix the 7 stale steps it finds in wairon's tree (admin_orchestrator_impl ×2, cli_packs_adapter_impl.installPack, cli_runner_impl.runRemote ×2 and runLogin, surface_exchange_orchestrator_impl.exportProjectSurface).
+- [ ] Document in `sdd_update_spec` that `*Label` jump fields resolve in deltas.
+
+## Doctrine and authoring-UX track (NEXT, after chained-subsystems stage 2) — decisions from Robbe 2026-09-13
+- [ ] **Authoring friction left over from 2a-0:** call-step conformance by import origin rather than callee name; a per-method `sourcePath`; nullable parameter types; params upserted by name; a guard on deleting a step by number; structured calls on intent-only methods.
+- [ ] **Specialist is the last resort:**
+  - add a `rationale` field on component specs, and `SPECIALIST_WITHOUT_RATIONALE` (warning) with rules-matrix fixtures;
+  - state the rule in the architecture standard, the sdd-architect skill template and agent briefs, with the decomposition checklist;
+  - audit wairon's own 19 Specialists: decompose each into real blocks where one fits, or write its rationale.
+- [ ] **Repository-first held state:**
+  - adding a Repository scaffolds its Store (durability required), and the result names both;
+  - members are added with `ownedBy: <repository>`;
+  - a Store outside a Repository must declare `standalone: { reason }` when created, or the write is refused — this replaces `UNOWNED_STORE` + `lint.allow`;
+  - the sdd-architect recipe becomes Repository-first;
+  - migrate existing standalone Stores to the declaration.
+- [ ] **Index → Index:** a derived-Index edge carries a written rationale (to verify with this track).
+- [ ] **Later:** conformance for type methods (optional `sourcePath`/`symbol` on type specs).

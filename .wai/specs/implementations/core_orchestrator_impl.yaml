@@ -118,8 +118,10 @@ methods:
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
       - stepNumber: 3
-        description: Write the default project.yaml config at the bound project root
-        type: local
+        description: Write the default configuration through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
     conformance: 'off'
   - name: computeStateId
     narrative:
@@ -189,21 +191,43 @@ methods:
         error: projectPath must resolve within the project root
       - stepNumber: 7
         description: >-
-          Branch on whether the child is already fully initialized — both project.yaml and an L0
-          system spec present
-        type: branch
-        condition: the child directory already has both project.yaml and an L0 system spec
-        onTrueStep: 9
-        onFalseStep: 8
-      - stepNumber: 8
-        description: >-
-          Scope the project root to the child directory and NON-DESTRUCTIVELY complete its bootstrap
-          — create the specs dir, project.yaml, and L0 system spec only when each is absent
-          (preferring an existing system spec's name), so a fresh child becomes runnable standalone
-          and a partially-scaffolded child is completed without overwriting its existing spec tree —
-          then restore the parent root scope
+          Scope the project root to the child directory, so the next reads and writes address the
+          child project
         type: local
+      - stepNumber: 8
+        description: Check whether the child already has a configuration
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: exists
       - stepNumber: 9
+        description: 'Complete only what is missing: an existing configuration is never overwritten'
+        type: branch
+        condition: the child has no configuration
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Write the child's default configuration, named after the child, through the project config
+          Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+      - stepNumber: 11
+        label: bootstrap_l0
+        description: 'Keep an existing spec tree intact: bootstrap an L0 only for a child that has none'
+        type: branch
+        condition: the child has no L0 system spec
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Persist the child's bootstrap L0 system spec, creating its specs directory, so a fresh
+          child becomes runnable standalone
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 13
+        description: Restore the parent root scope
+        type: local
+      - stepNumber: 14
         description: Chained subsystem wired and child project ensured
         type: return
         outcome: chained subsystem created
@@ -254,37 +278,46 @@ methods:
         error: 'cannot externalize: subsystem is missing or already external'
       - stepNumber: 4
         description: >-
-          Provision an isolated child project at projectPath (project.yaml + L0), scoped to the
-          child root
-        type: local
+          With the project root scoped to the child directory at projectPath, write the child's
+          default configuration through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
       - stepNumber: 5
+        description: >-
+          Persist the child's bootstrap L0 system spec (still scoped to the child root), then return
+          to the parent scope for the move
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 6
         description: >-
           Move the subsystem's spec subtree (its .index.yaml, components, interfaces,
           implementations, and types) from the parent specs dir into the child specs dir,
           re-expressing each moved implementation's sourcePath and simPath relative to the child
           root (the same files; code is never moved)
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Compose a minimal parent mount for the subsystem: id + parentSystem + projectPath with an
           empty public surface
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Persist the parent mount
         type: call
         targetComponent: spec_loader
         targetMethod: saveSubsystemSpec
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Rewrite cross-subsystem references across the remaining parent specs (dependsOn, narrative
           call targets, type refs) from bare ids to the subsystem-namespaced ids, and the moved
           subtree's own outgoing references (to the parent's other subsystems and to other chained
           projects) into super:: form
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Invalidate the spec cache
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Subsystem externalized into a standalone subproject
         type: return
         outcome: externalized
@@ -465,6 +498,78 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: resolveSubprojectForNamespace
+  - name: createProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Write the fresh configuration through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+    conformance: 'off'
+  - name: upsertPackSelection
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: upsertPackSelection
+    conformance: 'off'
+  - name: removePackSelection
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: removePackSelection
+    conformance: 'off'
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setProjectType
+    conformance: 'off'
+  - name: recordProfileSelection
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: recordProfileSelection
+    conformance: 'off'
+  - name: setExecutionTier
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setExecutionTier
+    conformance: 'off'
+  - name: registerPackRef
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: registerPackRef
+    conformance: 'off'
+  - name: deregisterPackRef
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: deregisterPackRef
+    conformance: 'off'
+  - name: markSelectionsBundled
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: markSelectionsBundled
+    conformance: 'off'
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-12T17:43:44.724Z'
+updatedAt: '2026-09-13T11:42:39.586Z'

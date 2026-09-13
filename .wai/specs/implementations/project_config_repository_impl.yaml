@@ -1,0 +1,107 @@
+id: project_config_repository_impl
+name: Project Config Repository Implementation
+description: 'Pure facade: reads forward 1:1 to the index, writes forward 1:1 to the registry.'
+contract: iproject_config_repository
+sourcePath: src/config/project-config.ts
+methods:
+  - name: load
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index
+        type: call
+        targetComponent: project_config_index
+        targetMethod: load
+  - name: exists
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index
+        type: call
+        targetComponent: project_config_index
+        targetMethod: exists
+  - name: declaresGlobalPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index
+        type: call
+        targetComponent: project_config_index
+        targetMethod: declaresGlobalPacks
+  - name: specsDir
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index
+        type: call
+        targetComponent: project_config_index
+        targetMethod: specsDir
+  - name: create
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: create
+  - name: upsertPackSelection
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: upsertPackSelection
+  - name: removePackSelection
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: removePackSelection
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: setProjectType
+  - name: recordProfileSelection
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: recordProfileSelection
+  - name: setExecutionTier
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: setExecutionTier
+  - name: registerPackRef
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: registerPackRef
+  - name: deregisterPackRef
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: deregisterPackRef
+  - name: markSelectionsBundled
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: markSelectionsBundled
+  - name: pinGlobalPacksAsSelections
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: pinGlobalPacksAsSelections
+status: draft
+createdAt: '2026-09-13T11:19:36.287Z'
+updatedAt: '2026-09-13T11:41:27.400Z'

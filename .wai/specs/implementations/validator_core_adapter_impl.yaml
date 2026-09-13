@@ -63,6 +63,13 @@ methods:
         targetComponent: core_portal
         targetMethod: loadProjectExtensions
     detail: calls-only
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadProjectConfig
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-18T22:34:35.143Z'
+updatedAt: '2026-09-13T11:20:01.221Z'

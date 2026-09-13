@@ -9,7 +9,8 @@ dependsOn:
   - core_orchestrator
   - extension_orchestrator
   - tree_transfer_orchestrator
+  - project_config_repository
 portalType: Custom
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-12T17:26:14.313Z'
+updatedAt: '2026-09-13T11:19:09.972Z'

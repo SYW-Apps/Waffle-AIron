@@ -1,0 +1,31 @@
+id: project_config_index_impl
+name: Project Config Index Implementation
+description: Read path over `.wai/project.yaml`, projected from the store.
+contract: iproject_config_index
+sourcePath: src/config/project-config.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Reads the configuration through the store, or null when the project has none; a schema failure
+      surfaces as the store's validation error.
+  - name: exists
+    narrative: []
+    intent: Reports whether the project has a configuration file, through the store.
+  - name: declaresGlobalPacks
+    narrative: []
+    intent: >-
+      Asks the store whether `extensions.useGlobalPacks` is present in the document itself rather
+      than supplied by the schema default.
+  - name: specsDir
+    narrative: []
+    intent: >-
+      Resolves the specs folder once for a binding: reads `paths.specsDir` from the raw document
+      through the store and resolves it against the bound project root. It falls back to the specs
+      folder under the project's `.wai` directory (or legacy `.wairon`) when the project has no
+      configuration or declares no such path, so a configuration that fails the schema still locates
+      its specs.
+detail: intent
+status: draft
+createdAt: '2026-09-13T11:19:27.409Z'
+updatedAt: '2026-09-13T11:19:27.411Z'

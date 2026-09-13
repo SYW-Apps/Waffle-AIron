@@ -24,10 +24,17 @@ fields:
   - name: adoptedPackName
     type: string
     description: >-
-      Set only when the ensure step had to vendor a server-global pack into the project (registering
-      it in extensions.packs) to make the profile resolvable — the name of that adopted pack, so
-      callers can report the side effect instead of hiding it.
+      Set only when the ensure step had to vendor a server-global pack into the project to make the
+      profile resolvable — the name of that adopted pack, so callers can report the side effect
+      instead of hiding it.
+    optional: true
+  - name: adoptedPackRef
+    type: string
+    description: >-
+      Set together with adoptedPackName: the project-relative path reference of the adopted pack's
+      vendored copy, which the calling orchestrator registers in the project configuration. The pack
+      registry owns that layout, so callers never compose the path themselves.
     optional: true
 methods: []
 createdAt: '2026-07-24T23:29:57.106Z'
-updatedAt: '2026-07-24T23:29:57.123Z'
+updatedAt: '2026-09-13T11:58:40.646Z'

@@ -1,0 +1,47 @@
+id: iproject_config_store
+name: Project Config Store Interface
+description: >-
+  Read-through holding of one project's configuration. Every read is a read-back of the document
+  through the fs adapter, parsed against the ProjectConfig schema. Keys the schema does not know are
+  round-tripped: they are never dropped by a write, so no path through wairon erases what it cannot
+  express.
+component: project_config_store
+methods:
+  - name: read
+    description: >-
+      Read the configuration: the document parsed against the schema with its defaults applied, or
+      null when the project has no configuration file.
+    signature: 'read(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    effect: read
+  - name: write
+    description: >-
+      Write the configuration. Known fields come from the given value; every key of the current
+      document the schema does not know is carried over verbatim, so a hand-added or newer key
+      survives any write.
+    signature: 'write(config: ProjectConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+    effect: write
+  - name: exists
+    description: Whether the project has a configuration file.
+    signature: 'exists(): boolean'
+    returns: boolean
+    params: []
+    effect: read
+  - name: declares
+    description: >-
+      Whether the document sets a top-level or dotted field explicitly (for example
+      `extensions.useGlobalPacks`), as opposed to the schema supplying its default.
+    signature: 'declares(field: string): boolean'
+    returns: boolean
+    params:
+      - name: field
+        type: string
+    effect: read
+status: draft
+createdAt: '2026-09-13T10:50:08.266Z'
+updatedAt: '2026-09-13T10:50:08.268Z'

@@ -200,6 +200,97 @@ methods:
     params:
       - name: namespace
         type: string
+  - name: createProjectConfig
+    description: >-
+      Write a fresh configuration for a project that has none, through the project config
+      Repository. Refuses when one already exists.
+    signature: 'createProjectConfig(config: ProjectConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: upsertPackSelection
+    description: >-
+      Select a pack by name in the bound project's configuration, moving a re-selected pack last,
+      through the project config Repository. Returns whether an earlier selection was replaced.
+    signature: 'upsertPackSelection(selection: PackSelection): boolean'
+    returns: boolean
+    params:
+      - name: selection
+        type: PackSelection
+    guarantees:
+      - idempotent
+  - name: removePackSelection
+    description: >-
+      Deselect a pack by name, leaving path references alone, through the project config Repository.
+      Returns whether anything was dropped.
+    signature: 'removePackSelection(packName: string): boolean'
+    returns: boolean
+    params:
+      - name: packName
+        type: string
+    guarantees:
+      - idempotent
+  - name: setProjectType
+    description: Set the governing `projectType`, through the project config Repository.
+    signature: 'setProjectType(projectType: string): void'
+    returns: void
+    params:
+      - name: projectType
+        type: string
+    guarantees:
+      - idempotent
+  - name: recordProfileSelection
+    description: Record the applied profile selection, through the project config Repository.
+    signature: 'recordProfileSelection(selection: ProjectProfileSelection): void'
+    returns: void
+    params:
+      - name: selection
+        type: ProjectProfileSelection
+    guarantees:
+      - idempotent
+  - name: setExecutionTier
+    description: Set `execution.tier`, through the project config Repository.
+    signature: 'setExecutionTier(tier: string): void'
+    returns: void
+    params:
+      - name: tier
+        type: string
+    guarantees:
+      - idempotent
+  - name: registerPackRef
+    description: >-
+      Register a legacy pack path reference when it is absent, through the project config
+      Repository. Returns whether it was added.
+    signature: 'registerPackRef(ref: string): boolean'
+    returns: boolean
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: deregisterPackRef
+    description: >-
+      Drop a legacy pack path reference that matches exactly, through the project config Repository.
+      Returns whether anything was dropped.
+    signature: 'deregisterPackRef(ref: string): boolean'
+    returns: boolean
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: markSelectionsBundled
+    description: >-
+      Record bundled packs on their selections in place, in one write, through the project config
+      Repository.
+    signature: 'markSelectionsBundled(bundled: PackSelection[]): void'
+    returns: void
+    params:
+      - name: bundled
+        type: PackSelection[]
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-12T17:36:38.465Z'
+updatedAt: '2026-09-13T11:42:36.212Z'

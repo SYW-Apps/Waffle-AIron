@@ -176,6 +176,71 @@ methods:
       - name: scope
         type: ApprovalScope
         optional: true
+  - name: loadProjectConfig
+    description: >-
+      The bound project's configuration, or null when it has none. Forwarded to the core portal.
+      Hosted pack, policy and profile workflows read it instead of the raw file.
+    signature: 'loadProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    guarantees:
+      - idempotent
+  - name: removePackSelection
+    description: >-
+      Deselect a pack by name in the bound project's configuration, leaving path references alone;
+      returns whether anything was dropped. Forwarded to the core portal. Used by a hosted pack
+      removal whose match is a by-name selection.
+    signature: 'removePackSelection(packName: string): boolean'
+    returns: boolean
+    params:
+      - name: packName
+        type: string
+    guarantees:
+      - idempotent
+  - name: setProjectType
+    description: Set the governing `projectType`. Forwarded to the core portal.
+    signature: 'setProjectType(projectType: string): void'
+    returns: void
+    params:
+      - name: projectType
+        type: string
+    guarantees:
+      - idempotent
+  - name: recordProfileSelection
+    description: Record the profile selection hosted policy applied. Forwarded to the core portal.
+    signature: 'recordProfileSelection(selection: ProjectProfileSelection): void'
+    returns: void
+    params:
+      - name: selection
+        type: ProjectProfileSelection
+    guarantees:
+      - idempotent
+  - name: registerPackRef
+    description: >-
+      Register a legacy pack path reference (a vendored pack file or folder under .wai/packs/) in
+      the bound project's configuration when that exact reference is absent; returns whether it was
+      added. Forwarded to the core portal. Used by every hosted pack install.
+    signature: 'registerPackRef(ref: string): boolean'
+    returns: boolean
+    params:
+      - name: ref
+        type: string
+        description: Project-relative pack path reference, e.g. .wai/packs/<name>.yaml or .wai/packs/<name>
+    guarantees:
+      - idempotent
+  - name: deregisterPackRef
+    description: >-
+      Drop the legacy pack path reference that matches exactly from the bound project's
+      configuration; returns whether anything was dropped. Forwarded to the core portal. Used by a
+      hosted pack removal whose match is a path reference.
+    signature: 'deregisterPackRef(ref: string): boolean'
+    returns: boolean
+    params:
+      - name: ref
+        type: string
+        description: The exact project-relative pack path reference to drop
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-12T00:19:47.018Z'
+updatedAt: '2026-09-13T11:49:39.143Z'

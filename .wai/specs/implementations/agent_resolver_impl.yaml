@@ -52,6 +52,13 @@ methods:
         targetMethod: composeVariantGuidance
       - stepNumber: 8
         description: >-
+          Read the project configuration through the project config repository: its enabled targets,
+          stamped on every record, and rules.generateComponentImplementers.
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 9
+        description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
           and ONE delegating owner per chained subproject (projectPath) that routes work into the
           subproject without enumerating its internals; component implementers only when
@@ -76,30 +83,38 @@ methods:
         type: throw
         error: UnknownAgentError
       - stepNumber: 4
+        description: >-
+          Read the project configuration through the project config repository: the global templates
+          directory the template lookup consults, and the execution settings the brief's budget is
+          resolved from.
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 5
         description: Load the record's instruction template through the template source adapter
         type: call
         targetComponent: template_source_adapter
         targetMethod: loadTemplate
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Build the variable map from the record (agentName, ownedPaths fence, domain context,
           rendered variantGuidance) and substitute the {{variable}} placeholders into the template
           body
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Read the optional per-agent project guidance file (.wai/agents/<agentId>.md) — live, so a
           user edit applies on the next fetch
         type: call
         targetComponent: template_source_adapter
         targetMethod: loadAgentOverride
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           When guidance exists, append it to the rendered instructions under an attributed '##
           Project guidance' section — the user's delta stays legible AS a delta over the inferred
           brief
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Return the AgentBrief: rendered instructions plus the structured scope fields (ownedPaths,
           readPaths, domainRoot, template)
@@ -107,4 +122,4 @@ methods:
         outcome: brief composed
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-08-08T12:43:24.207Z'
+updatedAt: '2026-09-13T11:32:32.864Z'

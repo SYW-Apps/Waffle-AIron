@@ -1,0 +1,140 @@
+id: iproject_config_repository
+name: Project Config Repository Interface
+description: >-
+  Facade over a project's configuration. Reads forward 1:1 to the index and writes forward 1:1 to
+  the registry; it is the only way into `.wai/project.yaml`.
+component: project_config_repository
+methods:
+  - name: load
+    description: The whole configuration, or null when the project has none (forwarded to the index).
+    signature: 'load(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    guarantees:
+      - idempotent
+  - name: exists
+    description: Whether the project has a configuration file (forwarded to the index).
+    signature: 'exists(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: declaresGlobalPacks
+    description: Whether `extensions.useGlobalPacks` is set explicitly (forwarded to the index).
+    signature: 'declaresGlobalPacks(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: specsDir
+    description: The absolute specs folder, resolved at binding (forwarded to the index).
+    signature: 'specsDir(): string'
+    returns: string
+    params: []
+    guarantees:
+      - idempotent
+    invokedBy:
+      kind: runtime
+      caller: >-
+        The project binding: when a project root is bound (a CLI command, an MCP server start, or a
+        hosted request's project binding), the workspace resolves its specs folder once through this
+        method and hands it to the spec repository.
+  - name: create
+    description: Write a fresh configuration for a project that has none (forwarded to the registry).
+    signature: 'create(config: ProjectConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: upsertPackSelection
+    description: >-
+      Select a pack by name, moving a re-selected pack last; returns whether an earlier selection
+      was replaced (forwarded to the registry).
+    signature: 'upsertPackSelection(selection: PackSelection): boolean'
+    returns: boolean
+    params:
+      - name: selection
+        type: PackSelection
+    guarantees:
+      - idempotent
+  - name: removePackSelection
+    description: >-
+      Deselect a pack by name, leaving path references alone; returns whether anything was dropped
+      (forwarded to the registry).
+    signature: 'removePackSelection(packName: string): boolean'
+    returns: boolean
+    params:
+      - name: packName
+        type: string
+    guarantees:
+      - idempotent
+  - name: setProjectType
+    description: Set the governing `projectType` (forwarded to the registry).
+    signature: 'setProjectType(projectType: string): void'
+    returns: void
+    params:
+      - name: projectType
+        type: string
+    guarantees:
+      - idempotent
+  - name: recordProfileSelection
+    description: Record the applied profile selection (forwarded to the registry).
+    signature: 'recordProfileSelection(selection: ProjectProfileSelection): void'
+    returns: void
+    params:
+      - name: selection
+        type: ProjectProfileSelection
+    guarantees:
+      - idempotent
+  - name: setExecutionTier
+    description: Set `execution.tier` (forwarded to the registry).
+    signature: 'setExecutionTier(tier: string): void'
+    returns: void
+    params:
+      - name: tier
+        type: string
+    guarantees:
+      - idempotent
+  - name: registerPackRef
+    description: >-
+      Append a legacy path reference when it is absent; returns whether it was added (forwarded to
+      the registry).
+    signature: 'registerPackRef(ref: string): boolean'
+    returns: boolean
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: deregisterPackRef
+    description: >-
+      Drop a legacy path reference that matches exactly; returns whether anything was dropped
+      (forwarded to the registry).
+    signature: 'deregisterPackRef(ref: string): boolean'
+    returns: boolean
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: markSelectionsBundled
+    description: Record bundled packs on their selections in place, in one write (forwarded to the registry).
+    signature: 'markSelectionsBundled(bundled: PackSelection[]): void'
+    returns: void
+    params:
+      - name: bundled
+        type: PackSelection[]
+    guarantees:
+      - idempotent
+  - name: pinGlobalPacksAsSelections
+    description: >-
+      Append implicitly applied global packs as selections and turn global packs off, in one write
+      (forwarded to the registry).
+    signature: 'pinGlobalPacksAsSelections(selections: PackSelection[]): void'
+    returns: void
+    params:
+      - name: selections
+        type: PackSelection[]
+status: draft
+createdAt: '2026-09-13T11:09:45.386Z'
+updatedAt: '2026-09-13T11:41:23.660Z'

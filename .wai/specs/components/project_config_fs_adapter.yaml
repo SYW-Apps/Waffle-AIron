@@ -1,0 +1,13 @@
+id: project_config_fs_adapter
+name: Project Config FS Adapter
+description: >-
+  File I/O for a project's configuration document, `.wai/project.yaml` at the bound project root:
+  reads the raw document and writes it atomically. It does no parsing and applies no defaults — the
+  schema belongs to the store.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-09-13T01:31:06.695Z'
+updatedAt: '2026-09-13T01:31:06.701Z'

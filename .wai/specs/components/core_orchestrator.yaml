@@ -14,6 +14,7 @@ dependsOn:
   - lock_registry
   - diagram_specialist
   - extension_orchestrator
+  - project_config_repository
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-29T14:54:43.458Z'
+updatedAt: '2026-09-13T11:19:10.531Z'

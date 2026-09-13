@@ -4,9 +4,11 @@ description: >-
   Hosted workflow owner for profile-aware project initialization and pack/profile policy
   enforcement. Credential-bearing methods resolve the caller's permissions through the authorization
   seam; it requires or records profile selection according to policy, applies required/default
-  declarative packs, evaluates project compliance, and audits policy decisions. Two pre-authorized
-  entries (executeApprovedInit, evaluateInitRequest) serve the project-lifecycle chain and are never
-  portal-exposed. Identity-provider (SSO) configuration is deferred to Phase 5.
+  declarative packs, evaluates project compliance, and audits policy decisions. It reads and writes
+  the project configuration — pack registrations, projectType, the recorded profile selection — only
+  through the core adapter; the pack registry vendors pack files and returns what to register. Two
+  pre-authorized entries (executeApprovedInit, evaluateInitRequest) serve the project-lifecycle
+  chain and are never portal-exposed. Identity-provider (SSO) configuration is deferred to Phase 5.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -21,4 +23,4 @@ dependsOn:
   - host_core_adapter
 status: complete
 createdAt: '2026-07-08T21:59:23.605Z'
-updatedAt: '2026-07-23T11:23:41.498Z'
+updatedAt: '2026-09-13T11:39:54.007Z'

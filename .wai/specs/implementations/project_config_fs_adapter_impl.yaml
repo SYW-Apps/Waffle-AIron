@@ -1,0 +1,27 @@
+id: project_config_fs_adapter_impl
+name: Project Config FS Adapter Implementation
+description: File I/O for `.wai/project.yaml` at the bound project root; raw documents only.
+contract: iproject_config_fs_adapter
+sourcePath: src/config/project-config.ts
+methods:
+  - name: readDocument
+    narrative: []
+    intent: >-
+      Reads `project.yaml` from the bound project's `.wai` directory (or legacy `.wairon`) as raw
+      YAML and returns the parsed document, or null when the file is absent. A malformed document
+      raises the YAML error with the file path; nothing is defaulted or validated here.
+  - name: writeDocument
+    narrative: []
+    intent: >-
+      Serializes the raw document to YAML and writes it to the bound project's `project.yaml`,
+      replacing the file and creating the `.wai` directory when missing. It is a plain file
+      replacement, not an atomic rename, so an interrupted write can leave a truncated file.
+  - name: documentExists
+    narrative: []
+    intent: >-
+      Reports whether the bound project's `project.yaml` exists; an unreadable directory counts as
+      absent.
+detail: intent
+status: draft
+createdAt: '2026-09-13T11:21:50.998Z'
+updatedAt: '2026-09-13T11:21:51.000Z'

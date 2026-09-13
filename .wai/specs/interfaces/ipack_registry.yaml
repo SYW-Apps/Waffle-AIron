@@ -2,13 +2,17 @@ id: ipack_registry
 name: Pack Registry Interface
 description: >-
   Contract for the hosted extension-pack store: list, install (declarative-only), and remove packs
-  at server-global scope and at a bound project's scope, plus a read of a project's declared
-  pack/profile references for operational drift checks. Server-global discovery merges two tiers —
-  the immutable image-layer directory (WAIRON_IMAGE_PACKS_DIR) and the mutable instance directory
-  (WAIRON_PACKS_DIR) — with the instance pack winning on a name collision and the shadowed image
-  pack surfaced as drift; install and remove touch only the mutable instance tier. Installs validate
-  the content as a declarative pack (profiles + language/platform tables) and refuse
-  programmatic/code packs; probing never throws for a bad pack (the error rides on its descriptor).
+  at server-global scope and in a bound project's .wai/packs/. Server-global discovery merges two
+  tiers — the immutable image-layer directory (WAIRON_IMAGE_PACKS_DIR) and the mutable instance
+  directory (WAIRON_PACKS_DIR) — with the instance pack winning on a name collision and the shadowed
+  image pack surfaced as drift; install and remove touch only the mutable instance tier. The store
+  never reads or writes .wai/project.yaml: project-scoped methods that need the project's pack
+  registration take the loaded ProjectConfig as a parameter; a project install returns its probe,
+  whose ref is the project-relative path reference the calling orchestrator registers, and a project
+  removal only deletes the vendored files of a registration the orchestrator has matched and
+  deregistered. Installs validate the content as a declarative pack (profiles + language/platform
+  tables) and refuse programmatic/code packs; probing never throws for a bad pack (the error rides
+  on its descriptor).
 component: pack_registry
 methods:
   - name: listGlobalPacks
@@ -46,15 +50,24 @@ methods:
       - name: name
         type: string
   - name: listProjectPacks
-    description: Probe the bound project's registered packs (.wai/project.yaml -> extensions.packs).
-    signature: 'listProjectPacks(): PackDescriptor[]'
+    description: >-
+      Probe each pack the given project configuration registers under extensions.packs — a by-name
+      selection resolved through the project's committed bundle, or a legacy path ref — against the
+      bound project root. The caller supplies the configuration; the store never reads project.yaml.
+      An absent configuration registers no packs.
+    signature: 'listProjectPacks(config?: ProjectConfig): PackDescriptor[]'
     returns: PackDescriptor[]
-    params: []
+    params:
+      - name: config
+        type: ProjectConfig
+        description: The bound project's loaded configuration; absent when the project has none.
+        optional: true
   - name: installProjectPack
     description: >-
-      Validate the content as a declarative pack, vendor it into the bound project's
-      .wai/packs/<name>.yaml, and register it in project.yaml; reject programmatic/code content.
-      Returns its probe.
+      Validate the content as a declarative pack and vendor it into the bound project's
+      .wai/packs/<name>.yaml; reject programmatic/code content. Does NOT register it: returns its
+      probe, whose ref (.wai/packs/<name>.yaml) is the path reference the caller registers in the
+      project configuration.
     signature: 'installProjectPack(name: string, content: string): PackDescriptor'
     returns: PackDescriptor
     params:
@@ -66,25 +79,21 @@ methods:
         description: Declarative pack YAML text
   - name: removeProjectPack
     description: >-
-      Deregister the named pack from the bound project's project.yaml and delete its vendored
-      .wai/packs file.
-    signature: 'removeProjectPack(name: string): void'
+      Delete the vendored files of one project pack registration the caller has already matched and
+      deregistered: the files at the given path reference, or — when no reference is given, for a
+      by-name selection — the pack's bundle directory .wai/packs/<name>/. Never deletes a path
+      outside .wai/packs (a reference pointing elsewhere keeps its files). Reads and writes no
+      configuration.
+    signature: 'removeProjectPack(name: string, ref?: string): void'
     returns: void
     params:
       - name: name
         type: string
-  - name: readProjectReferences
-    description: >-
-      Read a given hosted project's declared pack/profile references (its registered extension packs
-      unioned with the required/default packs and the profile ids recorded in its profile selection)
-      from its .wai/project.yaml, for operational drift checks. Never throws for a missing/empty
-      config; returns a ProjectPackReference carrying no filesystem paths.
-    signature: 'readProjectReferences(rootPath: string): ProjectPackReference'
-    returns: ProjectPackReference
-    params:
-      - name: rootPath
+        description: The pack name the caller matched.
+      - name: ref
         type: string
-        description: Absolute filesystem root of the project's isolated .wai/ tree.
+        description: The matched path reference, when the registration is one; absent for a by-name selection.
+        optional: true
   - name: storeListGlobalPacks
     description: >-
       List the server-global declarative packs straight from the store layer — the PRE-AUTHORIZED
@@ -94,20 +103,40 @@ methods:
     returns: PackDescriptor[]
   - name: executeApprovedListProjectPacks
     description: >-
-      Pre-authorized entry for the approval workflow and internal policy flows: list the packs
-      vendored into a bound project WITHOUT authentication — the caller has already enforced
-      approval-based or resolver authorization. Never exposed on any portal.
-    signature: 'executeApprovedListProjectPacks(project: string): PackDescriptor[]'
+      Pre-authorized entry for the approval workflow and internal policy flows: bind the project's
+      isolated root and probe the packs the given configuration registers, WITHOUT authentication —
+      the caller has already enforced approval-based or resolver authorization and loaded the
+      configuration. Never exposed on any portal.
+    signature: 'executeApprovedListProjectPacks(project: string, config?: ProjectConfig): PackDescriptor[]'
     returns: PackDescriptor[]
+    params:
+      - name: project
+        type: string
+        description: Hosted project id whose isolated root is bound for the probe.
+      - name: config
+        type: ProjectConfig
+        description: That project's loaded configuration; absent when it has none.
+        optional: true
   - name: executeApprovedInstallProjectPack
     description: >-
-      Pre-authorized entry for the approval workflow and internal policy flows: vendor and register
-      one declarative pack into a bound project WITHOUT authentication — the caller has already
-      enforced approval-based or resolver authorization. Never exposed on any portal.
+      Pre-authorized entry for the approval workflow and internal policy flows: bind the project's
+      isolated root and vendor one declarative pack into its .wai/packs/ WITHOUT authentication —
+      the caller has already enforced approval-based or resolver authorization. Returns its probe,
+      whose ref is the path reference the caller registers. Never exposed on any portal.
     signature: >-
       executeApprovedInstallProjectPack(project: string, name: string, content: string):
       PackDescriptor
     returns: PackDescriptor
+    params:
+      - name: project
+        type: string
+        description: Hosted project id whose isolated root is bound for the vendoring.
+      - name: name
+        type: string
+        description: Pack file name stem (sanitized)
+      - name: content
+        type: string
+        description: Declarative pack YAML text
   - name: installGlobalPackArchive
     description: >-
       Install a declarative pack from a .wpack ARCHIVE into the mutable instance packs directory.
@@ -127,8 +156,9 @@ methods:
   - name: installProjectPackArchive
     description: >-
       Archive counterpart of installProjectPack for the bound project: safely extract the
-      declarative pack into .wai/packs/<name>/ and register the directory ref in project.yaml;
-      rejects code and unsafe/non-declarative archives.
+      declarative pack into .wai/packs/<name>/ and return its probe, whose ref (.wai/packs/<name>)
+      is the directory reference the caller registers; rejects code and unsafe/non-declarative
+      archives.
     signature: 'installProjectPackArchive(archive: bytes, name?: string): PackDescriptor'
     returns: PackDescriptor
     params:
@@ -176,31 +206,43 @@ methods:
       every architectural profile SELECTABLE FOR ONE PROJECT, tagged with its source and whether it
       can already govern that project. Three contributions, deduped by (id, source) with the project
       tier winning: the built-in profiles via the core adapter (source "builtin", installed true);
-      every profile contributed by the packs registered in THAT project's own extensions.packs
-      (source = the pack's canonical name, installed true) — the tier the instance-wide catalog
-      cannot see, so a pack uploaded straight into a project no longer has invisible profiles; and
-      every profile contributed by the server-global packs across both tiers (installed false —
-      adoptable, selecting it vendors the contributing pack). Never throws for a bad pack: a pack
-      that fails to load simply contributes no profiles.
-    signature: 'executeApprovedListProjectProfiles(project: string): AvailableProfile[]'
+      every profile contributed by the packs registered in the configuration the caller supplies for
+      THAT project (source = the pack's canonical name, installed true) — the tier the instance-wide
+      catalog cannot see, so a pack uploaded straight into a project no longer has invisible
+      profiles; and every profile contributed by the server-global packs across both tiers
+      (installed false — adoptable, selecting it vendors the contributing pack). Never throws for a
+      bad pack: a pack that fails to load simply contributes no profiles.
+    signature: >-
+      executeApprovedListProjectProfiles(project: string, config?: ProjectConfig):
+      AvailableProfile[]
     returns: AvailableProfile[]
     params:
       - name: project
         type: string
         description: Hosted project id whose isolated root is bound for the project-tier half of the listing.
+      - name: config
+        type: ProjectConfig
+        description: >-
+          That project's loaded configuration, whose registered packs form the installed project
+          tier; absent when it has none.
+        optional: true
   - name: executeApprovedEnsureProfileInstalled
     description: >-
       Pre-authorized entry for the policy plane (no credential — the caller has already enforced
       authorization; never exposed on any portal): make one profile id able to actually GOVERN a
       project, and report what that took. A built-in profile or project kind, or a profile
-      contributed by a pack already registered in the project, resolves as-is. A profile contributed
-      only by a server-global pack is made resolvable by resolving that pack through
-      executeApprovedResolveGlobalPacks and vendoring it into the project
-      (executeApprovedInstallProjectPack), reported as adoptedPackName. A profile id no tier
-      contributes THROWS — writing it as the project's projectType would silently disable the whole
-      profile doctrine (UNKNOWN_PROFILE), so an unresolvable id is refused with the id and the tiers
-      searched, never applied.
-    signature: 'executeApprovedEnsureProfileInstalled(project: string, profileId: string): ProfileApplication'
+      contributed by a pack the supplied configuration already registers, resolves as-is. A profile
+      contributed only by a server-global pack is made resolvable by resolving that pack through
+      executeApprovedResolveGlobalPacks and vendoring it into the project by its canonical name
+      (executeApprovedInstallProjectPack), reported as adoptedPackName together with adoptedPackRef,
+      the adopted pack's vendored path reference. The store does NOT register the adopted pack: the
+      caller registers adoptedPackRef in the project configuration for the profile to resolve at
+      validation time. A profile id no tier contributes THROWS — writing it as the project's
+      projectType would silently disable the whole profile doctrine (UNKNOWN_PROFILE), so an
+      unresolvable id is refused with the id and the tiers searched, never applied.
+    signature: >-
+      executeApprovedEnsureProfileInstalled(project: string, profileId: string, config?:
+      ProjectConfig): ProfileApplication
     returns: ProfileApplication
     params:
       - name: project
@@ -209,8 +251,14 @@ methods:
       - name: profileId
         type: string
         description: The profile id (or project kind) to make resolvable.
+      - name: config
+        type: ProjectConfig
+        description: >-
+          That project's loaded configuration, whose registered packs decide whether the profile is
+          already installed; absent when it has none.
+        optional: true
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-07-04T18:42:41.273Z'
-updatedAt: '2026-07-24T23:30:44.030Z'
+updatedAt: '2026-09-13T12:15:41.019Z'

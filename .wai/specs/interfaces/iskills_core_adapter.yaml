@@ -10,6 +10,15 @@ methods:
     signature: 'loadProjectExtensions(): LoadedExtensions'
     returns: LoadedExtensions
     params: []
+  - name: loadProjectConfig
+    description: >-
+      The bound project's configuration, or null when it has none. Forwarded to the core portal;
+      skills export reads its targets and the server instructions read its projectType.
+    signature: 'loadProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-14T20:14:02.590Z'
-updatedAt: '2026-07-14T20:23:49.468Z'
+updatedAt: '2026-09-13T11:17:27.284Z'

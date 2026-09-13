@@ -1,0 +1,43 @@
+id: iproject_config_index
+name: Project Config Index Interface
+description: Read path over the project configuration, projected from the store. Nothing here writes.
+component: project_config_index
+methods:
+  - name: load
+    description: >-
+      The whole configuration, or null when the project has none. Readers take the fields they need
+      from it: targets, rules, projectType, profile selection, packs, execution, templates.
+    signature: 'load(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    guarantees:
+      - idempotent
+  - name: exists
+    description: Whether the project has a configuration file.
+    signature: 'exists(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: declaresGlobalPacks
+    description: >-
+      Whether the configuration sets `extensions.useGlobalPacks` explicitly. Doctor uses it to tell
+      a project that chose a value from one that left it to the default.
+    signature: 'declaresGlobalPacks(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: specsDir
+    description: >-
+      The absolute specs folder: `paths.specsDir` resolved against the project root, else
+      `.wai/specs`. Read once when a project root is bound and handed to the spec repository, so the
+      spec repository never reads configuration itself.
+    signature: 'specsDir(): string'
+    returns: string
+    params: []
+    guarantees:
+      - idempotent
+status: draft
+createdAt: '2026-09-13T10:50:13.952Z'
+updatedAt: '2026-09-13T10:50:13.956Z'

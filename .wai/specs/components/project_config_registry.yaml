@@ -1,0 +1,15 @@
+id: project_config_registry
+name: Project Config Registry
+description: >-
+  Write path for the project-configuration aggregate: every change to `.wai/project.yaml` is
+  validated against the schema and written through the store. That covers a full save, pack
+  registration and removal, the governing project type, the recorded profile selection, and the id
+  backfill. Read and write paths stay decoupled, so it never touches the index.
+subsystem: sdd_core
+componentType: Registry
+owns: []
+dependsOn:
+  - project_config_store
+status: draft
+createdAt: '2026-09-13T01:31:12.008Z'
+updatedAt: '2026-09-13T01:31:12.012Z'

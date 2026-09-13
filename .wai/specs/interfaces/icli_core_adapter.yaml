@@ -63,6 +63,40 @@ methods:
         type: bytes
       - name: options
         type: tree_import_options
+  - name: loadProjectConfig
+    description: The local project's configuration, or null when it has none. Forwarded to the core portal.
+    signature: 'loadProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    guarantees:
+      - idempotent
+  - name: createProjectConfig
+    description: >-
+      Write the configuration `wairon init` composed, for a project that has none. Forwarded to the
+      core portal.
+    signature: 'createProjectConfig(config: ProjectConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: setExecutionTier
+    description: Set `execution.tier` for `wairon execution set-tier`. Forwarded to the core portal.
+    signature: 'setExecutionTier(tier: string): void'
+    returns: void
+    params:
+      - name: tier
+        type: string
+    guarantees:
+      - idempotent
+  - name: projectConfigExists
+    description: >-
+      Whether the local project has a configuration — the CLI's is-this-a-wairon-project guard.
+      Forwarded to the core portal.
+    signature: 'projectConfigExists(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-12T18:32:02.824Z'
+updatedAt: '2026-09-13T11:45:59.169Z'

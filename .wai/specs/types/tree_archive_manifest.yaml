@@ -21,7 +21,7 @@ fields:
   - name: projectName
     type: string
     description: >-
-      The exporting project's name, read from its .wai/project.yaml — provenance and the default
+      The exporting project's name, read from its L0 system spec — provenance and the default
       suggested file name
     optional: false
   - name: roots
@@ -69,4 +69,4 @@ fields:
 methods: []
 componentClass: tree_codec
 createdAt: '2026-08-12T17:18:10.306Z'
-updatedAt: '2026-08-12T17:18:10.329Z'
+updatedAt: '2026-09-13T11:22:43.374Z'

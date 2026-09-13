@@ -63,6 +63,34 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: importSpecTree
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadProjectConfig
+  - name: createProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: createProjectConfig
+  - name: setExecutionTier
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: setExecutionTier
+  - name: projectConfigExists
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: projectConfigExists
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-12T18:32:27.068Z'
+updatedAt: '2026-09-13T11:46:00.117Z'

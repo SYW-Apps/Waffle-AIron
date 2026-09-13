@@ -1,0 +1,27 @@
+id: iproject_config_fs_adapter
+name: Project Config FS Adapter Interface
+description: >-
+  File I/O for `.wai/project.yaml` at the bound project root. The document goes in and out as raw
+  YAML: this adapter does no parsing and applies no defaults.
+component: project_config_fs_adapter
+methods:
+  - name: readDocument
+    description: Read the raw configuration document, or null when the file does not exist.
+    signature: 'readDocument(): Json | null'
+    returns: Json | null
+    params: []
+  - name: writeDocument
+    description: Write the raw document, replacing the file.
+    signature: 'writeDocument(document: Json): void'
+    returns: void
+    params:
+      - name: document
+        type: Json
+  - name: documentExists
+    description: Whether the configuration file exists at the bound root.
+    signature: 'documentExists(): boolean'
+    returns: boolean
+    params: []
+status: draft
+createdAt: '2026-09-13T10:50:01.980Z'
+updatedAt: '2026-09-13T11:21:47.507Z'
