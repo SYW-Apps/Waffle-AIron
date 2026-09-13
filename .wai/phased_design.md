@@ -277,11 +277,13 @@ Wairon's own tree read and wrote `.wai/project.yaml` directly from 10 components
     - [x] exposure-policy administration split into `exposure_policy_orchestrator` (approved 2026-09-13 — `operations_orchestrator` had crossed GOD_COMPONENT with the config edge; now 9 dependencies)
     - [x] `readProjectReferences` left `pack_registry`: `project_config` gains `declaredPackNames()` / `declaredProfileIds()`, and the health report builds the reference in a local step (decided 2026-09-13)
   - stay as they are: `tree_archive_adapter.hasSpecTree` (a layout check of the import destination; its Adapter depends only on sdk_portal) and internalize deleting a child's `.wai` (a project removal); `web_project_orchestrator` and `web_portal` only forward
-- [ ] Code (in progress 2026-09-13, through sdd-delegate owner briefs):
+- [x] Code (2026-09-13, through sdd-delegate owner briefs):
   - [x] wave 1, sdd_core owner: the Repository, the core surface, sdd_core's callers (49cc30e, af7d4d2, 90fda87, 132d23c), then readField (e3a5b97) and provisionProject creating before the L0 (e61a3fb)
   - [x] wave 2, integrated: CLI (1263b28…850043b), skills/validator/MCP readers (d76d0e1…13b0ae8), hosted (8730806 health-references fix, 0447b2d…d3d6622); full suite 2469 passing
-  - [ ] follow-ups: MCP `sdd_validate_tree` keeps its error on a missing configuration, and an anchored `loadProjectConfig` forward; `wairon init` keeps an existing configuration (spec 264c963, decided 2026-09-13)
-  - [ ] wave 3: delete loader.ts `loadProjectConfig`/`saveProjectConfig` and the transitional write (no aliases, so name-matched call conformance cannot hide a leftover reader); the public entry keeps a throwing `loadProjectConfig` and drops `saveProjectConfig` (both decided 2026-09-13); gates (typecheck, build, tests, e2e, validate --ci); CHANGELOG; PR to dev
+  - [x] follow-ups: MCP `sdd_validate_tree` keeps its error on a missing configuration, and an anchored `loadProjectConfig` forward (56de98a, 0029e80); `wairon init` keeps an existing configuration (spec 264c963, code fd9306a + its summary line, decided 2026-09-13)
+  - [x] wave 3: loader.ts `loadProjectConfig`/`saveProjectConfig` and the transitional write deleted (b28e36a); the public entry keeps a throwing `loadProjectConfig` and drops `saveProjectConfig` (edc3b06; both decided 2026-09-13); CHANGELOG (0606e8f)
+  - [x] gates: typecheck, build, 162 test files / 2474 tests, e2e 21, `validate --ci`, whole tree 0 errors / 0 warnings
+  - [ ] PR to dev; the maintainer runs `wairon lock` after merge
 
 ## Wairon authoring fixes (after 2a-0 merges, before stage 2a) — decided by Robbe 2026-09-13
 Every agent authoring 2a-0 hit the same `sdd_update_spec` traps, and stage 2a leans on that tool. Record: `docs/design/chained-subsystems/decisions.md` § Stage 2a-0.
