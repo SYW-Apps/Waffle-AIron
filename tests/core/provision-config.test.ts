@@ -97,6 +97,22 @@ describe('provisioning through the project config Repository', () => {
     expect(untouched(root)).toBe(true);
   });
 
+  it('provisionProject refusing a configured root leaves its project.yaml and L0 byte-identical', () => {
+    const root = tempRoot();
+    writeConfig(root, 'existing');
+    setProjectRoot(root);
+    saveL0('existing-tree');
+    const configFile = path.join(root, '.wai', 'project.yaml');
+    const l0File = path.join(root, '.wai', 'specs', '.index.yaml');
+    const configBefore = fs.readFileSync(configFile);
+    const l0Before = fs.readFileSync(l0File);
+
+    expect(() => provisionProject('other')).toThrow(/already exists/);
+
+    expect(fs.readFileSync(configFile).equals(configBefore)).toBe(true);
+    expect(fs.readFileSync(l0File).equals(l0Before)).toBe(true);
+  });
+
   it('ensureProjectInitialized keeps an existing configuration and completes the L0', () => {
     const root = tempRoot();
     writeConfig(root, 'existing');

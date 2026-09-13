@@ -78,18 +78,19 @@ function bootstrapSystemSpec(name: string, now: string): Parameters<typeof saveS
 }
 
 /**
- * Bootstrap a fresh isolated project at the bound root: an L0 system spec, then a
- * default project.yaml created through the project config Repository, which refuses
- * a root that already has a configuration.
+ * Bootstrap a fresh isolated project at the bound root: a default project.yaml created
+ * through the project config Repository, then an L0 system spec. The Repository refuses
+ * a root that already has a configuration; because the configuration comes first, that
+ * refusal writes nothing.
  */
 export function provisionProject(name: string): void {
   // Step 1: compose the default configuration and the bootstrap L0.
   const now = new Date().toISOString();
   const config = defaultProjectConfig(name, now);
-  // Step 2: persist the L0 system spec.
-  saveSystemSpec(bootstrapSystemSpec(name, now));
-  // Step 3: write the default configuration through the Repository.
+  // Step 2: write the default configuration through the Repository; refused when one exists.
   projectConfigRepository.create(config);
+  // Step 3: persist the L0 system spec.
+  saveSystemSpec(bootstrapSystemSpec(name, now));
 }
 
 /**
