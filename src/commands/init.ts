@@ -23,7 +23,7 @@ import {
 } from '../utils/ai-guide.js';
 import { writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/loader.js';
-import { createProjectConfig } from './subsystem.js';
+import { createProjectConfig, projectConfigExists } from './subsystem.js';
 import {
   defaultTargetConfig,
   ARCHITECT_AGENT_ID,
@@ -370,7 +370,14 @@ async function executeInit(
   ensureDir(AI_PATHS.docsDir());
   ensureDir(AI_PATHS.generatedDir());
 
-  createProjectConfig(projectConfig);
+  // Complete only what is missing. runInit's early return looks for the spec
+  // tree, so a half-finished init reaches here with its configuration in place;
+  // that configuration is kept exactly as it is.
+  if (!projectConfigExists()) {
+    createProjectConfig(projectConfig);
+  } else {
+    logger.info('Kept the existing .wai/project.yaml.');
+  }
 
   // Agents (including domain owners) are derived from the SDD spec tree and the
   // free-standing domains in .wai/topology.yaml at read time — nothing persisted here.

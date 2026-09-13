@@ -41,3 +41,62 @@ describe('cli_runner.runInit: written project config (real CLI)', () => {
     expect(config.rules.generateComponentImplementers).toBe(false);
   }, 180_000);
 });
+
+// ---------------------------------------------------------------------------
+// `wairon init` completes only what is missing. Its early return looks for the
+// spec tree, so a half-finished init — a configuration but no tree — reaches
+// the configuration step. That configuration is kept exactly as it is.
+// ---------------------------------------------------------------------------
+
+describe('cli_runner.runInit: completes only what is missing (real CLI)', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  // execFile rejects on a non-zero exit, so a resolved call is the exit-0 check.
+  const init = (cwd: string) =>
+    execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], { cwd, timeout: 180_000 });
+
+  it('keeps an existing project.yaml byte-identical and bootstraps the missing tree', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-keep-'));
+    const configPath = path.join(rootDir, '.wai', 'project.yaml');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, [
+      "schemaVersion: '1.0.0'",
+      'name: kept-project',
+      'projectType: game-ecs',
+      'targets:',
+      '  - type: claude',
+      '    outputDir: .claude/agents',
+      '    enabled: true',
+      'rules: {}',
+      'futureSetting: keep-me',
+      "createdAt: '2026-01-01T00:00:00Z'",
+      "updatedAt: '2026-01-01T00:00:00Z'",
+      '',
+    ].join('\n'));
+    const before = fs.readFileSync(configPath);
+
+    const { stdout } = await init(rootDir);
+
+    expect(fs.readFileSync(configPath).equals(before)).toBe(true);
+    expect(stdout).toContain('Kept the existing .wai/project.yaml');
+    expect(fs.existsSync(path.join(rootDir, '.wai', 'specs', '.index.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(rootDir, '.claude', 'skills', 'sdd-architect', 'SKILL.md'))).toBe(true);
+  }, 180_000);
+
+  it('still creates the configuration in a fresh folder', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-fresh-'));
+
+    const { stdout } = await init(rootDir);
+
+    const config = yaml.load(fs.readFileSync(path.join(rootDir, '.wai', 'project.yaml'), 'utf8')) as {
+      execution: { tier: string };
+    };
+    expect(config.execution.tier).toBe('off');
+    expect(stdout).not.toContain('Kept the existing .wai/project.yaml');
+    expect(fs.existsSync(path.join(rootDir, '.wai', 'specs', '.index.yaml'))).toBe(true);
+  }, 180_000);
+});
