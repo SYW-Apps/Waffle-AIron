@@ -20,12 +20,12 @@ methods:
   - name: specsDir
     narrative: []
     intent: >-
-      Resolves the specs folder once for a binding: reads `paths.specsDir` from the raw document
-      through the store and resolves it against the bound project root. It falls back to the specs
-      folder under the project's `.wai` directory (or legacy `.wairon`) when the project has no
-      configuration or declares no such path, so a configuration that fails the schema still locates
-      its specs.
+      Resolves the specs folder once for a binding: reads `paths.specsDir` through the store's
+      readField (the raw document, before schema parsing) and resolves it against the bound project
+      root. It falls back to the specs folder under the project's `.wai` directory (or legacy
+      `.wairon`) when the project has no configuration or declares no such path, so a configuration
+      that fails the schema still locates its specs.
 detail: intent
 status: draft
 createdAt: '2026-09-13T11:19:27.409Z'
-updatedAt: '2026-09-13T11:19:27.411Z'
+updatedAt: '2026-09-13T13:08:47.580Z'

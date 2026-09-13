@@ -276,7 +276,7 @@ Wairon's own tree read and wrote `.wai/project.yaml` directly from 10 components
     - [x] `ProfileApplication.adoptedPackRef`, so orchestrators never compose the storage path
     - [x] exposure-policy administration split into `exposure_policy_orchestrator` (approved 2026-09-13 — `operations_orchestrator` had crossed GOD_COMPONENT with the config edge; now 9 dependencies)
     - [x] `readProjectReferences` left `pack_registry`: `project_config` gains `declaredPackNames()` / `declaredProfileIds()`, and the health report builds the reference in a local step (decided 2026-09-13)
-  - stay as they are: `tree_archive_adapter.hasSpecTree` (checks archive roots, not the bound project) and internalize deleting a child's `.wai` (a project removal); `web_project_orchestrator` and `web_portal` only forward
+  - stay as they are: `tree_archive_adapter.hasSpecTree` (a layout check of the import destination; its Adapter depends only on sdk_portal) and internalize deleting a child's `.wai` (a project removal); `web_project_orchestrator` and `web_portal` only forward
 - [ ] Code: every direct site behind `src/config/project-config.ts`, behaviour-neutral; delete `loader.ts`'s `loadProjectConfig`/`saveProjectConfig` (no aliases, so name-matched call conformance cannot hide a leftover reader); correct the stale `useGlobalPacks` comment in `core/extensions.ts`; tests proven by revert; CHANGELOG; PR to dev
 
 ## Wairon authoring fixes (after 2a-0 merges, before stage 2a) — decided by Robbe 2026-09-13

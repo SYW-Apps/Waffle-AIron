@@ -113,15 +113,17 @@ methods:
         description: Compose a default ProjectConfig and a bootstrap L0 SystemSpec named `name`
         type: local
       - stepNumber: 2
+        description: >-
+          Write the default configuration through the project config Repository first, so a root
+          that already has one is refused before anything is written
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+      - stepNumber: 3
         description: Persist the L0 system spec via the spec loader
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 3
-        description: Write the default configuration through the project config Repository
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: create
     conformance: 'off'
   - name: computeStateId
     narrative:
@@ -572,4 +574,4 @@ methods:
     conformance: 'off'
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T11:42:39.586Z'
+updatedAt: '2026-09-13T13:08:49.906Z'

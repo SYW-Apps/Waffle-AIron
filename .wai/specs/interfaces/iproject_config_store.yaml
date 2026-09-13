@@ -42,6 +42,17 @@ methods:
       - name: field
         type: string
     effect: read
+  - name: readField
+    description: >-
+      The raw value at a top-level or dotted path of the document (for example `paths.specsDir`),
+      read before any schema parsing, or undefined when the document or the path is absent. Lets a
+      read that must work on a configuration the schema rejects still reach one field.
+    signature: 'readField(field: string): Json | undefined'
+    returns: Json | undefined
+    params:
+      - name: field
+        type: string
+    effect: read
 status: draft
 createdAt: '2026-09-13T10:50:08.266Z'
-updatedAt: '2026-09-13T10:50:08.268Z'
+updatedAt: '2026-09-13T13:08:44.997Z'
