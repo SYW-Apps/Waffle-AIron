@@ -369,11 +369,14 @@ describe('operations orchestrator (sdd_host)', () => {
     expect(getHealthReport(cfg, MASTER).status).toBe('unhealthy');
   });
 
-  /** Write a profileSelection into a project's raw .wai/project.yaml. */
+  /** Write a minimal, schema-valid .wai/project.yaml carrying a profileSelection. */
   function writeProfileSelection(root: string, requiredPackNames: string[], profileIds: string[]): void {
     const dir = path.join(root, '.wai');
     fs.mkdirSync(dir, { recursive: true });
     const yaml =
+      'name: fixture-project\n' +
+      "createdAt: '2026-01-01T00:00:00.000Z'\n" +
+      "updatedAt: '2026-01-01T00:00:00.000Z'\n" +
       'profileSelection:\n' +
       `  requiredPackNames: [${requiredPackNames.map((n) => JSON.stringify(n)).join(', ')}]\n` +
       `  profileIds: [${profileIds.map((n) => JSON.stringify(n)).join(', ')}]\n` +

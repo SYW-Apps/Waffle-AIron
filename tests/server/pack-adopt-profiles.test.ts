@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { loadProjectConfig } from '../../src/config/loader.js';
+import { loadProjectConfig, registerPackRef } from '../../src/core/index.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { AdminAuthError } from '../../src/server/errors.js';
 import {
@@ -18,6 +18,7 @@ import {
   executeApprovedListProjectProfiles,
   executeApprovedEnsureProfileInstalled,
 } from '../../src/server/packs.js';
+import { setProjectType } from '../../src/server/policy.js';
 import { allow, createPlacedProject, mintUserToken } from './helpers.js';
 import type { HostConfig } from '../../src/server/types.js';
 
@@ -35,7 +36,10 @@ import type { HostConfig } from '../../src/server/types.js';
 // blind spot the instance-wide catalog has) and the ensure-profile-installed
 // seam that makes one profile id actually able to GOVERN a project — adopting
 // the contributing pack when needed, idempotently, and refusing an id no tier
-// contributes rather than writing an unenforceable projectType.
+// contributes rather than writing an unenforceable projectType. The registry's
+// project-scoped entries read the configuration the caller loaded, and the
+// ensure seam vendors and REPORTS an adopted pack: registering it is the
+// orchestrators' job.
 // ---------------------------------------------------------------------------
 
 const ADMIN = 'test-admin-secret';
@@ -96,10 +100,16 @@ describe('Stage B+C — pack/profile catalog + adoption (sdd_host)', () => {
     }
   });
 
+  const projectRoot = (projectId: string): string => path.join(dataDir, 'projects', projectId);
+
+  /** A hosted project's configuration, loaded the way the orchestrators load it
+   *  before calling the pack registry's project-scoped entries. */
+  const projectConfig = (projectId: string) => runWithProjectRoot(projectRoot(projectId), () => loadProjectConfig());
+
   /** The pack refs registered in a hosted project's OWN .wai/project.yaml — what
    *  proves an adoption actually vendored + registered the contributing pack. */
   const registeredPacks = (projectId: string): string[] =>
-    runWithProjectRoot(path.join(dataDir, 'projects', projectId), () => loadProjectConfig()).extensions?.packs ?? [];
+    (projectConfig(projectId)?.extensions?.packs ?? []) as string[];
 
   it('(a) enriches the probe descriptor with profileIds / languageIds / ruleIds', () => {
     const desc = installGlobalPack(cfg, ADMIN, 'acme', ACME_PACK);
@@ -164,7 +174,7 @@ describe('Stage B+C — pack/profile catalog + adoption (sdd_host)', () => {
     createPlacedProject(cfg, ADMIN, 'demo');
     installProjectPack(cfg, ADMIN, 'demo', 'tenant', TENANT_PACK); // the project's OWN pack → installed
 
-    const catalog = executeApprovedListProjectProfiles(cfg, 'demo');
+    const catalog = executeApprovedListProjectProfiles(cfg, 'demo', projectConfig('demo'));
 
     // Built-ins always govern the project.
     expect(catalog.find((p) => p.id === 'backend')).toMatchObject({ source: 'builtin', installed: true });
@@ -193,7 +203,7 @@ describe('Stage B+C — pack/profile catalog + adoption (sdd_host)', () => {
     expect(storeListAvailableProfiles().find((p) => p.id === 'hexagonal')).toBeUndefined();
 
     // The project-scoped catalog can, and reports it as already governing.
-    expect(executeApprovedListProjectProfiles(cfg, 'demo').find((p) => p.id === 'hexagonal')).toMatchObject({
+    expect(executeApprovedListProjectProfiles(cfg, 'demo', projectConfig('demo')).find((p) => p.id === 'hexagonal')).toMatchObject({
       source: 'tenant-doctrine',
       installed: true,
     });
@@ -204,16 +214,26 @@ describe('Stage B+C — pack/profile catalog + adoption (sdd_host)', () => {
     createPlacedProject(cfg, ADMIN, 'demo');
     expect(registeredPacks('demo')).not.toContain('.wai/packs/acme-doctrine.yaml');
 
-    const applied = executeApprovedEnsureProfileInstalled(cfg, 'demo', 'ddd');
-    expect(applied).toEqual({ profileId: 'ddd', source: 'acme-doctrine', adoptedPackName: 'acme-doctrine' });
+    const applied = executeApprovedEnsureProfileInstalled(cfg, 'demo', 'ddd', projectConfig('demo'));
+    expect(applied).toEqual({
+      profileId: 'ddd',
+      source: 'acme-doctrine',
+      adoptedPackName: 'acme-doctrine',
+      adoptedPackRef: '.wai/packs/acme-doctrine.yaml',
+    });
 
-    // The side effect is real: the pack is vendored AND registered by canonical name.
-    expect(registeredPacks('demo')).toContain('.wai/packs/acme-doctrine.yaml');
+    // The side effect is real: the pack is vendored by canonical name. The ensure
+    // seam registers nothing itself — the reported ref is the caller's to register.
     expect(fs.existsSync(path.join(dataDir, 'projects', 'demo', '.wai', 'packs', 'acme-doctrine.yaml'))).toBe(true);
+    expect(registeredPacks('demo')).toEqual([]);
+
+    // Registration happens on the orchestrator path, which registers the reported ref.
+    setProjectType(cfg, ADMIN, 'demo', 'ddd');
+    expect(registeredPacks('demo')).toContain('.wai/packs/acme-doctrine.yaml');
     expect(listProjectPacks(cfg, ADMIN, 'demo').map((p) => p.name)).toContain('acme-doctrine');
 
     // And the profile now reads as installed rather than adoptable.
-    expect(executeApprovedListProjectProfiles(cfg, 'demo').find((p) => p.id === 'ddd')).toMatchObject({
+    expect(executeApprovedListProjectProfiles(cfg, 'demo', projectConfig('demo')).find((p) => p.id === 'ddd')).toMatchObject({
       source: 'acme-doctrine',
       installed: true,
     });
@@ -223,10 +243,13 @@ describe('Stage B+C — pack/profile catalog + adoption (sdd_host)', () => {
     installGlobalPack(cfg, ADMIN, 'acme', ACME_PACK);
     createPlacedProject(cfg, ADMIN, 'demo');
 
-    expect(executeApprovedEnsureProfileInstalled(cfg, 'demo', 'ddd').adoptedPackName).toBe('acme-doctrine');
+    const first = executeApprovedEnsureProfileInstalled(cfg, 'demo', 'ddd', projectConfig('demo'));
+    expect(first.adoptedPackName).toBe('acme-doctrine');
+    // The caller registers the adopted pack, as every orchestrator does.
+    runWithProjectRoot(projectRoot('demo'), () => registerPackRef(first.adoptedPackRef!));
     const before = registeredPacks('demo');
 
-    const again = executeApprovedEnsureProfileInstalled(cfg, 'demo', 'ddd');
+    const again = executeApprovedEnsureProfileInstalled(cfg, 'demo', 'ddd', projectConfig('demo'));
     expect(again).toEqual({ profileId: 'ddd', source: 'acme-doctrine' }); // no adoptedPackName
     expect(again.adoptedPackName).toBeUndefined();
     expect(registeredPacks('demo')).toEqual(before); // nothing new registered

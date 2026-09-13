@@ -6,7 +6,6 @@ import {
   storeListGlobalPacks,
   installGlobalPack,
   removeGlobalPack,
-  readProjectReferences,
   executeApprovedResolveGlobalPacks,
 } from '../../src/server/packs.js';
 import type { HostConfig, PackDescriptor } from '../../src/server/types.js';
@@ -15,8 +14,8 @@ import type { HostConfig, PackDescriptor } from '../../src/server/types.js';
 // Pack Registry — two-tier server-global store (sdd_host). Exercises the merge
 // of the immutable image tier (WAIRON_IMAGE_PACKS_DIR) and the mutable instance
 // tier (WAIRON_PACKS_DIR): tier tagging, instance-wins shadowing, install/remove
-// confined to the instance tier (removal re-exposes a shadowed image pack), an
-// absent image tier, and the path-free readProjectReferences drift read.
+// confined to the instance tier (removal re-exposes a shadowed image pack), and
+// an absent image tier.
 // ---------------------------------------------------------------------------
 
 const MASTER = 'master-credential-secret-value';
@@ -189,76 +188,5 @@ describe('pack registry — two-tier server-global store (sdd_host)', () => {
     expect(res.unresolved).toEqual([]);
     expect(res.resolved).toHaveLength(1); // both aliases collapse to one canonical pack
     expect(res.resolved[0].name).toBe('appender-make');
-  });
-});
-
-describe('pack registry — readProjectReferences (sdd_host)', () => {
-  let projectsRoot: string;
-
-  beforeEach(() => {
-    projectsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-refs-'));
-  });
-
-  afterEach(() => {
-    try {
-      fs.rmSync(projectsRoot, { recursive: true, force: true });
-    } catch {
-      /* windows file locks */
-    }
-  });
-
-  /** Create an isolated project root, optionally seeding a raw .wai/project.yaml. */
-  function makeProjectRoot(id: string, projectYaml?: string): string {
-    const root = path.join(projectsRoot, id);
-    if (projectYaml !== undefined) {
-      fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
-      fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), projectYaml);
-    } else {
-      fs.mkdirSync(root, { recursive: true });
-    }
-    return root;
-  }
-
-  it('unions extensions.packs (by stem) with the profileSelection pack names and carries the profile ids', () => {
-    const root = makeProjectRoot(
-      'proj-full',
-      [
-        'extensions:',
-        '  packs:',
-        '    - .wai/packs/vendored.yaml',
-        'profileSelection:',
-        '  requiredPackNames: [req-pack]',
-        '  defaultPackNames: [def-pack]',
-        '  profileIds: [prof-1]',
-        "  selectedAt: ''",
-        '',
-      ].join('\n'),
-    );
-
-    const ref = readProjectReferences(root);
-    expect(ref.projectId).toBe('proj-full');
-    expect(ref.packNames.sort()).toEqual(['def-pack', 'req-pack', 'vendored']);
-    expect(ref.profileIds).toEqual(['prof-1']);
-  });
-
-  it('reads references from extensions.packs alone when no profile selection is recorded', () => {
-    const root = makeProjectRoot(
-      'proj-vendored',
-      ['extensions:', '  packs:', '    - .wai/packs/only-vendored.yaml', ''].join('\n'),
-    );
-
-    const ref = readProjectReferences(root);
-    expect(ref.projectId).toBe('proj-vendored');
-    expect(ref.packNames).toEqual(['only-vendored']);
-    expect(ref.profileIds).toBeUndefined();
-  });
-
-  it('returns an empty, path-free reference (never throws) when the project has no config', () => {
-    const root = makeProjectRoot('proj-empty'); // no .wai/project.yaml
-
-    const ref = readProjectReferences(root);
-    expect(ref.projectId).toBe('proj-empty');
-    expect(ref.packNames).toEqual([]);
-    expect(ref.profileIds).toBeUndefined();
   });
 });
