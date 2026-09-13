@@ -611,6 +611,34 @@ describe('UNREALIZED_FINDING — declared finding codes appear as string literal
     } finally { proj.cleanup(); }
   });
 
+  it('is completeness-classed: an error-severity UNREALIZED_FINDING downgrades to warning in a draft context, like its sibling UNREALIZED_METHOD', () => {
+    // NOTE: this is exercised directly against buildRuleContext/addIssue,
+    // rather than through a project `rules.sddRuleSeverity` override, because
+    // getRuleSeverity resolves an explicit project (or pack profile) severity
+    // override BEFORE the draft-context downgrade — "explicit project config
+    // wins over everything" — so an override to 'error' reports as 'error'
+    // even on a draft implementation, for every completeness-classed code
+    // (this is pre-existing behavior, also true of UNREALIZED_METHOD, and out
+    // of scope for this fix). What COMPLETENESS_RULES membership actually
+    // gates is a code raised at 'error' with no such override in play.
+    const stamp = { createdAt: '2026-07-12T10:00:00Z', updatedAt: '2026-07-12T10:00:00Z' };
+    const issues: ValidationIssue[] = [];
+    const ctx = buildRuleContext({
+      system: { schemaVersion: '1.0.0', name: 'S', vision: 'v', ...stamp } as never,
+      subsystems: [],
+      components: [],
+      interfaces: [],
+      implementations: [],
+      types: [],
+      projectType: 'backend',
+      issues,
+    });
+    ctx.addIssue('error', 'UNREALIZED_FINDING', 'declared finding code missing from the realized file', 'impl-audit-orch', true);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('warning');
+    expect(issues[0].draftContext).toBe(true);
+  });
+
   it('is an implementations-depth expectation: gated away at interfaces design depth', async () => {
     const { RulesConfigSchema } = await import('../../src/models/project.js');
     const proj = createTempProject();
