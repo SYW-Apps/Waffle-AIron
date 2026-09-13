@@ -9,12 +9,13 @@ import { createMcpServer } from '../../src/mcp/server.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
-// mcp_core_adapter's getProjectConfig tool — stage 2a-0, wave 2.
+// mcp_core_adapter's getProjectConfig and sdd_validate_tree tools — stage
+// 2a-0, wave 2.
 //
-// The tool now reads through the core surface's null-safe loadProjectConfig
+// Both tools now read through the core surface's null-safe loadProjectConfig
 // (rather than the loader's throwing one), but a missing project configuration
-// must still surface as the SAME tool-level error it always has — never a
-// bare `json(null)` response.
+// must still surface as the SAME tool-level error each always has — never a
+// bare `json(null)` response, and never a validate run at silent defaults.
 // ---------------------------------------------------------------------------
 
 async function connectInMemory(server: McpServer): Promise<Client> {
@@ -77,6 +78,26 @@ describe('getProjectConfig (mcp_core_adapter)', () => {
       expect(result.isError ?? false).toBe(false);
       const parsed = JSON.parse(result.content[0].text as string);
       expect(parsed.name).toBe('getcfg-ok');
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+describe('sdd_validate_tree (mcp_orchestrator)', () => {
+  it('errors on an uninitialized project — no .wai/project.yaml at all', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-validatetree-noconfig-'));
+    created.push(tempDir);
+    vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
+    invalidateSpecCache();
+
+    const client = await connectInMemory(createMcpServer());
+    try {
+      const result: any = await client.callTool({ name: 'sdd_validate_tree', arguments: {} });
+      expect(result.isError).toBe(true);
+      const first = result.content?.[0];
+      expect(first?.type).toBe('text');
+      expect(first.text as string).toContain('No wairon project found');
     } finally {
       await client.close();
     }

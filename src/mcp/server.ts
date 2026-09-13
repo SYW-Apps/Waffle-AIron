@@ -171,7 +171,6 @@ function resolveAgentTopology(): AgentRecord[] {
 }
 
 
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -1531,13 +1530,14 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ subsystem, recursive }) => {
       try {
-        // A project with no readable configuration judges at the defaults
-        // (validateSddTree's own 'backend' fallback) rather than refusing to run.
         const config = coreLoadProjectConfig();
+        // A missing config errored before (the loader's loadProjectConfig threw);
+        // keep that outcome now that the adapter reads null instead of throwing.
+        if (!config) throw new ProjectNotInitializedError();
         const { validateSddTree } = requireValidation();
         const result = validateSddTree({
-          rules: config?.rules,
-          projectType: config?.projectType,
+          rules: config.rules,
+          projectType: config.projectType,
           scopeSubsystem: subsystem,
           recursive: recursive ?? true,
         });
