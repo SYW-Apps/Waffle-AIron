@@ -181,6 +181,7 @@ const DEPTH_GATED_CODES: Record<string, DesignDepth> = {
   MISSING_SOURCE_FILE: 'implementations',
   SOURCE_PATH_ESCAPES_ROOT: 'implementations',
   UNREALIZED_METHOD: 'implementations',
+  UNREALIZED_FINDING: 'implementations',
   CONFORMANCE_ANALYSIS_SKIPPED: 'implementations',
   CONFORMANCE_DEGRADED: 'implementations',
   UNDECLARED_DEPENDENCY: 'implementations',

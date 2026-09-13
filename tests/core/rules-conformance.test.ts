@@ -462,6 +462,135 @@ describe('structural conformance — each method against its own source file', (
   });
 });
 
+describe('UNREALIZED_FINDING — declared finding codes appear as string literals in the method source file', () => {
+  // An auditor contract whose methods declare the finding codes they report.
+  const auditContract = (proj: ReturnType<typeof createTempProject>, methods: { name: string; findings: string[] }[]) =>
+    proj.writeSpec('interface', 'iaudit-orch', [
+      'schemaVersion: 1.0.0',
+      'id: iaudit-orch',
+      'name: IAuditOrch',
+      'description: contract',
+      'component: audit-orch',
+      'methods:',
+      ...methods.map(m => [
+        `  - name: ${m.name}`,
+        `    description: ${m.name} audits one record and reports each discrepancy`,
+        `    signature: "${m.name}(): void"`,
+        '    returns: "void"',
+        ...(m.findings.length ? ['    findings:'] : []),
+        ...m.findings.map(code => [
+          `      - code: ${code}`,
+          '        severity: warning',
+          '        summary: The audited record disagrees with its source',
+        ].join('\n')),
+      ].join('\n')),
+    ].join('\n'));
+  const findingIssues = (res: { issues: { code: string; specId?: string; message: string; severity: string }[] }) =>
+    res.issues.filter(i => i.code === 'UNREALIZED_FINDING');
+
+  it('fires for a declared code missing from the file, naming code, method, contract, file and grade', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['INVOICE_TOTAL_MISMATCH', 'MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT('auditInvoice')}`);
+    proj.source('src/audit.ts', "export function auditInvoice(report: (code: string) => void): void {\n  report('INVOICE_TOTAL_MISMATCH');\n  report('TAX_ID_MISSING');\n}\n");
+    proj.activate();
+    try {
+      const found = findingIssues(validateSddTree());
+      expect(found).toHaveLength(1);
+      expect(found[0].severity).toBe('warning');
+      expect(found[0].specId).toBe('impl-audit-orch');
+      expect(found[0].message).toContain('"MISSING_TAX_ID"');
+      expect(found[0].message).toContain('"auditInvoice"');
+      expect(found[0].message).toContain('"iaudit-orch"');
+      expect(found[0].message).toContain('"src/audit.ts"');
+      expect(found[0].message).toContain('analysis grade: exact');
+    } finally { proj.cleanup(); }
+  });
+
+  it('stays quiet when every declared code appears as a string literal', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['INVOICE_TOTAL_MISMATCH', 'MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT('auditInvoice')}`);
+    proj.source('src/audit.ts', "export function auditInvoice(report: (code: string) => void): void {\n  report('INVOICE_TOTAL_MISMATCH');\n  report('MISSING_TAX_ID');\n}\n");
+    proj.activate();
+    try {
+      expect(findingIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('reads the method\'s own source file, not the implementation file', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT_AT('auditInvoice', 'src/commands/audit-invoice.ts')}`);
+    // the implementation file still reports the code; the method's own file does not
+    proj.source('src/audit.ts', "export const legacyCodes = ['MISSING_TAX_ID'];\n");
+    proj.source('src/commands/audit-invoice.ts', "export function auditInvoice(report: (code: string) => void): void {\n  report('TAX_ID_MISSING');\n}\n");
+    proj.activate();
+    try {
+      const found = findingIssues(validateSddTree());
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('"src/commands/audit-invoice.ts"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a declaration or a comment naming the code is not a string literal at exact grade', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT('auditInvoice')}`);
+    proj.source('src/audit.ts', "// reports MISSING_TAX_ID\nconst MISSING_TAX_ID = 42;\nexport function auditInvoice(report: (code: number) => void): void {\n  report(MISSING_TAX_ID);\n}\n");
+    proj.activate();
+    try {
+      expect(findingIssues(validateSddTree())).toHaveLength(1);
+    } finally { proj.cleanup(); }
+  });
+
+  it('skips methods at the off tier', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT('auditInvoice')}\n    conformance: off`);
+    proj.source('src/audit.ts', 'export function auditInvoice(): void {}\n');
+    proj.activate();
+    try {
+      expect(findingIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('skips files that were not analyzed — their own finding covers them', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT_AT('auditInvoice', 'src/commands/audit-invoice.ts')}`);
+    proj.source('src/audit.ts', "export const legacyCodes = ['MISSING_TAX_ID'];\n");
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(conformanceIssues(res).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      expect(findingIssues(res)).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('is an implementations-depth expectation: gated away at interfaces design depth', async () => {
+    const { RulesConfigSchema } = await import('../../src/models/project.js');
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT('auditInvoice')}`);
+    proj.source('src/audit.ts', 'export function auditInvoice(): void {}\n');
+    proj.activate();
+    try {
+      expect(findingIssues(validateSddTree())).toHaveLength(1);
+      invalidateSpecCache();
+      const gated = validateSddTree({ rules: RulesConfigSchema.parse({ designDepth: 'interfaces' }) });
+      expect(findingIssues(gated)).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+});
+
 describe('conformance degradation visibility', () => {
   it('fires CONFORMANCE_DEGRADED once when ts/js files were analyzed below exact grade', () => {
     // The dev environment always resolves the TypeScript compiler, so the

@@ -29,6 +29,14 @@ import { RuleContext, SddRule } from './types.js';
 //   off      — method checks skipped (generated/vendored code); the
 //              existence check of every named source file always applies.
 //
+// Declared findings: every finding code a contract method declares must be
+// among the string-literal anchors of the method's own source file
+// (UNREALIZED_FINDING). At exact grade those anchors are string literals and
+// property-access names; the pattern grade also counts any identifier outside
+// comments and the generic grade any word, so below exact grade a code that is
+// named but never reported as a literal can pass. The grade rides on the
+// finding.
+//
 // N:1 is native: many implementations may share one file, and one anchor
 // satisfies every component that declares that method name — telling WHICH
 // component a symbol serves is Level 3's job.
@@ -58,6 +66,8 @@ export function isInChainedSubproject(subsystemId: string, ctx: RuleContext): bo
 interface FactsLookup {
   declared: Set<string>;
   anchored: Set<string>;
+  /** The file's string-literal anchors alone — what a declared finding code must be among. */
+  literals: Set<string>;
   facts: SourceFileFacts;
 }
 
@@ -66,12 +76,13 @@ const quoteList = (names: string[]): string => names.map(n => `"${n}"`).join(', 
 export const structuralConformanceRule: SddRule = {
   name: 'structural-conformance',
   description:
-    'Code↔spec Level 1: every source file an implementation names — its own sourcePath and each method\'s — must resolve to a real file inside the project root, and every L3 contract method must be realized in its own source file (the method\'s sourcePath, else the implementation\'s) at its conformance tier (declared | anchored | off; Portals default to anchored, everything else to declared; per-method `symbol` maps intent-language names to code names). A file that escapes the root, is missing or cannot be read is reported once and blocks only the methods realized in it. Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. Implementations under chained subsystems (projectPath) validate standalone in their own project run and are skipped here.',
+    'Code↔spec Level 1: every source file an implementation names — its own sourcePath and each method\'s — must resolve to a real file inside the project root, and every L3 contract method must be realized in its own source file (the method\'s sourcePath, else the implementation\'s) at its conformance tier (declared | anchored | off; Portals default to anchored, everything else to declared; per-method `symbol` maps intent-language names to code names), and every finding code a contract method declares must appear as a string literal in that file (UNREALIZED_FINDING). A file that escapes the root, is missing or cannot be read is reported once and blocks only the methods realized in it. Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. Implementations under chained subsystems (projectPath) validate standalone in their own project run and are skipped here.',
   codes: [
     { code: 'MISSING_SOURCE_PATH', defaultSeverity: 'warning', summary: 'A contract method has no source file — its implementation declares no sourcePath and the method names none — so structural conformance cannot link it to code' },
     { code: 'MISSING_SOURCE_FILE', defaultSeverity: 'error', summary: 'A source file an implementation or one of its methods names does not resolve to a file on disk' },
     { code: 'SOURCE_PATH_ESCAPES_ROOT', defaultSeverity: 'error', summary: 'A source file an implementation or one of its methods names is absolute or escapes the project root (containment refusal)' },
     { code: 'UNREALIZED_METHOD', defaultSeverity: 'warning', summary: 'An L3 contract method has no anchor in its own source file (the method\'s sourcePath, else the implementation\'s) at the required conformance tier' },
+    { code: 'UNREALIZED_FINDING', defaultSeverity: 'warning', summary: 'A finding code a contract method declares does not appear as a string literal in the method\'s source file' },
     { code: 'CONFORMANCE_ANALYSIS_SKIPPED', defaultSeverity: 'warning', summary: 'A source file an implementation or one of its methods names could not be analyzed (binary/unreadable) — realization of the methods in it was not checked' },
     { code: 'CONFORMANCE_DEGRADED', defaultSeverity: 'warning', summary: 'TypeScript/JavaScript files were analyzed below exact grade (compiler not resolvable) — dependency conformance skips them' },
   ],
@@ -82,6 +93,7 @@ export const structuralConformanceRule: SddRule = {
       lookups.set(normalizeSourcePath(facts.path), {
         declared: new Set([...facts.declaredNames, ...facts.exportedNames]),
         anchored: new Set([...facts.declaredNames, ...facts.exportedNames, ...facts.anchoredNames]),
+        literals: new Set(facts.anchoredNames),
         facts,
       });
     }
@@ -184,18 +196,27 @@ export const structuralConformanceRule: SddRule = {
       const specTier = (impl.conformance as ConformanceTier | undefined)
         ?? stereotypeDefaultTier(component.componentType);
 
-      for (const method of contract.methods) {
-        const methodImpl = methodImplOf(method.name);
+      // The analyzed facts of a contract method's own source file at a checked
+      // tier, or undefined: tier off, no file (MISSING_SOURCE_PATH covers it),
+      // no code model for the path (context built without one), or a file
+      // that escaped, is missing or unreadable (that file's own finding covers
+      // it, and only the methods realized in it are blocked).
+      const checkedFile = (methodName: string): { file: string; tier: ConformanceTier; lookup: FactsLookup } | undefined => {
+        const methodImpl = methodImplOf(methodName);
         const tier = (methodImpl?.conformance as ConformanceTier | undefined) ?? specTier;
-        if (tier === 'off') continue;
-
+        if (tier === 'off') return undefined;
         const file = methodSourceFile(methodImpl ?? {}, impl.sourcePath);
-        if (!file) continue; // MISSING_SOURCE_PATH covers it
+        if (!file) return undefined;
         const lookup = lookups.get(normalizeSourcePath(file));
-        // No code model for this path (context built without one), or the file
-        // escaped, is missing or unreadable — that file's own finding covers it,
-        // and only the methods realized in it are blocked.
-        if (!lookup || lookup.facts.status !== 'analyzed') continue;
+        if (!lookup || lookup.facts.status !== 'analyzed') return undefined;
+        return { file, tier, lookup };
+      };
+
+      for (const method of contract.methods) {
+        const checked = checkedFile(method.name);
+        if (!checked) continue;
+        const { file, tier, lookup } = checked;
+        const methodImpl = methodImplOf(method.name);
 
         const symbol = methodImpl?.symbol ?? method.name;
         const inDeclared = lookup.declared.has(symbol);
@@ -214,6 +235,25 @@ export const structuralConformanceRule: SddRule = {
           impl.id,
           draft,
         );
+      }
+
+      // Declared findings: each code a contract method declares must be among
+      // the string-literal anchors of the method's own source file.
+      for (const method of contract.methods) {
+        if (!method.findings?.length) continue;
+        const checked = checkedFile(method.name);
+        if (!checked) continue;
+        const { file, lookup } = checked;
+        for (const finding of method.findings) {
+          if (lookup.literals.has(finding.code)) continue;
+          ctx.addIssue(
+            'warning',
+            'UNREALIZED_FINDING',
+            `Method "${method.name}" of contract "${impl.contract}" declares finding "${finding.code}", but "${file}" has no string literal "${finding.code}" (analysis grade: ${lookup.facts.analysisGrade}) — report the finding under its declared code, or remove the declaration.`,
+            impl.id,
+            draft,
+          );
+        }
       }
     }
   },

@@ -22,6 +22,10 @@
  *    string-literal occurrences; `off` skips method checks; a per-method
  *    `symbol` maps the intent-language contract name to the code-level name
  *    and is authoritative when given.
+ *  - UNREALIZED_FINDING (warning): a finding code a contract method declares
+ *    does not appear as a string literal in the method's source file (the
+ *    method's sourcePath, else the implementation's). Methods at the `off`
+ *    tier and files that were not analyzed are skipped.
  *  - CONFORMANCE_ANALYSIS_SKIPPED (warning): a source file an implementation
  *    or one of its methods names is binary or unreadable — realization of the
  *    methods in it was not checked.
@@ -1101,7 +1105,92 @@ export default [
       },
     }),
   }),
+
+  // -------------------------------------------------------------------------
+  // UNREALIZED_FINDING
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNREALIZED_FINDING',
+    severity: 'warning',
+    anchoredTo: 'invoice_auditor_impl',
+    expectFire: true,
+    scenario:
+      'The invoice auditor contract declares that auditInvoice reports MISSING_TAX_ID, but the module renamed the code to TAX_ID_MISSING, so the declared code is reported nowhere.',
+    tree: invoiceAuditorTree([
+      'type Report = (code: string, message: string) => void;',
+      '',
+      'export function auditInvoice(invoice: { total: number; linesTotal: number; taxId?: string }, report: Report): void {',
+      '  if (invoice.total !== invoice.linesTotal) report(\'INVOICE_TOTAL_MISMATCH\', \'total differs from the order lines\');',
+      '  if (!invoice.taxId) report(\'TAX_ID_MISSING\', \'no tax registration id\');',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'UNREALIZED_FINDING',
+    expectFire: false,
+    reason: 'Every finding code the contract method declares is reported under that exact string literal in the method\'s source file.',
+    scenario:
+      'The invoice auditor module reports INVOICE_TOTAL_MISMATCH and MISSING_TAX_ID under exactly the codes its contract declares.',
+    tree: invoiceAuditorTree([
+      'type Report = (code: string, message: string) => void;',
+      '',
+      'export function auditInvoice(invoice: { total: number; linesTotal: number; taxId?: string }, report: Report): void {',
+      '  if (invoice.total !== invoice.linesTotal) report(\'INVOICE_TOTAL_MISMATCH\', \'total differs from the order lines\');',
+      '  if (!invoice.taxId) report(\'MISSING_TAX_ID\', \'no tax registration id\');',
+      '}',
+      '',
+    ].join('\n')),
+  }),
 ];
+
+/**
+ * An invoice auditor whose auditInvoice contract method declares the two
+ * finding codes it reports; only the auditor module's text varies.
+ */
+function invoiceAuditorTree(auditorModule: string): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'billing', description: 'Invoicing, tax and the audit of issued invoices.' }],
+    components: [
+      {
+        id: 'invoice-auditor',
+        componentType: 'Orchestrator',
+        subsystem: 'billing',
+        description: 'Audits issued invoices against their orders and the customer tax registration.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'iinvoice_auditor',
+        component: 'invoice-auditor',
+        methods: [
+          {
+            name: 'auditInvoice',
+            description: 'Audit one issued invoice and report every discrepancy found.',
+            findings: [
+              { code: 'INVOICE_TOTAL_MISMATCH', severity: 'error', summary: 'The invoice total differs from the sum of its order lines' },
+              { code: 'MISSING_TAX_ID', severity: 'warning', summary: 'A business customer invoice carries no tax registration id' },
+            ],
+          },
+        ],
+      },
+    ],
+    implementations: [
+      {
+        id: 'invoice_auditor_impl',
+        contract: 'iinvoice_auditor',
+        sourcePath: 'src/billing/invoice-auditor.ts',
+        methods: [
+          {
+            name: 'auditInvoice',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Compare the invoice total with its order lines and check the tax registration.' }],
+          },
+        ],
+      },
+    ],
+    files: { 'src/billing/invoice-auditor.ts': auditorModule },
+  };
+}
 
 /**
  * The refund orchestrator of a payments subsystem: approveRefund and
