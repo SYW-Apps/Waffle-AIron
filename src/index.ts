@@ -28,3 +28,8 @@ export function loadProjectConfig(): ProjectConfig {
   if (!config) throw new ProjectNotInitializedError();
   return config;
 }
+
+// The public library's `activeTargetTypes` stays the core surface's zero-argument
+// read of the bound project's configuration; the models' pure
+// `activeTargetTypes(config)` shares the name, so the core one is chosen explicitly.
+export { activeTargetTypes } from './core/index.js';
