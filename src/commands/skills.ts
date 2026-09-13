@@ -1,7 +1,8 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized } from '../config/loader.js';
-import { exportSddSkills, listSkillNames } from '../core/skills.js';
+import { exportSddSkills as skillsExportSddSkills, listSkillNames } from '../core/skills.js';
+import type { SkillsExportResult } from '../core/skills.js';
 
 // ---------------------------------------------------------------------------
 // skills command
@@ -9,6 +10,13 @@ import { exportSddSkills, listSkillNames } from '../core/skills.js';
 // SDD skills teach the host AI tool the spec-driven workflow. They are copied
 // into each active target's skills directory and run in-session.
 // ---------------------------------------------------------------------------
+
+// cli_skills_adapter.exportSddSkills — 1:1 forward to the skills portal. The
+// commands export through here: `generate` for the configured targets, `init`
+// for the targets it just composed.
+export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
+  return skillsExportSddSkills(targetTypes);
+}
 
 export async function runSkillsList(): Promise<void> {
   assertProjectInitialized();

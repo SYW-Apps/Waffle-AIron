@@ -1,29 +1,31 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, loadRegistry } from '../config/loader.js';
+import { assertProjectInitialized } from '../config/loader.js';
 import { AgentRecord } from '../models/agent.js';
+import { resolveAgentTopology } from './subsystem.js';
 
 // ---------------------------------------------------------------------------
 // list command
 //
-// Lists all agents currently in the registry.
+// Lists the agent topology resolved from the spec tree through the core adapter.
 // ---------------------------------------------------------------------------
 
 export async function runList(): Promise<void> {
   assertProjectInitialized();
 
-  const registry = loadRegistry();
+  // Empty when the project has no system spec yet.
+  const agents = resolveAgentTopology();
 
-  if (registry.agents.length === 0) {
+  if (agents.length === 0) {
     logger.info('No agents resolved from the spec tree.');
     logger.info('Define subsystems and components first — see `wairon status`.');
     return;
   }
 
-  logger.header(`Agents (${registry.agents.length})`);
+  logger.header(`Agents (${agents.length})`);
   logger.blank();
 
-  for (const agent of registry.agents) {
+  for (const agent of agents) {
     printAgent(agent);
   }
 }

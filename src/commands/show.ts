@@ -1,20 +1,22 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, loadRegistry } from '../config/loader.js';
+import { assertProjectInitialized } from '../config/loader.js';
 import { WaironError } from '../utils/errors.js';
 import { AgentRecord } from '../models/agent.js';
+import { resolveAgentTopology } from './subsystem.js';
 
 // ---------------------------------------------------------------------------
 // show command
 //
-// Displays full details of a single agent from the registry.
+// Displays full details of a single agent of the topology resolved from the
+// spec tree through the core adapter.
 // ---------------------------------------------------------------------------
 
 export async function runShow(agentId: string): Promise<void> {
   assertProjectInitialized();
 
-  const registry = loadRegistry();
-  const agent = registry.agents.find((a) => a.id === agentId);
+  // Empty when the project has no system spec yet, so nothing is found.
+  const agent = resolveAgentTopology().find((a) => a.id === agentId);
 
   if (!agent) {
     throw new WaironError(`Agent "${agentId}" not found in the resolved spec topology.`);
