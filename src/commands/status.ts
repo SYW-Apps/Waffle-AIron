@@ -13,6 +13,7 @@ import {
 } from '../core/specs.js';
 import { approvalRecord, diffAgainstApproval, diffSize, movedChildren } from '../core/approval.js';
 import { describeApprover } from '../core/lockfile.js';
+import { implementationSourceFiles } from '../models/specs.js';
 
 export interface StatusOptions {
   subsystem?: string;
@@ -82,8 +83,9 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
     const impl = implementations.find(im => intf && im.contract === intf.id);
     if (impl) {
       score += 30; // 30% for implementation specification existing
-      if (impl.sourcePath && pathExists(fromProjectRoot(impl.sourcePath))) {
-        score += 20; // 20% for concrete source code file existing on disk
+      const sourceFiles = implementationSourceFiles(impl);
+      if (sourceFiles.length > 0 && sourceFiles.every(f => pathExists(fromProjectRoot(f)))) {
+        score += 20; // 20% for every named concrete source file existing on disk
       }
     }
 
@@ -167,12 +169,32 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
       // Print implementation info
       if (impl) {
         const implStatusStr = impl.status !== 'complete' ? chalk.yellow(` [${impl.status}]`) : '';
-        const pathStr = impl.sourcePath
-          ? pathExists(fromProjectRoot(impl.sourcePath))
+        const methodsWithOwnPath = impl.methods.filter(m => m.sourcePath);
+        let pathStr: string;
+        if (impl.sourcePath) {
+          pathStr = pathExists(fromProjectRoot(impl.sourcePath))
             ? chalk.green(` -> ${impl.sourcePath}`)
-            : chalk.red(` -> ${impl.sourcePath} (File Missing!)`)
-          : chalk.gray(' (No source path)');
+            : chalk.red(` -> ${impl.sourcePath} (File Missing!)`);
+        } else if (methodsWithOwnPath.length > 0) {
+          // No implementation-level path, but methods name their own — listed below
+          // instead of claiming there is no source path at all.
+          pathStr = '';
+        } else {
+          pathStr = chalk.gray(' (No source path)');
+        }
         console.log(`${chalk.gray(subIndent + compIndent + '└── ')}${chalk.green(`Implementation: ${impl.id}`)}${implStatusStr}${pathStr}`);
+
+        const methodIndent = subIndent + compIndent + '    ';
+        for (let k = 0; k < methodsWithOwnPath.length; k++) {
+          const method = methodsWithOwnPath[k];
+          const isLastMethod = k === methodsWithOwnPath.length - 1;
+          const methodPrefix = isLastMethod ? '└── ' : '├── ';
+          const methodPath = method.sourcePath as string;
+          const methodLine = pathExists(fromProjectRoot(methodPath))
+            ? chalk.green(`method ${method.name} -> ${methodPath}`)
+            : chalk.red(`method ${method.name} -> ${methodPath} (File Missing!)`);
+          console.log(`${chalk.gray(methodIndent + methodPrefix)}${methodLine}`);
+        }
       } else {
         console.log(`${chalk.gray(subIndent + compIndent + '└── ')}${chalk.red('Implementation: Missing (-30%)')}`);
       }
@@ -326,7 +348,8 @@ export function getStatusReport(options: StatusOptions = {}): string {
     const impl = implementations.find(im => intf && im.contract === intf.id);
     if (impl) {
       score += 30;
-      if (impl.sourcePath && pathExists(fromProjectRoot(impl.sourcePath))) {
+      const sourceFiles = implementationSourceFiles(impl);
+      if (sourceFiles.length > 0 && sourceFiles.every(f => pathExists(fromProjectRoot(f)))) {
         score += 20;
       }
     }
@@ -401,12 +424,28 @@ export function getStatusReport(options: StatusOptions = {}): string {
 
       if (impl) {
         const implStatusStr = impl.status !== 'complete' ? ` [${impl.status}]` : '';
-        const pathStr = impl.sourcePath
-          ? pathExists(fromProjectRoot(impl.sourcePath))
+        const methodsWithOwnPath = impl.methods.filter(m => m.sourcePath);
+        let pathStr: string;
+        if (impl.sourcePath) {
+          pathStr = pathExists(fromProjectRoot(impl.sourcePath))
             ? ` -> ${impl.sourcePath}`
-            : ` -> ${impl.sourcePath} (File Missing!)`
-          : ' (No source path)';
+            : ` -> ${impl.sourcePath} (File Missing!)`;
+        } else if (methodsWithOwnPath.length > 0) {
+          pathStr = '';
+        } else {
+          pathStr = ' (No source path)';
+        }
         output += `${subIndent}${compIndent}└── Implementation: ${impl.id}${implStatusStr}${pathStr}\n`;
+
+        const methodIndent = `${subIndent}${compIndent}    `;
+        for (let k = 0; k < methodsWithOwnPath.length; k++) {
+          const method = methodsWithOwnPath[k];
+          const isLastMethod = k === methodsWithOwnPath.length - 1;
+          const methodPrefix = isLastMethod ? '└── ' : '├── ';
+          const methodPath = method.sourcePath as string;
+          const fileMissing = !pathExists(fromProjectRoot(methodPath));
+          output += `${methodIndent}${methodPrefix}method ${method.name} -> ${methodPath}${fileMissing ? ' (File Missing!)' : ''}\n`;
+        }
       } else {
         output += `${subIndent}${compIndent}└── Implementation: Missing (-30%)\n`;
       }
