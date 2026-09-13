@@ -318,6 +318,35 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
       expect(detailIssues(validateSddTree())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
+
+  it('measures the realized function in the method\'s own source file, naming that file', () => {
+    const proj = createTempProject();
+    proj.component('store-a', 'Store');
+    proj.contract('store-a', ['put']);
+    proj.impl('store-a', `sourcePath: src/store.ts\nmethods:\n${INTENT('put')}\n    sourcePath: src/store/put.ts`);
+    proj.source('src/store.ts', SIMPLE_FN('put'));
+    proj.source('src/store/put.ts', BRANCHY_FN('put'));
+    proj.activate();
+    try {
+      const found = detailIssues(validateSddTree());
+      expect(found).toHaveLength(1);
+      expect(found[0].code).toBe('UNNARRATED_COMPLEXITY');
+      expect(found[0].message).toContain('"src/store/put.ts"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a simple function in the method\'s own source file is not judged by a branchy implementation file', () => {
+    const proj = createTempProject();
+    proj.component('store-a', 'Store');
+    proj.contract('store-a', ['put']);
+    proj.impl('store-a', `sourcePath: src/store.ts\nmethods:\n${INTENT('put')}\n    sourcePath: src/store/put.ts`);
+    proj.source('src/store.ts', BRANCHY_FN('put'));
+    proj.source('src/store/put.ts', SIMPLE_FN('put'));
+    proj.activate();
+    try {
+      expect(detailIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
 });
 
 describe('DETAIL_BELOW_STEREOTYPE — explicit dial below a logic stereotype\'s full floor', () => {

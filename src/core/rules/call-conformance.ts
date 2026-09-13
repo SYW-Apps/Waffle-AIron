@@ -1,5 +1,6 @@
 import type { SourceFileFacts } from '../source-analysis.js';
 import { normalizeSourcePath } from '../source-analysis.js';
+import { methodSourceFile } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
 import { isInChainedSubproject, stereotypeDefaultTier } from './conformance.js';
 
@@ -11,11 +12,12 @@ import { isInChainedSubproject, stereotypeDefaultTier } from './conformance.js';
 // step of a narrative must appear as a callee of the realized function.
 //
 // What it proves — and all it proves: the realized function (exact AST grade
-// only) contains a call to the target method's name (or its per-method
-// `symbol` override), where "contains" closes transitively over same-file
-// named helpers the function calls (extract-helper refactors stay clean).
-// Order, arguments, and conditions are deliberately unverified — this is set
-// membership, not behavioral equivalence, and the finding text says so.
+// only), found in the method's own source file (its sourcePath, else the
+// implementation's), contains a call to the target method's name (or its
+// per-method `symbol` override), where "contains" closes transitively over
+// same-file named helpers the function calls (extract-helper refactors stay
+// clean). Order, arguments, and conditions are deliberately unverified — this
+// is set membership, not behavioral equivalence, and the finding text says so.
 // `dispatch` steps are skipped: they route through runtime tables, so the
 // bound method's name legitimately never appears at the call site.
 // ---------------------------------------------------------------------------
@@ -50,24 +52,20 @@ export function closedCallees(facts: SourceFileFacts, fn: string): Set<string> |
 export const callConformanceRule: SddRule = {
   name: 'call-conformance',
   description:
-    'Code↔spec Level 3 (opener): every narrative `call` step of an exactly-analyzed method must be realized as a call in the realized function — the target method\'s contract name or its per-method symbol override must appear among the function\'s callees, closed transitively over same-file named helpers. Set membership only: order, arguments, and conditions are deliberately unverified, and dispatch steps (runtime-table routed) are skipped. Respects the conformance dial (off skips) and fires only at exact analysis grade — weaker grades never guess.',
+    'Code↔spec Level 3 (opener): every narrative `call` step of an exactly-analyzed method must be realized as a call in the realized function, read from the method\'s own source file (its sourcePath, else the implementation\'s) — the target method\'s contract name or its per-method symbol override must appear among the function\'s callees, closed transitively over same-file named helpers. Set membership only: order, arguments, and conditions are deliberately unverified, and dispatch steps (runtime-table routed) are skipped. Respects the conformance dial (off skips) and fires only at exact analysis grade — weaker grades never guess.',
   codes: [
-    { code: 'CALL_STEP_UNREALIZED', defaultSeverity: 'warning', summary: 'Narrative call step whose target method name (or symbol) never appears among the realized function\'s callees (exact grade, set membership)' },
+    { code: 'CALL_STEP_UNREALIZED', defaultSeverity: 'warning', summary: 'Narrative call step whose target method name (or symbol) never appears among the realized function\'s callees in the method\'s source file (exact grade, set membership)' },
   ],
   check(ctx: RuleContext) {
     const factsByPath = new Map<string, SourceFileFacts>();
     for (const f of ctx.codeModel.files) factsByPath.set(normalizeSourcePath(f.path), f);
 
     for (const impl of ctx.implementations) {
-      if (!impl.sourcePath) continue;
       const contract = ctx.interfaceMap.get(impl.contract);
       if (!contract) continue;
       const component = ctx.componentMap.get(contract.component);
       if (!component) continue;
       if (isInChainedSubproject(component.subsystem, ctx)) continue;
-
-      const facts = factsByPath.get(normalizeSourcePath(impl.sourcePath));
-      if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
 
       const specTier = impl.conformance ?? stereotypeDefaultTier(component.componentType);
       const isDraftCtx = ctx.isImplementationDraft(impl);
@@ -76,6 +74,13 @@ export const callConformanceRule: SddRule = {
         const tier = implMethod.conformance ?? specTier;
         if (tier === 'off') continue;
         if (!implMethod.narrative.length) continue;
+
+        // The realized function lives in the method's own source file: its
+        // sourcePath, else the implementation's. Exact grade only.
+        const file = methodSourceFile(implMethod, impl.sourcePath);
+        if (!file) continue;
+        const facts = factsByPath.get(normalizeSourcePath(file));
+        if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
 
         const fnSymbol = implMethod.symbol ?? implMethod.name;
         const callees = closedCallees(facts, fnSymbol);
@@ -121,7 +126,7 @@ export const callConformanceRule: SddRule = {
         ctx.addIssue(
           'warning',
           'CALL_STEP_UNREALIZED',
-          `Method "${implMethod.name}" in implementation "${impl.id}": ${missing.length} narrative call step(s) are not realized as calls of the function "${fnSymbol}" in "${impl.sourcePath}" — ${detail}. Callees are matched by name, closed over same-file helpers (exact grade, set membership — order and arguments are not checked). Realize the calls, fix the narrative, or map code names via per-method symbols on the targets.`,
+          `Method "${implMethod.name}" in implementation "${impl.id}": ${missing.length} narrative call step(s) are not realized as calls of the function "${fnSymbol}" in "${file}" — ${detail}. Callees are matched by name, closed over same-file helpers (exact grade, set membership — order and arguments are not checked). Realize the calls, fix the narrative, or map code names via per-method symbols on the targets.`,
           impl.id,
           isDraftCtx,
         );
