@@ -108,24 +108,14 @@ interface ProjectConfigStore {
   write(config: ProjectConfig): void;
   exists(): boolean;
   declares(field: string): boolean;
+  readField(field: string): ProjectConfigDocument | undefined;
 }
 
-/**
- * The store, plus the one raw field read the index needs to locate the specs
- * folder of a configuration that fails the schema. iproject_config_store has no
- * method returning a raw value, so this stays a private seam between two members
- * of the same Repository.
- */
-interface HeldProjectConfig {
-  store: ProjectConfigStore;
-  rawValueAt(field: string): unknown;
-}
-
-function storeOver(adapter: ProjectConfigFsAdapter, root: string): HeldProjectConfig {
+function storeOver(adapter: ProjectConfigFsAdapter, root: string): ProjectConfigStore {
   const currentDocument = (): ProjectConfigDocument | null =>
     (adapter.documentExists() ? adapter.readDocument() : null);
 
-  const store: ProjectConfigStore = {
+  return {
     read() {
       if (!adapter.documentExists()) return null;
       return parseConfig(adapter.readDocument(), root);
@@ -143,8 +133,12 @@ function storeOver(adapter: ProjectConfigFsAdapter, root: string): HeldProjectCo
     declares(field) {
       return valueAt(currentDocument(), field) !== undefined;
     },
+    readField(field) {
+      // The raw document, before any schema parsing, so a configuration the schema
+      // rejects still yields the field.
+      return valueAt(currentDocument(), field);
+    },
   };
-  return { store, rawValueAt: (field) => valueAt(currentDocument(), field) };
 }
 
 /** Parse the document against the schema, defaults applied, with the loader's error on failure. */
@@ -362,8 +356,7 @@ function bundleInPlace(packs: PackEntry[], bundled: PackSelection[]): PackEntry[
 
 // ── project_config_index ────────────────────────────────────────────────────
 
-function indexOver(held: HeldProjectConfig, root: string): ProjectConfigIndex {
-  const { store } = held;
+function indexOver(store: ProjectConfigStore, root: string): ProjectConfigIndex {
   return {
     load() {
       return store.read();
@@ -375,10 +368,11 @@ function indexOver(held: HeldProjectConfig, root: string): ProjectConfigIndex {
       return store.declares('extensions.useGlobalPacks');
     },
     specsDir() {
-      // Read raw, not parsed, so a configuration that fails the schema still locates
-      // its specs. Never throws: an unreadable document falls back like a missing one.
+      // Read through the store's readField (the raw document, before schema parsing),
+      // so a configuration that fails the schema still locates its specs. Never throws:
+      // an unreadable document falls back like a missing one.
       try {
-        const declared = held.rawValueAt('paths.specsDir');
+        const declared = store.readField('paths.specsDir');
         if (declared) return path.resolve(root, declared as string);
       } catch {
         // fall back below
@@ -396,9 +390,9 @@ function indexOver(held: HeldProjectConfig, root: string): ProjectConfigIndex {
  */
 export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, rootDir: string): ProjectConfigRepository {
   const root = path.resolve(rootDir);
-  const held = storeOver(adapter, root);
-  const index = indexOver(held, root);
-  const registry = registryOver(held.store, root);
+  const store = storeOver(adapter, root);
+  const index = indexOver(store, root);
+  const registry = registryOver(store, root);
   return {
     load() { return index.load(); },
     exists() { return index.exists(); },
@@ -453,7 +447,7 @@ export const projectConfigRepository: ProjectConfigRepository = {
  */
 export function replaceProjectConfigTransitional(config: ProjectConfig): void {
   const root = path.resolve(getProjectRoot());
-  storeOver(projectConfigFsAdapterAt(root), root).store.write(config);
+  storeOver(projectConfigFsAdapterAt(root), root).write(config);
 }
 
 // ── project_config type behaviour ───────────────────────────────────────────
