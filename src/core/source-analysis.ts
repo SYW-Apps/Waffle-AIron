@@ -1,14 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
-import type { ImplementationSpec } from '../models/index.js';
+import { implementationSourceFiles, type ImplementationSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Source Analysis Adapter — the validator subsystem's only source-code I/O.
 //
-// Resolves every distinct L4 sourcePath inside the project root, reads the
-// files, and produces the pure CodeModel the structural-conformance rule
-// family consumes. Analysis is tiered so wairon carries ZERO mandatory parser
+// Resolves every distinct source path the implementations name (each L4
+// sourcePath, each method's own sourcePath, each simPath) inside the project
+// root, reads the files, and produces the pure CodeModel the
+// structural-conformance rule family consumes. Analysis is tiered so wairon carries ZERO mandatory parser
 // dependencies:
 //   exact    — full AST via the TypeScript compiler, resolved dynamically from
 //              the analyzed project's node_modules first and wairon's own
@@ -613,22 +614,24 @@ function looksBinary(buffer: Buffer): boolean {
 
 /**
  * Build the pure source-code model for a validation run: one SourceFileFacts
- * per distinct sourcePath across the given implementations, resolved and
- * containment-checked within projectRoot, analyzed at the best available
- * grade. Deterministic over file contents; a single file's analysis failure
- * degrades that file to the generic scan, never aborts the run.
+ * per distinct source path across the given implementations — each
+ * implementation's sourcePath, each method's own sourcePath, and each simPath
+ * — resolved and containment-checked within projectRoot, analyzed at the best
+ * available grade. Deterministic over file contents; a single file's analysis
+ * failure degrades that file to the generic scan, never aborts the run.
  */
 export function buildCodeModel(implementations: ImplementationSpec[], projectRoot: string): CodeModel {
   const files: SourceFileFacts[] = [];
   const seen = new Set<string>();
   const exactCache = new Map<string, ExactFacts | null>();
 
-  // simPath files are analyzed alongside sourcePaths: the integration-
-  // conformance rule needs their import graphs to prove the harness wires
-  // the real modules. Same containment, same tiers, same dedup (N:1).
+  // Every source file an implementation names (its own path, then each
+  // method's), plus the simPath: the integration-conformance rule needs sim
+  // import graphs to prove the harness wires the real modules. Same
+  // containment, same tiers, same dedup (N:1).
   const declaredPaths: string[] = [];
   for (const impl of implementations) {
-    if (impl.sourcePath) declaredPaths.push(impl.sourcePath);
+    declaredPaths.push(...implementationSourceFiles(impl));
     if (impl.simPath) declaredPaths.push(impl.simPath);
   }
   for (const declared of declaredPaths) {

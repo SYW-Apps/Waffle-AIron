@@ -434,6 +434,40 @@ describe('buildCodeModel — analyzer grades', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
+  it('analyzes each method\'s own source file next to the implementation\'s, deduplicated', () => {
+    const dir = mkTemp();
+    try {
+      fs.mkdirSync(path.join(dir, 'src', 'commands'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'src', 'cli.ts'), 'export function listTargets(): void {}\n');
+      fs.writeFileSync(path.join(dir, 'src', 'commands', 'lock.ts'), 'export function lockSpecs(): void {}\n');
+      const withMethodFiles = {
+        ...impl('src/cli.ts'),
+        methods: [
+          { name: 'lockSpecs', sourcePath: 'src/commands/lock.ts', narrative: [] },
+          { name: 'listTargets', sourcePath: 'src/cli.ts', narrative: [] },
+          { name: 'unlockSpecs', sourcePath: 'src/commands/unlock.ts', narrative: [] },
+        ],
+      };
+      const model = buildCodeModel([withMethodFiles], dir);
+      expect(model.files.map(f => f.path)).toEqual(['src/cli.ts', 'src/commands/lock.ts', 'src/commands/unlock.ts']);
+      const lock = model.files.find(f => f.path === 'src/commands/lock.ts')!;
+      expect(lock.status).toBe('analyzed');
+      expect(lock.declaredNames).toContain('lockSpecs');
+      expect(model.files.find(f => f.path === 'src/commands/unlock.ts')!.status).toBe('missing');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('analyzes method source files even when the implementation names no path of its own', () => {
+    const dir = mkTemp();
+    try {
+      fs.writeFileSync(path.join(dir, 'lock.ts'), 'export function lockSpecs(): void {}\n');
+      const pathless = { ...impl('lock.ts'), sourcePath: undefined, methods: [{ name: 'lockSpecs', sourcePath: 'lock.ts', narrative: [] }] };
+      const model = buildCodeModel([pathless], dir);
+      expect(model.files.map(f => f.path)).toEqual(['lock.ts']);
+      expect(model.files[0].analysisGrade).toBe('exact');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it('deduplicates N:1 sourcePaths into one facts entry', () => {
     const dir = mkTemp();
     try {
