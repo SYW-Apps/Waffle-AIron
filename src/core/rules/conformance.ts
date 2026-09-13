@@ -78,7 +78,7 @@ export const structuralConformanceRule: SddRule = {
   description:
     'Code↔spec Level 1: every source file an implementation names — its own sourcePath and each method\'s — must resolve to a real file inside the project root, and every L3 contract method must be realized in its own source file (the method\'s sourcePath, else the implementation\'s) at its conformance tier (declared | anchored | off; Portals default to anchored, everything else to declared; per-method `symbol` maps intent-language names to code names), and every finding code a contract method declares must appear as a string literal in that file (UNREALIZED_FINDING). A file that escapes the root, is missing or cannot be read is reported once and blocks only the methods realized in it. Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. Implementations under chained subsystems (projectPath) validate standalone in their own project run and are skipped here.',
   codes: [
-    { code: 'MISSING_SOURCE_PATH', defaultSeverity: 'warning', summary: 'A contract method has no source file — its implementation declares no sourcePath and the method names none — so structural conformance cannot link it to code' },
+    { code: 'MISSING_SOURCE_PATH', defaultSeverity: 'warning', summary: 'An implementation names no source file at all, or a contract method is left without one — structural conformance cannot link it to code' },
     { code: 'MISSING_SOURCE_FILE', defaultSeverity: 'error', summary: 'A source file an implementation or one of its methods names does not resolve to a file on disk' },
     { code: 'SOURCE_PATH_ESCAPES_ROOT', defaultSeverity: 'error', summary: 'A source file an implementation or one of its methods names is absolute or escapes the project root (containment refusal)' },
     { code: 'UNREALIZED_METHOD', defaultSeverity: 'warning', summary: 'An L3 contract method has no anchor in its own source file (the method\'s sourcePath, else the implementation\'s) at the required conformance tier' },
@@ -130,21 +130,37 @@ export const structuralConformanceRule: SddRule = {
       const unlinked = contract.methods
         .filter(method => !methodSourceFile(methodImplOf(method.name) ?? {}, impl.sourcePath))
         .map(method => method.name);
-      if (unlinked.length > 0) {
+      // The implementation names no source file anywhere — no sourcePath of its
+      // own, and no method names one either — regardless of how many contract
+      // methods exist (including zero). `unlinked` alone goes quiet when the
+      // contract has no methods to enumerate, which would leave an
+      // implementation with literally nothing linking it to code unreported.
+      const noFileAtAll = implementationSourceFiles(impl).length === 0;
+      if (unlinked.length > 0 || noFileAtAll) {
         // An `implementation`-type external link on the component IS the external
         // source-of-record (a cloud console / Make.com scenario / GitHub file). wairon
         // cannot analyze it, so there is no local file to structurally check — and
         // MISSING_SOURCE_PATH would just be noise. Suppress it when such a link exists.
         const hasExternalSource = (component.externalLinks ?? []).some((l) => l.type === 'implementation');
         if (!hasExternalSource) {
-          const one = unlinked.length === 1;
-          ctx.addIssue(
-            'warning',
-            'MISSING_SOURCE_PATH',
-            `Implementation "${impl.id}" declares no sourcePath, and contract method${one ? '' : 's'} ${quoteList(unlinked)} of "${impl.contract}" name${one ? 's' : ''} no source file of ${one ? 'its' : 'their'} own — structural conformance cannot link ${one ? 'it' : 'them'} to code.`,
-            impl.id,
-            draft,
-          );
+          if (unlinked.length > 0) {
+            const one = unlinked.length === 1;
+            ctx.addIssue(
+              'warning',
+              'MISSING_SOURCE_PATH',
+              `Implementation "${impl.id}" declares no sourcePath, and contract method${one ? '' : 's'} ${quoteList(unlinked)} of "${impl.contract}" name${one ? 's' : ''} no source file of ${one ? 'its' : 'their'} own — structural conformance cannot link ${one ? 'it' : 'them'} to code.`,
+              impl.id,
+              draft,
+            );
+          } else {
+            ctx.addIssue(
+              'warning',
+              'MISSING_SOURCE_PATH',
+              `Implementation "${impl.id}" of contract "${impl.contract}" names no source file at all — structural conformance cannot link it to code.`,
+              impl.id,
+              draft,
+            );
+          }
         }
       }
 

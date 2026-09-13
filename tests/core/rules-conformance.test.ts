@@ -133,6 +133,43 @@ describe('structural conformance — file level', () => {
     } finally { proj.cleanup(); }
   });
 
+  it('fires MISSING_SOURCE_PATH when the implementation names no source file at all and the contract has no methods', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.writeSpec('interface', 'iorch-a', [
+      'schemaVersion: 1.0.0',
+      'id: iorch-a',
+      'name: IOrchA',
+      'description: contract',
+      'component: orch-a',
+    ].join('\n'));
+    proj.impl('orch-a', '');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code)).toEqual(['MISSING_SOURCE_PATH']);
+      expect(found[0].severity).toBe('warning');
+      expect(found[0].message).toContain('names no source file at all');
+    } finally { proj.cleanup(); }
+  });
+
+  it('the `implementation` external link suppression also holds when the contract has no methods', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'externalLinks:\n  - url: "https://make.com/scenarios/42"\n    type: implementation\n    label: "Make scenario"');
+    proj.writeSpec('interface', 'iorch-a', [
+      'schemaVersion: 1.0.0',
+      'id: iorch-a',
+      'name: IOrchA',
+      'description: contract',
+      'component: orch-a',
+    ].join('\n'));
+    proj.impl('orch-a', '');
+    proj.activate();
+    try {
+      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
   it('an `implementation` external link on the component satisfies the source requirement (no MISSING_SOURCE_PATH)', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator', 'externalLinks:\n  - url: "https://make.com/scenarios/42"\n    type: implementation\n    label: "Make scenario"');

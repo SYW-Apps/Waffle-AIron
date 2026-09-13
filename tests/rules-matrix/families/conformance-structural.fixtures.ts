@@ -3,12 +3,14 @@
  *
  * Documented intents pinned here (rule description + doc comments + the
  * ConformanceTierSchema doc in src/models/specs.ts):
- *  - MISSING_SOURCE_PATH (warning): a contract method has no source file —
- *    its implementation declares no sourcePath and the method names none — so
- *    it cannot be structurally linked to code. When every contract method
- *    names its own file there is nothing to report. An
- *    `implementation`-type externalLink on the component is the external
- *    source-of-record and suppresses the finding.
+ *  - MISSING_SOURCE_PATH (warning): an implementation names no source file at
+ *    all, or a contract method is left without one — structural conformance
+ *    cannot link it to code. The "no file at all" case fires regardless of
+ *    the contract's method count (including a contract with none yet), since
+ *    an implementation with no sourcePath and no per-method sourcePath links
+ *    to nothing either way. When every contract method names its own file
+ *    there is nothing to report. An `implementation`-type externalLink on the
+ *    component is the external source-of-record and suppresses the finding.
  *  - MISSING_SOURCE_FILE (error): a source file an implementation or one of
  *    its methods names does not resolve to a file on disk — the spec names
  *    code that does not exist.
@@ -127,6 +129,38 @@ export default [
               narrative: [{ stepNumber: 1, type: 'local', description: 'Collect the day\'s captured payments into a settlement batch.' }],
             },
           ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_PATH',
+    severity: 'warning',
+    anchoredTo: 'webhook_signature_verifier_impl',
+    expectFire: true,
+    scenario:
+      'The webhook signature verifier contract was stood up ahead of the security team finalizing the verification algorithm and declares no methods yet, but its implementation was already registered with no sourcePath at all — nothing links the component to code even though the contract itself has nothing to enumerate.',
+    tree: {
+      subsystems: [{ id: 'notifications', description: 'Inbound webhook intake and verification for third-party notifications.' }],
+      components: [
+        {
+          id: 'webhook-signature-verifier',
+          componentType: 'Specialist',
+          subsystem: 'notifications',
+          description: 'Will verify inbound webhook signatures once the security team finalizes the algorithm.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'iwebhook_signature_verifier',
+          component: 'webhook-signature-verifier',
+          methods: [],
+        },
+      ],
+      implementations: [
+        {
+          id: 'webhook_signature_verifier_impl',
+          contract: 'iwebhook_signature_verifier',
         },
       ],
     },
