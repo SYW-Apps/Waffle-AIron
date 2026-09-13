@@ -288,4 +288,36 @@ portalType: HTTP_API`);
       expect(techIssues(validateSddTree())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
+
+  it('flags TECH_LEAKAGE in a method source path outside the owning boundary', () => {
+    const proj = createTempProject();
+    writeRepositoryBoundary(proj);
+    proj.component('billing-orch', 'Orchestrator');
+    proj.writeSpec('interface', 'ibilling-orch', `schemaVersion: 1.0.0
+id: ibilling-orch
+name: IBillingOrch
+description: Runs the monthly billing cycle.
+component: billing-orch
+methods:
+  - name: runBillingCycle
+    description: Runs one billing cycle end to end.
+    signature: "runBillingCycle(): Promise<void>"
+    returns: "Promise<void>"`);
+    proj.writeSpec('implementation', 'impl-billing-orch', `schemaVersion: 1.0.0
+id: impl-billing-orch
+name: ImplBillingOrch
+description: Coordinates the monthly billing cycle.
+contract: ibilling-orch
+sourcePath: src/billing/billing-orchestrator.ts
+methods:
+  - name: runBillingCycle
+    sourcePath: src/billing/mysql-billing-cycle.ts
+    narrative:
+      - { stepNumber: 1, description: coordinate the billing cycle, type: local }`);
+    proj.activate();
+    try {
+      const issues = techIssues(validateSddTree());
+      expect(issues.some(i => i.code === 'TECH_LEAKAGE' && i.specId === 'impl-billing-orch')).toBe(true);
+    } finally { proj.cleanup(); }
+  });
 });
