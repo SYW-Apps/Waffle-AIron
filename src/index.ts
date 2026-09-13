@@ -9,5 +9,7 @@
 export * from './models/index.js';
 export * from './config/index.js';
 export * from './core/index.js';
+// `loadProjectConfig` is exported by both barrels until the loader wrapper is removed; this keeps the public API's throwing variant.
+export { loadProjectConfig } from './config/index.js';
 export * from './exporters/index.js';
 export * from './utils/index.js';

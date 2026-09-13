@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, loadProjectConfig, WaiPaths } from '../config/loader.js';
+import { projectConfigRepository } from '../config/project-config.js';
+import type { ProjectConfig, PackSelection, ProjectProfileSelection } from '../models/project.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import { computeStateId, hashGateState, stateIdEquals, canonicalize, type StateId, type GateConfig } from './statehash.js';
 import { loadProjectExtensions } from './extensions.js';
@@ -3176,6 +3178,58 @@ export function readLockState(): LockStatus {
   const current = computeGateStateId();
   if (!record) return { state: 'unlocked', record: null, current };
   return { state: stateIdEquals(record.stateId, current) ? 'locked' : 'stale', record, current };
+}
+
+// ---------------------------------------------------------------------------
+// Project configuration writes (icore_orchestrator createProjectConfig …
+// markSelectionsBundled). Each is one intent-level write through the project
+// config Repository, the only way into .wai/project.yaml. The core portal
+// routes every published configuration write through here.
+// ---------------------------------------------------------------------------
+
+/** Write a fresh configuration for a project that has none; refuses when one exists. */
+export function createProjectConfig(config: ProjectConfig): void {
+  projectConfigRepository.create(config);
+}
+
+/** Select a pack by name, moving a re-selected pack last; returns whether an earlier selection was replaced. */
+export function upsertPackSelection(selection: PackSelection): boolean {
+  return projectConfigRepository.upsertPackSelection(selection);
+}
+
+/** Deselect a pack by name, leaving path references alone; returns whether anything was dropped. */
+export function removePackSelection(packName: string): boolean {
+  return projectConfigRepository.removePackSelection(packName);
+}
+
+/** Set the governing `projectType`. */
+export function setProjectType(projectType: string): void {
+  projectConfigRepository.setProjectType(projectType);
+}
+
+/** Record the profile selection hosted policy applied. */
+export function recordProfileSelection(selection: ProjectProfileSelection): void {
+  projectConfigRepository.recordProfileSelection(selection);
+}
+
+/** Set `execution.tier`. */
+export function setExecutionTier(tier: string): void {
+  projectConfigRepository.setExecutionTier(tier);
+}
+
+/** Register a legacy pack path reference when it is absent; returns whether it was added. */
+export function registerPackRef(ref: string): boolean {
+  return projectConfigRepository.registerPackRef(ref);
+}
+
+/** Drop a legacy pack path reference that matches exactly; returns whether anything was dropped. */
+export function deregisterPackRef(ref: string): boolean {
+  return projectConfigRepository.deregisterPackRef(ref);
+}
+
+/** Record bundled packs on their selections in place, in one write. */
+export function markSelectionsBundled(bundled: PackSelection[]): void {
+  projectConfigRepository.markSelectionsBundled(bundled);
 }
 
 export function computeStateIdAt(root: string): string | null {
