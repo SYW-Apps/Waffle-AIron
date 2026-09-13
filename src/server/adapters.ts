@@ -4,13 +4,24 @@ import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph, assertContainedProjectPath } from '../core/specs.js';
 import { exportSpecTree, importSpecTree } from '../core/treetransfer.js';
 import { provisionProject } from '../core/provision.js';
-import { captureApprovedSpecs, currentChildPins } from '../core/index.js';
+import {
+  captureApprovedSpecs,
+  currentChildPins,
+  loadProjectConfig,
+  registerPackRef,
+  deregisterPackRef,
+  removePackSelection,
+  setProjectType,
+  recordProfileSelection,
+  declaredPackNames,
+  declaredProfileIds,
+} from '../core/index.js';
 import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
-import { loadProjectConfig } from '../config/loader.js';
 import { globalPacksDir, discoverPacks, loadExtensionPacks, packEntryRef, packEntryLabel, globalPacksEnabled, DeclarativePackSchema } from '../core/extensions.js';
 import { BUILTIN_PROFILES, PROJECT_KINDS } from '../core/rules/types.js';
 import { createMcpServer } from '../mcp/server.js';
+import { ProjectNotInitializedError } from '../utils/errors.js';
 import * as gitPortal from '../git/index.js';
 import * as producerPortal from '../producers/index.js';
 import * as surfacePortal from '../core/surfaces.js';
@@ -59,6 +70,20 @@ export const hostCore = {
   // hosted export/import surfaces and every local↔hosted migration run through.
   exportSpecTree,
   importSpecTree,
+  // The bound project's configuration, forwarded to the core portal's project
+  // config Repository: the only way hosted pack, policy and profile workflows
+  // read or write .wai/project.yaml. loadProjectConfig is null when the project
+  // has none; every write refuses a project without a configuration.
+  loadProjectConfig,
+  registerPackRef,
+  deregisterPackRef,
+  removePackSelection,
+  setProjectType,
+  recordProfileSelection,
+  // The project_config type's own derivations over a loaded configuration: the
+  // pack names it declares and the profile ids its selection records.
+  declaredPackNames,
+  declaredProfileIds,
   // Extension-pack loading forwarded to sdd_core — used by the hosted pack store
   // (pack_registry) and the policy plane's required/default-pack application.
   globalPacksDir,
@@ -98,9 +123,14 @@ export function resolveContainedProjectPath(projectRoot: string, projectPath: st
   return assertContainedProjectPath(projectRoot, projectPath);
 }
 
-// host_validator_adapter → sdd_validator (validator_portal)
+// host_validator_adapter → sdd_validator (validator_portal). The bound project's
+// own rule severities and projectType govern the as-complete gate, so the
+// configuration is read through the host core adapter before forwarding.
 export function validateProjectAsComplete() {
-  const config = loadProjectConfig();
+  const config = hostCore.loadProjectConfig();
+  // A root with no configuration is not an initialized project: refused, as the
+  // gate always refused it.
+  if (!config) throw new ProjectNotInitializedError();
   return validateAsComplete({ rules: config.rules, projectType: config.projectType });
 }
 
