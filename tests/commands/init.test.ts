@@ -59,6 +59,10 @@ describe('cli_runner.runInit: completes only what is missing (real CLI)', () => 
   const init = (cwd: string) =>
     execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], { cwd, timeout: 180_000 });
 
+  // The closing summary's two ways of naming the configuration.
+  const LISTED_AS_CREATED = /\.wai\/project\.yaml\s+— project config/;
+  const LISTED_AS_KEPT = 'Kept .wai/project.yaml as it was (not recreated).';
+
   it('keeps an existing project.yaml byte-identical and bootstraps the missing tree', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-keep-'));
     const configPath = path.join(rootDir, '.wai', 'project.yaml');
@@ -83,6 +87,8 @@ describe('cli_runner.runInit: completes only what is missing (real CLI)', () => 
 
     expect(fs.readFileSync(configPath).equals(before)).toBe(true);
     expect(stdout).toContain('Kept the existing .wai/project.yaml');
+    expect(stdout).toContain(LISTED_AS_KEPT);
+    expect(stdout).not.toMatch(LISTED_AS_CREATED);
     expect(fs.existsSync(path.join(rootDir, '.wai', 'specs', '.index.yaml'))).toBe(true);
     expect(fs.existsSync(path.join(rootDir, '.claude', 'skills', 'sdd-architect', 'SKILL.md'))).toBe(true);
   }, 180_000);
@@ -97,6 +103,8 @@ describe('cli_runner.runInit: completes only what is missing (real CLI)', () => 
     };
     expect(config.execution.tier).toBe('off');
     expect(stdout).not.toContain('Kept the existing .wai/project.yaml');
+    expect(stdout).toMatch(LISTED_AS_CREATED);
+    expect(stdout).not.toContain(LISTED_AS_KEPT);
     expect(fs.existsSync(path.join(rootDir, '.wai', 'specs', '.index.yaml'))).toBe(true);
   }, 180_000);
 });

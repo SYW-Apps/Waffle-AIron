@@ -373,7 +373,8 @@ async function executeInit(
   // Complete only what is missing. runInit's early return looks for the spec
   // tree, so a half-finished init reaches here with its configuration in place;
   // that configuration is kept exactly as it is.
-  if (!projectConfigExists()) {
+  const hadConfig = projectConfigExists();
+  if (!hadConfig) {
     createProjectConfig(projectConfig);
   } else {
     logger.info('Kept the existing .wai/project.yaml.');
@@ -531,10 +532,11 @@ async function executeInit(
   logger.blank();
   logger.info('What was created:');
   logger.info('  .wai/               — source of truth for agent topology');
-  logger.info('  .wai/project.yaml   — project config');
+  if (!hadConfig) logger.info('  .wai/project.yaml   — project config');
   logger.info('  .wai/phased_design.md — spec kit alternative design workbook');
   logger.info('  .wai/specs/         — SDD spec tree (L0 .index.yaml bootstrapped)');
   logger.info('  .wai/context/       — shared context directory (domains.md, wairon-guide.md)');
+  if (hadConfig) logger.info('Kept .wai/project.yaml as it was (not recreated).');
   logger.blank();
   logger.info('Next steps:');
   logger.info('  Edit .wai/context/project.md — describe the project concept and stack details for the AI');
