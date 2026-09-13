@@ -18,19 +18,29 @@ import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes } from './rules/repository.js';
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
 import type { PackSelection } from '../models/project.js';
-// Static, NOT a lazy require: a relative require does not resolve under the test
-// runner, and the catch below would swallow it into "no selections" — silently
-// disabling the reproducibility rule in every test.
-import { loadProjectConfig } from '../config/loader.js';
+import { loadProjectConfig as loadCoreProjectConfig } from './index.js';
+
+/**
+ * validator_core_adapter: forward to the core surface's project configuration
+ * read — null when the project has none. This file is itself re-exported BY
+ * index.ts's barrel (`export * from './validation.js'`), so this import is a
+ * real cycle — safe because the binding is only dereferenced inside a
+ * function body at call time, by which point the barrel has finished
+ * initializing (the same shape as the skills.ts/instructions.ts cycle).
+ */
+export function loadProjectConfig(): ProjectConfig | null {
+  return loadCoreProjectConfig();
+}
 
 /**
  * The project's BY-NAME pack selections, for the reproducibility rule. Legacy
  * path refs are excluded: they pin nothing to check. Never throws — an
- * uninitialized project simply selects nothing.
+ * uninitialized project, or one whose configuration cannot be read, simply
+ * selects nothing.
  */
 function projectPackSelections(): PackSelection[] {
   try {
-    return (loadProjectConfig().extensions?.packs ?? []).filter((e): e is PackSelection => typeof e !== 'string');
+    return (loadProjectConfig()?.extensions?.packs ?? []).filter((e): e is PackSelection => typeof e !== 'string');
   } catch {
     return [];
   }
@@ -582,8 +592,8 @@ function resolveThroughParent(
     let governing: { rules?: RulesConfig; projectType?: string } = { rules: stricterSeverities(undefined, childRules) };
     try {
       const config = loadProjectConfig();
-      governing = { rules: stricterSeverities(config.rules, childRules), projectType: config.projectType };
-    } catch { /* an unconfigured parent judges at the defaults, tightened by the child's severities */ }
+      if (config) governing = { rules: stricterSeverities(config.rules, childRules), projectType: config.projectType };
+    } catch { /* a parent configuration that fails its schema judges at the defaults, tightened by the child's severities */ }
     return validateSddTree({
       ...governing,
       scopeSubsystem: scope,
