@@ -152,3 +152,117 @@ methods:
     } finally { proj.cleanup(); }
   });
 });
+
+// ---------------------------------------------------------------------------
+// A method can name its own source file. The owner's and the component
+// implementer's write fences hold every file an implementation names: its own
+// sourcePath and each method's (implementation_spec.sourceFiles).
+// ---------------------------------------------------------------------------
+
+describe('agent write fences include each method source file', () => {
+  const alphaSubsystem = 'schemaVersion: 1.0.0\nid: alpha\nname: Alpha\ndescription: d\nparentSystem: TestSystem';
+
+  /** A CLI runner whose run command lives in its own file. */
+  function writeCliRunner(proj: ReturnType<typeof createTempProject>): void {
+    proj.writeSpec('subsystem', 'alpha', alphaSubsystem);
+    proj.writeSpec('component', 'cli_runner', 'schemaVersion: 1.0.0\nid: cli_runner\nname: cli_runner\ndescription: d\nsubsystem: alpha\ncomponentType: Orchestrator');
+    proj.writeSpec('interface', 'icli_runner', `schemaVersion: 1.0.0
+id: icli_runner
+name: ICli
+description: d
+component: cli_runner
+methods:
+  - name: run
+    description: Runs a command.
+    signature: "run(): void"
+    returns: "void"
+  - name: help
+    description: Prints help.
+    signature: "help(): void"
+    returns: "void"`);
+    proj.writeSpec('implementation', 'cli_runner_impl', `schemaVersion: 1.0.0
+id: cli_runner_impl
+name: CliImpl
+description: d
+contract: icli_runner
+sourcePath: src/alpha/cli.ts
+methods:
+  - name: run
+    sourcePath: src/alpha/commands/run.ts
+    narrative:
+      - { stepNumber: 1, description: run the command, type: return, outcome: done }
+  - name: help
+    narrative:
+      - { stepNumber: 1, description: print help, type: return, outcome: done }`);
+    proj.writeFile('src/alpha/cli.ts', 'export function help(): void {}\n');
+    proj.writeFile('src/alpha/commands/run.ts', 'export function run(): void {}\n');
+  }
+
+  it("an owner's fence holds each method's own source file beside the implementation's", () => {
+    const proj = createTempProject();
+    writeCliRunner(proj);
+    proj.activate();
+    try {
+      const alpha = resolveAgentTopology().find((a) => a.id === 'alpha-owner')!;
+      expect(alpha.ownedPaths).toContain('src/alpha/cli.ts');
+      expect(alpha.ownedPaths).toContain('src/alpha/commands/run.ts');
+      expect(alpha.writePaths).toContain('src/alpha/commands/run.ts');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a method source file alone is a declared source, so the owner fence infers nothing', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', alphaSubsystem);
+    proj.writeSpec('component', 'parser_specialist', 'schemaVersion: 1.0.0\nid: parser_specialist\nname: parser_specialist\ndescription: d\nsubsystem: alpha\ncomponentType: Specialist');
+    proj.writeSpec('interface', 'iparser_specialist', `schemaVersion: 1.0.0
+id: iparser_specialist
+name: IParser
+description: d
+component: parser_specialist
+methods:
+  - name: parse
+    description: Parses the input.
+    signature: "parse(): string"
+    returns: "string"`);
+    proj.writeSpec('implementation', 'parser_specialist_impl', `schemaVersion: 1.0.0
+id: parser_specialist_impl
+name: ParserImpl
+description: d
+contract: iparser_specialist
+methods:
+  - name: parse
+    sourcePath: src/alpha/parse/run.ts
+    narrative:
+      - { stepNumber: 1, description: return the parse, type: return, outcome: the parse }`);
+    // A file the component name would infer-claim if inference ran.
+    proj.writeFile('src/alpha/parser_specialist.ts', 'export const parse = 1;\n');
+    proj.writeFile('src/alpha/parse/run.ts', 'export function parse(): string { return ""; }\n');
+
+    proj.activate();
+    try {
+      const alpha = resolveAgentTopology().find((a) => a.id === 'alpha-owner')!;
+      expect(alpha.ownedPaths).toContain('src/alpha/parse/run.ts');
+      expect(alpha.ownedPaths).not.toContain('src/alpha/parser_specialist.ts');
+    } finally { proj.cleanup(); }
+  });
+
+  it("a component implementer's fence holds each method's own source file", () => {
+    const proj = createTempProject();
+    proj.writeFile('.wai/project.yaml', JSON.stringify({
+      schemaVersion: '1.0.0',
+      name: 'test-project',
+      projectType: 'backend',
+      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules: { generateComponentImplementers: true },
+      createdAt: '2026-07-03T10:00:00Z',
+      updatedAt: '2026-07-03T10:00:00Z',
+    }));
+    writeCliRunner(proj);
+    proj.activate();
+    try {
+      const implementer = resolveAgentTopology().find((a) => a.id === 'cli_runner-implementer')!;
+      expect(implementer.ownedPaths).toEqual(['src/alpha/cli.ts', 'src/alpha/commands/run.ts']);
+      expect(implementer.writePaths).toEqual(['src/alpha/cli.ts', 'src/alpha/commands/run.ts']);
+    } finally { proj.cleanup(); }
+  });
+});

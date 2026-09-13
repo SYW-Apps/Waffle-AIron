@@ -20,7 +20,7 @@ import {
   getImplementationPath,
   resolveSubprojectForNamespace,
 } from './specs.js';
-import { ComponentSpec } from '../models/specs.js';
+import { ComponentSpec, implementationSourceFiles } from '../models/specs.js';
 import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
 
 // Cache for project files relative to the system root
@@ -329,14 +329,16 @@ export function resolveAgentTopology(): AgentRecord[] {
 
         let hasExplicitSource = false;
         for (const impl of compImpls) {
-          if (impl.sourcePath) {
-            hasExplicitSource = true;
-            if (!ownedPaths.includes(impl.sourcePath)) ownedPaths.push(impl.sourcePath);
+          // Every file the implementation names: its own sourcePath and each method's.
+          const files = implementationSourceFiles(impl);
+          if (files.length > 0) hasExplicitSource = true;
+          for (const file of files) {
+            if (!ownedPaths.includes(file)) ownedPaths.push(file);
           }
         }
 
-        // Inference is a FALLBACK for components whose implementations declare
-        // no sourcePath. Running it on implemented components lets a filename
+        // Inference is a FALLBACK for components whose implementations name no
+        // source file at all. Running it on implemented components lets a filename
         // that matches the component TYPE claim a foreign file — e.g. a
         // Repository facade realized in specs.ts inferring rules/repository.ts
         // owned by another subsystem — tripping OVERLAPPING_OWNERSHIP.
@@ -398,7 +400,9 @@ export function resolveAgentTopology(): AgentRecord[] {
 
       const ownedPaths: string[] = [];
       for (const impl of compImpls) {
-        if (impl.sourcePath) ownedPaths.push(impl.sourcePath);
+        for (const file of implementationSourceFiles(impl)) {
+          if (!ownedPaths.includes(file)) ownedPaths.push(file);
+        }
       }
 
       if (ownedPaths.length === 0) {
