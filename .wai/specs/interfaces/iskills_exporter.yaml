@@ -1,12 +1,19 @@
-schemaVersion: "1.0.0"
-id: "iskills_exporter"
-name: "Skills Exporter Interface"
-description: "Interface contract for copying static workflow skills to agent config directories."
-component: "skills_exporter"
+id: iskills_exporter
+name: Skills Exporter Interface
+description: Interface contract for copying static workflow skills to agent config directories.
+component: skills_exporter
 methods:
-  - name: "exportSddSkills"
-    description: "Copies built-in SDD skills templates into the project's local config folders"
-    signature: "exportSddSkills(): void"
-    returns: "void"
-createdAt: "2026-06-11T14:50:00Z"
-updatedAt: "2026-06-11T14:50:00Z"
+  - name: exportSddSkills
+    description: >-
+      Copies the built-in SDD skill templates into each active target's skills directory — the
+      passed target types, else the project's enabled targets — and reports what it wrote.
+    signature: 'exportSddSkills(targetTypes?: string[]): SkillsExportResult'
+    returns: SkillsExportResult
+    params:
+      - name: targetTypes
+        type: string[]
+        description: The target types to export into; omitted means the project's enabled targets
+        optional: true
+status: complete
+createdAt: '2026-06-11T14:50:00Z'
+updatedAt: '2026-09-13T23:11:51.519Z'
