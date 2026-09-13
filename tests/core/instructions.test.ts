@@ -115,6 +115,26 @@ describe('wairon instructions (the wairon-owned default)', () => {
     } finally { proj.cleanup(); }
   });
 
+  it('never throws and names no profile when the project has no configuration at all', () => {
+    // No .wai/project.yaml — not even .wai/ — unlike createTempProject above.
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-instr-noconfig-'));
+    invalidateSpecCache();
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
+    try {
+      const text = buildServerInstructions();
+      // Still composes wairon's own briefing rather than degrading to silence.
+      expect(text).toContain('# wairon — Spec-Driven Development (SDD)');
+      // No governing profile to name, so the generic phrasing stands instead of
+      // a `` `<profile>` `` mention.
+      expect(text).toMatch(/validated against the project's configured profile/);
+      expect(text).toContain("None — only wairon's built-in doctrine applies.");
+    } finally {
+      cwdSpy.mockRestore();
+      invalidateSpecCache();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('stays a map, not a copy of the skills — pointer-heavy and bounded', () => {
     // Hermetic on purpose: pack skills and pack blocks legitimately add length,
     // so the ceiling is measured against wairon's own briefing.

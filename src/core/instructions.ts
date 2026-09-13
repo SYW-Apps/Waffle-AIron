@@ -1,6 +1,5 @@
-import { loadProjectConfig } from '../config/loader.js';
 import type { LoadedInstructionBlock } from './extensions.js';
-import { listSkillResources, loadProjectExtensions, type SkillResourceDescriptor } from './skills.js';
+import { listSkillResources, loadProjectConfig, loadProjectExtensions, type SkillResourceDescriptor } from './skills.js';
 
 // ---------------------------------------------------------------------------
 // MCP server instructions — what wairon PUSHES to a connecting agent.
@@ -33,9 +32,9 @@ import { listSkillResources, loadProjectExtensions, type SkillResourceDescriptor
 /** The governing projectType/profile of the bound project, or null when it cannot be read. */
 function governingProfile(): string | null {
   try {
-    return loadProjectConfig().projectType ?? null;
+    return loadProjectConfig()?.projectType ?? null;
   } catch {
-    // An uninitialized project has no config — the briefing still applies.
+    // A configuration that fails its schema — the briefing still applies.
     return null;
   }
 }
