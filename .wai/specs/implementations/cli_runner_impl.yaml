@@ -313,6 +313,18 @@ methods:
         description: Bootstrap the standard .wai directory structure
         type: local
       - stepNumber: 12
+        description: Does this folder already hold a project configuration (a half-finished init)?
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 13
+        description: >-
+          Complete only what is missing: a folder that already holds a configuration keeps it as it
+          is
+        type: branch
+        condition: the folder has no project configuration yet
+        onFalseStep: 15
+      - stepNumber: 14
         description: >-
           Compose the new project's configuration — the chosen targets and projectType, execution
           budgets off, component-implementer and agent-file generation off, the store packs
@@ -321,12 +333,13 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createProjectConfig
-      - stepNumber: 13
+      - stepNumber: 15
+        label: export_skills
         description: Export SDD skills templates
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 14
+      - stepNumber: 16
         description: Generate default L0/L1/L2 spec files if empty
         type: local
   - name: runSubsystemMove
@@ -1180,4 +1193,4 @@ methods:
     conformance: 'off'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-13T11:47:25.990Z'
+updatedAt: '2026-09-13T13:54:14.566Z'
