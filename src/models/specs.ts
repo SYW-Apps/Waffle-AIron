@@ -480,6 +480,22 @@ export const MethodParamSchema = z.object({
 });
 export type MethodParam = z.infer<typeof MethodParamSchema>;
 
+/**
+ * One finding code a contract method can report: the unit of a method's
+ * `findings` list. The code must appear as a string literal in the method's
+ * source file (UNREALIZED_FINDING). For a validator rule, its findings are its
+ * catalog entry.
+ */
+export const FindingDeclarationSchema = z.object({
+  /** UPPER_SNAKE and unique within the method; a pack's codes carry the pack prefix (<PACK>_<CODE>). */
+  code: z.string().regex(/^[A-Z][A-Z0-9_]*$/, 'Finding code must be UPPER_SNAKE, e.g. UNREALIZED_FINDING'),
+  /** The default before project severity overrides and draft-context downgrades. */
+  severity: z.enum(['error', 'warning']),
+  /** One line saying what the finding means. */
+  summary: z.string().min(1, 'Finding summary must say what the finding means'),
+});
+export type FindingDeclaration = z.infer<typeof FindingDeclarationSchema>;
+
 export const MethodSignatureSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
   description: z.string(),
@@ -515,6 +531,25 @@ export const MethodSignatureSchema = z.object({
   invokedBy: z.object({
     kind: z.enum(['runtime', 'external', 'sibling-subsystem']),
     caller: z.string().optional(),
+  }).optional(),
+  /**
+   * The finding codes this method can report, each with its default severity
+   * and summary (see FindingDeclarationSchema). Each declared code must appear
+   * as a string literal in the method's source file (UNREALIZED_FINDING). A
+   * code is declared once per method.
+   */
+  findings: z.array(FindingDeclarationSchema).superRefine((findings, ctx) => {
+    const seen = new Set<string>();
+    findings.forEach((finding, i) => {
+      if (seen.has(finding.code)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [i, 'code'],
+          message: `Finding code "${finding.code}" is declared more than once in this method`,
+        });
+      }
+      seen.add(finding.code);
+    });
   }).optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
   ext: ExtDataSchema.optional(),
@@ -684,6 +719,13 @@ export type ConformanceTier = z.infer<typeof ConformanceTierSchema>;
 
 export const MethodImplementationSchema = z.object({
   name: z.string(), // Must match a method name in the L3 interface contract
+  /**
+   * The source file realizing THIS method when it is not the implementation's
+   * sourcePath, such as a command whose body lives in its own file; the
+   * implementation's sourcePath is the default. Relative to the root of the
+   * project holding the spec (a chained subproject's own root).
+   */
+  sourcePath: z.string().optional(),
   narrative: z.array(NarrativeStepSchema).default([]), // Level 5 Narrative
   /** Detail level for THIS method (overrides the spec-level default). */
   detail: NarrativeDetailSchema.optional(),
@@ -747,6 +789,36 @@ export const ImplementationSpecSchema = z.object({
 });
 
 export type ImplementationSpec = z.infer<typeof ImplementationSpecSchema>;
+
+/**
+ * The file a method is realized in: its own sourcePath, else the
+ * implementation's sourcePath passed in, else none
+ * (method_implementation.sourceFile).
+ */
+export function methodSourceFile(
+  method: Pick<MethodImplementation, 'sourcePath'>,
+  implementationSourcePath?: string,
+): string | undefined {
+  return method.sourcePath || implementationSourcePath || undefined;
+}
+
+/**
+ * Every source file an implementation names — its own sourcePath, then each
+ * method's — deduplicated, in declaration order
+ * (implementation_spec.sourceFiles). The simPath harness is not a source file
+ * of the implementation and is never included.
+ */
+export function implementationSourceFiles(
+  impl: Pick<ImplementationSpec, 'sourcePath'> & { methods?: ReadonlyArray<Pick<MethodImplementation, 'sourcePath'>> },
+): string[] {
+  const files: string[] = [];
+  const add = (file: string | undefined): void => {
+    if (file && !files.includes(file)) files.push(file);
+  };
+  add(impl.sourcePath);
+  for (const method of impl.methods ?? []) add(method.sourcePath);
+  return files;
+}
 
 // ---------------------------------------------------------------------------
 // Types: entities and value objects (the data the components operate on).
