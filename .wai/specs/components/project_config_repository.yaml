@@ -13,6 +13,6 @@ owns:
   - project_config_index
   - project_config_fs_adapter
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-09-13T01:31:17.255Z'
-updatedAt: '2026-09-13T01:31:17.260Z'
+updatedAt: '2026-09-13T13:02:25.785Z'

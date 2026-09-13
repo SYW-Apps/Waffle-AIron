@@ -8,6 +8,6 @@ subsystem: sdd_core
 componentType: Adapter
 owns: []
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-09-13T01:31:06.695Z'
-updatedAt: '2026-09-13T01:31:06.701Z'
+updatedAt: '2026-09-13T13:02:26.447Z'

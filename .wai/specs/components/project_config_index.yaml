@@ -9,6 +9,6 @@ componentType: Index
 owns: []
 dependsOn:
   - project_config_store
-status: draft
+status: complete
 createdAt: '2026-09-13T01:31:14.198Z'
-updatedAt: '2026-09-13T01:31:14.203Z'
+updatedAt: '2026-09-13T13:02:26.285Z'
