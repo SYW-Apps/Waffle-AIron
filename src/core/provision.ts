@@ -651,9 +651,10 @@ function rewriteRefFields(
 }
 
 /**
- * Re-express every implementation file path (sourcePath, simPath) under
- * `specsDir` so it is read against `toRoot` instead of `fromRoot`. The file a
- * path names never changes — only the root it is relative to.
+ * Re-express every implementation file path (sourcePath, each method's
+ * sourcePath, simPath) under `specsDir` so it is read against `toRoot` instead
+ * of `fromRoot`. The file a path names never changes — only the root it is
+ * relative to. Empty and absolute paths are left as they are.
  */
 function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: string): void {
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
@@ -665,13 +666,20 @@ function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: s
     }
     if (!raw || typeof raw !== 'object' || !('contract' in raw)) continue;
     let changed = false;
-    for (const key of ['sourcePath', 'simPath']) {
-      const p = raw[key];
-      if (typeof p !== 'string' || p === '' || path.isAbsolute(p)) continue;
+    /** Rebase `holder[key]` in place when it holds a relative path. */
+    const rebase = (holder: any, key: string): void => {
+      const p = holder[key];
+      if (typeof p !== 'string' || p === '' || path.isAbsolute(p)) return;
       const next = toPosixPath(path.relative(toRoot, path.resolve(fromRoot, p)));
       if (next !== p) {
-        raw[key] = next;
+        holder[key] = next;
         changed = true;
+      }
+    };
+    for (const key of ['sourcePath', 'simPath']) rebase(raw, key);
+    if (Array.isArray(raw.methods)) {
+      for (const method of raw.methods) {
+        if (method && typeof method === 'object') rebase(method, 'sourcePath');
       }
     }
     if (changed) writeYamlFile(file, raw);
