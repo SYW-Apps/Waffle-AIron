@@ -16,6 +16,9 @@ import {
 } from '../../src/server/operations.js';
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
+import { registerLocalDevProject } from '../../src/server/projects.js';
+import { provisionProject } from '../../src/core/provision.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { mintUserToken, allow, seedUnit, createPlacedProject } from './helpers.js';
@@ -431,6 +434,27 @@ describe('operations orchestrator (sdd_host)', () => {
     expect(missing.message).toMatch(/proj-sel/);
     expect(missing.message).toMatch(/ghost-selection/);
     expect(missing.message).toMatch(/prof-sel/);
+  });
+
+  it('getHealthReport names a project by its record id, even when its root folder is named otherwise', () => {
+    // `wairon dev` registers the developer's own folder, whose basename is not the id.
+    const devRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-operations-devroot-'));
+    try {
+      fs.mkdirSync(path.join(devRoot, '.wai', 'specs'), { recursive: true });
+      runWithProjectRoot(devRoot, () => provisionProject('DevSys'));
+      const file = path.join(devRoot, '.wai', 'project.yaml');
+      writeYamlFile(file, {
+        ...(readYamlFile(file) as Record<string, unknown>),
+        extensions: { packs: ['.wai/packs/ghost-dev.yaml'], useGlobalPacks: false },
+      });
+      registerLocalDevProject(dataDir, 'local', devRoot);
+
+      const missing = getHealthReport(cfg, MASTER).checks.find((c) => c.id === 'missing-pack-references')!;
+      expect(missing.status).toBe('fail');
+      expect(missing.message).toMatch(/local → missing pack\(s\): ghost-dev/);
+    } finally {
+      fs.rmSync(devRoot, { recursive: true, force: true });
+    }
   });
 
   it('getUsage: returns the instance snapshot with the active project count', () => {

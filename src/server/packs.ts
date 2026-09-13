@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { runWithProjectRoot, getProjectRoot } from '../utils/fs.js';
-import { parseYaml, readYamlFile } from '../utils/yaml.js';
-import { AI_PATHS } from '../config/loader.js';
+import { parseYaml } from '../utils/yaml.js';
 import type { PackScope } from '../core/extensions.js';
 import type { PackSelection, ProjectConfig } from '../models/project.js';
 import { hostCore, hostSdk } from './adapters.js';
@@ -10,7 +9,7 @@ import { authenticateCredential } from './auth.js';
 import { authorize } from './authorization.js';
 import { AdminAuthError, UnauthenticatedError } from './errors.js';
 import { existingProjectRoot } from './projects.js';
-import type { AvailableProfile, HostConfig, PackDescriptor, PackResolution, ProfileApplication, ProjectPackReference, ProjectProfileSelection, ResolvedGlobalPack } from './types.js';
+import type { AvailableProfile, HostConfig, PackDescriptor, PackResolution, ProfileApplication, ResolvedGlobalPack } from './types.js';
 import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 
 // ---------------------------------------------------------------------------
@@ -502,53 +501,6 @@ function storeRemoveProjectPack(name: string, ref?: string): void {
   const vendorDir = path.resolve(root, '.wai', 'packs');
   if (resolved.startsWith(vendorDir + path.sep)) {
     fs.rmSync(resolved, { recursive: true, force: true });
-  }
-}
-
-// ── pack_registry: project reference read (operational drift checks) ───────────
-//
-// A path-free read of a GIVEN project's declared pack/profile references straight
-// from its .wai/project.yaml, for operational drift checks. Pre-authorized and
-// server-internal (the operations orchestrator already authorized operations:read
-// before calling), so it is never gated and never portal-exposed. Never throws: a
-// missing/empty config yields an empty reference. Carries no filesystem paths
-// (only the project id plus declared pack/profile names), so the result is safe
-// for redacted diagnostics.
-
-/**
- * Read the given project's declared pack/profile references as a
- * ProjectPackReference: the pack names registered under extensions.packs (a path
- * ref by its file stem, a by-name selection by its name), unioned with the
- * required/default pack names recorded in its profileSelection, plus the selected
- * profile ids. Returns empty reference lists (never throws) when the project has no
- * config or no extensions/profile selection. Reads the raw project.yaml (policy.ts
- * pattern) so the un-schema'd profileSelection survives the read.
- */
-export function readProjectReferences(rootPath: string): ProjectPackReference {
-  const projectId = path.basename(rootPath);
-  const empty: ProjectPackReference = { projectId, packNames: [] };
-  try {
-    return runWithProjectRoot(rootPath, () => {
-      const raw = readYamlFile(AI_PATHS.projectConfig()) as
-        | { extensions?: { packs?: Array<string | { name: string }> }; profileSelection?: ProjectProfileSelection }
-        | null;
-      if (!raw) return empty;
-      const sel = raw.profileSelection;
-      const packNames = [
-        ...new Set([
-          // A selection is an object: it contributes its name, never a file stem.
-          ...(raw.extensions?.packs ?? []).map((entry) => (typeof entry === 'string' ? stem(entry) : entry.name)),
-          ...(sel?.requiredPackNames ?? []),
-          ...(sel?.defaultPackNames ?? []),
-        ]),
-      ];
-      const reference: ProjectPackReference = { projectId, packNames };
-      const profileIds = [...new Set(sel?.profileIds ?? [])];
-      if (profileIds.length > 0) reference.profileIds = profileIds;
-      return reference;
-    });
-  } catch {
-    return empty;
   }
 }
 
