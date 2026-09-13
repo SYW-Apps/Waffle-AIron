@@ -18,6 +18,7 @@ import { setProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import { getStatusReport } from '../commands/status.js';
+import type { ProjectConfig } from '../models/project.js';
 // mcp_core_adapter's project configuration read (icore_portal loadProjectConfig,
 // null when the project has none). STATIC, not lazily required: same reasoning
 // as requireLoader below — a static binding stays correct per bound project,
@@ -168,6 +169,15 @@ function composeAgentBrief(agentId: string): AgentBrief {
 // read backing the wairon-agent:// resource listing.
 function resolveAgentTopology(): AgentRecord[] {
   return coreResolveAgentTopology();
+}
+
+// mcp_core_adapter.loadProjectConfig — the same forward for the project
+// configuration read (null when the project has none). validateTopology,
+// getProjectConfig, and sdd_validate_tree all call this rather than the
+// statically-imported binding directly, so the contract method has its own
+// realized function at the anchored conformance tier.
+function loadProjectConfig(): ProjectConfig | null {
+  return coreLoadProjectConfig();
 }
 
 
@@ -765,7 +775,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         }
         // A missing config errored before (the loader's loadProjectConfig threw);
         // keep that outcome now that the adapter reads null instead of throwing.
-        const config = coreLoadProjectConfig();
+        const config = loadProjectConfig();
         if (!config) throw new ProjectNotInitializedError();
         const result = validateRegistry(registry, config.rules);
         return json({
@@ -786,7 +796,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     () => {
       try {
-        const config = coreLoadProjectConfig();
+        const config = loadProjectConfig();
         // A missing config errored before (the loader's loadProjectConfig threw);
         // keep that outcome now that the adapter reads null instead of throwing.
         if (!config) throw new ProjectNotInitializedError();
@@ -1530,7 +1540,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ subsystem, recursive }) => {
       try {
-        const config = coreLoadProjectConfig();
+        const config = loadProjectConfig();
         // A missing config errored before (the loader's loadProjectConfig threw);
         // keep that outcome now that the adapter reads null instead of throwing.
         if (!config) throw new ProjectNotInitializedError();
