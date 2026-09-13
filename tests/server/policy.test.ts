@@ -22,7 +22,9 @@ import {
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
 import { mintUserToken, allow, seedUnit, createPlacedProject } from './helpers.js';
-import { adoptProjectPack, listProjectPacks } from '../../src/server/packs.js';
+import { adoptProjectPack, executeApprovedEnsureProfileInstalled, listProjectPacks } from '../../src/server/packs.js';
+import { loadProjectConfig } from '../../src/core/index.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { ForbiddenError } from '../../src/server/identity.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { existingProjectRoot } from '../../src/server/projects.js';
@@ -439,6 +441,44 @@ describe('project policy orchestrator (sdd_host)', () => {
       profileResolvable: true,
     });
     expect(setProjectType(cfg, MASTER, 'adopt-proj', 'ddd').adoptedPackName).toBeUndefined();
+  });
+
+  it('an adopted profile pack is registered by the reference the pack registry reported, which registers nothing itself', () => {
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+
+    // The registry vendors the contributing pack and REPORTS its reference...
+    createPlacedProject(cfg, MASTER, 'store-proj');
+    const storeRoot = existingProjectRoot(dataDir, 'store-proj')!;
+    const config = runWithProjectRoot(storeRoot, () => loadProjectConfig());
+    expect(executeApprovedEnsureProfileInstalled(cfg, 'store-proj', 'ddd', config)).toEqual({
+      profileId: 'ddd',
+      source: 'acme-doctrine',
+      adoptedPackName: 'acme-doctrine',
+      adoptedPackRef: '.wai/packs/acme-doctrine.yaml',
+    });
+    expect(fs.existsSync(path.join(storeRoot, '.wai', 'packs', 'acme-doctrine.yaml'))).toBe(true);
+    expect(readRawConfig(storeRoot).extensions?.packs ?? []).toEqual([]);
+
+    // ...and the policy orchestrator registers exactly that reference.
+    createPlacedProject(cfg, MASTER, 'ref-proj');
+    const root = existingProjectRoot(dataDir, 'ref-proj')!;
+    setProjectType(cfg, MASTER, 'ref-proj', 'ddd');
+    expect(readRawConfig(root).extensions.packs).toEqual(['.wai/packs/acme-doctrine.yaml']);
+    expect(readRawConfig(root).projectType).toBe('ddd');
+  });
+
+  it('an unknown project.yaml key survives the hosted projectType and profile-selection writes', () => {
+    createPlacedProject(cfg, MASTER, 'keep-key-proj');
+    const root = existingProjectRoot(dataDir, 'keep-key-proj')!;
+    writeRawConfig(root, { ...readRawConfig(root), futureSetting: { enabled: true, owner: 'platform' } });
+
+    // One hosted write sets projectType and records the folded profile selection.
+    setProjectType(cfg, MASTER, 'keep-key-proj', 'game-ecs');
+
+    const raw = readRawConfig(root);
+    expect(raw.projectType).toBe('game-ecs');
+    expect(raw.profileSelection.profileIds).toEqual(['game-ecs']);
+    expect(raw.futureSetting).toEqual({ enabled: true, owner: 'platform' });
   });
 
   it('setProjectType REFUSES a profile id no tier contributes and leaves project.yaml byte-for-byte intact', () => {

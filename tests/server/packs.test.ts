@@ -8,8 +8,9 @@ import { AdminAuthError } from '../../src/server/admin.js';
 import { UnauthenticatedError } from '../../src/server/errors.js';
 import * as packs from '../../src/server/packs.js';
 import { createPlacedProject, mintUserToken } from './helpers.js';
-import { loadProjectConfig } from '../../src/config/loader.js';
+import { loadProjectConfig } from '../../src/core/index.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
+import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { HostConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -35,6 +36,11 @@ const DECLARATIVE_PACK = [
   '    foreignBuiltins: []',
   '',
 ].join('\n');
+
+/** The entries a project's configuration registers under extensions.packs. */
+function registeredPacks(root: string): unknown[] {
+  return runWithProjectRoot(root, () => loadProjectConfig())?.extensions?.packs ?? [];
+}
 
 describe('hosted pack management (sdd_host)', () => {
   let base: string;
@@ -115,15 +121,54 @@ describe('hosted pack management (sdd_host)', () => {
 
       const root = path.join(dataDir, 'projects', 'demo');
       expect(fs.existsSync(path.join(root, '.wai', 'packs', 'acme.yaml'))).toBe(true);
-      const registered = runWithProjectRoot(root, () => loadProjectConfig()).extensions?.packs ?? [];
-      expect(registered).toContain('.wai/packs/acme.yaml');
+      expect(registeredPacks(root)).toContain('.wai/packs/acme.yaml');
 
       expect(packs.listProjectPacks(cfg, ADMIN, 'demo').map((p) => p.name)).toContain('acme-doctrine');
 
       packs.removeProjectPack(cfg, ADMIN, 'demo', 'acme');
       expect(fs.existsSync(path.join(root, '.wai', 'packs', 'acme.yaml'))).toBe(false);
-      const after = runWithProjectRoot(root, () => loadProjectConfig()).extensions?.packs ?? [];
-      expect(after).not.toContain('.wai/packs/acme.yaml');
+      expect(registeredPacks(root)).not.toContain('.wai/packs/acme.yaml');
+    });
+
+    it('registers a project pack exactly once, even when it is installed again', () => {
+      createPlacedProject(cfg, ADMIN, 'demo');
+      const root = path.join(dataDir, 'projects', 'demo');
+
+      const first = packs.installProjectPack(cfg, ADMIN, 'demo', 'acme', DECLARATIVE_PACK);
+      const again = packs.installProjectPack(cfg, ADMIN, 'demo', 'acme', DECLARATIVE_PACK);
+
+      // The registry's ref is the path reference the orchestrator registered.
+      expect(first.ref).toBe('.wai/packs/acme.yaml');
+      expect(again.ref).toBe('.wai/packs/acme.yaml');
+      expect(registeredPacks(root).filter((entry) => entry === '.wai/packs/acme.yaml')).toHaveLength(1);
+    });
+
+    it('removal deregisters the kind it matched: a selection by its name, a path reference by that reference', () => {
+      createPlacedProject(cfg, ADMIN, 'demo');
+      const root = path.join(dataDir, 'projects', 'demo');
+      packs.installProjectPack(cfg, ADMIN, 'demo', 'acme', DECLARATIVE_PACK);
+
+      // Beside the path reference, a by-name selection with its bundle directory.
+      const file = path.join(root, '.wai', 'project.yaml');
+      const raw = readYamlFile(file) as { extensions: { packs: unknown[] } };
+      raw.extensions.packs.push({ name: 'tenant' });
+      writeYamlFile(file, raw);
+      fs.mkdirSync(path.join(root, '.wai', 'packs', 'tenant'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.wai', 'packs', 'tenant', 'pack.yaml'), 'name: tenant\n');
+
+      // The selection goes, with its bundle directory; the path reference stays.
+      packs.removeProjectPack(cfg, ADMIN, 'demo', 'tenant');
+      expect(registeredPacks(root)).toEqual(['.wai/packs/acme.yaml']);
+      expect(fs.existsSync(path.join(root, '.wai', 'packs', 'tenant'))).toBe(false);
+      expect(fs.existsSync(path.join(root, '.wai', 'packs', 'acme.yaml'))).toBe(true);
+
+      // The path reference goes next, matched by its file stem.
+      packs.removeProjectPack(cfg, ADMIN, 'demo', 'acme');
+      expect(registeredPacks(root)).toEqual([]);
+      expect(fs.existsSync(path.join(root, '.wai', 'packs', 'acme.yaml'))).toBe(false);
+
+      // A name nothing registers is refused, with the message removal always gave.
+      expect(() => packs.removeProjectPack(cfg, ADMIN, 'demo', 'ghost')).toThrow('Project has no registered pack named "ghost".');
     });
 
     it('rejects operations on an unknown project', () => {
