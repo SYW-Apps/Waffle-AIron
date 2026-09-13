@@ -23,6 +23,7 @@ import {
 } from '../utils/ai-guide.js';
 import { writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/loader.js';
+import { createProjectConfig } from './subsystem.js';
 import {
   defaultTargetConfig,
   ARCHITECT_AGENT_ID,
@@ -369,7 +370,7 @@ async function executeInit(
   ensureDir(AI_PATHS.docsDir());
   ensureDir(AI_PATHS.generatedDir());
 
-  writeYamlFile(AI_PATHS.projectConfig(), projectConfig);
+  createProjectConfig(projectConfig);
 
   // Agents (including domain owners) are derived from the SDD spec tree and the
   // free-standing domains in .wai/topology.yaml at read time — nothing persisted here.

@@ -3,7 +3,7 @@ import { logger } from '../utils/logger.js';
 import { listRules as listActiveRules } from '../core/validation.js';
 import type { SddRule } from '../core/rules/index.js';
 import { loadProjectExtensions } from '../core/extensions.js';
-import { isProjectInitialized, loadProjectConfig } from '../config/loader.js';
+import { loadProjectConfig, projectConfigExists } from '../core/index.js';
 
 // ---------------------------------------------------------------------------
 // rules command
@@ -15,9 +15,9 @@ import { isProjectInitialized, loadProjectConfig } from '../config/loader.js';
 
 export async function listRules(): Promise<void> {
   let overrides: Record<string, 'error' | 'warning' | 'off'> = {};
-  if (isProjectInitialized()) {
+  if (projectConfigExists()) {
     try {
-      overrides = loadProjectConfig().rules.sddRuleSeverity ?? {};
+      overrides = loadProjectConfig()?.rules.sddRuleSeverity ?? {};
     } catch {
       // unreadable config — show defaults only
     }

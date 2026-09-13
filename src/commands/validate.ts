@@ -1,6 +1,8 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, loadProjectConfig, loadRegistry } from '../config/loader.js';
+import { assertProjectInitialized, loadRegistry } from '../config/loader.js';
+import { ProjectNotInitializedError } from '../utils/errors.js';
+import { loadProjectConfig } from '../core/index.js';
 import { validateRegistry, validateProjectConfig, validateAsComplete, ValidationIssue } from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
@@ -52,6 +54,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   assertProjectInitialized();
 
   const projectConfig = loadProjectConfig();
+  if (!projectConfig) throw new ProjectNotInitializedError();
   let registry = loadRegistry();
   if (options.subsystem) {
     registry = {

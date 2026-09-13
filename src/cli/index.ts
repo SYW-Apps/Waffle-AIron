@@ -4,7 +4,7 @@ import * as path from 'path';
 import { Command } from 'commander';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { logger, setLogLevel } from '../utils/logger.js';
-import { WaironError } from '../utils/errors.js';
+import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 // The runner imports each command adapter module DIRECTLY (not through the
 // commands barrel) so the physical import graph mirrors the declared
 // cli_runner → adapter edges (dependency conformance).
@@ -14,7 +14,7 @@ import { runGenerate } from '../commands/generate.js';
 import { runLock as lockTree } from '../commands/lock.js';
 import type { LockOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete } from '../commands/validate.js';
-import { assertProjectInitialized, loadProjectConfig, loadRegistry, AI_PATHS } from '../config/loader.js';
+import { assertProjectInitialized, loadRegistry, AI_PATHS } from '../config/loader.js';
 import { pathExists, writeFile, getProjectRoot } from '../utils/fs.js';
 import { runList } from '../commands/list.js';
 import { runShow } from '../commands/show.js';
@@ -62,6 +62,7 @@ import {
   runSubsystemExternalize,
   runSubsystemInternalize,
   composeAgentBrief,
+  loadProjectConfig,
 } from '../commands/subsystem.js';
 import { describeBudget } from '../core/budget_policy.js';
 import { showExecution, setExecutionTier } from '../commands/execution.js';
@@ -155,6 +156,7 @@ async function runLock(options: LockOptions): Promise<void> {
   }
 
   const projectConfig = loadProjectConfig();
+  if (!projectConfig) throw new ProjectNotInitializedError();
 
   logger.info('Analyzing and validating specifications in-memory...');
   const dry = validateAsComplete({

@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, loadProjectConfig, loadRegistry } from '../config/loader.js';
+import { assertProjectInitialized, loadRegistry } from '../config/loader.js';
+import { ProjectNotInitializedError } from '../utils/errors.js';
+import { loadProjectConfig } from './subsystem.js';
 import { generateAll, resolveExpectedOutputPaths } from '../exporters/generate.js';
 import { WAIRON_MANAGED_MARKER } from '../exporters/base.js';
 import { hasContext, syncContextFiles } from '../core/context.js';
@@ -124,6 +126,7 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
   assertProjectInitialized();
 
   const projectConfig = loadProjectConfig();
+  if (!projectConfig) throw new ProjectNotInitializedError();
   const registry = loadRegistry();
 
   if (registry.agents.length === 0) {
