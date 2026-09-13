@@ -103,6 +103,16 @@ methods:
     params:
       - name: agentId
         type: string
+  - name: loadProjectConfig
+    description: >-
+      Calls loadProjectConfig on the core portal: the bound project's configuration, or null when it
+      has none. Read by the sdd_validate_tree tool for the rule severities and projectType that
+      govern the gate.
+    signature: 'loadProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-08T11:12:36.729Z'
+updatedAt: '2026-09-13T12:27:13.882Z'

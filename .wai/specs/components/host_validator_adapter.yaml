@@ -9,6 +9,7 @@ componentType: Adapter
 owns: []
 dependsOn:
   - validator_portal
+  - host_core_adapter
 status: complete
 createdAt: '2026-07-04T12:33:56.357Z'
-updatedAt: '2026-07-04T13:06:22.673Z'
+updatedAt: '2026-09-13T12:28:25.850Z'

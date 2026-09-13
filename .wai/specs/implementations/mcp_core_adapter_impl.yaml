@@ -155,7 +155,14 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: composeAgentBrief
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward the configuration read to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadProjectConfig
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-08T11:12:44.028Z'
+updatedAt: '2026-09-13T12:27:15.566Z'
