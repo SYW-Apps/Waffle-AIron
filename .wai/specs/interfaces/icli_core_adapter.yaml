@@ -97,6 +97,48 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: resolveAgentTopology
+    description: >-
+      The agent topology resolved from the current spec tree: the live records `wairon list`, `show`
+      and `generate` work from. Forwarded to the core portal.
+    signature: 'resolveAgentTopology(): AgentRecord[]'
+    returns: AgentRecord[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: ensureProjectInitialized
+    description: >-
+      Complete the bound project's bootstrap without overwriting anything: the default configuration
+      and the L0 system spec, each only when absent. Forwarded to the core portal.
+    signature: 'ensureProjectInitialized(fallbackName: string): ProjectBootstrap'
+    returns: ProjectBootstrap
+    params:
+      - name: fallbackName
+        type: string
+        description: The project name to use when no system spec names one yet
+    guarantees:
+      - idempotent
+  - name: listDirectChainedSubprojects
+    description: >-
+      The direct chained subprojects of a project root, one level deep: each child's directory and
+      the subsystem that mounts it. Forwarded to the core portal.
+    signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
+    returns: ChainedSubprojectDir[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose own spec tree declares the mounts
+    guarantees:
+      - idempotent
+  - name: defaultPackSelections
+    description: >-
+      The store packs that apply by default, shaped as selections to seed into a new project's
+      configuration. Forwarded to the core portal.
+    signature: 'defaultPackSelections(): PackSelection[]'
+    returns: PackSelection[]
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T11:45:59.169Z'
+updatedAt: '2026-09-13T22:56:14.812Z'

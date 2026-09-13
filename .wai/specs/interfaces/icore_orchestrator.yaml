@@ -292,6 +292,32 @@ methods:
         type: PackSelection[]
     guarantees:
       - idempotent
+  - name: ensureProjectInitialized
+    description: >-
+      NON-DESTRUCTIVELY complete a project's bootstrap at the bound root: write the default project
+      configuration and the L0 system spec only when each is absent, preferring the existing system
+      spec's name, and report which files it wrote. Unlike provisionProject it never overwrites.
+    signature: 'ensureProjectInitialized(fallbackName: string): ProjectBootstrap'
+    returns: ProjectBootstrap
+    params:
+      - name: fallbackName
+        type: string
+        description: The project name to use when no system spec names one yet
+    guarantees:
+      - idempotent
+  - name: listDirectChainedSubprojects
+    description: >-
+      The DIRECT chained subprojects of a project, one level deep: the subsystems in this project's
+      own spec tree whose projectPath resolves inside the project root, each as the child's
+      directory and mounting subsystem id. An absolute or escaping projectPath is skipped.
+    signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
+    returns: ChainedSubprojectDir[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose own spec tree declares the mounts
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T20:56:38.268Z'
+updatedAt: '2026-09-13T22:56:23.750Z'

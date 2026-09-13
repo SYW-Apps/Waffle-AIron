@@ -363,6 +363,27 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: markSelectionsBundled
+  - name: ensureProjectInitialized
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: ensureProjectInitialized
+  - name: listDirectChainedSubprojects
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: listDirectChainedSubprojects
+  - name: defaultPackSelections
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: defaultPackSelections
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T11:42:48.401Z'
+updatedAt: '2026-09-13T22:56:30.678Z'

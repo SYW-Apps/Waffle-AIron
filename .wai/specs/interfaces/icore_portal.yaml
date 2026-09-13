@@ -363,6 +363,37 @@ methods:
         type: PackSelection[]
     guarantees:
       - idempotent
+  - name: ensureProjectInitialized
+    description: >-
+      Write path for completing a project's bootstrap non-destructively (wairon init, the generate
+      cascade): the default configuration and the L0 system spec, each only when absent.
+    signature: 'ensureProjectInitialized(fallbackName: string): ProjectBootstrap'
+    returns: ProjectBootstrap
+    params:
+      - name: fallbackName
+        type: string
+        description: The project name to use when no system spec names one yet
+    guarantees:
+      - idempotent
+  - name: listDirectChainedSubprojects
+    description: 'Published read: the direct chained subprojects of a project root, one level deep.'
+    signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
+    returns: ChainedSubprojectDir[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose own spec tree declares the mounts
+    guarantees:
+      - idempotent
+  - name: defaultPackSelections
+    description: >-
+      Published read: the store packs that apply by default, as selections for a new project's
+      configuration.
+    signature: 'defaultPackSelections(): PackSelection[]'
+    returns: PackSelection[]
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T11:42:45.274Z'
+updatedAt: '2026-09-13T22:56:19.178Z'
