@@ -7,7 +7,8 @@ description: >-
   guarantees are open tokens backed by builtins or loaded packs; endpoint binds a Portal method to
   its wire surface; effect (read | write) is required on a durable Store's methods so the durability
   round-trip rule can pair external writes with hydration read-backs; invokedBy declares a real
-  caller outside the modeled narrative graph, seeding the method as a reachability entrypoint.
+  caller outside the modeled narrative graph, seeding the method as a reachability entrypoint;
+  findings declare the finding codes the method reports.
 fields:
   - name: name
     type: string
@@ -49,6 +50,13 @@ fields:
       unused-detection seeds this method as an entrypoint; caller prose mandatory
       (INVOKED_BY_UNDESCRIBED), stale when internally reached anyway (INVOKED_BY_REDUNDANT)
     optional: true
+  - name: findings
+    type: FindingDeclaration[]
+    description: >-
+      The finding codes this method can report, each with its default severity and summary (see
+      finding_declaration). Each declared code must appear as a string literal in the method's
+      source file (UNREALIZED_FINDING).
+    optional: true
 methods: []
 createdAt: '2026-08-11T15:28:28.921Z'
-updatedAt: '2026-08-11T15:28:28.927Z'
+updatedAt: '2026-09-13T18:36:57.031Z'

@@ -2,21 +2,24 @@ kind: value-object
 id: source_file_facts
 name: SourceFileFacts
 description: >-
-  Pure analysis facts for one resolved L4 sourcePath — the unit of the CodeModel. Name sets are
-  anchor tiers for realization checking: declaredNames satisfy the 'declared' conformance tier,
-  anchoredNames additionally satisfy the 'anchored' tier. Carries the analysis grade so findings can
-  state how confident the analysis was (exact AST vs pattern table vs generic scan).
+  Pure analysis facts for one resolved source path — an implementation's, a method's or a sim
+  harness's; the unit of the CodeModel. Name sets are anchor tiers for realization checking:
+  declaredNames satisfy the 'declared' conformance tier, anchoredNames additionally satisfy the
+  'anchored' tier. Carries the analysis grade so findings can state how confident the analysis was
+  (exact AST vs pattern table vs generic scan).
 subsystem: sdd_validator
 fields:
   - name: path
     type: string
-    description: Project-relative resolved source path (the key many implementations may share, N:1)
+    description: >-
+      Project-relative resolved source path (the key many implementations and methods may share,
+      N:1)
     optional: false
   - name: status
     type: string
     description: >-
-      analyzed | missing (sourcePath resolves to no file) | escaped (absolute or parent-escaping
-      path, refused by containment) | unreadable (binary or read failure)
+      analyzed | missing (the path resolves to no file) | escaped (absolute or parent-escaping path,
+      refused by containment) | unreadable (binary or read failure)
     optional: false
   - name: language
     type: string
@@ -62,4 +65,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-07-11T20:29:53.999Z'
+updatedAt: '2026-09-13T20:55:24.242Z'

@@ -285,15 +285,66 @@ Wairon's own tree read and wrote `.wai/project.yaml` directly from 10 components
   - [x] gates: typecheck, build, 162 test files / 2474 tests, e2e 21, `validate --ci`, whole tree 0 errors / 0 warnings
   - [ ] PR to dev; the maintainer runs `wairon lock` after merge
 
-## Wairon authoring fixes (after 2a-0 merges, before stage 2a) — decided by Robbe 2026-09-13
-Every agent authoring 2a-0 hit the same `sdd_update_spec` traps, and stage 2a leans on that tool. Record: `docs/design/chained-subsystems/decisions.md` § Stage 2a-0.
-- [ ] A write that changes nothing reports "no change" and names the ignored keys; nested `[]` and step-level `unset` work.
-- [ ] Changing a step's `type` replaces the step instead of merging the old type's fields into it.
-- [ ] A per-type narrative field check replaces `MALFORMED_FLOW_STEP`; fix the 7 stale steps it finds in wairon's tree (admin_orchestrator_impl ×2, cli_packs_adapter_impl.installPack, cli_runner_impl.runRemote ×2 and runLogin, surface_exchange_orchestrator_impl.exportProjectSurface).
-- [ ] Document in `sdd_update_spec` that `*Label` jump fields resolve in deltas.
+## Wairon friction fixes (before stage 2a) — decided by Robbe 2026-09-13
+Most of the friction log (F1–F28) is resolved, not deferred: the tool must be clear and truthful, with no unneeded silence or confusion. Every pull request is spec-first, and all land before stage 2a. Order, decided with the rule model's shape (B′): schema PR → rule model PR → PR A → PR B → PR C; track D follows. Proposals, examples and every decision: `docs/design/chained-subsystems/friction-fixes-proposals.md` and `decisions.md`.
+
+### Schema PR — method-level source files and findings (ACTIVE, branch feat/method-source-and-findings, stacked on PR #70)
+- [x] L3 (approved 2026-09-13, with both refinements): `method_implementation` (types `implementation_spec.methods`) with a per-method `sourcePath` (B3, moved up from PR B); `narrative_step` (fields only); `finding_declaration` and `findings` on `method_signature`; the MCP write tools express both fields
+- [x] L4/L5 (approved 2026-09-13; plus the pure type methods `implementation_spec.sourceFiles()` and `method_implementation.sourceFile()` every consumer shares): the consumers of a method's source file described — code model paths, structural, call, dependency, integration and hidden-state conformance, narrative detail, agent write fences, status, chained path re-expression — and `UNREALIZED_FINDING` (declared codes found as string literals in the method's source file). The rule behaviour stays prose in `spec_validator_impl` step 20 until the rule model PR: the one change made before the rules have specs
+- [ ] Wairon's own tree (after the code lands and the MCP server is rebuilt): designed methods whose code lives in another file point at it (cli_runner commands, provision, approval, the config loader, the fs and yaml helpers, the diagram export), and whatever that surfaces is fixed
+- [ ] Code; tests proven by revert; gates; CHANGELOG; PR to dev
+
+### Rule model PR — the 43 validator rules designed (NEXT; A13, shape B′ chosen 2026-09-13)
+- [ ] L2: eight `arbiter` families — integrity, narrative, intrinsic, doctrine, extension, wiring, conformance, heuristic — plus `narrative_graph_projector`; `rule_registry` depends on the eight
+- [ ] L3: one method per rule with its `findings`; the `rule_context` queries and type methods that replace shared helpers; `specScopedRules` on rule_index and rule_repository
+- [ ] L4/L5: full narratives for all 43 rules; one registration step per rule in run order; `validateSddTree` gathers the round-trip and known-code inputs, then loops over the rule sequence
+- [ ] Code: one rule per file in family folders (`symbol: check`), helpers moved to their homes, `SDD_RULES` into the rule repository, the gather fix — no behaviour change, existing rule tests unchanged; `UNREALIZED_FINDING`; a test comparing the code registry with the spec catalog (families, codes, severities, scope)
+
+### PR A — truthful authoring tools (PARKED at 9cd939c on feat/truthful-authoring-tools; rebases onto the rule model PR)
+- [x] L1/L2 (approved 2026-09-13): new subsystem `sdd_authoring` (authoring_portal, authoring_orchestrator, authoring_core_adapter, authoring_validator_adapter); `mcp_authoring_adapter` in sdd_mcp
+- [ ] L3 (authored 2026-09-13, awaiting approval): `writeSpec`/`updateSpec`/`deleteSpec` returning a structured `SpecChangeReport`; types `spec_delta` (`applyTo`), `spec_delta_application`, `spec_change`, `spec_change_report`, `candidate_verdict`, `candidate_options`, `doctor_options`; `validateComponentCandidate` on validator_portal and spec_validator; core, spec loader, registry and index type/delete methods; mcp_portal `sdd_update_spec`, `sdd_get_spec` (methods filter), `sdd_delete_spec`, `sdd_add_type`, the `sdd_set_*` tools and `status` on the create tools; `cli_runner.runDoctor`. On rebase, re-add `narrative_step.foreignFields(): string[]` (removed from the schema PR; its per-type field table is A3's)
+- [ ] L4/L5 narratives
+- [ ] Code:
+  - A1 a write that changes nothing writes nothing and says so; a key with no effect at its depth refuses the write
+  - A2 `[]` and `unset` at every level
+  - A3 a type change rebuilds the step, keeping description and label
+  - A4 `FOREIGN_STEP_FIELD` (warning) with `doctor --fix`, and the 7 stale steps in wairon's tree fixed
+  - A5 delta order documented; a label retargets an existing jump
+  - A6 step delete guards
+  - A7 arrays inside elements merge by identity
+  - A8 `T | null` param types documented; the migration checked against unions
+  - A9 `status` on the create tools; no silent demotion
+  - A10 `sdd_get_spec` methods filter
+  - A11 nested tool input strict
+  - A12 `UNUSED_TYPE` counts type method signatures — a spec change to `wiring_rules.unusedDetection` first
+  - A4 likewise starts as a spec change to `narrative_rules.narrativeFlow`
+  - structured JSON results
+
+### PR B — conformance that never goes quiet (NEXT)
+- [ ] B1 call steps realized only by calls resolving to the target's file (`CALL_ORIGIN_UNRESOLVED` when unresolvable)
+- [ ] B2 `METHOD_BODY_NOT_FOUND` (B3 moved to the schema PR)
+- [ ] B4 `UNDECLARED_COLOCATED_CALL` (unit-level); B5 intent `calls`, reach-everything fallback removed
+- [ ] B6 `sourcePath`/`symbol` on types; B7 site-precise lint allows, existing allows rewritten
+- [ ] B8 opt-in source roots with `UNCLAIMED_SOURCE_FILE`
+
+### PR C — delegation (NEXT)
+- [ ] C1 `sdd_validate_tree` on a worktree root; C2 tests to revisit on a contract change; C3 typecheck tests in CI
+- [ ] C4 brief conventions (commits, worktrees, fences); C5 `sdd_move_methods`
+- [ ] C6 every unmodelled MCP tool and validator contract modelled
+
+### Track D — spec coverage (after PR C; does not block stage 2a) — decided by Robbe 2026-09-13
+148 of 234 source files are named by no spec, none left out for a recorded reason (audit in `decisions.md`). B8's `UNCLAIMED_SOURCE_FILE` makes the list visible and stops it growing; B3 and B6 link the files already designed; each undesigned area is then designed spec-first, one at a time.
+- [ ] Agent-file exporters (Claude, Gemini, custom) behind `generate`
+- [ ] Realtime hub and WebSocket transport
+- [ ] Permission-model migration, version stamp, demo seed
+- [ ] Domains (detection, scan, add/remove) and the aliases command
+- [ ] AI guide files and project context
+- [ ] Execution profiles and budgets (with C6)
+- [ ] User config and update channels, download, logger, errors, HTTP helpers
+- [ ] The React app (`web/src`), with the generated canvas engine claimed under `conformance: off` — or a decision, recorded in the standard with its reason, that UI is outside SDD
 
 ## Doctrine and authoring-UX track (NEXT, after chained-subsystems stage 2) — decisions from Robbe 2026-09-13
-- [ ] **Authoring friction left over from 2a-0:** call-step conformance by import origin rather than callee name; a per-method `sourcePath`; nullable parameter types; params upserted by name; a guard on deleting a step by number; structured calls on intent-only methods.
+- [x] **Authoring friction left over from 2a-0:** moved into the friction-fix programme (PR A–C) above.
 - [ ] **Specialist is the last resort:**
   - add a `rationale` field on component specs, and `SPECIALIST_WITHOUT_RATIONALE` (warning) with rules-matrix fixtures;
   - state the rule in the architecture standard, the sdd-architect skill template and agent briefs, with the decomposition checklist;

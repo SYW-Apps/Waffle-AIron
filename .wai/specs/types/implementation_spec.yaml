@@ -23,27 +23,29 @@ fields:
   - name: sourcePath
     type: string
     description: >-
-      Concrete source file realizing it, relative to the root of the project that holds the spec —
-      for a chained subproject's implementation, that subproject's own root
+      Concrete source file realizing it, and the default for every method that names no sourcePath
+      of its own. Relative to the root of the project that holds the spec; for a chained
+      subproject's implementation, that subproject's own root.
     optional: true
   - name: detail
     type: string
     description: 'Narrative detail default: full | calls-only | intent'
     optional: true
   - name: methods
-    type: object[]
+    type: MethodImplementation[]
     description: >-
-      Per-method L5 narratives (steps, detail, intent). A dispatch step routes a named capability
-      through a target Portal's dispatch table — validated against that table (UNSERVED_CAPABILITY)
-      and traversed by reachability, unlike a bare call to the generic handle. A register step
+      Per-method L5 narratives (see method_implementation): name, sourcePath, narrative steps,
+      detail, intent, conformance, symbol. A dispatch step routes a named capability through a
+      target Portal's dispatch table — validated against that table (UNSERVED_CAPABILITY) and
+      traversed by reachability, unlike a bare call to the generic handle. A register step
       (targetComponent + targetMethod, target resolved exactly like a call step against a declared
       dependency's contract) hands the target method to the runtime as a callback — a
       deferred-invocation edge: unused-detection treats the registered method as reached wherever
       its registering narrative is (so the callback correctly returns to unused if its registrar
       does), while call-graph conformance exempts register steps from CALL_STEP_UNREALIZED because a
-      registration references the callback rather than invoking it. Each method may also override
-      the conformance tier and bind an explicit realizing symbol (code-level name) for
-      intent-language renames — e.g. a store's put realized by saveSnapshot.
+      registration references the callback rather than invoking it. Each method may also name its
+      own source file, override the conformance tier, and bind an explicit realizing symbol
+      (code-level name) for intent-language renames — e.g. a store's put realized by saveSnapshot.
     optional: false
   - name: status
     type: string
@@ -54,8 +56,15 @@ fields:
     description: >-
       Structural-conformance tier default for all contract methods: declared | anchored | off
       (omitted = stereotype default: Portal → anchored, else declared). off skips method realization
-      checks; the sourcePath file-existence check always applies.
+      checks; the existence check of every named source file always applies.
     optional: true
-methods: []
+methods:
+  - name: sourceFiles
+    signature: 'sourceFiles(): string[]'
+    returns: string[]
+    description: >-
+      Every source file this implementation names — its own sourcePath and each method's —
+      deduplicated, in declaration order. The simPath harness is not a source file of the
+      implementation and is not included.
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-12T13:06:35.664Z'
+updatedAt: '2026-09-13T21:16:50.417Z'

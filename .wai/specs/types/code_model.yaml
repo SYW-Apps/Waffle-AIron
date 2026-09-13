@@ -4,20 +4,20 @@ name: CodeModel
 description: >-
   The pure source-code model the structural-conformance rule family consumes — built once per
   validation run by the source analysis adapter and injected into the rule context (the
-  surface-snapshots pattern). Keyed by resolved sourcePath, so many implementations legitimately
-  sharing one file (N:1 realization) read the same facts.
+  surface-snapshots pattern). Keyed by resolved source path, so implementations and methods
+  legitimately sharing one file (N:1 realization) read the same facts.
 subsystem: sdd_validator
 fields:
   - name: files
     type: SourceFileFacts[]
     description: >-
-      One facts entry per distinct resolved sourcePath (including missing/escaped/unreadable
-      entries, so rules stay pure lookups)
+      One facts entry per distinct resolved source path — an implementation's, a method's or a sim
+      harness's — including missing/escaped/unreadable entries, so rules stay pure lookups
     optional: false
   - name: projectRoot
     type: string
-    description: The root every sourcePath was resolved and containment-checked against
+    description: The root every source path was resolved and containment-checked against
     optional: false
 methods: []
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-07-11T17:51:46.145Z'
+updatedAt: '2026-09-13T20:55:21.055Z'

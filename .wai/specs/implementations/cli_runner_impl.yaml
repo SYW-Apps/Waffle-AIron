@@ -1010,7 +1010,8 @@ methods:
       - stepNumber: 5
         description: >-
           Not attached: read and print the LOCAL spec tree's completeness dashboard, scoped to a
-          subsystem when one was named.
+          subsystem when one was named, listing each implementation's source file and each method's
+          own source file, flagged when missing.
         type: local
     symbol: statusCommand
   - name: runMcpServe
@@ -1193,4 +1194,4 @@ methods:
     conformance: 'off'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-13T13:54:14.566Z'
+updatedAt: '2026-09-13T20:55:50.423Z'

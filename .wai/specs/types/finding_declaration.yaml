@@ -1,0 +1,26 @@
+kind: value-object
+id: finding_declaration
+name: FindingDeclaration
+description: >-
+  One finding code a method can report: the unit of a contract method's findings list. The code must
+  appear as a string literal in the method's source file (UNREALIZED_FINDING). For a validator rule,
+  its findings are its catalog entry.
+fields:
+  - name: code
+    type: string
+    description: >-
+      Finding code, UPPER_SNAKE and unique within the method; a pack's codes carry the pack prefix
+      (<PACK>_<CODE>)
+    optional: false
+    key: primary
+  - name: severity
+    type: string
+    description: 'error | warning: the default before project severity overrides and draft-context downgrades'
+    optional: false
+  - name: summary
+    type: string
+    description: One line saying what the finding means
+    optional: false
+methods: []
+createdAt: '2026-09-13T18:36:53.603Z'
+updatedAt: '2026-09-13T18:36:53.612Z'
