@@ -16,7 +16,14 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
+import { ProjectNotInitializedError } from '../utils/errors.js';
 import { getStatusReport } from '../commands/status.js';
+// mcp_core_adapter's project configuration read (icore_portal loadProjectConfig,
+// null when the project has none). STATIC, not lazily required: same reasoning
+// as requireLoader below — a static binding stays correct per bound project,
+// and a lazy require of a relative path does not resolve under the test runner
+// or inside the bundled hosted server.
+import { loadProjectConfig as coreLoadProjectConfig } from '../core/index.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
 import { resolveNarrativeLabels } from '../core/narrative-labels.js';
@@ -748,7 +755,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ subsystem }) => {
       try {
-        const { loadRegistry, loadProjectConfig } = requireLoader();
+        const { loadRegistry } = requireLoader();
         const { validateRegistry } = requireValidation();
         let registry = loadRegistry();
         if (subsystem) {
@@ -757,8 +764,11 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
             agents: registry.agents.filter((a) => a.domainRoot === subsystem || a.domainRoot?.startsWith(`${subsystem}::`)),
           };
         }
-        const config   = loadProjectConfig();
-        const result   = validateRegistry(registry, config.rules ?? { requireCreationReason: false });
+        // A missing config errored before (the loader's loadProjectConfig threw);
+        // keep that outcome now that the adapter reads null instead of throwing.
+        const config = coreLoadProjectConfig();
+        if (!config) throw new ProjectNotInitializedError();
+        const result = validateRegistry(registry, config.rules);
         return json({
           valid:    result.issues.filter((i: ValidationIssue) => i.severity === 'error').length === 0,
           errors:   result.issues.filter((i: ValidationIssue) => i.severity === 'error'),
@@ -777,8 +787,11 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     () => {
       try {
-        const { loadProjectConfig } = requireLoader();
-        return json(loadProjectConfig());
+        const config = coreLoadProjectConfig();
+        // A missing config errored before (the loader's loadProjectConfig threw);
+        // keep that outcome now that the adapter reads null instead of throwing.
+        if (!config) throw new ProjectNotInitializedError();
+        return json(config);
       } catch (e) {
         return errText(String(e));
       }
@@ -1518,12 +1531,13 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ subsystem, recursive }) => {
       try {
-        const { loadProjectConfig } = requireLoader();
-        const config = loadProjectConfig();
+        // A project with no readable configuration judges at the defaults
+        // (validateSddTree's own 'backend' fallback) rather than refusing to run.
+        const config = coreLoadProjectConfig();
         const { validateSddTree } = requireValidation();
         const result = validateSddTree({
-          rules: config.rules,
-          projectType: config.projectType,
+          rules: config?.rules,
+          projectType: config?.projectType,
           scopeSubsystem: subsystem,
           recursive: recursive ?? true,
         });
