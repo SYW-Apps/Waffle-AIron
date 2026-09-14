@@ -35,7 +35,14 @@ methods:
         type: call
         targetComponent: rule_index
         targetMethod: knownIssueCodes
+  - name: specScopedRules
+    narrative:
+      - stepNumber: 1
+        description: Forward to the rule index.
+        type: call
+        targetComponent: rule_index
+        targetMethod: specScopedRules
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:17:53.253Z'
-updatedAt: '2026-07-18T22:34:34.966Z'
+updatedAt: '2026-09-14T23:05:44.245Z'

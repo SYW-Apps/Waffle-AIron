@@ -1,0 +1,20 @@
+kind: value-object
+id: invariant
+name: Invariant
+description: >-
+  A declared domain invariant on an entity: a property every write path must uphold. A declaration,
+  not a proof — the invariant-backing rule checks that each write-effect method of the entity's
+  component carries a narrative step asserting it, never that the step enforces it.
+fields:
+  - name: id
+    type: string
+    description: Stable id, unique within the entity, referenced as <type-id>.<invariant-id>
+    optional: false
+    key: primary
+  - name: description
+    type: string
+    description: The property that must hold, stated precisely enough to test against
+    optional: false
+methods: []
+createdAt: '2026-09-14T23:23:23.163Z'
+updatedAt: '2026-09-14T23:23:23.170Z'

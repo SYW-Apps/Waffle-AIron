@@ -17,6 +17,12 @@ methods:
     signature: 'listRules(): SddRule[]'
     returns: SddRule[]
     params: []
+  - name: clear
+    description: Empty the held set, so a new validation run seeds its rules from nothing.
+    signature: 'clear(): void'
+    returns: void
+    params: []
+    effect: write
 status: complete
 createdAt: '2026-07-14T19:17:10.227Z'
-updatedAt: '2026-07-14T20:23:49.423Z'
+updatedAt: '2026-09-14T23:07:24.048Z'

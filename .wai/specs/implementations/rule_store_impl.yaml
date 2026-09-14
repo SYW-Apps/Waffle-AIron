@@ -16,7 +16,12 @@ methods:
     intent: >-
       Return the current rule set by shared reference, in registration order. Read-only; an empty
       set before seeding is normal, never an error.
+  - name: clear
+    narrative: []
+    intent: >-
+      Replace the held rule set with an empty one, so a repeated validation run in the same process
+      never holds a rule twice; registration order restarts with the next addRule.
 detail: intent
 status: complete
 createdAt: '2026-07-14T19:17:41.361Z'
-updatedAt: '2026-07-15T06:23:42.791Z'
+updatedAt: '2026-09-14T23:07:25.542Z'

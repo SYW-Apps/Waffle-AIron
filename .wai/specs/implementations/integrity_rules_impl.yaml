@@ -1,0 +1,698 @@
+id: integrity_rules_impl
+name: Integrity Rules Implementation
+description: The integrity rule family's methods, one per rule file under src/core/rules/integrity/.
+contract: iintegrity_rules
+simPath: tests/core/validation.test.ts
+methods:
+  - name: hierarchyIntegrity
+    sourcePath: src/core/rules/integrity/hierarchy-integrity.ts
+    narrative:
+      - stepNumber: 1
+        label: l1Start
+        description: For each loaded subsystem, check whether it is in draft or design status (informational).
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 4
+      - stepNumber: 2
+        description: 'Branch: is the subsystem''s status draft or design?'
+        type: branch
+        condition: sub.isDraft()
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report DRAFT_SUBSYSTEM_WARNING (warning; draft context true) naming the subsystem as being
+          in draft/design status.
+        type: local
+      - stepNumber: 4
+        label: l1End
+        description: Continue with the next subsystem.
+        type: local
+      - stepNumber: 5
+        label: l2Start
+        description: For each loaded component, check whether it (or an ancestor) is in draft or design status.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 8
+      - stepNumber: 6
+        description: 'Branch: does ctx.isComponentDraft report the component as draft?'
+        type: branch
+        condition: ctx.isComponentDraft(comp.id) is true
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report DRAFT_COMPONENT_WARNING (warning; draft context true) naming the component as being
+          in draft/design status.
+        type: local
+      - stepNumber: 8
+        label: l2End
+        description: Continue with the next component.
+        type: local
+      - stepNumber: 9
+        label: l3Start
+        description: For each loaded subsystem, check that it references the L0 system.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 12
+      - stepNumber: 10
+        description: 'Branch: is the subsystem orphaned from the L0 system?'
+        type: branch
+        condition: >-
+          sub.parentSystem is missing, or it is set but does not equal the system name while the
+          subsystem id carries no "::" namespace hop (a root-level subsystem)
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Report ORPHANED_SUBSYSTEM (warning; draft context from sub.isDraft()) naming the subsystem
+          and the system it fails to reference.
+        type: local
+      - stepNumber: 12
+        label: l3End
+        description: Continue with the next subsystem.
+        type: local
+      - stepNumber: 13
+        label: l4Start
+        description: For each loaded component, check that its declared subsystem exists.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 16
+      - stepNumber: 14
+        description: 'Branch: does comp.subsystem reference a non-existent subsystem?'
+        type: branch
+        condition: ctx.subsystemIds does not contain comp.subsystem
+        onFalseStep: 16
+      - stepNumber: 15
+        description: >-
+          Report INVALID_SUBSYSTEM_REFERENCE (error; draft context from
+          ctx.isComponentDraft(comp.id)) naming the component and the non-existent subsystem it
+          references.
+        type: local
+      - stepNumber: 16
+        label: l4End
+        description: Continue with the next component.
+        type: local
+      - stepNumber: 17
+        label: l5Start
+        description: For each loaded interface, check that its owning component exists.
+        type: loop
+        loopKind: forEach
+        over: ctx.interfaces
+        endStep: 20
+      - stepNumber: 18
+        description: 'Branch: does intf.component reference a non-existent component?'
+        type: branch
+        condition: ctx.componentIds does not contain intf.component
+        onFalseStep: 20
+      - stepNumber: 19
+        description: >-
+          Report INVALID_COMPONENT_REFERENCE (error; draft context from
+          ctx.isComponentDraft(intf.component) or the interface's own draft/design status) naming
+          the interface and the non-existent component it references.
+        type: local
+      - stepNumber: 20
+        label: l5End
+        description: Continue with the next interface.
+        type: local
+      - stepNumber: 21
+        label: l6Start
+        description: For each loaded implementation, check that its contract interface exists.
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 25
+      - stepNumber: 22
+        description: >-
+          Find the contract interface among ctx.interfaces whose id matches impl.contract
+          (ctx.interfaces.find(i => i.id === impl.contract)).
+        type: local
+      - stepNumber: 23
+        description: 'Branch: does impl.contract reference a non-existent interface?'
+        type: branch
+        condition: ctx.interfaceIds does not contain impl.contract
+        onFalseStep: 25
+      - stepNumber: 24
+        description: >-
+          Report INVALID_INTERFACE_REFERENCE (error; draft context from the implementation's own
+          draft/design status, or — when the contract interface resolved —
+          ctx.isComponentDraft(contract.component) or the contract's draft/design status) naming the
+          implementation and the non-existent interface contract it references.
+        type: local
+      - stepNumber: 25
+        label: l6End
+        description: Continue with the next implementation.
+        type: local
+    symbol: check
+  - name: namespaceHygiene
+    sourcePath: src/core/rules/integrity/namespace-hygiene.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Compute rootSubs — the set of root-level subsystem ids: every id in ctx.subsystems with no
+          "::" segment.
+        type: local
+      - stepNumber: 2
+        label: nsSubStart
+        description: >-
+          For each subsystem id, check it against the namespace grammar (mirrors the shared private
+          checkId(id, 'Subsystem') helper).
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 7
+      - stepNumber: 3
+        description: 'Branch: in scope and does the id use the reserved "super" segment?'
+        type: branch
+        condition: >-
+          the id is in scope (ctx.isSpecInScope) and its "::" segments include the reserved keyword
+          "super"
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report RESERVED_ID_SEGMENT (error) naming the subsystem id ("Subsystem") and warning a
+          stored reference to it would be consumed as a namespace hop and resolve to a different
+          spec.
+        type: local
+      - stepNumber: 5
+        label: nsSubShadowCheck
+        description: 'Branch: in scope, namespaced, and does its local name shadow a root subsystem?'
+        type: branch
+        condition: >-
+          the id is in scope, has more than one "::" segment, and its last segment matches a
+          root-level subsystem id in rootSubs
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report NAMESPACE_SHADOWING (error) naming the subsystem id ("Subsystem"), the root
+          subsystem it shadows, and that a bare reference inside its subproject would anchor to the
+          root, making the local spec unaddressable.
+        type: local
+      - stepNumber: 7
+        label: nsSubEnd
+        description: Continue with the next subsystem id.
+        type: local
+      - stepNumber: 8
+        label: nsCompStart
+        description: For each component id, check it against the namespace grammar ("Component").
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 13
+      - stepNumber: 9
+        description: 'Branch: in scope and does the id use the reserved "super" segment?'
+        type: branch
+        condition: the id is in scope and its "::" segments include the reserved keyword "super"
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report RESERVED_ID_SEGMENT (error) naming the component id ("Component") and warning a
+          stored reference would be consumed as a namespace hop.
+        type: local
+      - stepNumber: 11
+        label: nsCompShadowCheck
+        description: 'Branch: in scope, namespaced, and does its local name shadow a root subsystem?'
+        type: branch
+        condition: >-
+          the id is in scope, has more than one "::" segment, and its last segment matches a
+          root-level subsystem id in rootSubs
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Report NAMESPACE_SHADOWING (error) naming the component id ("Component"), the root
+          subsystem it shadows, and the anchoring hazard.
+        type: local
+      - stepNumber: 13
+        label: nsCompEnd
+        description: Continue with the next component id.
+        type: local
+      - stepNumber: 14
+        label: nsIntfStart
+        description: For each interface id, check it against the namespace grammar ("Interface").
+        type: loop
+        loopKind: forEach
+        over: ctx.interfaces
+        endStep: 19
+      - stepNumber: 15
+        description: 'Branch: in scope and does the id use the reserved "super" segment?'
+        type: branch
+        condition: the id is in scope and its "::" segments include the reserved keyword "super"
+        onFalseStep: 17
+      - stepNumber: 16
+        description: >-
+          Report RESERVED_ID_SEGMENT (error) naming the interface id ("Interface") and warning a
+          stored reference would be consumed as a namespace hop.
+        type: local
+      - stepNumber: 17
+        label: nsIntfShadowCheck
+        description: 'Branch: in scope, namespaced, and does its local name shadow a root subsystem?'
+        type: branch
+        condition: >-
+          the id is in scope, has more than one "::" segment, and its last segment matches a
+          root-level subsystem id in rootSubs
+        onFalseStep: 19
+      - stepNumber: 18
+        description: >-
+          Report NAMESPACE_SHADOWING (error) naming the interface id ("Interface"), the root
+          subsystem it shadows, and the anchoring hazard.
+        type: local
+      - stepNumber: 19
+        label: nsIntfEnd
+        description: Continue with the next interface id.
+        type: local
+      - stepNumber: 20
+        label: nsImplStart
+        description: For each implementation id, check it against the namespace grammar ("Implementation").
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 25
+      - stepNumber: 21
+        description: 'Branch: in scope and does the id use the reserved "super" segment?'
+        type: branch
+        condition: the id is in scope and its "::" segments include the reserved keyword "super"
+        onFalseStep: 23
+      - stepNumber: 22
+        description: >-
+          Report RESERVED_ID_SEGMENT (error) naming the implementation id ("Implementation") and
+          warning a stored reference would be consumed as a namespace hop.
+        type: local
+      - stepNumber: 23
+        label: nsImplShadowCheck
+        description: 'Branch: in scope, namespaced, and does its local name shadow a root subsystem?'
+        type: branch
+        condition: >-
+          the id is in scope, has more than one "::" segment, and its last segment matches a
+          root-level subsystem id in rootSubs
+        onFalseStep: 25
+      - stepNumber: 24
+        description: >-
+          Report NAMESPACE_SHADOWING (error) naming the implementation id ("Implementation"), the
+          root subsystem it shadows, and the anchoring hazard.
+        type: local
+      - stepNumber: 25
+        label: nsImplEnd
+        description: Continue with the next implementation id.
+        type: local
+      - stepNumber: 26
+        label: nsTypeStart
+        description: For each type id, check it against the namespace grammar ("Type").
+        type: loop
+        loopKind: forEach
+        over: ctx.types
+        endStep: 31
+      - stepNumber: 27
+        description: 'Branch: in scope and does the id use the reserved "super" segment?'
+        type: branch
+        condition: the id is in scope and its "::" segments include the reserved keyword "super"
+        onFalseStep: 29
+      - stepNumber: 28
+        description: >-
+          Report RESERVED_ID_SEGMENT (error) naming the type id ("Type") and warning a stored
+          reference would be consumed as a namespace hop.
+        type: local
+      - stepNumber: 29
+        label: nsTypeShadowCheck
+        description: 'Branch: in scope, namespaced, and does its local name shadow a root subsystem?'
+        type: branch
+        condition: >-
+          the id is in scope, has more than one "::" segment, and its last segment matches a
+          root-level subsystem id in rootSubs
+        onFalseStep: 31
+      - stepNumber: 30
+        description: >-
+          Report NAMESPACE_SHADOWING (error) naming the type id ("Type"), the root subsystem it
+          shadows, and the anchoring hazard.
+        type: local
+      - stepNumber: 31
+        label: nsTypeEnd
+        description: Continue with the next type id.
+        type: local
+    symbol: check
+  - name: roundtripSerialization
+    sourcePath: src/core/rules/integrity/roundtrip-serialization.ts
+    narrative:
+      - stepNumber: 1
+        label: rtStart
+        description: For each writer dry-run finding gathered by the validator before rules run (no I/O here).
+        type: loop
+        loopKind: forEach
+        over: ctx.roundTripIssues
+        endStep: 2
+      - stepNumber: 2
+        label: rtEnd
+        description: Report ROUNDTRIP_SERIALIZATION (error) using the issue's own message and specId verbatim.
+        type: local
+    symbol: check
+  - name: typeReferences
+    sourcePath: src/core/rules/integrity/type-references.ts
+    narrative:
+      - stepNumber: 1
+        label: trTypesStart
+        description: >-
+          For each loaded type, check its subsystem reference, its hollowness, and its field type
+          references.
+        type: loop
+        loopKind: forEach
+        over: ctx.types
+        endStep: 17
+      - stepNumber: 2
+        description: >-
+          Find sub = ctx.subsystems matching t.subsystem by id, and compute isDraftCtx as true when
+          sub exists and its status is "draft" or "design", else false.
+        type: local
+      - stepNumber: 3
+        description: 'Branch: does the type declare a subsystem that ctx.subsystemIds does not contain?'
+        type: branch
+        condition: t.subsystem is set and ctx.subsystemIds does not contain it
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report INVALID_SUBSYSTEM_REFERENCE (error; isDraftCtx) naming the type and the
+          non-existent subsystem it references.
+        type: local
+      - stepNumber: 5
+        label: trAfterSubRef
+        description: 'Branch: does the type declare neither fields nor methods?'
+        type: branch
+        condition: the type has no fields (or an empty fields list) and no methods (or an empty methods list)
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report HOLLOW_TYPE (warning; isDraftCtx) naming the type and its kind as a placeholder
+          with nothing to inform implementers or the ERD.
+        type: local
+      - stepNumber: 7
+        label: trAfterHollow
+        description: 'Branch: does the type declare a fields list at all?'
+        type: branch
+        condition: t.fields is set
+        onFalseStep: 17
+      - stepNumber: 8
+        label: trFieldsStart
+        description: For each field declared on the type, resolve the type identifiers its type string names.
+        type: loop
+        loopKind: forEach
+        over: t.fields
+        endStep: 16
+      - stepNumber: 9
+        description: >-
+          refs = t.fieldTypeRefs(field.name) — the type identifiers the field's type names, with the
+          type's own generic parameters already left out.
+        type: local
+      - stepNumber: 10
+        label: trRefsStart
+        description: For each type identifier the field's type names.
+        type: loop
+        loopKind: forEach
+        over: refs
+        endStep: 15
+      - stepNumber: 11
+        description: 'Branch: is the identifier not a builtin type?'
+        type: branch
+        condition: ctx.isBuiltinType(ref) is false (the identifier is not a builtin)
+        onFalseStep: 15
+      - stepNumber: 12
+        description: >-
+          resolved = ctx.types.find(spec => spec.matchesRef(ref)) — search the loaded types for one
+          whose qualified id the reference names.
+        type: local
+      - stepNumber: 13
+        description: 'Branch: did no loaded type match the reference?'
+        type: branch
+        condition: resolved is undefined (no matching type found)
+        onFalseStep: 15
+      - stepNumber: 14
+        description: >-
+          Report UNDEFINED_TYPE_REFERENCE (error; isDraftCtx) naming the type, the field, and the
+          undefined reference.
+        type: local
+      - stepNumber: 15
+        label: trRefsEnd
+        description: Continue with the next type identifier.
+        type: local
+      - stepNumber: 16
+        label: trFieldsEnd
+        description: Continue with the next field.
+        type: local
+      - stepNumber: 17
+        label: trTypesEnd
+        description: Continue with the next type.
+        type: local
+      - stepNumber: 18
+        label: trIntfStart
+        description: For each loaded interface, check every method signature's type references.
+        type: loop
+        loopKind: forEach
+        over: ctx.interfaces
+        endStep: 27
+      - stepNumber: 19
+        description: >-
+          Compute isDraftCtx as ctx.isComponentDraft(intf.component) or the interface's own status
+          being "draft"/"design"; interfaceGenerics = intf.genericParameters().
+        type: local
+      - stepNumber: 20
+        label: trMethStart
+        description: For each method on the interface.
+        type: loop
+        loopKind: forEach
+        over: intf.methods
+        endStep: 26
+      - stepNumber: 21
+        description: >-
+          methodGenerics = m.genericParameters(); allGenerics = the union of interfaceGenerics and
+          methodGenerics; refs = m.typeRefs().
+        type: local
+      - stepNumber: 22
+        label: trMRefsStart
+        description: For each type identifier the method's signature names.
+        type: loop
+        loopKind: forEach
+        over: refs
+        endStep: 25
+      - stepNumber: 23
+        description: 'Branch: does the reference fail to resolve?'
+        type: branch
+        condition: >-
+          ctx.isTypeResolved(ref, allGenerics) is false (the reference does not resolve to a
+          builtin, an in-scope generic, or a defined type)
+        onFalseStep: 25
+      - stepNumber: 24
+        description: >-
+          Report UNDEFINED_TYPE_REFERENCE (error; isDraftCtx) naming the method, the interface, and
+          the undefined reference.
+        type: local
+      - stepNumber: 25
+        label: trMRefsEnd
+        description: Continue with the next type identifier.
+        type: local
+      - stepNumber: 26
+        label: trMethEnd
+        description: Continue with the next method.
+        type: local
+      - stepNumber: 27
+        label: trIntfEnd
+        description: Continue with the next interface.
+        type: local
+    symbol: check
+  - name: publicSurface
+    sourcePath: src/core/rules/integrity/public-surface.ts
+    narrative:
+      - stepNumber: 1
+        label: psSubStart
+        description: >-
+          For each loaded subsystem, check every declared public interface entry against its backing
+          component.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 28
+      - stepNumber: 2
+        description: isDraftCtx = sub.isDraft().
+        type: local
+      - stepNumber: 3
+        label: psPiStart
+        description: For each public interface entry declared on the subsystem.
+        type: loop
+        loopKind: forEach
+        over: sub.publicInterfaces
+        endStep: 27
+      - stepNumber: 4
+        description: 'Branch: is pi.component unset?'
+        type: branch
+        condition: the entry declares no backing component (pi.component is unset)
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Report PUBLIC_INTERFACE_UNBOUND (error; isDraftCtx) naming the subsystem and the entry's
+          declared type, with no backing component bound.
+        type: local
+      - stepNumber: 6
+        description: >-
+          Skip the rest of this entry's checks and continue with the next public interface (mirrors
+          the source's continue).
+        type: jump
+        toStep: 27
+      - stepNumber: 7
+        label: psHasComponent
+        description: backing = ctx.componentMap.get(pi.component).
+        type: local
+      - stepNumber: 8
+        description: 'Branch: does pi.component resolve to no existing component?'
+        type: branch
+        condition: no component matches pi.component in ctx.componentMap (backing is undefined)
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Report PUBLIC_INTERFACE_INVALID_COMPONENT (error; isDraftCtx) naming the subsystem and the
+          non-existent component pi.component references.
+        type: local
+      - stepNumber: 10
+        description: >-
+          Skip the rest of this entry's checks and continue with the next public interface (mirrors
+          the source's continue).
+        type: jump
+        toStep: 27
+      - stepNumber: 11
+        label: psHasBacking
+        description: isSubsystemOwner = backing.subsystem equals sub.id, or starts with sub.id + "::".
+        type: local
+      - stepNumber: 12
+        description: 'Branch: is isSubsystemOwner false?'
+        type: branch
+        condition: the subsystem does not own the backing component (isSubsystemOwner is false)
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Report PUBLIC_INTERFACE_FOREIGN_COMPONENT (error; isDraftCtx) naming the subsystem, the
+          component, and the subsystem it actually belongs to — a subsystem may only publish its own
+          components.
+        type: local
+      - stepNumber: 14
+        label: psAfterForeign
+        description: 'Branch: does pubTypeMatches report a mismatch?'
+        type: branch
+        condition: >-
+          the entry's declared type cannot be realized by the backing component's stereotype
+          (pubTypeMatches(pi.type, backing.componentType, backing.portalType) is false)
+        onFalseStep: 16
+      - stepNumber: 15
+        description: >-
+          Report PUBLIC_INTERFACE_TYPE_MISMATCH (error; isDraftCtx) naming the subsystem, the
+          component and its stereotype/portalType, and the expected shape for pi.type (expectedFor).
+        type: local
+      - stepNumber: 16
+        label: psAfterTypeMismatch
+        description: 'Branch: is pi.interface set?'
+        type: branch
+        condition: the entry names a bound L3 interface (pi.interface is set)
+        onFalseStep: 23
+      - stepNumber: 17
+        description: intf = ctx.interfaceMap.get(pi.interface).
+        type: local
+      - stepNumber: 18
+        description: 'Branch: does pi.interface resolve to no existing interface?'
+        type: branch
+        condition: no interface matches pi.interface in ctx.interfaceMap (intf is undefined)
+        onTrueStep: 19
+        onFalseStep: 21
+      - stepNumber: 19
+        label: psReportMissingInterface
+        description: >-
+          Report PUBLIC_INTERFACE_INVALID_INTERFACE (error; isDraftCtx) naming the subsystem and the
+          non-existent interface pi.interface references.
+        type: local
+      - stepNumber: 20
+        description: Continue past the interface-ownership check (already resolved as missing).
+        type: jump
+        toStep: 23
+      - stepNumber: 21
+        label: psCheckInterfaceOwner
+        description: 'Branch: does the interface belong to a different component?'
+        type: branch
+        condition: >-
+          the resolved interface belongs to a different component than pi.component (intf.component
+          !== pi.component)
+        onFalseStep: 23
+      - stepNumber: 22
+        description: >-
+          Report PUBLIC_INTERFACE_INVALID_INTERFACE (error; isDraftCtx) naming the subsystem, the
+          interface pi.interface, the component it is bound to (pi.component), and the component it
+          actually belongs to (intf.component).
+        type: local
+      - stepNumber: 23
+        label: psAfterInterfaceCheck
+        description: 'Branch: is pi.type "Custom" and does EVENT_VOCAB match pi.details?'
+        type: branch
+        condition: >-
+          the entry is typed Custom and its details prose matches the event/async vocabulary
+          (EVENT_VOCAB)
+        onFalseStep: 27
+      - stepNumber: 24
+        description: >-
+          eventCapable = backing.componentType is "Observer", or backing.componentType is "Portal"
+          with portalType "MessageBus".
+        type: local
+      - stepNumber: 25
+        description: 'Branch: is eventCapable false?'
+        type: branch
+        condition: the backing component cannot realize eventing (eventCapable is false)
+        onFalseStep: 27
+      - stepNumber: 26
+        description: >-
+          Report PUBLIC_INTERFACE_EVENT_MISTYPED (warning; isDraftCtx) naming the subsystem, the
+          Custom entry's description, and the backing component's stereotype/portalType,
+          recommending it be retyped MessageBus and backed by an Observer or MessageBus Portal, or
+          reworded.
+        type: local
+      - stepNumber: 27
+        label: psPiEnd
+        description: Continue with the next public interface entry.
+        type: local
+      - stepNumber: 28
+        label: psSubEnd
+        description: Continue with the next subsystem.
+        type: local
+    symbol: check
+  - name: lintAllows
+    sourcePath: src/core/rules/integrity/lint-allows.ts
+    narrative:
+      - stepNumber: 1
+        label: laStart
+        description: For each per-spec lint.allow entry gathered by the validator.
+        type: loop
+        loopKind: forEach
+        over: ctx.lintAllows
+        endStep: 7
+      - stepNumber: 2
+        description: 'Branch: does no registered rule emit a.code?'
+        type: branch
+        condition: ctx.knownIssueCodes does not contain a.code
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Report UNKNOWN_LINT_ALLOW_CODE (warning) naming the spec and the unknown allowed code.
+        type: local
+      - stepNumber: 4
+        description: Continue with the next lint allow (mirrors the source's continue).
+        type: jump
+        toStep: 7
+      - stepNumber: 5
+        label: laKnownCode
+        description: 'Branch: did the allow match no finding this run?'
+        type: branch
+        condition: a.used is false
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code, and its stated
+          reason, as stale.
+        type: local
+      - stepNumber: 7
+        label: laEnd
+        description: Continue with the next lint allow.
+        type: local
+    symbol: check
+status: draft
+createdAt: '2026-09-14T23:14:34.746Z'
+updatedAt: '2026-09-14T23:35:38.411Z'

@@ -1,0 +1,23 @@
+kind: value-object
+id: allowed_edge
+name: AllowedEdge
+description: >-
+  A profile's license for an intra-subsystem dependsOn edge the built-in stereotype matrix refuses:
+  the platform's own idiom, with the stated reason. Cross-subsystem boundary rules and pattern
+  containment are never relaxable this way; the deny half is a forbid-edge declarative assertion.
+fields:
+  - name: from
+    type: string[]
+    description: The depending component types this license covers (at least one)
+    optional: false
+  - name: to
+    type: string[]
+    description: The dependency component types it covers (at least one)
+    optional: false
+  - name: reason
+    type: string
+    description: Why the platform needs the edge
+    optional: false
+methods: []
+createdAt: '2026-09-14T23:23:38.442Z'
+updatedAt: '2026-09-14T23:23:38.450Z'

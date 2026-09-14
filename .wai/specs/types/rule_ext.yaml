@@ -31,6 +31,18 @@ fields:
       codes join the known-issue-code set so lint.allow and severity overrides treat them like
       builtins.
     optional: false
+  - name: packSelections
+    type: PackSelection[]
+    description: >-
+      The project's by-name pack selections (legacy path references excluded), which the
+      pack-reproducibility rule checks for a version or integrity pin
+    optional: false
+  - name: selectionFailures
+    type: PackSelectionFailure[]
+    description: >-
+      Declared selections the extension loader could not resolve, each carrying the code the
+      pack-resolution rule reports it under
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:56:56.419Z'
-updatedAt: '2026-07-18T22:42:18.583Z'
+updatedAt: '2026-09-14T23:22:52.727Z'

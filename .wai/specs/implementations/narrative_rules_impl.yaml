@@ -1,0 +1,994 @@
+id: narrative_rules_impl
+name: Narrative Rules Implementation
+description: >-
+  The narrative rule family: each rule lives in its own file under src/core/rules/narrative/ and
+  exports a rule object whose check(ctx) realizes the method named after it.
+contract: inarrative_rules
+simPath: tests/core/validation.test.ts
+methods:
+  - name: contractSymmetryAndNarratives
+    sourcePath: src/core/rules/narrative/contract-symmetry-and-narratives.ts
+    narrative:
+      - stepNumber: 1
+        label: impls
+        description: For each implementation spec
+        type: loop
+        over: ctx.implementations
+        endStep: 62
+      - stepNumber: 2
+        description: Skip an implementation whose contract interface does not resolve
+        type: branch
+        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          Compute isDraftCtx = ctx.isImplementationDraft(impl), the draft context of the findings on
+          this implementation, and collect the contract's method names and the implementation's
+          method names
+        type: local
+      - stepNumber: 4
+        label: extraMethods
+        description: Check each implementation method against the contract
+        type: loop
+        over: impl.methods
+        endStep: 6
+      - stepNumber: 5
+        description: Is the method absent from the contract?
+        type: branch
+        condition: the method's name is not among the contract's method names
+        onFalseStep: 4
+      - stepNumber: 6
+        label: reportUnexpected
+        description: >-
+          Report UNEXPECTED_IMPLEMENTATION_METHOD (error; draft context isDraftCtx) on the
+          implementation, naming the method and the contract it is not defined on
+        type: local
+      - stepNumber: 7
+        label: missingMethods
+        description: Check each contract method against the implementation
+        type: loop
+        over: contract.methods
+        endStep: 9
+      - stepNumber: 8
+        description: Is the contract method left unimplemented?
+        type: branch
+        condition: the contract method's name is not among the implementation's method names
+        onFalseStep: 7
+      - stepNumber: 9
+        label: reportMissing
+        description: >-
+          Report MISSING_IMPLEMENTATION_METHOD (error; draft context isDraftCtx) on the
+          implementation, naming the contract method and its interface
+        type: local
+      - stepNumber: 10
+        label: targetSteps
+        description: Resolve the target of every narrative step of the implementation
+        type: loop
+        over: each narrative step of each method in impl.methods
+        endStep: 62
+      - stepNumber: 11
+        description: Only call, dispatch and register steps name a target; skip every other step
+        type: branch
+        condition: step.type is call, dispatch or register
+        onFalseStep: 10
+      - stepNumber: 12
+        description: Does the step lack its target component?
+        type: branch
+        condition: step.targetComponent is missing
+        onFalseStep: 15
+      - stepNumber: 13
+        description: >-
+          Report MISSING_TARGET_COMPONENT (error; draft context isDraftCtx) naming the method, the
+          step type and the step number
+        type: local
+      - stepNumber: 14
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 15
+        label: classifyRef
+        description: >-
+          Classify the target reference: isCrossTreeForm =
+          ctx.isExternalNamespaceRef(step.targetComponent); fromSubsystem = the subsystem of the
+          calling component ctx.componentMap.get(contract.component), when it resolves;
+          isCollapsedForm = not isCrossTreeForm, fromSubsystem known, and
+          ctx.isCollapsedCrossTreeRef(step.targetComponent, fromSubsystem)
+        type: local
+      - stepNumber: 16
+        description: >-
+          A dispatch step is checked for component existence and the declared dependency only;
+          resolving its capability against the portal's table is another rule's
+        type: branch
+        condition: step.type is dispatch
+        onFalseStep: 34
+      - stepNumber: 17
+        description: Does the dispatch target fail to resolve in this tree?
+        type: branch
+        condition: ctx.componentMap.get(step.targetComponent) finds no component
+        onFalseStep: 31
+      - stepNumber: 18
+        description: Only a cross-tree or collapsed reference is judged against the surface snapshots
+        type: branch
+        condition: isCrossTreeForm or isCollapsedForm
+        onFalseStep: 26
+      - stepNumber: 19
+        description: resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem)
+        type: local
+      - stepNumber: 20
+        description: >-
+          Act on how the snapshots judged the reference; an unresolved one falls back to the
+          unresolved-target findings
+        type: switch
+        'on': resolved.kind
+        cases:
+          - value: ambiguous
+            step: 21
+          - value: resolved
+            step: 23
+        defaultStep: 26
+      - stepNumber: 21
+        label: dispatchAmbiguous
+        description: >-
+          Report SURFACE_REF_AMBIGUOUS (error; draft context isDraftCtx; not surface-resolved) with
+          the message resolved.ambiguityMessage('Method <method> in implementation <impl> dispatches
+          (step <n>) through', step.targetComponent)
+        type: local
+      - stepNumber: 22
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 23
+        label: dispatchSurface
+        description: Validate the dispatched capability against the declared surface
+        type: branch
+        condition: >-
+          step.capability is set and resolved.entry.dispatch (none when absent) has no binding for
+          that capability
+        onFalseStep: 10
+      - stepNumber: 24
+        description: >-
+          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; surface-resolved) naming
+          the capability, the cross-tree portal, the snapshot's projectName and the entry id that
+          does not serve it
+        type: local
+      - stepNumber: 25
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 26
+        label: dispatchUnresolved
+        description: >-
+          An unresolved cross-tree reference is only verifiable from the parent project; any other
+          unresolved reference is broken
+        type: branch
+        condition: isCrossTreeForm
+        onFalseStep: 29
+      - stepNumber: 27
+        description: >-
+          Report CROSS_TREE_REF_UNRESOLVED (warning; draft context isDraftCtx) naming the method,
+          the cross-tree component it dispatches through and the step, with the remedies: validate
+          from the parent project, pin the family surfaces (wairon surface pin), or import the
+          producing project's surface
+        type: local
+      - stepNumber: 28
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 29
+        label: dispatchInvalid
+        description: >-
+          Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
+          dispatches through a component that does not exist, naming it and the step
+        type: local
+      - stepNumber: 30
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 31
+        label: dispatchDeps
+        description: Is the dispatch target an undeclared collaborator?
+        type: branch
+        condition: >-
+          the calling component ctx.componentMap.get(contract.component) resolves,
+          step.targetComponent is not the caller itself, and the caller neither dependsOn nor owns
+          it
+        onFalseStep: 10
+      - stepNumber: 32
+        description: >-
+          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
+          ctx.isComponentDraft(caller.id)) naming the caller and the component it dispatches through
+          without declaring it
+        type: local
+      - stepNumber: 33
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 34
+        label: callPath
+        description: >-
+          Call and register steps share the target resolution from here, their messages saying
+          'calls' or 'registers callback'. Does the step lack its target method?
+        type: branch
+        condition: step.targetMethod is missing
+        onFalseStep: 37
+      - stepNumber: 35
+        description: >-
+          Report MISSING_TARGET_METHOD (error; draft context isDraftCtx) naming the method, the step
+          type and the step number
+        type: local
+      - stepNumber: 36
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 37
+        label: callTarget
+        description: Does the call target fail to resolve in this tree?
+        type: branch
+        condition: ctx.componentMap.get(step.targetComponent) finds no component
+        onFalseStep: 55
+      - stepNumber: 38
+        description: Only a cross-tree or collapsed reference is judged against the surface snapshots
+        type: branch
+        condition: isCrossTreeForm or isCollapsedForm
+        onFalseStep: 50
+      - stepNumber: 39
+        description: resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem)
+        type: local
+      - stepNumber: 40
+        description: >-
+          Act on how the snapshots judged the reference; an unresolved one falls back to the
+          unresolved-target findings
+        type: switch
+        'on': resolved.kind
+        cases:
+          - value: ambiguous
+            step: 41
+          - value: resolved
+            step: 43
+        defaultStep: 50
+      - stepNumber: 41
+        label: callAmbiguous
+        description: >-
+          Report SURFACE_REF_AMBIGUOUS (error; draft context isDraftCtx; not surface-resolved) with
+          the message resolved.ambiguityMessage('Method <method> in implementation <impl>
+          calls|registers callback "<targetMethod>" (step <n>) on', step.targetComponent)
+        type: local
+      - stepNumber: 42
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 43
+        label: callSurface
+        description: Validate the called method against the declared surface
+        type: branch
+        condition: resolved.entry.methods has no method named step.targetMethod
+        onFalseStep: 46
+      - stepNumber: 44
+        description: >-
+          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; surface-resolved) naming
+          the method, the cross-tree component, the snapshot's projectName and the entry id that
+          does not expose it
+        type: local
+      - stepNumber: 45
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 46
+        label: surfaceGuarantees
+        description: Check each guarantee the step asserts against the surface method
+        type: loop
+        over: step.assertsGuarantees (none when absent)
+        endStep: 48
+      - stepNumber: 47
+        description: Is the asserted guarantee undeclared on the surface?
+        type: branch
+        condition: the surface method's guarantees (none when absent) do not include the asserted guarantee
+        onFalseStep: 46
+      - stepNumber: 48
+        label: surfaceUnbacked
+        description: >-
+          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx; surface-resolved)
+          naming the step, the method, the guarantee, the snapshot's projectName and the entry
+          method that does not declare it
+        type: local
+      - stepNumber: 49
+        description: Continue with the next step once every asserted guarantee is checked
+        type: jump
+        toStep: 10
+      - stepNumber: 50
+        label: callUnresolved
+        description: >-
+          An unresolved cross-tree reference is only verifiable from the parent project; any other
+          unresolved reference is broken
+        type: branch
+        condition: isCrossTreeForm
+        onFalseStep: 53
+      - stepNumber: 51
+        description: >-
+          Report CROSS_TREE_REF_UNRESOLVED (warning; draft context isDraftCtx) naming the method,
+          the cross-tree component it calls or registers a callback on and the step, with the
+          remedies: validate from the parent project, pin the family surfaces (wairon surface pin),
+          or import the producing project's surface
+        type: local
+      - stepNumber: 52
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 53
+        label: callInvalid
+        description: >-
+          Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
+          calls or registers a callback on a component that does not exist, naming it and the step
+        type: local
+      - stepNumber: 54
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 55
+        label: callDeps
+        description: Is the call target an undeclared collaborator?
+        type: branch
+        condition: >-
+          the calling component ctx.componentMap.get(contract.component) resolves,
+          step.targetComponent is not the caller itself, and the caller neither dependsOn nor owns
+          it
+        onFalseStep: 57
+      - stepNumber: 56
+        description: >-
+          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
+          ctx.isComponentDraft(caller.id)) naming the caller and the component it calls or registers
+          a callback on without declaring it
+        type: local
+      - stepNumber: 57
+        label: resolveTargetMethod
+        description: Does the target component's contract lack the called method?
+        type: branch
+        condition: >-
+          no interface in ctx.interfacesByComponent.get(step.targetComponent) (none when absent) has
+          a method named step.targetMethod; the first interface that has one supplies the target
+          method
+        onFalseStep: 60
+      - stepNumber: 58
+        description: >-
+          Report INVALID_TARGET_METHOD_REFERENCE (error; draft context isDraftCtx or
+          ctx.isComponentDraft(step.targetComponent)) naming the method, the target component and
+          the step
+        type: local
+      - stepNumber: 59
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 60
+        label: callGuarantees
+        description: Check each guarantee the step asserts against the target method's contract
+        type: loop
+        over: step.assertsGuarantees (none when absent)
+        endStep: 62
+      - stepNumber: 61
+        description: Is the asserted guarantee undeclared on the called contract?
+        type: branch
+        condition: the target method's L3 guarantees (none when absent) do not include the asserted guarantee
+        onFalseStep: 60
+      - stepNumber: 62
+        label: callUnbacked
+        description: >-
+          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx or
+          ctx.isComponentDraft(step.targetComponent)) naming the step, the guarantee and the called
+          method, with the remedy: declare it on that method, or revise the narrative
+        type: local
+    symbol: check
+  - name: guaranteeTokens
+    sourcePath: src/core/rules/narrative/guarantee-tokens.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          known = the builtin guarantee tokens SEMANTIC_GUARANTEES (idempotent, atomic,
+          transactional, exactly-once) together with the pack-declared ctx.ext.guarantees; fixHint
+          names the builtin tokens, the pack-declared ones when there are any, and the remedy: fix
+          the spelling, or declare the token in an extension pack's guarantees list
+        type: local
+      - stepNumber: 2
+        label: declaredTokens
+        description: Check every guarantee token an L3 method declares
+        type: loop
+        over: >-
+          each guarantee token declared by each method (method.guarantees, none when absent) of each
+          interface in ctx.interfaces
+        endStep: 4
+      - stepNumber: 3
+        description: Is the declared token unknown?
+        type: branch
+        condition: known does not contain the token
+        onFalseStep: 2
+      - stepNumber: 4
+        label: reportDeclared
+        description: >-
+          Report UNKNOWN_GUARANTEE (warning; draft context: the interface's status is draft or
+          design, or ctx.isComponentDraft(interface.component)) on the interface, naming the method
+          and the token no narrative assertion can match, followed by fixHint
+        type: local
+      - stepNumber: 5
+        label: assertedTokens
+        description: Check every guarantee token a narrative step asserts
+        type: loop
+        over: >-
+          each guarantee token asserted by each narrative step (step.assertsGuarantees, none when
+          absent) of each method of each implementation in ctx.implementations
+        endStep: 7
+      - stepNumber: 6
+        description: Is the asserted token unknown?
+        type: branch
+        condition: known does not contain the token
+        onFalseStep: 5
+      - stepNumber: 7
+        label: reportAsserted
+        description: >-
+          Report UNKNOWN_GUARANTEE (warning; draft context ctx.isImplementationDraft(impl)) on the
+          implementation, naming the step number, the method and the token no L3 contract can back,
+          followed by fixHint
+        type: local
+    symbol: check
+  - name: narrativeFlow
+    sourcePath: src/core/rules/narrative/narrative-flow.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: >-
+          For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl) as the
+          draft context of its findings
+        type: loop
+        over: each method of each implementation in ctx.implementations
+        endStep: 47
+      - stepNumber: 2
+        description: Skip a method without a narrative
+        type: branch
+        condition: implMethod.narrative has steps
+        onFalseStep: 1
+      - stepNumber: 3
+        label: labelSteps
+        description: >-
+          Scan the steps for duplicate labels, recording each label against the first step that
+          holds it
+        type: loop
+        over: implMethod.narrative
+        endStep: 7
+      - stepNumber: 4
+        description: Is the label a duplicate?
+        type: branch
+        condition: the step carries a label an earlier step already holds
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Report DUPLICATE_STEP_LABEL (error; draft context isDraftCtx) naming both step numbers and
+          the shared label: every symbolic reference becomes ambiguous and further edits to the
+          implementation are blocked
+        type: local
+      - stepNumber: 6
+        description: Continue with the next step
+        type: jump
+        toStep: 3
+      - stepNumber: 7
+        label: recordLabel
+        description: Record the step's label, when it carries one, against its step number
+        type: local
+      - stepNumber: 8
+        label: numberSteps
+        description: >-
+          Index the steps by number into byNum. The narrative starts sound; the private
+          malformed(message) helper marks it unsound and reports MALFORMED_FLOW_STEP (error; draft
+          context isDraftCtx), and serves every config finding below
+        type: loop
+        over: implMethod.narrative
+        endStep: 11
+      - stepNumber: 9
+        description: Is the step number a duplicate?
+        type: branch
+        condition: byNum already holds the step's stepNumber
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report MALFORMED_FLOW_STEP through malformed(): duplicate stepNumber, so jump targets
+          would be ambiguous
+        type: local
+      - stepNumber: 11
+        label: indexStep
+        description: byNum.set(step.stepNumber, step)
+        type: local
+      - stepNumber: 12
+        label: configSteps
+        description: Check each step's flow config and jump targets
+        type: loop
+        over: implMethod.narrative
+        endStep: 31
+      - stepNumber: 13
+        description: Is fire-and-forget misapplied?
+        type: branch
+        condition: step.detach is set and the step is neither a call nor a dispatch step
+        onFalseStep: 15
+      - stepNumber: 14
+        description: >-
+          Report MALFORMED_FLOW_STEP through malformed(): detach applies to call and dispatch steps
+          only
+        type: local
+      - stepNumber: 15
+        label: typeConfig
+        description: Check the config the step's type requires; return and throw need none
+        type: switch
+        'on': step.type
+        cases:
+          - value: local
+            step: 16
+          - value: call
+            step: 16
+          - value: register
+            step: 16
+          - value: dispatch
+            step: 16
+          - value: branch
+            step: 18
+          - value: switch
+            step: 20
+          - value: loop
+            step: 22
+          - value: try
+            step: 24
+          - value: parallel
+            step: 26
+          - value: jump
+            step: 28
+        defaultStep: 29
+      - stepNumber: 16
+        label: simpleConfig
+        description: >-
+          Report MALFORMED_FLOW_STEP through malformed() when the private flowConfigOn(step) finds
+          flow fields on a local, call, register or dispatch step: any of condition, onTrueStep,
+          onFalseStep, on, cases, defaultStep, loopKind, over, endStep, catches, finallyStep,
+          branches, toStep that is defined and not an empty list
+        type: local
+      - stepNumber: 17
+        description: Go on to the step's jump targets
+        type: jump
+        toStep: 29
+      - stepNumber: 18
+        label: branchConfig
+        description: >-
+          Report MALFORMED_FLOW_STEP through malformed() for a branch without condition, and again
+          for a branch without onFalseStep
+        type: local
+      - stepNumber: 19
+        description: Go on to the step's jump targets
+        type: jump
+        toStep: 29
+      - stepNumber: 20
+        label: switchConfig
+        description: >-
+          Report MALFORMED_FLOW_STEP through malformed() for a switch whose cases are missing or
+          empty
+        type: local
+      - stepNumber: 21
+        description: Go on to the step's jump targets
+        type: jump
+        toStep: 29
+      - stepNumber: 22
+        label: loopConfig
+        description: >-
+          Report MALFORMED_FLOW_STEP through malformed() for a loop without endStep, or else one
+          whose endStep is not beyond the header; then, taking the loop kind as loopKind, else
+          forEach when over is set, else while, for a while or doWhile loop without condition and
+          for a forEach or for loop without over
+        type: local
+      - stepNumber: 23
+        description: Go on to the step's jump targets
+        type: jump
+        toStep: 29
+      - stepNumber: 24
+        label: tryConfig
+        description: >-
+          Report MALFORMED_FLOW_STEP through malformed() for a try without endStep, or else one
+          whose endStep is not beyond the header, and for a try with neither catches nor finallyStep
+        type: local
+      - stepNumber: 25
+        description: Go on to the step's jump targets
+        type: jump
+        toStep: 29
+      - stepNumber: 26
+        label: parallelConfig
+        description: >-
+          Report MALFORMED_FLOW_STEP through malformed() for a parallel without endStep, or else one
+          whose endStep is not beyond the header; for fewer than two branches; otherwise for arm
+          entries not listed in ascending order, for an entry listed twice, for a first entry that
+          is not the body's first step (the step number following the header in byNum's ascending
+          order, when there is one), and for an entry beyond endStep
+        type: local
+      - stepNumber: 27
+        description: Go on to the step's jump targets
+        type: jump
+        toStep: 29
+      - stepNumber: 28
+        label: jumpConfig
+        description: Report MALFORMED_FLOW_STEP through malformed() for a jump without toStep
+        type: local
+      - stepNumber: 29
+        label: jumpFields
+        description: Check that every jump field lands on a step of this narrative
+        type: loop
+        over: >-
+          the step's set jump fields: onTrueStep, onFalseStep, defaultStep, endStep, finallyStep,
+          toStep, and every cases[i].step, catches[i].step and branches[i].step
+        endStep: 31
+      - stepNumber: 30
+        description: Does the jump field target a missing step?
+        type: branch
+        condition: byNum holds no step numbered as the field's target
+        onFalseStep: 29
+      - stepNumber: 31
+        label: reportBadJump
+        description: >-
+          Mark the narrative unsound and report INVALID_STEP_JUMP (error; draft context isDraftCtx)
+          naming the step, the field and the target step that does not exist
+        type: local
+      - stepNumber: 32
+        description: Reachability and region structure are only judged over a structurally sound narrative
+        type: branch
+        condition: the narrative is still sound
+        onFalseStep: 1
+      - stepNumber: 33
+        description: >-
+          graph = implMethod.stepGraph(); walk depth-first from its first step number following
+          graph.successorsOf, collecting the visited step numbers
+        type: local
+      - stepNumber: 34
+        description: Is any step dead?
+        type: branch
+        condition: some of the narrative's step numbers were not visited
+        onFalseStep: 36
+      - stepNumber: 35
+        description: >-
+          Report UNREACHABLE_STEP (warning; draft context isDraftCtx) once, listing every unvisited
+          step number and the first step they cannot be reached from
+        type: local
+      - stepNumber: 36
+        label: regionPairs
+        description: Check that regions nest or are disjoint
+        type: loop
+        over: >-
+          each ordered pair (a, b) of the narrative's regions: every loop, try and parallel step
+          with an endStep, spanning its header to its endStep
+        endStep: 38
+      - stepNumber: 37
+        description: Do the two regions interleave?
+        type: branch
+        condition: b's header lies in a's body (after a's header, up to a's end) and b ends beyond a's end
+        onFalseStep: 36
+      - stepNumber: 38
+        label: reportOverlap
+        description: >-
+          Report REGION_OVERLAP (error; draft context isDraftCtx) naming both regions' kinds and
+          spans: regions must be nested or disjoint
+        type: local
+      - stepNumber: 39
+        label: jumpEdges
+        description: Judge each jump edge against the regions
+        type: loop
+        over: >-
+          each jump edge: every step's set onTrueStep, onFalseStep, defaultStep, toStep and
+          finallyStep, and every cases[i].step and catches[i].step, as (from step, to step, field,
+          the step's type)
+        endStep: 44
+      - stepNumber: 40
+        label: edgeRegions
+        description: Check the edge against each region
+        type: loop
+        over: the narrative's regions
+        endStep: 42
+      - stepNumber: 41
+        description: Does the edge enter the region other than through its header?
+        type: branch
+        condition: >-
+          the edge lands in the region's body from a step that is neither the region's header nor in
+          its body
+        onFalseStep: 40
+      - stepNumber: 42
+        label: reportJumpInto
+        description: >-
+          Report JUMP_INTO_REGION (warning; draft context isDraftCtx) naming the step, the field,
+          the region and the landing step: regions are entered through their header
+        type: local
+      - stepNumber: 43
+        description: Is the edge an unstructured backward jump?
+        type: branch
+        condition: >-
+          the edge leaves a branch, switch or jump step for an earlier step, and it is not a
+          continue: no loop region has its header at the target with the source in its body
+        onFalseStep: 39
+      - stepNumber: 44
+        label: reportBackward
+        description: >-
+          Report BACKWARD_JUMP (warning; draft context isDraftCtx) naming the step, the field and
+          the target: model repetition with a loop step
+        type: local
+      - stepNumber: 45
+        label: tryBodies
+        description: Check that no try body falls through into its handlers
+        type: loop
+        over: each try step with an endStep
+        endStep: 47
+      - stepNumber: 46
+        description: Does the body's success path run into a handler?
+        type: branch
+        condition: >-
+          the body's last step (byNum at endStep) is a local, call, register or dispatch step, and
+          the step number following endStep is one of the try's catch steps or its finallyStep
+        onFalseStep: 45
+      - stepNumber: 47
+        label: reportFallthrough
+        description: >-
+          Report FALLTHROUGH_INTO_HANDLER (warning; draft context isDraftCtx) naming the body's last
+          step and the handler step it falls into: end the body with a jump, return or throw
+        type: local
+    symbol: check
+  - name: narrativeAntipatterns
+    sourcePath: src/core/rules/narrative/narrative-antipatterns.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: >-
+          For each implementation method, with per implementation component = the component of its
+          contract when ctx.interfaceMap and ctx.componentMap resolve both, and isDraftCtx =
+          ctx.isImplementationDraft(impl); cross-component call edges collect into callEdges, empty
+          at the start
+        type: loop
+        over: each method of each implementation in ctx.implementations
+        endStep: 16
+      - stepNumber: 2
+        description: Skip a method without a narrative
+        type: branch
+        condition: implMethod.narrative has steps
+        onFalseStep: 1
+      - stepNumber: 3
+        description: graph = implMethod.stepGraph()
+        type: local
+      - stepNumber: 4
+        label: decisionSteps
+        description: Look for decisions that decide nothing
+        type: loop
+        over: implMethod.narrative
+        endStep: 8
+      - stepNumber: 5
+        description: Do both arms of a branch go to one step?
+        type: branch
+        condition: >-
+          the step is a branch with onFalseStep set, and its true target (onTrueStep, else
+          graph.nextOf(step.stepNumber)) exists and equals onFalseStep
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report MEANINGLESS_BRANCH (warning; draft context isDraftCtx) naming the branch step and
+          the one step both arms go to
+        type: local
+      - stepNumber: 7
+        label: switchCheck
+        description: Do every case and the default of a switch go to one step?
+        type: branch
+        condition: >-
+          the step is a switch with cases, and its case steps together with its default
+          (defaultStep, else graph.nextOf(step.stepNumber), when there is one) are a single step
+        onFalseStep: 4
+      - stepNumber: 8
+        label: reportSwitch
+        description: >-
+          Report MEANINGLESS_BRANCH (warning; draft context isDraftCtx) naming the switch step and
+          the one step every case and the default go to
+        type: local
+      - stepNumber: 9
+        label: stepCycles
+        description: Look for step cycles that never terminate
+        type: loop
+        over: >-
+          each strongly connected component of the step graph, from the private
+          stronglyConnected(graph.stepNumbers, graph.successorsOf) (iterative Tarjan)
+        endStep: 11
+      - stepNumber: 10
+        description: Is the cycle inescapable?
+        type: branch
+        condition: >-
+          the component is a cycle (more than one step, or a step that is its own successor), no
+          member has a successor outside it, and no member is a return or throw step
+        onFalseStep: 9
+      - stepNumber: 11
+        label: reportCycle
+        description: >-
+          Report INESCAPABLE_CYCLE (warning; draft context isDraftCtx) listing the cycle's steps in
+          ascending order: once entered, the flow never terminates
+        type: local
+      - stepNumber: 12
+        description: The call-cycle pass needs the calling component
+        type: branch
+        condition: the implementation's component resolved
+        onFalseStep: 1
+      - stepNumber: 13
+        label: edgeSteps
+        description: Collect the method's cross-component call edges
+        type: loop
+        over: implMethod.narrative
+        endStep: 16
+      - stepNumber: 14
+        description: >-
+          Resolve the step's call target: a call step with targetComponent and targetMethod targets
+          them; a dispatch step with targetComponent and capability targets the component and method
+          bound to that capability in the portal's dispatch table
+          (ctx.componentMap.get(step.targetComponent)?.dispatch), when one is bound. Register steps
+          are never collected: a handoff defers the invocation, so it cannot recurse
+        type: local
+      - stepNumber: 15
+        description: Does the step make a call into a known component?
+        type: branch
+        condition: a target was resolved and ctx.componentMap has its component
+        onFalseStep: 13
+      - stepNumber: 16
+        label: recordEdge
+        description: >-
+          Add to callEdges the edge from '<component.id>::<method name>' to '<target
+          component>::<target method>' with the implementation, the method name, the step number and
+          the target label 'component.method'; the edge is unconditional when the private
+          isUnavoidable helper finds the step on every path to completion: with the step removed, no
+          step the private isTerminal helper counts as terminal (a return or throw, or a step whose
+          flow falls off the narrative's end) is reachable from the first step
+        type: local
+      - stepNumber: 17
+        description: >-
+          Build the unconditional call graph: adjacency groups the unconditional edges of callEdges
+          by their from key, and its nodes are every from and to key
+        type: local
+      - stepNumber: 18
+        label: callCycles
+        description: Look for call cycles with no guarded edge
+        type: loop
+        over: >-
+          each strongly connected component of the unconditional call graph, from stronglyConnected
+          over the node indices and their adjacency successors
+        endStep: 20
+      - stepNumber: 19
+        description: Is the call cycle unconditional?
+        type: branch
+        condition: >-
+          the component is a cycle (more than one node, or a node with an edge to itself) and has
+          member edges, the unconditional edges between its nodes
+        onFalseStep: 18
+      - stepNumber: 20
+        label: reportCallCycle
+        description: >-
+          Report UNCONDITIONAL_CALL_CYCLE (warning; draft context when any member edge's
+          implementation is ctx.isImplementationDraft) on the implementation of the anchor, the
+          member edge whose from key sorts first by localeCompare, naming the cycle's nodes in
+          sorted order and the anchor's step, method, implementation and target: it recurses without
+          a base case
+        type: local
+    symbol: check
+  - name: narrativeDetail
+    sourcePath: src/core/rules/narrative/narrative-detail.ts
+    narrative:
+      - stepNumber: 1
+        description: factsByPath = every ctx.codeModel.files entry keyed by ctx.codeModel.pathKey(entry.path)
+        type: local
+      - stepNumber: 2
+        label: impls
+        description: For each implementation spec
+        type: loop
+        over: ctx.implementations
+        endStep: 20
+      - stepNumber: 3
+        description: Skip an implementation whose contract does not resolve
+        type: branch
+        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          component = ctx.componentMap.get(contract.component); isDraftCtx =
+          ctx.isImplementationDraft(impl), which the rule computes inline today as the
+          implementation or its contract in draft or design status, or
+          ctx.isComponentDraft(contract.component)
+        type: local
+      - stepNumber: 5
+        label: methods
+        description: Hold each implementation method to its detail level
+        type: loop
+        over: impl.methods
+        endStep: 20
+      - stepNumber: 6
+        description: Skip a method the contract does not define
+        type: branch
+        condition: contract.methods has a method named implMethod.name (contractMethod)
+        onFalseStep: 5
+      - stepNumber: 7
+        description: >-
+          eff = implMethod.effectiveDetail(impl, component): the method's detail, else the
+          implementation's, either one explicit, else the component's defaultNarrativeDetail() (full
+          when the component does not resolve)
+        type: local
+      - stepNumber: 8
+        description: 'Levels are floors, not ceilings: a method with a narrative passes'
+        type: branch
+        condition: implMethod.narrative is empty
+        onFalseStep: 5
+      - stepNumber: 9
+        description: Does the method owe a narrative?
+        type: branch
+        condition: eff.level is full
+        onFalseStep: 12
+      - stepNumber: 10
+        description: >-
+          Report MISSING_NARRATIVE (error when eff.explicit, else warning; draft context isDraftCtx)
+          naming the method and whether full was declared or is the component type's default
+        type: local
+      - stepNumber: 11
+        description: Continue with the next method
+        type: jump
+        toStep: 5
+      - stepNumber: 12
+        label: codeSide
+        description: >-
+          complexityFired = false; tier = implMethod.conformance, else impl.conformance, else
+          component.defaultConformanceTier() (declared when the component does not resolve); file =
+          implMethod.sourceFile(impl.sourcePath)
+        type: local
+      - stepNumber: 13
+        description: >-
+          Detail sufficiency, code side: measure only when the method has a source file of this root
+          and a trusted name-to-symbol mapping
+        type: branch
+        condition: >-
+          file is set, tier is not off, and the component is not in a chained subproject (a resolved
+          component for which ctx.isInChainedSubproject(component.subsystem) holds)
+        onFalseStep: 17
+      - stepNumber: 14
+        description: >-
+          facts = factsByPath.get(ctx.codeModel.pathKey(file)); symbol = implMethod.symbol, else
+          implMethod.name; complexity = facts.functionComplexity[symbol] as an own property, only
+          when facts is analyzed at exact grade; limit =
+          ctx.complexityConfigFor(component?.subsystem)?.maxUnnarratedComplexity, else the private
+          DEFAULT_MAX_UNNARRATED_COMPLEXITY (8)
+        type: local
+      - stepNumber: 15
+        description: Is real branching hiding below full?
+        type: branch
+        condition: complexity was measured and exceeds limit
+        onFalseStep: 17
+      - stepNumber: 16
+        description: >-
+          Set complexityFired and report UNNARRATED_COMPLEXITY (warning; draft context isDraftCtx)
+          naming the level, the symbol, the file, the measured complexity and the limit
+        type: local
+      - stepNumber: 17
+        label: specSide
+        description: >-
+          Detail sufficiency, spec side: is a logic stereotype explicitly dialed below its full
+          floor?
+        type: branch
+        condition: >-
+          complexityFired is false, eff.explicit, and the component resolves with a componentType
+          among the private LOGIC_STEREOTYPES (Orchestrator, Supervisor, Actor, Specialist)
+        onFalseStep: 19
+      - stepNumber: 18
+        description: >-
+          Report DETAIL_BELOW_STEREOTYPE (warning; draft context isDraftCtx) naming the explicit
+          level and the logic stereotype whose full floor it sits below
+        type: local
+      - stepNumber: 19
+        label: intentFloor
+        description: Intent, and calls-only with nothing to choreograph, must clear the intent floor
+        type: branch
+        condition: >-
+          contractMethod.passesIntentFloor(implMethod.intent, else contractMethod.description) is
+          false
+        onFalseStep: 5
+      - stepNumber: 20
+        label: reportIntentFloor
+        description: >-
+          Report INTENT_FLOOR (error when eff.explicit, else warning; draft context isDraftCtx)
+          naming the method and its level: its behavioural prose is missing or placeholder-thin
+        type: local
+    symbol: check
+status: draft
+createdAt: '2026-09-14T23:18:39.432Z'
+updatedAt: '2026-09-14T23:35:32.618Z'

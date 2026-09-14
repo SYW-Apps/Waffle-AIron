@@ -51,6 +51,12 @@ fields:
     type: string
     description: Optional logical entity id represented by a table-schema type
     optional: true
+  - name: invariants
+    type: Invariant[]
+    description: >-
+      Declared domain invariants (entities); every write-effect method of the componentClass must
+      carry a narrative step asserting each one
+    optional: true
 methods:
   - name: qualifiedId
     signature: 'qualifiedId(): string'
@@ -71,6 +77,6 @@ methods:
     returns: string[]
     description: >-
       The type identifiers one field's type names, with comments, trailing prose and string literals
-      stripped and this type's own generic parameters left out
+      stripped and this type's own generic parameters left out (compared ignoring case)
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-09-14T06:04:06.685Z'
+updatedAt: '2026-09-14T23:23:27.918Z'

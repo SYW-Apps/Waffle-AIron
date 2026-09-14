@@ -1,0 +1,26 @@
+kind: value-object
+id: external_link
+name: ExternalLink
+description: >-
+  An opaque external reference on a component, a documented URL wairon never fetches or validates.
+  An implementation link marks an external source of record (a cloud console, a hosted scenario, a
+  file in another repository) and stands in for a local source path; an informative link is context
+  only.
+fields:
+  - name: url
+    type: string
+    description: The referenced location
+    optional: false
+  - name: type
+    type: string
+    description: >-
+      implementation | informative; defaults to informative, so an untyped link never satisfies the
+      source requirement
+    optional: false
+  - name: label
+    type: string
+    description: A human-readable label
+    optional: true
+methods: []
+createdAt: '2026-09-14T23:23:20.293Z'
+updatedAt: '2026-09-14T23:23:20.301Z'

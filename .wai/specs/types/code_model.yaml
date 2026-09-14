@@ -18,6 +18,18 @@ fields:
     type: string
     description: The root every source path was resolved and containment-checked against
     optional: false
-methods: []
+methods:
+  - name: pathKey
+    signature: 'pathKey(path: string): string'
+    returns: string
+    description: >-
+      The canonical key form of a source path in this model — forward slashes, no leading ./ — the
+      form every facts entry is stored under and every lookup or path comparison uses
+  - name: factsFor
+    signature: 'factsFor(path: string): SourceFileFacts | undefined'
+    returns: SourceFileFacts | undefined
+    description: >-
+      The facts entry for a source path, looked up by its canonical key; undefined when the run
+      analyzed no such path
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-09-13T20:55:21.055Z'
+updatedAt: '2026-09-14T23:22:43.602Z'

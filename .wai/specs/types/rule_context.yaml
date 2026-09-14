@@ -150,7 +150,10 @@ methods:
   - name: targetLanguageFor
     signature: 'targetLanguageFor(subsystemId?: string): string | undefined'
     returns: string | undefined
-    description: The effective target language for a subsystem, its own else the system's, lowercase
+    description: >-
+      The effective target language for a subsystem — its own, else the system's — normalized to the
+      language-table key (ts → typescript, js or node → javascript, rs → rust, py → python, c# or
+      dotnet → csharp, golang → go, else lowercased)
   - name: isSpecInScope
     signature: 'isSpecInScope(specId: string): boolean'
     returns: boolean
@@ -218,5 +221,11 @@ methods:
     description: >-
       Whether a type identifier is in the language-agnostic builtin vocabulary (string, u64,
       Promise, Map, and the rest), compared ignoring case
+  - name: namingConfigFor
+    signature: 'namingConfigFor(subsystemId?: string): NamingRuleConfig | undefined'
+    returns: NamingRuleConfig | undefined
+    description: >-
+      The naming rule config in force for a subsystem: the project's, overlaid with its profile
+      pack's when the pack sets one, stereotype patterns merged key by key
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-14T06:10:35.597Z'
+updatedAt: '2026-09-14T23:26:20.942Z'

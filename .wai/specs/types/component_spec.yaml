@@ -59,9 +59,10 @@ fields:
   - name: durability
     type: string
     description: >-
-      Store-only: ram-projection | durable. A durable Store's written state must have a hydration
-      read-back reachable from a declared lifecycle entrypoint (MISSING_HYDRATION); a ram-projection
-      declares it is rebuilt, not restored.
+      Store-only: durable | read-through | ram-projection | cache. A durable Store's writes need a
+      hydration read-back reachable from a lifecycle init entrypoint (MISSING_HYDRATION);
+      read-through reads its backing on every access; ram-projection is rebuilt, not restored; cache
+      is evictable and loss-safe.
     optional: true
   - name: patterns
     type: PatternRef[]
@@ -75,6 +76,32 @@ fields:
     description: >-
       Optional component variant — a declared, base-anchored specialization of this component's
       stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH).
+    optional: true
+  - name: basePath
+    type: string
+    description: 'Portal-only: the base path every endpoint of the Portal mounts under'
+    optional: true
+  - name: auth
+    type: PortalAuth
+    description: >-
+      Portal-only: the inbound transport authentication the Portal requires (a Gateway carries it on
+      the Portal it owns)
+    optional: true
+  - name: emits
+    type: EventBinding[]
+    description: >-
+      Topics this component publishes; every emitted topic needs a subscriber somewhere in the tree
+      (UNCONSUMED_TOPIC)
+    optional: true
+  - name: subscribesTo
+    type: EventBinding[]
+    description: >-
+      Topics this component consumes; every subscription needs an emitter somewhere in the tree
+      (UNSOURCED_SUBSCRIPTION)
+    optional: true
+  - name: externalLinks
+    type: ExternalLink[]
+    description: Opaque external references; an implementation link stands in for a local source path
     optional: true
 methods:
   - name: defaultConformanceTier
@@ -90,5 +117,11 @@ methods:
       The narrative detail its methods get when neither the method nor its implementation sets one:
       calls-only for Portals, Observers and Adapters; intent for Stores, Indexes and Registries;
       full otherwise
+  - name: isPattern
+    signature: 'isPattern(): boolean'
+    returns: boolean
+    description: >-
+      Whether the component is a pattern that owns member blocks: Repository, Gateway,
+      FeatureComponent or RouterComponent
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-14T06:03:58.492Z'
+updatedAt: '2026-09-14T23:23:25.862Z'

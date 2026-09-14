@@ -1,6 +1,8 @@
 id: spec_validator_impl
 name: Spec Validator Implementation
-description: Concrete implementation of the Spec Validator Interface containing validation logic and rules.
+description: >-
+  The validation workflow in src/core/validation.ts; its write-gate half,
+  validateComponentCandidate, lives in src/core/rules/candidate.ts.
 contract: ispec_validator
 sourcePath: src/core/validation.ts
 simPath: tests/core/validation.test.ts
@@ -75,10 +77,10 @@ methods:
         type: local
       - stepNumber: 12
         description: >-
-          Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
-          in-scope spec through the writer relativization + schema pipeline via the core adapter (no
-          I/O), reporting ROUNDTRIP_SERIALIZATION errors so validate predicts every write lock would
-          refuse
+          Gather the round-trip findings: dry-run every in-scope spec through the writer's
+          relativization and schema pipeline via the core adapter (no I/O) and keep the findings for
+          the rule context, where the roundtrip-serialization rule reports them, so validate
+          predicts every refusal a save or lock would raise
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
@@ -113,8 +115,9 @@ methods:
         targetMethod: ruleSequence
       - stepNumber: 18
         description: >-
-          Read the aggregate known-issue-code set into the rule context, so lint.allow references
-          are validated against every code the active rules can emit (UNKNOWN_LINT_ALLOW_CODE)
+          Gather the known issue codes of every registered rule and declarative assertion for the
+          rule context, so the lint-allows rule validates lint.allow references against every code
+          the active rules can report (UNKNOWN_LINT_ALLOW_CODE)
         type: call
         targetComponent: rule_repository
         targetMethod: knownIssueCodes
@@ -130,84 +133,26 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 20
         description: >-
-          Run hierarchy, namespace-hygiene, round-trip, type-reference, contract (incl. cross-tree
-          ref recognition), narrative, boundary, graph, naming, documentation, complexity,
-          semantic-edge rules (dispatch-table capability contracts and guarantee backing, dispatch-,
-          lifecycle-, and declared-invocation-rooted reachability — lifecycle roots spanning
-          init/shutdown plus the cyclic/interrupt/scheduled execution models, invokedBy-declared L3
-          methods seeded as entrypoints with mandatory caller prose (INVOKED_BY_UNDESCRIBED when
-          missing) and flagged stale when the internal walk reaches them anyway
-          (INVOKED_BY_REDUNDANT — remove the declaration, the edge is modeled now), and register
-          steps traversed as deferred-invocation handoff edges so a registered callback method is
-          reached wherever its registering narrative is — durability round-trip hydration with a
-          non-flooded boot graph and the four-mode durability axis required on every Store, untyped
-          cross-subsystem seams with dispatch-table exemption, prose-claim realization), invariant
-          backing (a declared entity invariant — type.invariants, anchored via componentClass — must
-          be asserted by a narrative step on every write-effect method of the owning component:
-          UNASSERTED_INVARIANT / INVARIANT_UNANCHORED warnings, declarations checked while
-          enforcement is never proven; dangling assertsInvariants references are
-          UNKNOWN_INVARIANT_REF errors), event topology (declared emits/subscribesTo bindings plus
-          MessageBus endpoint directions must pair by topic — every emitted topic has a subscriber
-          and every subscription a source: UNCONSUMED_TOPIC / UNSOURCED_SUBSCRIPTION warnings,
-          silent on trees declaring no event edges), narrative antipatterns (a step-graph cycle with
-          no exit edge and no return/throw member is a provable non-terminating loop —
-          INESCAPABLE_CYCLE; a branch or switch whose arms all target the same step decides nothing
-          — MEANINGLESS_BRANCH; a method-level call cycle across components in which every call edge
-          is unavoidable on all entry-to-exit paths of its narrative is provable unbounded recursion
-          — UNCONDITIONAL_CALL_CYCLE, dispatch steps resolved through their portal tables; prose
-          loop conditions are never judged — only structural inescapability is claimed), facade
-          forwarding (a Repository/Gateway facade method whose authored narrative is anything other
-          than exactly one call step targeting an owned member contains logic that belongs inside a
-          member block — FACADE_FORWARDING warning, the standard's mechanically-enforced 1:1 facade
-          rule), narrative detail-sufficiency (a method whose realized function — in the method's
-          own sourcePath, else the implementation's — measures a cyclomatic complexity above the
-          configured threshold while its spec sits below detail: full with no narrative —
-          UNNARRATED_COMPLEXITY, emitted from exact-grade analysis only so weaker grades never
-          guess; an explicit detail declaration below a full-floor logic stereotype with no
-          narrative — DETAIL_BELOW_STEREOTYPE; both honest lints about UNDECLARED behavior, not
-          proofs, and both lint.allow-suppressible), structural-conformance rules (every
-          implementation and method sourcePath resolves within the project root to a real file;
-          every contract method is realized in its own source file — the method's sourcePath, else
-          the implementation's — at its conformance tier (declared | anchored | off), honoring
-          per-method symbol overrides, with analysis grade carried on findings; every finding code a
-          contract method declares appears as a string literal in that file, else
-          UNREALIZED_FINDING), call-step realization (Level 3 opener: each narrative call step of an
-          exactly-analyzed, non-off method must appear as a callee of the realized function in the
-          method's source file — set membership over direct callees closed transitively through
-          same-file named helpers, honoring the target method's symbol override and N:1 identity
-          forwarding; CALL_STEP_UNREALIZED warning, order and arguments deliberately unverified;
-          register handoff steps exempt, since a registration references the callback rather than
-          invoking it), dependency-conformance rules (a component maps to every file its
-          implementation and its methods name; runtime imports between component-mapped files must
-          be justified by declared dependsOn/owns edges — or, across subsystems, by a declared edge
-          to the target subsystem's published surface — UNDECLARED_DEPENDENCY; declared collaborator
-          edges with no realizing import between exactly-analyzed files surface as
-          UNREALIZED_DEPENDENCY), integration-conformance rules (a committed L4 simPath harness must
-          exist inside the project root — SIM_FILE_MISSING — and its exact-grade import graph must
-          reach one of the component's own source modules (its implementation's or a method's) and
-          each direct dependency's module, any module of the target subsystem for cross-subsystem
-          edges, technology-boundary fakes sanctioned — UNWIRED_INTEGRATION_SIM; declaring the first
-          simPath in a subsystem activates MISSING_INTEGRATION_SIM for its other complete non-leaf
-          implementations; wiring proven, execution stays CI's job; a harness may additionally claim
-          per-component path coverage via sim:<component>.<method>[:<label>] string anchors — once
-          opted in, every narrated method's happy anchor and every labeled throw path's anchor are
-          expected: SIM_PATH_UNCOVERED), the declarative-assertion rule (pack-instantiated instances
-          of the closed assertion kinds — forbid-edge, require-field over top-level and ext.*
-          fields, endpoint-shape transport and address patterns — evaluated with the pack's
-          namespaced <PACK>_<CODE> finding codes, declared severities, and stated reasons: the
-          hosted-safe doctrine channel), the pattern-reference rule (a component's patterns[] must
-          each resolve to a loaded pack PatternDef — UNKNOWN_PATTERN_REF — with a version-mismatch
-          warning), and the guarantee-token rule (the guarantee vocabulary is open: every token an
-          L3 method declares or a narrative step asserts must be a builtin guarantee or one a loaded
-          pack declares in its guarantees list — UNKNOWN_GUARANTEE warning, because a token nobody
-          declares can never be backed by the consistency checks), every finding first passing the
-          designDepth gate (expectation codes below the subsystem's or project's declared design
-          depth are skipped; soundness of authored content always applies) and severity resolution
-          (explicit project sddRuleSeverity, else the governing pack profile's, else draft-context
-          downgrade, else the rule default), each rule's check running against the shared rule
-          context
+          Build the rule context from the gathered inputs: the loaded specs and their lookup maps,
+          the surface snapshots, the code model, the round-trip findings, the known issue codes, the
+          pack data and the lint-allow bookkeeping. Its addIssue applies the designDepth gate, then
+          severity resolution (the project's sddRuleSeverity, else the governing pack profile's,
+          else the draft-context downgrade, else the rule default), and lets a matching lint allow
+          silence a warning
         type: local
       - stepNumber: 21
+        description: For each rule in the run sequence
+        type: loop
+        loopKind: forEach
+        over: the rule run sequence read in step 17 (built-ins, then pack rules, lint-allows last)
+        endStep: 22
+      - stepNumber: 22
+        label: run-rule
+        description: >-
+          Run the rule's check against the rule context; the rule reports its findings through
+          ctx.addIssue
+        type: local
+      - stepNumber: 23
         description: >-
           Resolve a chained subproject's verdict through its parent. When this root still holds a
           reference-resolution failure no surface snapshot covers — an unresolved cross-tree
@@ -219,7 +164,7 @@ methods:
           on an edge this root can already see — a boundary crossing between its own subsystems, an
           undeclared dependency call — never triggers the walk.
         type: local
-      - stepNumber: 22
+      - stepNumber: 24
         description: >-
           When the walk reached a top root: with that root bound — the call runs as the parent
           project, so it returns the parent's configuration rather than this project's — read the
@@ -229,7 +174,7 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 23
+      - stepNumber: 25
         description: >-
           Validate the top root scoped to that chain with the parent's own doctrine, for each rule
           the stricter of the parent's and this project's severity, the same as-complete strictness,
@@ -250,7 +195,7 @@ methods:
           that cannot be judged through its parent pins its family surfaces or fails its gate;
           nothing is rewritten and no notice is prepended
         type: local
-      - stepNumber: 24
+      - stepNumber: 26
         description: Return the aggregated validation result
         type: return
         outcome: ValidationResult
@@ -326,10 +271,7 @@ methods:
         targetComponent: source_analysis_adapter
         targetMethod: buildCodeModel
       - stepNumber: 11
-        description: >-
-          Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
-          in-scope spec through the writer pipeline via the core adapter, identical to
-          validateSddTree
+        description: Gather the round-trip findings for the rule context, identical to validateSddTree
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
@@ -345,9 +287,8 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 14
         description: >-
-          Run the same active rule sequence as validateSddTree at full strictness, including
-          namespace-hygiene, round-trip, naming, documentation, complexity, and the semantic-edge
-          rules
+          Build the rule context and run the same rule sequence as validateSddTree at full
+          strictness
         type: local
       - stepNumber: 15
         description: Return the as-complete validation result
@@ -380,14 +321,59 @@ methods:
         type: return
         outcome: rule set
     detail: calls-only
-lint:
-  allow:
-    - code: CALL_STEP_UNREALIZED
-      reason: >-
-        The dry-run serialization and the known-issue-code set are executed through the REGISTERED
-        RULE SEQUENCE (the roundtrip rule and rule-context construction), not as direct calls from
-        the validate functions — the narrative names the semantic edges the run performs. Revisit
-        when Level 3 models call indirection.
+  - name: validateComponentCandidate
+    sourcePath: src/core/rules/candidate.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build a rule context holding only the candidate: a stub system spec (only its
+          targetLanguage is ever read, and a candidate carries none), no other specs, the project's
+          rules config and project type, and the loaded packs
+        type: local
+      - stepNumber: 2
+        description: Seed the built-in rules
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 3
+        description: Do the loaded packs carry programmatic rules?
+        type: branch
+        condition: the loaded packs carry programmatic rules
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Register the pack rules after the built-ins, so pack-registered spec-scoped rules gate
+          writes too
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerPackRules
+      - stepNumber: 5
+        label: read-spec-rules
+        description: Read the spec-scoped rules in run order
+        type: call
+        targetComponent: rule_repository
+        targetMethod: specScopedRules
+      - stepNumber: 6
+        description: For each spec-scoped rule
+        type: loop
+        loopKind: forEach
+        over: the spec-scoped rules
+        endStep: 7
+      - stepNumber: 7
+        label: run-check
+        description: Run the rule's check against the candidate context
+        type: local
+      - stepNumber: 8
+        description: >-
+          Keep only findings about the candidate (no spec id, or the candidate's id), so a rule that
+          misdeclares its scope cannot smuggle in a finding about another spec
+        type: local
+      - stepNumber: 9
+        description: >-
+          Return the verdict split by severity: errors refuse the write, warnings ride along as
+          notices
+        type: return
+        outcome: CandidateVerdict
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-13T20:55:44.308Z'
+updatedAt: '2026-09-14T23:08:58.263Z'

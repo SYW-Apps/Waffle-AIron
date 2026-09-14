@@ -24,13 +24,13 @@ fields:
     description: Optional partial RulesConfig overrides (rule severities etc.) the profile applies.
     optional: true
   - name: allowedEdges
-    type: string[]
+    type: AllowedEdge[]
     description: >-
-      Edge deltas (ALLOW half of the profile-scoped dependency matrix): {from[], to[], reason}
-      entries licensing intra-subsystem dependsOn edges the builtin stereotype matrix refuses, for
-      components governed by this profile. Cross-subsystem boundary rules and pattern containment
-      are never relaxable; the DENY half is a forbid-edge declarative assertion.
+      Edge licenses (the allow half of the profile-scoped dependency matrix): intra-subsystem
+      dependsOn edges the built-in stereotype matrix refuses, licensed for components this profile
+      governs, each with its reason. Cross-subsystem boundary rules and pattern containment are
+      never relaxable; the deny half is a forbid-edge declarative assertion. Defaults to none.
     optional: false
 methods: []
 createdAt: '2026-07-14T18:56:48.916Z'
-updatedAt: '2026-07-18T23:05:10.746Z'
+updatedAt: '2026-09-14T23:23:40.701Z'

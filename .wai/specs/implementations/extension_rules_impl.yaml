@@ -1,0 +1,672 @@
+id: extension_rules_impl
+name: Extension Rules Implementation
+description: >-
+  The extension-doctrine rule checks moving into src/core/rules/extension/ (from
+  src/core/rules/{profiles,pattern-references,variant-references,declarative-assertions,pack-resolution,reproducibility}.ts):
+  architectural profiles, pattern references, component variants, declarative assertions, and pack
+  selection resolution/reproducibility.
+contract: iextension_rules
+simPath: tests/core/validation.test.ts
+methods:
+  - name: architecturalProfiles
+    sourcePath: src/core/rules/extension/architectural-profiles.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the registered profile set: the built-in profile ids (BUILTIN_PROFILES) unioned with
+          the keys of ctx.ext.profiles (pack-registered profiles).
+        type: local
+      - stepNumber: 2
+        description: Walk every loaded subsystem, checking its declared profile.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 5
+      - stepNumber: 3
+        description: A subsystem declares a profile that is neither built-in nor pack-registered.
+        type: branch
+        condition: sub.profile is declared and is not a member of the registered set
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report UNKNOWN_PROFILE (warning) naming the subsystem's declared profile as neither a
+          built-in profile nor registered by a loaded pack, so no profile doctrine governs it;
+          specId = sub.id, no draft-context argument.
+        type: local
+      - stepNumber: 5
+        label: sub_done
+        description: This subsystem is processed.
+        type: local
+      - stepNumber: 6
+        description: >-
+          The project's own projectType (project.yaml) must itself be a legal profile or composite
+          kind.
+        type: branch
+        condition: >-
+          ctx.projectType is not in the registered set and is not one of the composite PROJECT_KINDS
+          (fullstack, system-of-systems, monorepo)
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report UNKNOWN_PROFILE (warning) naming projectType as neither a built-in profile/kind nor
+          pack-registered; components default to backend doctrine. No specId, no draft-context
+          argument.
+        type: local
+      - stepNumber: 8
+        label: comp_loop
+        description: Walk every loaded component, judging it against its governing profile's doctrine.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 31
+      - stepNumber: 9
+        description: >-
+          ctx.isComponentDraft(comp.id) — capture isDraftCtx for this component, used by every
+          finding below.
+        type: local
+      - stepNumber: 10
+        description: >-
+          ctx.getComponentProfile(comp.id) — the profile governing this component (its subsystem's
+          override, else the project type).
+        type: local
+      - stepNumber: 11
+        description: >-
+          Look up packDef = ctx.ext.profiles[profile]. Compute family: packDef.family when a pack
+          registers this profile; else 'frontend-like' when profile is one of the built-in
+          frontend-like profiles (frontend-reactive, frontend-controller); else 'backend-like' when
+          profile is one of the built-in backend-like profiles (backend, lowlevel-os, game-ecs,
+          realtime-embedded, plc-cyclic); else 'neutral' (an already-flagged unknown profile with no
+          doctrine to guess).
+        type: local
+      - stepNumber: 12
+        description: The governing profile's family is backend-like.
+        type: branch
+        condition: family is 'backend-like'
+        onFalseStep: 19
+      - stepNumber: 13
+        description: A backend-like profile forbids frontend view/routing stereotypes.
+        type: branch
+        condition: comp.componentType is one of View, FeatureComponent, RouterComponent
+        onFalseStep: 15
+      - stepNumber: 14
+        description: >-
+          Report FRONTEND_STEREOTYPE_IN_BACKEND (error; draft context from isDraftCtx) naming the
+          component's frontend stereotype and its backend-oriented subsystem.
+        type: local
+      - stepNumber: 15
+        label: check_plc
+        description: >-
+          The PLC-cyclic profile additionally forbids concurrent stereotypes (the runtime is a
+          single scan cycle).
+        type: branch
+        condition: profile is 'plc-cyclic'
+        onFalseStep: 22
+      - stepNumber: 16
+        description: Actor and Supervisor are concurrent stereotypes, incompatible with a single scan cycle.
+        type: branch
+        condition: comp.componentType is Actor or Supervisor
+        onFalseStep: 22
+      - stepNumber: 17
+        description: >-
+          Report PLC_CYCLIC_CONCURRENCY_VIOLATION (error; draft context from isDraftCtx) naming the
+          concurrent stereotype forbidden in the PLC-cyclic profile's single execution scan cycle.
+        type: local
+      - stepNumber: 18
+        description: >-
+          Backend-like handled — skip the frontend-like check entirely (the two families are
+          mutually exclusive).
+        type: jump
+        toStep: 22
+      - stepNumber: 19
+        label: check_frontend_like
+        description: The governing profile's family is frontend-like.
+        type: branch
+        condition: family is 'frontend-like'
+        onFalseStep: 22
+      - stepNumber: 20
+        description: A frontend-like profile warns on backend runtime stereotypes.
+        type: branch
+        condition: comp.componentType is Supervisor or Actor
+        onFalseStep: 22
+      - stepNumber: 21
+        description: >-
+          Report BACKEND_STEREOTYPE_IN_FRONTEND (warning; draft context from isDraftCtx) naming the
+          component's backend stereotype inside a frontend subsystem, asking to confirm the concern
+          is genuinely client-side.
+        type: local
+      - stepNumber: 22
+        label: after_family_if
+        description: >-
+          A loaded pack may govern this profile with its own doctrine, applied on top of the family
+          fencing.
+        type: branch
+        condition: packDef is defined (a loaded pack registers this profile)
+        onFalseStep: 31
+      - stepNumber: 23
+        description: Check the pack's forbidden-stereotype rules for this profile.
+        type: loop
+        loopKind: forEach
+        over: packDef.forbiddenStereotypes
+        endStep: 26
+      - stepNumber: 24
+        description: This forbidden-stereotype rule names the component's stereotype.
+        type: branch
+        condition: rule.types includes comp.componentType
+        onFalseStep: 26
+      - stepNumber: 25
+        description: >-
+          Report PROFILE_FORBIDDEN_STEREOTYPE (error; draft context from isDraftCtx) naming the
+          component's stereotype, the governing profile and the pack rule's stated reason.
+        type: local
+      - stepNumber: 26
+        label: forbidden_done
+        description: This forbidden-stereotype rule is processed.
+        type: local
+      - stepNumber: 27
+        description: Check the pack's discouraged-stereotype rules for this profile.
+        type: loop
+        loopKind: forEach
+        over: packDef.discouragedStereotypes
+        endStep: 30
+      - stepNumber: 28
+        description: This discouraged-stereotype rule names the component's stereotype.
+        type: branch
+        condition: rule.types includes comp.componentType
+        onFalseStep: 30
+      - stepNumber: 29
+        description: >-
+          Report PROFILE_DISCOURAGED_STEREOTYPE (warning; draft context from isDraftCtx) naming the
+          component's stereotype, the governing profile and the pack rule's stated reason.
+        type: local
+      - stepNumber: 30
+        label: discouraged_done
+        description: This discouraged-stereotype rule is processed.
+        type: local
+      - stepNumber: 31
+        label: comp_done
+        description: This component is processed.
+        type: local
+    symbol: check
+  - name: patternReferences
+    sourcePath: src/core/rules/extension/pattern-references.ts
+    narrative:
+      - stepNumber: 1
+        description: No component declares any pattern reference.
+        type: branch
+        condition: ctx.components.some(c => c.patterns is non-empty) is false
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Nothing to check.
+        type: return
+        outcome: no component references a pattern
+      - stepNumber: 3
+        label: build_index
+        description: >-
+          Build versionsById: for each pack-registered pattern in ctx.ext.patterns, collect its
+          declared versions keyed by pattern id.
+        type: local
+      - stepNumber: 4
+        description: Walk every loaded component.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 14
+      - stepNumber: 5
+        description: ctx.isComponentDraft(comp.id) — capture isDraftCtx for this component.
+        type: local
+      - stepNumber: 6
+        description: >-
+          Walk this component's declared pattern references (comp.patterns, empty when none
+          declared).
+        type: loop
+        loopKind: forEach
+        over: comp.patterns ?? []
+        endStep: 13
+      - stepNumber: 7
+        description: Look up versions = versionsById.get(ref.id).
+        type: local
+      - stepNumber: 8
+        description: No loaded pack declares this pattern id.
+        type: branch
+        condition: versions is undefined
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Report UNKNOWN_PATTERN_REF (warning; draft context from isDraftCtx) naming the component
+          and the unresolved pattern id, suggesting installing the declaring pack or removing the
+          reference.
+        type: local
+      - stepNumber: 10
+        description: Unresolved pattern id already reported — skip the version check.
+        type: jump
+        toStep: 13
+      - stepNumber: 11
+        label: check_version
+        description: The reference pins a version the declaring pack does not provide.
+        type: branch
+        condition: ref.version is set and versions does not include it
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Report PATTERN_VERSION_MISMATCH (warning; draft context from isDraftCtx) naming the
+          component, the pinned version and the pack's provided version(s).
+        type: local
+      - stepNumber: 13
+        label: ref_done
+        description: This pattern reference is processed.
+        type: local
+      - stepNumber: 14
+        label: comp_done
+        description: This component is processed.
+        type: local
+    symbol: check
+  - name: componentVariants
+    sourcePath: src/core/rules/extension/component-variants.ts
+    narrative:
+      - stepNumber: 1
+        description: No component declares a variant.
+        type: branch
+        condition: ctx.components.some(c => c.variant) is false
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Nothing to check.
+        type: return
+        outcome: no component declares a variant
+      - stepNumber: 3
+        label: build_index
+        description: 'Build byId: the variant registry (ctx.variants) keyed by its id.'
+        type: local
+      - stepNumber: 4
+        description: Walk every loaded component.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 13
+      - stepNumber: 5
+        description: This component declares no variant.
+        type: branch
+        condition: comp.variant is declared
+        onFalseStep: 13
+      - stepNumber: 6
+        description: ctx.isComponentDraft(comp.id) — capture isDraftCtx for this component.
+        type: local
+      - stepNumber: 7
+        description: Look up def = byId.get(comp.variant).
+        type: local
+      - stepNumber: 8
+        description: No registry declares this variant.
+        type: branch
+        condition: def is undefined
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Report UNKNOWN_VARIANT (warning; draft context from isDraftCtx) naming the component and
+          the undeclared variant, pointing at .wai/variants/ or the global variants directory.
+        type: local
+      - stepNumber: 10
+        description: Unresolved variant already reported — skip the base check.
+        type: jump
+        toStep: 13
+      - stepNumber: 11
+        label: check_base
+        description: The variant's declared base does not match this component's own stereotype.
+        type: branch
+        condition: def.base does not equal comp.componentType
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Report VARIANT_BASE_MISMATCH (error; draft context from isDraftCtx) naming the component's
+          actual stereotype and the variant's declared base — a variant may only be worn by a
+          component of its base stereotype.
+        type: local
+      - stepNumber: 13
+        label: comp_done
+        description: This component is processed.
+        type: local
+    symbol: check
+  - name: declarativeAssertions
+    sourcePath: src/core/rules/extension/declarative-assertions.ts
+    narrative:
+      - stepNumber: 1
+        description: Read ctx.ext.assertions — the declarative rule assertions loaded packs declare.
+        type: local
+      - stepNumber: 2
+        description: No assertion means nothing to evaluate.
+        type: branch
+        condition: assertions is empty
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return with nothing evaluated.
+        type: return
+        outcome: nothing to check (no loaded pack declares an assertion)
+      - stepNumber: 4
+        label: assertion_loop
+        description: Evaluate every loaded assertion in turn.
+        type: loop
+        loopKind: forEach
+        over: assertions
+        endStep: 48
+      - stepNumber: 5
+        description: Dispatch on the assertion's closed kind.
+        type: switch
+        'on': a.kind
+        cases:
+          - value: forbid-edge
+            step: 6
+          - value: require-field
+            step: 19
+          - value: endpoint-shape
+            step: 31
+        defaultStep: 48
+      - stepNumber: 6
+        label: fe_comp_loop
+        description: Consider every component as a candidate edge source.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 17
+      - stepNumber: 7
+        description: >-
+          matches(a.from, comp, ctx) — does this component match the assertion's from-selector
+          (componentType/profile via ctx.getComponentProfile/id glob)?
+        type: branch
+        condition: the component does not match a.from
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Non-matching source component — move on to the next component (skip its relations
+          entirely).
+        type: jump
+        toStep: 17
+      - stepNumber: 9
+        label: fe_draft
+        description: >-
+          ctx.isComponentDraft(comp.id) — capture isDraftCtx for this source component, used by
+          every finding emitted below.
+        type: local
+      - stepNumber: 10
+        description: Check every relation kind the assertion forbids (owns and/or dependsOn).
+        type: loop
+        loopKind: forEach
+        over: a.relation
+        endStep: 16
+      - stepNumber: 11
+        description: Check every id the component holds under this relation.
+        type: loop
+        loopKind: forEach
+        over: comp[relation]
+        endStep: 16
+      - stepNumber: 12
+        description: Look up target = ctx.componentMap.get(targetId).
+        type: local
+      - stepNumber: 13
+        description: >-
+          matches(a.to, target, ctx) — does the resolved target match the assertion's to-selector?
+          An unresolved targetId never matches.
+        type: branch
+        condition: target is undefined, or target does not match a.to
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Target does not close the forbidden edge — move on.
+        type: jump
+        toStep: 16
+      - stepNumber: 15
+        label: fe_report
+        description: >-
+          Report the assertion's pack code (<PACK>_<CODE>) at its declared severity (downgraded to
+          warning when isDraftCtx and the pack declared error), naming the forbidden owns/dependsOn
+          edge from comp to target and the assertion's stated reason; specId = comp.id.
+        type: local
+      - stepNumber: 16
+        label: fe_target_done
+        description: This relation kind and target id pairing is processed.
+        type: local
+      - stepNumber: 17
+        label: fe_comp_done
+        description: This candidate source component is processed.
+        type: local
+      - stepNumber: 18
+        description: Forbid-edge handled — skip the other two kinds.
+        type: jump
+        toStep: 48
+      - stepNumber: 19
+        label: rf_build_holders
+        description: >-
+          Build the holder list this level inspects: for level 'component', every component
+          (specId=c.id, draft=ctx.isComponentDraft(c.id)); for 'interface', every interface whose
+          owning component resolves (specId=i.id, draft = ctx.isComponentDraft(comp.id) or the
+          interface's own draft/design status); otherwise every implementation whose contract's
+          component resolves (specId=impl.id, draft=ctx.isImplementationDraft(impl)).
+        type: local
+      - stepNumber: 20
+        description: Inspect every holder at this level.
+        type: loop
+        loopKind: forEach
+        over: the holders
+        endStep: 29
+      - stepNumber: 21
+        description: >-
+          matches(a.on, holder.comp, ctx) — does the holder's owning component match the assertion's
+          on-selector?
+        type: branch
+        condition: the holder's component does not match a.on
+        onFalseStep: 23
+      - stepNumber: 22
+        description: Non-matching holder — move on.
+        type: jump
+        toStep: 29
+      - stepNumber: 23
+        label: rf_field
+        description: >-
+          fieldValue(holder.spec, a.field) — read the required field: one top-level spec field, or
+          an ext.* path.
+        type: local
+      - stepNumber: 24
+        description: The field is entirely absent.
+        type: branch
+        condition: the read value is undefined or null
+        onFalseStep: 27
+      - stepNumber: 25
+        description: >-
+          Report the assertion's pack code (<PACK>_<CODE>) at its declared severity (downgraded to
+          warning when draft and pack severity is error), naming the level, holder specId and the
+          required field a.field; specId = holder.specId.
+        type: local
+      - stepNumber: 26
+        description: Field reported as missing — skip the allowed-values check.
+        type: jump
+        toStep: 29
+      - stepNumber: 27
+        label: rf_values
+        description: >-
+          The field is present but the assertion restricts it to an allowed value set (a.values)
+          that does not include it.
+        type: branch
+        condition: a.values is declared and does not include String(the read value)
+        onFalseStep: 29
+      - stepNumber: 28
+        description: >-
+          Report the assertion's pack code (<PACK>_<CODE>) at its declared severity, naming the
+          holder's field value and the allowed set a.values; specId = holder.specId.
+        type: local
+      - stepNumber: 29
+        label: rf_end
+        description: This holder is processed.
+        type: local
+      - stepNumber: 30
+        description: Require-field handled — skip endpoint-shape.
+        type: jump
+        toStep: 48
+      - stepNumber: 31
+        label: es_compile
+        description: >-
+          pattern = a.pathPattern ? new RegExp(a.pathPattern) : undefined — compile the required
+          path pattern when the assertion declares one.
+        type: local
+      - stepNumber: 32
+        description: Consider every interface as a candidate endpoint owner.
+        type: loop
+        loopKind: forEach
+        over: ctx.interfaces
+        endStep: 47
+      - stepNumber: 33
+        description: comp = ctx.componentMap.get(intf.component); matches(a.on, comp, ctx) against it.
+        type: local
+      - stepNumber: 34
+        description: The owning component is missing, or does not match a.on.
+        type: branch
+        condition: comp is undefined, or comp does not match a.on
+        onFalseStep: 36
+      - stepNumber: 35
+        description: Non-matching interface — move on to the next interface (skip its methods entirely).
+        type: jump
+        toStep: 47
+      - stepNumber: 36
+        label: es_draft
+        description: isDraftCtx = ctx.isComponentDraft(comp.id) or intf.status is draft/design.
+        type: local
+      - stepNumber: 37
+        description: Check every declared method for an endpoint binding.
+        type: loop
+        loopKind: forEach
+        over: intf.methods
+        endStep: 46
+      - stepNumber: 38
+        description: A method with no endpoint binds no transport to shape.
+        type: branch
+        condition: method.endpoint is not set
+        onFalseStep: 40
+      - stepNumber: 39
+        description: No endpoint on this method — move on.
+        type: jump
+        toStep: 46
+      - stepNumber: 40
+        label: es_transport
+        description: >-
+          The assertion restricts transport (a.transport) and this endpoint's transport is outside
+          it.
+        type: branch
+        condition: a.transport is declared and non-empty and does not include method.endpoint.transport
+        onFalseStep: 43
+      - stepNumber: 41
+        description: >-
+          Report the assertion's pack code (<PACK>_<CODE>) at its declared severity, naming the
+          endpoint's transport and the allowed a.transport list; specId = intf.id.
+        type: local
+      - stepNumber: 42
+        description: >-
+          Transport already reported as out of shape — the real code continues past the path check
+          for this method.
+        type: jump
+        toStep: 46
+      - stepNumber: 43
+        label: es_address
+        description: >-
+          endpointAddress(method.endpoint) — read the transport's one address field (HTTP path, gRPC
+          service/method, GraphQL field, MessageBus topic, NamedPipe pipe, IPC channel, CLI command,
+          or Custom address).
+        type: local
+      - stepNumber: 44
+        description: A declared path pattern exists and the address does not match it.
+        type: branch
+        condition: pattern is set and does not match the address
+        onFalseStep: 46
+      - stepNumber: 45
+        description: >-
+          Report the assertion's pack code (<PACK>_<CODE>) at its declared severity, naming the
+          endpoint's bound address and the required a.pathPattern; specId = intf.id.
+        type: local
+      - stepNumber: 46
+        label: es_method_done
+        description: This method is processed.
+        type: local
+      - stepNumber: 47
+        label: es_intf_done
+        description: This candidate interface is processed.
+        type: local
+      - stepNumber: 48
+        label: assertion_done
+        description: This assertion is fully evaluated.
+        type: local
+    symbol: check
+  - name: packResolution
+    sourcePath: src/core/rules/extension/pack-resolution.ts
+    narrative:
+      - stepNumber: 1
+        description: Report every recorded pack-selection resolution failure.
+        type: loop
+        loopKind: forEach
+        over: ctx.ext.selectionFailures
+        endStep: 2
+      - stepNumber: 2
+        label: failure_done
+        description: >-
+          Report the failure exactly as resolution recorded it: ctx.addIssue(failure.severity,
+          failure.code, failure.message). failure.code is one of PACK_NOT_INSTALLED (absent
+          entirely), PACK_VERSION_UNSATISFIED (installed but no version satisfies the pin), or
+          PACK_INTEGRITY_MISMATCH (content off the pinned digest) — all error — or PACK_STORE_DRIFT
+          (warning: a committed bundle and the pack store hold different content for the same
+          name@version, the bundle wins). The severity and code travel with the recorded failure;
+          this rule surfaces what resolution (core/extensions.ts) already decided rather than
+          re-deciding.
+        type: local
+    symbol: check
+  - name: packReproducibility
+    sourcePath: src/core/rules/extension/pack-reproducibility.ts
+    narrative:
+      - stepNumber: 1
+        description: The project opts out of reproducibility enforcement.
+        type: branch
+        condition: ctx.rules?.enforceReproducibility is explicitly false
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Opted out — the family is silenced entirely.
+        type: return
+        outcome: 'enforcement disabled (rules.enforceReproducibility: false)'
+      - stepNumber: 3
+        label: selection_loop
+        description: Walk every by-name pack selection the project declares.
+        type: loop
+        loopKind: forEach
+        over: ctx.ext.packSelections
+        endStep: 10
+      - stepNumber: 4
+        description: A bundled selection's bytes are committed, so it reproduces without a pin.
+        type: branch
+        condition: selection.bundle is set
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Bundled — exempt from both checks.
+        type: jump
+        toStep: 10
+      - stepNumber: 6
+        label: check_version
+        description: The selection pins no exact version.
+        type: branch
+        condition: selection.version is not set
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report UNPINNED_PACK_SELECTION (warning) naming the selection, which resolves to whatever
+          version this machine happens to have installed; suggests pinning, bundling, or opting out
+          via rules.enforceReproducibility: false.
+        type: local
+      - stepNumber: 8
+        label: check_source
+        description: The selection records no fetchable source.
+        type: branch
+        condition: selection.source is not set
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Report PACK_SOURCE_UNFETCHABLE (warning) naming the selection, which a fresh machine or CI
+          runner cannot obtain; suggests recording a source URL or bundling a copy.
+        type: local
+      - stepNumber: 10
+        label: sel_done
+        description: This selection is processed.
+        type: local
+    symbol: check
+status: draft
+createdAt: '2026-09-14T23:15:33.948Z'
+updatedAt: '2026-09-14T23:17:52.188Z'
