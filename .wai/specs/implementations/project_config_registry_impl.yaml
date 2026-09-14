@@ -69,6 +69,6 @@ methods:
       Reads the configuration, appends the given selections after the existing entries, sets
       `useGlobalPacks` to false, and writes once. Refuses when the project has no configuration.
 detail: intent
-status: draft
+status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-09-13T11:41:17.152Z'
+updatedAt: '2026-09-14T05:16:00.202Z'

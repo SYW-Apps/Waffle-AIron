@@ -135,6 +135,6 @@ methods:
     params:
       - name: selections
         type: PackSelection[]
-status: draft
+status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-09-13T11:41:23.660Z'
+updatedAt: '2026-09-14T05:15:59.805Z'

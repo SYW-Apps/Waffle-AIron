@@ -22,6 +22,6 @@ methods:
       Reports whether the bound project's `project.yaml` exists; an unreadable directory counts as
       absent.
 detail: intent
-status: draft
+status: complete
 createdAt: '2026-09-13T11:21:50.998Z'
-updatedAt: '2026-09-13T11:21:51.000Z'
+updatedAt: '2026-09-14T05:16:00.007Z'
