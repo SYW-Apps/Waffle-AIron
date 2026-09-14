@@ -3,7 +3,8 @@
  *
  * Documented intents pinned here (rule description + module doc comment):
  *  - UNDECLARED_DEPENDENCY (warning): a runtime import edge between
- *    component-mapped source files that no declared relation justifies.
+ *    component-mapped source files that no declared relation justifies. A
+ *    component maps to every file its implementations and their methods name.
  *    Justified when the files share a component, a component pair has a
  *    direct dependsOn/owns edge, the target is a member of a depended-on
  *    pattern, or — across subsystems — the importer declares an edge to the
@@ -12,7 +13,8 @@
  *    the sanctioned hop, its barrel is cosmetic at runtime). Type-only
  *    imports are exempt (excluded at collection).
  *  - UNREALIZED_DEPENDENCY (warning): a declared dependsOn/owns edge between
- *    components realized in different files with no import edge realizing it.
+ *    components realized in different files with no import edge between any
+ *    file of the source and any file of the target realizing it.
  *    Skipped when either side shares a file (N:1 collapse); a mounting
  *    declarer (Portal/Observer) is satisfied by the REVERSE import (the
  *    server file imports the portal's file).
@@ -802,4 +804,117 @@ export default [
       },
     },
   }),
+
+  // -------------------------------------------------------------------------
+  // Method source files: a component maps to every file its implementation
+  // and methods name, so imports from a method's own module count both ways
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_DEPENDENCY',
+    severity: 'warning',
+    anchoredTo: 'payment_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The payment orchestrator\'s capturePayment body lives in its own capture module, which imports and calls the payment gateway adapter, but the orchestrator declares no dependsOn edge.',
+    tree: captureModuleTree([]),
+  }),
+  defineRuleFixture({
+    code: 'UNDECLARED_DEPENDENCY',
+    expectFire: false,
+    reason: 'The orchestrator declares the dependsOn edge that justifies the import made from its method\'s own module.',
+    scenario:
+      'The payment orchestrator\'s capture module imports the payment gateway adapter, and the orchestrator declares the matching dependsOn edge.',
+    tree: captureModuleTree(['payment-gateway-adapter']),
+  }),
+  defineRuleFixture({
+    code: 'UNREALIZED_DEPENDENCY',
+    expectFire: false,
+    reason:
+      'The declared edge is realized by an import between one of the orchestrator\'s files — its method\'s own capture module — and the adapter\'s file.',
+    scenario:
+      'The payment orchestrator declares its dependency on the payment gateway adapter, and only the capture module that holds capturePayment imports the adapter.',
+    tree: captureModuleTree(['payment-gateway-adapter']),
+  }),
 ];
+
+/**
+ * The payment orchestrator whose capturePayment names its own capture module;
+ * only the orchestrator's declared dependsOn varies.
+ */
+function captureModuleTree(dependsOn: string[]): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'payments', description: 'Payment capture and refunds for placed orders.' }],
+    components: [
+      {
+        id: 'payment-orchestrator',
+        componentType: 'Orchestrator',
+        subsystem: 'payments',
+        description: 'Drives the capture flow for authorized orders.',
+        dependsOn,
+      },
+      {
+        id: 'payment-gateway-adapter',
+        componentType: 'Adapter',
+        subsystem: 'payments',
+        description: 'Wraps the external PSP charge API.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ipayment_orchestrator',
+        component: 'payment-orchestrator',
+        methods: [{ name: 'capturePayment', description: 'Capture the authorized amount for an order.' }],
+      },
+      {
+        id: 'ipayment_gateway_adapter',
+        component: 'payment-gateway-adapter',
+        methods: [{ name: 'chargeCard', description: 'Charge the stored card via the PSP.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'payment_orchestrator_impl',
+        contract: 'ipayment_orchestrator',
+        sourcePath: 'src/payments/payment-orchestrator.ts',
+        methods: [
+          {
+            name: 'capturePayment',
+            sourcePath: 'src/payments/capture/capture-payment.ts',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Look up the authorization and capture the amount.' }],
+          },
+        ],
+      },
+      {
+        id: 'payment_gateway_adapter_impl',
+        contract: 'ipayment_gateway_adapter',
+        sourcePath: 'src/payments/payment-gateway-adapter.ts',
+        methods: [
+          {
+            name: 'chargeCard',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Send the charge request to the PSP over HTTPS.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/payments/payment-orchestrator.ts': [
+        'export const captureRetryLimit = 3;',
+        '',
+      ].join('\n'),
+      'src/payments/capture/capture-payment.ts': [
+        'import { chargeCard } from \'../payment-gateway-adapter.js\';',
+        '',
+        'export function capturePayment(orderId: string): void {',
+        '  chargeCard(orderId);',
+        '}',
+        '',
+      ].join('\n'),
+      'src/payments/payment-gateway-adapter.ts': [
+        'export function chargeCard(orderId: string): void {',
+        '  // POST the charge to the PSP',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}

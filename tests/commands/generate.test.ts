@@ -203,3 +203,97 @@ describe('resolveExpectedOutputPaths (full-topology expected set)', () => {
     expect(expected.size).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The cascade (runGenerate steps 9–15): after its own layer, `wairon generate`
+// generates each DIRECT chained subproject's layer in that subproject's own
+// root, completing the child's bootstrap first. It invalidates no spec cache of
+// its own: every project root reads through its own spec workspace, and the
+// bootstrap invalidates whenever it writes. Covered for both kinds of child — a
+// fresh folder the bootstrap writes into, and an initialized child it leaves
+// alone (so nothing is invalidated before that child's layer is resolved).
+// ---------------------------------------------------------------------------
+
+describe('cli_runner.runGenerate: the chained cascade generates each child layer in its own root (real CLI)', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  const runCli = (cwd: string, ...args: string[]) =>
+    execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'generate', ...args], { cwd, timeout: 180_000 });
+
+  const writeProjectYaml = (dir: string, name: string, rules: Record<string, unknown>) => {
+    fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
+      schemaVersion: '1.0.0',
+      name,
+      projectType: 'backend',
+      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules,
+      createdAt: now,
+      updatedAt: now,
+    }));
+  };
+
+  const systemSpec = (name: string) => ({
+    schemaVersion: '1.0.0',
+    name,
+    vision: `a cascade fixture system ${name}`,
+    boundaries: [],
+    globalRequirements: [],
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  it('bootstraps and generates a fresh child, and generates an initialized child from its own tree', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gen-cascade-'));
+    const freshDir = path.join(rootDir, 'fresh');
+    const readyDir = path.join(rootDir, 'ready');
+
+    // Parent: agent files on, two chained subsystems.
+    writeProjectYaml(rootDir, 'gen-system', { materializeAgentFiles: true });
+    setProjectRoot(rootDir);
+    saveSystemSpec(systemSpec('gen-system'));
+    saveSubsystemSpec({ ...subsystem('fresh'), projectPath: 'fresh' });
+    saveSubsystemSpec({ ...subsystem('ready'), projectPath: 'ready' });
+    // 'fresh': an empty folder — no configuration and no L0 yet.
+    fs.mkdirSync(freshDir, { recursive: true });
+    // 'ready': its own configuration (agent files on), its own L0 and one subsystem.
+    writeProjectYaml(readyDir, 'ready', { materializeAgentFiles: true });
+    setProjectRoot(readyDir);
+    invalidateSpecCache();
+    saveSystemSpec(systemSpec('ready'));
+    saveSubsystemSpec({ ...subsystem('inner'), parentSystem: 'ready' });
+    invalidateSpecCache();
+    setProjectRoot(null);
+
+    const { stdout } = await runCli(rootDir);
+
+    const agentsDir = (dir: string) => path.join(dir, '.claude', 'agents');
+    expect(stdout).toContain('Chained subproject "fresh"');
+    expect(stdout).toContain('Chained subproject "ready"');
+
+    // Parent layer: its architect and one delegate per child — never a child's internals.
+    expect(fs.existsSync(path.join(agentsDir(rootDir), 'system-architect.md'))).toBe(true);
+    expect(fs.existsSync(path.join(agentsDir(rootDir), 'fresh-owner.md'))).toBe(true);
+    expect(fs.existsSync(path.join(agentsDir(rootDir), 'ready-owner.md'))).toBe(true);
+    expect(fs.existsSync(path.join(agentsDir(rootDir), 'inner-owner.md'))).toBe(false);
+
+    // Fresh child: bootstrapped in place (default configuration, an L0 named after
+    // its subsystem), then its layer generated in its own root — skills and guide
+    // there, and no agent files, since its default configuration keeps them off.
+    expect(fs.existsSync(path.join(freshDir, '.wai', 'project.yaml'))).toBe(true);
+    expect(fs.readFileSync(path.join(freshDir, '.wai', 'specs', '.index.yaml'), 'utf8')).toMatch(/^name: ['"]?fresh['"]?\s*$/m);
+    expect(fs.existsSync(path.join(freshDir, '.claude', 'skills', 'sdd-architect', 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(freshDir, '.claude', 'CLAUDE.md'))).toBe(true);
+    expect(fs.existsSync(path.join(agentsDir(freshDir), 'system-architect.md'))).toBe(false);
+
+    // Initialized child: its own layer, resolved from its own tree.
+    expect(fs.existsSync(path.join(agentsDir(readyDir), 'system-architect.md'))).toBe(true);
+    expect(fs.existsSync(path.join(agentsDir(readyDir), 'inner-owner.md'))).toBe(true);
+  }, 180_000);
+});

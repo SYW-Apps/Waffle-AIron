@@ -1,5 +1,5 @@
 import * as path from 'path';
-import type { ComponentSpec, ImplementationSpec } from '../../models/index.js';
+import { implementationSourceFiles, type ComponentSpec, type ImplementationSpec } from '../../models/index.js';
 import { normalizeSourcePath } from '../source-analysis.js';
 import { RuleContext, SddRule } from './types.js';
 import { isInChainedSubproject } from './conformance.js';
@@ -10,7 +10,9 @@ import { isInChainedSubproject } from './conformance.js';
 // The spec declares who collaborates (dependsOn/owns); the code's runtime
 // import graph is the physical record of who ACTUALLY collaborates. This rule
 // lifts file→file import edges (between component-mapped files only) to
-// component sets via the sourcePath map and checks both directions:
+// component sets — a component maps to every file its implementations name,
+// each implementation's sourcePath and each method's own sourcePath — and
+// checks both directions:
 //
 //   UNDECLARED_DEPENDENCY — an import edge no declared relation justifies.
 //     Justified when the two files share a component, any component pair has
@@ -21,11 +23,11 @@ import { isInChainedSubproject } from './conformance.js';
 //     declaration is the sanctioned hop, its barrel is cosmetic at runtime).
 //
 //   UNREALIZED_DEPENDENCY — a declared dependsOn/owns edge between components
-//     realized in different files with NO import edge realizing it (for a
-//     cross-subsystem portal edge: no import landing anywhere in the target
-//     subsystem). Skipped when either side shares a file (N:1 collapse) —
-//     dependency-injection indirection can also produce false positives,
-//     which is why this stays a warning.
+//     realized in different files with NO import edge between any file of the
+//     source and any file of the target (for a cross-subsystem portal edge: no
+//     import landing anywhere in the target subsystem). Skipped when either
+//     side shares a file (N:1 collapse) — dependency-injection indirection can
+//     also produce false positives, which is why this stays a warning.
 //
 // Resolution is PURE: import specifiers are resolved string-wise against the
 // closed set of component-mapped paths (.js→.ts swaps, index files) — no I/O.
@@ -67,10 +69,10 @@ function resolveAgainst(mapped: Set<string>, fromFile: string, specifier: string
 export const dependencyConformanceRule: SddRule = {
   name: 'dependency-conformance',
   description:
-    'Code↔spec Level 2: runtime import edges between component-mapped source files must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning). Only exact-grade analyzed files participate; type-only imports are exempt; chained subprojects validate standalone.',
+    'Code↔spec Level 2: runtime import edges between component-mapped source files (a component maps to every file its implementations and their methods name) must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import between any file of the source and any file of the target (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning). Only exact-grade analyzed files participate; type-only imports are exempt; chained subprojects validate standalone.',
   codes: [
     { code: 'UNDECLARED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A runtime import between component-mapped files has no declared dependsOn/owns (or published-surface) justification' },
-    { code: 'UNREALIZED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A declared dependsOn/owns edge between components in different files is realized by no import' },
+    { code: 'UNREALIZED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A declared dependsOn/owns edge between components in different files is realized by no import between any of their files' },
   ],
 
   check(ctx: RuleContext): void {
@@ -81,29 +83,36 @@ export const dependencyConformanceRule: SddRule = {
     const implsByComponent = new Map<string, ImplementationSpec[]>();
 
     for (const impl of ctx.implementations) {
-      if (!impl.sourcePath) continue;
       const contract = ctx.interfaceMap.get(impl.contract);
       if (!contract) continue;
       const component = ctx.componentMap.get(contract.component);
       if (!component) continue;
       if (isInChainedSubproject(component.subsystem, ctx)) continue;
 
-      const p = normalizePath(impl.sourcePath);
-      const facts = factsByPath.get(p);
-      if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
+      // A component maps to every file its implementation names: the
+      // implementation's own sourcePath and each method's.
+      let mapped = false;
+      for (const file of implementationSourceFiles(impl)) {
+        const p = normalizePath(file);
+        const facts = factsByPath.get(p);
+        if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
 
-      let node = nodes.get(p);
-      if (!node) {
-        node = { path: p, components: [], anchorImplId: impl.id, imports: facts.imports, reexports: facts.reexports, draft: false };
-        nodes.set(p, node);
+        let node = nodes.get(p);
+        if (!node) {
+          node = { path: p, components: [], anchorImplId: impl.id, imports: facts.imports, reexports: facts.reexports, draft: false };
+          nodes.set(p, node);
+        }
+        if (!node.components.some(c => c.id === component.id)) node.components.push(component);
+        node.draft = node.draft || ctx.isImplementationDraft(impl);
+
+        if (!filesByComponent.has(component.id)) filesByComponent.set(component.id, new Set());
+        filesByComponent.get(component.id)!.add(p);
+        mapped = true;
       }
-      if (!node.components.some(c => c.id === component.id)) node.components.push(component);
-      node.draft = node.draft || ctx.isImplementationDraft(impl);
-
-      if (!filesByComponent.has(component.id)) filesByComponent.set(component.id, new Set());
-      filesByComponent.get(component.id)!.add(p);
-      if (!implsByComponent.has(component.id)) implsByComponent.set(component.id, []);
-      implsByComponent.get(component.id)!.push(impl);
+      if (mapped) {
+        if (!implsByComponent.has(component.id)) implsByComponent.set(component.id, []);
+        implsByComponent.get(component.id)!.push(impl);
+      }
     }
 
     const mappedPaths = new Set(nodes.keys());
@@ -239,7 +248,7 @@ export const dependencyConformanceRule: SddRule = {
           if (hasImportBetween(fromFiles, subsystemFiles, isMountingDeclarer)) continue;
         } else {
           const toFiles = filesByComponent.get(targetId);
-          if (!toFiles) continue; // target unmapped (no sourcePath / non-exact) — Level 1 territory
+          if (!toFiles) continue; // target unmapped (no source file / non-exact) — Level 1 territory
           if ([...fromFiles].some(f => toFiles.has(f))) continue; // N:1 same-file collapse
           if (hasImportBetween(fromFiles, toFiles, isMountingDeclarer)) continue;
         }

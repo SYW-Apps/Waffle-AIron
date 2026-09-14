@@ -15,8 +15,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Deduplicate the distinct sourcePaths across all implementations and resolve each against
-          the project root, classifying absolute or parent-escaping paths as escaped (containment,
+          Deduplicate the distinct source paths across all implementations — each implementation's
+          sourcePath, each method's own sourcePath and each simPath — and resolve each against the
+          project root, classifying absolute or parent-escaping paths as escaped (containment,
           mirroring the projectPath rule) and nonexistent files as missing
         type: local
       - stepNumber: 2
@@ -48,4 +49,4 @@ methods:
         outcome: CodeModel
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-07-11T19:14:23.286Z'
+updatedAt: '2026-09-13T20:55:18.297Z'

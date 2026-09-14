@@ -4,9 +4,16 @@ description: Orchestrator contract for exporting local filesystem skills.
 component: skills_orchestrator
 methods:
   - name: exportSddSkills
-    description: Export skills via exporter
-    signature: 'exportSddSkills(): void'
-    returns: void
+    description: >-
+      Export the built-in SDD skills via the exporter, for the passed target types or the project's
+      enabled targets, returning what was written.
+    signature: 'exportSddSkills(targetTypes?: string[]): SkillsExportResult'
+    returns: SkillsExportResult
+    params:
+      - name: targetTypes
+        type: string[]
+        description: The target types to export into; omitted means the project's enabled targets
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-08T22:02:18.714Z'
+updatedAt: '2026-09-13T23:11:53.175Z'

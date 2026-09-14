@@ -12,8 +12,9 @@
  *    inside the project root — the harness must be a committed, re-runnable
  *    file.
  *  - UNWIRED_INTEGRATION_SIM (warning): the sim file's import graph (closed
- *    transitively, exact grade) must reach the component's own sourcePath
- *    module and at least one sourcePath module of each direct dependency;
+ *    transitively, exact grade) must reach at least one of the component's
+ *    own source modules (its implementation's sourcePath or a method's) and
+ *    at least one source module of each direct dependency;
  *    technology-boundary dependencies are exempt — their contract-faithful
  *    fakes are sanctioned.
  *  - SIM_PATH_UNCOVERED (warning): once a harness carries sim:<component-id>.
@@ -924,4 +925,125 @@ export default [
       },
     },
   }),
+
+  // -------------------------------------------------------------------------
+  // UNWIRED_INTEGRATION_SIM — a component's own modules are all its files,
+  // including the modules its methods name
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNWIRED_INTEGRATION_SIM',
+    severity: 'warning',
+    anchoredTo: 'checkout_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The checkout orchestrator\'s placeOrder body lives in its own command module, but the checkout harness imports only the pricing engine and reaches neither of the orchestrator\'s modules.',
+    tree: placeOrderCommandTree([
+      'import { priceCart } from \'../../src/checkout/cart-pricing-engine.js\';',
+      '',
+      'export function runCheckoutFlowSim(): void {',
+      '  priceCart(\'cart-1001\');',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'UNWIRED_INTEGRATION_SIM',
+    expectFire: false,
+    reason:
+      'A module the orchestrator\'s method names is one of the component\'s own modules, and through it the harness reaches the real pricing engine.',
+    scenario:
+      'The checkout harness drives placeOrder through the orchestrator\'s command module, which imports the real pricing engine.',
+    tree: placeOrderCommandTree([
+      'import { placeOrder } from \'../../src/checkout/commands/place-order.js\';',
+      '',
+      'export function runCheckoutFlowSim(): void {',
+      '  placeOrder(\'cart-1001\');',
+      '}',
+      '',
+    ].join('\n')),
+  }),
 ];
+
+/**
+ * The checkout orchestrator whose placeOrder names its own command module,
+ * wired to the real cart pricing engine; only the harness text varies.
+ */
+function placeOrderCommandTree(harness: string): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'checkout', description: 'Cart pricing and order placement.' }],
+    components: [
+      {
+        id: 'checkout-orchestrator',
+        componentType: 'Orchestrator',
+        subsystem: 'checkout',
+        description: 'Drives order placement over the priced cart.',
+        dependsOn: ['cart-pricing-engine'],
+      },
+      {
+        id: 'cart-pricing-engine',
+        componentType: 'Specialist',
+        subsystem: 'checkout',
+        description: 'Prices the cart including promotions and tax.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'icheckout_orchestrator',
+        component: 'checkout-orchestrator',
+        methods: [{ name: 'placeOrder', description: 'Place the order for the priced cart.' }],
+      },
+      {
+        id: 'icart_pricing_engine',
+        component: 'cart-pricing-engine',
+        methods: [{ name: 'priceCart', description: 'Price the cart including promotions and tax.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'checkout_orchestrator_impl',
+        contract: 'icheckout_orchestrator',
+        sourcePath: 'src/checkout/checkout-orchestrator.ts',
+        simPath: 'tests/integration/checkout-flow.sim.ts',
+        methods: [
+          {
+            name: 'placeOrder',
+            sourcePath: 'src/checkout/commands/place-order.ts',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Validate the priced cart and persist the order.' }],
+          },
+        ],
+      },
+      {
+        id: 'cart_pricing_engine_impl',
+        contract: 'icart_pricing_engine',
+        sourcePath: 'src/checkout/cart-pricing-engine.ts',
+        methods: [
+          {
+            name: 'priceCart',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Apply promotions and tax to every cart line.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/checkout/checkout-orchestrator.ts': [
+        'export const orderChannel = \'web\';',
+        '',
+      ].join('\n'),
+      'src/checkout/commands/place-order.ts': [
+        'import { priceCart } from \'../cart-pricing-engine.js\';',
+        '',
+        'export function placeOrder(cartId: string): void {',
+        '  priceCart(cartId);',
+        '}',
+        '',
+      ].join('\n'),
+      'src/checkout/cart-pricing-engine.ts': [
+        'export function priceCart(cartId: string): number {',
+        '  return 0;',
+        '}',
+        '',
+      ].join('\n'),
+      'tests/integration/checkout-flow.sim.ts': harness,
+    },
+  };
+}

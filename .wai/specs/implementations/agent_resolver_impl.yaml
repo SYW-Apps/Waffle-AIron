@@ -62,8 +62,9 @@ methods:
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
           and ONE delegating owner per chained subproject (projectPath) that routes work into the
           subproject without enumerating its internals; component implementers only when
-          generateComponentImplementers is enabled. Each owner/implementer carries the rendered
-          variantGuidance for its variant-tagged components.
+          generateComponentImplementers is enabled. Each owner's and implementer's ownedPaths fence
+          holds the source files its implementations and their methods name, and each carries the
+          rendered variantGuidance for its variant-tagged components.
         type: local
   - name: composeAgentBrief
     narrative:
@@ -122,4 +123,4 @@ methods:
         outcome: brief composed
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-13T11:32:32.864Z'
+updatedAt: '2026-09-13T20:55:46.970Z'

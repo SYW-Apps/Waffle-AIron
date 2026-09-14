@@ -1,0 +1,114 @@
+kind: value-object
+id: narrative_step
+name: NarrativeStep
+description: >-
+  One step of an L5 narrative: a flat, numbered unit that reads top to bottom like the code it
+  describes. Its `type` decides which of its other fields it may carry.
+fields:
+  - name: stepNumber
+    type: number
+    description: The step's position; jump fields refer to it.
+    optional: false
+  - name: label
+    type: string
+    description: A symbolic anchor other steps' *Label twins may name.
+    optional: true
+  - name: description
+    type: string
+    description: What the step does, in the words the code would use.
+    optional: false
+  - name: type
+    type: string
+    description: local, call, dispatch, register, branch, switch, loop, try, parallel, jump, return or throw.
+    optional: false
+  - name: targetComponent
+    type: string
+    description: 'call, dispatch, register: the component reached.'
+    optional: true
+  - name: targetMethod
+    type: string
+    description: 'call, register: the method on the target''s interface.'
+    optional: true
+  - name: capability
+    type: string
+    description: 'dispatch: the capability routed through the target Portal.'
+    optional: true
+  - name: auth
+    type: object
+    description: 'call, dispatch: the credential presented to an authed Portal and where it is loaded from.'
+    optional: true
+  - name: detach
+    type: boolean
+    description: 'call, dispatch: fire-and-forget.'
+    optional: true
+  - name: assertsGuarantees
+    type: string[]
+    description: 'call, dispatch: guarantees the step relies on from the called method.'
+    optional: true
+  - name: assertsInvariants
+    type: string[]
+    description: 'local, call, dispatch: declared entity invariants the step upholds.'
+    optional: true
+  - name: condition
+    type: string
+    description: branch; loop while and doWhile.
+    optional: true
+  - name: onTrueStep
+    type: number
+    description: 'branch: where the true path goes (default: next step).'
+    optional: true
+  - name: onFalseStep
+    type: number
+    description: 'branch: where the false path goes.'
+    optional: true
+  - name: 'on'
+    type: string
+    description: 'switch: the dispatched value.'
+    optional: true
+  - name: cases
+    type: object[]
+    description: 'switch: value-to-step cases.'
+    optional: true
+  - name: defaultStep
+    type: number
+    description: 'switch: the default region.'
+    optional: true
+  - name: loopKind
+    type: string
+    description: 'loop: forEach, for, while or doWhile.'
+    optional: true
+  - name: over
+    type: string
+    description: 'loop forEach and for: the iteration source.'
+    optional: true
+  - name: endStep
+    type: number
+    description: 'loop, try, parallel: the last step of the body region.'
+    optional: true
+  - name: catches
+    type: object[]
+    description: 'try: error-to-handler regions.'
+    optional: true
+  - name: finallyStep
+    type: number
+    description: 'try: the first step of the always-runs region.'
+    optional: true
+  - name: branches
+    type: object[]
+    description: 'parallel: the arms.'
+    optional: true
+  - name: toStep
+    type: number
+    description: 'jump: the target step.'
+    optional: true
+  - name: outcome
+    type: string
+    description: 'return: what the method returns with.'
+    optional: true
+  - name: error
+    type: string
+    description: 'throw: the raised error.'
+    optional: true
+methods: []
+createdAt: '2026-09-13T16:53:32.013Z'
+updatedAt: '2026-09-13T18:33:00.331Z'

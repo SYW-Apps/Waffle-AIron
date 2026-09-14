@@ -5,8 +5,9 @@
  * Documented intent pinned here (rule description + module doc comment +
  * the narrative step-type vocabulary in src/models/specs.ts):
  *  - CALL_STEP_UNREALIZED (warning): every narrative `call` step of an
- *    exactly-analyzed method must appear among the realized function's
- *    callees — matched by the target method's contract name OR any per-method
+ *    exactly-analyzed method must appear among the callees of the realized
+ *    function in the method's own source file (its sourcePath, else the
+ *    implementation's) — matched by the target method's contract name OR any per-method
  *    `symbol` override a target-side implementation declares, closed
  *    transitively over same-file named helpers (extract-helper refactors stay
  *    clean). Set membership only; order/arguments/conditions unverified.
@@ -571,4 +572,143 @@ export default [
       },
     },
   }),
+
+  // -------------------------------------------------------------------------
+  // CALL_STEP_UNREALIZED — a method naming its own source file is read there
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    severity: 'warning',
+    anchoredTo: 'shipment_scheduler_impl',
+    expectFire: true,
+    scenario:
+      'The shipment scheduler moved scheduleShipment into its own command module, but the moved function dropped the carrier quote call, while the stale copy left in the scheduler module still makes it.',
+    tree: shipmentCommandTree({
+      schedulerModule: [
+        'import { fetchQuotes } from \'./carrier-quote-adapter.js\';',
+        '',
+        '// stale copy kept for old call sites; the command module is the real body',
+        'export function scheduleShipment(parcelId: string): void {',
+        '  fetchQuotes(parcelId);',
+        '}',
+        '',
+      ].join('\n'),
+      commandModule: [
+        'export function scheduleShipment(parcelId: string): void {',
+        '  bookFromRateTable(parcelId);',
+        '}',
+        '',
+        'function bookFromRateTable(parcelId: string): void {',
+        '  // static rate table lookup; the quote call was dropped in the move',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'The method names its own source file, and the realized function there calls the narrated target; the scheduler module is not where the method lives.',
+    scenario:
+      'The shipment scheduler\'s command module calls fetchQuotes on the carrier quote adapter, while the scheduler module itself keeps only the shipping policy.',
+    tree: shipmentCommandTree({
+      schedulerModule: [
+        'export function describeShipmentPolicy(): string {',
+        '  return \'cheapest-eligible-carrier\';',
+        '}',
+        '',
+      ].join('\n'),
+      commandModule: [
+        'import { fetchQuotes } from \'../carrier-quote-adapter.js\';',
+        '',
+        'export function scheduleShipment(parcelId: string): void {',
+        '  fetchQuotes(parcelId);',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
 ];
+
+/**
+ * The shipment scheduler whose scheduleShipment names its own command module
+ * (src/fulfillment/commands/schedule-shipment.ts) beside the scheduler module;
+ * only the two modules' text varies.
+ */
+function shipmentCommandTree(modules: { schedulerModule: string; commandModule: string }): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'fulfillment', description: 'Parcel scheduling and carrier hand-off.' }],
+    components: [
+      {
+        id: 'shipment-scheduler',
+        componentType: 'Orchestrator',
+        subsystem: 'fulfillment',
+        description: 'Plans each parcel pickup and books the cheapest eligible carrier.',
+        dependsOn: ['carrier-quote-adapter'],
+      },
+      {
+        id: 'carrier-quote-adapter',
+        componentType: 'Adapter',
+        subsystem: 'fulfillment',
+        description: 'Wraps the external carrier rate APIs behind one quote interface.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ishipment_scheduler',
+        component: 'shipment-scheduler',
+        methods: [{ name: 'scheduleShipment', description: 'Book the cheapest eligible carrier for a parcel.' }],
+      },
+      {
+        id: 'icarrier_quote_adapter',
+        component: 'carrier-quote-adapter',
+        methods: [{ name: 'fetchQuotes', description: 'Fetch current rate quotes from all connected carriers.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'shipment_scheduler_impl',
+        contract: 'ishipment_scheduler',
+        sourcePath: 'src/fulfillment/shipment-scheduler.ts',
+        methods: [
+          {
+            name: 'scheduleShipment',
+            sourcePath: 'src/fulfillment/commands/schedule-shipment.ts',
+            narrative: [
+              {
+                stepNumber: 1,
+                type: 'call',
+                description: 'Fetch carrier quotes for the parcel.',
+                targetComponent: 'carrier-quote-adapter',
+                targetMethod: 'fetchQuotes',
+              },
+              { stepNumber: 2, type: 'local', description: 'Pick the cheapest quote that meets the delivery window.' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'carrier_quote_adapter_impl',
+        contract: 'icarrier_quote_adapter',
+        sourcePath: 'src/fulfillment/carrier-quote-adapter.ts',
+        methods: [
+          {
+            name: 'fetchQuotes',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Call each connected carrier rate API and merge the quotes.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/fulfillment/shipment-scheduler.ts': modules.schedulerModule,
+      'src/fulfillment/commands/schedule-shipment.ts': modules.commandModule,
+      'src/fulfillment/carrier-quote-adapter.ts': [
+        'export function fetchQuotes(parcelId: string): number[] {',
+        '  return [12.5, 14.0];',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}

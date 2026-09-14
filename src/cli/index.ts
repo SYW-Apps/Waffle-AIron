@@ -737,6 +737,33 @@ mcpCmd
     await runMcpServe();
   });
 
+/**
+ * cli_runner.runMcpInstall — register (or self-heal) the wairon MCP entry. For a
+ * HOSTED registration the bearer is resolved HERE — the explicit --token, else
+ * the credential stored for that instance — because the config adapter may not
+ * read the credential store; `wairon login` once is enough to wire an agent.
+ */
+async function mcpInstallCommand(opts: {
+  global?: boolean;
+  configDir?: string;
+  backend?: string;
+  hosted?: string;
+  project?: string;
+  token?: string;
+}): Promise<void> {
+  const hostedToken = opts.hosted
+    ? (opts.token ?? storedCredentialFor(String(opts.hosted).replace(/\/+$/, '')) ?? undefined)
+    : undefined;
+  await runMcpInstall({
+    global: opts.global,
+    configDir: opts.configDir,
+    backend: opts.backend,
+    hostedUrl: opts.hosted,
+    hostedProject: opts.project,
+    hostedToken,
+  });
+}
+
 mcpCmd
   .command('install')
   .description('Register the wairon MCP server in the Claude Code settings.json or Antigravity mcp_config.json')
@@ -746,21 +773,7 @@ mcpCmd
   .option('--hosted <url>', 'register a HOSTED entry against this instance instead of the local stdio server')
   .option('--project <id>', 'hosted: the project the agent should be bound to')
   .option('--token <token>', 'hosted: the bearer to carry (else the credential stored by `wairon login`)')
-  .action(async (opts) => {
-    // Resolve the credential HERE (the config adapter may not read the
-    // credential store) so `wairon login` once is enough to wire an agent.
-    const hostedToken = opts.hosted
-      ? (opts.token ?? storedCredentialFor(String(opts.hosted).replace(/\/+$/, '')) ?? undefined)
-      : undefined;
-    await runMcpInstall({
-      global: opts.global,
-      configDir: opts.configDir,
-      backend: opts.backend,
-      hostedUrl: opts.hosted,
-      hostedProject: opts.project,
-      hostedToken,
-    });
-  });
+  .action(mcpInstallCommand);
 
 mcpCmd
   .command('status')

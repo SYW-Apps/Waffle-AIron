@@ -357,3 +357,16 @@ export const ProjectConfigSchema = z.object({
 });
 
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
+
+/**
+ * project_config.activeTargetTypes — the target types this configuration
+ * enables: every target not explicitly disabled, in declaration order. A legacy
+ * string target names its type directly and carries no enabled flag. Empty for a
+ * configuration with no enabled targets.
+ */
+export function activeTargetTypes(config: ProjectConfig): string[] {
+  const targets = config.targets as ReadonlyArray<TargetConfig | string>;
+  return targets
+    .filter((t) => typeof t === 'string' || t.enabled !== false)
+    .map((t) => (typeof t === 'string' ? t : t.type));
+}

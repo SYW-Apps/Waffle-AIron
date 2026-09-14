@@ -3,6 +3,7 @@ import {
   ImplementationSpec,
   MethodImplementation,
   NarrativeDetail,
+  methodSourceFile,
 } from '../../models/index.js';
 import { normalizeSourcePath, type SourceFileFacts } from '../source-analysis.js';
 import { isInChainedSubproject, stereotypeDefaultTier } from './conformance.js';
@@ -81,11 +82,11 @@ export function passesIntentFloor(text: string | undefined, methodName: string):
 export const narrativeDetailRule: SddRule = {
   name: 'narrative-detail',
   description:
-    'The narrative detail dial: each method resolves to full | calls-only | intent (method override → spec default → stereotype default). full requires a narrative; intent-level methods without a narrative must specify behavior as non-trivial prose (L4 intent or L3 description) — dialing detail down never means leaving behavior unspecified. Explicit declarations are held to their promise as errors; stereotype-defaulted gaps surface as warnings. Detail sufficiency rides along: a method whose realized function measures real branching (cyclomatic complexity above rules.complexity.maxUnnarratedComplexity, exact AST grade only) may not hide below detail: full without a narrative (UNNARRATED_COMPLEXITY), and an explicit dial below a full-floor logic stereotype without a narrative is a visible, lint.allow-justifiable choice (DETAIL_BELOW_STEREOTYPE). Both are honest lints over declarations — they never claim the narrative or prose is CORRECT.',
+    'The narrative detail dial: each method resolves to full | calls-only | intent (method override → spec default → stereotype default). full requires a narrative; intent-level methods without a narrative must specify behavior as non-trivial prose (L4 intent or L3 description) — dialing detail down never means leaving behavior unspecified. Explicit declarations are held to their promise as errors; stereotype-defaulted gaps surface as warnings. Detail sufficiency rides along: a method whose realized function — in the method\'s own source file, else the implementation\'s — measures real branching (cyclomatic complexity above rules.complexity.maxUnnarratedComplexity, exact AST grade only) may not hide below detail: full without a narrative (UNNARRATED_COMPLEXITY), and an explicit dial below a full-floor logic stereotype without a narrative is a visible, lint.allow-justifiable choice (DETAIL_BELOW_STEREOTYPE). Both are honest lints over declarations — they never claim the narrative or prose is CORRECT.',
   codes: [
     { code: 'MISSING_NARRATIVE', defaultSeverity: 'warning', summary: 'Method resolved to detail: full but has no narrative (error when the level was declared explicitly)' },
     { code: 'INTENT_FLOOR', defaultSeverity: 'warning', summary: 'Intent-level method whose intent/description prose is missing or placeholder-thin (error when declared explicitly)' },
-    { code: 'UNNARRATED_COMPLEXITY', defaultSeverity: 'warning', summary: 'Method below detail: full with no narrative whose realized function has real branching (cyclomatic complexity over the configured threshold, exact-grade analysis only)' },
+    { code: 'UNNARRATED_COMPLEXITY', defaultSeverity: 'warning', summary: 'Method below detail: full with no narrative whose realized function, in the method\'s source file, has real branching (cyclomatic complexity over the configured threshold, exact-grade analysis only)' },
     { code: 'DETAIL_BELOW_STEREOTYPE', defaultSeverity: 'warning', summary: 'Method explicitly dialed below the full narrative floor of its logic stereotype, with no narrative' },
   ],
   check(ctx) {
@@ -126,13 +127,16 @@ export const narrativeDetailRule: SddRule = {
         // Detail sufficiency (code side): the realized function's measured
         // branching may not hide below detail: full. Exact-grade analysis
         // only — a weaker grade skips rather than guesses. `off` conformance
-        // means the name↔symbol mapping is untrusted, so skip that too.
+        // means the name↔symbol mapping is untrusted, so skip that too. The
+        // function is measured in the method's own source file: its
+        // sourcePath, else the implementation's.
         let complexityFired = false;
         const tier = implMethod.conformance ?? impl.conformance
           ?? stereotypeDefaultTier(component?.componentType ?? '');
-        if (impl.sourcePath && tier !== 'off'
+        const file = methodSourceFile(implMethod, impl.sourcePath);
+        if (file && tier !== 'off'
           && !(component && isInChainedSubproject(component.subsystem, ctx))) {
-          const facts = factsByPath.get(normalizeSourcePath(impl.sourcePath));
+          const facts = factsByPath.get(normalizeSourcePath(file));
           const symbol = implMethod.symbol ?? implMethod.name;
           // Own-property lookup: a method named e.g. "constructor" must not
           // resolve to Object.prototype members.
@@ -148,7 +152,7 @@ export const narrativeDetailRule: SddRule = {
             ctx.addIssue(
               'warning',
               'UNNARRATED_COMPLEXITY',
-              `Method "${implMethod.name}" in implementation "${impl.id}" sits at detail: ${eff.level} with no narrative, but its realized function "${symbol}" in "${impl.sourcePath}" measures cyclomatic complexity ${complexity} (limit ${limit}) — real branching is hiding behind ${eff.level}. Write the narrative, or keep the dial with a lint.allow stating why the branching needs no choreography.`,
+              `Method "${implMethod.name}" in implementation "${impl.id}" sits at detail: ${eff.level} with no narrative, but its realized function "${symbol}" in "${file}" measures cyclomatic complexity ${complexity} (limit ${limit}) — real branching is hiding behind ${eff.level}. Write the narrative, or keep the dial with a lint.allow stating why the branching needs no choreography.`,
               impl.id,
               isDraftCtx,
             );

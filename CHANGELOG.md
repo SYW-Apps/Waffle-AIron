@@ -201,6 +201,41 @@ through each subsystem's core adapter. Behaviour is kept, except as listed here.
   at all. It now reports the selection's name, and a `wairon dev` project's
   references carry its project id instead of its folder name.
 
+### A method can name its own source file, and a contract method declares its findings
+
+An implementation had one `sourcePath`, so a method whose body lived elsewhere — a CLI command in its own file, a
+provisioning workflow outside the orchestrator's main module — was checked against the wrong file. The call check found
+no function there and skipped the method without a word, and no agent's write fence covered the file that actually held
+the code.
+
+- **A method names its own file.** `sourcePath` on an L4 method overrides the implementation's for that method.
+  `sdd_write_narrative` accepts it, and a chained subproject's save and `subsystem externalize` / `internalize` keep it
+  relative to the right root, exactly like the implementation's own path.
+- **Every check reads the method's own file.** Structural conformance checks each contract method in its own file and
+  reports a missing, escaping or unreadable file once per file, naming the methods that use it; a problem in one method's
+  file no longer blocks the others. Call-step realization, the narrative-detail lint, dependency, hidden-state and
+  integration conformance and the technology-leakage scan follow the same file, and the code model analyzes every file an
+  implementation or its methods name.
+- **`MISSING_SOURCE_PATH` names the methods left without a file.** An implementation with no path of its own is complete
+  when every method names one; an implementation that names no file at all is still reported, whatever its contract's
+  size.
+- **Agent write fences hold every file** an implementation and its methods name.
+- **`wairon status` lists each method's own file** under its implementation, flagged when missing, and counts the
+  source-file share of completeness only when every named file exists.
+- **A contract method declares the findings it reports: `findings: [{ code, severity, summary }]`.**
+  `sdd_define_interface` accepts it and `sdd_update_spec` upserts and deletes entries by `code`. A declared code must
+  appear as a string literal in the method's source file, or `UNREALIZED_FINDING` (warning) says so — the catalog of what
+  a check reports sits on its contract, the way ESLint keeps a rule's messages in its `meta`. Below exact analysis grade
+  the check is lenient: it can miss an unreported code, but never flags a reported one.
+- **Wairon's own tree** points 26 methods at their real files: 19 of `cli_runner`'s command methods at
+  `src/commands/*.ts` and 7 of `core_orchestrator`'s provisioning methods at `src/core/provision.ts`. The checks this
+  turned on found `init`, `generate`, `list` and `show` reaching core and skills internals directly. They now go through
+  `cli_core_adapter`, which gained `resolveAgentTopology`, `ensureProjectInitialized`, `listDirectChainedSubprojects`
+  and `defaultPackSelections`, and `init` bootstraps the L0 system spec through core's own non-destructive bootstrap.
+- **`wairon init` no longer writes an `agent-architect` file.** Agent files are opt-in (`materializeAgentFiles`, off by
+  default), yet `init` wrote one regardless, and the next `wairon generate` removed it again. A project that opts in gets
+  its agent files, the architect included, from `wairon generate`, rendered from the resolved topology.
+
 ### Execution budgets: the topology gains a resource axis
 
 The derived topology said who owns what, and nothing about what their work costs

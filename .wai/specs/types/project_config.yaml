@@ -55,5 +55,11 @@ methods:
     description: >-
       The profile ids recorded in `profileSelection`, deduplicated in first-seen order; empty when
       no selection is recorded. The governing `projectType` is not included.
+  - name: activeTargetTypes
+    signature: 'activeTargetTypes(): string[]'
+    returns: string[]
+    description: >-
+      The target types this configuration enables: every target not explicitly disabled. Empty for a
+      configuration with no enabled targets.
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-13T12:16:01.307Z'
+updatedAt: '2026-09-13T22:56:09.047Z'

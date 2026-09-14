@@ -1,5 +1,5 @@
 import * as path from 'path';
-import type { ImplementationSpec } from '../../models/index.js';
+import { implementationSourceFiles, type ImplementationSpec } from '../../models/index.js';
 import { normalizeSourcePath } from '../source-analysis.js';
 import type { RuleContext, SddRule } from './types.js';
 import { isInChainedSubproject } from './conformance.js';
@@ -10,10 +10,11 @@ import { isInChainedSubproject } from './conformance.js';
 // Unit suites with mocked collaborators prove contract SHAPE; cross-component
 // bugs live in the wiring the mocks encode away. The static gate proves — and
 // only proves — that a committed integration harness (L4 `simPath`) EXISTS
-// and its import graph WIRES the real modules: the component's own sourcePath
-// and at least one sourcePath of each direct dependency. Whether the harness
-// PASSES is CI's job (it is an ordinary test file); the validator never runs
-// anything.
+// and its import graph WIRES the real modules: at least one of the
+// component's own modules (every file its implementations name — each
+// implementation's sourcePath and each method's) and at least one module of
+// each direct dependency. Whether the harness PASSES is CI's job (it is an
+// ordinary test file); the validator never runs anything.
 //
 // Adoption is subsystem-by-subsystem and mechanical: declaring the FIRST
 // simPath in a subsystem activates MISSING_INTEGRATION_SIM for that
@@ -42,7 +43,7 @@ function resolveAgainst(mapped: Set<string>, fromFile: string, specifier: string
 export const integrationConformanceRule: SddRule = {
   name: 'integration-conformance',
   description:
-    'A component cannot honestly claim completeness until a committed integration harness wires it to its REAL dependencies (L4 simPath). Statically checked: the harness file exists inside the project root, and its import graph — closed transitively over the analyzed module set, exact grade only — reaches the component\'s own sourcePath module and at least one sourcePath module of each direct dependsOn/owns component (technology-boundary dependencies exempt: their fakes are sanctioned). Execution is CI\'s job — these findings prove wiring, never that the sim passes. MISSING_INTEGRATION_SIM activates per subsystem once its first simPath is declared.',
+    'A component cannot honestly claim completeness until a committed integration harness wires it to its REAL dependencies (L4 simPath). Statically checked: the harness file exists inside the project root, and its import graph — closed transitively over the analyzed module set, exact grade only — reaches at least one of the component\'s own source modules (its implementation\'s or a method\'s) and at least one source module of each direct dependsOn/owns component (technology-boundary dependencies exempt: their fakes are sanctioned). Execution is CI\'s job — these findings prove wiring, never that the sim passes. MISSING_INTEGRATION_SIM activates per subsystem once its first simPath is declared.',
   codes: [
     { code: 'MISSING_INTEGRATION_SIM', defaultSeverity: 'warning', summary: 'Complete non-leaf implementation in a sim-adopting subsystem declares no simPath' },
     { code: 'SIM_FILE_MISSING', defaultSeverity: 'warning', summary: 'Declared simPath resolves to no file inside the project root' },
@@ -67,8 +68,10 @@ export const integrationConformanceRule: SddRule = {
       if (!comp) continue;
       if (!implsByComponent.has(comp.id)) implsByComponent.set(comp.id, []);
       implsByComponent.get(comp.id)!.push(impl);
-      if (impl.sourcePath) {
-        const p = normalizePath(impl.sourcePath);
+      // A component's own modules are every file its implementations name:
+      // each implementation's sourcePath and each method's.
+      for (const file of implementationSourceFiles(impl)) {
+        const p = normalizePath(file);
         if (!filesByComponent.has(comp.id)) filesByComponent.set(comp.id, new Set());
         filesByComponent.get(comp.id)!.add(p);
         if (!filesBySubsystem.has(comp.subsystem)) filesBySubsystem.set(comp.subsystem, new Set());

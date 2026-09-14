@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { ensureDir, fromProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ProjectConfig } from '../models/project.js';
+import { activeTargetTypes as configActiveTargetTypes } from '../models/project.js';
 import { loadProjectExtensions as loadCoreExtensions, LoadedPackSkill } from './extensions.js';
 import { buildServerInstructions as composeServerInstructions } from './instructions.js';
 import { loadProjectConfig as loadCoreProjectConfig } from './index.js';
@@ -259,9 +260,7 @@ export function activeTargetTypes(): string[] {
   // enabled targets — exportSddSkills then writes nothing, rather than throwing.
   const config = loadProjectConfig();
   if (!config) return [];
-  return config.targets
-    .filter((t) => !('enabled' in t) || t.enabled)
-    .map((t) => (typeof t === 'string' ? t : t.type));
+  return configActiveTargetTypes(config);
 }
 
 // ---------------------------------------------------------------------------

@@ -5,11 +5,12 @@ description: >-
   subsystem boundaries, semantic wiring edges (dispatch-table capability contracts, dispatch-,
   lifecycle-, and declared-invocation-rooted reachability with register-step handoff edges,
   durability round-trip hydration, typed cross-subsystem seams, prose-claim realization), writer
-  round-trip serializability, structural code↔spec conformance (L4 sourcePaths resolve to real files
-  within the project root; contract methods are realized in those files at each implementation's
-  conformance tier), and dependency conformance (the runtime import graph between component-mapped
-  files must match declared dependsOn/owns edges, with cross-subsystem imports justified by a
-  declared edge to the target subsystem's published surface).
+  round-trip serializability, structural code↔spec conformance (every implementation and method
+  sourcePath resolves to a real file within the project root; each contract method is realized in
+  its own source file at its conformance tier, and every finding code it declares appears in that
+  file), and dependency conformance (the runtime import graph between component-mapped files must
+  match declared dependsOn/owns edges, with cross-subsystem imports justified by a declared edge to
+  the target subsystem's published surface).
 component: spec_validator
 methods:
   - name: validateSddTree
@@ -50,4 +51,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T12:21:21.581Z'
+updatedAt: '2026-09-13T20:56:33.265Z'

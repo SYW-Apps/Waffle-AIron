@@ -44,46 +44,106 @@ methods:
         type: local
     symbol: validateCommand
   - name: runGenerate
+    sourcePath: src/commands/generate.ts
     narrative:
       - stepNumber: 1
-        description: Load spec system
-        type: call
-        targetComponent: cli_core_adapter
-        targetMethod: loadSystemSpec
-      - stepNumber: 2
         description: >-
           Read the project configuration: the configured targets and whether agent files are
           materialized (rules.materializeAgentFiles).
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 3
-        description: >-
-          Generate Dynamic Agent outputs matching configured target engines, then prune stale
-          managed agent files against the FULL resolved topology (also under a domain scope),
-          re-export skills, and re-inject the local guides
-        type: local
-  - name: runList
-    narrative:
-      - stepNumber: 1
-        description: Load specs using spec loader
+      - stepNumber: 2
+        description: Resolve the agent topology from the spec tree through the core adapter
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: loadSystemSpec
+        targetMethod: resolveAgentTopology
+      - stepNumber: 3
+        description: Did the spec tree resolve any agent?
+        type: branch
+        condition: at least one agent resolved from the spec tree
+        onFalseStep: 8
+      - stepNumber: 4
+        description: >-
+          Generate the agent outputs for the configured target engines when agent files are
+          materialized, and prune stale managed agent files against the full resolved topology (also
+          under a domain scope)
+        type: local
+      - stepNumber: 5
+        description: Re-export the SDD skills when the spec tree exists
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: exportSddSkills
+      - stepNumber: 6
+        description: >-
+          Re-inject the local AI guides for the configuration's active targets
+          (project_config.activeTargetTypes)
+        type: local
+      - stepNumber: 7
+        description: Continue with the cascade
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: 'Warn that no agent resolved from the spec tree: define subsystems and components first'
+        type: local
+      - stepNumber: 9
+        description: Is the cascade off for this run?
+        type: branch
+        condition: the run is scoped to a domain or root, a dry run, or --no-recurse
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Stop after this layer
+        type: return
+        outcome: this layer generated
+      - stepNumber: 11
+        description: List this project's direct chained subprojects
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: listDirectChainedSubprojects
+      - stepNumber: 12
+        description: Generate each subproject's layer in its own root
+        type: loop
+        loopKind: forEach
+        over: each direct chained subproject
+        endStep: 14
+      - stepNumber: 13
+        description: Complete the subproject's bootstrap without overwriting it
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: ensureProjectInitialized
+      - stepNumber: 14
+        description: >-
+          Generate the subproject's layer and its own subprojects by running this command bound to
+          the subproject root
+        type: local
+      - stepNumber: 15
+        description: Every layer is generated
+        type: return
+        outcome: every layer generated
+  - name: runList
+    sourcePath: src/commands/list.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the agent topology from the spec tree through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveAgentTopology
       - stepNumber: 2
         description: Format and print resolved dynamic agent list to stdout
         type: local
   - name: runShow
+    sourcePath: src/commands/show.ts
     narrative:
       - stepNumber: 1
-        description: Load spec system
+        description: Resolve the agent topology from the spec tree through the core adapter
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: loadSystemSpec
+        targetMethod: resolveAgentTopology
       - stepNumber: 2
         description: Format and display details for specified dynamic agent
         type: local
   - name: runUpdate
+    sourcePath: src/commands/update.ts
     narrative:
       - stepNumber: 1
         description: Check remote github release page for new releases
@@ -92,6 +152,7 @@ methods:
         description: If new release is found and not in check-only mode, pull and apply updates
         type: local
   - name: runHostProject
+    sourcePath: src/commands/host.ts
     narrative:
       - stepNumber: 1
         description: Read the master credential from the environment
@@ -140,6 +201,7 @@ methods:
         type: return
         outcome: unknown action
   - name: runHostKey
+    sourcePath: src/commands/host.ts
     narrative:
       - stepNumber: 1
         description: Read the master credential from the environment
@@ -188,6 +250,7 @@ methods:
         type: return
         outcome: unknown action
   - name: runHostLock
+    sourcePath: src/commands/host.ts
     narrative:
       - stepNumber: 1
         description: Read the master credential from the environment
@@ -205,6 +268,7 @@ methods:
         type: return
         outcome: locked
   - name: runProduce
+    sourcePath: src/commands/produce.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -226,6 +290,7 @@ methods:
         type: return
         outcome: produced
   - name: runSubsystemAdd
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -262,6 +327,7 @@ methods:
         description: Print confirmation (parent subsystem id + child project path) and next steps
         type: local
   - name: runInit
+    sourcePath: src/commands/init.ts
     narrative:
       - stepNumber: 1
         description: Resolve the nearest ancestor wairon project root by walking up from cwd
@@ -280,7 +346,7 @@ methods:
         type: branch
         condition: a parent project root was found above cwd (root differs from cwd)
         onTrueStep: 5
-        onFalseStep: 11
+        onFalseStep: 12
       - stepNumber: 5
         description: >-
           Prompt the user to create this subdirectory as an external subsystem of the detected
@@ -297,34 +363,48 @@ methods:
         outcome: declined
       - stepNumber: 8
         description: >-
+          Read the parent project's system spec through the core adapter; a parent without one is
+          refused
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 9
+        description: >-
           Compose the SubsystemSpec (id from --name or directory name, projectPath = relative path
           from the parent root to cwd)
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Wire the parent subsystem and scaffold this directory's child project
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createChainedSubsystem
-      - stepNumber: 10
+      - stepNumber: 11
         description: Report the external subsystem was created and stop
         type: return
         outcome: external subsystem created
-      - stepNumber: 11
+      - stepNumber: 12
         description: Bootstrap the standard .wai directory structure
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: Does this folder already hold a project configuration (a half-finished init)?
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Complete only what is missing: a folder that already holds a configuration keeps it as it
           is
         type: branch
         condition: the folder has no project configuration yet
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 17
+      - stepNumber: 15
+        description: >-
+          Read the store packs that apply by default, to seed as the new configuration's pack
+          selections
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: defaultPackSelections
+      - stepNumber: 16
         description: >-
           Compose the new project's configuration — the chosen targets and projectType, execution
           budgets off, component-implementer and agent-file generation off, the store packs
@@ -333,16 +413,22 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createProjectConfig
-      - stepNumber: 15
+      - stepNumber: 17
+        label: bootstrap_l0
+        description: >-
+          Bootstrap the L0 system spec through core, completing only what is missing (the same
+          bootstrap every chained subproject gets)
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: ensureProjectInitialized
+      - stepNumber: 18
         label: export_skills
         description: Export SDD skills templates
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 16
-        description: Generate default L0/L1/L2 spec files if empty
-        type: local
   - name: runSubsystemMove
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -369,6 +455,7 @@ methods:
         description: Print confirmation (old path to new path)
         type: local
   - name: runSubsystemExternalize
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -397,6 +484,7 @@ methods:
           re-validate
         type: local
   - name: runSubsystemInternalize
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -414,6 +502,7 @@ methods:
         description: Print confirmation and a reminder to re-validate
         type: local
   - name: runSurface
+    sourcePath: src/commands/surface.ts
     narrative:
       - stepNumber: 1
         description: Route on the surface action
@@ -843,6 +932,7 @@ methods:
         type: throw
         error: unknown agent action (expected brief | customize)
   - name: runRemote
+    sourcePath: src/commands/remote.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -934,6 +1024,7 @@ methods:
           checkout now addresses and where that answer came from.
         type: local
   - name: runLogin
+    sourcePath: src/commands/remote.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -959,6 +1050,7 @@ methods:
         description: Confirm which instance is now reachable, without echoing the credential.
         type: local
   - name: runLogout
+    sourcePath: src/commands/remote.ts
     narrative:
       - stepNumber: 1
         description: Was an instance named?
@@ -1010,10 +1102,12 @@ methods:
       - stepNumber: 5
         description: >-
           Not attached: read and print the LOCAL spec tree's completeness dashboard, scoped to a
-          subsystem when one was named.
+          subsystem when one was named, listing each implementation's source file and each method's
+          own source file, flagged when missing.
         type: local
     symbol: statusCommand
   - name: runMcpServe
+    sourcePath: src/commands/mcp.ts
     narrative:
       - stepNumber: 1
         description: Run the stdio MCP server against the resolved project root.
@@ -1021,6 +1115,7 @@ methods:
         targetComponent: cli_mcp_adapter
         targetMethod: serveMcpStdio
   - name: runMcpInstall
+    sourcePath: src/cli/index.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -1037,7 +1132,9 @@ methods:
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
+    symbol: mcpInstallCommand
   - name: runMcpStatus
+    sourcePath: src/commands/mcp.ts
     narrative:
       - stepNumber: 1
         description: Report where a wairon MCP server is registered and what it points at.
@@ -1193,4 +1290,4 @@ methods:
     conformance: 'off'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-13T13:54:14.566Z'
+updatedAt: '2026-09-13T22:58:33.102Z'

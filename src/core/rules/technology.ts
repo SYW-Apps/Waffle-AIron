@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import type { MethodSignature } from '../../models/index.js';
+import { implementationSourceFiles, type MethodSignature } from '../../models/index.js';
 
 /**
  * Technology-boundary rules: an L4 that declares `technologies` (e.g.
@@ -209,7 +209,7 @@ export const technologyRule: SddRule = {
 
       for (const impl of ctx.implementations) {
         if (home.scope.has(impl.id)) continue;
-        const parts: (string | undefined)[] = [impl.description, impl.sourcePath];
+        const parts: (string | undefined)[] = [impl.description, ...implementationSourceFiles(impl)];
         for (const m of impl.methods) {
           parts.push(m.intent);
           for (const s of m.narrative ?? []) {

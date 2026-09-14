@@ -440,6 +440,61 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
       expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { pyProj.cleanup(); }
   });
+
+  // A narrated runFlow whose own body lives in a command module of its own.
+  const METHOD_FILE_CALL = (implPath: string | undefined) => [
+    ...(implPath ? [`sourcePath: ${implPath}`] : []),
+    'methods:',
+    '  - name: runFlow',
+    '    sourcePath: src/commands/run-flow.ts',
+    '    narrative:',
+    '      - { stepNumber: 1, description: Delegate to the store, type: call, targetComponent: store-a, targetMethod: put }',
+    '      - { stepNumber: 2, description: Done, type: return, outcome: done }',
+  ].join('\n');
+
+  it('reads the realized function in the method\'s own source file, naming that file', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('orch-a', ['runFlow']);
+    storeSide(proj);
+    proj.impl('orch-a', METHOD_FILE_CALL('src/orch.ts'));
+    // the implementation file keeps a stale runFlow that still calls the store
+    proj.source('src/orch.ts', "import { put } from './store.js';\nexport function runFlow(): void { put(); }\n");
+    proj.source('src/commands/run-flow.ts', 'export function runFlow(): void { /* the store call was dropped */ }\n');
+    proj.activate();
+    try {
+      const found = byCode(validateSddTree(), 'CALL_STEP_UNREALIZED');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('"src/commands/run-flow.ts"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a call made in the method\'s own source file is realized even when the implementation file lacks it', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('orch-a', ['runFlow']);
+    storeSide(proj);
+    proj.impl('orch-a', METHOD_FILE_CALL('src/orch.ts'));
+    proj.source('src/orch.ts', 'export function runFlow(): void {}\n');
+    proj.source('src/commands/run-flow.ts', "import { put } from '../store.js';\nexport function runFlow(): void { put(); }\n");
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a method naming its own source file is checked even when the implementation names no path', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('orch-a', ['runFlow']);
+    storeSide(proj);
+    proj.impl('orch-a', METHOD_FILE_CALL(undefined));
+    proj.source('src/commands/run-flow.ts', 'export function runFlow(): void { /* forgot the store */ }\n');
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(1);
+    } finally { proj.cleanup(); }
+  });
 });
 
 describe('buildCodeModel — per-function callee facts (exact grade)', () => {

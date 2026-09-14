@@ -400,4 +400,49 @@ describe('MCP write-tool schema field coverage', () => {
     expect(after.ext).toEqual({ 'mypack:pii': true });
     expect(after.fields.map((f: any) => f.name)).toEqual(['id']);
   }, 120_000);
+
+  // The two fields added for B3 are EXPRESSED by their create tools, so they
+  // need no update_spec-only entry: the create tool itself carries them into the
+  // stored spec. Each case stands alone so it can run in isolation.
+
+  it("a contract method's findings survive sdd_define_interface", async () => {
+    await call('sdd_add_component', {
+      id: 'cov-checker', name: 'Coverage Checker', description: 'Checks coverage',
+      subsystem: 'cov', componentType: 'Specialist',
+    });
+    const findings = [
+      { code: 'COV_UNREALIZED', severity: 'error', summary: 'A declared code never appears in the source file' },
+      { code: 'COV_SLOW', severity: 'warning', summary: 'The check took too long' },
+    ];
+    await call('sdd_define_interface', {
+      id: 'icov-checker', name: 'ICovChecker', description: 'Contract', component: 'cov-checker',
+      methods: [{ name: 'check', description: 'Check', signature: 'check(): void', returns: 'void', findings }],
+    });
+
+    const after = await getSpec('interface', 'icov-checker');
+    expect(after.methods[0].findings).toEqual(findings);
+  }, 120_000);
+
+  it("a method's own sourcePath survives sdd_write_narrative", async () => {
+    await call('sdd_add_component', {
+      id: 'cov-runner', name: 'Coverage Runner', description: 'Runs coverage commands',
+      subsystem: 'cov', componentType: 'Orchestrator',
+    });
+    await call('sdd_define_interface', {
+      id: 'icov-runner', name: 'ICovRunner', description: 'Contract', component: 'cov-runner',
+      methods: [{ name: 'run', description: 'Run', signature: 'run(): void', returns: 'void' }],
+    });
+    await call('sdd_write_narrative', {
+      id: 'cov_runner_impl', name: 'Cov Runner Impl', description: 'Impl', contract: 'icov-runner',
+      sourcePath: 'src/cov/runner.ts',
+      methods: [{
+        name: 'run', sourcePath: 'src/cov/commands/run.ts',
+        detail: 'intent', intent: 'Runs the coverage command; throws when the command fails.',
+      }],
+    });
+
+    const after = await getSpec('implementation', 'cov_runner_impl');
+    expect(after.sourcePath).toBe('src/cov/runner.ts');
+    expect(after.methods[0].sourcePath).toBe('src/cov/commands/run.ts');
+  }, 120_000);
 });

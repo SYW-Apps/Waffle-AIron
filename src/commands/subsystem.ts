@@ -2,26 +2,34 @@ import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 import { getProjectRoot } from '../utils/fs.js';
-import { loadSystemSpec } from '../core/specs.js';
-import { composeAgentBrief as coreComposeAgentBrief } from '../core/agent_resolver.js';
+// Every sdd_core call goes through the core portal's barrel, never a core module directly.
 import {
-  exportSpecTree as coreExportSpecTree,
-  importSpecTree as coreImportSpecTree,
-} from '../core/treetransfer.js';
-import type { TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/treetransfer.js';
-import {
-  createChainedSubsystem,
+  loadSystemSpec as coreLoadSystemSpec,
+  createChainedSubsystem as coreCreateChainedSubsystem,
   moveSubsystemProject,
   externalizeSubsystem,
   internalizeSubsystem,
-} from '../core/provision.js';
-import {
+  composeAgentBrief as coreComposeAgentBrief,
+  exportSpecTree as coreExportSpecTree,
+  importSpecTree as coreImportSpecTree,
   loadProjectConfig as coreLoadProjectConfig,
   createProjectConfig as coreCreateProjectConfig,
   setExecutionTier as coreSetExecutionTier,
   projectConfigExists as coreProjectConfigExists,
+  resolveAgentTopology as coreResolveAgentTopology,
+  ensureProjectInitialized as coreEnsureProjectInitialized,
+  listDirectChainedSubprojects as coreListDirectChainedSubprojects,
+  defaultPackSelections as coreDefaultPackSelections,
 } from '../core/index.js';
-import type { AgentBrief, ProjectConfig, SubsystemSpec } from '../models/index.js';
+import type { TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
+import type {
+  AgentBrief,
+  AgentRecord,
+  PackSelection,
+  ProjectConfig,
+  SubsystemSpec,
+  SystemSpec,
+} from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // subsystem command — create/relocate external (chained) subprojects
@@ -75,6 +83,41 @@ export function setExecutionTier(tier: string): void {
 
 export function projectConfigExists(): boolean {
   return coreProjectConfigExists();
+}
+
+// cli_core_adapter.loadSystemSpec / createChainedSubsystem — 1:1 forwards to the
+// core portal: the bound project's system spec, and wiring a chained subsystem in
+// the parent together with its scaffolded child project.
+export function loadSystemSpec(): SystemSpec | null {
+  return coreLoadSystemSpec();
+}
+
+export function createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void {
+  coreCreateChainedSubsystem(subsystem, projectName);
+}
+
+// cli_core_adapter.resolveAgentTopology — 1:1 forward: the live agent records
+// `wairon list`, `show` and `generate` work from; empty without a system spec.
+export function resolveAgentTopology(): AgentRecord[] {
+  return coreResolveAgentTopology();
+}
+
+// cli_core_adapter.ensureProjectInitialized / listDirectChainedSubprojects —
+// 1:1 forwards backing `wairon init`'s L0 bootstrap and `wairon generate`'s
+// cascade into each direct chained subproject. The bootstrap completes only what
+// is missing and reports what it wrote.
+export function ensureProjectInitialized(fallbackName: string): { wroteConfig: boolean; wroteSystem: boolean } {
+  return coreEnsureProjectInitialized(fallbackName);
+}
+
+export function listDirectChainedSubprojects(projectRoot: string): { dir: string; subsystemId: string }[] {
+  return coreListDirectChainedSubprojects(projectRoot);
+}
+
+// cli_core_adapter.defaultPackSelections — 1:1 forward: the store packs that
+// apply by default, seeded into a configuration `wairon init` composes.
+export function defaultPackSelections(): PackSelection[] {
+  return coreDefaultPackSelections();
 }
 
 interface SubsystemAddOptions {

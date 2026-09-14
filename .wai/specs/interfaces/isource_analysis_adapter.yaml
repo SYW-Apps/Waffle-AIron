@@ -10,7 +10,8 @@ component: source_analysis_adapter
 methods:
   - name: buildCodeModel
     description: >-
-      Resolve each distinct implementation sourcePath within the project root (absolute or
+      Resolve each distinct source file the implementations name — every implementation sourcePath,
+      every method's own sourcePath and every simPath — within the project root (absolute or
       parent-escaping paths classify as escaped, nonexistent files as missing, binary/unreadable
       content as unreadable), analyze every readable file with the best available analyzer — exact
       AST when the TypeScript compiler module resolves dynamically for ts/js, else the language's
@@ -27,11 +28,11 @@ methods:
       - name: implementations
         type: ImplementationSpec[]
         description: >-
-          The loaded L4 specs whose sourcePaths define the file set (deduplicated — N:1 sharing is
-          expected)
+          The loaded L4 specs whose implementation, method and sim paths define the file set
+          (deduplicated — N:1 sharing is expected)
       - name: projectRoot
         type: string
-        description: The root all sourcePaths are resolved and containment-checked within
+        description: The root all source paths are resolved and containment-checked within
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-07-18T18:25:20.954Z'
+updatedAt: '2026-09-13T20:55:16.250Z'

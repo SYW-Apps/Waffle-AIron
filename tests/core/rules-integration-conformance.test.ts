@@ -281,3 +281,73 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     } finally { proj.cleanup(); }
   });
 });
+
+describe('integration conformance — a component\'s own modules are all its files', () => {
+  // A component whose single contract method names its own source file.
+  const wireMethodFile = (proj: ReturnType<typeof createTempProject>, compId: string, implFile: string, methodFile: string, extraImpl = '') => {
+    const m = `run${compId.replace(/-/g, '')}`;
+    proj.writeSpec('interface', `i${compId}`, [
+      'schemaVersion: 1.0.0', `id: i${compId}`, `name: I${compId}`, 'description: contract', `component: ${compId}`,
+      'methods:', `  - name: ${m}`, '    description: does its one thing, carefully and observably', `    signature: "${m}(): void"`, '    returns: "void"',
+    ].join('\n'));
+    proj.writeSpec('implementation', `impl-${compId}`, [
+      'schemaVersion: 1.0.0', `id: impl-${compId}`, `name: Impl${compId}`, 'description: impl', `contract: i${compId}`,
+      `sourcePath: ${implFile}`,
+      ...(extraImpl ? [extraImpl.replace(/\n$/, '')] : []),
+      'methods:', `  - name: ${m}`, `    sourcePath: ${methodFile}`, '    detail: intent',
+      '    intent: Performs its one thing against held state; failures surface as thrown errors.',
+    ].join('\n'));
+  };
+  const unwired = (res: { issues: { code: string; specId?: string; message: string; severity: string }[] }) =>
+    simIssues(res).filter(i => i.code === 'UNWIRED_INTEGRATION_SIM');
+
+  it('a harness reaching the component through a method\'s own source file wires the component', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
+    proj.component('spec-b', 'Specialist');
+    wireMethodFile(proj, 'orch-a', 'src/a.ts', 'src/commands/run-a.ts', 'simPath: tests/integration/a.sim.ts\n');
+    proj.wire('spec-b', 'src/b.ts');
+    proj.source('src/a.ts', "export const orchestratorName = 'orch-a';\n");
+    proj.source('src/commands/run-a.ts', body('orcha', "import { runspecb } from '../b.js';\nrunspecb();\n"));
+    proj.source('src/b.ts', body('specb'));
+    proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/commands/run-a.js';\nrunorcha();\n");
+    proj.activate();
+    try {
+      expect(unwired(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('reaching a dependency\'s method source file proves the dependency is wired', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
+    proj.component('spec-b', 'Specialist');
+    proj.wire('orch-a', 'src/a.ts', 'simPath: tests/integration/a.sim.ts\n');
+    wireMethodFile(proj, 'spec-b', 'src/b.ts', 'src/spec/check-b.ts');
+    proj.source('src/a.ts', body('orcha', "import { runspecb } from './spec/check-b.js';\nrunspecb();\n"));
+    proj.source('src/b.ts', "export const specialistName = 'spec-b';\n");
+    proj.source('src/spec/check-b.ts', body('specb'));
+    proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/a.js';\nrunorcha();\n");
+    proj.activate();
+    try {
+      expect(unwired(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('still fires when the harness reaches none of the component\'s files', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
+    proj.component('spec-b', 'Specialist');
+    wireMethodFile(proj, 'orch-a', 'src/a.ts', 'src/commands/run-a.ts', 'simPath: tests/integration/a.sim.ts\n');
+    proj.wire('spec-b', 'src/b.ts');
+    proj.source('src/a.ts', "export const orchestratorName = 'orch-a';\n");
+    proj.source('src/commands/run-a.ts', body('orcha'));
+    proj.source('src/b.ts', body('specb'));
+    proj.source('tests/integration/a.sim.ts', "import { runspecb } from '../../src/b.js';\nrunspecb();\n");
+    proj.activate();
+    try {
+      const found = unwired(validateSddTree());
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain("the component's own module (src/a.ts | src/commands/run-a.ts)");
+    } finally { proj.cleanup(); }
+  });
+});

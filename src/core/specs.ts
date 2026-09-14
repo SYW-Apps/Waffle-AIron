@@ -614,8 +614,9 @@ function stripNamespaceFromImplementation(spec: ImplementationSpec, prefix: stri
 }
 
 /**
- * A chained subproject's implementation file paths are relative to ITS root:
- * the loader reads them against it, and the child's own gate checks them there.
+ * A chained subproject's implementation file paths (sourcePath, each method's
+ * sourcePath, simPath) are relative to ITS root: the loader reads them against
+ * it, and the child's own gate checks them there.
  * A path authored through a parent — relative to the authoring root — that
  * lands inside the mounted child is re-expressed against the child root. Any
  * other path is taken as already child-relative (as every loaded one is) and
@@ -632,6 +633,7 @@ function childRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string,
     ...spec,
     ...(spec.sourcePath ? { sourcePath: reexpress(spec.sourcePath) } : {}),
     ...(spec.simPath ? { simPath: reexpress(spec.simPath) } : {}),
+    methods: spec.methods.map((m) => (m.sourcePath ? { ...m, sourcePath: reexpress(m.sourcePath) } : m)),
   };
 }
 
@@ -937,9 +939,13 @@ export class SpecWorkspace {
         } else if ('contract' in raw) {
           detectedType = 'implementation';
           const parsed = ImplementationSpecSchema.parse(raw);
-          if (parsed.sourcePath) {
-            const absSourcePath = path.resolve(projectDir, parsed.sourcePath);
-            parsed.sourcePath = path.relative(projectDir, absSourcePath).replace(/\\/g, '/');
+          // Every source file the implementation names, its own and each
+          // method's, is normalized against the root of the project holding it.
+          const normalizeSourcePath = (p: string): string =>
+            path.relative(projectDir, path.resolve(projectDir, p)).replace(/\\/g, '/');
+          if (parsed.sourcePath) parsed.sourcePath = normalizeSourcePath(parsed.sourcePath);
+          for (const method of parsed.methods) {
+            if (method.sourcePath) method.sourcePath = normalizeSourcePath(method.sourcePath);
           }
           index.implementations.push(parsed);
           index.paths.implementation[parsed.id] = file;
@@ -2579,6 +2585,11 @@ export class SpecWorkspace {
               ...merged[idx],
               ...deltaItem,
               ...(deltaItem.ext !== undefined ? { ext: mergeExt(merged[idx].ext, deltaItem.ext) } : {}),
+              // An interface method's findings upsert and delete by code, like
+              // lint.allow; an empty list still clears them outright.
+              ...(Array.isArray(deltaItem.findings) && deltaItem.findings.length > 0
+                ? { findings: mergeIdentifiedArray('findings', merged[idx].findings ?? [], deltaItem.findings) }
+                : {}),
             };
           }
         } else {
@@ -2660,6 +2671,7 @@ export class SpecWorkspace {
         case 'subscribesTo':       return `${String(o.topic)} ${o.event === undefined ? '' : String(o.event)}`;
         case 'trustedLinks':       return str(o.subsystem);
         case 'allow':              return str(o.code);       // lint.allow
+        case 'findings':           return str(o.code);       // an interface method's findings
         case 'invariants':         return str(o.id);
         case 'patterns':           return str(o.id);
         case 'boundaries':         return str(o.name);

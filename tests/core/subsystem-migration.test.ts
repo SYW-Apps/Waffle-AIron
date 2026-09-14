@@ -145,6 +145,50 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     expect(back?.sourcePath).toBe('packages/core/src/orch.ts');
     expect(back?.simPath).toBe('sim/orch.sim.ts');
   });
+
+  it("re-expresses each method's own sourcePath against the new root and back, leaving an absolute one alone", () => {
+    seed();
+    saveInterfaceSpec({
+      id: 'icore_orch', name: 'icore_orch', description: 'd', component: 'core_orch',
+      methods: [
+        { name: 'run', description: 'd', signature: 'run(): void', returns: 'void' },
+        { name: 'stop', description: 'd', signature: 'stop(): void', returns: 'void' },
+        { name: 'pause', description: 'd', signature: 'pause(): void', returns: 'void' },
+      ],
+      createdAt: now, updatedAt: now,
+    } as any);
+    const absolute = path.join(root, 'vendor', 'pause.ts');
+    saveImplementationSpec({
+      id: 'core_orch_impl', name: 'impl', description: 'd', contract: 'icore_orch',
+      sourcePath: 'packages/core/src/orch.ts',
+      methods: [
+        // Its own file lives under the mount-to-be…
+        { name: 'run', sourcePath: 'packages/core/src/commands/run.ts', narrative: [] },
+        // …this one stays outside it…
+        { name: 'stop', sourcePath: 'tools/stop.ts', narrative: [] },
+        // …and an absolute path names the same file from any root.
+        { name: 'pause', sourcePath: absolute, narrative: [] },
+      ],
+      createdAt: now, updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    /** The implementation as written on disk under a project root, before any load normalization. */
+    const rawImpl = (projectDir: string): any => listFilesRecursive(path.join(projectDir, '.wai', 'specs'), '.yaml')
+      .map((f) => readYamlFile(f) as any)
+      .find((y) => y && y.id === 'core_orch_impl');
+
+    externalizeSubsystem('core', 'packages/core');
+    invalidateSpecCache();
+    const childRaw = rawImpl(path.join(root, 'packages', 'core'));
+    expect(childRaw.sourcePath).toBe('src/orch.ts');
+    expect(childRaw.methods.map((m: any) => m.sourcePath)).toEqual(['src/commands/run.ts', '../../tools/stop.ts', absolute]);
+
+    internalizeSubsystem('core');
+    invalidateSpecCache();
+    const parentRaw = rawImpl(root);
+    expect(parentRaw.methods.map((m: any) => m.sourcePath)).toEqual(['packages/core/src/commands/run.ts', 'tools/stop.ts', absolute]);
+  });
 });
 
 // ---------------------------------------------------------------------------

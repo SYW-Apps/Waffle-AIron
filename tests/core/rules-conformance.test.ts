@@ -133,6 +133,43 @@ describe('structural conformance — file level', () => {
     } finally { proj.cleanup(); }
   });
 
+  it('fires MISSING_SOURCE_PATH when the implementation names no source file at all and the contract has no methods', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.writeSpec('interface', 'iorch-a', [
+      'schemaVersion: 1.0.0',
+      'id: iorch-a',
+      'name: IOrchA',
+      'description: contract',
+      'component: orch-a',
+    ].join('\n'));
+    proj.impl('orch-a', '');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code)).toEqual(['MISSING_SOURCE_PATH']);
+      expect(found[0].severity).toBe('warning');
+      expect(found[0].message).toContain('names no source file at all');
+    } finally { proj.cleanup(); }
+  });
+
+  it('the `implementation` external link suppression also holds when the contract has no methods', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'externalLinks:\n  - url: "https://make.com/scenarios/42"\n    type: implementation\n    label: "Make scenario"');
+    proj.writeSpec('interface', 'iorch-a', [
+      'schemaVersion: 1.0.0',
+      'id: iorch-a',
+      'name: IOrchA',
+      'description: contract',
+      'component: orch-a',
+    ].join('\n'));
+    proj.impl('orch-a', '');
+    proj.activate();
+    try {
+      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
   it('an `implementation` external link on the component satisfies the source requirement (no MISSING_SOURCE_PATH)', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator', 'externalLinks:\n  - url: "https://make.com/scenarios/42"\n    type: implementation\n    label: "Make scenario"');
@@ -315,6 +352,310 @@ describe('structural conformance — method realization (exact TS analysis)', ()
   });
 });
 
+// A method naming its own source file (extra lines ride under the same list item).
+const INTENT_AT = (m: string, file: string, extra = '') => `${INTENT(m)}\n    sourcePath: ${file}${extra}`;
+
+describe('structural conformance — each method against its own source file', () => {
+  it('checks a method against the file it names, not the implementation file, and names that file', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    // the implementation file still carries a stale lockSpecs; the file the method names does not
+    proj.source('src/cli.ts', 'export function listTargets(): void {}\nexport function lockSpecs(): void {}\n');
+    proj.source('src/commands/lock.ts', 'export function readLockFile(): void {}\n');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code)).toEqual(['UNREALIZED_METHOD']);
+      expect(found[0].message).toContain('"lockSpecs"');
+      expect(found[0].message).toContain('"src/commands/lock.ts"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a method realized in the file it names passes even when the implementation file lacks it', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
+    proj.source('src/commands/lock.ts', 'export function lockSpecs(): void {}\n');
+    proj.activate();
+    try {
+      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('reports a missing method file once, naming the file and every method using it', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs', 'unlockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}\n${INTENT_AT('unlockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      expect(found[0].severity).toBe('error');
+      expect(found[0].specId).toBe('impl-cli-orch');
+      expect(found[0].message).toContain('"src/commands/lock.ts"');
+      expect(found[0].message).toContain('methods "lockSpecs", "unlockSpecs"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a missing implementation file blocks only the methods realized in it', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/gone.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/commands/lock.ts', 'export function readLockFile(): void {}\n');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_FILE', 'UNREALIZED_METHOD']);
+      const unrealized = found.find(i => i.code === 'UNREALIZED_METHOD')!;
+      expect(unrealized.message).toContain('"lockSpecs"');
+      expect(found.some(i => i.message.includes('"listTargets"'))).toBe(false);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a missing method file blocks only that method — the implementation file is still checked', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/cli.ts', 'export function printBanner(): void {}\n');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_FILE', 'UNREALIZED_METHOD']);
+      const unrealized = found.find(i => i.code === 'UNREALIZED_METHOD')!;
+      expect(unrealized.message).toContain('"listTargets"');
+      expect(unrealized.message).toContain('"src/cli.ts"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('escaping and unreadable method files report once each, naming the method', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs', 'exportBundle']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', '../outside/lock.ts')}\n${INTENT_AT('exportBundle', 'native/bundle.node')}`);
+    proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
+    proj.source('native/bundle.node', 'MZ\u0000\u0003bundle\u0000');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code).sort()).toEqual(['CONFORMANCE_ANALYSIS_SKIPPED', 'SOURCE_PATH_ESCAPES_ROOT']);
+      const escaped = found.find(i => i.code === 'SOURCE_PATH_ESCAPES_ROOT')!;
+      expect(escaped.message).toContain('method "lockSpecs"');
+      expect(escaped.message).toContain('"../outside/lock.ts"');
+      const skipped = found.find(i => i.code === 'CONFORMANCE_ANALYSIS_SKIPPED')!;
+      expect(skipped.message).toContain('method "exportBundle"');
+      expect(skipped.message).toContain('"native/bundle.node"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('the existence check of a method file applies at the off tier', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `sourcePath: src/cli.ts\nmethods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts', '\n    conformance: off')}`);
+    proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
+    proj.activate();
+    try {
+      expect(conformanceIssues(validateSddTree()).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+    } finally { proj.cleanup(); }
+  });
+
+  it('no MISSING_SOURCE_PATH when the implementation has no path but every contract method names its own file', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
+    proj.impl('cli-orch', `methods:\n${INTENT_AT('listTargets', 'src/commands/list.ts')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/commands/list.ts', 'export function listTargets(): void {}\n');
+    proj.source('src/commands/lock.ts', 'export function lockSpecs(): void {}\n');
+    proj.activate();
+    try {
+      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('MISSING_SOURCE_PATH names only the contract methods left without a file, and the rest are still checked', () => {
+    const proj = createTempProject();
+    proj.component('cli-orch', 'Orchestrator');
+    proj.contract('cli-orch', ['listTargets', 'lockSpecs', 'unlockSpecs']);
+    // unlockSpecs has no L4 method entry at all, so it has no file either
+    proj.impl('cli-orch', `methods:\n${INTENT('listTargets')}\n${INTENT_AT('lockSpecs', 'src/commands/lock.ts')}`);
+    proj.source('src/commands/lock.ts', 'export function readLockFile(): void {}\n');
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateSddTree());
+      expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_PATH', 'UNREALIZED_METHOD']);
+      const missingPath = found.find(i => i.code === 'MISSING_SOURCE_PATH')!;
+      expect(missingPath.message).toContain('"listTargets", "unlockSpecs"');
+      expect(missingPath.message).not.toContain('"lockSpecs"');
+      expect(found.find(i => i.code === 'UNREALIZED_METHOD')!.message).toContain('"src/commands/lock.ts"');
+    } finally { proj.cleanup(); }
+  });
+});
+
+describe('UNREALIZED_FINDING — declared finding codes appear as string literals in the method source file', () => {
+  // An auditor contract whose methods declare the finding codes they report.
+  const auditContract = (proj: ReturnType<typeof createTempProject>, methods: { name: string; findings: string[] }[]) =>
+    proj.writeSpec('interface', 'iaudit-orch', [
+      'schemaVersion: 1.0.0',
+      'id: iaudit-orch',
+      'name: IAuditOrch',
+      'description: contract',
+      'component: audit-orch',
+      'methods:',
+      ...methods.map(m => [
+        `  - name: ${m.name}`,
+        `    description: ${m.name} audits one record and reports each discrepancy`,
+        `    signature: "${m.name}(): void"`,
+        '    returns: "void"',
+        ...(m.findings.length ? ['    findings:'] : []),
+        ...m.findings.map(code => [
+          `      - code: ${code}`,
+          '        severity: warning',
+          '        summary: The audited record disagrees with its source',
+        ].join('\n')),
+      ].join('\n')),
+    ].join('\n'));
+  const findingIssues = (res: { issues: { code: string; specId?: string; message: string; severity: string }[] }) =>
+    res.issues.filter(i => i.code === 'UNREALIZED_FINDING');
+
+  it('fires for a declared code missing from the file, naming code, method, contract, file and grade', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['INVOICE_TOTAL_MISMATCH', 'MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT('auditInvoice')}`);
+    proj.source('src/audit.ts', "export function auditInvoice(report: (code: string) => void): void {\n  report('INVOICE_TOTAL_MISMATCH');\n  report('TAX_ID_MISSING');\n}\n");
+    proj.activate();
+    try {
+      const found = findingIssues(validateSddTree());
+      expect(found).toHaveLength(1);
+      expect(found[0].severity).toBe('warning');
+      expect(found[0].specId).toBe('impl-audit-orch');
+      expect(found[0].message).toContain('"MISSING_TAX_ID"');
+      expect(found[0].message).toContain('"auditInvoice"');
+      expect(found[0].message).toContain('"iaudit-orch"');
+      expect(found[0].message).toContain('"src/audit.ts"');
+      expect(found[0].message).toContain('analysis grade: exact');
+    } finally { proj.cleanup(); }
+  });
+
+  it('stays quiet when every declared code appears as a string literal', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['INVOICE_TOTAL_MISMATCH', 'MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT('auditInvoice')}`);
+    proj.source('src/audit.ts', "export function auditInvoice(report: (code: string) => void): void {\n  report('INVOICE_TOTAL_MISMATCH');\n  report('MISSING_TAX_ID');\n}\n");
+    proj.activate();
+    try {
+      expect(findingIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('reads the method\'s own source file, not the implementation file', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT_AT('auditInvoice', 'src/commands/audit-invoice.ts')}`);
+    // the implementation file still reports the code; the method's own file does not
+    proj.source('src/audit.ts', "export const legacyCodes = ['MISSING_TAX_ID'];\n");
+    proj.source('src/commands/audit-invoice.ts', "export function auditInvoice(report: (code: string) => void): void {\n  report('TAX_ID_MISSING');\n}\n");
+    proj.activate();
+    try {
+      const found = findingIssues(validateSddTree());
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('"src/commands/audit-invoice.ts"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a declaration or a comment naming the code is not a string literal at exact grade', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT('auditInvoice')}`);
+    proj.source('src/audit.ts', "// reports MISSING_TAX_ID\nconst MISSING_TAX_ID = 42;\nexport function auditInvoice(report: (code: number) => void): void {\n  report(MISSING_TAX_ID);\n}\n");
+    proj.activate();
+    try {
+      expect(findingIssues(validateSddTree())).toHaveLength(1);
+    } finally { proj.cleanup(); }
+  });
+
+  it('skips methods at the off tier', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT('auditInvoice')}\n    conformance: off`);
+    proj.source('src/audit.ts', 'export function auditInvoice(): void {}\n');
+    proj.activate();
+    try {
+      expect(findingIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('skips files that were not analyzed — their own finding covers them', () => {
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT_AT('auditInvoice', 'src/commands/audit-invoice.ts')}`);
+    proj.source('src/audit.ts', "export const legacyCodes = ['MISSING_TAX_ID'];\n");
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(conformanceIssues(res).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      expect(findingIssues(res)).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('is completeness-classed: an error-severity UNREALIZED_FINDING downgrades to warning in a draft context, like its sibling UNREALIZED_METHOD', () => {
+    // NOTE: this is exercised directly against buildRuleContext/addIssue,
+    // rather than through a project `rules.sddRuleSeverity` override, because
+    // getRuleSeverity resolves an explicit project (or pack profile) severity
+    // override BEFORE the draft-context downgrade — "explicit project config
+    // wins over everything" — so an override to 'error' reports as 'error'
+    // even on a draft implementation, for every completeness-classed code
+    // (this is pre-existing behavior, also true of UNREALIZED_METHOD, and out
+    // of scope for this fix). What COMPLETENESS_RULES membership actually
+    // gates is a code raised at 'error' with no such override in play.
+    const stamp = { createdAt: '2026-07-12T10:00:00Z', updatedAt: '2026-07-12T10:00:00Z' };
+    const issues: ValidationIssue[] = [];
+    const ctx = buildRuleContext({
+      system: { schemaVersion: '1.0.0', name: 'S', vision: 'v', ...stamp } as never,
+      subsystems: [],
+      components: [],
+      interfaces: [],
+      implementations: [],
+      types: [],
+      projectType: 'backend',
+      issues,
+    });
+    ctx.addIssue('error', 'UNREALIZED_FINDING', 'declared finding code missing from the realized file', 'impl-audit-orch', true);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('warning');
+    expect(issues[0].draftContext).toBe(true);
+  });
+
+  it('is an implementations-depth expectation: gated away at interfaces design depth', async () => {
+    const { RulesConfigSchema } = await import('../../src/models/project.js');
+    const proj = createTempProject();
+    proj.component('audit-orch', 'Orchestrator');
+    auditContract(proj, [{ name: 'auditInvoice', findings: ['MISSING_TAX_ID'] }]);
+    proj.impl('audit-orch', `sourcePath: src/audit.ts\nmethods:\n${INTENT('auditInvoice')}`);
+    proj.source('src/audit.ts', 'export function auditInvoice(): void {}\n');
+    proj.activate();
+    try {
+      expect(findingIssues(validateSddTree())).toHaveLength(1);
+      invalidateSpecCache();
+      const gated = validateSddTree({ rules: RulesConfigSchema.parse({ designDepth: 'interfaces' }) });
+      expect(findingIssues(gated)).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+});
+
 describe('conformance degradation visibility', () => {
   it('fires CONFORMANCE_DEGRADED once when ts/js files were analyzed below exact grade', () => {
     // The dev environment always resolves the TypeScript compiler, so the
@@ -431,6 +772,40 @@ describe('buildCodeModel — analyzer grades', () => {
       const model = buildCodeModel([a, b], dir);
       expect(model.files).toHaveLength(1);
       expect(model.files[0].path).toBe('src/a.ts');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('analyzes each method\'s own source file next to the implementation\'s, deduplicated', () => {
+    const dir = mkTemp();
+    try {
+      fs.mkdirSync(path.join(dir, 'src', 'commands'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'src', 'cli.ts'), 'export function listTargets(): void {}\n');
+      fs.writeFileSync(path.join(dir, 'src', 'commands', 'lock.ts'), 'export function lockSpecs(): void {}\n');
+      const withMethodFiles = {
+        ...impl('src/cli.ts'),
+        methods: [
+          { name: 'lockSpecs', sourcePath: 'src/commands/lock.ts', narrative: [] },
+          { name: 'listTargets', sourcePath: 'src/cli.ts', narrative: [] },
+          { name: 'unlockSpecs', sourcePath: 'src/commands/unlock.ts', narrative: [] },
+        ],
+      };
+      const model = buildCodeModel([withMethodFiles], dir);
+      expect(model.files.map(f => f.path)).toEqual(['src/cli.ts', 'src/commands/lock.ts', 'src/commands/unlock.ts']);
+      const lock = model.files.find(f => f.path === 'src/commands/lock.ts')!;
+      expect(lock.status).toBe('analyzed');
+      expect(lock.declaredNames).toContain('lockSpecs');
+      expect(model.files.find(f => f.path === 'src/commands/unlock.ts')!.status).toBe('missing');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('analyzes method source files even when the implementation names no path of its own', () => {
+    const dir = mkTemp();
+    try {
+      fs.writeFileSync(path.join(dir, 'lock.ts'), 'export function lockSpecs(): void {}\n');
+      const pathless = { ...impl('lock.ts'), sourcePath: undefined, methods: [{ name: 'lockSpecs', sourcePath: 'lock.ts', narrative: [] }] };
+      const model = buildCodeModel([pathless], dir);
+      expect(model.files.map(f => f.path)).toEqual(['lock.ts']);
+      expect(model.files[0].analysisGrade).toBe('exact');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
