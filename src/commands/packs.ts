@@ -7,7 +7,7 @@ import type { PackScaffoldRequest, PackBuildResult, PackExtractionResult } from 
 import { logger } from '../utils/logger.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { downloadFile } from '../utils/download.js';
-import { isProjectInitialized, loadProjectConfig, saveProjectConfig } from '../config/loader.js';
+import { ProjectNotInitializedError } from '../utils/errors.js';
 import type { PackSelection } from '../models/project.js';
 import {
   discoverPacks,
@@ -19,9 +19,10 @@ import {
   globalPacksEnabled,
   PackScope,
 } from '../core/extensions.js';
-// The pack store reached through sdd_core's PUBLISHED surface (the core barrel is
-// core_portal's realization) rather than by importing the store adapter module —
-// same shape as every other cli_* adapter's hop into core.
+// The pack store and the project configuration reached through sdd_core's
+// PUBLISHED surface (the core barrel is core_portal's realization) rather than by
+// importing the store or configuration modules — same shape as every other cli_*
+// adapter's hop into core.
 import {
   packStoreDir,
   listInstalledPacks,
@@ -29,6 +30,13 @@ import {
   installPackFromDirectory,
   uninstallPack,
   type InstalledPack,
+  projectConfigExists,
+  loadProjectConfig,
+  registerPackRef,
+  deregisterPackRef,
+  upsertPackSelection,
+  removePackSelection,
+  markSelectionsBundled,
 } from '../core/index.js';
 
 // ---------------------------------------------------------------------------
@@ -131,7 +139,7 @@ export async function addPack(source: string, options: { global?: boolean } = {}
     return;
   }
 
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — run `wairon init` first, or use --global for a machine-wide install.');
     process.exitCode = 1;
     return;
@@ -145,11 +153,7 @@ export async function addPack(source: string, options: { global?: boolean } = {}
     fs.cpSync(abs, dest, { recursive: true, force: true });
   }
 
-  const config = loadProjectConfig();
-  const packs = config.extensions?.packs ?? [];
-  if (!packs.includes(relRef)) {
-    config.extensions = { packs: [...packs, relRef], useGlobalPacks: globalPacksEnabled(config) };
-    saveProjectConfig(config);
+  if (registerPackRef(relRef)) {
     logger.success(`Vendored pack "${probe.name}" into ${relRef} and registered it in .wai/project.yaml.`);
   } else {
     fs.cpSync(abs, dest, { recursive: true, force: true });
@@ -181,7 +185,7 @@ async function addPackFromArchive(source: string, options: { global?: boolean })
   if (options.global) {
     baseDir = globalPacksDir();
   } else {
-    if (!isProjectInitialized()) {
+    if (!projectConfigExists()) {
       logger.error('Not inside a wairon project — run `wairon init` first, or use --global for a machine-wide install.');
       process.exitCode = 1;
       return;
@@ -227,11 +231,7 @@ async function addPackFromArchive(source: string, options: { global?: boolean })
 
   // Register the DIRECTORY ref, exactly like vendoring registers a ref.
   const relRef = `.wai/packs/${name}`;
-  const config = loadProjectConfig();
-  const packs = config.extensions?.packs ?? [];
-  if (!packs.includes(relRef)) {
-    config.extensions = { packs: [...packs, relRef], useGlobalPacks: globalPacksEnabled(config) };
-    saveProjectConfig(config);
+  if (registerPackRef(relRef)) {
     logger.success(`Installed pack "${probe.name ?? name}" into ${relRef} and registered it in .wai/project.yaml.`);
   } else {
     logger.success(`Pack "${probe.name ?? name}" already registered — refreshed ${relRef} from ${path.basename(abs)}.`);
@@ -469,7 +469,7 @@ export async function usePack(
   spec: string,
   options: { source?: string; bundle?: boolean; pin?: boolean } = {},
 ): Promise<void> {
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — run `wairon init` first.');
     process.exitCode = 1;
     return;
@@ -486,7 +486,7 @@ export async function usePack(
 
   const recorded = options.source ?? resolved.origin;
   const selection = buildSelection(resolved, { ...options, pinVersion: version !== undefined });
-  const reselected = writeSelection(selection);
+  const reselected = upsertPackSelection(selection);
 
   logger.success(`${reselected ? 'Re-selected' : 'Selected'} pack "${resolved.name}"${selection.version ? ` v${selection.version}` : ' (latest installed)'} for this project.`);
   if (options.bundle) {
@@ -520,19 +520,6 @@ function buildSelection(
   return selection;
 }
 
-/** Record the selection, replacing any existing one for the same pack. Returns whether it replaced. */
-function writeSelection(selection: PackSelection): boolean {
-  const config = loadProjectConfig();
-  const existing = config.extensions?.packs ?? [];
-  const without = existing.filter((e) => typeof e === 'string' || e.name !== selection.name);
-  config.extensions = {
-    packs: [...without, selection],
-    useGlobalPacks: globalPacksEnabled(config),
-  };
-  saveProjectConfig(config);
-  return without.length !== existing.length;
-}
-
 /** A selection with neither a fetchable source nor a bundle cannot be resolved by CI or a clone. */
 function warnIfUnobtainable(selection: PackSelection, recorded: string | undefined, bundled: boolean): void {
   if (selection.source !== undefined || bundled) return;
@@ -563,13 +550,15 @@ function warnIfUnobtainable(selection: PackSelection, recorded: string | undefin
  * only place the network is touched.
  */
 export async function syncPacks(): Promise<void> {
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — run `wairon init` first.');
     process.exitCode = 1;
     return;
   }
   const root = getProjectRoot();
-  const selections = (loadProjectConfig().extensions?.packs ?? [])
+  const config = loadProjectConfig();
+  if (!config) throw new ProjectNotInitializedError();
+  const selections = (config.extensions?.packs ?? [])
     .filter((e): e is PackSelection => typeof e !== 'string');
 
   // Already resolvable (installed or bundled) selections are left alone.
@@ -660,15 +649,15 @@ function writeBundle(root: string, resolved: InstalledPack): string {
 }
 
 export async function bundlePack(name?: string, options: { all?: boolean } = {}): Promise<void> {
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — run `wairon init` first.');
     process.exitCode = 1;
     return;
   }
   const root = getProjectRoot();
   const config = loadProjectConfig();
-  const entries = config.extensions?.packs ?? [];
-  const selections = entries.filter((e): e is PackSelection => typeof e !== 'string');
+  if (!config) throw new ProjectNotInitializedError();
+  const selections = (config.extensions?.packs ?? []).filter((e): e is PackSelection => typeof e !== 'string');
 
   const targets = bundleTargets(selections, name, options.all === true);
   if (targets.length === 0) {
@@ -680,6 +669,7 @@ export async function bundlePack(name?: string, options: { all?: boolean } = {})
   }
 
   const bundled: string[] = [];
+  const bundledSelections: PackSelection[] = [];
   for (const selection of targets) {
     const resolved = resolveInstalledPack(selection.name, selection.version);
     if (!resolved) {
@@ -691,36 +681,29 @@ export async function bundlePack(name?: string, options: { all?: boolean } = {})
 
     // Pin what was actually committed, and record the bundle so resolution and
     // a later `pack bundle` (no args) both know this pack travels with the repo.
-    selection.version = resolved.version;
-    selection.bundle = true;
+    bundledSelections.push({ name: selection.name, version: resolved.version });
     bundled.push(`${resolved.name}@${resolved.version}`);
     console.log(`  ${chalk.green('+')} ${chalk.dim(path.relative(root, dest).replace(/\\/g, '/'))}`);
   }
 
   if (bundled.length === 0) return;
-  config.extensions = { packs: entries, useGlobalPacks: globalPacksEnabled(config) };
-  saveProjectConfig(config);
+  markSelectionsBundled(bundledSelections);
   logger.success(`Bundled ${bundled.length} pack(s) into .wai/packs/: ${bundled.join(', ')}.`);
   logger.info('Commit .wai/ — a clone and CI now apply this doctrine with no pack store and no network.');
 }
 
 /** `wairon pack unuse <name>` — deselect a pack for this project (it stays installed). */
 export async function unusePack(name: string): Promise<void> {
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — run `wairon init` first.');
     process.exitCode = 1;
     return;
   }
-  const config = loadProjectConfig();
-  const existing = config.extensions?.packs ?? [];
-  const remaining = existing.filter((e) => typeof e === 'string' || e.name !== name);
-  if (remaining.length === existing.length) {
+  if (!removePackSelection(name)) {
     logger.error(`This project does not select a pack named "${name}".`);
     process.exitCode = 1;
     return;
   }
-  config.extensions = { packs: remaining, useGlobalPacks: globalPacksEnabled(config) };
-  saveProjectConfig(config);
   logger.success(`Deselected pack "${name}" — it remains installed in the store.`);
   logger.info('Its profiles, rules, and assertions no longer apply to this project; re-validate to see the change.');
 }
@@ -733,8 +716,9 @@ function parseNameAtVersion(spec: string): { name: string; version?: string } {
 }
 
 export async function listPacks(): Promise<void> {
-  const inProject = isProjectInitialized();
-  const config = inProject ? loadProjectConfig() : undefined;
+  const inProject = projectConfigExists();
+  const config = inProject ? loadProjectConfig() : null;
+  if (inProject && !config) throw new ProjectNotInitializedError();
   const useGlobal = globalPacksEnabled(config ?? {});
   const root = inProject ? getProjectRoot() : process.cwd();
 
@@ -791,26 +775,22 @@ export async function removePack(name: string, options: { global?: boolean } = {
     return;
   }
 
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — use --global to remove a machine-wide pack.');
     process.exitCode = 1;
     return;
   }
   const root = getProjectRoot();
   const config = loadProjectConfig();
-  const packs = config.extensions?.packs ?? [];
-  for (const entry of packs) {
+  if (!config) throw new ProjectNotInitializedError();
+  for (const entry of config.extensions?.packs ?? []) {
     // `pack remove` is the LEGACY vendored-pack command; a by-name selection is
     // dropped with `pack unuse` (which leaves the pack installed), so skip those.
     if (typeof entry !== 'string') continue;
     const ref = entry;
     const probe = probePack(ref, root, 'project');
     if (probe.name === name || ref === name || path.basename(ref) === name) {
-      config.extensions = {
-        packs: packs.filter(p => p !== ref),
-        useGlobalPacks: globalPacksEnabled(config),
-      };
-      saveProjectConfig(config);
+      deregisterPackRef(ref);
       // Delete vendored files, but never paths outside .wai/packs (the ref
       // may point at a location the user owns).
       const resolved = path.resolve(root, ref);

@@ -6,9 +6,10 @@ import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import {
   isProjectInitialized,
-  loadProjectConfig,
   AI_PATHS,
 } from '../config/loader.js';
+import { ProjectNotInitializedError } from '../utils/errors.js';
+import { loadProjectConfig } from './subsystem.js';
 import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { backfillChainedSubprojectConfigs } from '../core/provision.js';
 import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
@@ -113,7 +114,8 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   let targets: string[] = [];
   let configOk = false;
   try {
-    loadProjectConfig();
+    // A configuration gone since the check above reads null; report it as the loader's error did.
+    if (!loadProjectConfig()) throw new ProjectNotInitializedError();
     configOk = true;
     line(tally, 'ok', '.wai/project.yaml is valid');
   } catch (e) {
@@ -154,6 +156,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     try {
       const { validateSddTree } = require('../core/validation.js') as typeof import('../core/validation.js');
       const cfg = loadProjectConfig();
+      if (!cfg) throw new ProjectNotInitializedError();
       const result = validateSddTree(cfg.rules, cfg.projectType);
       const errs = result.issues.filter((i) => i.severity === 'error').length;
       const warns = result.issues.filter((i) => i.severity === 'warning').length;
@@ -343,7 +346,7 @@ async function applyFixes(): Promise<void> {
 
   let targets: string[];
   try {
-    loadProjectConfig();
+    if (!loadProjectConfig()) throw new ProjectNotInitializedError();
     targets = activeTargetTypes();
   } catch (e) {
     logger.warn(`--fix skipped: .wai/project.yaml is invalid (${e instanceof Error ? e.message : String(e)}). Fix it first.`);

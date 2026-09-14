@@ -16,10 +16,14 @@ import {
 } from '../../src/server/operations.js';
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
+import { registerLocalDevProject } from '../../src/server/projects.js';
+import { provisionProject } from '../../src/core/provision.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { mintUserToken, allow, seedUnit, createPlacedProject } from './helpers.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
+import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type {
   ApiKeyRecord,
   HostConfig,
@@ -365,11 +369,14 @@ describe('operations orchestrator (sdd_host)', () => {
     expect(getHealthReport(cfg, MASTER).status).toBe('unhealthy');
   });
 
-  /** Write a profileSelection into a project's raw .wai/project.yaml. */
+  /** Write a minimal, schema-valid .wai/project.yaml carrying a profileSelection. */
   function writeProfileSelection(root: string, requiredPackNames: string[], profileIds: string[]): void {
     const dir = path.join(root, '.wai');
     fs.mkdirSync(dir, { recursive: true });
     const yaml =
+      'name: fixture-project\n' +
+      "createdAt: '2026-01-01T00:00:00.000Z'\n" +
+      "updatedAt: '2026-01-01T00:00:00.000Z'\n" +
       'profileSelection:\n' +
       `  requiredPackNames: [${requiredPackNames.map((n) => JSON.stringify(n)).join(', ')}]\n` +
       `  profileIds: [${profileIds.map((n) => JSON.stringify(n)).join(', ')}]\n` +
@@ -412,6 +419,45 @@ describe('operations orchestrator (sdd_host)', () => {
     expect(report.checks.find((c) => c.id === 'pack-shadowing')!.status).toBe('pass');
     expect(report.checks.find((c) => c.id === 'missing-pack-references')!.status).toBe('pass');
     expect(report.status).toBe('ok');
+  });
+
+  it("getHealthReport: a by-name pack selection keeps the project's references, its profile selection included", () => {
+    // A selection is an object, not a path. Deriving a file stem from it threw, and
+    // the catch dropped every reference the project declares — its profile ids too.
+    const rec = createProject(cfg, MASTER, 'proj-sel', seedUnit(dataDir, 'unit-proj-sel').id);
+    const file = path.join(rec.rootPath, '.wai', 'project.yaml');
+    writeYamlFile(file, {
+      ...(readYamlFile(file) as Record<string, unknown>),
+      extensions: { packs: [{ name: 'ghost-selection' }], useGlobalPacks: false },
+      profileSelection: { profileIds: ['prof-sel'], requiredPackNames: [], selectedAt: '' },
+    });
+
+    const missing = getHealthReport(cfg, MASTER).checks.find((c) => c.id === 'missing-pack-references')!;
+    expect(missing.status).toBe('fail');
+    expect(missing.message).toMatch(/proj-sel/);
+    expect(missing.message).toMatch(/ghost-selection/);
+    expect(missing.message).toMatch(/prof-sel/);
+  });
+
+  it('getHealthReport names a project by its record id, even when its root folder is named otherwise', () => {
+    // `wairon dev` registers the developer's own folder, whose basename is not the id.
+    const devRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-operations-devroot-'));
+    try {
+      fs.mkdirSync(path.join(devRoot, '.wai', 'specs'), { recursive: true });
+      runWithProjectRoot(devRoot, () => provisionProject('DevSys'));
+      const file = path.join(devRoot, '.wai', 'project.yaml');
+      writeYamlFile(file, {
+        ...(readYamlFile(file) as Record<string, unknown>),
+        extensions: { packs: ['.wai/packs/ghost-dev.yaml'], useGlobalPacks: false },
+      });
+      registerLocalDevProject(dataDir, 'local', devRoot);
+
+      const missing = getHealthReport(cfg, MASTER).checks.find((c) => c.id === 'missing-pack-references')!;
+      expect(missing.status).toBe('fail');
+      expect(missing.message).toMatch(/local → missing pack\(s\): ghost-dev/);
+    } finally {
+      fs.rmSync(devRoot, { recursive: true, force: true });
+    }
   });
 
   it('getUsage: returns the instance snapshot with the active project count', () => {

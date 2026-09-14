@@ -1,0 +1,18 @@
+kind: value-object
+id: chained_subproject_dir
+name: ChainedSubprojectDir
+description: >-
+  One direct chained subproject of a project: its resolved directory and the subsystem id that
+  mounts it.
+fields:
+  - name: dir
+    type: string
+    description: The subproject's resolved directory
+    optional: false
+  - name: subsystemId
+    type: string
+    description: The id of the subsystem that mounts it
+    optional: false
+methods: []
+createdAt: '2026-09-13T22:56:07.350Z'
+updatedAt: '2026-09-13T22:56:07.361Z'

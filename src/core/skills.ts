@@ -2,8 +2,11 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { ensureDir, fromProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
+import type { ProjectConfig } from '../models/project.js';
+import { activeTargetTypes as configActiveTargetTypes } from '../models/project.js';
 import { loadProjectExtensions as loadCoreExtensions, LoadedPackSkill } from './extensions.js';
 import { buildServerInstructions as composeServerInstructions } from './instructions.js';
+import { loadProjectConfig as loadCoreProjectConfig } from './index.js';
 
 // ---------------------------------------------------------------------------
 // SDD skills export
@@ -26,6 +29,18 @@ const SKILL_NAMES = ['sdd-architect', 'sdd-narrative', 'sdd-auditor', 'sdd-imple
  */
 export function loadProjectExtensions() {
   return loadCoreExtensions();
+}
+
+/**
+ * skills_core_adapter: forward to the core surface's project configuration
+ * read — null when the project has none. This file is itself re-exported BY
+ * index.ts's barrel (`export * from './skills.js'`), so this import is a real
+ * cycle — safe the same way the skills.ts/instructions.ts cycle already is:
+ * the binding is only dereferenced inside a function body at call time, by
+ * which point the barrel has finished initializing.
+ */
+export function loadProjectConfig(): ProjectConfig | null {
+  return loadCoreProjectConfig();
 }
 
 /**
@@ -241,12 +256,11 @@ export function checkSkillFreshness(type: string): SkillFreshness {
 }
 
 export function activeTargetTypes(): string[] {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { loadProjectConfig } = require('../config/loader.js') as typeof import('../config/loader.js');
+  // An uninitialized project (or one whose configuration cannot be read) has no
+  // enabled targets — exportSddSkills then writes nothing, rather than throwing.
   const config = loadProjectConfig();
-  return config.targets
-    .filter((t: { enabled?: boolean }) => !('enabled' in t) || t.enabled)
-    .map((t: string | { type: string }) => (typeof t === 'string' ? t : t.type));
+  if (!config) return [];
+  return configActiveTargetTypes(config);
 }
 
 // ---------------------------------------------------------------------------

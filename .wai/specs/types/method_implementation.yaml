@@ -1,0 +1,66 @@
+kind: value-object
+id: method_implementation
+name: MethodImplementation
+description: >-
+  One L4 method realization: the unit of the implementation_spec methods list. name matches an L3
+  contract method; sourcePath names the method's own source file when it is not the
+  implementation's; narrative is the flat numbered L5 step list (see narrative_step); detail and
+  conformance override the spec-level dials for this method; intent is the prose substitute at
+  detail: intent; symbol binds the code-level realizing name when it legitimately differs from the
+  contract name; ext carries opaque pack/tool data preserved verbatim.
+fields:
+  - name: name
+    type: string
+    description: Contract method this realizes; must match a method on the L3 interface
+    optional: false
+    key: primary
+  - name: narrative
+    type: NarrativeStep[]
+    description: >-
+      The L5 narrative: a flat numbered step list whose order mimics the code lines; flow steps jump
+      by step number. Empty when the method is specified by intent.
+    optional: true
+  - name: detail
+    type: string
+    description: >-
+      Narrative detail for this method: full | calls-only | intent (overrides the spec-level
+      default)
+    optional: true
+  - name: intent
+    type: string
+    description: >-
+      Behavioural prose, the narrative substitute at detail: intent; must be non-trivial and state
+      failure behaviour here or in the contract's guarantees (INTENT_FLOOR)
+    optional: true
+  - name: conformance
+    type: string
+    description: 'Conformance tier for this method: declared | anchored | off (overrides the spec-level default)'
+    optional: true
+  - name: symbol
+    type: string
+    description: >-
+      Code-level name realizing this contract method when it legitimately differs from the contract
+      name, e.g. a store's put realized by saveSnapshot
+    optional: true
+  - name: ext
+    type: object
+    description: Opaque pack/tool extension data, preserved verbatim
+    optional: true
+  - name: sourcePath
+    type: string
+    description: >-
+      Source file realizing this method when it is not the implementation's sourcePath, such as a
+      command whose body lives in its own file. Relative to the root of the project holding the spec
+      (a chained subproject's own root). The code model analyzes it; structural, call, dependency,
+      integration and hidden-state conformance and the narrative-detail lint read the method against
+      it; agent write fences include it.
+    optional: true
+methods:
+  - name: sourceFile
+    signature: 'sourceFile(implementationSourcePath?: string): string | undefined'
+    returns: string | undefined
+    description: >-
+      The file this method is realized in: its own sourcePath, else the implementation's sourcePath
+      passed in, else none.
+createdAt: '2026-09-13T16:59:08.774Z'
+updatedAt: '2026-09-13T21:16:51.959Z'

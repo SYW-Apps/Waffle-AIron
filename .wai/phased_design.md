@@ -257,3 +257,104 @@ Robbe on the Arbiter/Projector proposal: not convinced for first-class ("Project
 - [x] docs/standards/architecture.md §8: "The four registered Specialist shapes (variants)" table + promotion criterion.
 - [x] sdd_validate_tree 0 errors / 0 warnings (UNKNOWN_VARIANT/VARIANT_BASE_MISMATCH clean).
 - NOTE: statehash re-dirtied by the 14 variant tags → wairon lock before/with the merge.
+
+## Chained subsystems — stage 2a-0: project configuration as held state (ACTIVE) — decisions from Robbe 2026-09-13, branch feat/stage2a0-config-repository
+Wairon's own tree read and wrote `.wai/project.yaml` directly from 10 components in 4 subsystems (76 code sites in 26 files) with no Store — its own "no persistence shortcuts" rule broken. It ships as its own behaviour-neutral PR before stage 2a; the parked 2a draft (6ad0f67 on feat/stage2a-identity-exports) builds on it. Design record: `docs/design/chained-subsystems/decisions.md` § Wairon modeling decisions.
+- [x] L2 (approved 2026-09-13): `project_config_repository` (Repository) owning `project_config_store` (Store, read-through), `project_config_registry` (Registry), `project_config_index` (Index) and `project_config_fs_adapter` (Adapter)
+- [x] L3 (approved 2026-09-13): store, registry, index and facade methods, sized to every current reader and writer (map in `docs/design/chained-subsystems/stage-2a0-config-map.md`); `core_portal` reads, `core_orchestrator` writes, plus the sdd_cli, sdd_host, sdd_skills and sdd_validator adapters. Decided 2026-09-13:
+  - the Store round-trips keys the schema does not know — no write erases data;
+  - the specs folder (`paths.specsDir`) is resolved once at binding through `project_config_index.specsDir()` and handed to the spec repository, which never reads configuration itself.
+- [x] L3 refinement (approved 2026-09-13):
+  - the registry's pack writes mirror today's code (config map § Registry write semantics): `registerPackRef`/`deregisterPackRef` for path strings; `upsertPackSelection`/`removePackSelection` for selections, returning booleans, with upsert moving a re-selected pack last; `markSelectionsBundled` and `pinGlobalPacksAsSelections` as single writes; every pack write records `useGlobalPacks`; `setGlobalPacksEnabled` dropped;
+  - `icli_core_adapter.projectConfigExists` for the "is this a project" guards;
+  - `icli_runner.runExecutionShow` / `runExecutionSetTier` — the execution-tier CLI had no spec.
+- [x] Spec text corrected: `tree_archive_manifest` (the project name comes from L0); `spec_file_store` (its specs folder is fixed at binding).
+- [x] Migrate every spec reader and writer:
+  - [x] `core_orchestrator` (provision, chained scaffold, externalize)
+  - [x] consumers agent: `extension_orchestrator`, `agent_resolver`, `cli_packs_adapter`, `cli_runner`, `cli_core_adapter`, `cli_validator_adapter`, `cli_mcp_adapter`, `skills_exporter`, `instructions_specialist`, `spec_validator` — on the refined registry; `pack use`/`unuse`/`bundle` given calls-only narratives so their writes are in the call graph; sdd_cli, sdd_core, sdd_skills, sdd_validator at 0 errors (remaining warnings name code not yet migrated)
+  - [x] sdd_host: `pack_registry` (reduced to pack storage), `pack_orchestrator`, `project_policy_orchestrator`, `operations_orchestrator` — the whole tree validates with 0 errors.
+    - [x] `ProfileApplication.adoptedPackRef`, so orchestrators never compose the storage path
+    - [x] exposure-policy administration split into `exposure_policy_orchestrator` (approved 2026-09-13 — `operations_orchestrator` had crossed GOD_COMPONENT with the config edge; now 9 dependencies)
+    - [x] `readProjectReferences` left `pack_registry`: `project_config` gains `declaredPackNames()` / `declaredProfileIds()`, and the health report builds the reference in a local step (decided 2026-09-13)
+  - stay as they are: `tree_archive_adapter.hasSpecTree` (a layout check of the import destination; its Adapter depends only on sdk_portal) and internalize deleting a child's `.wai` (a project removal); `web_project_orchestrator` and `web_portal` only forward
+- [x] Code (2026-09-13, through sdd-delegate owner briefs):
+  - [x] wave 1, sdd_core owner: the Repository, the core surface, sdd_core's callers (49cc30e, af7d4d2, 90fda87, 132d23c), then readField (e3a5b97) and provisionProject creating before the L0 (e61a3fb)
+  - [x] wave 2, integrated: CLI (1263b28…850043b), skills/validator/MCP readers (d76d0e1…13b0ae8), hosted (8730806 health-references fix, 0447b2d…d3d6622); full suite 2469 passing
+  - [x] follow-ups: MCP `sdd_validate_tree` keeps its error on a missing configuration, and an anchored `loadProjectConfig` forward (56de98a, 0029e80); `wairon init` keeps an existing configuration (spec 264c963, code fd9306a + its summary line, decided 2026-09-13)
+  - [x] wave 3: loader.ts `loadProjectConfig`/`saveProjectConfig` and the transitional write deleted (b28e36a); the public entry keeps a throwing `loadProjectConfig` and drops `saveProjectConfig` (edc3b06; both decided 2026-09-13); CHANGELOG (0606e8f)
+  - [x] gates: typecheck, build, 162 test files / 2474 tests, e2e 21, `validate --ci`, whole tree 0 errors / 0 warnings
+  - [ ] PR to dev; the maintainer runs `wairon lock` after merge
+
+## Wairon friction fixes (before stage 2a) — decided by Robbe 2026-09-13
+Most of the friction log (F1–F28) is resolved, not deferred: the tool must be clear and truthful, with no unneeded silence or confusion. Every pull request is spec-first, and all land before stage 2a. Order, decided with the rule model's shape (B′): schema PR → rule model PR → PR A → PR B → PR C; track D follows. Proposals, examples and every decision: `docs/design/chained-subsystems/friction-fixes-proposals.md` and `decisions.md`.
+
+### Schema PR — method-level source files and findings (ACTIVE, branch feat/method-source-and-findings, stacked on PR #70)
+- [x] L3 (approved 2026-09-13, with both refinements): `method_implementation` (types `implementation_spec.methods`) with a per-method `sourcePath` (B3, moved up from PR B); `narrative_step` (fields only); `finding_declaration` and `findings` on `method_signature`; the MCP write tools express both fields
+- [x] L4/L5 (approved 2026-09-13; plus the pure type methods `implementation_spec.sourceFiles()` and `method_implementation.sourceFile()` every consumer shares): the consumers of a method's source file described — code model paths, structural, call, dependency, integration and hidden-state conformance, narrative detail, agent write fences, status, chained path re-expression — and `UNREALIZED_FINDING` (declared codes found as string literals in the method's source file). The rule behaviour stays prose in `spec_validator_impl` step 20 until the rule model PR: the one change made before the rules have specs
+- [x] Wairon's own tree (after the code lands and the MCP server is rebuilt): a method names another file only when its own body lives there. A scan found 25 — `cli_runner`'s 20 command methods (`src/commands/*.ts`) and `core_orchestrator`'s 5 provision methods (`src/core/provision.ts`) — and whatever linking them surfaces is fixed. Not linked, with reasons: Portal and Adapter methods that forward by import or re-export (144; their realization is the forwarding); methods whose body sits in a collaborator's file (state hash, lock file, diagram); the shared `utils/fs.ts` and `utils/yaml.ts` plumbing (imported by 47 and 15 files — claiming it for one Store would be untrue); `approval.ts`, `config/loader.ts` and `diagram-export.ts`, whose code belongs to no modelled method (track D)
+- [x] Fix what linking surfaced (approved 2026-09-14; `validate --ci` fails on warnings): `cli_core_adapter` gains `resolveAgentTopology`, `ensureProjectInitialized`, `listDirectChainedSubprojects`, `defaultPackSelections` (through `core_portal` to `core_orchestrator` / `extension_orchestrator`); `project_config.activeTargetTypes()`; `init` bootstraps L0 through core and stops writing its own architect agent file; `list`, `show` and `generate` resolve the topology through the adapter; `generate`'s cascade is narrated and its redundant cache invalidation removed; the MCP install action is named and bound by `symbol`
+- [x] Code; tests proven by revert; gates (typecheck, 2564 tests, e2e 21, validate --ci); CHANGELOG; PR #71, stacked on #70 (rebase onto dev after #70 merges; the maintainer runs `wairon lock` after merge)
+
+### Rule model PR — the 43 validator rules designed (NEXT; A13, shape B′ chosen 2026-09-13)
+- [ ] L2: eight `arbiter` families — integrity, narrative, intrinsic, doctrine, extension, wiring, conformance, heuristic — plus `narrative_graph_projector`; `rule_registry` depends on the eight
+- [ ] L3: one method per rule with its `findings`; the `rule_context` queries and type methods that replace shared helpers; `specScopedRules` on rule_index and rule_repository
+- [ ] L4/L5: full narratives for all 43 rules; one registration step per rule in run order; `validateSddTree` gathers the round-trip and known-code inputs, then loops over the rule sequence
+- [ ] Code: one rule per file in family folders (`symbol: check`), helpers moved to their homes, `SDD_RULES` into the rule repository, the gather fix — no behaviour change, existing rule tests unchanged; `UNREALIZED_FINDING`; a test comparing the code registry with the spec catalog (families, codes, severities, scope)
+
+### PR A — truthful authoring tools (PARKED at 9cd939c on feat/truthful-authoring-tools; rebases onto the rule model PR)
+- [x] L1/L2 (approved 2026-09-13): new subsystem `sdd_authoring` (authoring_portal, authoring_orchestrator, authoring_core_adapter, authoring_validator_adapter); `mcp_authoring_adapter` in sdd_mcp
+- [ ] L3 (authored 2026-09-13, awaiting approval): `writeSpec`/`updateSpec`/`deleteSpec` returning a structured `SpecChangeReport`; types `spec_delta` (`applyTo`), `spec_delta_application`, `spec_change`, `spec_change_report`, `candidate_verdict`, `candidate_options`, `doctor_options`; `validateComponentCandidate` on validator_portal and spec_validator; core, spec loader, registry and index type/delete methods; mcp_portal `sdd_update_spec`, `sdd_get_spec` (methods filter), `sdd_delete_spec`, `sdd_add_type`, the `sdd_set_*` tools and `status` on the create tools; `cli_runner.runDoctor`. On rebase, re-add `narrative_step.foreignFields(): string[]` (removed from the schema PR; its per-type field table is A3's)
+- [ ] L4/L5 narratives
+- [ ] Code:
+  - A1 a write that changes nothing writes nothing and says so; a key with no effect at its depth refuses the write
+  - A2 `[]` and `unset` at every level
+  - A3 a type change rebuilds the step, keeping description and label
+  - A4 `FOREIGN_STEP_FIELD` (warning) with `doctor --fix`, and the 7 stale steps in wairon's tree fixed
+  - A5 delta order documented; a label retargets an existing jump
+  - A6 step delete guards
+  - A7 arrays inside elements merge by identity
+  - A8 `T | null` param types documented; the migration checked against unions
+  - A9 `status` on the create tools; no silent demotion
+  - A10 `sdd_get_spec` methods filter
+  - A11 nested tool input strict
+  - A12 `UNUSED_TYPE` counts type method signatures — a spec change to `wiring_rules.unusedDetection` first
+  - A4 likewise starts as a spec change to `narrative_rules.narrativeFlow`
+  - structured JSON results
+
+### PR B — conformance that never goes quiet (NEXT)
+- [ ] B1 call steps realized only by calls resolving to the target's file (`CALL_ORIGIN_UNRESOLVED` when unresolvable)
+- [ ] B2 `METHOD_BODY_NOT_FOUND` (B3 moved to the schema PR)
+- [ ] B4 `UNDECLARED_COLOCATED_CALL` (unit-level); B5 intent `calls`, reach-everything fallback removed
+- [ ] B6 `sourcePath`/`symbol` on types; B7 site-precise lint allows, existing allows rewritten
+- [ ] B8 opt-in source roots with `UNCLAIMED_SOURCE_FILE`
+
+### PR C — delegation (NEXT)
+- [ ] C1 `sdd_validate_tree` on a worktree root; C2 tests to revisit on a contract change; C3 typecheck tests in CI
+- [ ] C4 brief conventions (commits, worktrees, fences); C5 `sdd_move_methods`
+- [ ] C6 every unmodelled MCP tool and validator contract modelled
+
+### Track D — spec coverage (after PR C; does not block stage 2a) — decided by Robbe 2026-09-13
+148 of 234 source files are named by no spec, none left out for a recorded reason (audit in `decisions.md`). B8's `UNCLAIMED_SOURCE_FILE` makes the list visible and stops it growing; B3 and B6 link the files already designed; each undesigned area is then designed spec-first, one at a time.
+- [ ] Agent-file exporters (Claude, Gemini, custom) behind `generate`
+- [ ] Realtime hub and WebSocket transport
+- [ ] Permission-model migration, version stamp, demo seed
+- [ ] Domains (detection, scan, add/remove) and the aliases command
+- [ ] AI guide files and project context
+- [ ] Execution profiles and budgets (with C6)
+- [ ] User config and update channels, download, logger, errors, HTTP helpers
+- [ ] The React app (`web/src`), with the generated canvas engine claimed under `conformance: off` — or a decision, recorded in the standard with its reason, that UI is outside SDD
+
+## Doctrine and authoring-UX track (NEXT, after chained-subsystems stage 2) — decisions from Robbe 2026-09-13
+- [x] **Authoring friction left over from 2a-0:** moved into the friction-fix programme (PR A–C) above.
+- [ ] **Specialist is the last resort:**
+  - add a `rationale` field on component specs, and `SPECIALIST_WITHOUT_RATIONALE` (warning) with rules-matrix fixtures;
+  - state the rule in the architecture standard, the sdd-architect skill template and agent briefs, with the decomposition checklist;
+  - audit wairon's own 19 Specialists: decompose each into real blocks where one fits, or write its rationale.
+- [ ] **Repository-first held state:**
+  - adding a Repository scaffolds its Store (durability required), and the result names both;
+  - members are added with `ownedBy: <repository>`;
+  - a Store outside a Repository must declare `standalone: { reason }` when created, or the write is refused — this replaces `UNOWNED_STORE` + `lint.allow`;
+  - the sdd-architect recipe becomes Repository-first;
+  - migrate existing standalone Stores to the declaration.
+- [ ] **Index → Index:** a derived-Index edge carries a written rationale (to verify with this track).
+- [ ] **Later:** conformance for type methods (optional `sourcePath`/`symbol` on type specs).

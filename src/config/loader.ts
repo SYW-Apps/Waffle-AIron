@@ -2,16 +2,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { pathExists, getProjectRoot } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
-import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
+import { ProjectNotInitializedError } from '../utils/errors.js';
 import {
-  ProjectConfig,
-  ProjectConfigSchema,
   Registry,
   createEmptyRegistry,
   TopologyConfig,
   TopologyConfigSchema,
   createEmptyTopologyConfig,
 } from '../models/index.js';
+import { projectConfigRepository, projectConfigRepositoryAt } from './project-config.js';
 
 // ---------------------------------------------------------------------------
 // Paths within the .wai/ directory
@@ -53,20 +52,10 @@ export function aiPathsAt(rootDir: string): WaiPaths {
     const base = !fs.existsSync(waiPath) && fs.existsSync(waironPath) ? waironPath : waiPath;
     return path.join(base, ...segments);
   };
-  const specsDir = (): string => {
-    try {
-      const projConfig = aiDirAt('project.yaml');
-      if (pathExists(projConfig)) {
-        const raw = readYamlFile(projConfig) as any;
-        if (raw && raw.paths && raw.paths.specsDir) {
-          return path.resolve(resolvedRoot, raw.paths.specsDir);
-        }
-      }
-    } catch {
-      // ignore and fallback
-    }
-    return aiDirAt('specs');
-  };
+  // Where the specs live is configuration (`paths.specsDir`, else .wai/specs), so it
+  // is resolved through the project config Repository bound to THIS root. Its index
+  // never throws, and still reads the folder from a configuration that fails the schema.
+  const specsDir = (): string => projectConfigRepositoryAt(resolvedRoot).specsDir();
   return {
     root: () => aiDirAt(),
     projectConfig: () => aiDirAt('project.yaml'),
@@ -114,14 +103,15 @@ export const AI_PATHS: WaiPaths = {
 };
 
 // ---------------------------------------------------------------------------
-// Project config
+// Project config — held by the project config Repository (config/project-config.ts)
 // ---------------------------------------------------------------------------
 
 /**
- * Check whether the current directory has been initialized as a wairon project.
+ * Whether the current project is an initialized wairon project, meaning it has a
+ * project configuration.
  */
 export function isProjectInitialized(): boolean {
-  return pathExists(AI_PATHS.root()) && pathExists(AI_PATHS.projectConfig());
+  return projectConfigRepository.exists();
 }
 
 /**
@@ -131,26 +121,6 @@ export function assertProjectInitialized(): void {
   if (!isProjectInitialized()) {
     throw new ProjectNotInitializedError();
   }
-}
-
-/**
- * Load and validate the project config from .wai/project.yaml.
- */
-export function loadProjectConfig(): ProjectConfig {
-  assertProjectInitialized();
-  const raw = readYamlFile(AI_PATHS.projectConfig());
-  try {
-    return ProjectConfigSchema.parse(raw);
-  } catch (e: unknown) {
-    throw new WaironError(`Invalid .wai/project.yaml: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
-/**
- * Write the project config to .wai/project.yaml.
- */
-export function saveProjectConfig(config: ProjectConfig): void {
-  writeYamlFile(AI_PATHS.projectConfig(), config);
 }
 
 // ---------------------------------------------------------------------------

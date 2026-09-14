@@ -125,11 +125,6 @@ methods:
     signature: 'defaultPackSelections(): PackSelection[]'
     returns: PackSelection[]
     params: []
-    invokedBy:
-      kind: sibling-subsystem
-      caller: >-
-        The `wairon init` scaffold (sdd_cli, commands/init.ts) seeds a new project config's pack
-        selections over sdd_core's published barrel surface rather than a modeled component edge.
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-08-11T17:06:48.997Z'
+updatedAt: '2026-09-13T22:58:44.463Z'

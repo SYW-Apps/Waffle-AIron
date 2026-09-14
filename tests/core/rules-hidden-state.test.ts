@@ -170,4 +170,20 @@ describe('HIDDEN_STATE — mutable module state in logic-only files', () => {
       expect(byCode(validateSddTree(), 'HIDDEN_STATE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
+
+  it('a method\'s own source file counts as a file of its logic component', () => {
+    const proj = createTempProject();
+    proj.component('flow-orch', 'Orchestrator');
+    proj.contract('flow-orch', ['runFlow']);
+    proj.impl('flow-orch', `sourcePath: src/orch.ts\nmethods:\n${INTENT('runFlow')}\n    sourcePath: src/commands/run-flow.ts`);
+    proj.source('src/orch.ts', "export const flowName = 'session-flow';\n");
+    proj.source('src/commands/run-flow.ts', STATEFUL_ORCH);
+    proj.activate();
+    try {
+      const found = byCode(validateSddTree(), 'HIDDEN_STATE');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('"src/commands/run-flow.ts"');
+      expect(found[0].specId).toBe('impl-flow-orch');
+    } finally { proj.cleanup(); }
+  });
 });

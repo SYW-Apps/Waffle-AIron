@@ -1,13 +1,20 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, loadProjectConfig, loadRegistry } from '../config/loader.js';
+import { assertProjectInitialized, AI_PATHS } from '../config/loader.js';
+import { ProjectNotInitializedError } from '../utils/errors.js';
+import {
+  loadProjectConfig,
+  resolveAgentTopology,
+  listDirectChainedSubprojects,
+  ensureProjectInitialized,
+} from './subsystem.js';
+import { exportSddSkills } from './skills.js';
 import { generateAll, resolveExpectedOutputPaths } from '../exporters/generate.js';
 import { WAIRON_MANAGED_MARKER } from '../exporters/base.js';
 import { hasContext, syncContextFiles } from '../core/context.js';
-import { getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
-import { listDirectChainedSubprojects, ensureProjectInitialized } from '../core/provision.js';
-import { invalidateSpecCache } from '../core/specs.js';
+import { getProjectRoot, runWithProjectRoot, pathExists } from '../utils/fs.js';
+import { activeTargetTypes } from '../models/project.js';
 import type { AgentRecord } from '../models/agent.js';
 import type { ProjectConfig } from '../models/project.js';
 
@@ -99,6 +106,8 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
   // its agents in its own .wai/.claude. Skipped for --no-recurse, dry runs, and
   // scoped (--domain/--root) runs. Each subproject is ensured-initialized first
   // (non-destructive) so a not-yet-runnable child becomes generable in place.
+  // No spec-cache invalidation is needed here: every project root reads through
+  // its own spec workspace, and the bootstrap invalidates whenever it writes.
   const scoped = options.root || options.domain || options.domains;
   if (options.recurse === false || options.dryRun || scoped) return;
 
@@ -108,7 +117,6 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
     logger.info(`↳ Chained subproject "${child.subsystemId}" — generating its layer in ${path.relative(getProjectRoot(), child.dir) || '.'}/`);
     await runWithProjectRoot(child.dir, async () => {
       ensureProjectInitialized(child.subsystemId); // non-destructive
-      invalidateSpecCache();
       await runGenerate(options); // recurse: this child's layer + its own subprojects
     });
   }
@@ -124,15 +132,17 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
   assertProjectInitialized();
 
   const projectConfig = loadProjectConfig();
-  const registry = loadRegistry();
+  if (!projectConfig) throw new ProjectNotInitializedError();
+  // The live topology through the core adapter — empty while the project has no system spec.
+  const agents = resolveAgentTopology();
 
-  if (registry.agents.length === 0) {
+  if (agents.length === 0) {
     logger.warn('No agents resolved from the spec tree. Define subsystems and components first — see `wairon status`.');
     return;
   }
 
   if (projectConfig.rules.materializeAgentFiles) {
-    materializeAgentLayer(registry.agents, projectConfig, options);
+    materializeAgentLayer(agents, projectConfig, options);
   } else if (options.dryRun) {
     logger.info('Dry run — rules.materializeAgentFiles is off: no agent files are written; leftover managed files would be removed.');
   } else if (options.prune !== false) {
@@ -140,7 +150,7 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
     // file (managed marker / -(owner|implementer|architect).md naming) in the
     // topology's output dirs is a leftover. Hand-authored files and
     // .wai/agents/ guidance are never touched.
-    const candidateDirs = [...resolveExpectedOutputPaths(registry.agents, projectConfig)]
+    const candidateDirs = [...resolveExpectedOutputPaths(agents, projectConfig)]
       .map((p) => path.dirname(p));
     const removed = pruneStaleAgents(new Set(), candidateDirs);
     if (removed > 0) {
@@ -156,12 +166,9 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
     logger.verbose('Context files synced.');
   }
 
-  // Also re-export SDD skills if spec tree exists
-  const { AI_PATHS: sddPaths } = require('../config/loader.js') as typeof import('../config/loader.js');
-  const { pathExists: sddPathExists } = require('../utils/fs.js') as typeof import('../utils/fs.js');
-  if (sddPathExists(sddPaths.specsSystem())) {
+  // Re-export the SDD skills when the spec tree exists.
+  if (pathExists(AI_PATHS.specsSystem())) {
     try {
-      const { exportSddSkills } = require('../core/skills.js') as typeof import('../core/skills.js');
       exportSddSkills();
       logger.verbose('SDD AI Skills synced.');
     } catch (err) {
@@ -170,13 +177,13 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
   }
 
   // Re-inject the project-local guides so .claude/CLAUDE.md / .gemini/GEMINI.md
-  // stay current with the installed wairon (otherwise only `init` writes them).
+  // stay current with the installed wairon (otherwise only `init` writes them),
+  // for the configuration's active targets.
   try {
     const { reinjectLocalGuides } = require('../utils/ai-guide.js') as typeof import('../utils/ai-guide.js');
-    const { activeTargetTypes } = require('../core/skills.js') as typeof import('../core/skills.js');
     // getProjectRoot() (not process.cwd()) so a cascaded subproject layer
     // re-injects ITS guides into ITS own dir, not the original invocation dir.
-    reinjectLocalGuides(getProjectRoot(), activeTargetTypes());
+    reinjectLocalGuides(getProjectRoot(), activeTargetTypes(projectConfig));
     logger.verbose('Local AI guides re-injected.');
   } catch (err) {
     logger.warn(`Failed to re-inject AI guides: ${String(err)}`);
@@ -244,9 +251,9 @@ function materializeAgentLayer(
   // Reconcile: prune wairon-owned agent files no longer in the topology (removed
   // components, or the old flat pile after the switch to layered). ALWAYS runs,
   // scoped or not — the expected set is resolved from the FULL topology
-  // (registry.agents, never the scoped pool or what this run happened to write),
-  // so a domain/root/target-scoped run deletes true orphans while every other
-  // layer's current files stay recognized and untouched.
+  // (all resolved agents, never the scoped pool or what this run happened to
+  // write), so a domain/root/target-scoped run deletes true orphans while every
+  // other layer's current files stay recognized and untouched.
   let prunedCount = 0;
   if (!options.dryRun && options.prune !== false) {
     prunedCount = pruneStaleAgents(resolveExpectedOutputPaths(agents, projectConfig));

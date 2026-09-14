@@ -53,52 +53,79 @@ methods:
           pack descriptors
         type: local
       - stepNumber: 9
-        description: For each in-scope hosted project record, read its declared pack/profile references
+        description: >-
+          For each in-scope hosted project record, derive its declared pack/profile references from
+          its configuration
         type: loop
         loopKind: forEach
         over: the in-scope hosted project records
-        endStep: 10
+        endStep: 15
       - stepNumber: 10
-        description: Read the project's pack/profile references from its isolated root
-        type: call
-        targetComponent: pack_registry
-        targetMethod: readProjectReferences
+        description: Bind the project's isolated root
+        type: local
       - stepNumber: 11
+        description: Load the project's configuration without letting a malformed one fail the health report
+        type: try
+        endStep: 13
+        catches:
+          - error: project configuration failed to load
+            step: 14
+      - stepNumber: 12
+        description: Load the project's configuration through the core adapter (null when it has none)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 13
+        description: On a successful load, skip the load-failure handler
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        description: >-
+          Treat a configuration that fails to load as absent, so one malformed project.yaml yields
+          empty references instead of failing the whole health report
+        type: local
+      - stepNumber: 15
+        description: >-
+          Build the project's ProjectPackReference from its loaded configuration: the project id
+          plus the configuration's declaredPackNames() and declaredProfileIds() — empty lists when
+          the project has no configuration or it failed to load
+        type: local
+      - stepNumber: 16
         description: Gather the cross-project relations sourced from in-scope projects (relation-health inputs)
         type: call
         targetComponent: project_relation_repository
         targetMethod: list
-      - stepNumber: 12
+      - stepNumber: 17
         description: For each distinct relation target project
         type: loop
         loopKind: forEach
         over: the distinct relation target projects
-        endStep: 13
-      - stepNumber: 13
+        endStep: 18
+      - stepNumber: 18
         description: >-
           Fetch the target's stored public-surface snapshot for interface-drift checking (a missing
           snapshot is itself a finding)
         type: call
         targetComponent: public_surface_repository
         targetMethod: getSnapshot
-      - stepNumber: 14
+      - stepNumber: 19
         description: >-
           Derive redacted diagnostic checks from the in-scope project records, the two pack-tier
           name listings, the per-project references, and the relation-health inputs
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: runChecks
-      - stepNumber: 15
+      - stepNumber: 20
         description: Derive usage snapshots for the requested scope from the in-scope project records
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: collectUsage
-      - stepNumber: 16
+      - stepNumber: 21
         description: Assemble the aggregated instance health report from the checks and usage
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: buildHealthReport
-      - stepNumber: 17
+      - stepNumber: 22
         description: Return the redacted health report scoped to the caller
         type: return
         outcome: redacted health report
@@ -199,96 +226,8 @@ methods:
         type: return
         outcome: advisory quota-annotated usage snapshots
     detail: full
-  - name: getExposurePolicy
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: >-
-          Resolve the caller's project:admin permission at instance scope (the exposure posture
-          gates the whole web surface)
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
-      - stepNumber: 3
-        description: If the effective value is not yes, deny
-        type: branch
-        condition: the effective project:admin value is not yes
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Reject the exposure read
-        type: throw
-        error: Forbidden — exposure administration requires instance-level project:admin
-      - stepNumber: 5
-        description: Read the persisted exposure policy through the policy repository
-        type: call
-        targetComponent: policy_repository
-        targetMethod: getExposurePolicy
-      - stepNumber: 6
-        description: Substitute the safe default (web UI off, TLS required) when none has been configured
-        type: local
-      - stepNumber: 7
-        description: Return the exposure policy
-        type: return
-        outcome: exposure policy
-  - name: setExposurePolicy
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Resolve the caller's project:admin permission at instance scope
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
-      - stepNumber: 3
-        description: If the effective value is not yes, deny
-        type: branch
-        condition: the effective project:admin value is not yes
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Reject the exposure change
-        type: throw
-        error: Forbidden — exposure administration requires instance-level project:admin
-      - stepNumber: 5
-        description: Replace the exposure policy wholesale through the policy repository
-        type: call
-        targetComponent: policy_repository
-        targetMethod: setExposurePolicy
-      - stepNumber: 6
-        description: Append a redacted audit event without letting a failure fail the change
-        type: try
-        endStep: 8
-        catches:
-          - error: audit append failure
-            step: 9
-      - stepNumber: 7
-        description: >-
-          Append the redacted exposure.set audit event (security level) under the active retention
-          policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 8
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 10
-      - stepNumber: 9
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 10
-        description: Return the stored exposure policy
-        type: return
-        outcome: stored exposure policy
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T11:27:00.178Z'
-updatedAt: '2026-07-19T08:57:51.787Z'
+updatedAt: '2026-09-13T12:16:26.436Z'

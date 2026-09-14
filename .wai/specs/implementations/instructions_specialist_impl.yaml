@@ -13,9 +13,12 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Read the bound project's configuration to resolve the governing projectType/profile that
-          the briefing will name (an ambient config read, like every other component in the tree).
-        type: local
+          Read the bound project's configuration through the skills core adapter to resolve the
+          governing projectType/profile the briefing will name; a project with no readable
+          configuration names none, and the briefing still applies.
+        type: call
+        targetComponent: skills_core_adapter
+        targetMethod: loadProjectConfig
       - stepNumber: 2
         description: >-
           Resolve the skill resources available to this project — the built-in sdd-* skills plus any
@@ -67,4 +70,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-29T10:50:20.337Z'
-updatedAt: '2026-08-08T11:14:45.262Z'
+updatedAt: '2026-09-13T11:32:16.809Z'

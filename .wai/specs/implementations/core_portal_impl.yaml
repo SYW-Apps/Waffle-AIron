@@ -279,6 +279,111 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: resolveSubprojectForNamespace
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Read straight through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+  - name: projectConfigExists
+    narrative:
+      - stepNumber: 1
+        description: Read straight through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: exists
+  - name: declaresGlobalPacks
+    narrative:
+      - stepNumber: 1
+        description: Read straight through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declaresGlobalPacks
+  - name: createProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: createProjectConfig
+  - name: upsertPackSelection
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: upsertPackSelection
+  - name: removePackSelection
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: removePackSelection
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: setProjectType
+  - name: recordProfileSelection
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: recordProfileSelection
+  - name: setExecutionTier
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: setExecutionTier
+  - name: registerPackRef
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: registerPackRef
+  - name: deregisterPackRef
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: deregisterPackRef
+  - name: markSelectionsBundled
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: markSelectionsBundled
+  - name: ensureProjectInitialized
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: ensureProjectInitialized
+  - name: listDirectChainedSubprojects
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: listDirectChainedSubprojects
+  - name: defaultPackSelections
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: defaultPackSelections
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-12T12:01:12.120Z'
+updatedAt: '2026-09-13T22:56:30.678Z'

@@ -4,7 +4,7 @@ import * as path from 'path';
 import { Command } from 'commander';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { logger, setLogLevel } from '../utils/logger.js';
-import { WaironError } from '../utils/errors.js';
+import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 // The runner imports each command adapter module DIRECTLY (not through the
 // commands barrel) so the physical import graph mirrors the declared
 // cli_runner → adapter edges (dependency conformance).
@@ -14,7 +14,7 @@ import { runGenerate } from '../commands/generate.js';
 import { runLock as lockTree } from '../commands/lock.js';
 import type { LockOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete } from '../commands/validate.js';
-import { assertProjectInitialized, loadProjectConfig, loadRegistry, AI_PATHS } from '../config/loader.js';
+import { assertProjectInitialized, loadRegistry, AI_PATHS } from '../config/loader.js';
 import { pathExists, writeFile, getProjectRoot } from '../utils/fs.js';
 import { runList } from '../commands/list.js';
 import { runShow } from '../commands/show.js';
@@ -62,6 +62,7 @@ import {
   runSubsystemExternalize,
   runSubsystemInternalize,
   composeAgentBrief,
+  loadProjectConfig,
 } from '../commands/subsystem.js';
 import { describeBudget } from '../core/budget_policy.js';
 import { showExecution, setExecutionTier } from '../commands/execution.js';
@@ -155,6 +156,7 @@ async function runLock(options: LockOptions): Promise<void> {
   }
 
   const projectConfig = loadProjectConfig();
+  if (!projectConfig) throw new ProjectNotInitializedError();
 
   logger.info('Analyzing and validating specifications in-memory...');
   const dry = validateAsComplete({
@@ -735,6 +737,33 @@ mcpCmd
     await runMcpServe();
   });
 
+/**
+ * cli_runner.runMcpInstall — register (or self-heal) the wairon MCP entry. For a
+ * HOSTED registration the bearer is resolved HERE — the explicit --token, else
+ * the credential stored for that instance — because the config adapter may not
+ * read the credential store; `wairon login` once is enough to wire an agent.
+ */
+async function mcpInstallCommand(opts: {
+  global?: boolean;
+  configDir?: string;
+  backend?: string;
+  hosted?: string;
+  project?: string;
+  token?: string;
+}): Promise<void> {
+  const hostedToken = opts.hosted
+    ? (opts.token ?? storedCredentialFor(String(opts.hosted).replace(/\/+$/, '')) ?? undefined)
+    : undefined;
+  await runMcpInstall({
+    global: opts.global,
+    configDir: opts.configDir,
+    backend: opts.backend,
+    hostedUrl: opts.hosted,
+    hostedProject: opts.project,
+    hostedToken,
+  });
+}
+
 mcpCmd
   .command('install')
   .description('Register the wairon MCP server in the Claude Code settings.json or Antigravity mcp_config.json')
@@ -744,21 +773,7 @@ mcpCmd
   .option('--hosted <url>', 'register a HOSTED entry against this instance instead of the local stdio server')
   .option('--project <id>', 'hosted: the project the agent should be bound to')
   .option('--token <token>', 'hosted: the bearer to carry (else the credential stored by `wairon login`)')
-  .action(async (opts) => {
-    // Resolve the credential HERE (the config adapter may not read the
-    // credential store) so `wairon login` once is enough to wire an agent.
-    const hostedToken = opts.hosted
-      ? (opts.token ?? storedCredentialFor(String(opts.hosted).replace(/\/+$/, '')) ?? undefined)
-      : undefined;
-    await runMcpInstall({
-      global: opts.global,
-      configDir: opts.configDir,
-      backend: opts.backend,
-      hostedUrl: opts.hosted,
-      hostedProject: opts.project,
-      hostedToken,
-    });
-  });
+  .action(mcpInstallCommand);
 
 mcpCmd
   .command('status')

@@ -63,6 +63,82 @@ methods:
         type: bytes
       - name: options
         type: tree_import_options
+  - name: loadProjectConfig
+    description: The local project's configuration, or null when it has none. Forwarded to the core portal.
+    signature: 'loadProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    guarantees:
+      - idempotent
+  - name: createProjectConfig
+    description: >-
+      Write the configuration `wairon init` composed, for a project that has none. Forwarded to the
+      core portal.
+    signature: 'createProjectConfig(config: ProjectConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: setExecutionTier
+    description: Set `execution.tier` for `wairon execution set-tier`. Forwarded to the core portal.
+    signature: 'setExecutionTier(tier: string): void'
+    returns: void
+    params:
+      - name: tier
+        type: string
+    guarantees:
+      - idempotent
+  - name: projectConfigExists
+    description: >-
+      Whether the local project has a configuration — the CLI's is-this-a-wairon-project guard.
+      Forwarded to the core portal.
+    signature: 'projectConfigExists(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveAgentTopology
+    description: >-
+      The agent topology resolved from the current spec tree: the live records `wairon list`, `show`
+      and `generate` work from. Forwarded to the core portal.
+    signature: 'resolveAgentTopology(): AgentRecord[]'
+    returns: AgentRecord[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: ensureProjectInitialized
+    description: >-
+      Complete the bound project's bootstrap without overwriting anything: the default configuration
+      and the L0 system spec, each only when absent. Forwarded to the core portal.
+    signature: 'ensureProjectInitialized(fallbackName: string): ProjectBootstrap'
+    returns: ProjectBootstrap
+    params:
+      - name: fallbackName
+        type: string
+        description: The project name to use when no system spec names one yet
+    guarantees:
+      - idempotent
+  - name: listDirectChainedSubprojects
+    description: >-
+      The direct chained subprojects of a project root, one level deep: each child's directory and
+      the subsystem that mounts it. Forwarded to the core portal.
+    signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
+    returns: ChainedSubprojectDir[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose own spec tree declares the mounts
+    guarantees:
+      - idempotent
+  - name: defaultPackSelections
+    description: >-
+      The store packs that apply by default, shaped as selections to seed into a new project's
+      configuration. Forwarded to the core portal.
+    signature: 'defaultPackSelections(): PackSelection[]'
+    returns: PackSelection[]
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-12T18:32:02.824Z'
+updatedAt: '2026-09-13T22:56:14.812Z'

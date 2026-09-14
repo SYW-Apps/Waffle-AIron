@@ -10,31 +10,39 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          For each project entry that is a by-name SELECTION rather than a legacy path ref, resolve
-          it against the committed bundle and then the pack store, verifying a pinned integrity
-          digest; an unresolvable selection is collected as a load error instead of quietly reducing
-          the governing rule set.
+          Read the project's configuration through the project config repository: its declared pack
+          entries (legacy path refs and by-name selections) and its machine-wide packs setting.
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 2
+        description: >-
+          For each declared entry in the loaded configuration that is a by-name SELECTION rather
+          than a legacy path ref, resolve it against the committed bundle and then the pack store,
+          verifying a pinned integrity digest; an unresolvable selection is collected as a load
+          error instead of quietly reducing the governing rule set.
         type: call
         targetComponent: pack_store_adapter
         targetMethod: resolveInstalledPack
-      - stepNumber: 2
+      - stepNumber: 3
         description: Resolve the global packs directory.
         type: call
         targetComponent: pack_source_adapter
         targetMethod: globalPacksDir
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
-          Discover the global packs there (unless extensions.useGlobalPacks is false) to seed the
-          global-scoped refs, then append the project's declared packs as project-scoped refs.
+          Discover the global packs there when the loaded configuration enables machine-wide packs
+          (globalPacksEnabled — off by default) to seed the global-scoped refs, then append the
+          configuration's declared packs as project-scoped refs.
         type: call
         targetComponent: pack_source_adapter
         targetMethod: discoverPacks
-      - stepNumber: 4
+      - stepNumber: 5
         description: Resolve each gathered ref (global then project) to a concrete load target.
         type: call
         targetComponent: pack_source_adapter
         targetMethod: resolvePackRef
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Read each target's raw manifest, then parse/validate it against the pack schema and merge
           it (project packs win on collision) into the accumulated result; a failed pack is recorded
@@ -42,10 +50,10 @@ methods:
         type: call
         targetComponent: pack_source_adapter
         targetMethod: readManifest
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
-          Return the merged LoadedExtensions — empty when the project declares no packs or its
-          config is unreadable.
+          Return the merged LoadedExtensions — empty when the project declares no packs, has no
+          configuration, or its configuration cannot be read.
         type: return
         outcome: success
   - name: loadExtensions
@@ -162,15 +170,21 @@ methods:
   - name: diagnoseProjectPacks
     narrative:
       - stepNumber: 1
-        description: Read the project config and root.
-        type: local
+        description: >-
+          Read the project configuration through the project config repository; the project root
+          comes from the binding.
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
       - stepNumber: 2
         description: >-
-          Determine whether extensions.useGlobalPacks is ABSENT from the RAW project file. The
-          parsed config defaults the field, so only the raw file distinguishes a project that never
-          decided — the one that may have depended on machine-wide doctrine — from one that chose
-          deliberately.
-        type: local
+          Ask the repository whether the configuration sets extensions.useGlobalPacks explicitly.
+          The parsed configuration defaults the field, so only this check distinguishes a project
+          that never decided — the one that may have depended on machine-wide doctrine — from one
+          that chose deliberately.
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declaresGlobalPacks
       - stepNumber: 3
         description: Walk the project's declared entries.
         type: loop
@@ -211,14 +225,15 @@ methods:
         outcome: the diagnosis
     detail: full
     intent: >-
-      Reads the project config and, for every by-name selection, resolves it the way loading does —
-      collecting the same message the gate would report for anything unresolvable. Enumerates the
-      store, determines which packs actually apply (selections plus, when the project opted in, the
-      machine-wide set), and reports the remainder as installed-but-unapplied. Separately reports
-      whether extensions.useGlobalPacks is ABSENT from the raw project file, which the parsed config
-      cannot express because it defaults the field — only an absent field marks a project that never
-      decided and may therefore have depended on machine-wide doctrine. Swallows every failure into
-      an empty diagnosis: a health check must never itself break.
+      Reads the project configuration through the project config repository and, for every by-name
+      selection, resolves it the way loading does — collecting the same message the gate would
+      report for anything unresolvable. Enumerates the store, determines which packs actually apply
+      (selections plus, when the project opted in, the machine-wide set), and reports the remainder
+      as installed-but-unapplied. Separately asks the repository whether extensions.useGlobalPacks
+      is set explicitly (declaresGlobalPacks), which the parsed configuration cannot express because
+      it defaults the field — only an undeclared field marks a project that never decided and may
+      therefore have depended on machine-wide doctrine. Swallows every failure into an empty
+      diagnosis: a health check must never itself break.
   - name: pinInstalledPacksAsSelections
     narrative:
       - stepNumber: 1
@@ -239,16 +254,18 @@ methods:
         outcome: nothing migrated
       - stepNumber: 4
         description: >-
-          Append a name+version selection for each unapplied pack, carrying its recorded origin as
+          Compose a name+version selection for each unapplied pack, carrying its recorded origin as
           the selection's source only when that origin is a fetchable URL (a local path cannot be
           resolved by CI or a clone).
         type: local
       - stepNumber: 5
         description: >-
-          Turn machine-wide loading off so the decision is explicit, and save the config — the
-          doctrine governing this project is now declared BY the project, visible in a diff and
-          reproducible for a clone.
-        type: local
+          Append those selections and turn machine-wide loading off in ONE write through the
+          repository, so the decision is explicit — the doctrine governing this project is now
+          declared BY the project, visible in a diff and reproducible for a clone.
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: pinGlobalPacksAsSelections
       - stepNumber: 6
         description: Return the names recorded.
         type: return
@@ -257,10 +274,10 @@ methods:
     intent: >-
       Runs the diagnosis and does nothing unless the project never declared a position AND has
       installed packs it is not applying — so a project that deliberately applies nothing is never
-      given selections it did not ask for. Otherwise appends a name+version selection per unapplied
-      pack, carrying its recorded origin as a source only when that origin is a fetchable URL, sets
-      useGlobalPacks false to make the decision explicit, saves the config, and returns the recorded
-      names.
+      given selections it did not ask for. Otherwise composes a name+version selection per unapplied
+      pack, carrying its recorded origin as a source only when that origin is a fetchable URL, then
+      records them all and sets useGlobalPacks false in ONE project config repository write
+      (pinGlobalPacksAsSelections) to make the decision explicit, and returns the recorded names.
   - name: defaultPackSelections
     narrative:
       - stepNumber: 1
@@ -306,4 +323,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-07-29T21:28:00.320Z'
+updatedAt: '2026-09-13T11:48:25.224Z'

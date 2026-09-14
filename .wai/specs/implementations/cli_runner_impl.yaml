@@ -33,53 +33,117 @@ methods:
         type: return
         outcome: validated remotely
       - stepNumber: 5
-        description: Load project configuration file
-        type: local
-      - stepNumber: 6
         description: >-
           Not attached: run the whole local validation workflow — registry, project config and spec
           tree — through the validator adapter.
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: runValidation
-      - stepNumber: 7
+      - stepNumber: 6
         description: Print validation errors/warnings and exit process if invalid
         type: local
     symbol: validateCommand
   - name: runGenerate
+    sourcePath: src/commands/generate.ts
     narrative:
       - stepNumber: 1
-        description: Load spec system
-        type: call
-        targetComponent: cli_core_adapter
-        targetMethod: loadSystemSpec
-      - stepNumber: 2
         description: >-
-          Generate Dynamic Agent outputs matching configured target engines, then prune stale
-          managed agent files against the FULL resolved topology (also under a domain scope),
-          re-export skills, and re-inject the local guides
-        type: local
-  - name: runList
-    narrative:
-      - stepNumber: 1
-        description: Load specs using spec loader
+          Read the project configuration: the configured targets and whether agent files are
+          materialized (rules.materializeAgentFiles).
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: loadSystemSpec
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: Resolve the agent topology from the spec tree through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveAgentTopology
+      - stepNumber: 3
+        description: Did the spec tree resolve any agent?
+        type: branch
+        condition: at least one agent resolved from the spec tree
+        onFalseStep: 8
+      - stepNumber: 4
+        description: >-
+          Generate the agent outputs for the configured target engines when agent files are
+          materialized, and prune stale managed agent files against the full resolved topology (also
+          under a domain scope)
+        type: local
+      - stepNumber: 5
+        description: Re-export the SDD skills when the spec tree exists
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: exportSddSkills
+      - stepNumber: 6
+        description: >-
+          Re-inject the local AI guides for the configuration's active targets
+          (project_config.activeTargetTypes)
+        type: local
+      - stepNumber: 7
+        description: Continue with the cascade
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: 'Warn that no agent resolved from the spec tree: define subsystems and components first'
+        type: local
+      - stepNumber: 9
+        description: Is the cascade off for this run?
+        type: branch
+        condition: the run is scoped to a domain or root, a dry run, or --no-recurse
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Stop after this layer
+        type: return
+        outcome: this layer generated
+      - stepNumber: 11
+        description: List this project's direct chained subprojects
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: listDirectChainedSubprojects
+      - stepNumber: 12
+        description: Generate each subproject's layer in its own root
+        type: loop
+        loopKind: forEach
+        over: each direct chained subproject
+        endStep: 14
+      - stepNumber: 13
+        description: Complete the subproject's bootstrap without overwriting it
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: ensureProjectInitialized
+      - stepNumber: 14
+        description: >-
+          Generate the subproject's layer and its own subprojects by running this command bound to
+          the subproject root
+        type: local
+      - stepNumber: 15
+        description: Every layer is generated
+        type: return
+        outcome: every layer generated
+  - name: runList
+    sourcePath: src/commands/list.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the agent topology from the spec tree through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveAgentTopology
       - stepNumber: 2
         description: Format and print resolved dynamic agent list to stdout
         type: local
   - name: runShow
+    sourcePath: src/commands/show.ts
     narrative:
       - stepNumber: 1
-        description: Load spec system
+        description: Resolve the agent topology from the spec tree through the core adapter
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: loadSystemSpec
+        targetMethod: resolveAgentTopology
       - stepNumber: 2
         description: Format and display details for specified dynamic agent
         type: local
   - name: runUpdate
+    sourcePath: src/commands/update.ts
     narrative:
       - stepNumber: 1
         description: Check remote github release page for new releases
@@ -88,6 +152,7 @@ methods:
         description: If new release is found and not in check-only mode, pull and apply updates
         type: local
   - name: runHostProject
+    sourcePath: src/commands/host.ts
     narrative:
       - stepNumber: 1
         description: Read the master credential from the environment
@@ -136,6 +201,7 @@ methods:
         type: return
         outcome: unknown action
   - name: runHostKey
+    sourcePath: src/commands/host.ts
     narrative:
       - stepNumber: 1
         description: Read the master credential from the environment
@@ -184,6 +250,7 @@ methods:
         type: return
         outcome: unknown action
   - name: runHostLock
+    sourcePath: src/commands/host.ts
     narrative:
       - stepNumber: 1
         description: Read the master credential from the environment
@@ -201,6 +268,7 @@ methods:
         type: return
         outcome: locked
   - name: runProduce
+    sourcePath: src/commands/produce.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -222,12 +290,16 @@ methods:
         type: return
         outcome: produced
   - name: runSubsystemAdd
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
-          initialized wairon project
-        type: local
+          Resolve the parent project root by walking up from cwd and confirm through the core
+          adapter that it holds an initialized wairon project; error if it does not (naming `wairon
+          init`)
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
       - stepNumber: 2
         description: Require an explicit projectPath for an external (chained) subsystem
         type: branch
@@ -255,6 +327,7 @@ methods:
         description: Print confirmation (parent subsystem id + child project path) and next steps
         type: local
   - name: runInit
+    sourcePath: src/commands/init.ts
     narrative:
       - stepNumber: 1
         description: Resolve the nearest ancestor wairon project root by walking up from cwd
@@ -273,7 +346,7 @@ methods:
         type: branch
         condition: a parent project root was found above cwd (root differs from cwd)
         onTrueStep: 5
-        onFalseStep: 11
+        onFalseStep: 12
       - stepNumber: 5
         description: >-
           Prompt the user to create this subdirectory as an external subsystem of the detected
@@ -290,36 +363,80 @@ methods:
         outcome: declined
       - stepNumber: 8
         description: >-
+          Read the parent project's system spec through the core adapter; a parent without one is
+          refused
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 9
+        description: >-
           Compose the SubsystemSpec (id from --name or directory name, projectPath = relative path
           from the parent root to cwd)
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Wire the parent subsystem and scaffold this directory's child project
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createChainedSubsystem
-      - stepNumber: 10
+      - stepNumber: 11
         description: Report the external subsystem was created and stop
         type: return
         outcome: external subsystem created
-      - stepNumber: 11
+      - stepNumber: 12
         description: Bootstrap the standard .wai directory structure
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
+        description: Does this folder already hold a project configuration (a half-finished init)?
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 14
+        description: >-
+          Complete only what is missing: a folder that already holds a configuration keeps it as it
+          is
+        type: branch
+        condition: the folder has no project configuration yet
+        onFalseStep: 17
+      - stepNumber: 15
+        description: >-
+          Read the store packs that apply by default, to seed as the new configuration's pack
+          selections
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: defaultPackSelections
+      - stepNumber: 16
+        description: >-
+          Compose the new project's configuration — the chosen targets and projectType, execution
+          budgets off, component-implementer and agent-file generation off, the store packs
+          declaring applyByDefault seeded as selections, and machine-wide packs recorded as off —
+          and create it through the core adapter.
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: createProjectConfig
+      - stepNumber: 17
+        label: bootstrap_l0
+        description: >-
+          Bootstrap the L0 system spec through core, completing only what is missing (the same
+          bootstrap every chained subproject gets)
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: ensureProjectInitialized
+      - stepNumber: 18
+        label: export_skills
         description: Export SDD skills templates
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 13
-        description: Generate default L0/L1/L2 spec files if empty
-        type: local
   - name: runSubsystemMove
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
-          initialized wairon project
-        type: local
+          Resolve the parent project root by walking up from cwd and confirm through the core
+          adapter that it holds an initialized wairon project; error if it does not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
       - stepNumber: 2
         description: Require the new location
         type: branch
@@ -338,12 +455,15 @@ methods:
         description: Print confirmation (old path to new path)
         type: local
   - name: runSubsystemExternalize
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
-          initialized wairon project
-        type: local
+          Resolve the parent project root by walking up from cwd and confirm through the core
+          adapter that it holds an initialized wairon project; error if it does not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
       - stepNumber: 2
         description: Require the destination path
         type: branch
@@ -364,12 +484,15 @@ methods:
           re-validate
         type: local
   - name: runSubsystemInternalize
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
-          initialized wairon project
-        type: local
+          Resolve the parent project root by walking up from cwd and confirm through the core
+          adapter that it holds an initialized wairon project; error if it does not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
       - stepNumber: 2
         description: Internalize the external subsystem back into the parent tree
         type: call
@@ -379,6 +502,7 @@ methods:
         description: Print confirmation and a reminder to re-validate
         type: local
   - name: runSurface
+    sourcePath: src/commands/surface.ts
     narrative:
       - stepNumber: 1
         description: Route on the surface action
@@ -721,32 +845,39 @@ methods:
         type: return
         outcome: locked or requested
       - stepNumber: 5
+        description: >-
+          Not attached: read the project configuration — its rule severities and projectType govern
+          the as-complete gate.
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 6
         description: Run the as-complete dry-run gate over the tree
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateAsComplete
-      - stepNumber: 6
+      - stepNumber: 7
         description: The gate found errors (an invalid tree is never frozen)
         type: branch
         condition: as-complete validation reported errors
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 9
+      - stepNumber: 8
         description: Refuse the lock, printing the blocking findings
         type: return
         outcome: refused
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Confirm with the human (skipped under --yes), then freeze the tree through the lock
           adapter
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: lockTree
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Refresh the generated outputs (runGenerate): re-render owner/architect files, prune stale
           managed agents against the full topology, re-export skills, re-inject guides
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Print the lock record and return
         type: return
         outcome: locked
@@ -801,6 +932,7 @@ methods:
         type: throw
         error: unknown agent action (expected brief | customize)
   - name: runRemote
+    sourcePath: src/commands/remote.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -892,6 +1024,7 @@ methods:
           checkout now addresses and where that answer came from.
         type: local
   - name: runLogin
+    sourcePath: src/commands/remote.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -917,6 +1050,7 @@ methods:
         description: Confirm which instance is now reachable, without echoing the credential.
         type: local
   - name: runLogout
+    sourcePath: src/commands/remote.ts
     narrative:
       - stepNumber: 1
         description: Was an instance named?
@@ -968,10 +1102,12 @@ methods:
       - stepNumber: 5
         description: >-
           Not attached: read and print the LOCAL spec tree's completeness dashboard, scoped to a
-          subsystem when one was named.
+          subsystem when one was named, listing each implementation's source file and each method's
+          own source file, flagged when missing.
         type: local
     symbol: statusCommand
   - name: runMcpServe
+    sourcePath: src/commands/mcp.ts
     narrative:
       - stepNumber: 1
         description: Run the stdio MCP server against the resolved project root.
@@ -979,6 +1115,7 @@ methods:
         targetComponent: cli_mcp_adapter
         targetMethod: serveMcpStdio
   - name: runMcpInstall
+    sourcePath: src/cli/index.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -995,13 +1132,162 @@ methods:
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
+    symbol: mcpInstallCommand
   - name: runMcpStatus
+    sourcePath: src/commands/mcp.ts
     narrative:
       - stepNumber: 1
         description: Report where a wairon MCP server is registered and what it points at.
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: reportMcpStatus
+  - name: runExecutionShow
+    narrative:
+      - stepNumber: 1
+        description: Is this an initialized wairon project?
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Budgets belong to a project.
+        type: branch
+        condition: the project has no configuration (not an initialized wairon project)
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse, naming `wairon init`.
+        type: throw
+        error: Not a wairon project — run `wairon init` first.
+      - stepNumber: 4
+        description: 'Read the project configuration: the execution tier and the per-agent overrides.'
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 5
+        description: Print the tier and the one-line description of what that tier means.
+        type: local
+      - stepNumber: 6
+        description: Tier off derives nothing.
+        type: branch
+        condition: the tier is off
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Print that no budgets are derived — briefs and generated agent files carry what they
+          carried before budgets existed — and how to enable them (`wairon execution set-tier
+          default`).
+        type: return
+        outcome: tier off, nothing derived
+      - stepNumber: 8
+        description: Resolve the current agent topology from the live spec tree.
+        type: local
+      - stepNumber: 9
+        description: An empty topology has nothing to budget.
+        type: branch
+        condition: the topology has no agents
+        onTrueStep: 10
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Warn that there are no agents in the topology yet, so nothing is budgeted.
+        type: return
+        outcome: no agents
+      - stepNumber: 11
+        description: List every agent's allowance.
+        type: loop
+        loopKind: forEach
+        over: the resolved agents
+        endStep: 12
+      - stepNumber: 12
+        description: >-
+          Derive the agent's execution profile from its work, with the rationale that produced it,
+          and resolve its budget under the project's execution settings; print the model tier (or
+          inherit), tool class, turn limit, MCP access and effort — marked as an override when the
+          configuration overrides this agent — followed by the rationale.
+        type: local
+      - stepNumber: 13
+        description: When the configuration declares per-agent overrides, print how many.
+        type: local
+      - stepNumber: 14
+        description: >-
+          When any agent is pinned to the frontier tier — only an override can do that — warn that
+          frontier is a sparring partner for questions the specs do not settle rather than an owner
+          tier, and that an owner needing it usually points at a component doing too much.
+        type: local
+      - stepNumber: 15
+        description: Done.
+        type: return
+        outcome: allowances listed
+    conformance: 'off'
+  - name: runExecutionSetTier
+    narrative:
+      - stepNumber: 1
+        description: Is this an initialized wairon project?
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: The dial belongs to a project.
+        type: branch
+        condition: the project has no configuration (not an initialized wairon project)
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse, naming `wairon init`.
+        type: throw
+        error: Not a wairon project — run `wairon init` first.
+      - stepNumber: 4
+        description: Only a known tier can be set.
+        type: branch
+        condition: the requested tier is not one of off | free | default | trade | aggressive
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Refuse, listing the valid tiers.
+        type: throw
+        error: 'Unknown tier — expected one of: off, free, default, trade, aggressive.'
+      - stepNumber: 6
+        description: Read the project configuration for the current tier.
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: Setting the current tier again changes nothing.
+        type: branch
+        condition: the requested tier is already the current tier
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Report that the tier is already set, writing nothing.
+        type: return
+        outcome: unchanged
+      - stepNumber: 9
+        description: Write execution.tier through the core adapter; per-agent overrides are kept.
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: setExecutionTier
+      - stepNumber: 10
+        description: >-
+          Report the move (previous → new tier) and what the new tier costs — its description — then
+          point at `wairon execution show` for the resulting allowances and at `wairon generate` to
+          write them into materialized agent files.
+        type: local
+      - stepNumber: 11
+        description: The cost-trading tiers get a warning.
+        type: branch
+        condition: the new tier is trade or aggressive
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Warn that this tier trades quality for cost, and that a cheaper delegation needing a
+          second round trip is not cheaper — measure it on real work before keeping it.
+        type: local
+      - stepNumber: 13
+        description: Done.
+        type: return
+        outcome: tier set
+    conformance: 'off'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T12:42:52.020Z'
+updatedAt: '2026-09-13T22:58:33.102Z'

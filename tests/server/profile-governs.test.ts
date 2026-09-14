@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { loadProjectConfig } from '../../src/config/loader.js';
+import { loadProjectConfig } from '../../src/core/index.js';
 import { validateSddTree } from '../../src/core/validation.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { hostCore } from '../../src/server/adapters.js';
@@ -108,6 +108,7 @@ describe('Stage D — a selected pack profile actually governs the project (sdd_
     return runWithProjectRoot(projectRoot(projectId), () => {
       invalidateSpecCache();
       const config = loadProjectConfig();
+      if (!config) throw new Error(`hosted project "${projectId}" has no configuration`);
       const res = validateSddTree({ rules: config.rules, projectType: config.projectType });
       return {
         codes: res.issues.map((i) => i.code),

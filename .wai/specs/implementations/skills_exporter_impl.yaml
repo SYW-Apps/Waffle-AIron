@@ -10,30 +10,37 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Determine the built-in skill template directory and each active target's skills directory
-          (from project config).
-        type: local
+          When no target types were passed, read the project configuration through the core adapter
+          for its enabled targets.
+        type: call
+        targetComponent: skills_core_adapter
+        targetMethod: loadProjectConfig
       - stepNumber: 2
+        description: >-
+          Determine the built-in skill template directory and each active target's skills directory
+          — the passed target types, else the configured enabled targets.
+        type: local
+      - stepNumber: 3
         description: >-
           Copy each built-in SDD skill template into every active target's skills directory as
           <name>/SKILL.md, skipping targets that have no skills directory.
         type: local
-      - stepNumber: 3
+      - stepNumber: 4
         description: Load the governing extension packs to obtain their provided skills.
         type: call
         targetComponent: skills_core_adapter
         targetMethod: loadProjectExtensions
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           For each pack skill whose targets include an active target, copy its SKILL.md (resolved
           relative to the pack directory) into that target's skills directory namespaced as
           <pack-id>-<skill-id>; the built-in sdd-* names are reserved so a pack cannot shadow them.
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return the export result (destinations, file count, skipped targets).
         type: return
         outcome: skills installed
 detail: calls-only
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-14T20:14:24.630Z'
+updatedAt: '2026-09-13T11:32:14.425Z'

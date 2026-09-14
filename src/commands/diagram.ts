@@ -14,7 +14,7 @@ import {
 import { buildCanvasModel, renderCanvasHtml } from '../core/canvas.js';
 import { generateDrawioXml, generateExcalidrawScene } from '../core/diagram-export.js';
 import { validateSddTree } from '../core/validation.js';
-import { loadProjectConfig } from '../config/loader.js';
+import { loadProjectConfig } from './subsystem.js';
 import { WaironError } from '../utils/errors.js';
 
 // ---------------------------------------------------------------------------
@@ -65,10 +65,11 @@ function applyFormat(options: DiagramOptions): DiagramOptions {
 function collectIssues() {
   try {
     const config = loadProjectConfig();
-    return validateSddTree({ rules: config.rules, projectType: config.projectType }).issues;
+    if (config) return validateSddTree({ rules: config.rules, projectType: config.projectType }).issues;
   } catch {
-    return validateSddTree().issues;
+    // fall through to the defaults, as for a missing configuration
   }
+  return validateSddTree().issues;
 }
 
 function writeCanvas(dest: string): void {

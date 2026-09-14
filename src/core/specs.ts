@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
-import { aiPathsAt, loadProjectConfig, WaiPaths } from '../config/loader.js';
+import { aiPathsAt, WaiPaths } from '../config/loader.js';
+import { projectConfigRepository } from '../config/project-config.js';
+import type { ProjectConfig, PackSelection, ProjectProfileSelection } from '../models/project.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import { computeStateId, hashGateState, stateIdEquals, canonicalize, type StateId, type GateConfig } from './statehash.js';
 import { loadProjectExtensions } from './extensions.js';
@@ -612,8 +614,9 @@ function stripNamespaceFromImplementation(spec: ImplementationSpec, prefix: stri
 }
 
 /**
- * A chained subproject's implementation file paths are relative to ITS root:
- * the loader reads them against it, and the child's own gate checks them there.
+ * A chained subproject's implementation file paths (sourcePath, each method's
+ * sourcePath, simPath) are relative to ITS root: the loader reads them against
+ * it, and the child's own gate checks them there.
  * A path authored through a parent — relative to the authoring root — that
  * lands inside the mounted child is re-expressed against the child root. Any
  * other path is taken as already child-relative (as every loaded one is) and
@@ -630,6 +633,7 @@ function childRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string,
     ...spec,
     ...(spec.sourcePath ? { sourcePath: reexpress(spec.sourcePath) } : {}),
     ...(spec.simPath ? { simPath: reexpress(spec.simPath) } : {}),
+    methods: spec.methods.map((m) => (m.sourcePath ? { ...m, sourcePath: reexpress(m.sourcePath) } : m)),
   };
 }
 
@@ -935,9 +939,13 @@ export class SpecWorkspace {
         } else if ('contract' in raw) {
           detectedType = 'implementation';
           const parsed = ImplementationSpecSchema.parse(raw);
-          if (parsed.sourcePath) {
-            const absSourcePath = path.resolve(projectDir, parsed.sourcePath);
-            parsed.sourcePath = path.relative(projectDir, absSourcePath).replace(/\\/g, '/');
+          // Every source file the implementation names, its own and each
+          // method's, is normalized against the root of the project holding it.
+          const normalizeSourcePath = (p: string): string =>
+            path.relative(projectDir, path.resolve(projectDir, p)).replace(/\\/g, '/');
+          if (parsed.sourcePath) parsed.sourcePath = normalizeSourcePath(parsed.sourcePath);
+          for (const method of parsed.methods) {
+            if (method.sourcePath) method.sourcePath = normalizeSourcePath(method.sourcePath);
           }
           index.implementations.push(parsed);
           index.paths.implementation[parsed.id] = file;
@@ -2577,6 +2585,11 @@ export class SpecWorkspace {
               ...merged[idx],
               ...deltaItem,
               ...(deltaItem.ext !== undefined ? { ext: mergeExt(merged[idx].ext, deltaItem.ext) } : {}),
+              // An interface method's findings upsert and delete by code, like
+              // lint.allow; an empty list still clears them outright.
+              ...(Array.isArray(deltaItem.findings) && deltaItem.findings.length > 0
+                ? { findings: mergeIdentifiedArray('findings', merged[idx].findings ?? [], deltaItem.findings) }
+                : {}),
             };
           }
         } else {
@@ -2658,6 +2671,7 @@ export class SpecWorkspace {
         case 'subscribesTo':       return `${String(o.topic)} ${o.event === undefined ? '' : String(o.event)}`;
         case 'trustedLinks':       return str(o.subsystem);
         case 'allow':              return str(o.code);       // lint.allow
+        case 'findings':           return str(o.code);       // an interface method's findings
         case 'invariants':         return str(o.id);
         case 'patterns':           return str(o.id);
         case 'boundaries':         return str(o.name);
@@ -3135,9 +3149,9 @@ export function computeGateStateId(): StateId {
   // passed. Config is read here and passed in, so the hash itself stays pure.
   let gate: GateConfig = {};
   try {
-    const config = loadProjectConfig();
-    gate = { projectType: config.projectType, rules: config.rules };
-  } catch { /* uninitialized project: the tree hash still stands on its own */ }
+    const config = projectConfigRepository.load();
+    if (config) gate = { projectType: config.projectType, rules: config.rules };
+  } catch { /* a configuration that fails the schema: the tree hash still stands on its own */ }
 
   // The consumed contract inputs: this root's own stored snapshots, plus every
   // chained mount's — a whole-tree validation can consult any of them when
@@ -3176,6 +3190,58 @@ export function readLockState(): LockStatus {
   const current = computeGateStateId();
   if (!record) return { state: 'unlocked', record: null, current };
   return { state: stateIdEquals(record.stateId, current) ? 'locked' : 'stale', record, current };
+}
+
+// ---------------------------------------------------------------------------
+// Project configuration writes (icore_orchestrator createProjectConfig …
+// markSelectionsBundled). Each is one intent-level write through the project
+// config Repository, the only way into .wai/project.yaml. The core portal
+// routes every published configuration write through here.
+// ---------------------------------------------------------------------------
+
+/** Write a fresh configuration for a project that has none; refuses when one exists. */
+export function createProjectConfig(config: ProjectConfig): void {
+  projectConfigRepository.create(config);
+}
+
+/** Select a pack by name, moving a re-selected pack last; returns whether an earlier selection was replaced. */
+export function upsertPackSelection(selection: PackSelection): boolean {
+  return projectConfigRepository.upsertPackSelection(selection);
+}
+
+/** Deselect a pack by name, leaving path references alone; returns whether anything was dropped. */
+export function removePackSelection(packName: string): boolean {
+  return projectConfigRepository.removePackSelection(packName);
+}
+
+/** Set the governing `projectType`. */
+export function setProjectType(projectType: string): void {
+  projectConfigRepository.setProjectType(projectType);
+}
+
+/** Record the profile selection hosted policy applied. */
+export function recordProfileSelection(selection: ProjectProfileSelection): void {
+  projectConfigRepository.recordProfileSelection(selection);
+}
+
+/** Set `execution.tier`. */
+export function setExecutionTier(tier: string): void {
+  projectConfigRepository.setExecutionTier(tier);
+}
+
+/** Register a legacy pack path reference when it is absent; returns whether it was added. */
+export function registerPackRef(ref: string): boolean {
+  return projectConfigRepository.registerPackRef(ref);
+}
+
+/** Drop a legacy pack path reference that matches exactly; returns whether anything was dropped. */
+export function deregisterPackRef(ref: string): boolean {
+  return projectConfigRepository.deregisterPackRef(ref);
+}
+
+/** Record bundled packs on their selections in place, in one write. */
+export function markSelectionsBundled(bundled: PackSelection[]): void {
+  projectConfigRepository.markSelectionsBundled(bundled);
 }
 
 export function computeStateIdAt(root: string): string | null {

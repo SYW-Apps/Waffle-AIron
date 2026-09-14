@@ -1,0 +1,22 @@
+kind: value-object
+id: skills_export_result
+name: SkillsExportResult
+description: >-
+  What exporting the built-in SDD skills wrote: the skills directories written to, the number of
+  files, and the target types skipped because they have no skills directory.
+fields:
+  - name: destinations
+    type: string[]
+    description: Skills directories written to
+    optional: false
+  - name: fileCount
+    type: number
+    description: Total skill files written
+    optional: false
+  - name: skipped
+    type: string[]
+    description: Target types that have no skills directory, and were skipped
+    optional: false
+methods: []
+createdAt: '2026-09-13T23:11:48.552Z'
+updatedAt: '2026-09-13T23:11:48.572Z'

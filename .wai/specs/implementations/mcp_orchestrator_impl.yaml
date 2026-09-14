@@ -63,6 +63,13 @@ methods:
   - name: validateTree
     narrative:
       - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core adapter: its rule severities and
+          projectType govern the gate
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
         description: Run the conformance gate via the validator client adapter
         type: call
         targetComponent: mcp_validator_adapter
@@ -226,4 +233,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-12T17:37:04.775Z'
+updatedAt: '2026-09-13T12:27:17.434Z'

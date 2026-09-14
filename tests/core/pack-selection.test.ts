@@ -7,8 +7,8 @@ import { installPackFromDirectory, uninstallPack, resolveInstalledPack } from '.
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { expandSource } from '../../src/commands/packs.js';
 import { defaultPackSelections } from '../../src/core/extensions.js';
-import { validateSddTree } from '../../src/core/validation.js';
-import { loadProjectConfig } from '../../src/config/loader.js';
+import { validateSddTree, loadProjectConfig as validatorLoadProjectConfig } from '../../src/core/validation.js';
+import { loadProjectConfig } from '../../src/core/index.js';
 
 // ---------------------------------------------------------------------------
 // Pack SELECTION (A2) — the project declares which packs apply, by name.
@@ -396,7 +396,7 @@ describe('enforceReproducibility finally enforces something (A6)', () => {
     invalidateSpecCache();
     // Pass rules exactly as the validate command and the MCP tool do — otherwise
     // the project's opt-out never reaches the rule.
-    return validateSddTree({ rules: loadProjectConfig().rules }).issues.map((i) => i.code);
+    return validateSddTree({ rules: loadProjectConfig()?.rules }).issues.map((i) => i.code);
   }
 
   it('warns on a floating selection — it resolves off whatever this machine has', () => {
@@ -433,6 +433,35 @@ describe('enforceReproducibility finally enforces something (A6)', () => {
     const codes = codesFor({ name: 'demo' }, { enforceReproducibility: false });
     expect(codes).not.toContain('UNPINNED_PACK_SELECTION');
     expect(codes).not.toContain('PACK_SOURCE_UNFETCHABLE');
+  });
+
+  // validator_core_adapter's loadProjectConfig (stage 2a-0, wave 2): a project
+  // with no readable configuration selects nothing, rather than crashing the
+  // rule or being mistaken for a project that selected packs.
+  it('selects no packs — and never throws — when the project has no configuration at all', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.2.0'));
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-repro-noconfig-'));
+    created.push(dir);
+    // A real spec tree, but deliberately NO .wai/project.yaml.
+    fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.wai', 'specs', '.index.yaml'),
+      "schemaVersion: 1.0.0\nname: S\nvision: v\ncreatedAt: '2026-07-03T10:00:00Z'\nupdatedAt: '2026-07-03T10:00:00Z'\n");
+    vi.spyOn(process, 'cwd').mockReturnValue(dir);
+    invalidateSpecCache();
+
+    const codes = validateSddTree().issues.map((i) => i.code);
+    expect(codes).not.toContain('UNPINNED_PACK_SELECTION');
+    expect(codes).not.toContain('PACK_SOURCE_UNFETCHABLE');
+  });
+
+  it('validator_core_adapter.loadProjectConfig reads null for an uninitialized project', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-repro-noconfig-direct-'));
+    created.push(dir);
+    vi.spyOn(process, 'cwd').mockReturnValue(dir);
+    invalidateSpecCache();
+    expect(validatorLoadProjectConfig()).toBeNull();
   });
 });
 

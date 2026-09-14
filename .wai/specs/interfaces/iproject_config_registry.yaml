@@ -1,0 +1,120 @@
+id: iproject_config_registry
+name: Project Config Registry Interface
+description: >-
+  The write path for a project's configuration. Each method is one intent-level change, validated
+  against the schema and written through the store in one write. Keys the schema does not know
+  survive every write. Every write to `extensions.packs` also records `extensions.useGlobalPacks` at
+  its effective value, so a project that changed its packs counts as having decided on global packs.
+component: project_config_registry
+methods:
+  - name: create
+    description: >-
+      Write a fresh configuration for a project that has none: init, provisioning, a chained child,
+      externalize, and doctor's backfill. Refuses when a configuration already exists, so creation
+      never overwrites one.
+    signature: 'create(config: ProjectConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: upsertPackSelection
+    description: >-
+      Select a pack by name: drop every selection of the same pack and append the new one last, so a
+      re-selected pack moves to the highest precedence. Path references are left alone. Covers `pack
+      use`. Returns whether an earlier selection was replaced.
+    signature: 'upsertPackSelection(selection: PackSelection): boolean'
+    returns: boolean
+    params:
+      - name: selection
+        type: PackSelection
+    guarantees:
+      - idempotent
+  - name: removePackSelection
+    description: >-
+      Deselect a pack by name: drop every selection of that pack, leaving path references alone.
+      Writes only when something was dropped. Covers `pack unuse` and a hosted removal that matched
+      a selection. Returns whether anything was dropped.
+    signature: 'removePackSelection(packName: string): boolean'
+    returns: boolean
+    params:
+      - name: packName
+        type: string
+    guarantees:
+      - idempotent
+  - name: setProjectType
+    description: Set the governing `projectType`.
+    signature: 'setProjectType(projectType: string): void'
+    returns: void
+    params:
+      - name: projectType
+        type: string
+    guarantees:
+      - idempotent
+  - name: recordProfileSelection
+    description: Record the profile selection that hosted policy workflows applied to the project.
+    signature: 'recordProfileSelection(selection: ProjectProfileSelection): void'
+    returns: void
+    params:
+      - name: selection
+        type: ProjectProfileSelection
+    guarantees:
+      - idempotent
+  - name: setExecutionTier
+    description: Set `execution.tier`, the execution-budget dial.
+    signature: 'setExecutionTier(tier: string): void'
+    returns: void
+    params:
+      - name: tier
+        type: string
+    guarantees:
+      - idempotent
+  - name: registerPackRef
+    description: >-
+      Register a legacy path reference (a vendored pack folder or file under `.wai/packs/`) by
+      appending it when that exact reference is absent. Covers `pack add` from a folder or an
+      archive, and a hosted project-pack install. Returns whether it was added.
+    signature: 'registerPackRef(ref: string): boolean'
+    returns: boolean
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: deregisterPackRef
+    description: >-
+      Drop the legacy path references equal to the given one; selections are left alone. Writes only
+      when something was dropped. The caller decides which reference a pack name means. Covers `pack
+      remove` and a hosted removal that matched a path reference. Returns whether anything was
+      dropped.
+    signature: 'deregisterPackRef(ref: string): boolean'
+    returns: boolean
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: markSelectionsBundled
+    description: >-
+      Record that packs were bundled into `.wai/packs/`: each selection of a named pack gets the
+      committed version and `bundle: true`, in place, keeping the order. One write for the whole
+      set. Covers `pack bundle`.
+    signature: 'markSelectionsBundled(bundled: PackSelection[]): void'
+    returns: void
+    params:
+      - name: bundled
+        type: PackSelection[]
+    guarantees:
+      - idempotent
+  - name: pinGlobalPacksAsSelections
+    description: >-
+      Turn the packs a project applied implicitly from the machine-wide store into explicit
+      selections: append them and set `extensions.useGlobalPacks` to false, in one write. Covers
+      `doctor --fix`.
+    signature: 'pinGlobalPacksAsSelections(selections: PackSelection[]): void'
+    returns: void
+    params:
+      - name: selections
+        type: PackSelection[]
+status: draft
+createdAt: '2026-09-13T11:09:34.948Z'
+updatedAt: '2026-09-13T11:41:10.336Z'

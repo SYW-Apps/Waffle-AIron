@@ -1,3 +1,6 @@
+import { projectConfigRepository } from '../config/project-config.js';
+import type { ProjectConfig } from '../models/project.js';
+
 export * from './detection.js';
 export * from './domains.js';
 export * from './templates.js';
@@ -48,3 +51,38 @@ export {
 // Who to record as the approver on a machine with no wairon account — resolved
 // through the portal like everything else sdd_cli reaches in sdd_core.
 export { localApprover } from './approver.js';
+
+// Project configuration (icore_portal loadProjectConfig … markSelectionsBundled).
+// Reads go straight through the project config Repository. Writes are routed
+// through the core orchestrator (specs.js), which writes through the Repository.
+// No other subsystem reaches .wai/project.yaml any other way.
+
+/** The bound project's configuration, or null when it has none. */
+export function loadProjectConfig(): ProjectConfig | null {
+  return projectConfigRepository.load();
+}
+
+/** Whether the bound project has a configuration file. */
+export function projectConfigExists(): boolean {
+  return projectConfigRepository.exists();
+}
+
+/** Whether the bound project's configuration sets `extensions.useGlobalPacks` explicitly. */
+export function declaresGlobalPacks(): boolean {
+  return projectConfigRepository.declaresGlobalPacks();
+}
+
+export {
+  createProjectConfig,
+  upsertPackSelection,
+  removePackSelection,
+  registerPackRef,
+  deregisterPackRef,
+  markSelectionsBundled,
+  setProjectType,
+  recordProfileSelection,
+  setExecutionTier,
+} from './specs.js';
+
+// The project_config type's own behaviour, for callers deriving from a loaded configuration.
+export { declaredPackNames, declaredProfileIds } from '../config/project-config.js';

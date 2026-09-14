@@ -562,6 +562,57 @@ describe('array deltas upsert by identity and honour delete markers', () => {
     expect(loadTypeSpec('invoice')!.lint!.allow).toEqual([{ code: 'A_CODE', reason: 'RA' }]);
   });
 
+  it('interface method findings: keyed by code, upserted and deletable', () => {
+    project();
+    saveSubsystemSpec({ schemaVersion: '1.0.0', id: 'rules', name: 'Rules', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
+    saveComponentSpec({
+      id: 'rule', name: 'Rule', description: 'd', subsystem: 'rules', componentType: 'Specialist',
+      owns: [], dependsOn: [], createdAt: now, updatedAt: now,
+    } as never);
+    saveInterfaceSpec({
+      id: 'irule', name: 'IRule', description: 'd', component: 'rule',
+      methods: [{
+        name: 'validate', description: 'd', signature: 'validate(): void', returns: 'void',
+        findings: [
+          { code: 'A_CODE', severity: 'error', summary: 'a' },
+          { code: 'B_CODE', severity: 'warning', summary: 'b' },
+        ],
+      }],
+      createdAt: now, updatedAt: now,
+    } as never);
+    invalidateSpecCache();
+
+    // Upsert one by code, keep the other, append a new code.
+    updateSpec('interface', 'irule', {
+      methods: [{
+        name: 'validate',
+        findings: [
+          { code: 'A_CODE', severity: 'warning', summary: 'A' },
+          { code: 'C_CODE', severity: 'error', summary: 'c' },
+        ],
+      }],
+    });
+    invalidateSpecCache();
+    expect(loadInterfaceSpec('irule')!.methods[0].findings).toEqual([
+      { code: 'A_CODE', severity: 'warning', summary: 'A' },
+      { code: 'B_CODE', severity: 'warning', summary: 'b' },
+      { code: 'C_CODE', severity: 'error', summary: 'c' },
+    ]);
+
+    // Delete by code.
+    updateSpec('interface', 'irule', { methods: [{ name: 'validate', findings: [{ code: 'B_CODE', action: 'delete' }] }] });
+    invalidateSpecCache();
+    expect(loadInterfaceSpec('irule')!.methods[0].findings).toEqual([
+      { code: 'A_CODE', severity: 'warning', summary: 'A' },
+      { code: 'C_CODE', severity: 'error', summary: 'c' },
+    ]);
+
+    // A delete that addresses no declared code is refused, not silently ignored.
+    expect(() => updateSpec('interface', 'irule', {
+      methods: [{ name: 'validate', findings: [{ code: 'Z_CODE', action: 'delete' }] }],
+    })).toThrow(/nothing with that identity exists/);
+  });
+
   it('string arrays have no per-element identity, so they replace wholesale', () => {
     project();
     saveSubsystemSpec({ schemaVersion: '1.0.0', id: 'billing', name: 'B', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);

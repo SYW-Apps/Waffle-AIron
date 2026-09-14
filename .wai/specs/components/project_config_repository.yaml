@@ -1,0 +1,18 @@
+id: project_config_repository
+name: Project Config Repository
+description: >-
+  Facade over a project's configuration, `.wai/project.yaml`. Every reader and writer of project
+  configuration — scaffolding, packs, policy and profiles, instructions, validation, archives — uses
+  this facade only: reads forward 1:1 to the index, writes forward 1:1 to the registry. It replaces
+  direct access to the file from ten components across four subsystems.
+subsystem: sdd_core
+componentType: Repository
+owns:
+  - project_config_store
+  - project_config_registry
+  - project_config_index
+  - project_config_fs_adapter
+dependsOn: []
+status: complete
+createdAt: '2026-09-13T01:31:17.255Z'
+updatedAt: '2026-09-13T13:02:25.785Z'

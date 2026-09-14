@@ -1,4 +1,4 @@
-import type { ImplementationSpec } from '../../models/index.js';
+import { implementationSourceFiles, type ImplementationSpec } from '../../models/index.js';
 import { normalizeSourcePath } from '../source-analysis.js';
 import { RuleContext, SddRule } from './types.js';
 import { isInChainedSubproject } from './conformance.js';
@@ -11,7 +11,9 @@ import { isInChainedSubproject } from './conformance.js';
 // entrypoint activations is domain state and belongs in a Store (or a Store
 // with durability: cache, for memo state). This lint is the honest STATIC
 // approximation: module-scope mutable bindings (`let`/`var`) in a file whose
-// mapped components are exclusively LOGIC stereotypes.
+// mapped components are exclusively LOGIC stereotypes. A component maps every
+// file its implementations name: each implementation's sourcePath and each
+// method's own sourcePath.
 //
 // Deliberately conservative:
 //  - exact analysis grade only (lower grades never guess);
@@ -29,24 +31,27 @@ const LOGIC_STEREOTYPES = new Set(['Orchestrator', 'Supervisor', 'Actor', 'Speci
 export const hiddenStateRule: SddRule = {
   name: 'hidden-state',
   description:
-    'The fields-vs-Store criterion, statically approximated: module-scope mutable bindings (let/var) in a source file mapped EXCLUSIVELY to logic-stereotype components (Orchestrator/Supervisor/Actor/Specialist) are flagged as hidden held state — state a logic component keeps for itself is invisible to the spec, the canvas, and every persistence rule. Promote it to a Store (durability: cache for loss-safe memo state), or lint.allow with the reason it is genuinely wiring/ephemeral. Exact analysis grade only; files also mapped to data or boundary components are exempt (N:1 collapse); const-bound container mutation is beyond this check and the finding says so.',
+    'The fields-vs-Store criterion, statically approximated: module-scope mutable bindings (let/var) in a source file mapped EXCLUSIVELY to logic-stereotype components (Orchestrator/Supervisor/Actor/Specialist) — a component maps every file its implementations and their methods name — are flagged as hidden held state — state a logic component keeps for itself is invisible to the spec, the canvas, and every persistence rule. Promote it to a Store (durability: cache for loss-safe memo state), or lint.allow with the reason it is genuinely wiring/ephemeral. Exact analysis grade only; files also mapped to data or boundary components are exempt (N:1 collapse); const-bound container mutation is beyond this check and the finding says so.',
   codes: [
     { code: 'HIDDEN_STATE', defaultSeverity: 'warning', summary: 'Module-scope mutable binding in a file mapped only to logic-stereotype components — held state hiding outside a Store' },
   ],
   check(ctx: RuleContext) {
-    // sourcePath → the implementations mapping it (with their components).
+    // Source file → the implementations mapping it (with their components):
+    // an implementation maps its own sourcePath and each method's.
     const byPath = new Map<string, { impl: ImplementationSpec; componentType: string; compId: string }[]>();
     for (const impl of ctx.implementations) {
-      if (!impl.sourcePath) continue;
       if (impl.conformance === 'off') continue; // untrusted mapping
       const contract = ctx.interfaceMap.get(impl.contract);
       const component = contract ? ctx.componentMap.get(contract.component) : undefined;
       if (!component) continue;
       if (isInChainedSubproject(component.subsystem, ctx)) continue;
-      const key = normalizeSourcePath(impl.sourcePath);
-      const list = byPath.get(key) ?? [];
-      list.push({ impl, componentType: component.componentType, compId: component.id });
-      byPath.set(key, list);
+      for (const file of implementationSourceFiles(impl)) {
+        const key = normalizeSourcePath(file);
+        const list = byPath.get(key) ?? [];
+        if (list.some(m => m.impl === impl)) continue;
+        list.push({ impl, componentType: component.componentType, compId: component.id });
+        byPath.set(key, list);
+      }
     }
 
     for (const facts of ctx.codeModel.files) {

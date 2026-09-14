@@ -13,6 +13,9 @@ import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import * as packs from './packs.js';
 import { listProjectRelations } from './relations.js';
 import { getPublicSurfaceSnapshot } from './surfaces.js';
+import { hostCore } from './adapters.js';
+import { runWithProjectRoot } from '../utils/fs.js';
+import type { ProjectConfig } from '../models/project.js';
 import type {
   AuditEvent,
   DiagnosticCheckResult,
@@ -353,6 +356,36 @@ export function evaluateUsage(
 // ── Operations Orchestrator ──────────────────────────────────────────────────
 
 /**
+ * The pack/profile references one hosted project declares: bind its isolated
+ * root, load its configuration through the host core adapter, and derive the
+ * declared pack names and profile ids from it. A project with no configuration,
+ * one whose configuration fails to load, or a record with no root to bind yields
+ * empty references, so one malformed project.yaml never fails the whole health
+ * report. The reference carries the RECORD id: a `wairon dev` project's root is the
+ * developer's own folder, whose name is not the id. Carries no filesystem path, so
+ * it stays safe for redacted diagnostics.
+ */
+function declaredReferences(project: HostedProjectRecord): ProjectPackReference {
+  let config: ProjectConfig | null = null;
+  // A record without a root has no isolated root to bind — binding '' would read
+  // the server's own working directory instead.
+  if (project.rootPath && project.rootPath.trim() !== '') {
+    try {
+      config = runWithProjectRoot(project.rootPath, () => hostCore.loadProjectConfig());
+    } catch {
+      config = null; // a configuration that fails to load counts as absent
+    }
+  }
+  const reference: ProjectPackReference = {
+    projectId: project.id,
+    packNames: config ? hostCore.declaredPackNames(config) : [],
+  };
+  const profileIds = config ? hostCore.declaredProfileIds(config) : [];
+  if (profileIds.length > 0) reference.profileIds = profileIds;
+  return reference;
+}
+
+/**
  * Authenticate the caller, authorize operations read, list hosted projects, and
  * assemble a redacted instance health report (diagnostic checks plus usage
  * snapshots) via the diagnostics specialist. Read-only; no writes, no audit.
@@ -374,8 +407,9 @@ export function getHealthReport(
   const imagePackNames = globalPacks.filter((p) => p.tier === 'image').map((p) => p.name);
   const instancePackNames = globalPacks.filter((p) => p.tier === 'instance').map((p) => p.name);
 
-  // Read each project's declared pack/profile references from its isolated root.
-  const projectReferences = projects.map((p) => packs.readProjectReferences(p.rootPath));
+  // Derive each in-scope project's declared pack/profile references from its
+  // configuration, read under its own isolated root.
+  const projectReferences = projects.map((p) => declaredReferences(p));
 
   // Relation health inputs: active relations sourced from in-scope projects,
   // plus the stored snapshots of their targets.

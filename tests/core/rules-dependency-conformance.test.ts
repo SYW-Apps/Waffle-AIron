@@ -295,3 +295,68 @@ describe('dependency conformance — UNREALIZED_DEPENDENCY', () => {
     } finally { proj.cleanup(); }
   });
 });
+
+describe('dependency conformance — a component maps to every file its implementation and methods name', () => {
+  // A component whose single contract method names its own source file.
+  const wireMethodFile = (proj: ReturnType<typeof createTempProject>, compId: string, implFile: string, methodFile: string) => {
+    const m = `run${compId.replace(/-/g, '')}`;
+    proj.writeSpec('interface', `i${compId}`, [
+      'schemaVersion: 1.0.0', `id: i${compId}`, `name: I${compId}`, 'description: contract', `component: ${compId}`,
+      'methods:', `  - name: ${m}`, '    description: does its one thing', `    signature: "${m}(): void"`, '    returns: "void"',
+    ].join('\n'));
+    proj.writeSpec('implementation', `impl-${compId}`, [
+      'schemaVersion: 1.0.0', `id: impl-${compId}`, `name: Impl${compId}`, 'description: impl', `contract: i${compId}`,
+      `sourcePath: ${implFile}`,
+      'methods:', `  - name: ${m}`, `    sourcePath: ${methodFile}`, '    detail: intent',
+      '    intent: Performs its one thing against held state; failures surface as thrown errors.',
+    ].join('\n'));
+  };
+
+  it('an import from a method\'s own source file must be justified (UNDECLARED_DEPENDENCY)', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.component('store-b', 'Store');
+    wireMethodFile(proj, 'orch-a', 'src/a.ts', 'src/commands/run-a.ts');
+    proj.wire('store-b', 'src/b.ts');
+    proj.source('src/a.ts', "export const orchestratorName = 'orch-a';\n");
+    proj.source('src/commands/run-a.ts', body('orcha', "import { runstoreb } from '../b.js';\nrunstoreb();\n"));
+    proj.source('src/b.ts', body('storeb'));
+    proj.activate();
+    try {
+      const found = depIssues(validateSddTree()).filter(i => i.code === 'UNDECLARED_DEPENDENCY');
+      expect(found).toHaveLength(1);
+      expect(found[0].specId).toBe('impl-orch-a');
+      expect(found[0].message).toContain('"src/commands/run-a.ts"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a declared edge is realized by an import from any file of the source component', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'sub-a', 'dependsOn: [store-b]');
+    proj.component('store-b', 'Store');
+    wireMethodFile(proj, 'orch-a', 'src/a.ts', 'src/commands/run-a.ts');
+    proj.wire('store-b', 'src/b.ts');
+    proj.source('src/a.ts', "export const orchestratorName = 'orch-a';\n");
+    proj.source('src/commands/run-a.ts', body('orcha', "import { runstoreb } from '../b.js';\nrunstoreb();\n"));
+    proj.source('src/b.ts', body('storeb'));
+    proj.activate();
+    try {
+      expect(depIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a declared edge is realized by an import landing in any file of the target component', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'sub-a', 'dependsOn: [store-b]');
+    proj.component('store-b', 'Store');
+    proj.wire('orch-a', 'src/a.ts');
+    wireMethodFile(proj, 'store-b', 'src/b.ts', 'src/store/put.ts');
+    proj.source('src/a.ts', body('orcha', "import { runstoreb } from './store/put.js';\nrunstoreb();\n"));
+    proj.source('src/b.ts', "export const storeName = 'store-b';\n");
+    proj.source('src/store/put.ts', body('storeb'));
+    proj.activate();
+    try {
+      expect(depIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+});

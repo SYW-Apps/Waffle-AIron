@@ -3,9 +3,10 @@ import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, isProjectInitialized, loadProjectConfig } from '../config/loader.js';
+import { assertProjectInitialized, isProjectInitialized } from '../config/loader.js';
+import { loadProjectConfig } from '../core/index.js';
 import { aiDir } from '../utils/fs.js';
-import { WaironError } from '../utils/errors.js';
+import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
 /** The Gemini/Antigravity home dir. Precedence: override > GEMINI_CONFIG_DIR > ~/.gemini. */
@@ -255,8 +256,9 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
     backends = [normalizeBackend(options.backend)];
   } else {
     try {
+      // A missing configuration contributes nothing, like an unreadable one.
       const config = loadProjectConfig();
-      const enabledTypes = config.targets
+      const enabledTypes = (config?.targets ?? [])
         .filter((t) => !('enabled' in t) || t.enabled)
         .map((t) => t.type);
 
@@ -392,6 +394,7 @@ export async function runMcpStatus(): Promise<void> {
   assertProjectInitialized();
 
   const projectConfig = loadProjectConfig();
+  if (!projectConfig) throw new ProjectNotInitializedError();
   const claudeProject = claudeMcpConfigPath(false);
   const claudeGlobal  = claudeMcpConfigPath(true);
   const geminiProject = path.join(process.cwd(), '.gemini', 'settings.json');

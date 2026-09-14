@@ -40,6 +40,26 @@ fields:
       hosted writes ensure the contributing pack is registered before writing it. Defaults to
       'backend' when the config omits it.
     optional: true
-methods: []
+methods:
+  - name: declaredPackNames
+    signature: 'declaredPackNames(): string[]'
+    returns: string[]
+    description: >-
+      The names of the packs this configuration declares, deduplicated in first-seen order: each
+      `extensions.packs` entry (a selection's name, or a legacy path reference's file stem — its
+      basename without a pack extension), then the required and default pack names recorded in
+      `profileSelection`. Empty when nothing is declared.
+  - name: declaredProfileIds
+    signature: 'declaredProfileIds(): string[]'
+    returns: string[]
+    description: >-
+      The profile ids recorded in `profileSelection`, deduplicated in first-seen order; empty when
+      no selection is recorded. The governing `projectType` is not included.
+  - name: activeTargetTypes
+    signature: 'activeTargetTypes(): string[]'
+    returns: string[]
+    description: >-
+      The target types this configuration enables: every target not explicitly disabled. Empty for a
+      configuration with no enabled targets.
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-24T23:30:05.014Z'
+updatedAt: '2026-09-13T22:56:09.047Z'

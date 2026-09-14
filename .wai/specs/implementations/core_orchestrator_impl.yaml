@@ -108,18 +108,23 @@ methods:
         targetComponent: spec_loader
         targetMethod: saveImplementationSpec
   - name: provisionProject
+    sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
         description: Compose a default ProjectConfig and a bootstrap L0 SystemSpec named `name`
         type: local
       - stepNumber: 2
+        description: >-
+          Write the default configuration through the project config Repository first, so a root
+          that already has one is refused before anything is written
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+      - stepNumber: 3
         description: Persist the L0 system spec via the spec loader
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 3
-        description: Write the default project.yaml config at the bound project root
-        type: local
     conformance: 'off'
   - name: computeStateId
     narrative:
@@ -154,6 +159,7 @@ methods:
         targetMethod: renderDiagram
     conformance: 'off'
   - name: createChainedSubsystem
+    sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
         description: Guard that the subsystem carries a projectPath
@@ -189,26 +195,49 @@ methods:
         error: projectPath must resolve within the project root
       - stepNumber: 7
         description: >-
-          Branch on whether the child is already fully initialized — both project.yaml and an L0
-          system spec present
-        type: branch
-        condition: the child directory already has both project.yaml and an L0 system spec
-        onTrueStep: 9
-        onFalseStep: 8
-      - stepNumber: 8
-        description: >-
-          Scope the project root to the child directory and NON-DESTRUCTIVELY complete its bootstrap
-          — create the specs dir, project.yaml, and L0 system spec only when each is absent
-          (preferring an existing system spec's name), so a fresh child becomes runnable standalone
-          and a partially-scaffolded child is completed without overwriting its existing spec tree —
-          then restore the parent root scope
+          Scope the project root to the child directory, so the next reads and writes address the
+          child project
         type: local
+      - stepNumber: 8
+        description: Check whether the child already has a configuration
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: exists
       - stepNumber: 9
+        description: 'Complete only what is missing: an existing configuration is never overwritten'
+        type: branch
+        condition: the child has no configuration
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Write the child's default configuration, named after the child, through the project config
+          Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+      - stepNumber: 11
+        label: bootstrap_l0
+        description: 'Keep an existing spec tree intact: bootstrap an L0 only for a child that has none'
+        type: branch
+        condition: the child has no L0 system spec
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Persist the child's bootstrap L0 system spec, creating its specs directory, so a fresh
+          child becomes runnable standalone
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 13
+        description: Restore the parent root scope
+        type: local
+      - stepNumber: 14
         description: Chained subsystem wired and child project ensured
         type: return
         outcome: chained subsystem created
     conformance: 'off'
   - name: moveSubsystemProject
+    sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
         description: Load the target subsystem spec
@@ -237,6 +266,7 @@ methods:
         targetMethod: saveSubsystemSpec
     conformance: 'off'
   - name: externalizeSubsystem
+    sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
         description: Load the target subsystem
@@ -254,42 +284,52 @@ methods:
         error: 'cannot externalize: subsystem is missing or already external'
       - stepNumber: 4
         description: >-
-          Provision an isolated child project at projectPath (project.yaml + L0), scoped to the
-          child root
-        type: local
+          With the project root scoped to the child directory at projectPath, write the child's
+          default configuration through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
       - stepNumber: 5
+        description: >-
+          Persist the child's bootstrap L0 system spec (still scoped to the child root), then return
+          to the parent scope for the move
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 6
         description: >-
           Move the subsystem's spec subtree (its .index.yaml, components, interfaces,
           implementations, and types) from the parent specs dir into the child specs dir,
-          re-expressing each moved implementation's sourcePath and simPath relative to the child
-          root (the same files; code is never moved)
+          re-expressing each moved implementation's file paths — sourcePath, each method's
+          sourcePath, simPath — relative to the child root (the same files; code is never moved)
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Compose a minimal parent mount for the subsystem: id + parentSystem + projectPath with an
           empty public surface
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Persist the parent mount
         type: call
         targetComponent: spec_loader
         targetMethod: saveSubsystemSpec
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Rewrite cross-subsystem references across the remaining parent specs (dependsOn, narrative
           call targets, type refs) from bare ids to the subsystem-namespaced ids, and the moved
           subtree's own outgoing references (to the parent's other subsystems and to other chained
           projects) into super:: form
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Invalidate the spec cache
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Subsystem externalized into a standalone subproject
         type: return
         outcome: externalized
     conformance: 'off'
   - name: internalizeSubsystem
+    sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
         description: Load the target subsystem
@@ -317,8 +357,8 @@ methods:
       - stepNumber: 6
         description: >-
           Move the subproject's spec subtree back under the parent subsystem folder, stripping the
-          namespace and re-expressing each moved implementation's sourcePath and simPath relative to
-          the parent root
+          namespace and re-expressing each moved implementation's file paths — sourcePath, each
+          method's sourcePath, simPath — relative to the parent root
         type: local
       - stepNumber: 7
         description: Restore the parent subsystem spec from the child's realization, dropping projectPath
@@ -465,6 +505,148 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: resolveSubprojectForNamespace
+  - name: createProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Write the fresh configuration through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+    conformance: 'off'
+  - name: upsertPackSelection
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: upsertPackSelection
+    conformance: 'off'
+  - name: removePackSelection
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: removePackSelection
+    conformance: 'off'
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setProjectType
+    conformance: 'off'
+  - name: recordProfileSelection
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: recordProfileSelection
+    conformance: 'off'
+  - name: setExecutionTier
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setExecutionTier
+    conformance: 'off'
+  - name: registerPackRef
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: registerPackRef
+    conformance: 'off'
+  - name: deregisterPackRef
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: deregisterPackRef
+    conformance: 'off'
+  - name: markSelectionsBundled
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: markSelectionsBundled
+    conformance: 'off'
+  - name: ensureProjectInitialized
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Check whether the bound root already holds an L0 system spec
+        type: local
+      - stepNumber: 2
+        description: Does a system spec exist?
+        type: branch
+        condition: a system spec exists at the bound root
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Prefer the existing system spec's name over the fallback
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 4
+        description: Does the project already have a configuration?
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: exists
+      - stepNumber: 5
+        description: Complete only what is missing
+        type: branch
+        condition: the project has no configuration
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Create the default configuration under the chosen name
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+      - stepNumber: 7
+        description: Is the system spec still missing?
+        type: branch
+        condition: no system spec exists at the bound root
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Write the bootstrap L0 system spec under the chosen name
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 9
+        description: Invalidate the spec cache when anything was written
+        type: local
+      - stepNumber: 10
+        description: Report which files were written
+        type: return
+        outcome: ProjectBootstrap
+  - name: listDirectChainedSubprojects
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Read every spec file in this project's own spec tree
+        type: local
+      - stepNumber: 2
+        description: Walk the subsystem specs that declare a non-empty projectPath
+        type: loop
+        loopKind: forEach
+        over: the subsystem specs with a projectPath
+        endStep: 4
+      - stepNumber: 3
+        description: Resolve the projectPath inside the project root; an absolute or escaping path is skipped
+        type: local
+      - stepNumber: 4
+        description: Record the child directory with its mounting subsystem id
+        type: local
+      - stepNumber: 5
+        description: Return the direct chained subprojects
+        type: return
+        outcome: ChainedSubprojectDir[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-12T17:43:44.724Z'
+updatedAt: '2026-09-13T22:56:39.169Z'

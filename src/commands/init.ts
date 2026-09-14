@@ -11,9 +11,6 @@ import {
   getProjectRootOverride,
   setProjectRoot,
 } from '../utils/fs.js';
-import { loadSystemSpec } from '../core/specs.js';
-import { defaultPackSelections } from '../core/extensions.js';
-import { createChainedSubsystem } from '../core/provision.js';
 import type { SubsystemSpec } from '../models/index.js';
 import {
   globalGuideFilePath,
@@ -24,14 +21,16 @@ import {
 import { writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/loader.js';
 import {
-  defaultTargetConfig,
-  ARCHITECT_AGENT_ID,
-  ARCHITECT_TEMPLATE_ID,
-} from '../config/defaults.js';
-import { createAgentRecord, AgentRecord } from '../models/agent.js';
-import { ProjectConfig, TargetConfig } from '../models/project.js';
-import { loadTemplate, renderTemplateInstructions } from '../core/templates.js';
-import { getExporter } from '../exporters/index.js';
+  createProjectConfig,
+  projectConfigExists,
+  loadSystemSpec,
+  createChainedSubsystem,
+  defaultPackSelections,
+  ensureProjectInitialized,
+} from './subsystem.js';
+import { exportSddSkills } from './skills.js';
+import { defaultTargetConfig } from '../config/defaults.js';
+import { ProjectConfig, TargetConfig, activeTargetTypes } from '../models/project.js';
 import { syncContextFiles } from '../core/context.js';
 
 // ---------------------------------------------------------------------------
@@ -176,10 +175,8 @@ async function runInitNonInteractive(): Promise<void> {
 
   await executeInit(
     projectName,
-    targets,
     projectConfig,
     guidePlan,
-    now,
   );
 
   logger.success(`Project "${projectName}" initialized (non-interactive).`);
@@ -293,12 +290,12 @@ async function runInitInteractive(): Promise<void> {
     geminiLocal: false,
   };
 
-  const activeTargetTypes = targets.map((t) => t.type);
+  const selectedTypes = targets.map((t) => t.type);
 
-  if (activeTargetTypes.includes('claude')) {
+  if (selectedTypes.includes('claude')) {
     guidePlan.claudeLocal = true;
   }
-  if (activeTargetTypes.includes('gemini') || activeTargetTypes.includes('agy')) {
+  if (selectedTypes.includes('gemini') || selectedTypes.includes('agy')) {
     guidePlan.geminiLocal = true;
   }
 
@@ -312,7 +309,7 @@ async function runInitInteractive(): Promise<void> {
   console.log(`  ${chalk.bold('Project:')}  ${projectName}`);
   console.log(`  ${chalk.bold('Profile:')}  ${projectType}`);
   console.log(`  ${chalk.bold('Targets:')}  ${targets.map((t) => t.type).join(', ')}`);
-  console.log(`  ${chalk.bold('Guide:')}    Auto-inject local AI rules card (${activeTargetTypes.filter(t => ['claude', 'gemini', 'agy'].includes(t)).join(', ') || 'none'})`);
+  console.log(`  ${chalk.bold('Guide:')}    Auto-inject local AI rules card (${selectedTypes.filter(t => ['claude', 'gemini', 'agy'].includes(t)).join(', ') || 'none'})`);
   logger.blank();
 
   const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([
@@ -338,10 +335,8 @@ async function runInitInteractive(): Promise<void> {
 
   await executeInit(
     projectName,
-    targets,
     projectConfig,
     guidePlan,
-    now,
   );
 }
 
@@ -351,10 +346,8 @@ async function runInitInteractive(): Promise<void> {
 
 async function executeInit(
   projectName: string,
-  targets: TargetConfig[],
   projectConfig: ProjectConfig,
   guidePlan: AiGuidePlan,
-  now: string,
 ): Promise<void> {
   const projectRoot = fromProjectRoot();
   const cwd = process.cwd();
@@ -369,61 +362,31 @@ async function executeInit(
   ensureDir(AI_PATHS.docsDir());
   ensureDir(AI_PATHS.generatedDir());
 
-  writeYamlFile(AI_PATHS.projectConfig(), projectConfig);
-
-  // Agents (including domain owners) are derived from the SDD spec tree and the
-  // free-standing domains in .wai/topology.yaml at read time — nothing persisted here.
-  const activeTargetTypes = targets
-    .filter((t) => !('enabled' in t) || t.enabled)
-    .map((t) => t.type);
-
-  // The architect agent is generated as a file directly below. All other agents
-  // are derived from the SDD spec tree at read time (resolveAgentTopology), so
-  // no agents.json is persisted.
-  const architectAgent = createAgentRecord({
-    id: ARCHITECT_AGENT_ID,
-    name: 'Agent Architect',
-    description: 'Responsible for managing the AI agent topology of this project using the wairon CLI.',
-    template: ARCHITECT_TEMPLATE_ID,
-    ownedPaths: ['.wai/**'],
-    tags: ['meta', 'architect'],
-    creationReason: 'Bootstrapped by wairon init as the root agent for topology management.',
-    targets: activeTargetTypes as AgentRecord['targets'],
-  });
-
-  // Generate architect agent file into each target
-  logger.info('Generating architect agent files...');
-  let template;
-  try {
-    template = loadTemplate(ARCHITECT_TEMPLATE_ID);
-  } catch {
-    logger.warn('Built-in "architect" template not found — skipping architect generation.');
-    template = null;
+  // Complete only what is missing. runInit's early return looks for the spec
+  // tree, so a half-finished init reaches here with its configuration in place;
+  // that configuration is kept exactly as it is.
+  const hadConfig = projectConfigExists();
+  if (!hadConfig) {
+    // A NEW configuration seeds the store packs that declare `applyByDefault`, and
+    // records the machine-wide decision explicitly. This is what a machine-wide
+    // install should mean: a default for projects created from now on, written
+    // where it is visible in review and removable — not retroactive authority over
+    // projects that never mentioned it. A kept configuration reads no packs.
+    createProjectConfig({
+      ...projectConfig,
+      extensions: {
+        packs: defaultPackSelections(),
+        useGlobalPacks: false,
+      },
+    });
+  } else {
+    logger.info('Kept the existing .wai/project.yaml.');
   }
 
-  if (template) {
-    const vars: Record<string, string> = {
-      agentId: architectAgent.id,
-      agentName: architectAgent.name,
-      agentDescription: architectAgent.description,
-      ownedPaths: architectAgent.ownedPaths.join('\n'),
-      tags: architectAgent.tags.join(', '),
-    };
-    const renderedInstructions = renderTemplateInstructions(template, vars);
-
-    for (const targetConfig of targets) {
-      const exporter = getExporter(targetConfig);
-
-      const result = exporter.export({
-        agent: architectAgent,
-        template,
-        renderedInstructions,
-        projectRoot,
-        target: targetConfig,
-      });
-      logger.success(`Generated: ${path.relative(cwd, result.outputPath)}`);
-    }
-  }
+  // No agent file is written here: agents are live briefs resolved from the spec
+  // tree at read time, and `wairon generate` writes agent files only when
+  // rules.materializeAgentFiles is on.
+  const targetTypes = activeTargetTypes(projectConfig);
 
   // Starter docs + rules
   writeStarterDocs(projectName);
@@ -458,21 +421,21 @@ async function executeInit(
   }
 
   // Root instructions/rules for other targets if active
-  if (activeTargetTypes.includes('cursor')) {
+  if (targetTypes.includes('cursor')) {
     writeRootGuideDelegator(projectRoot, 'cursor');
     logger.success(`Created root .cursorrules pointing to .cursor/rules/`);
   }
-  if (activeTargetTypes.includes('copilot')) {
+  if (targetTypes.includes('copilot')) {
     writeRootGuideDelegator(projectRoot, 'copilot');
     logger.success(`Created root .github/copilot-instructions.md pointing to .github/prompts/`);
   }
-  if (activeTargetTypes.includes('codex')) {
+  if (targetTypes.includes('codex')) {
     writeRootGuideDelegator(projectRoot, 'codex');
     logger.success(`Created root .codexrules pointing to .codex/agents/`);
   }
 
   // Register MCP server locally for Claude Code target
-  if (activeTargetTypes.includes('claude')) {
+  if (targetTypes.includes('claude')) {
     try {
       const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
       await runMcpInstall({ global: false, backend: 'claude' });
@@ -483,7 +446,7 @@ async function executeInit(
 
   // Register MCP server for Antigravity (agy) target — project-local only.
   // Global registration ($HOME) is opt-in via `wairon mcp install --global`.
-  if (activeTargetTypes.includes('gemini') || activeTargetTypes.includes('agy')) {
+  if (targetTypes.includes('gemini') || targetTypes.includes('agy')) {
     try {
       const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
       await runMcpInstall({ backend: 'gemini', global: false });
@@ -496,22 +459,12 @@ async function executeInit(
   syncContextFiles();
   logger.verbose('Context files seeded in .wai/context/');
 
-  // Bootstrap L0 System Spec and export SDD Skills for AI toolings
+  // Bootstrap the L0 system spec through core — completing only what is missing,
+  // the same bootstrap every chained subproject gets — then export the SDD skills
+  // for this init's targets.
   try {
-    const { saveSystemSpec } = require('../core/specs.js') as typeof import('../core/specs.js');
-    saveSystemSpec({
-      schemaVersion: '1.0.0',
-      name: projectName,
-      vision: `Core vision for ${projectName}`,
-      boundaries: [],
-      globalRequirements: [],
-      databases: [],
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const { exportSddSkills } = require('../core/skills.js') as typeof import('../core/skills.js');
-    const skillsResult = exportSddSkills(activeTargetTypes);
+    ensureProjectInitialized(projectName);
+    const skillsResult = exportSddSkills(targetTypes);
     logger.success(`Bootstrapped SDD spec system and installed SDD skills into ${skillsResult.destinations.length} target(s).`);
   } catch (err) {
     logger.warn(`Failed to bootstrap SDD Specs: ${String(err)}`);
@@ -523,10 +476,11 @@ async function executeInit(
   logger.blank();
   logger.info('What was created:');
   logger.info('  .wai/               — source of truth for agent topology');
-  logger.info('  .wai/project.yaml   — project config');
+  if (!hadConfig) logger.info('  .wai/project.yaml   — project config');
   logger.info('  .wai/phased_design.md — spec kit alternative design workbook');
   logger.info('  .wai/specs/         — SDD spec tree (L0 .index.yaml bootstrapped)');
   logger.info('  .wai/context/       — shared context directory (domains.md, wairon-guide.md)');
+  if (hadConfig) logger.info('Kept .wai/project.yaml as it was (not recreated).');
   logger.blank();
   logger.info('Next steps:');
   logger.info('  Edit .wai/context/project.md — describe the project concept and stack details for the AI');
@@ -540,6 +494,8 @@ async function executeInit(
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Compose a new project's configuration. Its pack selections are seeded only
+ *  when the configuration is actually created (see executeInit). */
 function buildProjectConfig(
   name: string,
   targets: TargetConfig[],
@@ -573,15 +529,6 @@ function buildProjectConfig(
     paths: {
       specsDir: '.wai/specs',
     },
-    // Seed the store packs that declare `applyByDefault`, and record the
-    // machine-wide decision explicitly. This is what a machine-wide install
-    // should mean: a default for projects created from now on, written where it is
-    // visible in review and removable — not retroactive authority over projects
-    // that never mentioned it.
-    extensions: {
-      packs: defaultPackSelections(),
-      useGlobalPacks: false,
-    },
     createdAt: now,
     updatedAt: now,
   };
@@ -598,9 +545,7 @@ Describe the overall agent strategy for this project here. See also [.wai/phased
 
 ## Agents
 
-| ID | Template | Purpose |
-|----|----------|---------|
-| agent-architect | architect | Manages agent topology using the wairon CLI |
+Agents are live briefs resolved from the spec tree (\`.wai/specs/\`) whenever they are needed — an AI tool fetches one through the \`sdd_get_agent_brief\` MCP tool, and \`wairon list\` shows the current topology. \`wairon generate\` writes agent files only when \`rules.materializeAgentFiles\` is on in \`.wai/project.yaml\`.
 
 ## Decisions
 

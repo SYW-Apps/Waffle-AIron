@@ -1,0 +1,42 @@
+id: project_config_store_impl
+name: Project Config Store Implementation
+description: >-
+  Read-through holding of `.wai/project.yaml`: parsed against the ProjectConfig schema on every
+  read, merged back on every write so unknown keys survive.
+contract: iproject_config_store
+sourcePath: src/config/project-config.ts
+methods:
+  - name: read
+    narrative: []
+    intent: >-
+      Reads the document through the fs adapter and parses it against the ProjectConfig schema,
+      applying its defaults; returns null when the file is absent. A document that fails the schema
+      raises the validation error with the project root and the offending fields, never a partially
+      defaulted configuration.
+  - name: write
+    narrative: []
+    intent: >-
+      Reads the current document through the fs adapter, overlays the known fields of the given
+      configuration, keeps every key the schema does not know exactly as it was, and writes the
+      merged document back, so a hand-added or newer key survives any write. A configuration that
+      fails the schema is refused before anything is written.
+  - name: exists
+    narrative: []
+    intent: >-
+      Reports whether the configuration file exists, through the fs adapter; it never parses the
+      document, so a malformed file still counts as existing.
+  - name: declares
+    narrative: []
+    intent: >-
+      Reads the raw document through the fs adapter and reports whether the given top-level or
+      dotted field (for example `extensions.useGlobalPacks`) is present in it, as opposed to
+      supplied by a schema default; false when the file is absent.
+  - name: readField
+    narrative: []
+    intent: >-
+      Reads the document through the fs adapter and walks the dotted path without parsing against
+      the schema; returns undefined when the file, or any segment of the path, is absent.
+detail: intent
+status: draft
+createdAt: '2026-09-13T11:19:15.916Z'
+updatedAt: '2026-09-13T13:08:45.521Z'

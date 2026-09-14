@@ -1215,6 +1215,12 @@ export interface ProfileApplication {
    *  name of the pack contributing it. */
   source: string;
   /** Set only when the ensure step had to vendor a server-global pack into the
-   *  project (registering it in extensions.packs) to make the profile resolve. */
+   *  project to make the profile resolve — the name of that adopted pack, so the
+   *  side effect is reported instead of hidden. */
   adoptedPackName?: string;
+  /** Set together with adoptedPackName: the project-relative path reference of
+   *  the adopted pack's vendored copy, which the calling orchestrator registers in
+   *  the project configuration. The pack registry owns that layout, so callers
+   *  never compose the path themselves. */
+  adoptedPackRef?: string;
 }

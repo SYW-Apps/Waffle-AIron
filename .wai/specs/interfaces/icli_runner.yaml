@@ -244,6 +244,22 @@ methods:
     params:
       - name: options
         type: status_command_options
+  - name: runExecutionShow
+    description: >-
+      `wairon execution show`: list every agent's execution allowance with the rationale that
+      produced it, under the project's current tier.
+    signature: 'runExecutionShow(): Promise<void>'
+    returns: Promise<void>
+    params: []
+  - name: runExecutionSetTier
+    description: >-
+      `wairon execution set-tier <tier>`: move the project's execution-budget dial and state what
+      the new tier costs.
+    signature: 'runExecutionSetTier(tier: string): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: tier
+        type: string
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T12:42:53.601Z'
+updatedAt: '2026-09-13T11:17:18.355Z'

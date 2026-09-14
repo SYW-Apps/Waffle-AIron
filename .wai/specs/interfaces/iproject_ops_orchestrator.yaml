@@ -259,7 +259,9 @@ methods:
       - name: query
         type: AuditQuery
   - name: getExposurePolicy
-    description: Forward to operations_orchestrator.getExposurePolicy (instance-level project:admin upstream).
+    description: >-
+      Forward to exposure_policy_orchestrator.getExposurePolicy (instance-level project:admin
+      upstream).
     signature: 'getExposurePolicy(credential: string): HostExposurePolicy'
     returns: HostExposurePolicy
     params:
@@ -267,8 +269,8 @@ methods:
         type: string
   - name: setExposurePolicy
     description: >-
-      Forward to operations_orchestrator.setExposurePolicy (instance-level project:admin upstream;
-      audited there).
+      Forward to exposure_policy_orchestrator.setExposurePolicy (instance-level project:admin
+      upstream; audited there).
     signature: 'setExposurePolicy(credential: string, policy: HostExposurePolicy): HostExposurePolicy'
     returns: HostExposurePolicy
     params:
@@ -453,4 +455,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-08-12T17:27:38.014Z'
+updatedAt: '2026-09-13T12:08:42.071Z'

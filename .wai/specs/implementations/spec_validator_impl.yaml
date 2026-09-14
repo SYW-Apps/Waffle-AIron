@@ -62,10 +62,11 @@ methods:
         targetMethod: loadMountSurfaceSnapshots
       - stepNumber: 10
         description: >-
-          Build the source code model via the source analysis adapter — every distinct L4 sourcePath
-          resolved and containment-checked within the project root, analyzed at the best available
-          grade (exact | pattern | generic); the structural-conformance rules consume it purely from
-          the rule context (the surface-snapshots injection pattern)
+          Build the source code model via the source analysis adapter — every distinct source path
+          (each implementation's sourcePath, each method's own sourcePath, each simPath) resolved
+          and containment-checked within the project root, analyzed at the best available grade
+          (exact | pattern | generic); the structural-conformance rules consume it purely from the
+          rule context (the surface-snapshots injection pattern)
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: buildCodeModel
@@ -119,6 +120,16 @@ methods:
         targetMethod: knownIssueCodes
       - stepNumber: 19
         description: >-
+          Read the bound project's configuration through the core adapter for its by-name pack
+          selections, which the pack-reproducibility rule checks from the rule context (legacy path
+          refs pin nothing and are excluded; a project with no readable configuration selects
+          nothing). The project's own rule severities and projectType are not read here: the caller
+          that invokes validation supplies them.
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 20
+        description: >-
           Run hierarchy, namespace-hygiene, round-trip, type-reference, contract (incl. cross-tree
           ref recognition), narrative, boundary, graph, naming, documentation, complexity,
           semantic-edge rules (dispatch-table capability contracts and guarantee backing, dispatch-,
@@ -148,29 +159,34 @@ methods:
           forwarding (a Repository/Gateway facade method whose authored narrative is anything other
           than exactly one call step targeting an owned member contains logic that belongs inside a
           member block — FACADE_FORWARDING warning, the standard's mechanically-enforced 1:1 facade
-          rule), narrative detail-sufficiency (a method whose realized function's measured
-          cyclomatic complexity exceeds the configured threshold while its spec sits below detail:
-          full with no narrative — UNNARRATED_COMPLEXITY, emitted from exact-grade analysis only so
-          weaker grades never guess; an explicit detail declaration below a full-floor logic
-          stereotype with no narrative — DETAIL_BELOW_STEREOTYPE; both honest lints about UNDECLARED
-          behavior, not proofs, and both lint.allow-suppressible), structural-conformance rules
-          (sourcePaths resolve within the project root to real files; every contract method is
-          realized in its file at the implementation's conformance tier — declared | anchored | off
-          — honoring per-method symbol overrides, with analysis grade carried on findings),
-          call-step realization (Level 3 opener: each narrative call step of an exactly-analyzed,
-          non-off method must appear as a callee of the realized function — set membership over
-          direct callees closed transitively through same-file named helpers, honoring the target
-          method's symbol override and N:1 identity forwarding; CALL_STEP_UNREALIZED warning, order
-          and arguments deliberately unverified; register handoff steps exempt, since a registration
-          references the callback rather than invoking it), dependency-conformance rules (runtime
-          imports between component-mapped files must be justified by declared dependsOn/owns edges
-          — or, across subsystems, by a declared edge to the target subsystem's published surface —
-          UNDECLARED_DEPENDENCY; declared collaborator edges with no realizing import between
-          exactly-analyzed files surface as UNREALIZED_DEPENDENCY), integration-conformance rules (a
-          committed L4 simPath harness must exist inside the project root — SIM_FILE_MISSING — and
-          its exact-grade import graph must reach the component's own sourcePath module and each
-          direct dependency's module, any module of the target subsystem for cross-subsystem edges,
-          technology-boundary fakes sanctioned — UNWIRED_INTEGRATION_SIM; declaring the first
+          rule), narrative detail-sufficiency (a method whose realized function — in the method's
+          own sourcePath, else the implementation's — measures a cyclomatic complexity above the
+          configured threshold while its spec sits below detail: full with no narrative —
+          UNNARRATED_COMPLEXITY, emitted from exact-grade analysis only so weaker grades never
+          guess; an explicit detail declaration below a full-floor logic stereotype with no
+          narrative — DETAIL_BELOW_STEREOTYPE; both honest lints about UNDECLARED behavior, not
+          proofs, and both lint.allow-suppressible), structural-conformance rules (every
+          implementation and method sourcePath resolves within the project root to a real file;
+          every contract method is realized in its own source file — the method's sourcePath, else
+          the implementation's — at its conformance tier (declared | anchored | off), honoring
+          per-method symbol overrides, with analysis grade carried on findings; every finding code a
+          contract method declares appears as a string literal in that file, else
+          UNREALIZED_FINDING), call-step realization (Level 3 opener: each narrative call step of an
+          exactly-analyzed, non-off method must appear as a callee of the realized function in the
+          method's source file — set membership over direct callees closed transitively through
+          same-file named helpers, honoring the target method's symbol override and N:1 identity
+          forwarding; CALL_STEP_UNREALIZED warning, order and arguments deliberately unverified;
+          register handoff steps exempt, since a registration references the callback rather than
+          invoking it), dependency-conformance rules (a component maps to every file its
+          implementation and its methods name; runtime imports between component-mapped files must
+          be justified by declared dependsOn/owns edges — or, across subsystems, by a declared edge
+          to the target subsystem's published surface — UNDECLARED_DEPENDENCY; declared collaborator
+          edges with no realizing import between exactly-analyzed files surface as
+          UNREALIZED_DEPENDENCY), integration-conformance rules (a committed L4 simPath harness must
+          exist inside the project root — SIM_FILE_MISSING — and its exact-grade import graph must
+          reach one of the component's own source modules (its implementation's or a method's) and
+          each direct dependency's module, any module of the target subsystem for cross-subsystem
+          edges, technology-boundary fakes sanctioned — UNWIRED_INTEGRATION_SIM; declaring the first
           simPath in a subsystem activates MISSING_INTEGRATION_SIM for its other complete non-leaf
           implementations; wiring proven, execution stays CI's job; a harness may additionally claim
           per-component path coverage via sim:<component>.<method>[:<label>] string anchors — once
@@ -191,7 +207,7 @@ methods:
           downgrade, else the rule default), each rule's check running against the shared rule
           context
         type: local
-      - stepNumber: 20
+      - stepNumber: 21
         description: >-
           Resolve a chained subproject's verdict through its parent. When this root still holds a
           reference-resolution failure no surface snapshot covers — an unresolved cross-tree
@@ -199,29 +215,42 @@ methods:
           does not resolve in this tree — detect the parent through the reach-gated
           resolveChainingParent, so a request whose credential is narrowed to the child reads
           nothing above its root, not even to discover the parent; then walk up to the TOP root
-          collecting the mount chain (never above the bound request's top project root), and
-          validate the top root scoped to that chain with the parent's own doctrine, for each rule
-          the stricter of the parent's and this project's severity, the same as-complete strictness,
-          and without resolving again. A verdict on an edge this root can already see — a boundary
-          crossing between its own subsystems, an undeclared dependency call — never triggers the
-          walk. The parent's findings are renamed into the child's ids (the mount prefix stripped
-          from spec ids and messages) and merged with the child's own: a child finding gives way
-          only where the parent reported the same code on the same spec at least as severely, or
-          where it is a resolution failure the parent's run did not repeat (the reference resolved
-          from the parent); every other child finding stands, and a parent finding that a stricter
-          child finding already covers is dropped — so the child is never judged more leniently than
-          alone or than its parent. Known limitation until composed validation replaces this step:
-          once the walk runs, the parent's verdicts are merged in for edges a pin also covered, so
-          which evidence judges a pinned edge depends on whether some resolution failure triggered
-          the walk. Code↔spec conformance findings keep full strength: a chained child's source
-          paths are relative to its own root. The result records the root and scope it was resolved
-          through. When no usable parent is reachable (its L0 missing, the mount unknown, or reach
-          denied), every reference keeps its raw verdict — a cross-tree form stays an unwaived
-          CROSS_TREE_REF_UNRESOLVED warning and a typo stays an error — so a child that cannot be
-          judged through its parent pins its family surfaces or fails its gate; nothing is rewritten
-          and no notice is prepended
+          collecting the mount chain (never above the bound request's top project root). A verdict
+          on an edge this root can already see — a boundary crossing between its own subsystems, an
+          undeclared dependency call — never triggers the walk.
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
+        description: >-
+          When the walk reached a top root: with that root bound — the call runs as the parent
+          project, so it returns the parent's configuration rather than this project's — read the
+          parent's rule severities and projectType, whose doctrine and profile decide what is
+          judged. A parent with no readable configuration judges at the defaults, tightened by this
+          project's severities.
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 23
+        description: >-
+          Validate the top root scoped to that chain with the parent's own doctrine, for each rule
+          the stricter of the parent's and this project's severity, the same as-complete strictness,
+          and without resolving again. The parent's findings are renamed into the child's ids (the
+          mount prefix stripped from spec ids and messages) and merged with the child's own: a child
+          finding gives way only where the parent reported the same code on the same spec at least
+          as severely, or where it is a resolution failure the parent's run did not repeat (the
+          reference resolved from the parent); every other child finding stands, and a parent
+          finding that a stricter child finding already covers is dropped — so the child is never
+          judged more leniently than alone or than its parent. Known limitation until composed
+          validation replaces this step: once the walk runs, the parent's verdicts are merged in for
+          edges a pin also covered, so which evidence judges a pinned edge depends on whether some
+          resolution failure triggered the walk. Code↔spec conformance findings keep full strength:
+          a chained child's source paths are relative to its own root. The result records the root
+          and scope it was resolved through. When no usable parent is reachable (its L0 missing, the
+          mount unknown, or reach denied), every reference keeps its raw verdict — a cross-tree form
+          stays an unwaived CROSS_TREE_REF_UNRESOLVED warning and a typo stays an error — so a child
+          that cannot be judged through its parent pins its family surfaces or fails its gate;
+          nothing is rewritten and no notice is prepended
+        type: local
+      - stepNumber: 24
         description: Return the aggregated validation result
         type: return
         outcome: ValidationResult
@@ -309,11 +338,18 @@ methods:
         type: local
       - stepNumber: 13
         description: >-
+          Read the bound project's configuration through the core adapter for its by-name pack
+          selections, identical to validateSddTree
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 14
+        description: >-
           Run the same active rule sequence as validateSddTree at full strictness, including
           namespace-hygiene, round-trip, naming, documentation, complexity, and the semantic-edge
           rules
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: Return the as-complete validation result
         type: return
         outcome: as-complete ValidationResult
@@ -354,4 +390,4 @@ lint:
         when Level 3 models call indirection.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T17:36:18.444Z'
+updatedAt: '2026-09-13T20:55:44.308Z'

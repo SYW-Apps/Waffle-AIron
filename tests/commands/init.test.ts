@@ -41,3 +41,114 @@ describe('cli_runner.runInit: written project config (real CLI)', () => {
     expect(config.rules.generateComponentImplementers).toBe(false);
   }, 180_000);
 });
+
+// ---------------------------------------------------------------------------
+// `wairon init` completes only what is missing. Its early return looks for the
+// spec tree, so a half-finished init — a configuration but no tree — reaches
+// the configuration step. That configuration is kept exactly as it is.
+// ---------------------------------------------------------------------------
+
+describe('cli_runner.runInit: completes only what is missing (real CLI)', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  // execFile rejects on a non-zero exit, so a resolved call is the exit-0 check.
+  const init = (cwd: string) =>
+    execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], { cwd, timeout: 180_000 });
+
+  // The closing summary's two ways of naming the configuration.
+  const LISTED_AS_CREATED = /\.wai\/project\.yaml\s+— project config/;
+  const LISTED_AS_KEPT = 'Kept .wai/project.yaml as it was (not recreated).';
+
+  it('keeps an existing project.yaml byte-identical and bootstraps the missing tree', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-keep-'));
+    const configPath = path.join(rootDir, '.wai', 'project.yaml');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, [
+      "schemaVersion: '1.0.0'",
+      'name: kept-project',
+      'projectType: game-ecs',
+      'targets:',
+      '  - type: claude',
+      '    outputDir: .claude/agents',
+      '    enabled: true',
+      'rules: {}',
+      'futureSetting: keep-me',
+      "createdAt: '2026-01-01T00:00:00Z'",
+      "updatedAt: '2026-01-01T00:00:00Z'",
+      '',
+    ].join('\n'));
+    const before = fs.readFileSync(configPath);
+
+    const { stdout } = await init(rootDir);
+
+    expect(fs.readFileSync(configPath).equals(before)).toBe(true);
+    expect(stdout).toContain('Kept the existing .wai/project.yaml');
+    expect(stdout).toContain(LISTED_AS_KEPT);
+    expect(stdout).not.toMatch(LISTED_AS_CREATED);
+    expect(fs.existsSync(path.join(rootDir, '.wai', 'specs', '.index.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(rootDir, '.claude', 'skills', 'sdd-architect', 'SKILL.md'))).toBe(true);
+  }, 180_000);
+
+  it('still creates the configuration in a fresh folder', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-fresh-'));
+
+    const { stdout } = await init(rootDir);
+
+    const config = yaml.load(fs.readFileSync(path.join(rootDir, '.wai', 'project.yaml'), 'utf8')) as {
+      execution: { tier: string };
+    };
+    expect(config.execution.tier).toBe('off');
+    expect(stdout).not.toContain('Kept the existing .wai/project.yaml');
+    expect(stdout).toMatch(LISTED_AS_CREATED);
+    expect(stdout).not.toContain(LISTED_AS_KEPT);
+    expect(fs.existsSync(path.join(rootDir, '.wai', 'specs', '.index.yaml'))).toBe(true);
+  }, 180_000);
+});
+
+// ---------------------------------------------------------------------------
+// `wairon init` writes no agent file: agents are live briefs resolved from the
+// spec tree, and agent files are the opt-in view `wairon generate` writes when
+// rules.materializeAgentFiles is on. Its L0 is the bootstrap core gives every
+// project, and its starter topology notes say so without naming an agent file.
+// ---------------------------------------------------------------------------
+
+describe('cli_runner.runInit: no agent file, and the L0 core bootstraps (real CLI)', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  it('writes no architect agent file into any target, bootstraps the L0, and describes agents as live briefs', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-noagent-'));
+
+    await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], { cwd: rootDir, timeout: 180_000 });
+
+    // --yes selects claude and agy: neither target gets an agent file.
+    for (const dir of [path.join('.claude', 'agents'), path.join('.gemini', 'agents')]) {
+      const full = path.join(rootDir, dir);
+      expect.soft(fs.existsSync(full) ? fs.readdirSync(full) : [], dir).toEqual([]);
+    }
+
+    // The L0 core bootstraps for every project.
+    const name = path.basename(rootDir);
+    const l0 = yaml.load(fs.readFileSync(path.join(rootDir, '.wai', 'specs', '.index.yaml'), 'utf8'));
+    expect.soft(l0).toMatchObject({
+      schemaVersion: '1.0.0',
+      name,
+      vision: `Core vision for ${name}`,
+      boundaries: [],
+      globalRequirements: [],
+    });
+
+    // The starter topology notes: live briefs, files only when opted in, no agent file named.
+    const notes = fs.readFileSync(path.join(rootDir, '.wai', 'docs', 'topology.md'), 'utf8');
+    expect.soft(notes).not.toContain('agent-architect');
+    expect.soft(notes).toContain('live briefs');
+    expect.soft(notes).toContain('materializeAgentFiles');
+  }, 180_000);
+});

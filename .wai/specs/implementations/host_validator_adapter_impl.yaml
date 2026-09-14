@@ -7,6 +7,13 @@ methods:
   - name: validateAsComplete
     narrative:
       - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the host core adapter: its rule severities
+          and projectType govern the as-complete gate
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
         description: Forward the as-complete validation to the validator portal
         type: call
         targetComponent: validator_portal
@@ -14,4 +21,4 @@ methods:
     symbol: validateProjectAsComplete
 status: complete
 createdAt: '2026-07-04T12:53:08.409Z'
-updatedAt: '2026-07-18T23:33:41.227Z'
+updatedAt: '2026-09-13T12:28:27.039Z'

@@ -1,15 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { runWithProjectRoot, getProjectRoot } from '../utils/fs.js';
-import { parseYaml, readYamlFile } from '../utils/yaml.js';
-import { loadProjectConfig, saveProjectConfig, AI_PATHS } from '../config/loader.js';
+import { parseYaml } from '../utils/yaml.js';
 import type { PackScope } from '../core/extensions.js';
+import type { PackSelection, ProjectConfig } from '../models/project.js';
 import { hostCore, hostSdk } from './adapters.js';
 import { authenticateCredential } from './auth.js';
 import { authorize } from './authorization.js';
 import { AdminAuthError, UnauthenticatedError } from './errors.js';
 import { existingProjectRoot } from './projects.js';
-import type { AvailableProfile, HostConfig, PackDescriptor, PackResolution, ProfileApplication, ProjectPackReference, ProjectProfileSelection, ResolvedGlobalPack } from './types.js';
+import type { AvailableProfile, HostConfig, PackDescriptor, PackResolution, ProfileApplication, ResolvedGlobalPack } from './types.js';
 import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 
 // ---------------------------------------------------------------------------
@@ -22,18 +22,24 @@ import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 // (WAIRON_PACKS_DIR, defaulted onto the data volume so installs persist). On a
 // name collision the INSTANCE pack wins and the shadowed image pack is surfaced
 // as drift; install/remove touch the instance tier ONLY (the image tier is
-// immutable). It also manages a bound project's .wai/packs/ plus its project.yaml
-// registration, and can read a project's declared pack/profile references for
-// drift checks. Installs over this surface are DECLARATIVE-ONLY (profiles +
-// language/platform tables — pure data); programmatic rule/code packs are refused
-// here and must be installed via the trusted filesystem (a baked image layer, a
-// mounted packs volume, or `wairon packs add`). The orchestrator layer adds
-// resolver authorization (instance-level project:admin for the global tier;
-// project:admin/project:read over the project for its tier) and scope binding.
+// immutable). It also stores a bound project's vendored packs under .wai/packs/.
+// The store never reads or writes .wai/project.yaml: project-scoped reads take the
+// loaded configuration, and a project install returns the probe whose ref the
+// orchestrator registers. Installs over this surface are DECLARATIVE-ONLY
+// (profiles + language/platform tables — pure data); programmatic rule/code packs
+// are refused here and must be installed via the trusted filesystem (a baked
+// image layer, a mounted packs volume, or `wairon packs add`). The orchestrator
+// layer adds resolver authorization (instance-level project:admin for the global
+// tier; project:admin/project:read over the project for its tier), scope binding,
+// and — at project scope — the pack registration, read and written through the
+// host core adapter.
 // ---------------------------------------------------------------------------
 
 const NAME_RE = /^[A-Za-z0-9._-]+$/;
 const PACK_EXT_RE = /\.(ya?ml|cjs|js)$/i;
+
+/** One extensions.packs registration: a legacy path reference or a by-name selection. */
+type PackRegistration = string | PackSelection;
 
 /** Guard the pack name so it can never traverse out of the packs directory. */
 function assertName(name: string): void {
@@ -223,17 +229,18 @@ function scanGlobalPackProfiles(): ProfileContribution[] {
 }
 
 /**
- * Collect every profile contributed by the packs registered in the BOUND
- * project's own config (.wai/project.yaml -> extensions.packs) — the tier the
- * instance-wide catalog cannot see, so a pack uploaded straight into a project no
- * longer has invisible profiles. Loads each registered ref in isolation against
- * the project root; a pack that fails to load contributes nothing. Assumes a
- * project root is already bound in scope; mutates nothing.
+ * Collect every profile contributed by the packs the given configuration registers
+ * for the BOUND project (extensions.packs) — the tier the instance-wide catalog
+ * cannot see, so a pack uploaded straight into a project no longer has invisible
+ * profiles. The caller loaded the configuration; an absent one registers nothing.
+ * Loads each registered ref in isolation against the project root; a pack that
+ * fails to load contributes nothing. Assumes a project root is already bound in
+ * scope; reads no project.yaml and mutates nothing.
  */
-function scanProjectPackProfiles(): ProfileContribution[] {
+function scanProjectPackProfiles(config?: ProjectConfig | null): ProfileContribution[] {
   const root = getProjectRoot();
   const out: ProfileContribution[] = [];
-  for (const entry of loadProjectConfig().extensions?.packs ?? []) {
+  for (const entry of config?.extensions?.packs ?? []) {
     try {
       // A by-name selection resolves through the bundle/store first; an
       // unresolvable one contributes no profiles, exactly like a bad pack.
@@ -285,9 +292,9 @@ export function storeListAvailableProfiles(): AvailableProfile[] {
  * this order:
  *
  *   1. the built-in profile ids (source 'builtin', installed) — they always govern;
- *   2. the profiles contributed by the packs registered in THIS project's own
- *      config (source = the pack's canonical name, installed) — the tier the
- *      instance-wide catalog cannot see;
+ *   2. the profiles contributed by the packs the supplied configuration registers
+ *      for THIS project (source = the pack's canonical name, installed) — the tier
+ *      the instance-wide catalog cannot see; an absent configuration adds none;
  *   3. the profiles contributed by the server-global packs across both tiers
  *      (NOT installed) — adoptable, and vendored by the write path on selection.
  *
@@ -296,7 +303,7 @@ export function storeListAvailableProfiles(): AvailableProfile[] {
  * installed rather than adoptable. Carries `family` through from each ProfileDef.
  * A pack that fails to load contributes nothing; never throws, mutates no tier.
  */
-function storeListProjectProfiles(): AvailableProfile[] {
+function storeListProjectProfiles(config?: ProjectConfig | null): AvailableProfile[] {
   const out: AvailableProfile[] = [];
   const seen = new Set<string>();
   const emit = (id: string, source: string, installed: boolean, family?: string): void => {
@@ -307,7 +314,7 @@ function storeListProjectProfiles(): AvailableProfile[] {
   };
 
   for (const id of hostCore.builtinProfileIds()) emit(id, 'builtin', true);
-  for (const c of scanProjectPackProfiles()) emit(c.id, c.source, true, c.family);
+  for (const c of scanProjectPackProfiles(config)) emit(c.id, c.source, true, c.family);
   for (const c of scanGlobalPackProfiles()) emit(c.id, c.source, false, c.family);
   return out;
 }
@@ -426,10 +433,16 @@ function storeRemoveGlobalPack(name: string): void {
 }
 
 // ── pack_registry: bound-project store (assumes a project root is bound) ───────
+//
+// Pack FILES only. Every project-scoped read takes the configuration the caller
+// loaded, and every install returns the probe whose ref the caller registers: the
+// registration itself belongs to the orchestrators, through the host core adapter.
 
-function storeListProjectPacks(): PackDescriptor[] {
+/** Probe each pack the supplied configuration registers, listed under its declared
+ *  label. An absent configuration registers no packs. */
+function storeListProjectPacks(config?: ProjectConfig | null): PackDescriptor[] {
   const root = getProjectRoot();
-  const entries = loadProjectConfig().extensions?.packs ?? [];
+  const entries = config?.extensions?.packs ?? [];
   // Selections are probed at their resolved location but LISTED under their
   // declared label, so the hosted view shows what the project asked for.
   return entries.map((entry) => {
@@ -439,28 +452,27 @@ function storeListProjectPacks(): PackDescriptor[] {
   });
 }
 
+/**
+ * Vendor a declarative pack into the bound project's .wai/packs/<name>.yaml
+ * (re-installing refreshes the file) and return its probe. Registers nothing: the
+ * probe's ref (.wai/packs/<name>.yaml) is the path reference the calling
+ * orchestrator registers in the project configuration.
+ */
 function storeInstallProjectPack(name: string, content: string): PackDescriptor {
   assertName(name);
   assertDeclarative(content);
   const root = getProjectRoot();
   const relRef = `.wai/packs/${name}.yaml`;
   writeFileAtomic(path.join(root, '.wai', 'packs', `${name}.yaml`), content);
-
-  const config = loadProjectConfig();
-  const packs = config.extensions?.packs ?? [];
-  if (!packs.includes(relRef)) {
-    config.extensions = { packs: [...packs, relRef], useGlobalPacks: hostCore.globalPacksEnabled(config) };
-    saveProjectConfig(config);
-  }
   return probe(relRef, root, 'project', relRef);
 }
 
 /**
  * Archive counterpart of storeInstallProjectPack for the bound project: inspect
  * + reject a code pack before disk, safely extract the declarative pack into
- * .wai/packs/<name>/ under hosted-strict limits, and register that
- * project-relative DIRECTORY ref in .wai/project.yaml under extensions.packs
- * (idempotent). Committed with the project, so every clone and CI enforce it.
+ * .wai/packs/<name>/ under hosted-strict limits, and return its probe, whose ref
+ * (.wai/packs/<name>) is the directory reference the calling orchestrator
+ * registers — committed with the project, so every clone and CI enforce it.
  * Assumes a project root is already bound in scope.
  */
 function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): PackDescriptor {
@@ -471,84 +483,24 @@ function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): Pac
   const root = getProjectRoot();
   const relRef = `.wai/packs/${packName}`;
   extractDeclarativeArchive(archive, path.join(root, '.wai', 'packs', packName));
-
-  const config = loadProjectConfig();
-  const packs = config.extensions?.packs ?? [];
-  if (!packs.includes(relRef)) {
-    config.extensions = { packs: [...packs, relRef], useGlobalPacks: hostCore.globalPacksEnabled(config) };
-    saveProjectConfig(config);
-  }
   return probe(relRef, root, 'project', relRef);
 }
 
-function storeRemoveProjectPack(name: string): void {
+/**
+ * Delete the vendored files of one registration the calling orchestrator has
+ * already matched and deregistered: the files at the given path reference, or —
+ * for a by-name selection, which carries no reference — the pack's bundle
+ * directory .wai/packs/<name>/. Never a path outside .wai/packs (a reference may
+ * point at a location the user owns); a path already gone is not an error. Reads
+ * and writes no configuration.
+ */
+function storeRemoveProjectPack(name: string, ref?: string): void {
   assertName(name);
   const root = getProjectRoot();
-  const config = loadProjectConfig();
-  const packs = config.extensions?.packs ?? [];
-  const relRef = `.wai/packs/${name}.yaml`;
-  // Matches either form: a legacy path ref by path/stem/basename, or a by-name
-  // selection by its declared name.
-  const match = packs.find((entry) => (typeof entry === 'string'
-    ? entry === relRef || stem(entry) === name || path.basename(entry) === name
-    : entry.name === name));
-  if (!match) throw new Error(`Project has no registered pack named "${name}".`);
-
-  config.extensions = { packs: packs.filter((entry) => entry !== match), useGlobalPacks: hostCore.globalPacksEnabled(config) };
-  saveProjectConfig(config);
-
-  // Delete the vendored file, but never a path outside .wai/packs (the ref may
-  // point at a location the user owns). A selection owns no vendored path here.
-  const resolved = path.resolve(root, typeof match === 'string' ? match : path.join('.wai', 'packs', match.name));
+  const resolved = path.resolve(root, ref ?? path.join('.wai', 'packs', name));
   const vendorDir = path.resolve(root, '.wai', 'packs');
   if (resolved.startsWith(vendorDir + path.sep)) {
     fs.rmSync(resolved, { recursive: true, force: true });
-  }
-}
-
-// ── pack_registry: project reference read (operational drift checks) ───────────
-//
-// A path-free read of a GIVEN project's declared pack/profile references straight
-// from its .wai/project.yaml, for operational drift checks. Pre-authorized and
-// server-internal (the operations orchestrator already authorized operations:read
-// before calling), so it is never gated and never portal-exposed. Never throws: a
-// missing/empty config yields an empty reference. Carries no filesystem paths
-// (only the project id plus declared pack/profile names), so the result is safe
-// for redacted diagnostics.
-
-/**
- * Read the given project's declared pack/profile references as a
- * ProjectPackReference: the pack names registered under extensions.packs (by file
- * stem), unioned with the required/default pack names recorded in its
- * profileSelection, plus the selected profile ids. Returns empty reference lists
- * (never throws) when the project has no config or no extensions/profile
- * selection. Reads the raw project.yaml (policy.ts pattern) so the un-schema'd
- * profileSelection survives the read.
- */
-export function readProjectReferences(rootPath: string): ProjectPackReference {
-  const projectId = path.basename(rootPath);
-  const empty: ProjectPackReference = { projectId, packNames: [] };
-  try {
-    return runWithProjectRoot(rootPath, () => {
-      const raw = readYamlFile(AI_PATHS.projectConfig()) as
-        | { extensions?: { packs?: string[] }; profileSelection?: ProjectProfileSelection }
-        | null;
-      if (!raw) return empty;
-      const sel = raw.profileSelection;
-      const packNames = [
-        ...new Set([
-          ...(raw.extensions?.packs ?? []).map((ref) => stem(ref)),
-          ...(sel?.requiredPackNames ?? []),
-          ...(sel?.defaultPackNames ?? []),
-        ]),
-      ];
-      const reference: ProjectPackReference = { projectId, packNames };
-      const profileIds = [...new Set(sel?.profileIds ?? [])];
-      if (profileIds.length > 0) reference.profileIds = profileIds;
-      return reference;
-    });
-  } catch {
-    return empty;
   }
 }
 
@@ -557,7 +509,9 @@ export function readProjectReferences(rootPath: string): ProjectPackReference {
 // Server-global pack management is instance configuration → INSTANCE-level
 // project:admin. Per-project install/remove require project:admin over that
 // project; the per-project listing requires project:read. The master credential
-// and the built-in admin pass via the resolver bypass.
+// and the built-in admin pass via the resolver bypass. At project scope the
+// orchestrator also owns the pack registration: it loads the bound project's
+// configuration and registers or deregisters through the host core adapter.
 
 /** Authenticate the caller credential or throw (401-mapping). */
 function requirePrincipal(cfg: HostConfig, credential: string | null) {
@@ -587,6 +541,16 @@ function boundProject(cfg: HostConfig, project: string): string {
   return root;
 }
 
+/** The one registration naming a pack, matched as project pack removal always
+ *  matched it: the first path reference equal to .wai/packs/<name>.yaml or whose
+ *  file stem or basename is the name, or a by-name selection with that name. */
+function findPackRegistration(config: ProjectConfig | null, name: string): PackRegistration | undefined {
+  const relRef = `.wai/packs/${name}.yaml`;
+  return (config?.extensions?.packs ?? []).find((entry) => (typeof entry === 'string'
+    ? entry === relRef || stem(entry) === name || path.basename(entry) === name
+    : entry.name === name));
+}
+
 export function listGlobalPacks(cfg: HostConfig, credential: string | null): PackDescriptor[] {
   requireCap(cfg, credential, 'project:admin', 'instance', '', 'Forbidden — managing server-global packs requires instance-level project:admin');
   return storeListGlobalPacks();
@@ -602,14 +566,23 @@ export function removeGlobalPack(cfg: HostConfig, credential: string | null, nam
   storeRemoveGlobalPack(name);
 }
 
+/** List a project's packs: require project:read over it, bind its root, load its
+ *  configuration through the core adapter, and probe the packs it registers. */
 export function listProjectPacks(cfg: HostConfig, credential: string | null, project: string): PackDescriptor[] {
   requireCap(cfg, credential, 'project:read', 'project', project, 'Forbidden — listing a project\'s packs requires project:read over it');
-  return executeApprovedListProjectPacks(cfg, project);
+  return runWithProjectRoot(boundProject(cfg, project), () => storeListProjectPacks(hostCore.loadProjectConfig()));
 }
 
+/** Install a declarative pack into a project: require project:admin over it, bind
+ *  its root, vendor the pack, and register the vendored path reference through the
+ *  core adapter (appended only when absent, so a re-install leaves one). */
 export function installProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string, content: string): PackDescriptor {
   requireCap(cfg, credential, 'project:admin', 'project', project, 'Forbidden — installing a project pack requires project:admin over the project');
-  return executeApprovedInstallProjectPack(cfg, project, name, content);
+  return runWithProjectRoot(boundProject(cfg, project), () => {
+    const descriptor = storeInstallProjectPack(name, content);
+    hostCore.registerPackRef(descriptor.ref);
+    return descriptor;
+  });
 }
 
 // ── pack_orchestrator: profile catalog + server-global pack adoption ───────────
@@ -633,13 +606,16 @@ export function listAvailableProfiles(cfg: HostConfig, credential: string | null
 
 /** List the profiles selectable for ONE project, each tagged with its source and
  *  whether it can already govern that project. Requires project:read over the
- *  project (mirrors listProjectPacks / listAdoptableProjectPacks), then returns
- *  the pre-authorized project-scoped store read. This is the catalog a
+ *  project (mirrors listProjectPacks / listAdoptableProjectPacks), binds its root,
+ *  loads its configuration through the core adapter, and returns the
+ *  pre-authorized project-scoped store read over it. This is the catalog a
  *  project-type picker must use: the instance-wide listAvailableProfiles cannot
  *  see a project's own packs and cannot say which profiles would need adopting. */
 export function listProjectProfiles(cfg: HostConfig, credential: string | null, project: string): AvailableProfile[] {
   requireCap(cfg, credential, 'project:read', 'project', project, 'Forbidden — listing a project\'s selectable profiles requires project:read over the project');
-  return executeApprovedListProjectProfiles(cfg, project);
+  return runWithProjectRoot(boundProject(cfg, project), () =>
+    executeApprovedListProjectProfiles(cfg, project, hostCore.loadProjectConfig()),
+  );
 }
 
 /** List the server-global pack catalog a project may adopt from. Requires
@@ -651,9 +627,10 @@ export function listAdoptableProjectPacks(cfg: HostConfig, credential: string | 
 }
 
 /** Adopt a server-global pack into a project by name: require project:admin over
- *  the project, resolve the name against the server-global set (both tiers), and
- *  vendor the resolved pack in by its CANONICAL name. A name the instance does not
- *  carry is rejected — never a silent no-op. */
+ *  the project, resolve the name against the server-global set (both tiers), vendor
+ *  the resolved pack in by its CANONICAL name, and register the vendored path
+ *  reference through the core adapter. A name the instance does not carry is
+ *  rejected — never a silent no-op. */
 export function adoptProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string): PackDescriptor {
   requireCap(cfg, credential, 'project:admin', 'project', project, 'Forbidden — adopting a project pack requires project:admin over the project');
   const resolution = executeApprovedResolveGlobalPacks([name]);
@@ -661,16 +638,21 @@ export function adoptProjectPack(cfg: HostConfig, credential: string | null, pro
     throw new Error(`no such server-global pack "${name}" — cannot adopt a pack the instance does not carry`);
   }
   const resolved = resolution.resolved[0];
-  return executeApprovedInstallProjectPack(cfg, project, resolved.name, resolved.content);
+  const descriptor = executeApprovedInstallProjectPack(cfg, project, resolved.name, resolved.content);
+  runWithProjectRoot(boundProject(cfg, project), () => hostCore.registerPackRef(descriptor.ref));
+  return descriptor;
 }
 
 /** Pre-authorized entries for the policy plane's init/reconcile workflows: same work as the
  *  gated variants but WITHOUT credential authentication — the caller (project_policy_orchestrator)
- *  has already enforced approval- or grant-based authorization. Never exposed on a portal. */
-export function executeApprovedListProjectPacks(cfg: HostConfig, project: string): PackDescriptor[] {
-  return runWithProjectRoot(boundProject(cfg, project), () => storeListProjectPacks());
+ *  has already enforced approval- or grant-based authorization and loaded the project's
+ *  configuration. Never exposed on a portal. */
+export function executeApprovedListProjectPacks(cfg: HostConfig, project: string, config?: ProjectConfig | null): PackDescriptor[] {
+  return runWithProjectRoot(boundProject(cfg, project), () => storeListProjectPacks(config));
 }
 
+/** Vendor one declarative pack into the project and return its probe, whose ref is the
+ *  path reference the caller registers. Registers nothing. */
 export function executeApprovedInstallProjectPack(cfg: HostConfig, project: string, name: string, content: string): PackDescriptor {
   return runWithProjectRoot(boundProject(cfg, project), () => storeInstallProjectPack(name, content));
 }
@@ -685,13 +667,13 @@ export function executeApprovedResolveGlobalPacks(names: string[]): PackResoluti
 }
 
 /** Pre-authorized entry for the policy plane and the project-scoped catalog
- *  surface: the profiles selectable for one project (built-ins + the project's own
- *  registered packs, installed; + the server-global packs, adoptable) WITHOUT
- *  credential authentication — the caller has already enforced authorization.
- *  Binds the project's isolated root for the project-tier half of the listing.
- *  Never exposed on any portal. */
-export function executeApprovedListProjectProfiles(cfg: HostConfig, project: string): AvailableProfile[] {
-  return runWithProjectRoot(boundProject(cfg, project), () => storeListProjectProfiles());
+ *  surface: the profiles selectable for one project (built-ins + the packs the
+ *  supplied configuration registers, installed; + the server-global packs,
+ *  adoptable) WITHOUT credential authentication — the caller has already enforced
+ *  authorization and loaded the configuration. Binds the project's isolated root
+ *  for the project-tier half of the listing. Never exposed on any portal. */
+export function executeApprovedListProjectProfiles(cfg: HostConfig, project: string, config?: ProjectConfig | null): AvailableProfile[] {
+  return runWithProjectRoot(boundProject(cfg, project), () => storeListProjectProfiles(config));
 }
 
 /**
@@ -700,32 +682,39 @@ export function executeApprovedListProjectProfiles(cfg: HostConfig, project: str
  * caller has already enforced authorization; never exposed on any portal.
  *
  * A known composite project kind or built-in profile id resolves immediately
- * (source 'builtin', nothing adopted). Otherwise the project-scoped catalog
- * decides: a profile already contributed by a pack registered in the project is
- * returned with that pack as its source and nothing adopted; a profile contributed
- * only by a server-global pack has that pack resolved through the two-tier
- * resolution seam and vendored into the project by its CANONICAL name (registering
- * it in extensions.packs), returned with adoptedPackName set so the side effect is
- * reported rather than hidden.
+ * (source 'builtin', nothing adopted). Otherwise the project-scoped catalog built
+ * from the supplied configuration decides: a profile already contributed by a pack
+ * that configuration registers is returned with that pack as its source and nothing
+ * adopted; a profile contributed only by a server-global pack has that pack resolved
+ * through the two-tier resolution seam and vendored into the project by its
+ * CANONICAL name, returned with adoptedPackName and adoptedPackRef (the vendored
+ * path reference) set. It registers nothing: the caller registers adoptedPackRef, so
+ * the side effect is reported rather than hidden and no caller composes the
+ * vendored layout itself.
  *
  * A profile id no tier contributes THROWS naming the id and the tiers searched:
  * writing it as the project's projectType would leave the whole profile doctrine
  * silently unenforced (UNKNOWN_PROFILE), so it is refused instead of applied.
  *
- * Idempotent: an already-resolvable profile is returned untouched, and a second
- * call adopts nothing further (the first call's vendoring put the contributing
- * pack in the project tier, where the catalog reports it installed).
+ * Idempotent: a profile the supplied configuration already makes resolvable is
+ * returned untouched; a repeat call made before the caller registered an earlier
+ * adoption re-vendors the same content and reports the same adoption.
  */
-export function executeApprovedEnsureProfileInstalled(cfg: HostConfig, project: string, profileId: string): ProfileApplication {
+export function executeApprovedEnsureProfileInstalled(
+  cfg: HostConfig,
+  project: string,
+  profileId: string,
+  config?: ProjectConfig | null,
+): ProfileApplication {
   // A composite project kind or a built-in profile governs as-is — no
   // contributing pack exists to adopt.
   if (hostCore.builtinProjectKinds().includes(profileId) || hostCore.builtinProfileIds().includes(profileId)) {
     return { profileId, source: 'builtin' };
   }
 
-  const contributors = executeApprovedListProjectProfiles(cfg, project).filter((p) => p.id === profileId);
+  const contributors = executeApprovedListProjectProfiles(cfg, project, config).filter((p) => p.id === profileId);
 
-  // Already resolvable: a pack registered in the project contributes it.
+  // Already resolvable: a pack the configuration registers contributes it.
   const installed = contributors.find((p) => p.installed);
   if (installed) return { profileId, source: installed.source };
 
@@ -740,13 +729,32 @@ export function executeApprovedEnsureProfileInstalled(cfg: HostConfig, project: 
       'whole profile doctrine (UNKNOWN_PROFILE), so it is refused instead of applied.',
     );
   }
-  executeApprovedInstallProjectPack(cfg, project, resolved.name, resolved.content);
-  return { profileId, source: resolved.name, adoptedPackName: resolved.name };
+  const descriptor = executeApprovedInstallProjectPack(cfg, project, resolved.name, resolved.content);
+  return { profileId, source: resolved.name, adoptedPackName: resolved.name, adoptedPackRef: descriptor.ref };
 }
 
+/**
+ * Remove a pack from a project: require project:admin over it, bind its root, load
+ * its configuration through the core adapter, and find the one registration naming
+ * the pack (rejected when none does). Deregister by the kind that matched — a path
+ * reference by that exact reference, a selection by its name — then delete the
+ * matched registration's vendored files, never a path outside .wai/packs.
+ */
 export function removeProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string): void {
   requireCap(cfg, credential, 'project:admin', 'project', project, 'Forbidden — removing a project pack requires project:admin over the project');
-  runWithProjectRoot(boundProject(cfg, project), () => storeRemoveProjectPack(name));
+  runWithProjectRoot(boundProject(cfg, project), () => {
+    // An unsafe name is refused before anything is read or written, as it always was.
+    assertName(name);
+    const match = findPackRegistration(hostCore.loadProjectConfig(), name);
+    if (!match) throw new Error(`Project has no registered pack named "${name}".`);
+    if (typeof match === 'string') {
+      hostCore.deregisterPackRef(match);
+      storeRemoveProjectPack(name, match);
+    } else {
+      hostCore.removePackSelection(match.name);
+      storeRemoveProjectPack(name);
+    }
+  });
 }
 
 // ── pack_orchestrator: ZIP (.wpack) archive installs (declarative-only) ────────
@@ -755,7 +763,8 @@ export function removeProjectPack(cfg: HostConfig, credential: string | null, pr
 // resolver gates (instance-level project:admin for the global tier; project:admin
 // over the project for its tier), same scope binding — the registry inspects the
 // envelope and rejects code packs, extracts under hosted-strict limits, and
-// re-checks the extracted pack is declarative.
+// re-checks the extracted pack is declarative; the orchestrator registers the
+// extracted directory reference at project scope.
 
 export function installGlobalPackArchive(cfg: HostConfig, credential: string | null, archive: Uint8Array, name?: string): PackDescriptor {
   requireCap(cfg, credential, 'project:admin', 'instance', '', 'Forbidden — managing server-global packs requires instance-level project:admin');
@@ -764,5 +773,9 @@ export function installGlobalPackArchive(cfg: HostConfig, credential: string | n
 
 export function installProjectPackArchive(cfg: HostConfig, credential: string | null, project: string, archive: Uint8Array, name?: string): PackDescriptor {
   requireCap(cfg, credential, 'project:admin', 'project', project, 'Forbidden — installing a project pack requires project:admin over the project');
-  return runWithProjectRoot(boundProject(cfg, project), () => storeInstallProjectPackArchive(archive, name));
+  return runWithProjectRoot(boundProject(cfg, project), () => {
+    const descriptor = storeInstallProjectPackArchive(archive, name);
+    hostCore.registerPackRef(descriptor.ref);
+    return descriptor;
+  });
 }

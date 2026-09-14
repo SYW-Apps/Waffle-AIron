@@ -4,9 +4,16 @@ description: Inbound Portal contract for skills subsystem.
 component: skills_portal
 methods:
   - name: exportSddSkills
-    description: Triggers skill exporting
-    signature: 'exportSddSkills(): void'
-    returns: void
+    description: >-
+      Triggers skill exporting for the passed target types, or the project's enabled targets, and
+      returns what was written.
+    signature: 'exportSddSkills(targetTypes?: string[]): SkillsExportResult'
+    returns: SkillsExportResult
+    params:
+      - name: targetTypes
+        type: string[]
+        description: The target types to export into; omitted means the project's enabled targets
+        optional: true
   - name: listResources
     description: Publish the built-in SDD skills as MCP resource descriptors for the MCP server.
     signature: 'listResources(): SkillResourceDescriptor[]'
@@ -29,4 +36,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-29T10:50:36.696Z'
+updatedAt: '2026-09-13T23:11:55.313Z'

@@ -155,6 +155,48 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: captureApprovedSpecs
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadProjectConfig
+  - name: removePackSelection
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: removePackSelection
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: setProjectType
+  - name: recordProfileSelection
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: recordProfileSelection
+  - name: registerPackRef
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: registerPackRef
+  - name: deregisterPackRef
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: deregisterPackRef
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-09-12T00:19:49.783Z'
+updatedAt: '2026-09-13T11:49:41.765Z'

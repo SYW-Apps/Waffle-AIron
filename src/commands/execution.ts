@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { WaironError } from '../utils/errors.js';
-import { isProjectInitialized, loadProjectConfig, saveProjectConfig } from '../config/loader.js';
+import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
+import { loadProjectConfig, projectConfigExists, setExecutionTier as writeExecutionTier } from './subsystem.js';
 import { resolveAgentTopology } from '../core/agent_resolver.js';
 import { deriveExecutionProfile } from '../core/execution_profile.js';
 import { resolveBudget } from '../core/budget_policy.js';
@@ -21,7 +21,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function assertInitialized(): void {
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     throw new WaironError('Not a wairon project — run `wairon init` first.');
   }
 }
@@ -36,6 +36,7 @@ const TIER_COLOR: Record<ModelTier, (s: string) => string> = {
 export async function showExecution(): Promise<void> {
   assertInitialized();
   const config = loadProjectConfig();
+  if (!config) throw new ProjectNotInitializedError();
   const tier = config.execution.tier;
 
   logger.header('Execution budgets');
@@ -115,14 +116,14 @@ export async function setExecutionTier(raw: string): Promise<void> {
   const tier: BudgetTier = parsed.data;
 
   const config = loadProjectConfig();
+  if (!config) throw new ProjectNotInitializedError();
   const previous = config.execution.tier;
   if (previous === tier) {
     logger.info(`Execution tier is already ${chalk.bold(tier)}.`);
     return;
   }
 
-  config.execution = { ...config.execution, tier };
-  saveProjectConfig(config);
+  writeExecutionTier(tier);
 
   logger.success(`Execution tier: ${chalk.gray(previous)} → ${chalk.bold(tier)}`);
   logger.info(BUDGET_TIER_DESCRIPTIONS[tier]);

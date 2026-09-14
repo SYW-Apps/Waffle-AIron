@@ -147,9 +147,11 @@ lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
       reason: >-
-        The canvas issue overlay invokes validateSddTree directly; the proper shape is issues passed
-        in by the caller — cross-subsystem refactor candidate (diagram_specialist is sdd_core, the
-        validator is sdd_validator).
+        The canvas issue overlay invokes validateSddTree directly, and reads the project
+        configuration (through project_config_repository) only to hand that call its rules and
+        projectType; the proper shape is issues passed in by the caller, which removes both edges —
+        cross-subsystem refactor candidate (diagram_specialist is sdd_core, the validator is
+        sdd_validator).
     - code: CALL_STEP_UNREALIZED
       reason: >-
         The graph/diagram builders read spec data through the shared workspace scan performed
@@ -157,4 +159,4 @@ lint:
         Reconcile with the canvas engine epic's renderer extraction.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-07-23T11:12:19.081Z'
+updatedAt: '2026-09-13T13:09:20.925Z'

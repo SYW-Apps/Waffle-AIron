@@ -1,0 +1,16 @@
+id: project_config_store
+name: Project Config Store
+description: >-
+  Authoritative holding of one project's configuration. Read-through: every read is a read-back of
+  `.wai/project.yaml` through the fs adapter, parsed against the ProjectConfig schema with its
+  defaults, so a hand edit is seen at once and nothing stale is held in memory. Writes replace the
+  document through the same adapter.
+subsystem: sdd_core
+componentType: Store
+owns: []
+dependsOn:
+  - project_config_fs_adapter
+durability: read-through
+status: complete
+createdAt: '2026-09-13T01:31:09.447Z'
+updatedAt: '2026-09-13T13:02:25.958Z'

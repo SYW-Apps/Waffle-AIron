@@ -11,6 +11,7 @@ dependsOn:
   - spec_loader
   - variant_registry_adapter
   - template_source_adapter
+  - project_config_repository
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-08-08T11:12:13.581Z'
+updatedAt: '2026-09-13T11:17:31.844Z'

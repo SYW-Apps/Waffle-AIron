@@ -76,7 +76,7 @@ describe('wairon execution (real CLI)', () => {
   const runCli = (cwd: string, ...args: string[]) =>
     execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'execution', ...args], { cwd, timeout: 180_000 });
 
-  /** The fixture is written as JSON; saveProjectConfig rewrites it as YAML.
+  /** The fixture is written as JSON; a configuration write rewrites it as YAML.
    *  js-yaml parses both, so read it this way on either side of a write. */
   const readConfig = (dir: string): { execution?: { tier?: string } } =>
     yaml.load(fs.readFileSync(path.join(dir, '.wai', 'project.yaml'), 'utf8')) as { execution?: { tier?: string } };

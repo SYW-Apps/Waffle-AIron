@@ -13,7 +13,8 @@ import {
   assertContainedProjectPath,
   rebaseReference,
 } from './specs.js';
-import { saveProjectConfig, aiPathsAt } from '../config/loader.js';
+import { aiPathsAt } from '../config/loader.js';
+import { projectConfigRepository, projectConfigRepositoryAt } from '../config/project-config.js';
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
@@ -62,11 +63,9 @@ function defaultProjectConfig(name: string, now: string): ProjectConfig {
   };
 }
 
-/** Bootstrap a fresh isolated project (project.yaml + L0 system spec) at the bound root. */
-export function provisionProject(name: string): void {
-  const now = new Date().toISOString();
-  saveProjectConfig(defaultProjectConfig(name, now));
-  saveSystemSpec({
+/** The bootstrap L0 system spec a fresh project starts from. */
+function bootstrapSystemSpec(name: string, now: string): Parameters<typeof saveSystemSpec>[0] {
+  return {
     schemaVersion: '1.0.0',
     name,
     vision: `Core vision for ${name}`,
@@ -75,7 +74,23 @@ export function provisionProject(name: string): void {
     databases: [],
     createdAt: now,
     updatedAt: now,
-  });
+  };
+}
+
+/**
+ * Bootstrap a fresh isolated project at the bound root: a default project.yaml created
+ * through the project config Repository, then an L0 system spec. The Repository refuses
+ * a root that already has a configuration; because the configuration comes first, that
+ * refusal writes nothing.
+ */
+export function provisionProject(name: string): void {
+  // Step 1: compose the default configuration and the bootstrap L0.
+  const now = new Date().toISOString();
+  const config = defaultProjectConfig(name, now);
+  // Step 2: write the default configuration through the Repository; refused when one exists.
+  projectConfigRepository.create(config);
+  // Step 3: persist the L0 system spec.
+  saveSystemSpec(bootstrapSystemSpec(name, now));
 }
 
 /**
@@ -100,21 +115,13 @@ export function ensureProjectInitialized(fallbackName: string): { wroteConfig: b
   }
   let wroteConfig = false;
   let wroteSystem = false;
-  if (!fs.existsSync(paths.projectConfig())) {
-    saveProjectConfig(defaultProjectConfig(name, now));
+  // Complete only what is missing: an existing configuration is never overwritten.
+  if (!projectConfigRepository.exists()) {
+    projectConfigRepository.create(defaultProjectConfig(name, now));
     wroteConfig = true;
   }
   if (!hasSystem) {
-    saveSystemSpec({
-      schemaVersion: '1.0.0',
-      name,
-      vision: `Core vision for ${name}`,
-      boundaries: [],
-      globalRequirements: [],
-      databases: [],
-      createdAt: now,
-      updatedAt: now,
-    });
+    saveSystemSpec(bootstrapSystemSpec(name, now));
     wroteSystem = true;
   }
   if (wroteConfig || wroteSystem) invalidateSpecCache();
@@ -206,7 +213,7 @@ export function listDirectChainedSubprojects(projectRoot: string): { dir: string
 
 /** True when a child dir has a spec tree but no project.yaml (un-runnable standalone). */
 function childHasSpecsButNoConfig(childDir: string): boolean {
-  return fs.existsSync(aiPathsAt(childDir).specsDir()) && !fs.existsSync(aiPathsAt(childDir).projectConfig());
+  return fs.existsSync(aiPathsAt(childDir).specsDir()) && !projectConfigRepositoryAt(childDir).exists();
 }
 
 /**
@@ -374,11 +381,15 @@ export function externalizeSubsystem(subsystemId: string, projectPath: string): 
   // Build the rename map (bare id -> namespaced) from foo's public surface BEFORE moving.
   const renameMap = buildRenameMap(subsystemId, /* externalize */ true);
 
-  // Provision the child project (project.yaml + L0), then move foo's subtree in.
+  // Provision the child project, then move foo's subtree in. The child's configuration
+  // comes first, through the Repository. It refuses a child that already has one,
+  // before anything has moved. The child's bootstrap L0 follows.
   const childSystemName = foo.name || subsystemId;
   runWithProjectRoot(childDir, () => {
+    const now = new Date().toISOString();
+    projectConfigRepository.create(defaultProjectConfig(childSystemName, now));
     ensureDir(path.join(childDir, '.wai', 'specs'));
-    provisionProject(childSystemName);
+    saveSystemSpec(bootstrapSystemSpec(childSystemName, now));
   });
   ensureDir(path.dirname(childFooDir));
   fs.renameSync(fooDir, childFooDir);
@@ -640,9 +651,10 @@ function rewriteRefFields(
 }
 
 /**
- * Re-express every implementation file path (sourcePath, simPath) under
- * `specsDir` so it is read against `toRoot` instead of `fromRoot`. The file a
- * path names never changes — only the root it is relative to.
+ * Re-express every implementation file path (sourcePath, each method's
+ * sourcePath, simPath) under `specsDir` so it is read against `toRoot` instead
+ * of `fromRoot`. The file a path names never changes — only the root it is
+ * relative to. Empty and absolute paths are left as they are.
  */
 function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: string): void {
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
@@ -654,13 +666,20 @@ function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: s
     }
     if (!raw || typeof raw !== 'object' || !('contract' in raw)) continue;
     let changed = false;
-    for (const key of ['sourcePath', 'simPath']) {
-      const p = raw[key];
-      if (typeof p !== 'string' || p === '' || path.isAbsolute(p)) continue;
+    /** Rebase `holder[key]` in place when it holds a relative path. */
+    const rebase = (holder: any, key: string): void => {
+      const p = holder[key];
+      if (typeof p !== 'string' || p === '' || path.isAbsolute(p)) return;
       const next = toPosixPath(path.relative(toRoot, path.resolve(fromRoot, p)));
       if (next !== p) {
-        raw[key] = next;
+        holder[key] = next;
         changed = true;
+      }
+    };
+    for (const key of ['sourcePath', 'simPath']) rebase(raw, key);
+    if (Array.isArray(raw.methods)) {
+      for (const method of raw.methods) {
+        if (method && typeof method === 'object') rebase(method, 'sourcePath');
       }
     }
     if (changed) writeYamlFile(file, raw);

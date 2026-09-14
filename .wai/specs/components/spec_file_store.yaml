@@ -1,9 +1,11 @@
 id: spec_file_store
 name: Spec File Store
 description: >-
-  Durable YAML file state of the spec tree under .wai/specs/ — the single file-I/O face of the spec
-  repository. Reads and writes go straight through to disk (read-through: the workspace's index
-  cache is an evictable convenience, never the source of truth).
+  Durable YAML file state of the spec tree — the single file-I/O face of the spec repository. Reads
+  and writes go straight through to disk (read-through: the workspace's index cache is an evictable
+  convenience, never the source of truth). The specs folder it addresses is fixed when a project
+  root is bound, resolved once from the project configuration's `paths.specsDir` (default
+  `.wai/specs`); the store itself never reads `project.yaml`.
 subsystem: sdd_core
 componentType: Store
 owns: []
@@ -11,4 +13,4 @@ dependsOn: []
 durability: read-through
 status: complete
 createdAt: '2026-07-18T22:57:52.990Z'
-updatedAt: '2026-07-18T22:57:53.778Z'
+updatedAt: '2026-09-13T11:22:45.438Z'
