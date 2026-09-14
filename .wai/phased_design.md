@@ -286,7 +286,7 @@ Wairon's own tree read and wrote `.wai/project.yaml` directly from 10 components
   - [ ] PR to dev; the maintainer runs `wairon lock` after merge
 
 ## Wairon friction fixes (before stage 2a) — decided by Robbe 2026-09-13
-Most of the friction log (F1–F28) is resolved, not deferred: the tool must be clear and truthful, with no unneeded silence or confusion. Every pull request is spec-first, and all land before stage 2a. Order, decided with the rule model's shape (B′): schema PR → rule model PR → PR A → PR B → PR C; track D follows. Proposals, examples and every decision: `docs/design/chained-subsystems/friction-fixes-proposals.md` and `decisions.md`.
+Most of the friction log (F1–F28) is resolved, not deferred: the tool must be clear and truthful, with no unneeded silence or confusion. Every pull request is spec-first, and all land before stage 2a. Order, decided with the rule model's shape (B′) and extended 2026-09-15: schema PR → rule model PR → doctrine PR → data-model PR → PR A → PR B → PR C; track D follows. Proposals, examples and every decision: `docs/design/chained-subsystems/friction-fixes-proposals.md` and `decisions.md`.
 
 ### Schema PR — method-level source files and findings (ACTIVE, branch feat/method-source-and-findings, stacked on PR #70)
 - [x] L3 (approved 2026-09-13, with both refinements): `method_implementation` (types `implementation_spec.methods`) with a per-method `sourcePath` (B3, moved up from PR B); `narrative_step` (fields only); `finding_declaration` and `findings` on `method_signature`; the MCP write tools express both fields
@@ -295,11 +295,28 @@ Most of the friction log (F1–F28) is resolved, not deferred: the tool must be 
 - [x] Fix what linking surfaced (approved 2026-09-14; `validate --ci` fails on warnings): `cli_core_adapter` gains `resolveAgentTopology`, `ensureProjectInitialized`, `listDirectChainedSubprojects`, `defaultPackSelections` (through `core_portal` to `core_orchestrator` / `extension_orchestrator`); `project_config.activeTargetTypes()`; `init` bootstraps L0 through core and stops writing its own architect agent file; `list`, `show` and `generate` resolve the topology through the adapter; `generate`'s cascade is narrated and its redundant cache invalidation removed; the MCP install action is named and bound by `symbol`
 - [x] Code; tests proven by revert; gates (typecheck, 2564 tests, e2e 21, validate --ci); CHANGELOG; PR #71, stacked on #70 (rebase onto dev after #70 merges; the maintainer runs `wairon lock` after merge)
 
-### Rule model PR — the 43 validator rules designed (NEXT; A13, shape B′ chosen 2026-09-13)
-- [ ] L2: eight `arbiter` families — integrity, narrative, intrinsic, doctrine, extension, wiring, conformance, heuristic — plus `narrative_graph_projector`; `rule_registry` depends on the eight
-- [ ] L3: one method per rule with its `findings`; the `rule_context` queries and type methods that replace shared helpers; `specScopedRules` on rule_index and rule_repository
-- [ ] L4/L5: full narratives for all 43 rules; one registration step per rule in run order; `validateSddTree` gathers the round-trip and known-code inputs, then loops over the rule sequence
-- [ ] Code: one rule per file in family folders (`symbol: check`), helpers moved to their homes, `SDD_RULES` into the rule repository, the gather fix — no behaviour change, existing rule tests unchanged; `UNREALIZED_FINDING`; a test comparing the code registry with the spec catalog (families, codes, severities, scope)
+### Rule model PR — the 43 validator rules designed (ACTIVE, branch feat/validator-rule-model; A13, shape B′ chosen 2026-09-13)
+- [x] L2 (approved 2026-09-14): eight `arbiter` Specialist families — integrity, narrative, intrinsic, doctrine, extension, wiring, conformance, heuristic — plus `narrative_graph_projector` (`projector`); `rule_registry` depends on `rule_store` and the eight. `spec_validator` retyped to Orchestrator (approved 2026-09-15: validation is a workflow)
+- [x] L3 (approved 2026-09-15): 43 rule methods carrying their 163 finding codes; `narrative_graph_projector.walk`; the shared helpers placed as `rule_context` queries (with `roundTripIssues` gathered by the validator) and as type methods on `component_spec`, `method_implementation`, `method_signature`, `type_spec`, `interface_spec`, `surface_snapshot` and `surface_contract_entry`; `sdd_rule.scope`; `specScopedRules` on rule_index and rule_repository; `validateComponentCandidate` on spec_validator and validator_portal
+- [ ] L4/L5: full narratives for all 43 rules, each method's `sourcePath` `src/core/rules/<family>/<rule>.ts` with `symbol: check`; the projector's walk; one registration step per rule in run order; `validateSddTree` gathers the round-trip and known-code inputs, then loops over the rule sequence; `validateComponentCandidate` in `src/core/rules/candidate.ts`
+- [ ] Code: one rule per file in family folders, helpers moved to their homes, `SDD_RULES` into the rule repository, the gather fix, the portal re-exporting `validateComponentCandidate` — no behaviour change, existing rule tests unchanged; a test comparing the code registry with the spec catalog (families, codes, severities, scope)
+
+### Doctrine PR — logic, process and data-access blocks (decided by Robbe 2026-09-15; proposals E6–E10)
+- [ ] Logic is an Orchestrator: a flowchart that may nest others, with one or more cohesive methods (a class, or a module of functions). Variants declare a dependency class the validator enforces: `pure` (only pure components) and `read` (reads of Repositories, Indexes and Adapters, judged once facade methods carry effect tags). Specialist retired; wairon's 28 Specialists migrated
+- [ ] A warning when an Orchestrator's methods form groups that call no common component
+- [ ] Process layer: an Actor owns one live thing, entity instances included, and its methods are full flowcharts; a Supervisor owns the set and may supervise Supervisors; a live Actor is reached by id through its Supervisor (`dependsOn` lists both) and is the only writer of its aggregate; the method owning a workflow owns its transaction and applies in-memory state only after commit; a Portal may message a Supervisor by id; dependency rules for Orchestrator, Supervisor and Actor; `hidden-state` stops treating Supervisor and Actor as stateless
+- [ ] Data access: a Store covers one aggregate; `Query` joins Store, Registry and Index as a Repository member for computed reads; cross-aggregate reads go through a read Orchestrator or a read-model Repository; the outbox is a sibling Repository (§7 and §10 aligned)
+- [ ] Timers: per-instance timers are Actor state; deadlines are aggregate fields read by an Index; a schedule aggregate only for timers that span aggregates
+- [ ] Complexity: a level from a cognitive score (linear, simple, moderate, complex, severe) and a step count, each with a warning and an optional max on separate codes; defaults warn above moderate and above 25 steps, with no max; precedence built-in, then pack profile, then project
+- [ ] Naming: stutter, generic words, a role word contradicting the component type, a one-method component named after its method; wairon's own seven mismatched names fixed
+- [ ] The standard gains the module realization in the language bindings and the live auction as its worked example
+
+### Data-model PR — entities as table schemas (decided by Robbe 2026-09-15; proposal E10)
+- [ ] One type per entity with persistence metadata (`database`, `table`, a per-field `column`, `transient`); relations stated on fields with derived foreign keys — other aggregates by id, value objects embedded, owned collections as child tables, many-to-many join tables derived; `linkedEntity`, `references` and `key: foreign` retired
+- [ ] Each table-backed entity belongs to exactly one Store, bound to its database
+- [ ] Read models derived explicitly (`derivedFrom`, a source per field) instead of `extends`; polymorphism through a discriminator plus one owned value object per variant
+- [ ] `wairon produce schema --database <id> --target postgres|prisma|efcore`; migrations stay with the ORM
+- [ ] Checks: unknown database or table, a table without a primary key, an unresolved relation, cross-aggregate navigation, a table owned by zero or two Stores, read-model drift, spec-to-ORM-schema drift
 
 ### PR A — truthful authoring tools (PARKED at 9cd939c on feat/truthful-authoring-tools; rebases onto the rule model PR)
 - [x] L1/L2 (approved 2026-09-13): new subsystem `sdd_authoring` (authoring_portal, authoring_orchestrator, authoring_core_adapter, authoring_validator_adapter); `mcp_authoring_adapter` in sdd_mcp
@@ -346,10 +363,7 @@ Most of the friction log (F1–F28) is resolved, not deferred: the tool must be 
 
 ## Doctrine and authoring-UX track (NEXT, after chained-subsystems stage 2) — decisions from Robbe 2026-09-13
 - [x] **Authoring friction left over from 2a-0:** moved into the friction-fix programme (PR A–C) above.
-- [ ] **Specialist is the last resort:**
-  - add a `rationale` field on component specs, and `SPECIALIST_WITHOUT_RATIONALE` (warning) with rules-matrix fixtures;
-  - state the rule in the architecture standard, the sdd-architect skill template and agent briefs, with the decomposition checklist;
-  - audit wairon's own 19 Specialists: decompose each into real blocks where one fits, or write its rationale.
+- [x] **Specialist is the last resort:** superseded on 2026-09-15 by the doctrine PR in the friction programme above. Specialist retires: logic is an Orchestrator whose variant declares its dependency class, and wairon's 28 Specialists migrate.
 - [ ] **Repository-first held state:**
   - adding a Repository scaffolds its Store (durability required), and the result names both;
   - members are added with `ownedBy: <repository>`;
