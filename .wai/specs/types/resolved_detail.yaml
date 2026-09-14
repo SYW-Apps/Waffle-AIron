@@ -1,0 +1,27 @@
+kind: value-object
+id: resolved_detail
+name: ResolvedDetail
+description: >-
+  The narrative detail a method is held to, and whether it was set on the method or its
+  implementation rather than defaulted from its component's type.
+fields:
+  - name: level
+    type: string
+    description: full | calls-only | intent
+    optional: false
+  - name: explicit
+    type: boolean
+    description: >-
+      True when the method or its implementation set the level; false when it is the component
+      type's default
+    optional: false
+methods: []
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Named only by the return of method_implementation.effectiveDetail, and unused-detection does
+        not yet count type-method signatures as references. Remove this allow once it does; the
+        stale-allow audit will flag it.
+createdAt: '2026-09-14T06:03:29.922Z'
+updatedAt: '2026-09-14T06:10:11.352Z'

@@ -1,0 +1,24 @@
+kind: value-object
+id: narrative_reach
+name: NarrativeReach
+description: What a narrative graph walk reached from its seeds.
+fields:
+  - name: reachedComponents
+    type: Set<string>
+    description: Ids of the components reached
+    optional: false
+  - name: reachedMethods
+    type: Set<string>
+    description: The methods reached, keyed component#method (component ids may themselves contain ::)
+    optional: false
+methods:
+  - name: reachesComponent
+    signature: 'reachesComponent(compId: string): boolean'
+    returns: boolean
+    description: Whether the walk reached this component
+  - name: reachesMethod
+    signature: 'reachesMethod(compId: string, methodName: string): boolean'
+    returns: boolean
+    description: Whether the walk reached this method of this component
+createdAt: '2026-09-14T06:03:48.859Z'
+updatedAt: '2026-09-14T06:03:48.869Z'

@@ -76,6 +76,19 @@ fields:
       Optional component variant — a declared, base-anchored specialization of this component's
       stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH).
     optional: true
-methods: []
+methods:
+  - name: defaultConformanceTier
+    signature: 'defaultConformanceTier(): string'
+    returns: string
+    description: >-
+      The conformance tier its methods get when neither the method nor its implementation sets one:
+      anchored for a Portal, declared otherwise
+  - name: defaultNarrativeDetail
+    signature: 'defaultNarrativeDetail(): string'
+    returns: string
+    description: >-
+      The narrative detail its methods get when neither the method nor its implementation sets one:
+      calls-only for Portals, Observers and Adapters; intent for Stores, Indexes and Registries;
+      full otherwise
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-15T12:23:34.588Z'
+updatedAt: '2026-09-14T06:03:58.492Z'

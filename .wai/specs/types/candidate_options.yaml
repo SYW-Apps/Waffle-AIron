@@ -1,0 +1,22 @@
+kind: value-object
+id: candidate_options
+name: CandidateOptions
+description: What the write gate needs besides the candidate itself.
+fields:
+  - name: rules
+    type: RulesConfig
+    description: >-
+      The project's rules config, so sddRuleSeverity overrides apply at the write as they do at
+      validate
+    optional: true
+  - name: projectType
+    type: string
+    description: The project type (default backend)
+    optional: true
+  - name: extensions
+    type: LoadedExtensions
+    description: Loaded packs, so pack-registered spec-scoped rules gate writes too
+    optional: true
+methods: []
+createdAt: '2026-09-14T06:03:53.921Z'
+updatedAt: '2026-09-14T06:03:53.928Z'

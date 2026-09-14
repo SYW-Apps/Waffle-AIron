@@ -1,0 +1,34 @@
+id: inarrative_graph_projector
+name: Narrative Graph Projector Interface
+description: >-
+  Derives what the L5 narrative graph reaches from a set of seeds, for the wiring rules that need
+  reachability.
+component: narrative_graph_projector
+methods:
+  - name: walk
+    description: >-
+      Breadth-first walk over the narrative graph from the seeds. Call steps and dispatch steps
+      (routed through the target Portal's dispatch table) are always followed; every binding of a
+      reached Portal's dispatch table and register-step handoffs are followed when the options
+      enable them, which they do by default. A reached method with no implementation contributes
+      nothing; one whose narrative is empty and whose effective detail is below full reaches every
+      contract method of its component's dependsOn and owns instead. Pure: the same context, seeds
+      and options always give the same reach.
+    signature: 'walk(ctx: RuleContext, seeds: WalkSeed[], options?: WalkOptions): NarrativeReach'
+    returns: NarrativeReach
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model
+      - name: seeds
+        type: WalkSeed[]
+        description: Where the walk starts
+      - name: options
+        type: WalkOptions
+        description: Which optional edges to follow
+        optional: true
+    guarantees:
+      - idempotent
+status: draft
+createdAt: '2026-09-14T06:07:00.382Z'
+updatedAt: '2026-09-14T06:07:00.387Z'

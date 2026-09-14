@@ -1,0 +1,224 @@
+id: iwiring_rules
+name: Wiring Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules judge whether the
+  execution graph is connected and complete; unused-detection and durability-round-trip take their
+  reachability from the narrative graph projector.
+component: wiring_rules
+methods:
+  - name: dependencyCycles
+    description: >-
+      Rule dependency-cycles. The component dependsOn graph must be a DAG; the first detected cycle
+      is reported with its full path.
+    signature: 'dependencyCycles(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: CIRCULAR_DEPENDENCY
+        severity: error
+        summary: Circular dependency between components
+  - name: dispatchTables
+    description: >-
+      Rule dispatch-tables. Portal dispatch tables must bind every capability to an existing
+      component.method inside the portal's own subsystem (the portal dispatches inward), with no
+      duplicate capabilities; dispatch narrative steps must route a declared capability through a
+      Portal that actually serves it.
+    signature: 'dispatchTables(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DISPATCH_ON_NON_PORTAL
+        severity: error
+        summary: Dispatch table declared on a component that is not a Portal
+      - code: DUPLICATE_CAPABILITY
+        severity: error
+        summary: Capability bound more than once in one dispatch table
+      - code: UNSERVED_CAPABILITY
+        severity: error
+        summary: >-
+          Capability has no existing server (bad table binding, or dispatch step routing a
+          capability the target Portal does not serve)
+      - code: DISPATCH_CROSS_SUBSYSTEM
+        severity: error
+        summary: Dispatch binding targets a component outside the portal's subsystem
+      - code: UNDECLARED_DISPATCH_TARGET
+        severity: error
+        summary: Dispatch binding targets a component the portal does not depend on or own
+      - code: MALFORMED_DISPATCH_STEP
+        severity: error
+        summary: >-
+          Dispatch step missing its capability (targetComponent presence is the contracts rule's
+          finding)
+      - code: NARRATIVE_SEMANTIC_UNBACKED
+        severity: warning
+        summary: Dispatch step asserts a guarantee the bound capability method does not declare
+  - name: lifecycleEntrypoints
+    description: >-
+      Rule lifecycle-entrypoints. Declared subsystem lifecycle entrypoints (init/shutdown flows)
+      must name an existing component and a method on one of its interfaces — they are reachability
+      roots, so a dangling entrypoint would silently detach every flow rooted in it.
+    signature: 'lifecycleEntrypoints(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: INVALID_LIFECYCLE_ENTRYPOINT
+        severity: error
+        summary: Lifecycle entrypoint names a missing component or method
+      - code: LIFECYCLE_CROSS_SUBSYSTEM
+        severity: error
+        summary: Lifecycle entrypoint roots a flow in another subsystem's component
+  - name: unusedDetection
+    description: >-
+      Rule unused-detection. Walks the narrative execution graph (call steps, register handoffs,
+      dispatch-table routing, lifecycle flows) from every entrypoint (Portal/Observer/published
+      component/lifecycle entrypoint/invokedBy-declared method) and flags components and methods no
+      execution chain reaches, plus types no field or signature references. An interface method
+      declaring invokedBy (a real caller outside the modeled graph) seeds the walk, so its narrative
+      propagates reachability; the declaration itself is audited (thin caller prose, or a method the
+      internal walk already reaches).
+    signature: 'unusedDetection(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNUSED_COMPONENT
+        severity: warning
+        summary: Component never reached by any narrative call chain
+      - code: UNUSED_METHOD
+        severity: warning
+        summary: Method never called by any narrative step
+      - code: UNUSED_TYPE
+        severity: warning
+        summary: Type never referenced by fields or signatures
+      - code: INVOKED_BY_UNDESCRIBED
+        severity: warning
+        summary: invokedBy declaration whose caller prose is missing or placeholder-thin
+      - code: INVOKED_BY_REDUNDANT
+        severity: warning
+        summary: >-
+          invokedBy declaration on a method the internal narrative walk already reaches — stale,
+          remove it
+  - name: durabilityRoundTrip
+    description: >-
+      Rule durability-round-trip. A durable Store (persisted RAM projection) must carry
+      effect-tagged contract methods, and its writes require a hydration read-back reachable from a
+      lifecycle init entrypoint. read-through is exempt (every read IS the read-back), as are
+      ram-projection (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic
+      check is opt-out by declaration, never silently absent — the declaration itself is enforced by
+      durability-declaration.
+    signature: 'durabilityRoundTrip(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MISSING_EFFECT_TAG
+        severity: warning
+        summary: 'Durable Store contract method lacks an effect: read | write tag'
+      - code: MISSING_HYDRATION
+        severity: error
+        summary: Durable Store is written but no read-back is reachable from any lifecycle init entrypoint
+  - name: untypedSeams
+    description: >-
+      Rule untyped-seams. Methods on a subsystem's published components (its public surface) should
+      not take or return bare Json/any/unknown — cross-subsystem contracts are the swap seam and
+      must be typed. Generic-dispatch portals carry per-capability types via their dispatch table
+      instead.
+    signature: 'untypedSeams(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNTYPED_SEAM
+        severity: warning
+        summary: Bare Json/any/unknown parameter or return crossing a subsystem public surface
+  - name: proseClaims
+    description: >-
+      Rule prose-claims. Flags durability/side-effect claims that exist only in prose: a local step
+      description or an intent paragraph claiming persistence ("persisted", "survives restart",
+      "registered into") on a logic component whose narrative has no call/dispatch edge to any
+      data-layer component (Store/Registry/Index/Adapter/Repository). Data-layer components are
+      exempt — they ARE the persistence.
+    signature: 'proseClaims(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNREALIZED_CLAIM
+        severity: warning
+        summary: Durability/side-effect claim in prose with no matching structural edge
+  - name: invariantBacking
+    description: >-
+      Rule invariant-backing. The invariant registry: entities may declare domain invariants
+      (type.invariants), anchored through their componentClass. Every write-effect contract method
+      of the owning component must carry a narrative step asserting each invariant
+      (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as
+      semantic guarantees. This is an HONEST lint over declarations: a green run means every write
+      path visibly claims the invariant, never that the narrative or code actually enforces it. An
+      invariant with no resolvable owner or no declared write path is unanchored; dangling assertion
+      references are errors.
+    signature: 'invariantBacking(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DUPLICATE_INVARIANT_ID
+        severity: error
+        summary: An entity declares two invariants with the same id
+      - code: INVARIANT_UNANCHORED
+        severity: warning
+        summary: >-
+          An entity declares invariants but has no componentClass, its componentClass does not
+          resolve, or the owning component declares no write-effect contract methods
+      - code: UNASSERTED_INVARIANT
+        severity: warning
+        summary: >-
+          A write-effect method of the invariant's owning component has no narrative step asserting
+          it
+      - code: UNKNOWN_INVARIANT_REF
+        severity: error
+        summary: A narrative step asserts an invariant that no entity declares
+  - name: eventTopology
+    description: >-
+      Rule event-topology. Bipartite completeness of the declared pub/sub graph: every topic a
+      component emits (emits declarations, MessageBus publish endpoints) must have at least one
+      subscriber (subscribesTo declarations, MessageBus subscribe endpoints), and every subscription
+      must have at least one source. Pairing is by exact topic name. Trees that declare no event
+      edges see nothing — the rule costs request/response systems zero noise. Warnings + lint.allow:
+      a topic produced for (or consumed from) an EXTERNAL system is a legitimate, declarable
+      exception.
+    signature: 'eventTopology(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNCONSUMED_TOPIC
+        severity: warning
+        summary: Topic is emitted but nothing in the tree subscribes to it
+      - code: UNSOURCED_SUBSCRIPTION
+        severity: warning
+        summary: Topic is subscribed to but nothing in the tree emits it
+status: draft
+createdAt: '2026-09-14T06:08:14.964Z'
+updatedAt: '2026-09-14T06:08:14.967Z'

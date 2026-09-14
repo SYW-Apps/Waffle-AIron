@@ -19,6 +19,13 @@ fields:
     type: RuleCode[]
     description: Every issue code this rule can emit, with default severity and summary.
     optional: false
+  - name: scope
+    type: string
+    description: >-
+      spec | tree (the default): what the check needs to see. A spec-scoped rule reads only one
+      spec's own fields, so the write gate also runs it on a candidate before saving; in the spec
+      tree the spec-scoped built-ins are exactly intrinsic_rules' methods.
+    optional: true
 methods: []
 createdAt: '2026-07-14T18:56:52.909Z'
-updatedAt: '2026-07-14T18:56:52.949Z'
+updatedAt: '2026-09-14T06:03:55.923Z'

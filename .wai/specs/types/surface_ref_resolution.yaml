@@ -1,0 +1,42 @@
+kind: value-object
+id: surface_ref_resolution
+name: SurfaceRefResolution
+description: >-
+  How a cross-tree reference fared against the stored surface snapshots: resolved to one snapshot's
+  contract entry; ambiguous, when several snapshots expose the name with different contracts so no
+  declared contract may judge the edge; or unresolved.
+fields:
+  - name: kind
+    type: string
+    description: resolved | ambiguous | unresolved
+    optional: false
+  - name: snapshot
+    type: SurfaceSnapshot
+    description: The snapshot that resolved the reference (resolved only)
+    optional: true
+  - name: entry
+    type: SurfaceContractEntry
+    description: The matching contract entry (resolved only)
+    optional: true
+  - name: providers
+    type: string[]
+    description: The providers whose snapshots disagree on the contract (ambiguous only)
+    optional: true
+methods:
+  - name: ambiguityMessage
+    signature: 'ambiguityMessage(subject: string, ref: string): string'
+    returns: string
+    description: >-
+      The message for an ambiguous resolution: the subject clause leading up to the reference, the
+      providers whose contracts disagree, and the remedy (name the provider, or remove the snapshot
+      that no longer applies). Each rule that resolves references reports it under
+      SURFACE_REF_AMBIGUOUS itself, so the finding reads the same on every kind of edge.
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Named only by the return of rule_context.resolveSurfaceRef, and unused-detection does not
+        yet count type-method signatures as references. Remove this allow once it does; the
+        stale-allow audit will flag it.
+createdAt: '2026-09-14T06:03:40.298Z'
+updatedAt: '2026-09-14T06:10:14.459Z'

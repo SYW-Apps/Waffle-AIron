@@ -1,0 +1,138 @@
+id: iheuristic_rules
+name: Heuristic Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules give advisory
+  judgements on size, naming and technology fit.
+component: heuristic_rules
+methods:
+  - name: couplingHealth
+    description: >-
+      Rule coupling-health. Two subsystems depending on each other is a real architectural
+      commitment (deployment affinity, backpressure, scaling coupling). It is allowed but must be
+      acknowledged with a trustedLinks declaration on either side, stating the reason (e.g. a
+      latency fast lane that bypasses the bus). A trustedLink on the SOURCE subsystem additionally
+      licenses its direct edges into the peer without the client-Adapter shim; the published-Portal
+      target requirement stays either way. Also flags components whose dependsOn fan-out suggests a
+      god component.
+    signature: 'couplingHealth(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MUTUAL_SUBSYSTEM_DEPENDENCY
+        severity: warning
+        summary: Subsystems depend on each other without a declared trusted link
+      - code: INVALID_TRUSTED_LINK
+        severity: error
+        summary: trustedLinks references a non-existent subsystem
+      - code: UNUSED_TRUSTED_LINK
+        severity: warning
+        summary: trustedLinks declares a peer no dependency actually reaches
+      - code: GOD_COMPONENT
+        severity: warning
+        summary: Component with excessive dependency fan-out
+  - name: targetLanguage
+    description: >-
+      Rule target-language. Contracts must speak the declared target language: builtin types that
+      unambiguously belong to another language family are flagged in method signatures, and
+      narrative flow steps using constructs the language lacks (e.g. exceptions in Rust/Go, do-while
+      in Python) are flagged too. Set targetLanguage on the system (L0) or override per subsystem
+      (L1).
+    signature: 'targetLanguage(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: LANGUAGE_FOREIGN_BUILTIN
+        severity: warning
+        summary: Signature uses a builtin from a different language family
+      - code: LANGUAGE_FOREIGN_FLOW
+        severity: warning
+        summary: Narrative flow step uses a construct the target language does not have
+  - name: technologyBoundaries
+    description: >-
+      Rule technology-boundaries. Technology stays behind its owning boundary: an L4 that declares
+      `technologies` (e.g. [mysql]) makes its component's ownership tree the technology's home.
+      References outside that tree are leakage, L3 contract identifiers must stay intent-language
+      (the contract is the swap seam), and only data-layer stereotypes
+      (Adapter/Store/Registry/Index) should bind a technology directly.
+    signature: 'technologyBoundaries(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: TECH_LEAKAGE
+        severity: warning
+        summary: Technology referenced outside its owning boundary
+      - code: VENDOR_NAME_IN_CONTRACT
+        severity: warning
+        summary: Technology name in L3 contract identifiers
+      - code: TECH_ON_LOGIC_COMPONENT
+        severity: warning
+        summary: Technology bound by a non-data-layer stereotype
+  - name: namingConventions
+    description: >-
+      Rule naming-conventions. Enforces naming conventions (casing styles or regular expressions)
+      for subsystem, component, interface, type (differentiating entities and value-objects),
+      method, variables/parameters, fields, and constants names/IDs, plus stereotype-specific naming
+      patterns.
+    signature: 'namingConventions(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: NAMING_CONVENTION_VIOLATION
+        severity: warning
+        summary: Item name or ID does not match the configured casing pattern or regex
+      - code: STEREOTYPE_NAMING_VIOLATION
+        severity: warning
+        summary: Component name or ID does not match stereotype suffix/prefix/regex rules
+      - code: INVALID_NAMING_PATTERN
+        severity: error
+        summary: Configured naming pattern is not a known casing style or valid regular expression
+  - name: complexityAndMetadata
+    description: >-
+      Rule complexity-and-metadata. Enforces metadata documentation completeness (checking if
+      descriptions are missing or too short) and structural complexity caps (limits on methods per
+      interface, dependencies per component, and narrative steps per method) configured globally or
+      in architectural profiles.
+    signature: 'complexityAndMetadata(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MISSING_DESCRIPTION
+        severity: warning
+        summary: Required description field is missing or empty
+      - code: DESCRIPTION_TOO_SHORT
+        severity: warning
+        summary: Description is shorter than the configured minimum length
+      - code: EXCESSIVE_METHODS
+        severity: warning
+        summary: Interface declares more methods than the configured limit
+      - code: EXCESSIVE_METHOD_PARAMS
+        severity: warning
+        summary: Interface method declares more parameters than the configured limit
+      - code: EXCESSIVE_DEPENDENCIES
+        severity: warning
+        summary: Component has more dependencies than the configured limit
+      - code: EXCESSIVE_NARRATIVE_STEPS
+        severity: warning
+        summary: Method implementation contains more narrative steps than the configured limit
+      - code: EXCESSIVE_SUBSYSTEM_COMPONENTS
+        severity: warning
+        summary: Subsystem has more direct components than the configured limit
+status: draft
+createdAt: '2026-09-14T06:08:59.720Z'
+updatedAt: '2026-09-14T06:08:59.722Z'

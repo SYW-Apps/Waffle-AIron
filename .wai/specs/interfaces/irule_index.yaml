@@ -19,6 +19,13 @@ methods:
     signature: 'knownIssueCodes(): RuleCode[]'
     returns: RuleCode[]
     params: []
+  - name: specScopedRules
+    description: >-
+      Return the spec-scoped rules in run order: the rules that read only one spec's own fields,
+      which the write gate runs on a candidate before it is saved.
+    signature: 'specScopedRules(): SddRule[]'
+    returns: SddRule[]
+    params: []
 status: complete
 createdAt: '2026-07-14T19:17:17.309Z'
-updatedAt: '2026-07-14T20:23:49.283Z'
+updatedAt: '2026-09-14T06:07:02.122Z'
