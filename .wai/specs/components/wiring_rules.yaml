@@ -1,0 +1,20 @@
+id: wiring_rules
+name: Wiring Rules
+description: >-
+  Judges whether the execution graph is connected and complete: no dependency cycles, dispatch
+  tables and lifecycle entrypoints resolve, every component and method is reached, durable Stores
+  are hydrated from an init flow, cross-subsystem seams are typed, prose claims are realized,
+  invariants are asserted, and events pair by topic. Reachability comes from the narrative graph
+  projector. Specialist by last resort: its verdicts are not type methods, because the rule set is
+  open (packs register rules at runtime) and most verdicts read many specs; it holds no state (the
+  rule set belongs to the rule Repository), does no I/O and runs no workflow, which is the arbiter
+  shape.
+subsystem: sdd_validator
+componentType: Specialist
+owns: []
+dependsOn:
+  - narrative_graph_projector
+variant: arbiter
+status: draft
+createdAt: '2026-09-14T05:42:42.284Z'
+updatedAt: '2026-09-14T05:42:56.423Z'

@@ -1,0 +1,16 @@
+id: heuristic_rules
+name: Heuristic Rules
+description: >-
+  Advisory judgements on size, naming and technology fit: coupling health, target-language fit,
+  technology boundaries, naming conventions, and documentation and complexity caps. Specialist by
+  last resort: its verdicts are not type methods, because the rule set is open (packs register rules
+  at runtime) and most verdicts read many specs; it holds no state (the rule set belongs to the rule
+  Repository), does no I/O and runs no workflow, which is the arbiter shape.
+subsystem: sdd_validator
+componentType: Specialist
+owns: []
+dependsOn: []
+variant: arbiter
+status: draft
+createdAt: '2026-09-14T05:42:23.080Z'
+updatedAt: '2026-09-14T05:42:48.023Z'

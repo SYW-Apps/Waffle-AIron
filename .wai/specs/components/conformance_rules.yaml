@@ -1,0 +1,18 @@
+id: conformance_rules
+name: Conformance Rules
+description: >-
+  Judges whether code matches the spec, from the source facts the validator gathers: source files
+  resolve and realize their contract methods and declared findings, narrative calls are realized,
+  logic files hold no hidden state, runtime imports match declared dependencies, and integration
+  harnesses wire the real modules. Specialist by last resort: its verdicts are not type methods,
+  because the rule set is open (packs register rules at runtime) and most verdicts read many specs;
+  it holds no state (the rule set belongs to the rule Repository), does no I/O and runs no workflow,
+  which is the arbiter shape.
+subsystem: sdd_validator
+componentType: Specialist
+owns: []
+dependsOn: []
+variant: arbiter
+status: draft
+createdAt: '2026-09-14T05:42:20.209Z'
+updatedAt: '2026-09-14T05:42:47.033Z'
