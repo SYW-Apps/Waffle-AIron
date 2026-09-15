@@ -282,6 +282,10 @@ function nodeDecl(id: string, label: string, comp: ComponentSpec): string {
 
 function stereotypeClass(comp: ComponentSpec): string {
   switch (comp.componentType) {
+    // Retired stereotypes stay drawn until migrated; a Gateway is no pattern.
+    case 'Specialist':
+    case 'Gateway':
+      return 'retired';
     case 'Portal':
     case 'Observer':
       return 'entry';
@@ -292,7 +296,6 @@ function stereotypeClass(comp: ComponentSpec): string {
     case 'Adapter':
       return 'adapter';
     case 'Repository':
-    case 'Gateway':
     case 'FeatureComponent':
     case 'RouterComponent':
       return 'pattern';
@@ -307,6 +310,7 @@ const CLASS_DEFS = [
   'classDef data fill:#fdf6e3,stroke:#c9963f,color:#4a3517;',
   'classDef adapter fill:#eef8f1,stroke:#4f9e6b,color:#173322;',
   'classDef pattern fill:#f6f8fa,stroke:#6a737d,color:#24292e;',
+  'classDef retired fill:#efedeb,stroke:#8a817c,color:#35302b,stroke-dasharray:3 3;',
   'classDef publicSurface stroke-width:3px;',
 ];
 

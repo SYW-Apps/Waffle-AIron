@@ -147,6 +147,20 @@ describe('diagram generation from the spec tree', () => {
     expect(mmd).toMatch(/class .*billing_portal.* publicSurface/);
   });
 
+  it('classes retired Specialists and Gateways as retired, not as logic or a pattern', () => {
+    buildFixture();
+    const at = { description: 'd', subsystem: 'billing', owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now };
+    saveComponentSpec({ ...at, id: 'pricing-specialist', name: 'Pricing Specialist', componentType: 'Specialist' } as any);
+    saveComponentSpec({ ...at, id: 'edge-gateway', name: 'Edge Gateway', componentType: 'Gateway' } as any);
+    const mmd = generateComponentDiagram();
+
+    expect(mmd).toContain('classDef retired');
+    const retiredIds = (/^\s*class (\S+) retired$/m.exec(mmd)?.[1] ?? '').split(',');
+    expect(retiredIds).toEqual(expect.arrayContaining(['pricing_specialist', 'edge_gateway']));
+    expect(/^\s*class (\S+) logic$/m.exec(mmd)?.[1] ?? '').not.toContain('pricing_specialist');
+    expect(/^\s*class (\S+) pattern$/m.exec(mmd)?.[1] ?? '').not.toContain('edge_gateway');
+  });
+
   it('scopes a component diagram to a subsystem plus its external neighbors', () => {
     buildFixture();
     const mmd = generateComponentDiagram({ subsystem: 'shipping' });

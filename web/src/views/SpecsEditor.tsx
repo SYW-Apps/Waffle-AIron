@@ -46,9 +46,10 @@ interface Selected {
 
 const STATUS = ['draft', 'design', 'complete'];
 const COMPONENT_TYPE = [
-  'Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Registry',
-  'Adapter', 'Observer', 'Specialist', 'View', 'Repository', 'Gateway',
-  'FeatureComponent', 'RouterComponent',
+  'Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Query', 'Registry',
+  'Adapter', 'Observer', 'View', 'Repository', 'FeatureComponent', 'RouterComponent',
+  // Retired (STEREOTYPE_RETIRED): still listed so a tree not yet migrated shows its type.
+  'Specialist', 'Gateway',
 ];
 const PORTAL_TYPE = ['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom'];
 const DURABILITY = ['ram-projection', 'durable', 'read-through', 'cache'];
@@ -992,7 +993,7 @@ function SpecForm(props: {
           </Field>
           {(draft.publicInterfaces ?? []).length > 0 && (
             <div className="stack-lg">
-              <span className="field-label">Gateway surface entries</span>
+              <span className="field-label">Public surface entries</span>
               {draft.publicInterfaces.map((pi: any, i: number) => (
                 <div key={i} className="sub-card">
                   <code className="subtle">{pi.id ?? pi.component ?? `entry ${i + 1}`}</code>
@@ -1386,7 +1387,7 @@ function ComponentUnitEditor(props: {
   const navigate = useNavigate();
   const compNode = nodes.find((n) => n.id === componentId);
   // "Open in canvas" opens the component's PARENT (subsystem) view and focuses the
-  // component — a leaf (Specialist/Store/Actor/…) has no meaningful "inside" to drill
+  // component — a leaf (Orchestrator/Store/Actor/…) has no meaningful "inside" to drill
   // into. Subsystem route = its id with '::' → '/' segments; the component to focus
   // (and, for a method, the narrative flow) rides in the URL hash. No unit prefix.
   const parentRoute = compNode?.parentId ? compNode.parentId.split('::').map(encodeURIComponent).join('/') : '';
