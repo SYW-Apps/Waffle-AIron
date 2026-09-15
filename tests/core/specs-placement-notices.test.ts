@@ -126,12 +126,12 @@ describe('component / interface / implementation parent-change notices', () => {
     const specs = path.join(proj, '.wai', 'specs');
     fs.writeFileSync(
       path.join(specs, 'components', 'widget.yaml'),
-      `schemaVersion: 1.0.0\nid: widget\nname: W\ndescription: d\nsubsystem: billing\ncomponentType: Specialist\nowns: []\ndependsOn: []\n${stamp}\n`,
+      `schemaVersion: 1.0.0\nid: widget\nname: W\ndescription: d\nsubsystem: billing\ncomponentType: Orchestrator\ndependencyClass: pure\nowns: []\ndependsOn: []\n${stamp}\n`,
     );
     invalidateSpecCache();
 
     const notices = saveComponentSpec({
-      id: 'widget', name: 'W', description: 'd', subsystem: 'ops', componentType: 'Specialist',
+      id: 'widget', name: 'W', description: 'd', subsystem: 'ops', componentType: 'Orchestrator', dependencyClass: 'pure',
       owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now,
     });
     expect(notices.some(n => n.includes('never relocates'))).toBe(true);
@@ -210,11 +210,11 @@ describe('component / interface / implementation parent-change notices', () => {
     const specs = path.join(proj, '.wai', 'specs');
     fs.writeFileSync(
       path.join(specs, 'components', 'widget.yaml'),
-      `schemaVersion: 1.0.0\nid: widget\nname: W\ndescription: d\nsubsystem: billing\ncomponentType: Specialist\nowns: []\ndependsOn: []\n${stamp}\n`,
+      `schemaVersion: 1.0.0\nid: widget\nname: W\ndescription: d\nsubsystem: billing\ncomponentType: Orchestrator\ndependencyClass: pure\nowns: []\ndependsOn: []\n${stamp}\n`,
     );
     invalidateSpecCache();
     const notices = saveComponentSpec({
-      id: 'widget', name: 'W', description: 'renamed only', subsystem: 'billing', componentType: 'Specialist',
+      id: 'widget', name: 'W', description: 'renamed only', subsystem: 'billing', componentType: 'Orchestrator', dependencyClass: 'pure',
       owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now,
     });
     expect(notices).toEqual([]);

@@ -97,7 +97,8 @@ schemaVersion: 1.0.0
 id: invalid-comp
 name: invalid-comp
 subsystem: subsystem_a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 description: valid description
@@ -226,7 +227,8 @@ schemaVersion: 1.0.0
 id: comp-a
 name: comp-a
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 description: valid description
@@ -287,7 +289,8 @@ schemaVersion: 1.0.0
 id: comp-a
 name: comp-a
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 description: ''
@@ -347,7 +350,8 @@ schemaVersion: 1.0.0
 id: comp-a
 name: comp-a
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 dependsOn: [comp-b, comp-c]
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -359,7 +363,8 @@ schemaVersion: 1.0.0
 id: comp-b
 name: comp-b
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 description: valid description
@@ -370,7 +375,8 @@ schemaVersion: 1.0.0
 id: comp-c
 name: comp-c
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 description: valid description

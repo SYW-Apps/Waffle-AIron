@@ -158,16 +158,16 @@ describe('dependency-cycles — a scoped run reports the cycles of its scope', (
 
 // returns-portal.openReturn calls refund-orch.issueRefund; refund-orch's second
 // contract (irefund-admin) declares voidRefund, which nothing calls, and
-// reconcileRefunds, whose invokedBy states no caller; restock-spec is unreached.
+// reconcileRefunds, whose invokedBy states no caller; restock-orch is unreached.
 function returnsDesk(proj: Project, subsystemExtra: Spec = {}) {
   proj.subsystem('returns-desk', subsystemExtra);
   proj.component('returns-portal', 'returns-desk', 'Portal', { portalType: 'Custom', dependsOn: ['refund-orch'] });
   proj.component('refund-orch', 'returns-desk', 'Orchestrator');
-  proj.component('restock-spec', 'returns-desk', 'Specialist');
+  proj.component('restock-orch', 'returns-desk', 'Orchestrator', { dependencyClass: 'pure' });
   proj.contract('ireturns-portal', 'returns-portal', [{ name: 'openReturn' }]);
   proj.contract('irefund-orch', 'refund-orch', [{ name: 'issueRefund' }]);
   proj.contract('irefund-admin', 'refund-orch', [{ name: 'voidRefund' }, { name: 'reconcileRefunds', invokedBy: { kind: 'runtime' } }]);
-  proj.contract('irestock-spec', 'restock-spec', [{ name: 'restock' }]);
+  proj.contract('irestock-orch', 'restock-orch', [{ name: 'restock' }]);
   proj.impl('returns-portal-impl', 'ireturns-portal', [{
     name: 'openReturn',
     narrative: [{ stepNumber: 1, type: 'call', description: 'Hand the return to the refund workflow', targetComponent: 'refund-orch', targetMethod: 'issueRefund' }],
@@ -178,7 +178,7 @@ describe('unused-detection — draft context and anchors', () => {
   it('a draft subsystem is draft context for UNUSED_COMPONENT, UNUSED_METHOD and INVOKED_BY_UNDESCRIBED', () => {
     inProject(proj => returnsDesk(proj, { status: 'draft' }), proj => {
       const res = proj.validate();
-      const unusedComponent = withCode(res, 'UNUSED_COMPONENT').find(i => i.specId === 'restock-spec');
+      const unusedComponent = withCode(res, 'UNUSED_COMPONENT').find(i => i.specId === 'restock-orch');
       const unusedMethod = withCode(res, 'UNUSED_METHOD').find(i => i.message.includes('"voidRefund"'));
       const undescribed = withCode(res, 'INVOKED_BY_UNDESCRIBED').find(i => i.message.includes('"reconcileRefunds"'));
       expect(unusedComponent?.draftContext).toBe(true);
@@ -190,7 +190,7 @@ describe('unused-detection — draft context and anchors', () => {
   it('a complete subsystem is not draft context for the same findings', () => {
     inProject(proj => returnsDesk(proj), proj => {
       const res = proj.validate();
-      expect(withCode(res, 'UNUSED_COMPONENT').find(i => i.specId === 'restock-spec')?.draftContext).toBeUndefined();
+      expect(withCode(res, 'UNUSED_COMPONENT').find(i => i.specId === 'restock-orch')?.draftContext).toBeUndefined();
       expect(withCode(res, 'UNUSED_METHOD').find(i => i.message.includes('"voidRefund"'))?.draftContext).toBeUndefined();
     });
   });
@@ -401,7 +401,7 @@ describe('dispatch-tables — no guarantee finding against a method that does no
           { capability: 'payment.refund', component: 'refund-executor', method: 'refundCharge' },
         ],
       });
-      proj.component('charge-executor', 'payments', 'Specialist');
+      proj.component('charge-executor', 'payments', 'Orchestrator', { dependencyClass: 'pure' });
       proj.component('payment-orch', 'payments', 'Orchestrator', { dependsOn: ['payments-portal'] });
       proj.contract('icharge-executor', 'charge-executor', [{ name: 'authorizeCharge' }]);
       proj.contract('ipayment-orch', 'payment-orch', [{ name: 'capturePayment' }]);

@@ -306,7 +306,8 @@ id: known-a
 name: known-a
 description: d
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 patterns:
   - id: org/domain-pattern
     version: 1.0.0`);
@@ -315,7 +316,8 @@ id: unknown-a
 name: unknown-a
 description: d
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 patterns:
   - id: org/missing-pattern`);
     proj.activate();
@@ -339,7 +341,8 @@ id: comp-a
 name: comp-a
 description: d
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 patterns:
   - id: org/domain-pattern
     version: 2.0.0`);
@@ -402,13 +405,13 @@ describe('component variants', () => {
   it('resolves a component variant and flags unknown / base-mismatched ones', () => {
     const proj = createTempProject();
     proj.writeFile('.wai/variants/publisher.yaml', `id: publisher
-base: Specialist
+base: Orchestrator
 guidance: Fan-out emitter; reuse the shared publisher helper.
 `);
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
-    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
+    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: publisher');
     proj.writeSpec('component', 'bad-base', 'schemaVersion: 1.0.0\nid: bad-base\nname: bad-base\ndescription: d\nsubsystem: sub-a\ncomponentType: Adapter\nvariant: publisher');
-    proj.writeSpec('component', 'unknown-v', 'schemaVersion: 1.0.0\nid: unknown-v\nname: unknown-v\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: nope');
+    proj.writeSpec('component', 'unknown-v', 'schemaVersion: 1.0.0\nid: unknown-v\nname: unknown-v\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: nope');
     proj.activate();
     try {
       const res = validateSddTree();
@@ -421,10 +424,10 @@ guidance: Fan-out emitter; reuse the shared publisher helper.
   it('merges global (WAIRON_VARIANTS_DIR) and project variants, project winning', () => {
     const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-global-variants-'));
     fs.writeFileSync(path.join(globalDir, 'shared.yaml'), 'id: shared\nbase: Adapter\nguidance: global version\n');
-    fs.writeFileSync(path.join(globalDir, 'publisher.yaml'), 'id: publisher\nbase: Specialist\nguidance: global publisher\n');
+    fs.writeFileSync(path.join(globalDir, 'publisher.yaml'), 'id: publisher\nbase: Orchestrator\nguidance: global publisher\n');
     process.env.WAIRON_VARIANTS_DIR = globalDir;
     const proj = createTempProject();
-    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Specialist\nguidance: PROJECT publisher\n');
+    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Orchestrator\nguidance: PROJECT publisher\n');
     proj.activate();
     try {
       const byId = new Map(loadProjectVariants().map(v => [v.id, v]));
@@ -439,10 +442,10 @@ guidance: Fan-out emitter; reuse the shared publisher helper.
 
   it('injects variant guidance + same-variant siblings into the owner agent context', () => {
     const proj = createTempProject();
-    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Specialist\nguidance: Fan-out emitter, reuse the shared helper.\n');
+    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Orchestrator\nguidance: Fan-out emitter, reuse the shared helper.\n');
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
-    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
-    proj.writeSpec('component', 'pub-b', 'schemaVersion: 1.0.0\nid: pub-b\nname: pub-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
+    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: publisher');
+    proj.writeSpec('component', 'pub-b', 'schemaVersion: 1.0.0\nid: pub-b\nname: pub-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: publisher');
     proj.activate();
     try {
       const owner = resolveAgentTopology().find(a => a.id === 'sub-a-owner');

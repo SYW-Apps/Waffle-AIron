@@ -100,7 +100,7 @@ const CALL = (n: number, comp: string, method: string) =>
 const RETURN = (n: number) =>
   `      - { stepNumber: ${n}, description: Done, type: return, outcome: done }`;
 
-// Portal → (call) sched-orch.start → (register) worker-spec.tick; the callback's
+// Portal → (call) sched-orch.start → (register) worker-orch.tick; the callback's
 // own narrative calls audit-store.append — reachability must flow through ALL of it.
 function registerChainFixture(proj: ReturnType<typeof createTempProject>, opts: { portal: boolean }) {
   proj.subsystem('sub-a');
@@ -109,12 +109,12 @@ function registerChainFixture(proj: ReturnType<typeof createTempProject>, opts: 
     proj.contract('api-portal', { boot: [] });
     proj.impl('api-portal', ['methods:', '  - name: boot', '    narrative:', CALL(1, 'sched-orch', 'start'), RETURN(2)].join('\n'));
   }
-  proj.component('sched-orch', 'Orchestrator', 'dependsOn: [worker-spec]');
+  proj.component('sched-orch', 'Orchestrator', 'dependsOn: [worker-orch]');
   proj.contract('sched-orch', { start: [] });
-  proj.impl('sched-orch', ['methods:', '  - name: start', '    narrative:', REGISTER(1, 'worker-spec', 'tick'), RETURN(2)].join('\n'));
-  proj.component('worker-spec', 'Specialist', 'dependsOn: [audit-store]');
-  proj.contract('worker-spec', { tick: [] });
-  proj.impl('worker-spec', ['methods:', '  - name: tick', '    narrative:', CALL(1, 'audit-store', 'append'), RETURN(2)].join('\n'));
+  proj.impl('sched-orch', ['methods:', '  - name: start', '    narrative:', REGISTER(1, 'worker-orch', 'tick'), RETURN(2)].join('\n'));
+  proj.component('worker-orch', 'Orchestrator', 'dependsOn: [audit-store]');
+  proj.contract('worker-orch', { tick: [] });
+  proj.impl('worker-orch', ['methods:', '  - name: tick', '    narrative:', CALL(1, 'audit-store', 'append'), RETURN(2)].join('\n'));
   proj.component('audit-store', 'Store', 'durability: ram-projection');
   proj.contract('audit-store', { append: [] });
 }
@@ -127,7 +127,7 @@ describe('register steps — reachability edges for unused-detection', () => {
     try {
       const res = validateSddTree();
       const unused = unusedMessages(res);
-      expect(unused).not.toMatch(/worker-spec|tick/);
+      expect(unused).not.toMatch(/worker-orch|tick/);
       expect(unused).not.toMatch(/audit-store|append/);
       // The register step is structurally a plain sequential step: nothing
       // after it goes dead, nothing about it is malformed.
@@ -146,7 +146,7 @@ describe('register steps — reachability edges for unused-detection', () => {
       const res = validateSddTree();
       const unusedComponents = byCode(res, 'UNUSED_COMPONENT').map(i => i.message).join('\n');
       expect(unusedComponents).toMatch(/sched-orch/);
-      expect(unusedComponents).toMatch(/worker-spec/);
+      expect(unusedComponents).toMatch(/worker-orch/);
     } finally { proj.cleanup(); }
   });
 
@@ -224,20 +224,20 @@ describe('register steps — contract validation identical to call steps', () =>
   it('dangling targets, undeclared dependencies, and a missing targetMethod error like call steps', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a');
-    proj.component('sched-orch', 'Orchestrator', 'dependsOn: [worker-spec]');
+    proj.component('sched-orch', 'Orchestrator', 'dependsOn: [worker-orch]');
     proj.contract('sched-orch', { start: [] });
-    proj.component('worker-spec', 'Specialist');
-    proj.contract('worker-spec', { tick: [] });
-    proj.component('lone-spec', 'Specialist'); // exists, but not a declared dependency
-    proj.contract('lone-spec', { run: [] });
+    proj.component('worker-orch', 'Orchestrator', 'dependencyClass: pure');
+    proj.contract('worker-orch', { tick: [] });
+    proj.component('lone-orch', 'Orchestrator', 'dependencyClass: pure'); // exists, but not a declared dependency
+    proj.contract('lone-orch', { run: [] });
     proj.impl('sched-orch', [
       'methods:',
       '  - name: start',
       '    narrative:',
       REGISTER(1, 'ghost-comp', 'run'),        // non-existent component
-      REGISTER(2, 'worker-spec', 'noSuchTick'), // method not on the contract
-      REGISTER(3, 'lone-spec', 'run'),          // undeclared dependency
-      '      - { stepNumber: 4, description: Register with no target method, type: register, targetComponent: worker-spec }',
+      REGISTER(2, 'worker-orch', 'noSuchTick'), // method not on the contract
+      REGISTER(3, 'lone-orch', 'run'),          // undeclared dependency
+      '      - { stepNumber: 4, description: Register with no target method, type: register, targetComponent: worker-orch }',
       RETURN(5),
     ].join('\n'));
     proj.activate();
@@ -251,7 +251,7 @@ describe('register steps — contract validation identical to call steps', () =>
       expect(badMethod[0].message).toMatch(/noSuchTick/);
       const undeclared = byCode(res, 'UNDECLARED_DEPENDENCY_CALL');
       expect(undeclared).toHaveLength(1);
-      expect(undeclared[0].message).toMatch(/lone-spec/);
+      expect(undeclared[0].message).toMatch(/lone-orch/);
       const missingMethod = byCode(res, 'MISSING_TARGET_METHOD');
       expect(missingMethod).toHaveLength(1);
       expect(missingMethod[0].message).toMatch(/register step \(4\)/);
@@ -261,16 +261,16 @@ describe('register steps — contract validation identical to call steps', () =>
 
 describe('register steps — exempt from call-graph conformance', () => {
   const workerSide = (proj: ReturnType<typeof createTempProject>) => {
-    proj.component('worker-spec', 'Specialist');
-    proj.contract('worker-spec', { tick: [] });
-    proj.impl('worker-spec', 'sourcePath: src/worker.ts\nmethods:\n  - name: tick\n    detail: intent\n    intent: Drains the pending queue once per invocation; failures are logged and the entry is retried on the next tick.');
+    proj.component('worker-orch', 'Orchestrator', 'dependencyClass: pure');
+    proj.contract('worker-orch', { tick: [] });
+    proj.impl('worker-orch', 'sourcePath: src/worker.ts\nmethods:\n  - name: tick\n    detail: intent\n    intent: Drains the pending queue once per invocation; failures are logged and the entry is retried on the next tick.');
     proj.source('src/worker.ts', 'export function tick(): void {}\n');
   };
 
   it('a register step never demands a code callee (no CALL_STEP_UNREALIZED)', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a');
-    proj.component('sched-orch', 'Orchestrator', 'dependsOn: [worker-spec]');
+    proj.component('sched-orch', 'Orchestrator', 'dependsOn: [worker-orch]');
     proj.contract('sched-orch', { start: [] });
     workerSide(proj);
     proj.impl('sched-orch', [
@@ -278,7 +278,7 @@ describe('register steps — exempt from call-graph conformance', () => {
       'methods:',
       '  - name: start',
       '    narrative:',
-      REGISTER(1, 'worker-spec', 'tick'),
+      REGISTER(1, 'worker-orch', 'tick'),
       RETURN(2),
     ].join('\n'));
     // The realized function never names tick() — a timer API takes the reference.
@@ -292,7 +292,7 @@ describe('register steps — exempt from call-graph conformance', () => {
   it('control: the same narrative as a call step IS held to realization', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a');
-    proj.component('sched-orch', 'Orchestrator', 'dependsOn: [worker-spec]');
+    proj.component('sched-orch', 'Orchestrator', 'dependsOn: [worker-orch]');
     proj.contract('sched-orch', { start: [] });
     workerSide(proj);
     proj.impl('sched-orch', [
@@ -300,7 +300,7 @@ describe('register steps — exempt from call-graph conformance', () => {
       'methods:',
       '  - name: start',
       '    narrative:',
-      CALL(1, 'worker-spec', 'tick'),
+      CALL(1, 'worker-orch', 'tick'),
       RETURN(2),
     ].join('\n'));
     proj.source('src/orch.ts', 'export function start(): void { /* forgot the call */ }\n');

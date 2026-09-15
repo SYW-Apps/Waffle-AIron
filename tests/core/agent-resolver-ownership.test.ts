@@ -142,13 +142,13 @@ methods:
   it('a component with no implemented sourcePath still gets the inference fallback', () => {
     const proj = createTempProject();
     proj.writeSpec('subsystem', 'alpha', 'schemaVersion: 1.0.0\nid: alpha\nname: Alpha\ndescription: d\nparentSystem: TestSystem');
-    proj.writeSpec('component', 'parser_specialist', 'schemaVersion: 1.0.0\nid: parser_specialist\nname: parser_specialist\ndescription: d\nsubsystem: alpha\ncomponentType: Specialist');
-    proj.writeFile('src/alpha/parser_specialist.ts', 'export const parse = 1;\n');
+    proj.writeSpec('component', 'parser_codec', 'schemaVersion: 1.0.0\nid: parser_codec\nname: parser_codec\ndescription: d\nsubsystem: alpha\ncomponentType: Orchestrator\ndependencyClass: pure');
+    proj.writeFile('src/alpha/parser_codec.ts', 'export const parse = 1;\n');
 
     proj.activate();
     try {
       const alpha = resolveAgentTopology().find((a) => a.id === 'alpha-owner')!;
-      expect(alpha.ownedPaths).toContain('src/alpha/parser_specialist.ts');
+      expect(alpha.ownedPaths).toContain('src/alpha/parser_codec.ts');
     } finally { proj.cleanup(); }
   });
 });
@@ -213,36 +213,36 @@ methods:
   it('a method source file alone is a declared source, so the owner fence infers nothing', () => {
     const proj = createTempProject();
     proj.writeSpec('subsystem', 'alpha', alphaSubsystem);
-    proj.writeSpec('component', 'parser_specialist', 'schemaVersion: 1.0.0\nid: parser_specialist\nname: parser_specialist\ndescription: d\nsubsystem: alpha\ncomponentType: Specialist');
-    proj.writeSpec('interface', 'iparser_specialist', `schemaVersion: 1.0.0
-id: iparser_specialist
+    proj.writeSpec('component', 'parser_codec', 'schemaVersion: 1.0.0\nid: parser_codec\nname: parser_codec\ndescription: d\nsubsystem: alpha\ncomponentType: Orchestrator\ndependencyClass: pure');
+    proj.writeSpec('interface', 'iparser_codec', `schemaVersion: 1.0.0
+id: iparser_codec
 name: IParser
 description: d
-component: parser_specialist
+component: parser_codec
 methods:
   - name: parse
     description: Parses the input.
     signature: "parse(): string"
     returns: "string"`);
-    proj.writeSpec('implementation', 'parser_specialist_impl', `schemaVersion: 1.0.0
-id: parser_specialist_impl
+    proj.writeSpec('implementation', 'parser_codec_impl', `schemaVersion: 1.0.0
+id: parser_codec_impl
 name: ParserImpl
 description: d
-contract: iparser_specialist
+contract: iparser_codec
 methods:
   - name: parse
     sourcePath: src/alpha/parse/run.ts
     narrative:
       - { stepNumber: 1, description: return the parse, type: return, outcome: the parse }`);
     // A file the component name would infer-claim if inference ran.
-    proj.writeFile('src/alpha/parser_specialist.ts', 'export const parse = 1;\n');
+    proj.writeFile('src/alpha/parser_codec.ts', 'export const parse = 1;\n');
     proj.writeFile('src/alpha/parse/run.ts', 'export function parse(): string { return ""; }\n');
 
     proj.activate();
     try {
       const alpha = resolveAgentTopology().find((a) => a.id === 'alpha-owner')!;
       expect(alpha.ownedPaths).toContain('src/alpha/parse/run.ts');
-      expect(alpha.ownedPaths).not.toContain('src/alpha/parser_specialist.ts');
+      expect(alpha.ownedPaths).not.toContain('src/alpha/parser_codec.ts');
     } finally { proj.cleanup(); }
   });
 

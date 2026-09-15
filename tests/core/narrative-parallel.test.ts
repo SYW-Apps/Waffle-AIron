@@ -91,8 +91,8 @@ describe('narrative-flow parallel/detach soundness (via validateSddTree)', () =>
     writeSpec('system', 'system', 'schemaVersion: 1.0.0\nname: TestSystem\nvision: testing');
     writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
     writeSpec('component', 'fan-orch', 'schemaVersion: 1.0.0\nid: fan-orch\nname: fan-orch\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependsOn: [side-a, side-b]');
-    writeSpec('component', 'side-a', 'schemaVersion: 1.0.0\nid: side-a\nname: side-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist');
-    writeSpec('component', 'side-b', 'schemaVersion: 1.0.0\nid: side-b\nname: side-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist');
+    writeSpec('component', 'side-a', 'schemaVersion: 1.0.0\nid: side-a\nname: side-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure');
+    writeSpec('component', 'side-b', 'schemaVersion: 1.0.0\nid: side-b\nname: side-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure');
     writeSpec('interface', 'iside-a', 'schemaVersion: 1.0.0\nid: iside-a\nname: ISideA\ndescription: d\ncomponent: side-a\nmethods:\n  - name: workA\n    description: Performs the A-side work and reports the outcome plainly.\n    signature: "workA(): void"\n    returns: "void"');
     writeSpec('interface', 'iside-b', 'schemaVersion: 1.0.0\nid: iside-b\nname: ISideB\ndescription: d\ncomponent: side-b\nmethods:\n  - name: workB\n    description: Performs the B-side work and reports the outcome plainly.\n    signature: "workB(): void"\n    returns: "void"');
     writeSpec('interface', 'ifan-orch', 'schemaVersion: 1.0.0\nid: ifan-orch\nname: IFanOrch\ndescription: d\ncomponent: fan-orch\nmethods:\n  - name: fanOut\n    description: Runs both sides concurrently and reports when both have completed.\n    signature: "fanOut(): void"\n    returns: "void"');
@@ -320,7 +320,7 @@ describe('language gating of parallel/detach via pack tables', () => {
       w('system', 'system', 'schemaVersion: 1.0.0\nname: TestSystem\nvision: testing\ntargetLanguage: structured-text');
       w('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
       w('component', 'orch', 'schemaVersion: 1.0.0\nid: orch\nname: orch\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependsOn: [helper]');
-      w('component', 'helper', 'schemaVersion: 1.0.0\nid: helper\nname: helper\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist');
+      w('component', 'helper', 'schemaVersion: 1.0.0\nid: helper\nname: helper\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure');
       w('interface', 'ihelper', 'schemaVersion: 1.0.0\nid: ihelper\nname: IHelper\ndescription: d\ncomponent: helper\nmethods:\n  - name: assist\n    description: Assists with the auxiliary duty and reports completion.\n    signature: "assist(): void"\n    returns: "void"');
       w('interface', 'iorch', 'schemaVersion: 1.0.0\nid: iorch\nname: IOrch\ndescription: d\ncomponent: orch\nmethods:\n  - name: run\n    description: Runs one full pass of the coordinated duty cycle.\n    signature: "run(): void"\n    returns: "void"');
       w('implementation', 'impl-orch', [
