@@ -346,21 +346,33 @@ Each reported behaviour is reproduced with a failing test first; a confirmed one
   - Hosted process: `backup_schedule` and `instance_bootstrap`, with `host_server` delegating to both.
   - Descriptions made untrue by D1 are rewritten.
   - `wairon doctor` imports core directly for work no spec models yet. A reasoned UNDECLARED_DEPENDENCY allow on `cli_runner_impl` acknowledges it, and track D routes those reads through modelled adapters.
-- [ ] Logic is an Orchestrator: a flowchart that may nest others, with one or more cohesive methods (a class, or a module of functions). A logic component declares `dependencyClass: pure | read`, a first-class field the validator enforces as it enforces a Store's `durability` (decided 2026-09-15, revising E7's variant wording); unset means a workflow. `pure` depends only on pure components; `read` adds read methods of Repositories, Indexes and Adapters, the write check judged once facade methods carry effect tags. Specialist retires, with a migration for existing trees; the four shape variants stay guidance-only, rebased onto Orchestrator
-- [ ] Process layer: an Actor owns one live thing, entity instances included, and its methods are full flowcharts; a Supervisor owns the set and may supervise Supervisors; a live Actor is reached by id through its Supervisor (`dependsOn` lists both) and is the only writer of its aggregate; the method owning a workflow owns its transaction and applies in-memory state only after commit; a Portal may message a Supervisor by id; dependency rules for Orchestrator, Supervisor and Actor; `hidden-state` stops treating Supervisor and Actor as stateless
-- [ ] Data access: a Store covers one aggregate; `Query` joins Store, Registry and Index as a Repository member for computed reads; cross-aggregate reads go through a read Orchestrator or a read-model Repository; the outbox is a sibling Repository (§7 and §10 aligned)
-- [ ] Timers: per-instance timers are Actor state; deadlines are aggregate fields read by an Index; a schedule aggregate only for timers that span aggregates
-- [ ] The standard gains the module realization in the language bindings and the live auction as its worked example
-- [ ] Decide how the lock's gate hash gets the validator's built-in rule identity. `state_hash_specialist` (sdd_core) reads `SDD_RULES` from sdd_validator's rule repository — a cross-subsystem edge no spec declares, made visible when the rule model PR moved the list; acknowledged with a reasoned UNDECLARED_DEPENDENCY allow on `state_hash_specialist_impl` until decided. Options: sdd_core reads it through sdd_validator's published surface (a mutual subsystem dependency to acknowledge), or the lock workflow passes it in with the doctrine
-- [ ] `LOGIC_STEREOTYPES` is defined twice (narrative-detail and hidden-state); give the logic-stereotype test a home when the stereotypes change
-- [ ] From the rule fixes: a pattern owning a pattern also raises VISIBILITY_VIOLATION on the inner pattern's dependants. The Gateway Portal-count question closed when the Gateway pattern retired.
-- [ ] Variants built in (decided 2026-09-15):
+- [x] Logic is an Orchestrator: a flowchart that may nest others, with one or more cohesive methods (a class, or a module of functions). A logic component declares `dependencyClass: pure | read`, a first-class field the validator enforces as it enforces a Store's `durability` (decided 2026-09-15, revising E7's variant wording); unset means a workflow. `pure` depends only on pure components; `read` adds read methods of Repositories, Indexes and Adapters, the write check judged once facade methods carry effect tags. Specialist retires, with a migration for existing trees; the four shape variants stay guidance-only, rebased onto Orchestrator
+- [x] Process layer: an Actor owns one live thing, entity instances included, and its methods are full flowcharts; a Supervisor owns the set and may supervise Supervisors; a live Actor is reached by id through its Supervisor (`dependsOn` lists both) and is the only writer of its aggregate; the method owning a workflow owns its transaction and applies in-memory state only after commit; a Portal may message a Supervisor by id; dependency rules for Orchestrator, Supervisor and Actor; `hidden-state` stops treating Supervisor and Actor as stateless
+- [x] Data access: a Store covers one aggregate; `Query` joins Store, Registry and Index as a Repository member for computed reads; cross-aggregate reads go through a read Orchestrator or a read-model Repository; the outbox is a sibling Repository (§7 and §10 aligned)
+- [x] Timers: per-instance timers are Actor state; deadlines are aggregate fields read by an Index; a schedule aggregate only for timers that span aggregates
+- [x] The standard gains the module realization in the language bindings and the live auction as its worked example
+- [x] Decide how the lock's gate hash gets the validator's built-in rule identity (decided at L2 and shipped: the validator's `gate_identity` computes it, and core compares a lock with the identity its caller passes). `state_hash_specialist` (sdd_core) reads `SDD_RULES` from sdd_validator's rule repository — a cross-subsystem edge no spec declares, made visible when the rule model PR moved the list; acknowledged with a reasoned UNDECLARED_DEPENDENCY allow on `state_hash_specialist_impl` until decided. Options: sdd_core reads it through sdd_validator's published surface (a mutual subsystem dependency to acknowledge), or the lock workflow passes it in with the doctrine
+- [x] `LOGIC_STEREOTYPES` is defined twice (narrative-detail and hidden-state); give the logic-stereotype test a home when the stereotypes change: `ComponentSpec.isLogic()` and `holdsState()`
+- [x] From the rule fixes: a pattern owning a pattern also raised VISIBILITY_VIOLATION on the inner pattern's dependants; the inner pattern now gets no owner, so only PATTERN_OWNS_PATTERN reports. The Gateway Portal-count question closed when the Gateway pattern retired.
+- [x] Variants built in (decided 2026-09-15):
   - A built-in layer under the global and project variant directories ships arbiter, projector, composer and codec, based on Orchestrator, and `gateway`, based on Portal. Wairon's own `.wai/variants/specialist-shapes.yaml` goes.
   - The Gateway pattern retires:
     - `GATEWAY_CONTAINMENT` goes;
     - facade forwarding covers Repositories only;
     - the cross-subsystem rule no longer accepts a Gateway as a front door;
     - `STEREOTYPE_RETIRED` reports a Gateway with manual steps, while `doctor --fix` retypes Specialists.
+- [ ] Code (branch feat/doctrine-blocks):
+  - [x] Waves 1–5: the model, MCP schema and built-in variants; the validator rules and gate identity; the rename tool, Specialist retirement and doctor; the hosted process; the standard, guides and UI
+  - [x] Wave 6 code: wairon's own 27 Specialists retyped through `retireSpecialists` (18 pure, 9 read), guides regenerated, the mermaid diagram's Query class, and docs and comments following the renames
+  - [x] Wave 6 leftovers: the demo seed's Specialist is a pure `pricing` Orchestrator, the web editor offers a retired type only as a component's current value, and `portal-fields`, `GOD_COMPONENT` and the comments stop teaching a Gateway
+  - [x] Wave 6 tree:
+    - the 14 renames through `sdd_rename_component` (42 specs moved) and their display names;
+    - the prose that still taught Specialist or Gateway or named an old component: the rule families now read as pure arbiter logic, and "the permission resolver" reads as `permission_rules`;
+    - `gate_identity` is pure;
+    - `src/server/permission_resolver.ts` moved to `permission-rules.ts`, together with its spec;
+    - the L0 requirement that listed a nonexistent Resolver type now points at the standard;
+    - the rename tool's findings are friction F40–F46.
+  - [ ] Gates, CHANGELOG, PR
 
 ### Doctrine D2 — complexity, naming and cohesion checks (decided by Robbe 2026-09-15; after D1, on the final shapes)
 - [ ] A warning when an Orchestrator's methods form groups that call no common component
