@@ -284,18 +284,24 @@ const READ_TOOL_NAMES = new Set<string>([
   'getProjectConfig',
 ]);
 
+/** Write tools whose names carry no write prefix, listed one by one: each
+ *  mutates the bound spec tree as a prefixed write does. */
+const WRITE_TOOL_NAMES = new Set<string>([
+  'sdd_rename_component',
+]);
+
 /**
  * The data-plane capability a tool requires: `project:read` for a read tool (a
  * name starting with sdd_get_ / sdd_validate_, or one of READ_TOOL_NAMES),
  * otherwise `project:write`.
  *
  * FAIL CLOSED: a read is ONLY an explicit read prefix or name. The known write
- * prefixes and any unrecognized or newly added tool name are all treated as
- * writes, so a novel tool can never slip past on read-level permission.
+ * prefixes and names and any unrecognized or newly added tool name are all
+ * treated as writes, so a novel tool can never slip past on read-level permission.
  */
 export function requiredDataPlaneCapability(toolName: string): 'project:read' | 'project:write' {
   if (READ_TOOL_NAMES.has(toolName) || READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:read';
-  if (WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:write';
+  if (WRITE_TOOL_NAMES.has(toolName) || WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:write';
   return 'project:write';
 }
 
@@ -315,10 +321,10 @@ const TREE_SCOPED_HOST_TOOLS = new Set<string>([
 /**
  * The scope a tool declares, or undefined when it declares none. Every ordinary
  * sdd_* tool the scoped server serves — each explicit read and each explicit
- * write prefix — acts on the bound tree; the hosted tools are declared one by
- * one. Confinement reads this and fails closed on undefined: a tool added
- * without a declared scope is refused under a narrowed credential until it
- * declares one.
+ * write, by prefix or by name — acts on the bound tree; the hosted tools are
+ * declared one by one. Confinement reads this and fails closed on undefined: a
+ * tool added without a declared scope is refused under a narrowed credential
+ * until it declares one.
  */
 export function toolScope(toolName: string): ToolScope | undefined {
   if (PROJECT_RECORD_TOOLS.has(toolName)) return 'record';
@@ -326,6 +332,7 @@ export function toolScope(toolName: string): ToolScope | undefined {
   if (
     READ_TOOL_NAMES.has(toolName) ||
     READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p)) ||
+    WRITE_TOOL_NAMES.has(toolName) ||
     WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))
   ) {
     return 'tree';
@@ -335,8 +342,8 @@ export function toolScope(toolName: string): ToolScope | undefined {
 
 /**
  * Whether a tool is classified on purpose — it declares its scope, which also
- * makes it an explicit read, an explicit write prefix, or a hosted tool the data
- * plane dispatches itself — rather than leaning on a fail-closed default. The
+ * makes it an explicit read, an explicit write, or a hosted tool the data plane
+ * dispatches itself — rather than leaning on a fail-closed default. The
  * defaults are safety nets, not classifications: a tool the server advertises
  * must never depend on them.
  */

@@ -50,6 +50,15 @@ describe('data-plane tool classification', () => {
     }
   });
 
+  it('gates a write that carries no write prefix as a tree-scoped write, on purpose', () => {
+    expect(requiredDataPlaneCapability('sdd_rename_component')).toBe('project:write');
+    expect(toolScope('sdd_rename_component')).toBe('tree');
+    expect(isExplicitlyClassifiedTool('sdd_rename_component')).toBe(true);
+    expect(subprojectConfinementError('proj', 'kid', {
+      jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'sdd_rename_component', arguments: {} },
+    })).toBeUndefined();
+  });
+
   it('still fails closed for a name nobody classified', () => {
     expect(requiredDataPlaneCapability('sdd_brand_new_tool')).toBe('project:write');
     expect(isExplicitlyClassifiedTool('sdd_brand_new_tool')).toBe(false);
