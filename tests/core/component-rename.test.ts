@@ -31,7 +31,13 @@ import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } 
 
 const now = new Date().toISOString();
 
-type Step = { type: 'local' | 'call' | 'dispatch' | 'register'; targetComponent?: string; targetMethod?: string; capability?: string };
+type Step = {
+  type: 'local' | 'call' | 'dispatch' | 'register';
+  targetComponent?: string;
+  targetMethod?: string;
+  capability?: string;
+  auth?: { from: string };
+};
 
 const sub = (id: string, over: Partial<SubsystemSpec> = {}): SubsystemSpec => ({
   id, name: id, description: `subsystem ${id}`, parentSystem: 'books-sys',
@@ -108,11 +114,13 @@ function findings(root: string, renamedIds: Record<string, string> = {}): string
 /**
  * A `books` subsystem whose `ledger` Store is named from every reference
  * position: the L0 and L1 published interfaces, a lifecycle entrypoint, a
- * Repository's owns, a Portal's dependsOn and dispatch table, an Orchestrator's
- * dependsOn, narrative call, dispatch and register targets, and an entity's
- * componentClass. The ledger's own implementation calls back into it. A chained
- * `ext` project holds a component of its own, and `books_adapter` holds the
- * interface and implementation ids a rename onto `archive` or `vault` would take.
+ * Repository's owns, a Portal's dependsOn and dispatch table, the dependsOn of
+ * an Orchestrator and an Adapter, narrative call, dispatch and register
+ * targets, the credential source an Adapter presents to an authenticated
+ * Portal, and an entity's componentClass. The ledger's own implementation calls
+ * back into it. A chained `ext` project holds a component of its own, and
+ * `books_adapter` holds the interface and implementation ids a rename onto
+ * `archive` or `vault` would take.
  */
 function books(): string {
   const root = projectRoot('rename-');
@@ -146,9 +154,13 @@ function books(): string {
       { type: 'register', targetComponent: 'ledger', targetMethod: 'open' },
     ],
   }));
-  saveComponentSpec(comp('books_adapter', 'books', 'Adapter'));
+  saveComponentSpec(comp('vault_portal', 'books', 'Portal', { portalType: 'Custom', auth: { scheme: 'bearer' } }));
+  saveInterfaceSpec(intf('ivault_portal', 'vault_portal', ['unlock']));
+  saveComponentSpec(comp('books_adapter', 'books', 'Adapter', { dependsOn: ['ledger', 'vault_portal'] }));
   saveInterfaceSpec(intf('iarchive', 'books_adapter', ['keep']));
-  saveImplementationSpec(impl('vault_impl', 'iarchive', { keep: [{ type: 'local' }] }));
+  saveImplementationSpec(impl('vault_impl', 'iarchive', {
+    keep: [{ type: 'call', targetComponent: 'vault_portal', targetMethod: 'unlock', auth: { from: 'component:ledger' } }],
+  }));
   saveTypeSpec({
     kind: 'entity', id: 'entry', name: 'Entry', description: 'd', subsystem: 'books', componentClass: 'ledger',
     fields: [{ name: 'id', type: 'string', optional: false }], methods: [], createdAt: now, updatedAt: now,
@@ -182,7 +194,9 @@ describe('renameComponent', () => {
       { kind: 'interface', from: 'iledger', to: 'ijournal' },
       { kind: 'implementation', from: 'ledger_impl', to: 'journal_impl' },
     ]);
-    expect([...report.rewritten].sort()).toEqual(['books', 'books_orch', 'books_orch_impl', 'books_portal', 'books_repo', 'entry', 'system']);
+    expect([...report.rewritten].sort()).toEqual([
+      'books', 'books_adapter', 'books_orch', 'books_orch_impl', 'books_portal', 'books_repo', 'entry', 'system', 'vault_impl',
+    ]);
   });
 
   it('rewrites the reference in every position', () => {
@@ -200,9 +214,12 @@ describe('renameComponent', () => {
     expect(portal.dependsOn).toEqual(['journal', 'books_orch']);
     expect(portal.dispatch.map((b: any) => b.component)).toEqual(['journal']);
     expect(stored(root, 'component', 'books_orch')[0].dependsOn).toEqual(['journal']);
+    expect(stored(root, 'component', 'books_adapter')[0].dependsOn).toEqual(['journal', 'vault_portal']);
     const [orchImpl] = stored(root, 'implementation', 'books_orch_impl');
     expect(orchImpl.methods[0].narrative.map((s: any) => [s.type, s.targetComponent]))
       .toEqual([['call', 'journal'], ['dispatch', 'journal'], ['register', 'journal']]);
+    const [vaultImpl] = stored(root, 'implementation', 'vault_impl');
+    expect(vaultImpl.methods[0].narrative[0]).toMatchObject({ targetComponent: 'vault_portal', auth: { from: 'component:journal' } });
     expect(stored(root, 'type', 'entry')[0].componentClass).toBe('journal');
 
     // The moved specs carry their new ids, and the reference back into the component follows.
@@ -237,14 +254,18 @@ describe('renameComponent', () => {
     }
   });
 
-  it('adds no finding: the tree validates after the rename as it did before', () => {
+  it('adds no finding, and leaves no credential source unknown or unwired: the tree validates after the rename as it did before', () => {
     root = books();
+    const authSourceFindings = (all: string[]): string[] => all.filter((f) => /UNKNOWN_AUTH_SOURCE|AUTH_SOURCE_UNWIRED/.test(f));
     const before = findings(root, { ledger: 'journal', iledger: 'ijournal', ledger_impl: 'journal_impl' });
+    expect(authSourceFindings(before)).toEqual([]);
 
     setProjectRoot(root);
     renameComponent('ledger', 'journal');
 
-    expect(findings(root)).toEqual(before);
+    const after = findings(root);
+    expect(authSourceFindings(after)).toEqual([]);
+    expect(after).toEqual(before);
   });
 
   it('keeps an interface named otherwise, rewriting its component, while the implementation named after the component moves', () => {

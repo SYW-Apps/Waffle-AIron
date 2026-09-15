@@ -534,10 +534,15 @@ function buildRenameMap(subsystemId: string, externalize: boolean): Map<string, 
  * component, an interface's component and narrative targets, each qualified by
  * the loader into the namespace its spec loads in. An entity's componentClass:
  * a component matched by name within the entity's own namespace, never
- * qualified. An interface: an implementation's contract or a published
- * interface's. A type: what a method parameter or a type field names.
+ * qualified. An auth source: the component a narrative step's `auth.from`
+ * names as `component:<id>`, matched by its exact id and never qualified. An
+ * interface: an implementation's contract or a published interface's. A type:
+ * what a method parameter or a type field names.
  */
-type RefPosition = 'component' | 'entity-class' | 'interface' | 'type';
+type RefPosition = 'component' | 'entity-class' | 'auth-source' | 'interface' | 'type';
+
+/** The `auth.from` prefix that makes a credential source a component reference. */
+const COMPONENT_AUTH_SOURCE = 'component:';
 
 /** A spec a reference rewrite changed, by kind and id; the L0 system spec's id is "system". */
 interface RewrittenSpec {
@@ -562,10 +567,10 @@ function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excl
  * loaded type, whichever namespace the naming spec sits in — the loader never
  * qualifies a parameter or field type — so moving the spec cannot change what it
  * resolves to, and a super:: hop written into one would match no type at all.
- * An entity's componentClass is matched by name within the entity's own
- * namespace, so it too stays as written. An interface reference — a contract, a
- * published interface — names a contract of a component in the moved subtree,
- * which travels with it.
+ * An entity's componentClass and a narrative step's component auth source are
+ * matched by exact id, never qualified, so they too stay as written. An
+ * interface reference — a contract, a published interface — names a contract of
+ * a component in the moved subtree, which travels with it.
  */
 function rebaseMovedRefs(movedDir: string, mount: string, direction: 'into' | 'outOf'): void {
   const declared = componentIdsUnder(movedDir);
@@ -594,7 +599,8 @@ function componentIdsUnder(dir: string): Set<string> {
  * component's dependsOn, owns and dispatch components; a subsystem's lifecycle
  * entrypoints and published interfaces; the system's published interfaces; an
  * interface's component and method parameter types; an implementation's
- * contract and narrative targets; an entity's componentClass and field types.
+ * contract, narrative targets and narrative `component:` auth sources; an
+ * entity's componentClass and field types.
  */
 function rewriteRefFields(
   specsDir: string,
@@ -664,7 +670,19 @@ function rewriteRefFields(
       kind = 'implementation';
       rewrite(raw, 'contract', 'interface');
       for (const method of raw.methods) {
-        for (const step of entries(method?.narrative)) rewrite(step, 'targetComponent', 'component');
+        for (const step of entries(method?.narrative)) {
+          rewrite(step, 'targetComponent', 'component');
+          // A credential source names its component after the component: prefix.
+          const source = step?.auth?.from;
+          if (typeof source === 'string' && source.startsWith(COMPONENT_AUTH_SOURCE)) {
+            const id = source.slice(COMPONENT_AUTH_SOURCE.length);
+            const next = remap(id, 'auth-source');
+            if (next !== id) {
+              step.auth.from = `${COMPONENT_AUTH_SOURCE}${next}`;
+              changed = true;
+            }
+          }
+        }
       }
     } else if ('kind' in raw && Array.isArray(raw.fields)) {
       kind = 'type';
@@ -836,7 +854,9 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
   // Step 20: every reference to a renamed id across the bound tree. The moved
   // specs were written under their new ids already, so only the others report.
   const rewritten = rewriteRefFields(aiPathsAt(getProjectRoot()).specsDir(), (ref, position) => {
-    if (position === 'component' || position === 'entity-class') return ref === componentId ? newId : ref;
+    if (position === 'component' || position === 'entity-class' || position === 'auth-source') {
+      return ref === componentId ? newId : ref;
+    }
     if (position === 'interface' && ref === movingInterface?.id) return interfaceId;
     return ref;
   })
