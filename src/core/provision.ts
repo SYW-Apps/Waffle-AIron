@@ -8,7 +8,9 @@ import {
   loadSystemSpec,
   loadComponentSpec,
   loadComponentSpecs,
+  loadInterfaceSpec,
   loadInterfaceSpecs,
+  loadImplementationSpec,
   loadImplementationSpecs,
   loadTypeSpecs,
   saveComponentSpec,
@@ -821,38 +823,16 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
   const movingInterface = contracts.find((i) => i.id === `i${componentId}`);
   const movingImplementation = implementations.find((impl) =>
     impl.id === `${componentId}_impl` && contracts.some((i) => i.id === impl.contract));
+  const renamed: SpecRename[] = [
+    { kind: 'component', from: componentId, to: newId },
+    ...(movingInterface ? [{ kind: 'interface' as const, from: movingInterface.id, to: interfaceId }] : []),
+    ...(movingImplementation ? [{ kind: 'implementation' as const, from: movingImplementation.id, to: implementationId }] : []),
+  ];
 
-  // Step 14: the component under its new id.
-  const renamed: SpecRename[] = [{ kind: 'component', from: componentId, to: newId }];
-  saveComponentSpec({ ...component, id: newId });
-  // Steps 15–16: its own interface, when that moves, under i<newId>.
-  if (movingInterface) {
-    saveInterfaceSpec({ ...movingInterface, id: interfaceId, component: newId });
-    renamed.push({ kind: 'interface', from: movingInterface.id, to: interfaceId });
-  }
-  // Steps 17–18: its own implementation, when that moves, under <newId>_impl.
-  if (movingImplementation) {
-    const contract = movingImplementation.contract === movingInterface?.id ? interfaceId : movingImplementation.contract;
-    // The nested layout keeps an implementation's file beside its contract's, so
-    // one whose contract keeps its id is written to the very file it moves out
-    // of. That file is cleared first: the loader refuses to write over another id.
-    const oldFile = getImplementationPath(movingImplementation.id);
-    if (path.resolve(getImplementationPath(implementationId, contract)) === path.resolve(oldFile)) {
-      fs.unlinkSync(oldFile);
-    }
-    saveImplementationSpec({ ...movingImplementation, id: implementationId, contract });
-    renamed.push({ kind: 'implementation', from: movingImplementation.id, to: implementationId });
-  }
-
-  // Step 19: remove each moved spec's old file, found by its old id — which the
-  // loader still indexes beside the new one, so a folder a save re-nested is
-  // followed.
-  removeSpecFile(getComponentPath(componentId), componentId);
-  if (movingInterface) removeSpecFile(getInterfacePath(movingInterface.id), movingInterface.id);
-  if (movingImplementation) removeSpecFile(getImplementationPath(movingImplementation.id), movingImplementation.id);
-
-  // Step 20: every reference to a renamed id across the bound tree. The moved
-  // specs were written under their new ids already, so only the others report.
+  // Step 14: every reference to a renamed id across the bound tree, the moved
+  // specs' own files included, before anything is saved: placement then finds a
+  // renamed member's owner through its rewritten owns. The moved specs report as
+  // renamed, not as rewritten.
   const rewritten = rewriteRefFields(aiPathsAt(getProjectRoot()).specsDir(), (ref, position) => {
     if (position === 'component' || position === 'entity-class' || position === 'auth-source') {
       return ref === componentId ? newId : ref;
@@ -860,10 +840,44 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
     if (position === 'interface' && ref === movingInterface?.id) return interfaceId;
     return ref;
   })
-    .filter((spec) => !renamed.some((moved) => moved.kind === spec.kind && moved.to === spec.id))
+    .filter((spec) => !renamed.some((moved) => moved.kind === spec.kind && moved.from === spec.id))
     .map((spec) => spec.id);
 
-  // Step 21: the removed files and rewritten references changed the tree outside the save paths.
+  // Step 15: the rewrite changed files outside the save paths.
+  invalidateSpecCache();
+
+  // Step 16: the moved specs as the rewrite left them, their references to the
+  // component and its contract already following the rename.
+  const movedComponent = loadComponentSpec(componentId) ?? component;
+  const movedInterface = movingInterface ? loadInterfaceSpec(movingInterface.id) ?? movingInterface : null;
+  const movedImplementation = movingImplementation
+    ? loadImplementationSpec(movingImplementation.id) ?? movingImplementation
+    : null;
+
+  // Step 17: the component under its new id, where the loader places it — an
+  // owned member nested under its owner.
+  saveComponentSpec({ ...movedComponent, id: newId });
+  // Step 18: its own interface, when that moves, under i<newId>.
+  if (movedInterface) saveInterfaceSpec({ ...movedInterface, id: interfaceId, component: newId });
+  // Step 19: its own implementation, when that moves, under <newId>_impl.
+  if (movedImplementation) {
+    // The nested layout keeps an implementation's file beside its contract's, so
+    // one whose contract keeps its id is written to the very file it moves out
+    // of. That file is cleared first: the loader refuses to write over another id.
+    const oldFile = getImplementationPath(movedImplementation.id);
+    if (path.resolve(getImplementationPath(implementationId, movedImplementation.contract)) === path.resolve(oldFile)) {
+      fs.unlinkSync(oldFile);
+    }
+    saveImplementationSpec({ ...movedImplementation, id: implementationId });
+  }
+
+  // Step 20: remove each moved spec's old file, found by its old id — which the
+  // loader still indexes beside the new one, so a folder a save moved is followed.
+  removeSpecFile(getComponentPath(componentId), componentId);
+  if (movingInterface) removeSpecFile(getInterfacePath(movingInterface.id), movingInterface.id);
+  if (movingImplementation) removeSpecFile(getImplementationPath(movingImplementation.id), movingImplementation.id);
+
+  // Step 21: the removed files changed the tree outside the save paths.
   invalidateSpecCache();
   // Step 22: what moved, and what was rewritten.
   return { renamed, rewritten };

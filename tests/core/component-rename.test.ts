@@ -254,6 +254,22 @@ describe('renameComponent', () => {
     }
   });
 
+  it('leaves a renamed Repository member nested under its owner, as the loader lays it out, with no flat copy', () => {
+    root = books();
+    const subsystemDir = path.join(root, '.wai', 'specs', 'books');
+    const files = ['.index.yaml', '.interface.yaml', '.implementation.yaml'];
+    for (const file of files) expect(fs.existsSync(path.join(subsystemDir, 'books_repo', 'ledger', file)), file).toBe(true);
+
+    renameComponent('ledger', 'journal');
+
+    for (const file of files) expect(fs.existsSync(path.join(subsystemDir, 'books_repo', 'journal', file)), file).toBe(true);
+    for (const leftover of [path.join(subsystemDir, 'journal'), path.join(subsystemDir, 'ledger'), path.join(subsystemDir, 'books_repo', 'ledger')]) {
+      expect(fs.existsSync(leftover), leftover).toBe(false);
+    }
+    invalidateSpecCache();
+    expect(workspaceFor(root).normalizeComponentLayout()).toEqual([]);
+  });
+
   it('adds no finding, and leaves no credential source unknown or unwired: the tree validates after the rename as it did before', () => {
     root = books();
     const authSourceFindings = (all: string[]): string[] => all.filter((f) => /UNKNOWN_AUTH_SOURCE|AUTH_SOURCE_UNWIRED/.test(f));
