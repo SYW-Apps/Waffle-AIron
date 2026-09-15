@@ -11,12 +11,12 @@ methods:
       - stepNumber: 1
         description: Resolve the session to a Principal.
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: Require share:create over the target project's scope.
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: The effective permission is not yes.
@@ -30,7 +30,7 @@ methods:
       - stepNumber: 5
         description: Capture the requested view + artifacts into an immutable snapshot.
         type: call
-        targetComponent: share_snapshot_specialist
+        targetComponent: share_snapshots
         targetMethod: captureSnapshot
       - stepNumber: 6
         description: Persist the snapshot.
@@ -61,7 +61,7 @@ methods:
       - stepNumber: 1
         description: Resolve the session to a Principal.
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: Load the link, or not-found.
@@ -71,7 +71,7 @@ methods:
       - stepNumber: 3
         description: Require share:create over the link's project scope.
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 4
         description: Not permitted.
@@ -85,7 +85,7 @@ methods:
       - stepNumber: 6
         description: Re-capture the view into a new immutable snapshot.
         type: call
-        targetComponent: share_snapshot_specialist
+        targetComponent: share_snapshots
         targetMethod: captureSnapshot
       - stepNumber: 7
         description: Persist the new snapshot.
@@ -111,7 +111,7 @@ methods:
       - stepNumber: 1
         description: Resolve the session to a Principal.
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: Load the link.
@@ -121,7 +121,7 @@ methods:
       - stepNumber: 3
         description: Require share:create over the link's scope.
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 4
         description: Not permitted.
@@ -153,7 +153,7 @@ methods:
       - stepNumber: 1
         description: Resolve the session to a Principal.
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: Load the link.
@@ -163,7 +163,7 @@ methods:
       - stepNumber: 3
         description: Require share:create over the link's scope.
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 4
         description: Not permitted.
@@ -193,12 +193,12 @@ methods:
       - stepNumber: 1
         description: Resolve the session to a Principal.
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: Require share:create over the project scope.
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: Not permitted.
@@ -223,7 +223,7 @@ methods:
       - stepNumber: 1
         description: Resolve the session to a Principal.
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: Load the link.
@@ -233,7 +233,7 @@ methods:
       - stepNumber: 3
         description: Require share:create over the link's scope.
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 4
         description: Not permitted.

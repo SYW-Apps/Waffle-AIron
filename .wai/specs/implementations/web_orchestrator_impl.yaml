@@ -27,7 +27,7 @@ methods:
           Sign an SSO state binding providerId, the nonce, and redirectUri via the single signing
           authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: signSsoState
       - stepNumber: 4
         description: >-
@@ -92,7 +92,7 @@ methods:
       - stepNumber: 1
         description: Verify the signed SSO state (rejects tampered or expired state) and return its payload.
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: verifySsoState
       - stepNumber: 2
         description: Parse the verified state payload into providerId, nonce, and redirectUri.
@@ -195,11 +195,11 @@ methods:
       - stepNumber: 17
         description: >-
           Build the new WebSession (session id with the reserved prefix, subject, providerId,
-          createdAt, expiresAt = now + the session TTL); the session carries NO grants — the auth
-          specialist resolves the principal's permissionSubject (roleBindings + instanceAdmin) live
-          at authentication. MULTI-DEVICE: prior sessions are left intact, so one principal may hold
-          concurrent browser sessions across devices/tabs; each independently revocable via signOut,
-          and signOutEverywhere revokes them all.
+          createdAt, expiresAt = now + the session TTL); the session carries NO grants — the
+          authentication component resolves the principal's permissionSubject (roleBindings +
+          instanceAdmin) live at authentication. MULTI-DEVICE: prior sessions are left intact, so
+          one principal may hold concurrent browser sessions across devices/tabs; each independently
+          revocable via signOut, and signOutEverywhere revokes them all.
         type: local
       - stepNumber: 18
         description: Persist the new browser session through the web session repository.
@@ -224,7 +224,7 @@ methods:
           Resolve the presented session to a Principal (an expired or absent session yields an
           unauthenticated principal).
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: If the session did not resolve to an authenticated principal, there is nothing to revoke.
@@ -305,10 +305,11 @@ methods:
           Build a new WebSession bound to the synthetic local-developer subject (issuer 'local',
           userId = the PERSISTED boot-reserved local-developer UUID seeded at first boot, kind
           'human'), narrowed to the one local project (projects = [the local project id]); the
-          session carries NO permissions — in devMode the auth specialist resolves THIS subject's
-          permissionSubject with instanceAdmin = true (full local access) live at authentication,
-          matching the dev-subject identity check in authenticateSession. This path is devMode-only
-          and never mints a session in a hosted deployment. expiresAt = now + the session TTL.
+          session carries NO permissions — in devMode the authentication component resolves THIS
+          subject's permissionSubject with instanceAdmin = true (full local access) live at
+          authentication, matching the dev-subject identity check in authenticateSession. This path
+          is devMode-only and never mints a session in a hosted deployment. expiresAt = now + the
+          session TTL.
         type: local
       - stepNumber: 8
         description: Persist the new local-developer session through the web session repository
@@ -346,10 +347,10 @@ methods:
         error: Unauthenticated — too many failed attempts (short lockout)
       - stepNumber: 3
         description: >-
-          Verify BOTH the username and the password constant-time via the auth specialist (unset env
-          = password login disabled → always null)
+          Verify BOTH the username and the password constant-time via the authentication component
+          (unset env = password login disabled → always null)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: verifyBuiltinAdmin
       - stepNumber: 4
         description: If verification returned no subject (mismatch or disabled), record and reject
@@ -369,8 +370,8 @@ methods:
       - stepNumber: 7
         description: >-
           Clear the username's throttle entry and build the WebSession bound to the stable built-in
-          super-admin subject; the session carries NO grants — the auth specialist resolves the
-          built-in super-admin's permissionSubject with instanceAdmin = true (the ONLY
+          super-admin subject; the session carries NO grants — the authentication component resolves
+          the built-in super-admin's permissionSubject with instanceAdmin = true (the ONLY
           instance-admin, env-anchored, hard-reserved away from user records and minted tokens).
           expiresAt = now + the session TTL.
         type: local
@@ -424,7 +425,7 @@ methods:
           Resolve the session to a Principal through the single auth authority's session bridge
           (rejects an expired or absent session)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: >-
@@ -454,4 +455,4 @@ lint:
         declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-08-12T05:34:27.125Z'
+updatedAt: '2026-09-15T20:49:07.964Z'

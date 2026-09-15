@@ -1,0 +1,16 @@
+id: istate_hash
+name: State Hash Interface
+description: Contract for computing the deterministic content identity of the spec tree.
+component: state_hash
+methods:
+  - name: hashSpecTree
+    description: >-
+      Load every spec via the loader, canonicalize (stable key order, normalized serialization), and
+      digest into a StateId. Pure and reproducible.
+    signature: 'hashSpecTree(): StateId'
+    returns: StateId
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-07-04T12:48:43.305Z'
+updatedAt: '2026-09-15T20:46:46.562Z'

@@ -186,4 +186,38 @@ describe('HIDDEN_STATE — mutable module state in logic-only files', () => {
       expect(found[0].specId).toBe('impl-flow-orch');
     } finally { proj.cleanup(); }
   });
+
+  it('ignores files realizing only a Supervisor or an Actor: they hold runtime state by definition', () => {
+    const proj = createTempProject();
+    proj.component('shift-supervisor', 'Supervisor');
+    proj.component('printer-actor', 'Actor');
+    proj.contract('shift-supervisor', ['runFlow']);
+    proj.contract('printer-actor', ['printLabel']);
+    proj.impl('shift-supervisor', `sourcePath: src/supervisor.ts\nmethods:\n${INTENT('runFlow')}`);
+    proj.impl('printer-actor', `sourcePath: src/actor.ts\nmethods:\n${INTENT('printLabel')}`);
+    proj.source('src/supervisor.ts', STATEFUL_ORCH);
+    proj.source('src/actor.ts', ['let queued = 0;', 'export function printLabel(): void { queued += 1; }'].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'HIDDEN_STATE')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('exempts a file an Orchestrator shares with a Supervisor: the state is the Supervisor\'s to hold', () => {
+    const proj = createTempProject();
+    proj.component('flow-orch', 'Orchestrator');
+    proj.component('shift-supervisor', 'Supervisor', 'dependsOn: [flow-orch]');
+    proj.contract('flow-orch', ['runFlow']);
+    proj.contract('shift-supervisor', ['restartFlow']);
+    proj.impl('flow-orch', `sourcePath: src/shared.ts\nmethods:\n${INTENT('runFlow')}`);
+    proj.impl('shift-supervisor', `sourcePath: src/shared.ts\nmethods:\n${INTENT('restartFlow')}`);
+    proj.source('src/shared.ts', [
+      STATEFUL_ORCH,
+      'export function restartFlow(id: string): void { delete sessionCache[id]; runFlow(id); }',
+    ].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'HIDDEN_STATE')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
 });

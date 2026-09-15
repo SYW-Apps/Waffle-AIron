@@ -36,7 +36,7 @@ import type {
 //
 // Coverage the example deliberately exercises:
 //   • ≥3 subsystems, each a layered slice: Portal → Orchestrator → Repository
-//     (which OWNS a Store + Registry + Index), plus a Specialist / Adapter.
+//     (which OWNS a Store + Registry + Index), plus an Orchestrator (pure logic) / Adapter.
 //   • Two cross-subsystem edges shaped correctly: a client Adapter in one
 //     subsystem dependsOn another subsystem's PUBLISHED Portal (red boundary
 //     edges + frames in the canvas).
@@ -105,7 +105,7 @@ export function seedDemoTree(): void {
       { id: 'catalogdb', name: 'Catalog DB', engine: 'postgres', description: 'Products and categories.' },
       { id: 'ordersdb', name: 'Orders DB', engine: 'postgres', description: 'Orders, order lines, and payments.' },
     ],
-    // L0 gateway surface — the entries exported beyond the project (each backed by
+    // L0 export surface — the entries exported beyond the project (each backed by
     // a subsystem-published Portal), with an audience ceiling. Catalog + Ordering
     // are externally shareable (they appear in a public share's OpenAPI); Payments
     // is instance-internal (excluded from an external projection).
@@ -174,7 +174,7 @@ export function seedDemoTree(): void {
     dependsOn: ['catalog-orchestrator'],
   });
   comp('catalog-orchestrator', 'Catalog Orchestrator', 'catalog', 'Orchestrator', 'Coordinates catalog reads and pricing.', {
-    dependsOn: ['product-repo', 'pricing-specialist'],
+    dependsOn: ['product-repo', 'pricing'],
   });
   comp('product-repo', 'Product Repository', 'catalog', 'Repository', 'Persistence facade for products.', {
     owns: ['product-store', 'product-registry', 'product-index'],
@@ -182,7 +182,9 @@ export function seedDemoTree(): void {
   comp('product-store', 'Product Store', 'catalog', 'Store', 'Durable product record storage.');
   comp('product-registry', 'Product Registry', 'catalog', 'Registry', 'SKU → product identity registry.');
   comp('product-index', 'Product Index', 'catalog', 'Index', 'Category → product id lookup index.');
-  comp('pricing-specialist', 'Pricing Specialist', 'catalog', 'Specialist', 'Computes tiered display pricing.');
+  comp('pricing', 'Pricing', 'catalog', 'Orchestrator', 'Computes tiered display pricing.', {
+    dependencyClass: 'pure',
+  });
 
   // payments
   comp('payments-portal', 'Payments Portal', 'payments', 'Portal', 'HTTP front door for charges.', {
@@ -260,7 +262,7 @@ export function seedDemoTree(): void {
   iface('iproduct-index', 'IProductIndex', 'product-index', [
     { name: 'byCategory', description: 'Product ids in a category.', returns: 'string[]', params: [{ name: 'categoryId', type: 'string' }] },
   ]);
-  iface('ipricing-specialist', 'IPricingSpecialist', 'pricing-specialist', [
+  iface('ipricing', 'IPricing', 'pricing', [
     { name: 'quote', description: 'Compute a tiered price for a quantity.', returns: 'Money', params: [{ name: 'product', type: 'Product' }, { name: 'qty', type: 'number' }] },
   ]);
 
@@ -346,7 +348,7 @@ export function seedDemoTree(): void {
   });
   const intentMethod = (name: string, intent: string): MethodImplementation => ({ name, narrative: [], intent });
 
-  // catalog: Portal (calls-only) → Orchestrator (full narratives) → Specialist (switch)
+  // catalog: Portal (calls-only) → Orchestrator (full narratives) → Orchestrator, pure logic (switch)
   impl('catalog-portal-impl', 'icatalog-portal', [
     callsOnly('getProduct', 'catalog-orchestrator', 'fetchProduct', 'Dispatch the read to the catalog orchestrator.'),
     callsOnly('listByCategory', 'catalog-orchestrator', 'browseCategory', 'Dispatch the category browse to the orchestrator.'),
@@ -369,13 +371,13 @@ export function seedDemoTree(): void {
         step({ stepNumber: 1, description: 'Normalize the category id.', type: 'local' }),
         step({ stepNumber: 2, description: 'Fetch every product in the category.', type: 'call', targetComponent: 'product-repo', targetMethod: 'findByCategory' }),
         step({ stepNumber: 3, description: 'Price each product for display.', type: 'loop', loopKind: 'forEach', over: 'each product in the result', endStep: 4 }),
-        step({ stepNumber: 4, description: 'Compute the display price for the product.', type: 'call', targetComponent: 'pricing-specialist', targetMethod: 'quote' }),
+        step({ stepNumber: 4, description: 'Compute the display price for the product.', type: 'call', targetComponent: 'pricing', targetMethod: 'quote' }),
         step({ stepNumber: 5, description: 'Return the priced product list.', type: 'return', outcome: 'priced catalog page' }),
       ],
     },
   ]);
 
-  impl('pricing-specialist-impl', 'ipricing-specialist', [
+  impl('pricing-impl', 'ipricing', [
     {
       name: 'quote',
       narrative: [

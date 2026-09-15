@@ -3,10 +3,10 @@ name: Project Ops Orchestrator Interface
 description: >-
   Contract for the operational forwarding seam. Every method takes the caller's credential first (a
   browser session id or a bearer token — both resolve to a Principal upstream) and forwards 1:1 to
-  the owning orchestrator, whose resolver gate applies unchanged: global packs / instance policy /
-  exposure → instance-level project:admin; per-project pack install/remove, producers, git binding
-  administration → project:admin over the project; per-project pack listing → project:read; policy
-  evaluate/reconcile, git sync/commit → project:write; the audit reads filter to the caller's
+  the owning orchestrator, whose permission-rules gate applies unchanged: global packs / instance
+  policy / exposure → instance-level project:admin; per-project pack install/remove, producers, git
+  binding administration → project:admin over the project; per-project pack listing → project:read;
+  policy evaluate/reconcile, git sync/commit → project:write; the audit reads filter to the caller's
   project:admin visible scopes.
 component: project_ops_orchestrator
 methods:
@@ -455,4 +455,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-09-13T12:08:42.071Z'
+updatedAt: '2026-09-15T21:03:16.476Z'

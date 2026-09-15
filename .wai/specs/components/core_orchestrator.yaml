@@ -10,9 +10,9 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - spec_loader
-  - state_hash_specialist
+  - state_hash
   - lock_registry
-  - diagram_specialist
+  - architecture_diagrams
   - project_config_repository
   - variant_registry_adapter
 status: complete

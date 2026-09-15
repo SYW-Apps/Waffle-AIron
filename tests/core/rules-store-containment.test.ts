@@ -96,13 +96,13 @@ describe('UNOWNED_STORE — a Store belongs inside a Repository', () => {
 });
 
 describe('Store-target boundary violations prescribe the fix and forbid the shortcut', () => {
-  it('Specialist → Store: wrap in a Repository, depend on the facade, never inline the state', () => {
+  it('read logic → Store: wrap in a Repository, depend on the facade, never inline the state', () => {
     const proj = createTempProject();
     proj.component('loose-store', 'Store');
-    proj.component('resolver', 'Specialist', 'dependsOn: [loose-store]');
+    proj.component('resolver', 'Orchestrator', 'dependencyClass: read\ndependsOn: [loose-store]');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'ARCHITECTURE_VIOLATION_SPECIALIST_DEP');
+      const found = byCode(validateSddTree(), 'DEPENDENCY_CLASS_VIOLATION');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('wrap "loose-store" in a Repository pattern');
       expect(found[0].message).toContain('depend on that Repository facade');
@@ -126,10 +126,10 @@ describe('Store-target boundary violations prescribe the fix and forbid the shor
   it('non-Store targets keep their original messages (no store hint appended)', () => {
     const proj = createTempProject();
     proj.component('flow-orch', 'Orchestrator');
-    proj.component('resolver', 'Specialist', 'dependsOn: [flow-orch]');
+    proj.component('resolver', 'Orchestrator', 'dependencyClass: read\ndependsOn: [flow-orch]');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'ARCHITECTURE_VIOLATION_SPECIALIST_DEP');
+      const found = byCode(validateSddTree(), 'DEPENDENCY_CLASS_VIOLATION');
       expect(found).toHaveLength(1);
       expect(found[0].message).not.toContain('Repository pattern (owns');
       expect(found[0].message).not.toContain('Never resolve this by merging');

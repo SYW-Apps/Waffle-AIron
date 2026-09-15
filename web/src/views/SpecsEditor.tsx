@@ -46,10 +46,13 @@ interface Selected {
 
 const STATUS = ['draft', 'design', 'complete'];
 const COMPONENT_TYPE = [
-  'Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Registry',
-  'Adapter', 'Observer', 'Specialist', 'View', 'Repository', 'Gateway',
-  'FeatureComponent', 'RouterComponent',
+  'Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Query', 'Registry',
+  'Adapter', 'Observer', 'View', 'Repository', 'FeatureComponent', 'RouterComponent',
 ];
+// Retired (STEREOTYPE_RETIRED): never offered as a choice — componentTypeOptions()
+// below includes one of these only when it is the component's CURRENT value, so a
+// tree not yet migrated still shows its type without letting anyone pick it anew.
+const RETIRED_COMPONENT_TYPE = ['Specialist', 'Gateway'];
 const PORTAL_TYPE = ['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom'];
 const DURABILITY = ['ram-projection', 'durable', 'read-through', 'cache'];
 const DESIGN_DEPTH = ['components', 'interfaces', 'implementations', 'narratives'];
@@ -190,6 +193,18 @@ function EnumSelect(props: {
     ...props.options.map((o) => ({ value: o, label: o })),
   ];
   return <Select value={props.value ?? ''} onChange={props.onChange} options={opts} disabled={props.disabled} />;
+}
+
+/** The Component-type picker's options: every live stereotype, plus the CURRENT
+ *  value's retired type (Specialist/Gateway), marked retired, when it is one —
+ *  so an unmigrated component still shows its type, and nobody can choose a
+ *  retired type for any component going forward. */
+function componentTypeOptions(current: string | undefined): { value: string; label: string }[] {
+  const options = COMPONENT_TYPE.map((v) => ({ value: v, label: v }));
+  if (current && RETIRED_COMPONENT_TYPE.includes(current)) {
+    options.push({ value: current, label: `${current} (retired)` });
+  }
+  return options;
 }
 
 let comboSeq = 0;
@@ -992,7 +1007,7 @@ function SpecForm(props: {
           </Field>
           {(draft.publicInterfaces ?? []).length > 0 && (
             <div className="stack-lg">
-              <span className="field-label">Gateway surface entries</span>
+              <span className="field-label">Public surface entries</span>
               {draft.publicInterfaces.map((pi: any, i: number) => (
                 <div key={i} className="sub-card">
                   <code className="subtle">{pi.id ?? pi.component ?? `entry ${i + 1}`}</code>
@@ -1064,7 +1079,7 @@ function SpecForm(props: {
           </div>
           <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           <div className="row-form">
-            <Field label="Component type" fieldKey="componentType" highlight={flagFor('componentType')}><EnumSelect value={draft.componentType} onChange={(v) => set('componentType', v)} options={COMPONENT_TYPE} /></Field>
+            <Field label="Component type" fieldKey="componentType" highlight={flagFor('componentType')}><Select value={draft.componentType ?? ''} onChange={(v) => set('componentType', v)} options={componentTypeOptions(draft.componentType)} /></Field>
             {draft.componentType === 'Portal' && (
               <Field label="Portal type"><EnumSelect value={draft.portalType} onChange={(v) => set('portalType', v)} options={PORTAL_TYPE} allowNone /></Field>
             )}
@@ -1386,7 +1401,7 @@ function ComponentUnitEditor(props: {
   const navigate = useNavigate();
   const compNode = nodes.find((n) => n.id === componentId);
   // "Open in canvas" opens the component's PARENT (subsystem) view and focuses the
-  // component — a leaf (Specialist/Store/Actor/…) has no meaningful "inside" to drill
+  // component — a leaf (Orchestrator/Store/Actor/…) has no meaningful "inside" to drill
   // into. Subsystem route = its id with '::' → '/' segments; the component to focus
   // (and, for a method, the narrative flow) rides in the URL hash. No unit prefix.
   const parentRoute = compNode?.parentId ? compNode.parentId.split('::').map(encodeURIComponent).join('/') : '';

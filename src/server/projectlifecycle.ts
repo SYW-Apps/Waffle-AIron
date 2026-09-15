@@ -32,7 +32,7 @@ import type {
 // EXECUTE-PRIMARY project lifecycle actions — initialize / lock —
 // requested over MCP, CLI, or UI. The action is the caller's normal intent;
 // an approval request is the EXCEPTION added for separation of duties. Every
-// method authenticates the caller credential (via the auth specialist) and
+// method authenticates the caller credential (via authentication) and
 // resolves their permission through the authorization seam, then acts on the
 // resolved value:
 //   yes      → execute directly through the pre-authorized entry points
@@ -79,7 +79,7 @@ const AWAIT_MAX_TIMEOUT_S = 300;
 
 // ── authorization ────────────────────────────────────────────────────────────
 //
-// Every decision resolves through the permission resolver (authorization.ts).
+// Every decision resolves through permission rules (authorization.ts).
 // isInstanceAdmin is imported rather than re-implemented: the previous local
 // copy had to be kept "in lockstep" with three other copies by hand, which is
 // exactly how the model drifted.
@@ -225,7 +225,7 @@ function createPendingOutcome(
  * EXECUTE-PRIMARY project initialization. Authenticate the caller, validate the
  * ProjectInitRequest structurally (id shape per the project-id rules
  * createProject enforces, non-collision, and the REQUIRED ownerUnitId — every
- * project is placed at creation so the permission resolver can always see it),
+ * project is placed at creation so permission rules can always see it),
  * then evaluate it against the active instance pack policy via the policy
  * orchestrator's pre-authorized evaluation: an enforcing ('block') policy
  * rejects a non-compliant request immediately with actionable findings, while
@@ -422,7 +422,7 @@ function lifecycleAction(
 ): ProjectActionOutcome {
   const principal = requirePrincipal(cfg, credential);
 
-  // Resolve project:write over the project through the permission resolver: the
+  // Resolve project:write over the project through permission rules: the
   // leaf->root walk reaches a project-scoped value, a unit-scoped value for the
   // subtree it is placed in, or an instance-level default — so a unit admin is
   // first-class over their subtree and nobody reaches across tenants.

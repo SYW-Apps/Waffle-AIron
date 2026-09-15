@@ -2,7 +2,7 @@ id: iinstance_identity_repository
 name: Instance Identity Repository Interface
 description: >-
   Facade contract for the persisted singleton instance identity. Consumers (the lifecycle init
-  entrypoint, the auth specialist) use only this facade.
+  entrypoint, the authentication component) use only this facade.
 component: instance_identity_repository
 methods:
   - name: ensureSeeded
@@ -27,4 +27,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-16T00:24:17.189Z'
-updatedAt: '2026-07-16T07:27:54.504Z'
+updatedAt: '2026-09-15T20:46:59.879Z'

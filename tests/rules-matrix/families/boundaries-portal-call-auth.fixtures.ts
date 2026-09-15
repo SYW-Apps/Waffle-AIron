@@ -237,22 +237,23 @@ export default [
     anchoredTo: 'settlement_client_impl',
     expectFire: true,
     scenario:
-      'The settlement client adapter names the credential-format specialist as its credential source, but a Specialist neither loads nor holds secrets.',
+      'The settlement client adapter names the credential header formatter as its credential source, but pure logic neither loads nor holds secrets.',
     tree: {
       system: SYSTEM,
       subsystems: [CLAIMS_SUB, SETTLEMENT_SUB],
       components: [
-        clientAdapter(['settlement-portal', 'credential-format-specialist']),
+        clientAdapter(['settlement-portal', 'credential-header-formatter']),
         {
-          id: 'credential-format-specialist',
-          componentType: 'Specialist',
+          id: 'credential-header-formatter',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'claims',
           description: 'Formats credentials into the header shape the settlement API expects.',
         },
         SETTLEMENT_PORTAL,
       ],
       interfaces: [CLIENT_INTERFACE, SETTLEMENT_PORTAL_INTERFACE],
-      implementations: [clientImpl({ from: 'component:credential-format-specialist' })],
+      implementations: [clientImpl({ from: 'component:credential-header-formatter' })],
     },
   }),
   defineRuleFixture({

@@ -7,7 +7,7 @@ description: >-
   sdd_host_await_approval) to the project lifecycle orchestrator, the hosted landscape discovery
   tools to the surface exchange orchestrator (currentProjectId = the bound project), and every other
   tool to the scoped MCP server after enforcing the granular data-plane permission through the
-  authorization specialist (project:read for reads, project:write for writes — unknown tools fail
+  authorization component (project:read for reads, project:write for writes — unknown tools fail
   closed as writes) over the bound project.
 contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
@@ -20,7 +20,7 @@ methods:
       - stepNumber: 2
         description: Verify the token (signature + expiry); rejects if invalid
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: verifyViewToken
       - stepNumber: 3
         description: Resolve the granted project's isolated root and bind it
@@ -48,7 +48,7 @@ methods:
           Authenticate the token to a principal (resolving its subject, projects narrowing, and
           permissionSubject)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticate
       - stepNumber: 3
         description: If the principal is unauthenticated, reject
@@ -92,13 +92,13 @@ methods:
       - stepNumber: 10
         description: >-
           Confine a subproject-qualified credential by the called tool's declared scope. A
-          TREE-scoped tool — every scoped spec tool, lock, and the two tree transfer tools — acts on
-          the bound child tree (lock and transfer receive the qualifier). A RECORD-scoped tool acts
-          on the project record or its repository, or answers for the hosted project's relations to
-          other projects, so serving it would let a token scoped to one chained child reach the
-          whole parent — the qualifier would narrow nothing. A tool with no declared scope is
-          treated as record-scoped: confinement fails closed, so a tool added later is refused under
-          a narrowed credential until it declares its scope.
+          TREE-scoped tool — every scoped spec tool (sdd_rename_component among them), lock, and the
+          two tree transfer tools — acts on the bound child tree (lock and transfer receive the
+          qualifier). A RECORD-scoped tool acts on the project record or its repository, or answers
+          for the hosted project's relations to other projects, so serving it would let a token
+          scoped to one chained child reach the whole parent — the qualifier would narrow nothing. A
+          tool with no declared scope is treated as record-scoped: confinement fails closed, so a
+          tool added later is refused under a narrowed credential until it declares its scope.
         type: branch
         condition: >-
           the resolved binding carries a subproject qualifier AND the called tool is not declared
@@ -355,16 +355,17 @@ methods:
           when it is one of the explicitly listed read tools — sdd_list_external_interfaces and the
           topology reads listAgents, getAgent, listDomains, validateTopology and getProjectConfig —
           requiring project:read; ANY other tool — the explicit write prefixes
-          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_)
-          AND any unrecognized or newly added name — is treated as a write requiring project:write
-          (fail closed: an unknown tool never falls through to read-level gating)
+          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_),
+          the explicitly named write tools (sdd_rename_component), AND any unrecognized or newly
+          added name — is treated as a write requiring project:write (fail closed: an unknown tool
+          never falls through to read-level gating)
         type: local
       - stepNumber: 49
         description: >-
           Resolve the caller's required capability (project:read or project:write) over the bound
-          project through the authorization specialist
+          project through the authorization component
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 50
         description: >-
@@ -421,4 +422,4 @@ methods:
     symbol: handleMcpRequest
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-12T17:36:55.652Z'
+updatedAt: '2026-09-15T20:48:50.758Z'

@@ -145,7 +145,8 @@ export default [
       components: [
         {
           id: 'webhook-signature-verifier',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'notifications',
           description: 'Will verify inbound webhook signatures once the security team finalizes the algorithm.',
         },
@@ -272,7 +273,8 @@ export default [
       components: [
         {
           id: 'rate-plan-engine',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'pricing',
           description: 'Computes the applicable rate plan for a subscription.',
         },
@@ -310,7 +312,8 @@ export default [
       components: [
         {
           id: 'rate-plan-engine',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'pricing',
           description: 'Computes the applicable rate plan for a subscription.',
         },
@@ -924,7 +927,8 @@ export default [
       components: [
         {
           id: 'fare-rules-engine',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'pricing',
           description: 'Evaluates the generated fare rule matrix for a booking.',
         },
@@ -965,7 +969,8 @@ export default [
       components: [
         {
           id: 'fare-rules-engine',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'pricing',
           description: 'Evaluates the generated fare rule matrix for a booking.',
         },

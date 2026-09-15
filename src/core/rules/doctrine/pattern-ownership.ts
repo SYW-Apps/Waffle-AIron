@@ -1,5 +1,5 @@
 import { SddRule } from '../types.js';
-import { PATTERN_TYPES, isPattern } from '../../../models/index.js';
+import { PATTERN_TYPES, isPattern, isRetired } from '../../../models/index.js';
 
 /**
  * Pattern ownership: only patterns own member blocks (exactly one hop, one
@@ -9,24 +9,29 @@ import { PATTERN_TYPES, isPattern } from '../../../models/index.js';
 export const patternsRule: SddRule = {
   name: 'pattern-ownership',
   description:
-    'Patterns (Repository/Gateway/FeatureComponent/RouterComponent) own member blocks with the containment their definition prescribes; blocks own nothing; a member has exactly one owner; and private members are reachable only via their facade or siblings.',
+    'Patterns (Repository/FeatureComponent/RouterComponent) own member blocks with the containment their definition prescribes; blocks own nothing; a member has exactly one owner; and private members are reachable only via their facade or siblings.',
   codes: [
     { code: 'EMPTY_PATTERN', defaultSeverity: 'error', summary: 'Pattern with no owned member blocks' },
     { code: 'BLOCK_OWNS_MEMBERS', defaultSeverity: 'error', summary: 'Building block using owns' },
     { code: 'INVALID_OWNED_MEMBER', defaultSeverity: 'error', summary: 'owns names a non-existent component' },
     { code: 'PATTERN_OWNS_PATTERN', defaultSeverity: 'error', summary: 'Pattern owning another pattern' },
     { code: 'SHARED_OWNED_MEMBER', defaultSeverity: 'error', summary: 'Block owned by two patterns' },
-    { code: 'REPOSITORY_CONTAINMENT', defaultSeverity: 'error', summary: 'Repository owning a non Store/Registry/Index/Adapter member' },
-    { code: 'GATEWAY_CONTAINMENT', defaultSeverity: 'error', summary: 'Gateway owning a non Portal/Orchestrator/Specialist member' },
+    { code: 'REPOSITORY_CONTAINMENT', defaultSeverity: 'error', summary: 'Repository owning a non Store/Registry/Index/Query/Adapter member' },
     { code: 'FEATURE_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'FeatureComponent not owning exactly one Orchestrator + one or more Views' },
     { code: 'ROUTER_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'RouterComponent not owning exactly one Portal facade, or owning no children to route to' },
     { code: 'VISIBILITY_VIOLATION', defaultSeverity: 'error', summary: 'Dependency on a block privately owned by another pattern' },
     { code: 'UNOWNED_STORE', defaultSeverity: 'warning', summary: 'Store not owned by any pattern — recommended shape is a Repository; a deliberate standalone Store needs a lint.allow' },
     { code: 'REGISTRY_WITHOUT_STORE', defaultSeverity: 'warning', summary: 'Standalone Registry with no Store to write to — either mistyped (a fused file-backed store belongs typed Store) or orphaned' },
+    { code: 'UNOWNED_QUERY', defaultSeverity: 'error', summary: 'Query not owned by a Repository — a Query computes reads over its own Repository\'s Store' },
   ],
   check(ctx) {
     const ownedBy = new Map<string, string>(); // member block id -> the pattern that first claimed it
     for (const comp of ctx.components) {
+      // A retired component (a Specialist or Gateway) is skipped entirely: it
+      // records no ownership and gets no pattern or containment finding —
+      // retired-stereotypes reports it once, and its migration decides what its
+      // owns becomes.
+      if (isRetired(comp)) continue;
       const isDraftCtx = ctx.isComponentDraft(comp.id);
       const pattern = isPattern(comp);
 
@@ -50,6 +55,9 @@ export const patternsRule: SddRule = {
         if (!pattern) continue;
         if (isPattern(member)) {
           ctx.addIssue('error', 'PATTERN_OWNS_PATTERN', `Pattern "${comp.id}" owns "${memberId}", which is itself a pattern. Patterns own only building blocks — compose patterns at the subsystem (L1) level.`, comp.id, isDraftCtx);
+          // The inner pattern gets no owner: it is composed at L1, so its
+          // dependants get no VISIBILITY_VIOLATION on top of this finding.
+          continue;
         }
         // The first pattern to claim a member stays its owner, so every later
         // claimant is reported against that first owner.
@@ -60,25 +68,27 @@ export const patternsRule: SddRule = {
         if (!firstOwner) ownedBy.set(memberId, comp.id);
       }
 
-      // Repository containment: only Store / Registry / Index / Adapter
-      if (comp.componentType === 'Repository') {
-        const allowed = new Set(['Store', 'Registry', 'Index', 'Adapter']);
-        for (const memberId of comp.owns) {
-          const t = ctx.componentMap.get(memberId)?.componentType;
-          if (t && !allowed.has(t)) {
-            ctx.addIssue('error', 'REPOSITORY_CONTAINMENT', `Repository "${comp.id}" owns "${memberId}" of type ${t}; a Repository may own only Store, Registry, Index, and (optionally) Adapter.`, comp.id, isDraftCtx);
-          }
-        }
+      // A FeatureComponent or RouterComponent owning a retired member is not
+      // judged for containment until that member is migrated: its member counts
+      // change with the migration, and the member's STEREOTYPE_RETIRED is the one
+      // finding. Ownership, sharing and visibility above and below still apply.
+      if ((comp.componentType === 'FeatureComponent' || comp.componentType === 'RouterComponent')
+        && comp.owns.some(memberId => {
+          const member = ctx.componentMap.get(memberId);
+          return member !== undefined && isRetired(member);
+        })) {
+        continue;
       }
 
-      // Gateway containment: only Portal / Orchestrator / Specialist
-      if (comp.componentType === 'Gateway') {
-        const allowed = new Set(['Portal', 'Orchestrator', 'Specialist']);
+      // Repository containment: only Store / Registry / Index / Query / Adapter.
+      // Each member is judged on its own: a retired member is skipped (its
+      // STEREOTYPE_RETIRED is its one finding), a live member's mistake still reports.
+      if (comp.componentType === 'Repository') {
+        const allowed = new Set(['Store', 'Registry', 'Index', 'Query', 'Adapter']);
         for (const memberId of comp.owns) {
-          const t = ctx.componentMap.get(memberId)?.componentType;
-          if (t && !allowed.has(t)) {
-            ctx.addIssue('error', 'GATEWAY_CONTAINMENT', `Gateway "${comp.id}" owns "${memberId}" of type ${t}; a Gateway may own only a Portal, Orchestrators, and Specialists.`, comp.id, isDraftCtx);
-          }
+          const member = ctx.componentMap.get(memberId);
+          if (!member || isRetired(member) || allowed.has(member.componentType)) continue;
+          ctx.addIssue('error', 'REPOSITORY_CONTAINMENT', `Repository "${comp.id}" owns "${memberId}" of type ${member.componentType}; a Repository may own only Store, Registry, Index, Query, and (optionally) Adapter.`, comp.id, isDraftCtx);
         }
       }
 
@@ -158,11 +168,26 @@ export const patternsRule: SddRule = {
       );
     }
 
+    // A Query is a computed read over its own Repository's Store, so it has no
+    // standalone form. A Query another pattern owns is that pattern's
+    // containment finding, not this one.
+    for (const comp of ctx.components) {
+      if (comp.componentType !== 'Query' || ownedBy.has(comp.id)) continue;
+      ctx.addIssue(
+        'error',
+        'UNOWNED_QUERY',
+        `Query "${comp.id}" is not owned by any pattern. A Query computes reads over its own Repository's Store — make it a member of the Repository whose Store it reads (owns: ["${comp.id}", …]).`,
+        comp.id,
+        ctx.isComponentDraft(comp.id),
+      );
+    }
+
     // Visibility rule: a component may depend on (a) blocks within its OWN group
     // (it is the owning pattern, or a sibling member of the same pattern), (b) any
     // pattern facade, or (c) a standalone block — never on a block privately owned by
-    // ANOTHER pattern.
+    // ANOTHER pattern. A retired depending component is skipped, as above.
     for (const comp of ctx.components) {
+      if (isRetired(comp)) continue;
       for (const depId of comp.dependsOn) {
         const owner = ownedBy.get(depId);
         if (!owner) continue;                         // dep is a facade or standalone block — fine

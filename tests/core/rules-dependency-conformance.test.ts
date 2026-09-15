@@ -168,7 +168,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     const proj = createTempProject();
     proj.subsystem('sub-b', 'publicInterfaces:\n  - type: Custom\n    details: in-process portal\n    component: portal-b');
     proj.component('portal-b', 'Portal', 'sub-b', 'portalType: Custom\ndependsOn: [inner-b]');
-    proj.component('inner-b', 'Specialist', 'sub-b');
+    proj.component('inner-b', 'Orchestrator', 'sub-b', 'dependencyClass: pure');
     proj.component('adapter-a', 'Adapter', 'sub-a', 'dependsOn: [portal-b]');
     proj.wire('portal-b', 'src/b/portal.ts');
     proj.wire('inner-b', 'src/b/inner.ts');

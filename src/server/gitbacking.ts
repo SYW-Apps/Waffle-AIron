@@ -46,7 +46,7 @@ import type {
 //                          listBindings / getBinding — pure 1:1 forwarding.
 //   - git_backing_adapter: the only block doing git + filesystem I/O for the
 //                          backup working copies under <dataDir>/git-backing/.
-//   - git_backing_orchestrator: resolver-gated bind/unbind/sync + the
+//   - git_backing_orchestrator: permission-rules-gated bind/unbind/sync + the
 //                          pre-authorized periodic sweep.
 // ---------------------------------------------------------------------------
 

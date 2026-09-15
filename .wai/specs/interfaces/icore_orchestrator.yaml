@@ -66,9 +66,7 @@ methods:
     signature: 'provisionProject(name: string): void'
     returns: void
   - name: computeStateId
-    description: >-
-      Compute the deterministic content hash (StateId) of the current spec tree via the state hash
-      specialist.
+    description: Compute the deterministic content hash (StateId) of the current spec tree via state_hash.
     signature: 'computeStateId(): StateId'
     returns: StateId
   - name: readLockRecord
@@ -80,7 +78,7 @@ methods:
     signature: 'writeLockRecord(record: LockRecord): void'
     returns: void
   - name: renderDiagram
-    description: Delegate diagram rendering to the diagram specialist.
+    description: Delegate diagram rendering to architecture_diagrams.
     signature: 'renderDiagram(format: string): string'
     returns: string
   - name: createChainedSubsystem
@@ -142,7 +140,7 @@ methods:
   - name: buildProjectGraph
     description: >-
       Project the current project's spec tree into a level-filtered WebGraphModel for the web UI,
-      forwarded to the diagram specialist's pure graph projection.
+      forwarded to the pure graph projection of architecture_diagrams.
     signature: 'buildProjectGraph(level: number): WebGraphModel'
     returns: WebGraphModel
     params:
@@ -316,13 +314,16 @@ methods:
   - name: renameComponent
     description: >-
       Rename a component and every reference to it. The component, and each interface and
-      implementation named after it (i<id>, <id>_impl), move to the new id and file; every reference
-      in the bound tree is rewritten: dependsOn, owns, dispatch and lifecycle entries, published
-      interfaces at L1 and L0, narrative targets, an entity's componentClass, an interface's
-      component and an implementation's contract. Refuses a component that does not exist, a new id
-      already taken or outside the id grammar, and a component inside a chained subproject (rename
-      it from that project's root). Human-readable names are left to the author, and a lock goes
-      stale as with any edit.
+      implementation named after it (i<id>, <id>_impl), move to the new id and file, a member of a
+      pattern staying under its owner; every reference in the bound tree is rewritten: dependsOn,
+      owns, dispatch and lifecycle entries, published interfaces at L1 and L0 (their component and
+      interface), narrative targets, auth sources naming a component, an entity's componentClass, an
+      interface's component and an implementation's contract. References from chained subprojects
+      (super::) are not rewritten: validate each child after renaming. Refuses a component that does
+      not exist, a new id already taken or outside the id grammar, and a component inside a chained
+      subproject (rename it from that project's root); every refusal happens before the first write,
+      and a failure after it leaves the rename half-applied. Human-readable names are left to the
+      author, and a lock goes stale as with any edit.
     signature: 'renameComponent(componentId: string, newId: string): ComponentRename'
     returns: ComponentRename
     params:
@@ -348,4 +349,4 @@ methods:
         description: Write the plan; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T10:51:57.720Z'
+updatedAt: '2026-09-15T20:44:34.146Z'

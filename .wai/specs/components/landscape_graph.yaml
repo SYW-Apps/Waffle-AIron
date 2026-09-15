@@ -1,0 +1,15 @@
+id: landscape_graph
+name: Landscape Graph
+description: >-
+  Projects organization units, hosted projects, public surfaces, and cross-project relations into a
+  LandscapeGraphModel. It receives already-authorized records from the orchestrator and does not
+  read project roots or private specs itself.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+variant: projector
+status: complete
+createdAt: '2026-07-08T21:12:51.558Z'
+updatedAt: '2026-09-15T20:46:07.565Z'

@@ -28,6 +28,6 @@ fields:
     description: Include a skills/<id>/SKILL.md stub
     optional: true
 methods: []
-componentClass: pack_scaffold_specialist
+componentClass: pack_scaffold
 createdAt: '2026-07-21T18:12:50.242Z'
 updatedAt: '2026-07-21T18:12:50.371Z'

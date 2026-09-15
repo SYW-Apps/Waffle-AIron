@@ -7,12 +7,12 @@ import type { NamedOpenApiSpec } from '../models/index.js';
 
 /** Coarse compatibility role projected for DISPLAY only — never an authorization
  *  source. Precise authorization resolves from a Principal's permissionSubject
- *  through the permission resolver. (Named DisplayRole so the domain concept
+ *  through permission rules. (Named DisplayRole so the domain concept
  *  `Role` below can carry its canonical meaning: a permission template.) */
 export type DisplayRole = 'editor' | 'admin';
 
 // ---------------------------------------------------------------------------
-// Hierarchical permission model (roles + assignments + the resolver)
+// Hierarchical permission model (roles + assignments + permission rules)
 // ---------------------------------------------------------------------------
 
 /** The five capabilities the hierarchical permission model gates. There is NO
@@ -92,14 +92,14 @@ export interface RoleBinding {
   scopeId?: string;
 }
 
-/** The resolved caller handed to the pure permission resolver. */
+/** The resolved caller handed to pure permission rules. */
 export interface PermissionSubject {
   /** The principal's stable user id (matches PermissionAssignment.subjectId). */
   subjectId: string;
   /**
    * Alternate ids this subject is also known by, when a user record's id and
    * its subject's userId have DIVERGED (legacy records, renamed subjects).
-   * The resolver honors a per-user assignment keyed by ANY of these exactly
+   * Permission rules honor a per-user assignment keyed by ANY of these exactly
    * as one keyed by subjectId — a "no" override must never silently miss a
    * diverged user. Write paths canonicalize new assignments onto the
    * subject's userId, so aliases only carry legacy rows.
@@ -108,14 +108,14 @@ export interface PermissionSubject {
   /** Roles bound to this subject, optionally scoped. */
   roleBindings: RoleBinding[];
   /** True ONLY for the env-anchored built-in super-admin subject, the master
-   *  credential, or (devMode) the local-developer subject — the resolver then
-   *  bypasses to yes. Determined by SUBJECT IDENTITY, never by an assignment;
+   *  credential, or (devMode) the local-developer subject — permission rules then
+   *  bypass to yes. Determined by SUBJECT IDENTITY, never by an assignment;
    *  a regular user is never instanceAdmin, even a delegated project:admin. */
   instanceAdmin: boolean;
 }
 
-/** The gathered, read-only data the pure resolver walks. The caller performs
- *  the I/O; the resolver performs none. */
+/** The gathered, read-only data pure permission rules walk. The caller performs
+ *  the I/O; permission rules perform none. */
 export interface PermissionWorld {
   assignments: PermissionAssignment[];
   /** Stored roles MERGED with the intrinsic built-in reserved roles. */
@@ -165,13 +165,13 @@ export interface PrincipalSubject {
  *  server-side bindings derived from the token or bootstrap credential, never
  *  from client-supplied parameters. The role/projects fields remain a coarse
  *  compatibility projection for display; precise authorization is expressed
- *  through the permission resolver over permissionSubject, never stored grants. */
+ *  through permission rules over permissionSubject, never stored grants. */
 export interface Principal {
   tokenId: string;
   /** Coarse display projection — NOT an authorization source. */
   role: DisplayRole;
   /** Coarse projection of the token's project narrowing; '*' denotes no
-   *  narrowing (the resolver still gates per project). Entries may be
+   *  narrowing (permission rules still gate per project). Entries may be
    *  subproject-qualified ('projectId::subsystemId') — carried through verbatim
    *  so root resolution can bind the mounted child root. */
   projects: string[];
@@ -192,7 +192,7 @@ export const UNAUTHENTICATED: Principal = {
 /** A persisted MCP/API credential: the hashed bearer token bound server-side to
  *  an owner identity and a projects narrowing. The token carries NO permissions
  *  of its own — within its narrowing it acts as the owner user's LIVE permission
- *  (the resolver gates per project). The plaintext is never stored. */
+ *  (permission rules gate per project). The plaintext is never stored. */
 export interface ApiKeyRecord {
   id: string;
   keyHash: string;
@@ -206,7 +206,7 @@ export interface ApiKeyRecord {
    *  e.g. 'proj::a::b') — scoping the token INTO that chained subproject:
    *  data-plane requests then bind the mounted child root instead of the
    *  project root. Never a grant — within this narrowing the token acts as the
-   *  owner's LIVE permission (the resolver gates per project; a subproject
+   *  owner's LIVE permission (permission rules gate per project; a subproject
    *  qualifier narrows reach, it never widens or refines grants). */
   projects: string[];
   createdAt: string;
@@ -311,7 +311,7 @@ export interface ResourceUsageSnapshot {
   projectBytes?: number;
   mcpRequestsLastMinute?: number;
   auditEventsToday?: number;
-  /** Advisory observe/warn findings annotated by the quota specialist. */
+  /** Advisory observe/warn findings annotated by quota rules. */
   quotaMessages: string[];
 }
 
@@ -404,7 +404,7 @@ export interface ProjectInitRequest {
   displayName?: string;
   description?: string;
   /** The organization unit that owns the project. REQUIRED — every project is
-   *  placed at creation so the permission resolver can always enumerate it; a
+   *  placed at creation so permission rules can always enumerate it; a
    *  fresh instance must create its first organization unit before
    *  initializing projects. */
   ownerUnitId: string;
@@ -764,7 +764,7 @@ export interface SurfaceArtifact {
   filename: string;
 }
 
-/** The computed surface-visibility view of one observer project (visibility_specialist). */
+/** The computed surface-visibility view of one observer project (visibility_rules). */
 export interface VisibilityResolution {
   observerProjectId: string;
   /** Units the observer's placements land in, plus their ancestor chains. */
@@ -1097,7 +1097,7 @@ export interface HostConfig {
   builtinAdminUser?: string;
   /** Built-in super-admin web-login password, read from WAIRON_ADMIN_PASSWORD by
    *  the serve command. Held in memory only — never persisted or logged; compared
-   *  constant-time by the auth specialist. */
+   *  constant-time by authentication. */
   builtinAdminPassword?: string;
 }
 

@@ -186,9 +186,9 @@ describe('composeAgentBrief (live delegation briefs)', () => {
 
   it('folds a variant-tagged component guidance into variantGuidance AND the rendered instructions', () => {
     const proj = createTempProject();
-    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Specialist\nguidance: Fan-out emitter; reuse the shared publisher helper.\n');
+    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Orchestrator\nguidance: Fan-out emitter; reuse the shared publisher helper.\n');
     proj.writeSpec('subsystem', 'alpha', 'schemaVersion: 1.0.0\nid: alpha\nname: Alpha\ndescription: d\nparentSystem: TestSystem');
-    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: alpha\ncomponentType: Specialist\nvariant: publisher');
+    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: alpha\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: publisher');
     proj.activate();
     try {
       const brief = composeAgentBrief('alpha-owner');

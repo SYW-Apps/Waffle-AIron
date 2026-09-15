@@ -3,7 +3,7 @@ name: Landscape Orchestrator Interface
 description: >-
   Contract for hosted-instance landscape ADMINISTRATION workflows: organization hierarchy, project
   placement, public-surface snapshots, cross-project relations (visibility-gated once units exist),
-  and landscape graph generation. Authorization resolves through the permission resolver —
+  and landscape graph generation. Authorization resolves through the permission rules —
   project:admin over the relevant unit/project for writes, project:read visible scopes for reads
   (actionable scopes plus their ancestor breadcrumb) — never stored grants. Consumer-facing
   discovery/exchange lives on the surface exchange orchestrator.
@@ -115,4 +115,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T21:13:44.021Z'
-updatedAt: '2026-07-15T23:27:00.771Z'
+updatedAt: '2026-09-15T21:02:50.852Z'

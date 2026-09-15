@@ -25,7 +25,7 @@ methods:
       other name — the explicit write prefixes AND any unrecognized or newly added name, failing
       closed) and the caller's resolved permission for the matching capability (project:read for
       reads, project:write for writes) over the bound project MUST be yes, resolved through the
-      authorization specialist; a missing permission is rejected with a clear MCP error before
+      authorization component; a missing permission is rejected with a clear MCP error before
       dispatch. The execute-primary project-lifecycle MCP tools and the hosted landscape discovery
       MCP tools are dispatched to their orchestrators (already gated) instead of the scoped MCP tool
       surface and bypass this data-plane permission gate. Appends a redacted audit event for every
@@ -45,4 +45,4 @@ methods:
     returns: HttpResponse
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-09-12T17:37:02.587Z'
+updatedAt: '2026-09-15T20:49:27.133Z'

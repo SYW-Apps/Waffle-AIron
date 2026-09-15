@@ -493,7 +493,8 @@ export default [
         },
         {
           id: 'rate-calculator',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'freight-quoting',
           description: 'Computes rated quotes from carrier tariffs.',
         },
@@ -636,7 +637,8 @@ export default [
         },
         {
           id: 'rate-calculator',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'freight-quoting',
           description: 'Computes rated quotes from carrier tariffs.',
         },
@@ -701,7 +703,8 @@ export default [
         },
         {
           id: 'rate-calculator',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'freight-quoting',
           description: 'Computes rated quotes from carrier tariffs.',
         },

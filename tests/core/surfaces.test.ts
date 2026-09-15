@@ -733,17 +733,20 @@ describe('sibling surface projection + pinned siblings', () => {
     expect(snap.types.map(t => t.id).sort()).toEqual(['customer-ref', 'invoice-record']);
   });
 
-  it('projects a subsystem published through a Gateway — the same target the boundary rules sanction', () => {
+  it('projects a subsystem published through a gateway — a Portal with the gateway variant', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
-    // A subsystem whose front door is a Gateway pattern, not a Portal. The
-    // boundary rules accept a Gateway as a cross-subsystem dependency target,
-    // so a child MUST be able to see (and verify against) its contract.
+    // A subsystem whose front door is a gateway: a Portal wearing the gateway
+    // variant. The boundary rules accept it as a cross-subsystem dependency
+    // target because it IS a Portal, so a child MUST be able to see (and
+    // verify against) its contract.
     saveSubsystemSpec(subsystem('gw-sub', {
       publicInterfaces: [{ type: 'Custom', details: 'gateway-fronted api', component: 'edge-gateway' }],
     }));
     saveComponentSpec(component('edge-gateway', 'gw-sub', {
-      componentType: 'Gateway',
+      componentType: 'Portal',
+      portalType: 'Custom',
+      variant: 'gateway',
       basePath: '/edge',
       auth: { scheme: 'bearer', bearerFormat: 'JWT' },
       dispatch: [{ capability: 'edge.relay', component: 'core-orch', method: 'getRecord' }],
@@ -798,16 +801,18 @@ describe('sibling surface projection + pinned siblings', () => {
     expect(snap.types.map(t => t.id).sort()).toEqual(['customer-ref', 'invoice-record']);
   });
 
-  it('omits a Custom entry backed by a non-target stereotype AND reports it as a diagnostic', () => {
+  // A retired Gateway is no cross-boundary target any more: a gateway is a Portal
+  // with the gateway variant, and only that Portal projects.
+  it.each(['Orchestrator', 'Gateway'])('omits a Custom entry backed by a non-target %s AND reports it as a diagnostic', (stereotype) => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
     // Declarable (Custom carries no backing obligation) but never consumable
     // across a boundary — the author must learn WHY the child cannot see it.
     saveSubsystemSpec(subsystem('calc-sub', {
-      publicInterfaces: [{ type: 'Custom', details: 'a narrow capability', component: 'rate-specialist' }],
+      publicInterfaces: [{ type: 'Custom', details: 'a narrow capability', component: 'rate-calculator' }],
     }));
-    saveComponentSpec(component('rate-specialist', 'calc-sub', { componentType: 'Specialist' } as Partial<ComponentSpec>));
-    saveInterfaceSpec(iface('irate-specialist', 'rate-specialist', [
+    saveComponentSpec(component('rate-calculator', 'calc-sub', { componentType: stereotype } as Partial<ComponentSpec>));
+    saveInterfaceSpec(iface('irate-calculator', 'rate-calculator', [
       { name: 'rate', description: 'computes a rate', signature: 'rate(): string', returns: 'string' },
     ]));
     invalidateSpecCache();
@@ -820,8 +825,8 @@ describe('sibling surface projection + pinned siblings', () => {
       expect(spy).toHaveBeenCalledTimes(1);
       const line = spy.mock.calls[0][0] as string;
       // Names the subsystem, the backing component and its stereotype.
-      expect(line).toContain('[surfaces] skipped "calc-sub::rate-specialist"');
-      expect(line).toContain('Specialist');
+      expect(line).toContain('[surfaces] skipped "calc-sub::rate-calculator"');
+      expect(line).toContain(`a published ${stereotype}`);
     } finally {
       spy.mockRestore();
     }

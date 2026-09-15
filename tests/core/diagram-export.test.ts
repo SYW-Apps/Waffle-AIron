@@ -121,4 +121,76 @@ describe('editable diagram exports (draw.io / Excalidraw)', () => {
     expect(again.elements.length).toBe(scene.elements.length);
     expect(again.elements[0].seed).toBe(scene.elements[0].seed);
   });
+
+  it('colours a Query apart from its Store and from logic, in both exports', () => {
+    // Hand-built: the exporters take any model of this shape, and the tree
+    // under test needs no saved specs.
+    const comp = (id: string, componentType: string, over: Record<string, unknown> = {}) => ({
+      id, name: id, subsystem: 'auction', componentType, public: false,
+      owns: [] as string[], dependsOn: [] as string[], ...over,
+    });
+    const model = {
+      system: { name: 'AuctionSys' },
+      generatedAt: now,
+      subsystems: [{ id: 'auction', name: 'Auction' }],
+      components: [
+        comp('lot_repository', 'Repository', { owns: ['lot_store', 'bid_history'] }),
+        comp('lot_store', 'Store', { owner: 'lot_repository' }),
+        comp('bid_history', 'Query', { owner: 'lot_repository', dependsOn: ['lot_store'] }),
+        comp('bidding', 'Orchestrator', { dependsOn: ['lot_repository'] }),
+      ],
+      edges: [{ from: 'bidding', to: 'lot_repository', cross: false }],
+    };
+
+    const xml = generateDrawioXml(model as any);
+    const fillOf = (id: string) => new RegExp(`id="comp_${id}"[^>]*style="[^"]*fillColor=(#[0-9a-f]{6})`).exec(xml)?.[1];
+    expect(fillOf('bid_history')).toBeDefined();
+    expect(fillOf('bid_history')).not.toBe(fillOf('lot_store'));
+    expect(fillOf('bid_history')).not.toBe(fillOf('bidding'));
+
+    const scene = JSON.parse(generateExcalidrawScene(model as any));
+    const rect = (id: string) => scene.elements.find((e: any) => e.id === 'comp-' + id);
+    expect(rect('bid_history').backgroundColor).toBe(fillOf('bid_history'));
+  });
+
+  it('draws a retired Gateway as a plain box beside the Portal it listed, marked retired like a Specialist', () => {
+    // As buildCanvasModel hands it over: the Gateway still lists what it owned,
+    // but no member records it as owner, since a Gateway is no pattern.
+    const comp = (id: string, componentType: string, over: Record<string, unknown> = {}) => ({
+      id, name: id, subsystem: 'auction', componentType, public: false,
+      owns: [] as string[], dependsOn: [] as string[], ...over,
+    });
+    const model = {
+      system: { name: 'AuctionSys' },
+      generatedAt: now,
+      subsystems: [{ id: 'auction', name: 'Auction' }],
+      components: [
+        comp('edge_gateway', 'Gateway', { owns: ['edge_portal'], dependsOn: ['bidding'] }),
+        comp('edge_portal', 'Portal', { dependsOn: ['bidding'] }),
+        comp('pricing_specialist', 'Specialist'),
+        comp('bidding', 'Orchestrator', { dependsOn: ['pricing_specialist'] }),
+      ],
+      edges: [
+        { from: 'edge_gateway', to: 'bidding', cross: false },
+        { from: 'edge_portal', to: 'bidding', cross: false },
+        { from: 'bidding', to: 'pricing_specialist', cross: false },
+      ],
+    };
+
+    const L = computeLayout(model as any, {});
+    expect({ w: L.boxes['edge_gateway'].w, h: L.boxes['edge_gateway'].h }).toEqual({ w: 190, h: 52 });
+
+    const xml = generateDrawioXml(model as any);
+    const styleOf = (id: string) => new RegExp(`id="comp_${id}"[^>]*style="([^"]*)"`).exec(xml)?.[1] ?? '';
+    const fillOf = (id: string) => /fillColor=(#[0-9a-f]{6})/.exec(styleOf(id))?.[1];
+    expect(styleOf('edge_gateway')).not.toContain('container=1');
+    expect(xml).toMatch(/id="comp_edge_portal"[^>]*parent="sub_auction"/);
+    expect(fillOf('edge_gateway')).toBe(fillOf('pricing_specialist'));
+    expect(fillOf('pricing_specialist')).not.toBe(fillOf('bidding'));
+
+    const scene = JSON.parse(generateExcalidrawScene(model as any));
+    const rect = (id: string) => scene.elements.find((e: any) => e.id === 'comp-' + id);
+    expect(rect('edge_gateway').strokeStyle).toBe('solid');
+    expect(rect('edge_gateway').backgroundColor).toBe(fillOf('pricing_specialist'));
+  });
 });

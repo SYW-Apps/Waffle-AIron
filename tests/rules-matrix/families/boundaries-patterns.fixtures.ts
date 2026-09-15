@@ -10,9 +10,7 @@
  *    owning a pattern is BLOCK_OWNS_MEMBERS, not this code).
  *  - SHARED_OWNED_MEMBER (error): a block has exactly one owner.
  *  - REPOSITORY_CONTAINMENT (error): Repository owns only Store/Registry/
- *    Index/Adapter.
- *  - GATEWAY_CONTAINMENT (error): Gateway owns only Portal/Orchestrator/
- *    Specialist.
+ *    Index/Query/Adapter.
  *  - FEATURE_COMPONENT_CONTAINMENT (error): exactly one Orchestrator + one or
  *    more Views, nothing else.
  *  - ROUTER_COMPONENT_CONTAINMENT (error, two documented behaviors): must own
@@ -24,6 +22,8 @@
  *  - REGISTRY_WITHOUT_STORE (warning): a standalone Registry with no Store to
  *    write to is mistyped or orphaned; Repository-owned Registries reach
  *    their Store as a sibling and are exempt (documented).
+ *  - UNOWNED_QUERY (error): a Query computes reads over its own Repository's
+ *    Store, so it is always a Repository member.
  */
 import { defineRuleFixture } from '../harness.js';
 
@@ -178,7 +178,7 @@ export default [
     anchoredTo: 'pharmacy-repository',
     expectFire: true,
     scenario:
-      'The pharmacy repository tries to own the dispensing gateway, nesting one pattern inside another instead of composing them at the subsystem level.',
+      'The pharmacy repository tries to own the dispensing repository, nesting one pattern inside another instead of composing them at the subsystem level.',
     tree: {
       system: SYSTEM,
       subsystems: [PHARMACY_SUB],
@@ -187,17 +187,16 @@ export default [
           id: 'pharmacy-repository',
           componentType: 'Repository',
           description: 'Facade over the pharmacy data blocks.',
-          owns: ['medication-store', 'dispensing-gateway'],
+          owns: ['medication-store', 'dispensing-repository'],
         },
         MEDICATION_STORE,
         {
-          id: 'dispensing-gateway',
-          componentType: 'Gateway',
-          description: 'Facade bundling the dispensing portal and its orchestrator.',
-          owns: ['dispensing-portal', 'dispensing-orchestrator'],
+          id: 'dispensing-repository',
+          componentType: 'Repository',
+          description: 'Facade over the dispensing record blocks.',
+          owns: ['dispensing-record-store'],
         },
-        { id: 'dispensing-portal', componentType: 'Portal', portalType: 'Custom', description: 'Inbound surface for dispensing requests.' },
-        { id: 'dispensing-orchestrator', componentType: 'Orchestrator', description: 'Drives the dispensing workflow.' },
+        { id: 'dispensing-record-store', componentType: 'Store', description: 'Holds the dispensing records.' },
       ],
     },
   }),
@@ -206,7 +205,7 @@ export default [
     expectFire: false,
     reason: 'Both patterns own only building blocks and stand side by side in the subsystem — patterns compose at L1, never by nesting.',
     scenario:
-      'The pharmacy repository and the dispensing gateway each own their building blocks and are composed side by side in the pharmacy subsystem.',
+      'The pharmacy repository and the dispensing repository each own their building blocks and are composed side by side in the pharmacy subsystem.',
     tree: {
       system: SYSTEM,
       subsystems: [PHARMACY_SUB],
@@ -219,13 +218,12 @@ export default [
         },
         MEDICATION_STORE,
         {
-          id: 'dispensing-gateway',
-          componentType: 'Gateway',
-          description: 'Facade bundling the dispensing portal and its orchestrator.',
-          owns: ['dispensing-portal', 'dispensing-orchestrator'],
+          id: 'dispensing-repository',
+          componentType: 'Repository',
+          description: 'Facade over the dispensing record blocks.',
+          owns: ['dispensing-record-store'],
         },
-        { id: 'dispensing-portal', componentType: 'Portal', portalType: 'Custom', description: 'Inbound surface for dispensing requests.' },
-        { id: 'dispensing-orchestrator', componentType: 'Orchestrator', description: 'Drives the dispensing workflow.' },
+        { id: 'dispensing-record-store', componentType: 'Store', description: 'Holds the dispensing records.' },
       ],
     },
   }),
@@ -315,9 +313,9 @@ export default [
   defineRuleFixture({
     code: 'REPOSITORY_CONTAINMENT',
     expectFire: false,
-    reason: 'The Repository owns exactly the documented member set: Store, Registry, Index, and (optionally) a backend Adapter.',
+    reason: 'The Repository owns exactly the documented member set: Store, Registry, Index, Query, and (optionally) a backend Adapter.',
     scenario:
-      'The medication repository owns its store, write registry, read index, and the backing database adapter — the full documented containment.',
+      'The medication repository owns its store, write registry, read index, reorder query, and the backing database adapter — the full documented containment.',
     tree: {
       system: SYSTEM,
       subsystems: [PHARMACY_SUB],
@@ -326,60 +324,13 @@ export default [
           id: 'medication-repository',
           componentType: 'Repository',
           description: 'Facade over the medication data blocks.',
-          owns: ['medication-store', 'medication-registry', 'medication-lookup-index', 'medication-db-adapter'],
+          owns: ['medication-store', 'medication-registry', 'medication-lookup-index', 'medication-reorder-query', 'medication-db-adapter'],
         },
         MEDICATION_STORE,
         MEDICATION_REGISTRY,
         { id: 'medication-lookup-index', componentType: 'Index', description: 'Read projection for medication lookups.' },
+        { id: 'medication-reorder-query', componentType: 'Query', description: 'Computed read of the medications below their reorder level.' },
         { id: 'medication-db-adapter', componentType: 'Adapter', description: 'Backend adapter to the pharmacy database.' },
-      ],
-    },
-  }),
-
-  // -------------------------------------------------------------------------
-  // GATEWAY_CONTAINMENT
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'GATEWAY_CONTAINMENT',
-    severity: 'error',
-    anchoredTo: 'dispensing-gateway',
-    expectFire: true,
-    scenario:
-      'The dispensing gateway owns the medication store directly, pulling a persistence block into a pattern that fronts only Portals, Orchestrators, and Specialists.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [PHARMACY_SUB],
-      components: [
-        {
-          id: 'dispensing-gateway',
-          componentType: 'Gateway',
-          description: 'Facade bundling the dispensing entry points.',
-          owns: ['dispensing-portal', 'medication-store'],
-        },
-        { id: 'dispensing-portal', componentType: 'Portal', portalType: 'Custom', description: 'Inbound surface for dispensing requests.' },
-        MEDICATION_STORE,
-      ],
-    },
-  }),
-  defineRuleFixture({
-    code: 'GATEWAY_CONTAINMENT',
-    expectFire: false,
-    reason: 'The Gateway owns exactly the documented member set: a Portal, Orchestrators, and Specialists.',
-    scenario:
-      'The dispensing gateway owns its portal, the dispensing orchestrator, and an interaction-check specialist — the documented containment.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [PHARMACY_SUB],
-      components: [
-        {
-          id: 'dispensing-gateway',
-          componentType: 'Gateway',
-          description: 'Facade bundling the dispensing entry points.',
-          owns: ['dispensing-portal', 'dispensing-orchestrator', 'interaction-check-specialist'],
-        },
-        { id: 'dispensing-portal', componentType: 'Portal', portalType: 'Custom', description: 'Inbound surface for dispensing requests.' },
-        { id: 'dispensing-orchestrator', componentType: 'Orchestrator', description: 'Drives the dispensing workflow.' },
-        { id: 'interaction-check-specialist', componentType: 'Specialist', description: 'Checks prescriptions for drug interactions.' },
       ],
     },
   }),
@@ -688,6 +639,63 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
+  // UNOWNED_QUERY
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNOWNED_QUERY',
+    severity: 'error',
+    anchoredTo: 'refill-due-query',
+    expectFire: true,
+    scenario:
+      'The refill due query computes which prescriptions are due for refill but stands outside the refill repository whose store it reads.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [PHARMACY_SUB],
+      components: [
+        {
+          id: 'refill-repository',
+          componentType: 'Repository',
+          description: 'Facade over the refill prescription data blocks.',
+          owns: ['refill-prescription-store'],
+        },
+        { id: 'refill-prescription-store', componentType: 'Store', description: 'Holds the refillable prescriptions.' },
+        {
+          id: 'refill-due-query',
+          componentType: 'Query',
+          description: 'Computed read of the prescriptions due for refill.',
+          dependsOn: ['refill-prescription-store'],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNOWNED_QUERY',
+    expectFire: false,
+    reason: 'The Query is a member of the Repository whose Store it reads — the only home a Query has.',
+    scenario:
+      'The refill due query is a member of the refill repository and computes its read over the sibling prescription store.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [PHARMACY_SUB],
+      components: [
+        {
+          id: 'refill-repository',
+          componentType: 'Repository',
+          description: 'Facade over the refill prescription data blocks.',
+          owns: ['refill-prescription-store', 'refill-due-query'],
+        },
+        { id: 'refill-prescription-store', componentType: 'Store', description: 'Holds the refillable prescriptions.' },
+        {
+          id: 'refill-due-query',
+          componentType: 'Query',
+          description: 'Computed read of the prescriptions due for refill.',
+          dependsOn: ['refill-prescription-store'],
+        },
+      ],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
   // A RouterComponent has exactly one Portal facade; only a pattern's owns
   // makes it an owner (a block's claim is wholly BLOCK_OWNS_MEMBERS)
   // -------------------------------------------------------------------------
@@ -741,7 +749,7 @@ export default [
     expectFire: false,
     reason: 'The owner is a building block, whose owns is wholly the BLOCK_OWNS_MEMBERS finding; only a pattern owning a pattern is this code.',
     scenario:
-      'The dispensing orchestrator, a building block, claims the dispensing gateway through owns instead of depending on it.',
+      'The dispensing orchestrator, a building block, claims the dispensing repository through owns instead of depending on it.',
     tree: {
       system: SYSTEM,
       subsystems: [PHARMACY_SUB],
@@ -750,15 +758,15 @@ export default [
           id: 'dispensing-orchestrator',
           componentType: 'Orchestrator',
           description: 'Drives the dispensing workflow.',
-          owns: ['dispensing-gateway'],
+          owns: ['dispensing-repository'],
         },
         {
-          id: 'dispensing-gateway',
-          componentType: 'Gateway',
-          description: 'Facade bundling the dispensing portal.',
-          owns: ['dispensing-portal'],
+          id: 'dispensing-repository',
+          componentType: 'Repository',
+          description: 'Facade over the dispensing record blocks.',
+          owns: ['dispensing-record-store'],
         },
-        { id: 'dispensing-portal', componentType: 'Portal', portalType: 'Custom', description: 'Inbound surface for dispensing requests.' },
+        { id: 'dispensing-record-store', componentType: 'Store', description: 'Holds the dispensing records.' },
       ],
     },
   }),

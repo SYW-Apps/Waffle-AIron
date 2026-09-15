@@ -47,7 +47,7 @@ methods:
       - stepNumber: 5
         description: Project the spec tree into a DocPage tree
         type: call
-        targetComponent: spec_projection_specialist
+        targetComponent: spec_doc_pages
         targetMethod: project
       - stepNumber: 6
         description: Push the DocPage tree to Notion
@@ -61,7 +61,7 @@ methods:
       - stepNumber: 8
         description: Project the architecture into a GraphModel
         type: call
-        targetComponent: spec_projection_specialist
+        targetComponent: spec_doc_pages
         targetMethod: projectGraph
       - stepNumber: 9
         description: Render the graph onto the Miro board

@@ -4,9 +4,9 @@ description: >-
   Hosted identity control-plane workflows: authenticate the caller credential, then manage
   user-bound MCP/API tokens, hosted user records + their role bindings, identity-provider (SSO)
   configuration, and admin-only audit access; plus the unauthenticated headless SSO login pair.
-  Authorization resolves through the permission resolver (project:admin over the relevant scope, or
-  the env-anchored instance-admin bypass) — never stored grants. Audit appends are best-effort and
-  never fail the primary action.
+  Authorization resolves through the permission rules (project:admin over the relevant scope, or the
+  env-anchored instance-admin bypass) — never stored grants. Audit appends are best-effort and never
+  fail the primary action.
 contract: iidentity_orchestrator
 sourcePath: src/server/identity.ts
 methods:
@@ -15,7 +15,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential to the calling principal
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
@@ -91,7 +91,7 @@ methods:
           Sign an SSO state binding providerId, the nonce, and redirectUri via the single signing
           authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: signSsoState
       - stepNumber: 7
         description: >-
@@ -136,7 +136,7 @@ methods:
           is rejected; the original payload is returned (no caller credential — trust derives from
           the signed state and the code exchange)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: verifySsoState
       - stepNumber: 2
         description: Parse the verified state payload into providerId, nonce, and redirectUri
@@ -260,9 +260,9 @@ methods:
           token: generate a cryptographically random token, compute its salted hash, and build the
           ApiKeyRecord (keyHash, ownerSubject = the resolved user's subject, createdBySubject = the
           resolved user's subject, projects = '*' so the token acts as the user across their
-          accessible projects with the resolver gating per project, createdAt now); the token
-          carries NO grants — the auth specialist resolves the owner's permissionSubject live from
-          roleBindings + assignments.
+          accessible projects with permission rules gating per project, createdAt now); the token
+          carries NO grants — the authentication component resolves the owner's permissionSubject
+          live from roleBindings + assignments.
         type: local
       - stepNumber: 21
         description: Persist only the hashed credential record
@@ -299,14 +299,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          Resolve the caller's project:read over the EXACT requested project through the resolver
-          (self-scoped: a unit assignment covers its own subtree, never another tenant's)
+          Resolve the caller's project:read over the EXACT requested project through the permission
+          rules (self-scoped: a unit assignment covers its own subtree, never another tenant's)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: The caller must already hold read authority over the project
@@ -350,11 +350,11 @@ methods:
         outcome: the plaintext token
     detail: intent
     intent: >-
-      Authenticate the caller (ws_ session or token) to the calling principal via the auth
-      specialist. Mint a token OWNED BY the caller (ownerSubject and createdBySubject = the
+      Authenticate the caller (ws_ session or token) to the calling principal via the authentication
+      component. Mint a token OWNED BY the caller (ownerSubject and createdBySubject = the
       principal's subject) narrowed to exactly one project (projects = [projectId]); the token
-      carries NO grants — it acts as the caller's OWN live permission on that project, so the
-      resolver gates read vs write at use time and the token can never exceed the caller's access
+      carries NO grants — it acts as the caller's OWN live permission on that project, so permission
+      rules gate read vs write at use time and the token can never exceed the caller's access
       (self-scoped, so key:manage is neither required nor consulted). The write flag is advisory
       (token label only). Persist only the hashed record through the credential registry, append a
       best-effort redacted token.mint.self (security) audit event, and return the plaintext exactly
@@ -365,7 +365,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
@@ -390,7 +390,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: List the caller's OWN tokens through the credential registry
@@ -435,14 +435,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Compute the caller's project:admin visible scopes over the organization tree (the units
           they may administer)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: If the caller has no actionable unit scope, deny
@@ -492,7 +492,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the target user by id to read its home unit and existence
@@ -512,7 +512,7 @@ methods:
       - stepNumber: 5
         description: Resolve the caller's project:admin permission over the target user's home unit
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 6
         description: If the effective project:admin value is not yes, deny
@@ -582,12 +582,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Compute the caller's project:admin visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: If the caller has no actionable project scope, deny
@@ -619,12 +619,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Compute the caller's project:admin visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: If the caller has no actionable project scope, deny
@@ -656,7 +656,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
@@ -670,7 +670,7 @@ methods:
           Resolve the caller's project:admin permission over the target user's home unit (the
           incoming record's, or the existing record's on update)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 4
         description: If the effective project:admin value is not yes, deny
@@ -687,7 +687,7 @@ methods:
           Check the target record's subject id against the reserved built-in subject ids (the
           persisted boot-reserved UUIDs and the legacy 'builtin:*' literals)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: isReservedSubject
       - stepNumber: 7
         description: If the target subject id is reserved, reject
@@ -744,7 +744,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential to the calling principal
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
@@ -798,7 +798,7 @@ methods:
           ApiKeyRecord (keyHash, ownerSubject = the owner user's subject, createdBySubject = the
           caller's subject, projects = request.projects narrowing, createdAt now, optional
           expiresAt); the token carries NO grants — within its narrowing it acts as the owner's live
-          permission and the resolver gates per project
+          permission and permission rules gate per project
         type: local
       - stepNumber: 10
         description: Persist only the hashed credential record
@@ -836,14 +836,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over instance scope (the env-anchored
           instance-admin passes via bypass; a delegated project:admin@instance also passes)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -894,12 +894,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over instance scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -926,12 +926,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over instance scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -981,12 +981,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over instance scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -1083,4 +1083,4 @@ methods:
     symbol: tryAppendAudit
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-19T13:29:42.967Z'
+updatedAt: '2026-09-15T21:03:25.108Z'

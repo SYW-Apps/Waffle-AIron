@@ -2,9 +2,9 @@ id: web_session_repository
 name: Web Session Repository
 description: >-
   Facade for durable browser-session state. Coordinates the private store, write registry, and read
-  index while exposing a single dependency target to the auth specialist and web orchestrators.
-  Every method is pure 1:1 forwarding — reads go to the index, writes go to the registry; no logic
-  lives here.
+  index while exposing a single dependency target to the authentication component and web
+  orchestrators. Every method is pure 1:1 forwarding — reads go to the index, writes go to the
+  registry; no logic lives here.
 subsystem: sdd_host
 componentType: Repository
 owns:
@@ -14,4 +14,4 @@ owns:
 dependsOn: []
 status: complete
 createdAt: '2026-07-11T11:31:39.009Z'
-updatedAt: '2026-07-11T11:44:27.180Z'
+updatedAt: '2026-09-15T20:46:44.497Z'

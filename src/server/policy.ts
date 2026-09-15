@@ -11,7 +11,7 @@ import { authorize } from './authorization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { sendJson } from './httpio.js';
 import * as packs from './packs.js';
-import { hostCore } from './adapters.js';
+import { hostCore, computeGateStateId } from './adapters.js';
 import type {
   AuditEvent,
   AuditRetentionPolicy,
@@ -306,9 +306,9 @@ export function removeIdentityProviderRecord(dataDir: string, id: string): void 
 // canonical identity.ts helpers; keep this copy in lockstep).
 //
 // Project-scoped methods (evaluateProjectPolicy, reconcileProjectPolicy)
-// authorize project:write over the project through the permission resolver — a
-// unit admin is first-class over the projects placed in its subtree, because the
-// resolver's leaf->root walk reaches their unit-scoped permission. Only the
+// authorize project:write over the project through permission rules — a
+// unit admin is first-class over the projects placed in its subtree, because
+// permission rules' leaf->root walk reaches their unit-scoped permission. Only the
 // instance-WIDE capabilities (initializeProjectWithProfile, setPackPolicy)
 // authorize at the instance root by design.
 
@@ -728,7 +728,7 @@ function performInit(
 
   // Create AND place the project in its required owner unit (executeApprovedCreate
   // validates the unit and writes the placement, so no init path can mint an
-  // unplaced project the permission resolver cannot see).
+  // unplaced project permission rules cannot see).
   const record = executeApprovedCreate(
     cfg,
     request.id,
@@ -1055,7 +1055,7 @@ export function getProjectConfig(
   // repair path is reconcileProjectPolicy / setProjectType.
   const classified = classifyProfile(projectType, packs.executeApprovedListProjectProfiles(cfg, projectId, config));
 
-  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState());
+  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState(computeGateStateId()));
   // "locked" means the lock is IN FORCE, not merely that a record exists: a stale
   // record freezes nothing (promotion refuses, and the tree already moved past it),
   // so reporting it as locked claimed a freeze that was not real.
@@ -1118,7 +1118,7 @@ export function setProjectType(
   recordProfileSelectionAt(root, folded);
   const remainder = folded.profileIds.slice(1);
 
-  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState());
+  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState(computeGateStateId()));
   // "locked" means the lock is IN FORCE, not merely that a record exists: a stale
   // record freezes nothing (promotion refuses, and the tree already moved past it),
   // so reporting it as locked claimed a freeze that was not real.

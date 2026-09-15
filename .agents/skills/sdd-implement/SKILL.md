@@ -105,18 +105,20 @@ You are the **Spec-to-Code Compiler**. Your job is to generate concrete source c
 All implementation work must strictly adhere to these rules:
 1. **Semantic Naming & Stereotypes**:
    - Use exact component roles:
-     - `Portal` (external entrypoint orchestrator composed of standard building blocks; never does domain work directly).
-     - `Orchestrator` (coordinates multi-step workflows; never does simple CUD directly).
-     - `Supervisor` (oversees running processes).
-     - `Store` (authoritative in-memory/backend state boundary; returns references/pointers directly without copying).
+     - `Portal` (inbound entrypoint composed of standard building blocks; dispatches to Orchestrators and never does domain work directly; with the `gateway` variant it authenticates, authorizes, validates or rate-limits before it dispatches).
+     - `Orchestrator` (logic as a flowchart over injected collaborators; with no `dependencyClass` it is a workflow that coordinates multi-step work and owns its transactions, never doing simple CUD directly).
+     - pure/read `Orchestrator` (`dependencyClass: pure` holds narrow deterministic rules over supplied values, e.g. Scanner, Router, Evaluator, Compiler, and depends only on pure Orchestrators; `dependencyClass: read` also reads through Repositories, Indexes and Adapters, and never writes).
+     - `Supervisor` (owns the set of live Actors and their lifecycle; reaches data only through workflows).
+     - `Store` (authoritative in-memory/backend state boundary for one aggregate; returns references/pointers directly without copying).
      - `Registry` (manages registration/CUD write paths).
      - `Index` (handles read-path lookups, optimized query maps).
-     - `Actor` (asynchronous state execution task).
+     - `Query` (a Repository member computing reads over its Store per call; depends only on its Store, a backend Adapter or pure logic).
+     - `Actor` (owns one live thing, such as a session, connection, timer or entity instance, and its runtime state; its methods are full flowcharts, and it changes that state only after a commit).
+     - `Adapter` (the only block doing external I/O).
      - `Observer` (subscribes to events and forwards them).
-     - `Specialist` (narrow, functional domain rules e.g., Scanner, Router, Evaluator, Compiler).
    - **Strict Layer Isolation & No Persistence Shortcuts**:
-     - A `Portal` must **never** depend directly on a `Store`, `Registry`, or `Adapter`. Passthrough READS may go through a `Repository`/`Index` facade; every WRITE must route through an `Orchestrator` (a Portal narrative call or dispatch-table binding that reaches a write-effect facade method is a `PORTAL_WRITE_SHORTCUT` error).
-     - Held domain state always lives in a dedicated data component, never as fields inside an `Orchestrator` or `Specialist`. Two sanctioned shapes: the RECOMMENDED `Repository` pattern (owns `Store` + `Registry` + `Index`; consumers depend on the facade), or — for genuinely simple state — a deliberately standalone `Store` (workflow-layer consumers only, acknowledged via `lint.allow` on `UNOWNED_STORE`). Do **not** combine Store/Registry/Index functionality into a single helper/specialist, and never fold state into a consuming component because a link was refused.
+     - A `Portal` must **never** depend directly on a `Store`, `Registry`, `Adapter` or `Query`. Passthrough READS may go through a `Repository`/`Index` facade; every WRITE must route through an `Orchestrator` (a Portal narrative call or dispatch-table binding that reaches a write-effect facade method is a `PORTAL_WRITE_SHORTCUT` error).
+     - Held domain state always lives in a dedicated data component, never as fields inside an `Orchestrator`. Two sanctioned shapes: the RECOMMENDED `Repository` pattern (owns `Store` + `Registry` + `Index`; consumers depend on the facade), or — for genuinely simple state — a deliberately standalone `Store` (workflow-layer consumers only, acknowledged via `lint.allow` on `UNOWNED_STORE`). Do **not** combine Store/Registry/Index functionality into a single helper component, and never fold state into a consuming component because a link was refused.
 2. **Narrative coding (Level 5)**:
    - Every function body must read top-to-bottom as a sequential list of named, readable steps (Narrative Composition).
    - Maintain one level of abstraction per function. Functions must remain short (~25 lines max).

@@ -1,9 +1,9 @@
 id: git_backing_orchestrator_impl
 name: Git Backing Orchestrator Implementation
 description: >-
-  Container-level backup workflows: resolver-gated bind/unbind/sync of unit container repos and the
-  instance-structure backup repo, plus the pre-authorized periodic sweep. Mirror syncs never touch
-  the secret store.
+  Container-level backup workflows: permission-rules-gated bind/unbind/sync of unit container repos
+  and the instance-structure backup repo, plus the pre-authorized periodic sweep. Mirror syncs never
+  touch the secret store.
 contract: igit_backing_orchestrator
 sourcePath: src/server/gitbacking.ts
 methods:
@@ -12,7 +12,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: List every stored binding through the repository
@@ -22,7 +22,7 @@ methods:
       - stepNumber: 3
         description: Compute the caller's project:admin visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 4
         description: >-
@@ -39,14 +39,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the binding's scope (the named unit, or
           instance scope for an 'instance' binding)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -108,7 +108,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the binding by id to read its own scope
@@ -130,7 +130,7 @@ methods:
           Resolve the caller's project:admin permission over the binding's OWN scope (never a
           caller-supplied one)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 6
         description: If the effective value is not yes, deny
@@ -175,7 +175,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the binding by id to read its own scope
@@ -195,7 +195,7 @@ methods:
       - stepNumber: 5
         description: Resolve the caller's project:admin permission over the binding's OWN scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 6
         description: If the effective value is not yes, deny
@@ -320,4 +320,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-16T15:40:54.973Z'
-updatedAt: '2026-07-16T15:48:49.424Z'
+updatedAt: '2026-09-15T21:03:09.344Z'

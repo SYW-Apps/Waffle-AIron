@@ -2107,9 +2107,10 @@ updatedAt: '2026-06-10T22:00:00Z'
 schemaVersion: 1.0.0
 id: comp-helper
 name: Helper
-description: Helper specialist
+description: Helper logic
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -2348,17 +2349,18 @@ parentSystem: TestSystem
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
-    const specialists: string[] = [];
+    const workers: string[] = [];
     for (let i = 1; i <= 9; i++) {
       const id = `worker-${i}`;
-      specialists.push(id);
+      workers.push(id);
       proj.writeSpec('component', id, `
 schemaVersion: 1.0.0
 id: ${id}
 name: Worker${i}
 description: d
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -2371,7 +2373,7 @@ name: MegaOrchestrator
 description: d
 subsystem: sub-a
 componentType: Orchestrator
-dependsOn: [${specialists.join(', ')}]
+dependsOn: [${workers.join(', ')}]
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -2412,7 +2414,8 @@ id: comp-a
 name: ComponentA
 description: d
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -2484,7 +2487,8 @@ id: comp-a
 name: ComponentA
 description: d
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'

@@ -83,12 +83,12 @@ const body = (name: string, extra = '') => `export function run${name}(): void {
 describe('integration conformance — subsystem adoption + wiring proof', () => {
   it('stays silent on a subsystem that has not adopted sims', () => {
     const proj = createTempProject();
-    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('spec-b', 'Specialist');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependencyClass: pure');
     proj.wire('orch-a', 'src/a.ts');
-    proj.wire('spec-b', 'src/b.ts');
-    proj.source('src/a.ts', body('orcha', "import { runspecb } from './b.js';\nrunspecb();\n"));
-    proj.source('src/b.ts', body('specb'));
+    proj.wire('orch-b', 'src/b.ts');
+    proj.source('src/a.ts', body('orcha', "import { runorchb } from './b.js';\nrunorchb();\n"));
+    proj.source('src/b.ts', body('orchb'));
     proj.activate();
     try {
       expect(simIssues(validateSddTree())).toHaveLength(0);
@@ -97,15 +97,15 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
 
   it('a wired sim is clean; siblings without sims get MISSING_INTEGRATION_SIM; leaves are exempt', () => {
     const proj = createTempProject();
-    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('orch-c', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('spec-b', 'Specialist');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-c', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependencyClass: pure');
     proj.wire('orch-a', 'src/a.ts', 'simPath: tests/integration/a.sim.ts\n');
     proj.wire('orch-c', 'src/c.ts');
-    proj.wire('spec-b', 'src/b.ts');
-    proj.source('src/a.ts', body('orcha', "import { runspecb } from './b.js';\nrunspecb();\n"));
-    proj.source('src/b.ts', body('specb'));
-    proj.source('src/c.ts', body('orchc', "import { runspecb } from './b.js';\nrunspecb();\n"));
+    proj.wire('orch-b', 'src/b.ts');
+    proj.source('src/a.ts', body('orcha', "import { runorchb } from './b.js';\nrunorchb();\n"));
+    proj.source('src/b.ts', body('orchb'));
+    proj.source('src/c.ts', body('orchc', "import { runorchb } from './b.js';\nrunorchb();\n"));
     proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/a.js';\nrunorcha();\n");
     proj.activate();
     try {
@@ -114,36 +114,36 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
       expect(found[0].code).toBe('MISSING_INTEGRATION_SIM');
       expect(found[0].specId).toBe('impl-orch-c');
       expect(found[0].severity).toBe('warning');
-      // spec-b is a leaf (no deps) — exempt even though the subsystem adopted.
-      expect(found.some(i => i.specId === 'impl-spec-b')).toBe(false);
+      // orch-b is a leaf (no deps) — exempt even though the subsystem adopted.
+      expect(found.some(i => i.specId === 'impl-orch-b')).toBe(false);
     } finally { proj.cleanup(); }
   });
 
   it('flags a simPath that resolves to no file (SIM_FILE_MISSING), incl. root escapes', () => {
     const proj = createTempProject();
-    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('spec-b', 'Specialist');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependencyClass: pure');
     proj.wire('orch-a', 'src/a.ts', 'simPath: tests/integration/gone.sim.ts\n');
-    proj.wire('spec-b', 'src/b.ts', 'simPath: ../outside.sim.ts\n');
-    proj.source('src/a.ts', body('orcha', "import { runspecb } from './b.js';\nrunspecb();\n"));
-    proj.source('src/b.ts', body('specb'));
+    proj.wire('orch-b', 'src/b.ts', 'simPath: ../outside.sim.ts\n');
+    proj.source('src/a.ts', body('orcha', "import { runorchb } from './b.js';\nrunorchb();\n"));
+    proj.source('src/b.ts', body('orchb'));
     proj.activate();
     try {
       const found = simIssues(validateSddTree()).filter(i => i.code === 'SIM_FILE_MISSING');
       expect(found).toHaveLength(2);
       expect(found.find(i => i.specId === 'impl-orch-a')!.message).toContain('resolves to no file');
-      expect(found.find(i => i.specId === 'impl-spec-b')!.message).toContain('escapes the project root');
+      expect(found.find(i => i.specId === 'impl-orch-b')!.message).toContain('escapes the project root');
     } finally { proj.cleanup(); }
   });
 
   it('flags a sim that does not import the real modules (UNWIRED_INTEGRATION_SIM)', () => {
     const proj = createTempProject();
-    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('spec-b', 'Specialist');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependencyClass: pure');
     proj.wire('orch-a', 'src/a.ts', 'simPath: tests/integration/a.sim.ts\n');
-    proj.wire('spec-b', 'src/b.ts');
+    proj.wire('orch-b', 'src/b.ts');
     proj.source('src/a.ts', body('orcha'));
-    proj.source('src/b.ts', body('specb'));
+    proj.source('src/b.ts', body('orchb'));
     proj.source('tests/integration/a.sim.ts', 'export const nothing = 1;\n');
     proj.activate();
     try {
@@ -151,23 +151,23 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
       expect(found).toHaveLength(1);
       expect(found[0].specId).toBe('impl-orch-a');
       expect(found[0].message).toContain("the component's own module");
-      expect(found[0].message).toContain('"spec-b"');
+      expect(found[0].message).toContain('"orch-b"');
     } finally { proj.cleanup(); }
   });
 
   it('reach is transitive through the component module, and technology-boundary deps stay exempt', () => {
     const proj = createTempProject();
-    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b, mail-adapter]');
-    proj.component('spec-b', 'Specialist');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b, mail-adapter]');
+    proj.component('orch-b', 'Orchestrator', 'dependencyClass: pure');
     proj.component('mail-adapter', 'Adapter');
     proj.wire('orch-a', 'src/a.ts', 'simPath: tests/integration/a.sim.ts\n');
-    proj.wire('spec-b', 'src/b.ts');
+    proj.wire('orch-b', 'src/b.ts');
     proj.wire('mail-adapter', 'src/mail.ts', 'technologies: [sendgrid]\n');
     // The sim imports only the component; the component imports its dep —
-    // transitive reach over the analyzed set covers spec-b. The mail adapter
+    // transitive reach over the analyzed set covers orch-b. The mail adapter
     // is a declared technology boundary: a contract-faithful fake is fine.
-    proj.source('src/a.ts', body('orcha', "import { runspecb } from './b.js';\nrunspecb();\n"));
-    proj.source('src/b.ts', body('specb'));
+    proj.source('src/a.ts', body('orcha', "import { runorchb } from './b.js';\nrunorchb();\n"));
+    proj.source('src/b.ts', body('orchb'));
     proj.source('src/mail.ts', body('mailadapter'));
     proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/a.js';\nrunorcha();\n");
     proj.activate();
@@ -177,11 +177,11 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
   });
 
   // A narrated orchestrator with a labeled error path, wired to a real dep —
-  // the §4.5 path-coverage fixture (orch-a validates via spec-b, then throws
+  // the §4.5 path-coverage fixture (orch-a validates via orch-b, then throws
   // on rejection through the labeled path).
   function narratedScenario(proj: ReturnType<typeof createTempProject>, simBody: string) {
-    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('spec-b', 'Specialist');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependencyClass: pure');
     proj.writeSpec('interface', 'iorch-a', [
       'schemaVersion: 1.0.0', 'id: iorch-a', 'name: IOrchA', 'description: contract', 'component: orch-a',
       'methods:',
@@ -199,10 +199,10 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
       '  - name: ingest',
       '    narrative:',
       '      - stepNumber: 1',
-      '        description: Validate the payload through the specialist',
+      '        description: Validate the payload through orch-b',
       '        type: call',
-      '        targetComponent: spec-b',
-      '        targetMethod: runspecb',
+      '        targetComponent: orch-b',
+      '        targetMethod: runorchb',
       '      - stepNumber: 2',
       '        description: Accept the record',
       '        type: branch',
@@ -218,9 +218,9 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
       '        type: throw',
       '        error: InvalidPayload',
     ].join('\n'));
-    proj.wire('spec-b', 'src/b.ts');
-    proj.source('src/a.ts', "import { runspecb } from './b.js';\nexport function ingest(): void { runspecb(); }\n");
-    proj.source('src/b.ts', body('specb'));
+    proj.wire('orch-b', 'src/b.ts');
+    proj.source('src/a.ts', "import { runorchb } from './b.js';\nexport function ingest(): void { runorchb(); }\n");
+    proj.source('src/b.ts', body('orchb'));
     proj.source('tests/integration/a.sim.ts', simBody);
   }
 
@@ -265,15 +265,15 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
 
   it('draft implementations in an adopted subsystem are not expected to have sims yet', () => {
     const proj = createTempProject();
-    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('orch-c', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('spec-b', 'Specialist');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-c', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependencyClass: pure');
     proj.wire('orch-a', 'src/a.ts', 'simPath: tests/integration/a.sim.ts\n');
     proj.wire('orch-c', 'src/c.ts', 'status: draft\n');
-    proj.wire('spec-b', 'src/b.ts');
-    proj.source('src/a.ts', body('orcha', "import { runspecb } from './b.js';\nrunspecb();\n"));
-    proj.source('src/b.ts', body('specb'));
-    proj.source('src/c.ts', body('orchc', "import { runspecb } from './b.js';\nrunspecb();\n"));
+    proj.wire('orch-b', 'src/b.ts');
+    proj.source('src/a.ts', body('orcha', "import { runorchb } from './b.js';\nrunorchb();\n"));
+    proj.source('src/b.ts', body('orchb'));
+    proj.source('src/c.ts', body('orchc', "import { runorchb } from './b.js';\nrunorchb();\n"));
     proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/a.js';\nrunorcha();\n");
     proj.activate();
     try {
@@ -303,13 +303,13 @@ describe('integration conformance — a component\'s own modules are all its fil
 
   it('a harness reaching the component through a method\'s own source file wires the component', () => {
     const proj = createTempProject();
-    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('spec-b', 'Specialist');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependencyClass: pure');
     wireMethodFile(proj, 'orch-a', 'src/a.ts', 'src/commands/run-a.ts', 'simPath: tests/integration/a.sim.ts\n');
-    proj.wire('spec-b', 'src/b.ts');
+    proj.wire('orch-b', 'src/b.ts');
     proj.source('src/a.ts', "export const orchestratorName = 'orch-a';\n");
-    proj.source('src/commands/run-a.ts', body('orcha', "import { runspecb } from '../b.js';\nrunspecb();\n"));
-    proj.source('src/b.ts', body('specb'));
+    proj.source('src/commands/run-a.ts', body('orcha', "import { runorchb } from '../b.js';\nrunorchb();\n"));
+    proj.source('src/b.ts', body('orchb'));
     proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/commands/run-a.js';\nrunorcha();\n");
     proj.activate();
     try {
@@ -319,13 +319,13 @@ describe('integration conformance — a component\'s own modules are all its fil
 
   it('reaching a dependency\'s method source file proves the dependency is wired', () => {
     const proj = createTempProject();
-    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('spec-b', 'Specialist');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependencyClass: pure');
     proj.wire('orch-a', 'src/a.ts', 'simPath: tests/integration/a.sim.ts\n');
-    wireMethodFile(proj, 'spec-b', 'src/b.ts', 'src/spec/check-b.ts');
-    proj.source('src/a.ts', body('orcha', "import { runspecb } from './spec/check-b.js';\nrunspecb();\n"));
-    proj.source('src/b.ts', "export const specialistName = 'spec-b';\n");
-    proj.source('src/spec/check-b.ts', body('specb'));
+    wireMethodFile(proj, 'orch-b', 'src/b.ts', 'src/checks/check-b.ts');
+    proj.source('src/a.ts', body('orcha', "import { runorchb } from './checks/check-b.js';\nrunorchb();\n"));
+    proj.source('src/b.ts', "export const componentName = 'orch-b';\n");
+    proj.source('src/checks/check-b.ts', body('orchb'));
     proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/a.js';\nrunorcha();\n");
     proj.activate();
     try {
@@ -335,14 +335,14 @@ describe('integration conformance — a component\'s own modules are all its fil
 
   it('still fires when the harness reaches none of the component\'s files', () => {
     const proj = createTempProject();
-    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
-    proj.component('spec-b', 'Specialist');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependencyClass: pure');
     wireMethodFile(proj, 'orch-a', 'src/a.ts', 'src/commands/run-a.ts', 'simPath: tests/integration/a.sim.ts\n');
-    proj.wire('spec-b', 'src/b.ts');
+    proj.wire('orch-b', 'src/b.ts');
     proj.source('src/a.ts', "export const orchestratorName = 'orch-a';\n");
     proj.source('src/commands/run-a.ts', body('orcha'));
-    proj.source('src/b.ts', body('specb'));
-    proj.source('tests/integration/a.sim.ts', "import { runspecb } from '../../src/b.js';\nrunspecb();\n");
+    proj.source('src/b.ts', body('orchb'));
+    proj.source('tests/integration/a.sim.ts', "import { runorchb } from '../../src/b.js';\nrunorchb();\n");
     proj.activate();
     try {
       const found = unwired(validateSddTree());

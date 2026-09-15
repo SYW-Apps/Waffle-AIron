@@ -86,7 +86,7 @@ describe('skills published as MCP prompts (7.4)', () => {
 
 describe('variant guidance resolution (7.5)', () => {
   const variants = new Map<string, VariantDef>([
-    ['publisher', { id: 'publisher', base: 'Specialist', guidance: 'Reuse the shared publisher helper.' }],
+    ['publisher', { id: 'publisher', base: 'Orchestrator', guidance: 'Reuse the shared publisher helper.' }],
   ]);
 
   it('resolves the variant with its same-variant siblings', () => {
@@ -98,7 +98,7 @@ describe('variant guidance resolution (7.5)', () => {
     const resolved = resolveVariantGuidance(all[0], all, variants);
 
     expect(resolved).not.toBeNull();
-    expect(resolved!.base).toBe('Specialist');
+    expect(resolved!.base).toBe('Orchestrator');
     expect(resolved!.guidance).toContain('shared publisher helper');
     // The siblings travel WITH the guidance — that is the whole payoff of a
     // variant: every component of the kind gets implemented alike.
@@ -144,12 +144,12 @@ describe('variant guidance reaches a hosted agent via sdd_get_spec (7.5)', () =>
       `schemaVersion: 1.0.0\nid: sub\nname: Sub\ndescription: d\nparentSystem: S\n${stamp}\n`);
     for (const id of ['a_pub', 'b_pub']) {
       fs.writeFileSync(path.join(specs, 'components', `${id}.yaml`),
-        `schemaVersion: 1.0.0\nid: ${id}\nname: ${id}\ndescription: d\nsubsystem: sub\ncomponentType: Specialist\nvariant: publisher\n${stamp}\n`);
+        `schemaVersion: 1.0.0\nid: ${id}\nname: ${id}\ndescription: d\nsubsystem: sub\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: publisher\n${stamp}\n`);
     }
     const variantsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-vardir-'));
     created.push(variantsDir);
     fs.writeFileSync(path.join(variantsDir, 'publisher.yaml'),
-      'id: publisher\nbase: Specialist\nguidance: Reuse the shared publisher helper; do not reimplement dispatch.\n');
+      'id: publisher\nbase: Orchestrator\nguidance: Reuse the shared publisher helper; do not reimplement dispatch.\n');
     process.env.WAIRON_VARIANTS_DIR = variantsDir;
     vi.spyOn(process, 'cwd').mockReturnValue(dir);
     return dir;
@@ -164,7 +164,7 @@ describe('variant guidance reaches a hosted agent via sdd_get_spec (7.5)', () =>
 
     expect(spec.id).toBe('a_pub');
     expect(spec.variantGuidance.variant).toBe('publisher');
-    expect(spec.variantGuidance.base).toBe('Specialist');
+    expect(spec.variantGuidance.base).toBe('Orchestrator');
     expect(spec.variantGuidance.guidance).toContain('shared publisher helper');
     expect(spec.variantGuidance.siblings).toEqual(['b_pub']);
   });
@@ -172,7 +172,7 @@ describe('variant guidance reaches a hosted agent via sdd_get_spec (7.5)', () =>
   it('adds nothing for a component that declares no variant', async () => {
     const dir = projectWithVariant();
     fs.writeFileSync(path.join(dir, '.wai', 'specs', 'components', 'plain.yaml'),
-      "schemaVersion: 1.0.0\nid: plain\nname: plain\ndescription: d\nsubsystem: sub\ncomponentType: Specialist\ncreatedAt: '2026-07-03T10:00:00Z'\nupdatedAt: '2026-07-03T10:00:00Z'\n");
+      "schemaVersion: 1.0.0\nid: plain\nname: plain\ndescription: d\nsubsystem: sub\ncomponentType: Orchestrator\ndependencyClass: pure\ncreatedAt: '2026-07-03T10:00:00Z'\nupdatedAt: '2026-07-03T10:00:00Z'\n");
     invalidateSpecCache();
 
     const client = await connect(createMcpServer());

@@ -125,10 +125,10 @@ export default [
   defineRuleFixture({
     code: 'UNUSED_COMPONENT',
     severity: 'warning',
-    anchoredTo: 'gift-wrap-specialist',
+    anchoredTo: 'gift-wrap-planner',
     expectFire: true,
     scenario:
-      'The checkout portal drives the checkout orchestrator, but the gift-wrap specialist is wired into no narrative at all — no execution chain from the portal ever reaches it.',
+      'The checkout portal drives the checkout orchestrator, but the gift-wrap planner is wired into no narrative at all — no execution chain from the portal ever reaches it.',
     tree: {
       subsystems: [{ id: 'storefront', description: 'Customer-facing shop: checkout and order intake.' }],
       components: [
@@ -145,8 +145,9 @@ export default [
           description: 'Validates the cart and drives order placement.',
         },
         {
-          id: 'gift-wrap-specialist',
-          componentType: 'Specialist',
+          id: 'gift-wrap-planner',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Computes gift-wrap plans for gift-marked items.',
         },
       ],
@@ -162,8 +163,8 @@ export default [
           methods: [{ name: 'submitOrder', description: 'Validate the cart and reserve stock for the order.' }],
         },
         {
-          id: 'igift_wrap_specialist',
-          component: 'gift-wrap-specialist',
+          id: 'igift_wrap_planner',
+          component: 'gift-wrap-planner',
           methods: [{ name: 'wrapItems', description: 'Compute the wrap plan for each gift-marked item.' }],
         },
       ],
@@ -200,8 +201,8 @@ export default [
           ],
         },
         {
-          id: 'gift_wrap_specialist_impl',
-          contract: 'igift_wrap_specialist',
+          id: 'gift_wrap_planner_impl',
+          contract: 'igift_wrap_planner',
           methods: [
             {
               name: 'wrapItems',
@@ -215,9 +216,9 @@ export default [
   defineRuleFixture({
     code: 'UNUSED_COMPONENT',
     expectFire: false,
-    reason: 'The orchestrator narrative now calls the specialist, so a Portal-rooted execution chain reaches every component.',
+    reason: 'The orchestrator narrative now calls the gift-wrap planner, so a Portal-rooted execution chain reaches every component.',
     scenario:
-      'The checkout orchestrator calls the gift-wrap specialist for gift-marked items, completing the portal-rooted chain.',
+      'The checkout orchestrator calls the gift-wrap planner for gift-marked items, completing the portal-rooted chain.',
     tree: {
       subsystems: [{ id: 'storefront', description: 'Customer-facing shop: checkout and order intake.' }],
       components: [
@@ -232,11 +233,12 @@ export default [
           id: 'checkout-orchestrator',
           componentType: 'Orchestrator',
           description: 'Validates the cart and drives order placement.',
-          dependsOn: ['gift-wrap-specialist'],
+          dependsOn: ['gift-wrap-planner'],
         },
         {
-          id: 'gift-wrap-specialist',
-          componentType: 'Specialist',
+          id: 'gift-wrap-planner',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Computes gift-wrap plans for gift-marked items.',
         },
       ],
@@ -252,8 +254,8 @@ export default [
           methods: [{ name: 'submitOrder', description: 'Validate the cart and reserve stock for the order.' }],
         },
         {
-          id: 'igift_wrap_specialist',
-          component: 'gift-wrap-specialist',
+          id: 'igift_wrap_planner',
+          component: 'gift-wrap-planner',
           methods: [{ name: 'wrapItems', description: 'Compute the wrap plan for each gift-marked item.' }],
         },
       ],
@@ -288,7 +290,7 @@ export default [
                   stepNumber: 2,
                   type: 'call',
                   description: 'Compute the wrap plan for gift-marked items.',
-                  targetComponent: 'gift-wrap-specialist',
+                  targetComponent: 'gift-wrap-planner',
                   targetMethod: 'wrapItems',
                 },
                 { stepNumber: 3, type: 'return', description: 'Confirm the placed order to the caller.', outcome: 'success' },
@@ -297,8 +299,8 @@ export default [
           ],
         },
         {
-          id: 'gift_wrap_specialist_impl',
-          contract: 'igift_wrap_specialist',
+          id: 'gift_wrap_planner_impl',
+          contract: 'igift_wrap_planner',
           methods: [
             {
               name: 'wrapItems',
@@ -676,9 +678,9 @@ export default [
     code: 'UNUSED_COMPONENT',
     expectFire: false,
     reason:
-      'The close-period method is explicitly dialed to intent, so its missing narrative triggers the component-granularity fallback over dependsOn — the specialist must not be false-flagged for a deliberately lower-fidelity method.',
+      'The close-period method is explicitly dialed to intent, so its missing narrative triggers the component-granularity fallback over dependsOn — the ledger adjuster must not be false-flagged for a deliberately lower-fidelity method.',
     scenario:
-      'The billing orchestrator closePeriod method is dialed to intent with prose only, and its declared dependency on the ledger-adjustment specialist keeps the specialist reachable.',
+      'The billing orchestrator closePeriod method is dialed to intent with prose only, and its declared dependency on the ledger adjuster keeps the adjuster reachable.',
     tree: {
       subsystems: [{ id: 'billing', description: 'Accounting-period management and ledger adjustments.' }],
       components: [
@@ -693,11 +695,12 @@ export default [
           id: 'billing-orchestrator',
           componentType: 'Orchestrator',
           description: 'Drives the accounting-period close.',
-          dependsOn: ['ledger-adjustment-specialist'],
+          dependsOn: ['ledger-adjuster'],
         },
         {
-          id: 'ledger-adjustment-specialist',
-          componentType: 'Specialist',
+          id: 'ledger-adjuster',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Applies accrual and rounding adjustments to open ledgers.',
         },
       ],
@@ -713,8 +716,8 @@ export default [
           methods: [{ name: 'closePeriod', description: 'Freeze postings and close the open accounting period.' }],
         },
         {
-          id: 'iledger_adjustment_specialist',
-          component: 'ledger-adjustment-specialist',
+          id: 'iledger_adjuster',
+          component: 'ledger-adjuster',
           methods: [{ name: 'applyAdjustments', description: 'Apply accrual and rounding adjustments to each open ledger.' }],
         },
       ],
@@ -745,14 +748,14 @@ export default [
               name: 'closePeriod',
               detail: 'intent',
               intent:
-                'Close the open accounting period: freeze postings, run the adjustment pass over every open ledger via the adjustment specialist, and emit the close report.',
+                'Close the open accounting period: freeze postings, run the adjustment pass over every open ledger via the ledger adjuster, and emit the close report.',
               narrative: [],
             },
           ],
         },
         {
-          id: 'ledger_adjustment_specialist_impl',
-          contract: 'iledger_adjustment_specialist',
+          id: 'ledger_adjuster_impl',
+          contract: 'iledger_adjuster',
           methods: [
             {
               name: 'applyAdjustments',
@@ -766,10 +769,10 @@ export default [
   defineRuleFixture({
     code: 'UNUSED_COMPONENT',
     severity: 'warning',
-    anchoredTo: 'ledger-adjustment-specialist',
+    anchoredTo: 'ledger-adjuster',
     expectFire: true,
     scenario:
-      'The billing orchestrator closePeriod method sits at the full-detail floor with no narrative, so no fallback flooding applies and the ledger-adjustment specialist is correctly reported unreached.',
+      'The billing orchestrator closePeriod method sits at the full-detail floor with no narrative, so no fallback flooding applies and the ledger adjuster is correctly reported unreached.',
     tree: {
       subsystems: [{ id: 'billing', description: 'Accounting-period management and ledger adjustments.' }],
       components: [
@@ -784,11 +787,12 @@ export default [
           id: 'billing-orchestrator',
           componentType: 'Orchestrator',
           description: 'Drives the accounting-period close.',
-          dependsOn: ['ledger-adjustment-specialist'],
+          dependsOn: ['ledger-adjuster'],
         },
         {
-          id: 'ledger-adjustment-specialist',
-          componentType: 'Specialist',
+          id: 'ledger-adjuster',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Applies accrual and rounding adjustments to open ledgers.',
         },
       ],
@@ -804,8 +808,8 @@ export default [
           methods: [{ name: 'closePeriod', description: 'Freeze postings and close the open accounting period.' }],
         },
         {
-          id: 'iledger_adjustment_specialist',
-          component: 'ledger-adjustment-specialist',
+          id: 'iledger_adjuster',
+          component: 'ledger-adjuster',
           methods: [{ name: 'applyAdjustments', description: 'Apply accrual and rounding adjustments to each open ledger.' }],
         },
       ],
@@ -834,8 +838,8 @@ export default [
           methods: [{ name: 'closePeriod', narrative: [] }],
         },
         {
-          id: 'ledger_adjustment_specialist_impl',
-          contract: 'iledger_adjustment_specialist',
+          id: 'ledger_adjuster_impl',
+          contract: 'iledger_adjuster',
           methods: [
             {
               name: 'applyAdjustments',
@@ -856,7 +860,7 @@ export default [
     reason:
       'invokedBy seeds the webhook handler as an entrypoint (a typed acknowledgment of the external caller), and reachability propagates through its narrative into the signature verifier.',
     scenario:
-      'The webhook orchestrator declares its external payment-provider caller via invokedBy, and its narrative call keeps the signature-verifier specialist reachable.',
+      'The webhook orchestrator declares its external payment-provider caller via invokedBy, and its narrative call keeps the signature verifier reachable.',
     tree: {
       subsystems: [{ id: 'webhooks', description: 'Inbound webhook processing from external providers.' }],
       components: [
@@ -864,11 +868,12 @@ export default [
           id: 'webhook-orchestrator',
           componentType: 'Orchestrator',
           description: 'Processes signed webhook events from the payment provider.',
-          dependsOn: ['signature-verifier-specialist'],
+          dependsOn: ['signature-verifier'],
         },
         {
-          id: 'signature-verifier-specialist',
-          componentType: 'Specialist',
+          id: 'signature-verifier',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Verifies HMAC signatures on inbound webhook payloads.',
         },
       ],
@@ -889,8 +894,8 @@ export default [
           ],
         },
         {
-          id: 'isignature_verifier_specialist',
-          component: 'signature-verifier-specialist',
+          id: 'isignature_verifier',
+          component: 'signature-verifier',
           methods: [{ name: 'verifySignature', description: 'Verify the HMAC signature of an inbound payload.' }],
         },
       ],
@@ -906,7 +911,7 @@ export default [
                   stepNumber: 1,
                   type: 'call',
                   description: 'Verify the HMAC signature before trusting the payload.',
-                  targetComponent: 'signature-verifier-specialist',
+                  targetComponent: 'signature-verifier',
                   targetMethod: 'verifySignature',
                 },
                 { stepNumber: 2, type: 'local', description: 'Apply the verified event to the order state machine.' },
@@ -915,8 +920,8 @@ export default [
           ],
         },
         {
-          id: 'signature_verifier_specialist_impl',
-          contract: 'isignature_verifier_specialist',
+          id: 'signature_verifier_impl',
+          contract: 'isignature_verifier',
           methods: [
             {
               name: 'verifySignature',
@@ -1176,7 +1181,8 @@ export default [
       components: [
         {
           id: 'rate-shopper',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Fetches and compares carrier rate quotes for a shipping lane.',
         },
       ],
@@ -1219,7 +1225,8 @@ export default [
       components: [
         {
           id: 'rate-shopper',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Fetches and compares carrier rate quotes for a shipping lane.',
         },
       ],

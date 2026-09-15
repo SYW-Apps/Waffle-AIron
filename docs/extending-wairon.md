@@ -200,7 +200,7 @@ profiles:
       - types: [Actor, Supervisor]
         reason: why this platform cannot express them
     discouragedStereotypes:       # warning: PROFILE_DISCOURAGED_STEREOTYPE
-      - types: [Specialist]
+      - types: [Observer]
         reason: why to avoid them here
 
 languages:
@@ -366,22 +366,39 @@ patterns:
 ## Component variants (a dynamic layer on top of packs)
 
 A **variant** is a named, base-anchored specialization of a core stereotype — a
-"kind of `Adapter`/`Specialist`/…" (e.g. a `publisher`) — carrying implementation
-guidance so the implementer treats every component of the same variant alike,
-reusing one shared approach instead of reinventing it per instance. The base
-stereotype stays authoritative for all of wairon's generic semantics and
+"kind of `Orchestrator`/`Adapter`/`Portal`/…" (e.g. a `publisher`) — carrying
+implementation guidance so the implementer treats every component of the same
+variant alike, reusing one shared approach instead of reinventing it per instance.
+The base stereotype stays authoritative for all of wairon's generic semantics and
 dependency rules; the variant adds domain vocabulary + a stable rule target + the
-guidance.
+guidance. It adds no dependency rule of its own: what an Orchestrator may depend on
+is its `dependencyClass` field, not its variant.
+
+**Built-in variants.** wairon ships five, described in the
+[architecture standard](standards/architecture.md) §8:
+
+| Variant | Base | Shape |
+|---|---|---|
+| `arbiter` | Orchestrator | subject + supplied facts → deterministic verdict + reasons |
+| `projector` | Orchestrator | source model → self-contained derived view |
+| `composer` | Orchestrator | templates + values → authored text or files |
+| `codec` | Orchestrator | format ↔ format, both directions in one component |
+| `gateway` | Portal | a Portal that authenticates, authorizes, validates or rate-limits before it dispatches |
+
+**Three layers.** Variants load built-in first, then from the global directory
+(`WAIRON_VARIANTS_DIR`, else `~/.wairon/variants`), then from the project's
+`.wai/variants/`; a later layer overrides a variant with the same id, so a team can
+reword a built-in's guidance without forking wairon.
 
 Variants deliberately live **outside packs**: define one on demand — no pack edit
-or release — and share it anywhere (a variant is a tiny, portable YAML). Loaded
-from a machine/org-wide directory and the project, so a good variant is reusable
-across projects, orgs, and tenants.
+or release — and share it anywhere (a variant is a tiny, portable YAML). A
+machine/org-wide directory makes a good variant reusable across projects, orgs,
+and tenants.
 
 ```yaml
 # .wai/variants/publisher.yaml  (or WAIRON_VARIANTS_DIR for machine/org-wide)
 id: publisher
-base: Specialist                 # required — the stereotype this variant specializes
+base: Orchestrator               # required — the stereotype this variant specializes
 guidance: >
   In-process fan-out emitter. Reuse the shared publisher helper; do not
   reimplement dispatch per instance.
@@ -390,7 +407,7 @@ guidance: >
 ```
 ```yaml
 # on a component
-componentType: Specialist
+componentType: Orchestrator
 variant: publisher
 ```
 

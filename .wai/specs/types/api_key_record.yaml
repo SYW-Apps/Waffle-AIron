@@ -4,8 +4,8 @@ name: ApiKeyRecord
 description: >-
   A persisted MCP/API credential: the hashed bearer token bound server-side to an owner identity and
   a projects narrowing. The token carries no permissions of its own — within its narrowing it acts
-  as the owner user's live permission (the resolver gates per project). The plaintext key is shown
-  once at mint time and never stored.
+  as the owner user's live permission (permission rules gate per project). The plaintext key is
+  shown once at mint time and never stored.
 subsystem: sdd_host
 fields:
   - name: id
@@ -31,7 +31,7 @@ fields:
       mounts compose, e.g. 'proj::a::b') — scoping the token INTO that chained subproject:
       data-plane requests then bind the mounted child root instead of the project root. The token
       carries no permissions of its own — within this narrowing it acts as the owner user's LIVE
-      permission (the resolver gates per project; a subproject qualifier narrows reach, it never
+      permission (permission rules gate per project; a subproject qualifier narrows reach, it never
       widens or refines grants).
     optional: false
   - name: createdAt
@@ -60,4 +60,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-07-24T18:20:41.520Z'
+updatedAt: '2026-09-15T21:02:36.162Z'

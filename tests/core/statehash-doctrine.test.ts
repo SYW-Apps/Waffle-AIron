@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { computeStateId, stateIdEquals } from '../../src/core/statehash.js';
-import { computeGateStateId, invalidateSpecCache } from '../../src/core/specs.js';
+import { invalidateSpecCache } from '../../src/core/specs.js';
+import { computeGateStateId } from '../../src/core/validation.js';
 import { SDD_RULES } from '../../src/core/rules/repository.js';
 
 // ---------------------------------------------------------------------------
@@ -91,7 +92,7 @@ describe('gate StateId vs content StateId', () => {
       const content = computeStateId();
       const gate = computeGateStateId();
       expect(content.algorithm).toBe('sha256');
-      expect(gate.algorithm).toBe('sha256+doctrine+inputs');
+      expect(gate.algorithm).toBe('sha256+content+doctrine+inputs');
       expect(stateIdEquals(content, gate)).toBe(false);
     } finally { proj.cleanup(); }
   });

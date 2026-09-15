@@ -6,23 +6,23 @@ description: >-
   (observe/warn) quota observations. It gathers the hosted project records, the two server-global
   pack-tier listings, and per-project pack/profile references (derived from each project's
   configuration, loaded through the core adapter), delegates diagnostic and usage derivation to the
-  diagnostics specialist and quota evaluation to the quota specialist. It performs no writes; the
-  instance exposure-policy administration lives in exposure_policy_orchestrator. Durable
-  backup/restore is intentionally out of scope: operators rely on the git-backing sweeps and
-  platform-level data-volume snapshots per the hosted deployment guidance.
+  diagnostics component and quota evaluation to quota_rules. It performs no writes; the instance
+  exposure-policy administration lives in exposure_policy_orchestrator. Durable backup/restore is
+  intentionally out of scope: operators rely on the git-backing sweeps and platform-level
+  data-volume snapshots per the hosted deployment guidance.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - auth_specialist
+  - authentication
   - project_registry
-  - diagnostics_specialist
-  - quota_specialist
+  - diagnostics
+  - quota_rules
   - pack_registry
-  - authorization_specialist
+  - authorization
   - project_relation_repository
   - public_surface_repository
   - host_core_adapter
 status: complete
 createdAt: '2026-07-09T09:09:26.722Z'
-updatedAt: '2026-09-13T12:07:52.396Z'
+updatedAt: '2026-09-15T20:46:21.032Z'

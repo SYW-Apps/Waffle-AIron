@@ -217,7 +217,7 @@ export async function lockRemoteProject(target: RemoteTarget): Promise<string> {
  * a session already bound to some OTHER project. The web plane's project route
  * is instance-scoped, accepts the same bearer credential (its auth bridge takes
  * a bearer in place of a session cookie), and resolves project:create over the
- * owner unit through the same permission resolver. Same credential, same gate,
+ * owner unit through the same permission rules. Same credential, same gate,
  * the one endpoint that can answer before the project exists.
  */
 export async function initializeRemoteProject(target: RemoteTarget, ownerUnitId: string): Promise<string> {

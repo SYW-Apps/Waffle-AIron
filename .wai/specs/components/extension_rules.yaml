@@ -3,14 +3,15 @@ name: Extension Rules
 description: >-
   Judges what extension packs contribute: architectural profiles, pattern references, component
   variants and declarative assertions resolve and apply, and pack selections resolve and are pinned.
-  Specialist by last resort: its verdicts are not type methods, because the rule set is open (packs
-  register rules at runtime) and most verdicts read many specs; it holds no state (the rule set
-  belongs to the rule Repository), does no I/O and runs no workflow, which is the arbiter shape.
+  Pure logic (dependencyClass: pure, the arbiter variant): it holds no state (the rule set belongs
+  to the rule Repository), does no I/O and runs no workflow. Its verdicts are not type methods,
+  because the rule set is open (packs register rules at runtime) and most verdicts read many specs.
 subsystem: sdd_validator
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn: []
+dependencyClass: pure
 variant: arbiter
 status: draft
 createdAt: '2026-09-14T05:42:17.078Z'
-updatedAt: '2026-09-14T05:42:46.096Z'
+updatedAt: '2026-09-15T20:40:40.978Z'

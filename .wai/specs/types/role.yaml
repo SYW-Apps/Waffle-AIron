@@ -7,7 +7,7 @@ description: >-
   wins; explicit denial is expressed at the scope-default or per-user level, not by a role. Most
   roles are admin-defined and stored in the role repository. A small set of BUILT-IN reserved roles
   (notably 'sso-admin' → project:admin + project:create at instance scope) are intrinsic code
-  constants: they are always merged into the permission world by the authorization specialist (so a
+  constants: they are always merged into the permission world by the authorization component (so a
   binding to them always resolves without a seed row), and role CRUD refuses to create, edit, or
   delete a reserved built-in id.
 subsystem: sdd_host
@@ -39,4 +39,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-15T20:25:10.998Z'
-updatedAt: '2026-07-15T23:21:14.718Z'
+updatedAt: '2026-09-15T20:47:25.144Z'

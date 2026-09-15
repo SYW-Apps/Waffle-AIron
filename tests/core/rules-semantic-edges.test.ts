@@ -75,7 +75,7 @@ function dispatchFixture(proj: ReturnType<typeof createTempProject>, opts: {
     opts.portalDeps ?? 'dependsOn: [shadow-server]',
     ...(opts.table !== undefined ? [opts.table] : []),
   ].filter(Boolean).join('\n'));
-  proj.component('shadow-server', 'Specialist');
+  proj.component('shadow-server', 'Orchestrator', 'dependencyClass: pure');
   proj.writeSpec('interface', 'ipkg-portal', `schemaVersion: 1.0.0
 id: ipkg-portal
 name: IPortal
@@ -146,7 +146,7 @@ describe('dispatch tables (UNSERVED_CAPABILITY family)', () => {
     proj.subsystem('sub-a');
     proj.component('orch-a', 'Orchestrator',
       'dispatch:\n  - { capability: a.b, component: helper-a, method: run }\n  - { capability: a.b, component: helper-a, method: run }');
-    proj.component('helper-a', 'Specialist');
+    proj.component('helper-a', 'Orchestrator', 'dependencyClass: pure');
     proj.writeSpec('interface', 'ihelper-a', `schemaVersion: 1.0.0
 id: ihelper-a
 name: IHelper
@@ -169,16 +169,16 @@ methods:
   it('flags a cross-subsystem dispatch binding', () => {
     const proj = createTempProject();
     dispatchFixture(proj, {
-      table: 'dispatch:\n  - { capability: foreign.cap, component: foreign-spec, method: run }',
-      portalDeps: 'dependsOn: [foreign-spec]',
+      table: 'dispatch:\n  - { capability: foreign.cap, component: foreign-orch, method: run }',
+      portalDeps: 'dependsOn: [foreign-orch]',
     });
     proj.subsystem('sub-b');
-    proj.component('foreign-spec', 'Specialist', '', 'sub-b');
-    proj.writeSpec('interface', 'iforeign-spec', `schemaVersion: 1.0.0
-id: iforeign-spec
+    proj.component('foreign-orch', 'Orchestrator', 'dependencyClass: pure', 'sub-b');
+    proj.writeSpec('interface', 'iforeign-orch', `schemaVersion: 1.0.0
+id: iforeign-orch
 name: IForeign
 description: d
-component: foreign-spec
+component: foreign-orch
 methods:
   - name: run
     description: Runs the foreign capability end to end.
@@ -520,7 +520,7 @@ describe('untyped seams (UNTYPED_SEAM)', () => {
     proj.subsystem('sub-a', 'publicInterfaces:\n  - { type: Custom, details: d, component: env-portal }');
     proj.component('env-portal', 'Portal',
       'portalType: Custom\ndependsOn: [env-server]\ndispatch:\n  - { capability: env.get, component: env-server, method: getEnv }');
-    proj.component('env-server', 'Specialist');
+    proj.component('env-server', 'Orchestrator', 'dependencyClass: pure');
     proj.writeSpec('interface', 'ienv-portal', `schemaVersion: 1.0.0
 id: ienv-portal
 name: IEnvPortal
@@ -554,8 +554,8 @@ methods:
   it('flags bare Json/any params and returns on a published component only', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a', 'publicInterfaces:\n  - { type: Custom, details: d, component: edge-portal }');
-    proj.component('edge-portal', 'Portal', 'portalType: Custom\ndependsOn: [inner-spec]');
-    proj.component('inner-spec', 'Specialist');
+    proj.component('edge-portal', 'Portal', 'portalType: Custom\ndependsOn: [inner-orch]');
+    proj.component('inner-orch', 'Orchestrator', 'dependencyClass: pure');
     proj.writeSpec('interface', 'iedge-portal', `schemaVersion: 1.0.0
 id: iedge-portal
 name: IEdge
@@ -574,11 +574,11 @@ methods:
     returns: "string"
     params:
       - { name: name, type: string }`);
-    proj.writeSpec('interface', 'iinner-spec', `schemaVersion: 1.0.0
-id: iinner-spec
+    proj.writeSpec('interface', 'iinner-orch', `schemaVersion: 1.0.0
+id: iinner-orch
 name: IInner
 description: d
-component: inner-spec
+component: inner-orch
 methods:
   - name: crunch
     description: Internal helper that legitimately passes loose bags around.

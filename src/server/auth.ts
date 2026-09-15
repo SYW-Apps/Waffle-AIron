@@ -15,7 +15,7 @@ import { getInstanceIdentity } from './instance.js';
 import { resolveSecret } from '../utils/secrets.js';
 
 // ---------------------------------------------------------------------------
-// Auth Specialist (sdd_host)
+// Authentication (sdd_host)
 //
 // The single authentication authority. Data-plane bearer tokens verify against
 // the credential registry; the control-plane master credential verifies against
@@ -24,8 +24,8 @@ import { resolveSecret } from '../utils/secrets.js';
 // routing — it only produces a Principal.
 //
 // A Principal carries NO permissions of its own. It carries a resolved
-// permissionSubject (subjectId + roleBindings + instanceAdmin) that the
-// permission resolver evaluates per request, so a token always acts as its
+// permissionSubject (subjectId + roleBindings + instanceAdmin) that
+// permission rules evaluate per request, so a token always acts as its
 // owner's LIVE permission and can never outlive or exceed it.
 // ---------------------------------------------------------------------------
 
@@ -54,7 +54,7 @@ export const RESERVED_SUBJECT_IDS: readonly string[] = [
 ];
 
 /**
- * True ONLY for the subjects that hold the resolver bypass:
+ * True ONLY for the subjects that hold the permission-rules bypass:
  *   - the built-in super-admin, matched on the FULL tuple (issuer 'local' AND
  *     userId === the PERSISTED boot-reserved super-admin UUID) so an SSO
  *     provider issuing that userId under its own issuer can never collide into
@@ -119,7 +119,7 @@ function resolvePermissionSubject(
   const subjectId = subject?.userId ?? '';
   if (isInstanceAdminSubject(dataDir, subject)) {
     // The env-anchored subjects have no user record — bindings are irrelevant
-    // because the resolver bypasses the walk for them entirely.
+    // because permission rules bypass the walk for them entirely.
     return { subjectId, roleBindings: [], instanceAdmin: true };
   }
   if (!subjectId) {
@@ -129,7 +129,7 @@ function resolvePermissionSubject(
   if (user && user.status !== 'active') return null;
   // Diverged identities: when the record's id and its subject's userId are
   // not the same string, legacy assignments may be keyed by either — carry
-  // the other ids as aliases so the resolver honors those rows too.
+  // the other ids as aliases so permission rules honor those rows too.
   const aliasSubjectIds = user
     ? [user.id, user.subject.userId].filter(
       (id): id is string => !!id && id !== subjectId,
@@ -313,8 +313,8 @@ export function verifyBuiltinAdmin(cfg: HostConfig, user: string, password: stri
 
 /**
  * The synthetic local-developer subject behind `wairon dev` sessions: the
- * PERSISTED boot-reserved local-developer UUID under issuer 'local' (which this
- * specialist recognizes as instance-admin by its full tuple). Owned here —
+ * PERSISTED boot-reserved local-developer UUID under issuer 'local' (which
+ * authentication recognizes as instance-admin by its full tuple). Owned here —
  * built-in subject recognition and minting live together. Throws when the
  * instance identity has never been seeded: the dev server always runs the
  * lifecycle init entrypoint before serving.

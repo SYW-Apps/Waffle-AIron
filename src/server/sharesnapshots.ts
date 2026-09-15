@@ -9,12 +9,12 @@ import type { Principal, ShareSnapshot } from './types.js';
 import { openApiIndexDocument } from './openapiindex.js';
 
 // ---------------------------------------------------------------------------
-// Share Snapshot Repository + Specialist (sdd_host).
+// Share Snapshot Repository + Share Snapshots (sdd_host).
 //
 // A snapshot is the immutable, point-in-time capture a share link serves. The
 // store keeps one write-once JSON blob per snapshot id under
 // <dataDir>/share-snapshots/; a captured share never changes even as the spec
-// tree evolves. The specialist FREEZES a project view into a snapshot via the
+// tree evolves. share_snapshots FREEZES a project view into a snapshot via the
 // core + surfaces adapters, scoped to the caller's own read authority.
 // ---------------------------------------------------------------------------
 
@@ -130,7 +130,7 @@ export function getSnapshotArtifact(
   return new ShareSnapshotIndex(new ShareSnapshotStore(dataDir)).getArtifact(snapshotId, kind, portalId);
 }
 
-// ── share_snapshot_specialist ─────────────────────────────────────────────────
+// ── share_snapshots ────────────────────────────────────────────────────────
 
 /**
  * Capture a project view into an immutable snapshot payload set. Binds the

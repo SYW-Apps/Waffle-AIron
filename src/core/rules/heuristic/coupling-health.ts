@@ -115,7 +115,7 @@ export const couplingRule: SddRule = {
         ctx.addIssue(
           'warning',
           'GOD_COMPONENT',
-          `Component "${comp.id}" depends on ${comp.dependsOn.length} components (> ${threshold}). That fan-out suggests it owns more than one responsibility — split the workflow, or group cohesive collaborators behind a pattern facade (Repository/Gateway).`,
+          `Component "${comp.id}" depends on ${comp.dependsOn.length} components (> ${threshold}). That fan-out suggests it owns more than one responsibility — split the workflow, or group cohesive collaborators behind a Repository facade.`,
           comp.id,
           ctx.isComponentDraft(comp.id),
         );

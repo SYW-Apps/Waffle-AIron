@@ -13,12 +13,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential (bootstrap or user-bound token)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Compute the caller's project-read visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: If the caller has no actionable project scope, deny
@@ -113,17 +113,17 @@ methods:
           Derive redacted diagnostic checks from the in-scope project records, the two pack-tier
           name listings, the per-project references, and the relation-health inputs
         type: call
-        targetComponent: diagnostics_specialist
+        targetComponent: diagnostics
         targetMethod: runChecks
       - stepNumber: 20
         description: Derive usage snapshots for the requested scope from the in-scope project records
         type: call
-        targetComponent: diagnostics_specialist
+        targetComponent: diagnostics
         targetMethod: collectUsage
       - stepNumber: 21
         description: Assemble the aggregated instance health report from the checks and usage
         type: call
-        targetComponent: diagnostics_specialist
+        targetComponent: diagnostics
         targetMethod: buildHealthReport
       - stepNumber: 22
         description: Return the redacted health report scoped to the caller
@@ -135,12 +135,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Compute the caller's project-read visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: If the caller has no actionable project scope, deny
@@ -165,7 +165,7 @@ methods:
       - stepNumber: 7
         description: Derive usage snapshots for the requested scope from the in-scope project records
         type: call
-        targetComponent: diagnostics_specialist
+        targetComponent: diagnostics
         targetMethod: collectUsage
       - stepNumber: 8
         description: Return the redacted usage snapshots scoped to the caller
@@ -177,12 +177,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Compute the caller's project-read visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: If the caller has no actionable project scope, deny
@@ -207,7 +207,7 @@ methods:
       - stepNumber: 7
         description: Derive usage snapshots for the requested scope from the in-scope project records
         type: call
-        targetComponent: diagnostics_specialist
+        targetComponent: diagnostics
         targetMethod: collectUsage
       - stepNumber: 8
         description: >-
@@ -219,7 +219,7 @@ methods:
           Evaluate the usage snapshots against the advisory quota policy, annotating observe/warn
           messages
         type: call
-        targetComponent: quota_specialist
+        targetComponent: quota_rules
         targetMethod: evaluateUsage
       - stepNumber: 10
         description: Return the advisory quota-annotated usage snapshots scoped to the caller

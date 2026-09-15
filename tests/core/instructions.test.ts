@@ -87,6 +87,23 @@ describe('wairon instructions (the wairon-owned default)', () => {
     expect(text).toMatch(/self-describing/i);
   });
 
+  it('names the blocks and patterns the validator accepts, and the retired stereotypes as retired', () => {
+    const text = buildServerInstructions();
+    const l2 = text.split('\n- **L3 Interface**')[0].split('- **L2 Component**')[1];
+    expect(l2).toContain('`Query`');
+    expect(l2).toContain('pattern (`Repository`');
+    // The UI patterns stay in the vocabulary.
+    expect(l2).toContain('`FeatureComponent`');
+    expect(l2).toContain('`RouterComponent`');
+    // Logic is an Orchestrator bounded by its class; a gateway is a Portal variant.
+    expect(l2).toContain('`dependencyClass`');
+    expect(l2).toMatch(/`gateway` variant/);
+    const retired = '`Specialist` and `Gateway` are retired';
+    expect(l2).toContain(retired);
+    // Named nowhere else: the briefing never offers them as something to design with.
+    expect(text.replace(retired, '')).not.toMatch(/`Specialist`|`Gateway`/);
+  });
+
   it('directs the agent to read sdd-architect BEFORE authoring, by resource uri', () => {
     const text = buildServerInstructions();
     expect(text).toContain('wairon-skill://sdd-architect');

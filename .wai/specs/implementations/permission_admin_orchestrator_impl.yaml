@@ -2,7 +2,7 @@ id: permission_admin_orchestrator_impl
 name: Permission Admin Orchestrator Implementation
 description: >-
   Role, assignment, and role-binding management: authenticate, authorize through the authorization
-  specialist (instance-level project:admin for roles, project:admin over the scope for
+  component (instance-level project:admin for roles, project:admin over the scope for
   assignments/bindings), mutate through the role/permission/user repositories, and audit at security
   level. Reserves the built-in role ids (e.g. 'sso-admin' — intrinsic, not stored) against
   create/update/delete, and rejects any attempt to set the reserved '*' capability (there is no
@@ -15,12 +15,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission at instance scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -46,7 +46,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
@@ -65,7 +65,7 @@ methods:
       - stepNumber: 4
         description: Resolve the caller's project:admin permission over the assignment's scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 5
         description: If the effective value is not yes, deny
@@ -114,7 +114,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the assignment by id to read its own scope
@@ -136,7 +136,7 @@ methods:
           Resolve the caller's project:admin permission over the assignment's OWN scope (never a
           caller-supplied one)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 6
         description: If the effective value is not yes, deny
@@ -181,12 +181,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the queried scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -215,12 +215,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the binding's scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -285,12 +285,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the binding's scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -365,12 +365,12 @@ methods:
       - stepNumber: 3
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 4
         description: Resolve the caller's project:admin permission at instance scope (roles are instance-level)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 5
         description: If the effective value is not yes, deny
@@ -425,12 +425,12 @@ methods:
       - stepNumber: 3
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 4
         description: Resolve the caller's project:admin permission at instance scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 5
         description: If the effective value is not yes, deny
@@ -485,12 +485,12 @@ methods:
       - stepNumber: 3
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 4
         description: Resolve the caller's project:admin permission at instance scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 5
         description: If the effective value is not yes, deny
@@ -533,4 +533,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-15T22:01:26.906Z'
-updatedAt: '2026-07-19T14:59:59.557Z'
+updatedAt: '2026-09-15T20:47:18.126Z'

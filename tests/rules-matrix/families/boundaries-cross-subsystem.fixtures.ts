@@ -274,10 +274,11 @@ export default [
           dependsOn: ['retired-adjudication-engine'],
         },
         {
-          id: 'adjudication-specialist',
-          componentType: 'Specialist',
+          id: 'adjudication-arbiter',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'claims',
-          description: 'Pure capability scoring a claim against the payer\'s adjudication rules.',
+          description: 'Pure logic scoring a claim against the payer\'s adjudication rules.',
         },
       ],
     },
@@ -287,7 +288,7 @@ export default [
     expectFire: false,
     reason: 'Every dependsOn entry resolves to an existing component of the tree.',
     scenario:
-      'The claims orchestrator depends on the adjudication specialist that actually exists in the claims subsystem.',
+      'The claims orchestrator depends on the adjudication arbiter that actually exists in the claims subsystem.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'claims', description: 'Insurance claim intake and adjudication.' }],
@@ -297,13 +298,14 @@ export default [
           componentType: 'Orchestrator',
           subsystem: 'claims',
           description: 'Coordinates claim intake through adjudication.',
-          dependsOn: ['adjudication-specialist'],
+          dependsOn: ['adjudication-arbiter'],
         },
         {
-          id: 'adjudication-specialist',
-          componentType: 'Specialist',
+          id: 'adjudication-arbiter',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'claims',
-          description: 'Pure capability scoring a claim against the payer\'s adjudication rules.',
+          description: 'Pure logic scoring a claim against the payer\'s adjudication rules.',
         },
       ],
     },
@@ -632,17 +634,17 @@ export default [
 
   // -------------------------------------------------------------------------
   // Profile edge-deltas: allowedEdges licenses a matrix-refused edge
-  // (documented in the stereotype-deps rule description). Quiet control for
-  // ARCHITECTURE_VIOLATION_SPECIALIST_DEP; the unlicensed fire lives in the
-  // stereotype-matrix sweep (Specialist → Store).
+  // (documented in the stereotype-deps rule description), the dependency-class
+  // rule included. Quiet control for DEPENDENCY_CLASS_VIOLATION; the unlicensed
+  // fire lives in the stereotype-matrix sweep (read logic → Store).
   // -------------------------------------------------------------------------
   defineRuleFixture({
-    code: 'ARCHITECTURE_VIOLATION_SPECIALIST_DEP',
+    code: 'DEPENDENCY_CLASS_VIOLATION',
     expectFire: false,
     reason:
-      'The governing pack profile (clinic-embedded) licenses Specialist→Store via allowedEdges with a stated reason — the documented profile edge-delta mechanism for a platform\'s own idiom.',
+      'The governing pack profile (clinic-embedded) licenses Orchestrator→Store via allowedEdges with a stated reason — the documented profile edge-delta mechanism for a platform\'s own idiom, which the dependency-class rule honours too.',
     scenario:
-      'On the embedded vitals monitor profile, the vitals sampling specialist reads its ring-buffer store directly under the profile\'s declared allowedEdges license.',
+      'On the embedded vitals monitor profile, the vitals sampling projector, read logic, reads its ring-buffer store directly under the profile\'s declared allowedEdges license.',
     tree: {
       system: SYSTEM,
       subsystems: [
@@ -650,8 +652,9 @@ export default [
       ],
       components: [
         {
-          id: 'vitals-sampling-specialist',
-          componentType: 'Specialist',
+          id: 'vitals-sampling-projector',
+          componentType: 'Orchestrator',
+          dependencyClass: 'read',
           subsystem: 'vitals-monitoring',
           description: 'Samples the vitals ring buffer and derives alarm thresholds.',
           dependsOn: ['vitals-ring-buffer-store'],
@@ -672,10 +675,10 @@ export default [
           '  clinic-embedded:',
           '    family: backend-like',
           '    allowedEdges:',
-          '      - from: [Specialist]',
+          '      - from: [Orchestrator]',
           '        to: [Store]',
           '        reason: >-',
-          '          On the embedded vitals monitor a sampling specialist reads its',
+          '          On the embedded vitals monitor sampling logic reads its',
           '          ring-buffer store directly; the repository ceremony cannot fit',
           '          the device budget.',
           '',

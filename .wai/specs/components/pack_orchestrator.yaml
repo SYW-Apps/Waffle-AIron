@@ -2,25 +2,25 @@ id: pack_orchestrator
 name: Pack Orchestrator
 description: >-
   Owns the control-plane pack-management workflow: authenticate the caller credential, authorize
-  through the permission resolver — server-global pack management requires INSTANCE-level
-  project:admin (packs are instance configuration); per-project install/remove require project:admin
-  over that project and the per-project listing requires project:read over it — then
-  list/install/remove extension packs, binding the project's isolated root first for project scope.
-  Enforces the surface policy that installs are declarative-only — profiles and language/platform
-  tables, never executable rule code — delegating the pack-file I/O and the declarative-schema check
-  to the pack registry. Owns the project pack registration: it loads the project configuration and
-  registers or deregisters packs in it through the core adapter, since the pack registry stores pack
-  files only. Reached from the admin portal, the web portal (session as credential), and the MCP
-  data plane (bearer as credential) through the project ops orchestrator.
+  through the permission rules — server-global pack management requires INSTANCE-level project:admin
+  (packs are instance configuration); per-project install/remove require project:admin over that
+  project and the per-project listing requires project:read over it — then list/install/remove
+  extension packs, binding the project's isolated root first for project scope. Enforces the surface
+  policy that installs are declarative-only — profiles and language/platform tables, never
+  executable rule code — delegating the pack-file I/O and the declarative-schema check to the pack
+  registry. Owns the project pack registration: it loads the project configuration and registers or
+  deregisters packs in it through the core adapter, since the pack registry stores pack files only.
+  Reached from the admin portal, the web portal (session as credential), and the MCP data plane
+  (bearer as credential) through the project ops orchestrator.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - auth_specialist
-  - authorization_specialist
+  - authentication
+  - authorization
   - pack_registry
   - project_registry
   - host_core_adapter
 status: complete
 createdAt: '2026-07-04T18:46:35.024Z'
-updatedAt: '2026-09-13T11:39:45.842Z'
+updatedAt: '2026-09-15T21:04:04.025Z'

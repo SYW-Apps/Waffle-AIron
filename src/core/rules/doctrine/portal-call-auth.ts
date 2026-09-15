@@ -46,7 +46,7 @@ export const portalCallAuthRule: SddRule = {
           // (1b) The credential PRESENTER — the component making the authenticated
           // outbound call — must be an Adapter. An authenticated cross-service call
           // is external I/O, and the vocabulary reserves external I/O to Adapters
-          // (a Gateway forwards through a client Adapter it owns, not directly).
+          // (the presenter of an authenticated outbound call is a client Adapter).
           if (presenter && presenter.componentType !== 'Adapter') {
             ctx.addIssue(
               'warning',

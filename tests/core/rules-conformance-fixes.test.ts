@@ -35,6 +35,7 @@ interface Unit { component: Spec; interface: Spec; implementation: Spec }
 function unit(id: string, opts: {
   subsystem: string;
   type?: string;
+  dependencyClass?: 'pure' | 'read';
   dependsOn?: string[];
   owns?: string[];
   method: string;
@@ -43,7 +44,14 @@ function unit(id: string, opts: {
   impl?: Record<string, unknown>;
 }): Unit {
   return {
-    component: { id, subsystem: opts.subsystem, componentType: opts.type ?? 'Orchestrator', dependsOn: opts.dependsOn ?? [], owns: opts.owns ?? [] },
+    component: {
+      id,
+      subsystem: opts.subsystem,
+      componentType: opts.type ?? 'Orchestrator',
+      ...(opts.dependencyClass ? { dependencyClass: opts.dependencyClass } : {}),
+      dependsOn: opts.dependsOn ?? [],
+      owns: opts.owns ?? [],
+    },
     interface: {
       id: `i${id}`,
       component: id,
@@ -131,7 +139,7 @@ describe('integration-conformance — a missing own file reports once', () => {
         sourcePath: 'src/ordering/order-orchestrator.ts',
         impl: { simPath: 'tests/integration/order.sim.ts' },
       }),
-      unit('pricing-engine', { subsystem: 'ordering', type: 'Specialist', method: 'priceCart', sourcePath: 'src/ordering/pricing-engine.ts' }),
+      unit('pricing-engine', { subsystem: 'ordering', type: 'Orchestrator', dependencyClass: 'pure', method: 'priceCart', sourcePath: 'src/ordering/pricing-engine.ts' }),
     ], {
       subsystems: [{ id: 'ordering' }],
       files: {
@@ -160,7 +168,7 @@ describe('integration-conformance — a missing own file reports once', () => {
           }],
         },
       }),
-      unit('pricing-engine', { subsystem: 'ordering', type: 'Specialist', method: 'priceCart', sourcePath: 'src/ordering/pricing-engine.ts' }),
+      unit('pricing-engine', { subsystem: 'ordering', type: 'Orchestrator', dependencyClass: 'pure', method: 'priceCart', sourcePath: 'src/ordering/pricing-engine.ts' }),
     ], {
       subsystems: [{ id: 'ordering' }],
       files: {
@@ -285,7 +293,8 @@ describe('structural-conformance — what a declared finding code must be among'
     const issues = validate(tree([
       unit('ledger-auditor', {
         subsystem: 'ledger',
-        type: 'Specialist',
+        type: 'Orchestrator',
+        dependencyClass: 'pure',
         method: 'auditLedger',
         sourcePath: 'src/ledger/ledger-auditor.ts',
         findings: [{ code: 'LEDGER_IMBALANCED', severity: 'warning', summary: 'Debits and credits of a ledger period differ' }],

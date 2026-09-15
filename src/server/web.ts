@@ -94,7 +94,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 /** Browser session lifetime: long enough for a working session, short enough to
- *  bound a stolen cookie. The auth specialist rejects a session past its expiry. */
+ *  bound a stolen cookie. Authentication rejects a session past its expiry. */
 const WEB_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 // ── Local developer server (`wairon dev`) conventions ────────────────────────
@@ -105,7 +105,7 @@ const WEB_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 // sole source of those conventions (subject id, project id, session lifetime).
 
 /** The synthetic identity behind the local dev session: the PERSISTED
- *  boot-reserved local-developer UUID, resolved through the auth specialist
+ *  boot-reserved local-developer UUID, resolved through authentication
  *  (which owns built-in subject recognition — see auth.localDevSubject; it
  *  throws when the instance identity has never been seeded). */
 function devSubject(cfg: HostConfig): PrincipalSubject {
@@ -239,7 +239,7 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
       // first-login: bind the built-in sso-admin ROLE when the verified groups
       // match adminGroupClaims, otherwise no bindings — an admin assigns roles
       // and grid assignments later. Permissions never live on the user record;
-      // the role resolves through the permission resolver (project:admin +
+      // the role resolves through permission rules (project:admin +
       // project:create @instance, OVERRIDABLE — never the instance-admin bypass).
       roleBindings: inAdminGroup ? [{ roleId: SSO_ADMIN_ROLE_ID }] : [],
       createdAt: new Date().toISOString(),
@@ -271,7 +271,7 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
 
   // Build the new WebSession (the repository mints the reserved-prefix id and
   // stamps createdAt/lastSeenAt). The session stores NO permissions and no
-  // narrowing ('*'): the auth specialist resolves the subject's permissionSubject
+  // narrowing ('*'): authentication resolves the subject's permissionSubject
   // (roleBindings + instanceAdmin) LIVE on every request, so revocations take
   // effect immediately. Prior sessions are LEFT INTACT so one principal may hold
   // concurrent sessions.
@@ -319,7 +319,7 @@ export function __resetLoginThrottle(): void {
  * Sign the built-in super-admin in with the env-configured username + password.
  * Consult the minimal in-memory failed-attempt throttle first (~5 consecutive
  * failures lock the username out for a short window; attempts during the lockout
- * are rejected outright). Verify BOTH values via the auth specialist's
+ * are rejected outright). Verify BOTH values via authentication's
  * constant-time verifyBuiltinAdmin (unset env = password login disabled, always
  * fails). On failure, record the attempt and reject as unauthenticated. On
  * success, clear the throttle entry and create a browser session bound to the
@@ -356,8 +356,8 @@ export function signInWithPassword(cfg: HostConfig, user: string, password: stri
   }
 
   // step 7: success clears the throttle. The session stores NO permissions —
-  // the subject IS the persisted built-in super-admin, so the auth specialist
-  // resolves instanceAdmin (the resolver bypass) live at authentication.
+  // the subject IS the persisted built-in super-admin, so authentication
+  // resolves instanceAdmin (the permission-rules bypass) live at authentication.
   loginThrottle.delete(key);
   const session: WebSession = {
     id: '', // web_session_repository mints a ws_-prefixed id
@@ -402,8 +402,8 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
 
   // step 3: the coarse instance-admin flag comes from the resolved permission
   // subject (the env-anchored super-admin / master / devMode subject — the
-  // resolver bypass). The context carries NO permission projections: the client
-  // lists projects via /web/projects (resolver-filtered server-side) and drives
+  // permission-rules bypass). The context carries NO permission projections: the client
+  // lists projects via /web/projects (permission-rules-filtered server-side) and drives
   // delegated/SSO admin chrome from its project:admin visible scopes.
   return {
     subject: principal.subject ?? { userId: principal.tokenId, kind: 'service', issuer: 'local' },
@@ -421,7 +421,7 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
  * — this is the ONLY unauthenticated session-minting path and it exists solely for
  * `wairon dev` (loopback, auth off). The session is bound to the persisted
  * boot-reserved local-developer subject, narrowed to the ONE local project; it
- * carries NO permissions of its own — the auth specialist resolves THIS subject's
+ * carries NO permissions of its own — authentication resolves THIS subject's
  * permissionSubject (instanceAdmin = full local access) live at authentication.
  * Reuses an existing dev session rather than churning the store on every
  * cookieless hit.
@@ -1274,7 +1274,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   var ctx = null;
   var selectedProjectId = '';
   // Whether the Admin tab is shown. True for the env super-admin (ctx.isAdmin)
-  // AND for a DELEGATED/SSO instance admin — detected by probing a resolver-gated
+  // AND for a DELEGATED/SSO instance admin — detected by probing a permission-rules-gated
   // instance-admin read, since the slim context carries no permission projection.
   var adminVisible = false;
 
@@ -1369,7 +1369,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     // shows for any instance-level admin (env super-admin OR a delegated/SSO
     // admin who holds project:admin@instance). The slim context only carries the
     // env-super flag, so a delegated admin is detected by probing a
-    // resolver-gated instance-admin read (/web/admin/roles → project:admin@instance).
+    // permission-rules-gated instance-admin read (/web/admin/roles → project:admin@instance).
     $('adminBadge').hidden = !ctx.isAdmin;
     adminVisible = !!ctx.isAdmin;
     $('navAdmin').hidden = !adminVisible;
@@ -1379,12 +1379,12 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       }).catch(function () { /* not an instance admin — tab stays hidden */ });
     }
     // The context carries no permission projections: write authority is enforced
-    // per request server-side (the resolver). Per-project ops (git/packs/policy/
+    // per request server-side (permission rules). Per-project ops (git/packs/policy/
     // producers) are reachable by any signed-in user from the Projects view and
     // gated per project server-side.
     $('roBadge').hidden = true;
 
-    // The project selector comes from /web/projects — the resolver-filtered
+    // The project selector comes from /web/projects — the permission-rules-filtered
     // listing of projects this principal can act on (dev mode lists the single
     // registered "local" project the same way).
     api('/web/projects').then(function (r) { return r.ok ? r.json() : {}; }).then(function (list) {
@@ -1574,7 +1574,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     selectedSpec = { kind: kind, id: id };
     var insp = $('insp'); insp.innerHTML = '<div class="hint">Loading ' + esc(id) + '…</div>';
     mcp('sdd_get_spec', { kind: kind, id: id }).then(function (spec) {
-      // Write authority is enforced per request by the resolver server-side; a
+      // Write authority is enforced per request by permission rules server-side; a
       // save from a read-only principal is refused with a clear error. Scope-
       // aware read-only chrome returns with the roles/assignments UI.
       var canWrite = true;
@@ -2060,7 +2060,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   function placementForm(el, units) {
     var box = $('oForm');
     // The project ids come from the already-populated selector (fed by
-    // /web/projects, the resolver-filtered listing).
+    // /web/projects, the permission-rules-filtered listing).
     var pids = Array.prototype.map.call($('projSel').options, function (o) { return o.value; });
     var projCtl = pids.length ? '<select id="plProj">' + pids.map(function (pid) { return opt(pid, pid, false); }).join('') + '</select>' : '<input id="plProj" placeholder="projectId" />';
     var unitOpts = units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('');
@@ -2461,7 +2461,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   function renderConnect() {
     var box = $('connectBody');
     // The project ids come from the already-populated selector (fed by
-    // /web/projects, the resolver-filtered listing).
+    // /web/projects, the permission-rules-filtered listing).
     var pids = Array.prototype.map.call($('projSel').options, function (o) { return o.value; });
     var html = '<h2 style="margin:0 0 4px">Connect an agent</h2>';
     html += '<p style="color:var(--dim);margin:0 0 12px;font-size:12.5px">Mint a single-project MCP token to hand to an AI agent.</p>';
@@ -2535,7 +2535,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   }
 
   // ---- Projects (lifecycle management; any signed-in user) ----------------
-  // Lists the caller's in-scope projects (GET /web/projects — resolver-filtered).
+  // Lists the caller's in-scope projects (GET /web/projects — permission-rules-filtered).
   // The management affordances are always offered; the SERVER resolves the real
   // per-action permission, so a 403 is surfaced gracefully rather than trusted
   // to client-side flags. Scope-aware chrome returns with the roles UI.
@@ -3030,7 +3030,7 @@ function projectDestroy(cfg: HostConfig, sessionId: string, body: Body, res: Ser
 //
 // Thin portal handlers forwarding to the project ops orchestrator with the
 // session as the credential; the OWNING orchestrators re-apply the exact
-// resolver authorization (instance-level project:admin for the global/instance
+// permission-rules authorization (instance-level project:admin for the global/instance
 // surfaces; project:admin / project:write / project:read over the project for
 // its surfaces). Cookie POSTs are CSRF-gated in http.ts like /web/logout.
 

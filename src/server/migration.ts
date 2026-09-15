@@ -392,7 +392,7 @@ export function migratePermissionModel(dataDir: string, apply: boolean): Migrati
     if (apply && changed) writeRaw(sessionsPath, kept);
   }
 
-  // 6. Unplaced projects: every project is placed — the resolver enumerates
+  // 6. Unplaced projects: every project is placed — permission rules enumerate
   //    units + PLACED projects, so an unplaced one is in NOBODY's view.
   const placedIds = new Set(listProjectPlacements(dataDir).map((p) => p.projectId));
   const unplaced = listProjectRecords(dataDir).filter((r) => !placedIds.has(r.id));
