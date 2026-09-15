@@ -272,21 +272,27 @@ export const ComponentTypeSchema = z.enum([
   'Actor',
   'Store',
   'Index',
+  'Query', // Repository member for computed reads over its Store
   'Registry',
   'Adapter',
   'Observer',
-  'Specialist',
   'View', // Pure presenter/UI component
   // Patterns (compositions of blocks)
   'Repository',
-  'Gateway',
   'FeatureComponent', // Logic Hook + View Presenter pattern
   'RouterComponent',  // Switch/routing component pattern
+  // Retired stereotypes: still parsed so a tree using them loads and the
+  // rules can report them (STEREOTYPE_RETIRED), never authored new
+  'Specialist', // logic is an Orchestrator with a dependencyClass
+  'Gateway',    // a gateway is a Portal with the gateway variant
 ]);
 export type ComponentType = z.infer<typeof ComponentTypeSchema>;
 
 /** Component types that are patterns (own member blocks) rather than building blocks. */
-export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 'Gateway', 'FeatureComponent', 'RouterComponent']);
+export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 'FeatureComponent', 'RouterComponent']);
+
+/** Retired component types: a tree still loads them, and STEREOTYPE_RETIRED reports each until it is migrated. */
+export const RETIRED_STEREOTYPES: ReadonlySet<ComponentType> = new Set(['Specialist', 'Gateway']);
 
 export const PortalTypeSchema = z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']);
 export type PortalType = z.infer<typeof PortalTypeSchema>;
@@ -331,6 +337,21 @@ export type DispatchBinding = z.infer<typeof DispatchBindingSchema>;
  */
 export const DurabilitySchema = z.enum(['ram-projection', 'durable', 'read-through', 'cache']);
 export type Durability = z.infer<typeof DurabilitySchema>;
+
+/**
+ * Orchestrator dependency-class declaration — what a logic Orchestrator may
+ * depend on, enforced as a Store's durability is. Declared only on an
+ * Orchestrator (DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR otherwise); a dependency
+ * the class does not allow is DEPENDENCY_CLASS_VIOLATION:
+ * - `pure` — depends only on pure Orchestrators: a computation over the values
+ *            it is handed (an arbiter, a codec).
+ * - `read` — also depends on read Orchestrators and on Repositories, Indexes
+ *            and Adapters, whose write methods it never calls (judged once
+ *            facade methods carry effect tags).
+ * Unset, the Orchestrator is a workflow.
+ */
+export const DependencyClassSchema = z.enum(['pure', 'read']);
+export type DependencyClass = z.infer<typeof DependencyClassSchema>;
 
 /** A reference from a component to a pack-declared reusable pattern (resolved against loaded packs' PatternDefs; UNKNOWN_PATTERN_REF when unresolved). */
 export const PatternRefSchema = z.object({
@@ -418,6 +439,8 @@ export const ComponentSpecSchema = z.object({
   dispatch: z.array(DispatchBindingSchema).optional(),
   /** Store-only: whether held state survives restart (see DurabilitySchema). */
   durability: DurabilitySchema.optional(),
+  /** Orchestrator-only: what the logic may depend on; unset means a workflow (see DependencyClassSchema). */
+  dependencyClass: DependencyClassSchema.optional(),
   /** Topics this component publishes to (see EventBindingSchema). */
   emits: z.array(EventBindingSchema).optional(),
   /** Topics this component consumes (see EventBindingSchema) — typical on Observers. */
@@ -456,7 +479,7 @@ export function defaultConformanceTier(component?: Pick<ComponentSpec, 'componen
  * component_spec.defaultNarrativeDetail — the narrative detail the component's
  * methods get when neither the method nor its implementation sets one:
  * calls-only for Portals, Observers and Adapters (boundary pass-throughs);
- * intent for Stores, Indexes and Registries (a contract paragraph, not
+ * intent for Stores, Indexes, Queries and Registries (a contract paragraph, not
  * choreography); full otherwise, and full when the component does not resolve.
  */
 export function defaultNarrativeDetail(component?: Pick<ComponentSpec, 'componentType'>): NarrativeDetail {
@@ -464,7 +487,7 @@ export function defaultNarrativeDetail(component?: Pick<ComponentSpec, 'componen
   if (componentType === 'Portal' || componentType === 'Observer' || componentType === 'Adapter') {
     return 'calls-only';
   }
-  if (componentType === 'Store' || componentType === 'Index' || componentType === 'Registry') {
+  if (componentType === 'Store' || componentType === 'Index' || componentType === 'Query' || componentType === 'Registry') {
     return 'intent';
   }
   return 'full';
@@ -472,11 +495,39 @@ export function defaultNarrativeDetail(component?: Pick<ComponentSpec, 'componen
 
 /**
  * component_spec.isPattern — whether the component is a pattern that owns
- * member blocks (Repository, Gateway, FeatureComponent or RouterComponent)
- * rather than a building block.
+ * member blocks (Repository, FeatureComponent or RouterComponent) rather than a
+ * building block.
  */
 export function isPattern(component: Pick<ComponentSpec, 'componentType'>): boolean {
   return PATTERN_TYPES.has(component.componentType);
+}
+
+/**
+ * component_spec.isLogic — whether the component's methods are flowcharts of
+ * the system's logic: an Orchestrator, Supervisor or Actor, or a Specialist
+ * until it is retired.
+ */
+export function isLogic(component: Pick<ComponentSpec, 'componentType'>): boolean {
+  const componentType = component.componentType;
+  return componentType === 'Orchestrator' || componentType === 'Supervisor' || componentType === 'Actor' || componentType === 'Specialist';
+}
+
+/**
+ * component_spec.holdsState — whether the component owns domain or runtime
+ * state between calls: a Store, Index, Supervisor or Actor.
+ */
+export function holdsState(component: Pick<ComponentSpec, 'componentType'>): boolean {
+  const componentType = component.componentType;
+  return componentType === 'Store' || componentType === 'Index' || componentType === 'Supervisor' || componentType === 'Actor';
+}
+
+/**
+ * component_spec.isRetired — whether the component's type is a retired
+ * stereotype (Specialist or Gateway). The rules that judge a stereotype's shape
+ * skip it, and retired-stereotypes reports it once, until it is migrated.
+ */
+export function isRetired(component: Pick<ComponentSpec, 'componentType'>): boolean {
+  return RETIRED_STEREOTYPES.has(component.componentType);
 }
 
 // ---------------------------------------------------------------------------
@@ -537,9 +588,10 @@ export type MethodParam = z.infer<typeof MethodParamSchema>;
 
 /**
  * One finding code a contract method can report: the unit of a method's
- * `findings` list. The code must appear as a string literal in the method's
- * source file (UNREALIZED_FINDING). For a validator rule, its findings are its
- * catalog entry.
+ * `findings` list. The code must be anchored in the method's source file, as a
+ * string literal or a property-access name such as Codes.X (UNREALIZED_FINDING);
+ * below exact analysis grade any identifier counts. For a validator rule, its
+ * findings are its catalog entry.
  */
 export const FindingDeclarationSchema = z.object({
   /** UPPER_SNAKE and unique within the method; a pack's codes carry the pack prefix (<PACK>_<CODE>). */
@@ -589,9 +641,10 @@ export const MethodSignatureSchema = z.object({
   }).optional(),
   /**
    * The finding codes this method can report, each with its default severity
-   * and summary (see FindingDeclarationSchema). Each declared code must appear
-   * as a string literal in the method's source file (UNREALIZED_FINDING). A
-   * code is declared once per method.
+   * and summary (see FindingDeclarationSchema). Each declared code must be
+   * anchored in the method's source file as a string literal or a
+   * property-access name (UNREALIZED_FINDING). A code is declared once per
+   * method.
    */
   findings: z.array(FindingDeclarationSchema).superRefine((findings, ctx) => {
     const seen = new Set<string>();
@@ -772,7 +825,7 @@ export type NarrativeStep = z.infer<typeof NarrativeStepSchema>;
 /**
  * The narrative detail dial — declared per method (or per spec as a default),
  * IN the implementation spec. Absent = the component stereotype's default
- * (Portal/Observer/Adapter → calls-only, Store/Index/Registry → intent,
+ * (Portal/Observer/Adapter → calls-only, Store/Index/Query/Registry → intent,
  * everything else → full). Levels are floors, not ceilings.
  */
 export const NarrativeDetailSchema = z.enum(['full', 'calls-only', 'intent']);
