@@ -5,11 +5,10 @@ import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import {
-  isProjectInitialized,
   AI_PATHS,
 } from '../config/loader.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
-import { loadProjectConfig } from './subsystem.js';
+import { loadProjectConfig, projectConfigExists, retireSpecialists, readLockState } from './subsystem.js';
 import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { backfillChainedSubprojectConfigs } from '../core/provision.js';
 import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
@@ -17,8 +16,7 @@ import { readStampVersion } from '../core/stamp.js';
 import { localGuideFilePath, reinjectLocalGuides } from '../utils/ai-guide.js';
 import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
 import { findLegacySpecFiles } from '../core/specs.js';
-import { readLockState } from './subsystem.js';
-import { computeGateStateId } from './validate.js';
+import { computeGateStateId, validateSddTree } from './validate.js';
 import { describeApprover } from '../core/lockfile.js';
 import { diagnoseProjectPacks, pinInstalledPacksAsSelections } from '../core/extensions.js';
 import { claudeMcpConfigPath } from './mcp.js';
@@ -106,7 +104,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
 
   // ── Project ───────────────────────────────────────────────────────────────
   console.log(chalk.bold('Project'));
-  if (!isProjectInitialized()) {
+  if (!projectConfigExists()) {
     line(tally, 'error', 'Not a wairon project (no .wai/project.yaml). Run `wairon init`.');
     printSummary(tally);
     process.exit(1);
@@ -156,7 +154,6 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   if (hasSystemSpec && configOk) {
     console.log(chalk.bold('Spec tree'));
     try {
-      const { validateSddTree } = require('../core/validation.js') as typeof import('../core/validation.js');
       const cfg = loadProjectConfig();
       if (!cfg) throw new ProjectNotInitializedError();
       const result = validateSddTree(cfg.rules, cfg.projectType);
@@ -169,6 +166,28 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       line(tally, 'warn', `Could not run conformance check: ${e instanceof Error ? e.message : String(e)}`);
     }
     logger.blank();
+
+    // ── Stereotypes ────────────────────────────────────────────────────────
+    // The Specialist retirement plan, dry-run: each remaining Specialist with
+    // the dependencyClass it would take as an Orchestrator, and each project
+    // variant that would rebase. Silent once none remain.
+    try {
+      const plan = retireSpecialists(false);
+      if (plan.retyped.length > 0) {
+        console.log(chalk.bold('Stereotypes'));
+        for (const retype of plan.retyped) {
+          const cls = retype.dependencyClass ?? 'workflow';
+          line(tally, 'warn', `${retype.component}: Specialist → Orchestrator (${cls}) — ${retype.reason}`);
+        }
+        if (plan.rebasedVariants.length > 0) {
+          line(tally, 'warn', `${plan.rebasedVariants.length} project variant(s) to rebase from Specialist to Orchestrator: ${plan.rebasedVariants.join(', ')}`);
+        }
+        line(tally, 'warn', 'Run `wairon doctor --fix` to retire the Specialist stereotype.');
+        logger.blank();
+      }
+    } catch (e) {
+      line(tally, 'warn', `Could not plan Specialist retirement: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   // ── Generated context files ─────────────────────────────────────────────────
@@ -223,7 +242,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   // ── Lock ────────────────────────────────────────────────────────────────────
   // A voided lock used to be discoverable only by attempting the next gated
   // action, which fails closed but tells you late. Silent for a project that was never locked.
-  if (isProjectInitialized()) {
+  if (projectConfigExists()) {
     try {
       const lock = readLockState(computeGateStateId());
       if (lock.state === 'locked') {
@@ -262,7 +281,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   // ── Extension packs ─────────────────────────────────────────────────────────
   // The migration surface: which packs govern this project, and which govern it
   // only because nobody said otherwise.
-  if (isProjectInitialized()) {
+  if (projectConfigExists()) {
     const packs = diagnoseProjectPacks();
     if (packs.unresolved.length || packs.notApplied.length || packs.globalsApplied.length) {
       console.log(chalk.bold('Extension packs'));
@@ -344,7 +363,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
  * writes outside the project, so it is reported but not auto-fixed.
  */
 async function applyFixes(): Promise<void> {
-  if (!isProjectInitialized()) return; // the report below will flag this
+  if (!projectConfigExists()) return; // the report below will flag this
 
   let targets: string[];
   try {
@@ -403,6 +422,22 @@ async function applyFixes(): Promise<void> {
     }
   } catch (e) {
     console.log(`  ${icon('error')} Chained-subproject backfill failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Retire the Specialist stereotype: each becomes an Orchestrator with the
+  // dependencyClass its dependencies decide, and each Specialist-based project
+  // variant rebases onto Orchestrator. Runs after the filename migration
+  // above, so the retyped specs are saved under their current names.
+  try {
+    const retirement = retireSpecialists(true);
+    if (retirement.retyped.length > 0) {
+      console.log(`  ${icon('ok')} Retired ${retirement.retyped.length} Specialist(s) to Orchestrator.`);
+    }
+    if (retirement.rebasedVariants.length > 0) {
+      console.log(`  ${icon('ok')} Rebased ${retirement.rebasedVariants.length} variant(s) from Specialist to Orchestrator: ${retirement.rebasedVariants.join(', ')}.`);
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} Specialist retirement failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // Register / repair the MCP server. The install is now self-healing, so this
