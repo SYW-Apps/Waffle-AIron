@@ -1,6 +1,6 @@
-import { ComponentSpec, MethodSignature } from '../../models/index.js';
+import { ComponentSpec, isDraftSubsystem } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
-import { methodKey, walkNarrativeGraph, WalkSeed } from './graph.js';
+import { walk, type WalkSeed } from './narrative-graph-projector.js';
 
 // ---------------------------------------------------------------------------
 // Semantic-edge rules: the validator checks not just that referenced things
@@ -15,14 +15,6 @@ import { methodKey, walkNarrativeGraph, WalkSeed } from './graph.js';
 
 /** Data-layer stereotypes — where persistence/registration claims are structurally realized. */
 const DATA_STEREOTYPES = new Set(['Store', 'Registry', 'Index', 'Adapter', 'Repository']);
-
-function interfaceMethodsOf(ctx: RuleContext, compId: string): MethodSignature[] {
-  const out: MethodSignature[] = [];
-  for (const intf of ctx.interfacesByComponent.get(compId) ?? []) {
-    out.push(...intf.methods);
-  }
-  return out;
-}
 
 function componentOfImpl(ctx: RuleContext, implContract: string): ComponentSpec | undefined {
   const contract = ctx.interfaceMap.get(implContract);
@@ -89,7 +81,7 @@ export const dispatchRule: SddRule = {
           );
           continue;
         }
-        if (!interfaceMethodsOf(ctx, target.id).some(method => method.name === b.method)) {
+        if (!ctx.interfaceMethodsOf(target.id).some(method => method.name === b.method)) {
           ctx.addIssue(
             'error',
             'UNSERVED_CAPABILITY',
@@ -171,7 +163,7 @@ export const dispatchRule: SddRule = {
           // Same consistency check call steps get: a guarantee this step
           // asserts must be declared by the method the capability resolves to.
           if (step.assertsGuarantees?.length) {
-            const boundMethod = interfaceMethodsOf(ctx, binding.component).find(m => m.name === binding.method);
+            const boundMethod = ctx.interfaceMethodsOf(binding.component).find(m => m.name === binding.method);
             const declared = new Set(boundMethod?.guarantees ?? []);
             for (const g of step.assertsGuarantees) {
               if (!declared.has(g)) {
@@ -206,7 +198,7 @@ export const lifecycleRule: SddRule = {
   ],
   check(ctx) {
     for (const sub of ctx.subsystems) {
-      const isDraftCtx = sub.status === 'draft' || sub.status === 'design';
+      const isDraftCtx = isDraftSubsystem(sub);
       for (const le of sub.lifecycle ?? []) {
         const comp = ctx.componentMap.get(le.component);
         if (!comp) {
@@ -231,7 +223,7 @@ export const lifecycleRule: SddRule = {
             isDraftCtx || ctx.isComponentDraft(comp.id),
           );
         }
-        if (!interfaceMethodsOf(ctx, comp.id).some(method => method.name === le.method)) {
+        if (!ctx.interfaceMethodsOf(comp.id).some(method => method.name === le.method)) {
           ctx.addIssue(
             'error',
             'INVALID_LIFECYCLE_ENTRYPOINT',
@@ -325,7 +317,7 @@ export const durabilityRule: SddRule = {
     // init flow are still followed). followRegisterEdges: false for the same
     // reason — registering a callback at init hands it to the runtime for
     // LATER; it is not a boot-time execution of the hydrating read.
-    const initReach = initSeeds.length ? walkNarrativeGraph(ctx, initSeeds, { followDispatchTables: false, followRegisterEdges: false }) : null;
+    const initReach = initSeeds.length ? walk(ctx, initSeeds, { followDispatchTables: false, followRegisterEdges: false }) : null;
 
     for (const comp of ctx.components) {
       const isDraftCtx = ctx.isComponentDraft(comp.id);
@@ -337,7 +329,7 @@ export const durabilityRule: SddRule = {
       if (comp.componentType !== 'Store') continue;
       if (comp.durability !== 'durable') continue;
 
-      const methods = interfaceMethodsOf(ctx, comp.id);
+      const methods = ctx.interfaceMethodsOf(comp.id);
       const untagged = methods.filter(method => !method.effect);
       if (untagged.length) {
         ctx.addIssue(
@@ -354,7 +346,7 @@ export const durabilityRule: SddRule = {
       if (writes.length === 0) continue; // nothing persisted, nothing to hydrate
 
       const hydrated = initReach !== null
-        && reads.some(method => initReach.reachedMethods.has(methodKey(comp.id, method.name)));
+        && reads.some(method => initReach.reachesMethod(comp.id, method.name));
       if (!hydrated) {
         const because = initReach === null
           ? 'no subsystem declares a lifecycle init entrypoint at all'

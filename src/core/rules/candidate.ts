@@ -96,6 +96,10 @@ export function validateComponentCandidate(
     rules: opts.rules,
     projectType: opts.projectType ?? 'backend',
     extensions: opts.extensions,
+    // Only tree-scoped rules read these (roundtrip-serialization and the
+    // lint-allows audit); no spec-scoped rule does, so a candidate carries none.
+    roundTripIssues: [],
+    knownIssueCodes: new Set<string>(),
     issues,
   });
 

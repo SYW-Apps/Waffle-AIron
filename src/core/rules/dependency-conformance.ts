@@ -1,8 +1,5 @@
-import * as path from 'path';
-import { implementationSourceFiles, type ComponentSpec, type ImplementationSpec } from '../../models/index.js';
-import { normalizeSourcePath } from '../source-analysis.js';
+import { implementationSourceFiles, pathKey, resolveImport, type ComponentSpec, type ImplementationSpec } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
-import { isInChainedSubproject } from './conformance.js';
 
 // ---------------------------------------------------------------------------
 // Dependency conformance (code↔spec Level 2)
@@ -48,24 +45,6 @@ interface FileNode {
   draft: boolean;
 }
 
-const normalizePath = normalizeSourcePath;
-
-/** Pure candidate resolution of a relative specifier against the mapped-file set. */
-function resolveAgainst(mapped: Set<string>, fromFile: string, specifier: string): string | null {
-  if (!specifier.startsWith('.')) return null;
-  const joined = normalizePath(path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), specifier)));
-  const candidates = [
-    joined,
-    joined.replace(/\.js$/, '.ts'), joined.replace(/\.js$/, '.tsx'),
-    `${joined}.ts`, `${joined}.tsx`, `${joined}.js`,
-    `${joined}/index.ts`, `${joined}/index.js`,
-  ];
-  for (const c of candidates) {
-    if (mapped.has(c)) return c;
-  }
-  return null;
-}
-
 export const dependencyConformanceRule: SddRule = {
   name: 'dependency-conformance',
   description:
@@ -77,7 +56,7 @@ export const dependencyConformanceRule: SddRule = {
 
   check(ctx: RuleContext): void {
     // ---- build the file→components map (exact-grade, non-chained only) ----
-    const factsByPath = new Map(ctx.codeModel.files.map(f => [normalizePath(f.path), f]));
+    const factsByPath = new Map(ctx.codeModel.files.map(f => [pathKey(f.path), f]));
     const nodes = new Map<string, FileNode>();
     const filesByComponent = new Map<string, Set<string>>();
     const implsByComponent = new Map<string, ImplementationSpec[]>();
@@ -87,13 +66,13 @@ export const dependencyConformanceRule: SddRule = {
       if (!contract) continue;
       const component = ctx.componentMap.get(contract.component);
       if (!component) continue;
-      if (isInChainedSubproject(component.subsystem, ctx)) continue;
+      if (ctx.isInChainedSubproject(component.subsystem)) continue;
 
       // A component maps to every file its implementation names: the
       // implementation's own sourcePath and each method's.
       let mapped = false;
       for (const file of implementationSourceFiles(impl)) {
-        const p = normalizePath(file);
+        const p = pathKey(file);
         const facts = factsByPath.get(p);
         if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
 
@@ -126,13 +105,13 @@ export const dependencyConformanceRule: SddRule = {
     for (const node of nodes.values()) {
       const targets = new Set<string>();
       for (const spec of node.imports) {
-        const resolved = resolveAgainst(mappedPaths, node.path, spec);
+        const resolved = resolveImport(node.path, spec, mappedPaths);
         if (resolved && resolved !== node.path) targets.add(resolved);
       }
       edges.set(node.path, targets);
       const realized = new Set(targets);
       for (const spec of node.reexports) {
-        const resolved = resolveAgainst(mappedPaths, node.path, spec);
+        const resolved = resolveImport(node.path, spec, mappedPaths);
         if (resolved && resolved !== node.path) realized.add(resolved);
       }
       realizationEdges.set(node.path, realized);

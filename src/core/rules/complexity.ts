@@ -1,31 +1,4 @@
-import { DocumentationRuleConfig, ComplexityRuleConfig } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
-
-function extensionProfileFor(ctx: RuleContext, subsystemId?: string) {
-  const sub = subsystemId ? ctx.subsystems.find(s => s.id === subsystemId) : undefined;
-  const profile = sub?.profile || ctx.projectType;
-  return ctx.ext.profiles[profile];
-}
-
-function getEffectiveDocConfig(ctx: RuleContext, subsystemId?: string): DocumentationRuleConfig | undefined {
-  const projectDoc = ctx.rules?.documentation;
-  const packDef = extensionProfileFor(ctx, subsystemId);
-  
-  if (packDef?.rules?.documentation) {
-    return { ...projectDoc, ...packDef.rules.documentation };
-  }
-  return projectDoc;
-}
-
-export function getEffectiveComplexityConfig(ctx: RuleContext, subsystemId?: string): ComplexityRuleConfig | undefined {
-  const projectComp = ctx.rules?.complexity;
-  const packDef = extensionProfileFor(ctx, subsystemId);
-  
-  if (packDef?.rules?.complexity) {
-    return { ...projectComp, ...packDef.rules.complexity };
-  }
-  return projectComp;
-}
 
 function checkDescription(
   ctx: RuleContext,
@@ -73,10 +46,10 @@ export const complexityRule: SddRule = {
   check(ctx) {
     // 1. Subsystems (Doc checks)
     for (const sub of ctx.subsystems) {
-      const docConfig = getEffectiveDocConfig(ctx, sub.id);
+      const docConfig = ctx.documentationConfigFor(sub.id);
       checkDescription(ctx, sub.description, docConfig?.requireDescriptions ?? false, docConfig?.minDescriptionLength, sub.id, 'Subsystem', false);
 
-      const complexityConfig = getEffectiveComplexityConfig(ctx, sub.id);
+      const complexityConfig = ctx.complexityConfigFor(sub.id);
       const directComponents = ctx.components.filter(c => c.subsystem === sub.id).length;
       if (complexityConfig?.maxSubsystemComponents !== undefined && directComponents > complexityConfig.maxSubsystemComponents) {
         ctx.addIssue(
@@ -90,8 +63,8 @@ export const complexityRule: SddRule = {
 
     // 2. Components (Doc & Complexity checks)
     for (const comp of ctx.components) {
-      const docConfig = getEffectiveDocConfig(ctx, comp.subsystem);
-      const complexityConfig = getEffectiveComplexityConfig(ctx, comp.subsystem);
+      const docConfig = ctx.documentationConfigFor(comp.subsystem);
+      const complexityConfig = ctx.complexityConfigFor(comp.subsystem);
       const isDraft = ctx.isComponentDraft(comp.id);
 
       checkDescription(
@@ -118,8 +91,8 @@ export const complexityRule: SddRule = {
     // 3. Interfaces & Methods (Doc & Complexity checks)
     for (const intf of ctx.interfaces) {
       const comp = ctx.componentMap.get(intf.component);
-      const docConfig = getEffectiveDocConfig(ctx, comp?.subsystem);
-      const complexityConfig = getEffectiveComplexityConfig(ctx, comp?.subsystem);
+      const docConfig = ctx.documentationConfigFor(comp?.subsystem);
+      const complexityConfig = ctx.complexityConfigFor(comp?.subsystem);
       const isDraft = ctx.isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
 
       checkDescription(
@@ -170,7 +143,7 @@ export const complexityRule: SddRule = {
     for (const impl of ctx.implementations) {
       const intf = ctx.interfaceMap.get(impl.contract);
       const comp = intf ? ctx.componentMap.get(intf.component) : undefined;
-      const complexityConfig = getEffectiveComplexityConfig(ctx, comp?.subsystem);
+      const complexityConfig = ctx.complexityConfigFor(comp?.subsystem);
       const isDraft = impl.status === 'draft' || impl.status === 'design';
 
       if (complexityConfig?.maxNarrativeSteps !== undefined) {
@@ -190,7 +163,7 @@ export const complexityRule: SddRule = {
 
     // 5. Types (Doc checks)
     for (const t of ctx.types) {
-      const docConfig = getEffectiveDocConfig(ctx, t.subsystem);
+      const docConfig = ctx.documentationConfigFor(t.subsystem);
 
       checkDescription(
         ctx,

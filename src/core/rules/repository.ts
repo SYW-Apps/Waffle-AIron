@@ -22,9 +22,14 @@ function listRules(): SddRule[] {
   return ruleSet;
 }
 
-/** rule_registry: seed the built-in SDD rule set, resetting the set for a fresh run. */
-export function registerBuiltinRules(): void {
+/** rule_store: empty the held set, so a new validation run seeds its rules from nothing. Repository-internal. */
+function clear(): void {
   ruleSet = [];
+}
+
+/** rule_registry: seed the built-in SDD rule set, starting from an empty set so a repeated run never holds a rule twice. */
+export function registerBuiltinRules(): void {
+  clear();
   for (const rule of SDD_RULES) addRule(rule);
 }
 

@@ -1,6 +1,6 @@
-import { RuleContext, SddRule } from './types.js';
-import { BUILTIN_TYPES, extractTypeIdentifiers, extractTypeGenerics, methodTypeRefs, matchTypeRef } from './type-analysis.js';
-import { effectiveNarrativeDetail, passesIntentFloor } from './narrative-detail.js';
+import { SddRule } from './types.js';
+import { extractTypeIdentifiers, methodTypeRefs, passesIntentFloor, typeGenericParameters, typeMatchesRef } from '../../models/index.js';
+import { walk, type WalkSeed } from './narrative-graph-projector.js';
 
 /** Dependency-cycle detection over the component dependsOn graph. */
 export const cyclesRule: SddRule = {
@@ -61,160 +61,11 @@ export const cyclesRule: SddRule = {
   },
 };
 
-// Key with '#': component ids may themselves contain '::' (namespaced subprojects),
-// so '::' cannot separate component from method.
-export const methodKey = (compId: string, methodName: string): string => `${compId}#${methodName}`;
-
-/** A reachability seed: a specific method, or (methodName omitted) every contract method of the component. */
-export interface WalkSeed {
-  compId: string;
-  methodName?: string;
-}
-
-/**
- * The shared narrative-graph walker: BFS over L5 execution edges from a seed
- * set. Edges are `call` steps, `dispatch` steps (routed through the target
- * Portal's dispatch table to the bound capability server), and every dispatch
- * binding of a reached Portal (its declared served surface — the runtime
- * dispatches into those bindings even though no static call names them).
- * Used by unused-detection (roots: Portals/Observers/published components/
- * lifecycle entrypoints) and by the durability round-trip rule (roots:
- * lifecycle init flows only).
- */
-export interface WalkOptions {
-  /**
-   * Whether reaching a Portal floods every binding of its dispatch table into
-   * the reachable set. TRUE for unused-detection (the table IS the portal's
-   * served surface). FALSE for the durability boot-graph: at boot only edges
-   * the init narratives actually take count — a capability merely *offered*
-   * by a reached portal is not a boot-time read. Explicit `dispatch` steps
-   * are followed either way.
-   */
-  followDispatchTables?: boolean;
-  /**
-   * Whether `register` steps (runtime-callback handoffs) contribute edges.
-   * TRUE for unused-detection: a callback handed to the runtime IS reached
-   * wherever its registering narrative is reached. FALSE for the durability
-   * boot-graph: registration is a deferred invocation — registering a hydration
-   * read at init does not execute it at boot, so the boot walk must not take
-   * the edge (same doctrine as the non-flooded dispatch tables).
-   */
-  followRegisterEdges?: boolean;
-}
-
-export function walkNarrativeGraph(
-  ctx: RuleContext,
-  seeds: WalkSeed[],
-  opts: WalkOptions = {},
-): { reachedComponents: Set<string>; reachedMethods: Set<string> } {
-  const followDispatchTables = opts.followDispatchTables ?? true;
-  const followRegisterEdges = opts.followRegisterEdges ?? true;
-  const reachedComponents = new Set<string>();
-  const reachedMethods = new Set<string>();
-  const queue: { compId: string; methodName: string }[] = [];
-
-  const enqueueMethod = (compId: string, methodName: string): void => {
-    const key = methodKey(compId, methodName);
-    if (!reachedMethods.has(key)) {
-      reachedMethods.add(key);
-      queue.push({ compId, methodName });
-    }
-  };
-
-  const reachComponent = (compId: string): void => {
-    if (reachedComponents.has(compId)) return;
-    reachedComponents.add(compId);
-    if (!followDispatchTables) return;
-    // A Portal's dispatch table IS its served surface: reaching the portal
-    // reaches every capability binding.
-    const comp = ctx.componentMap.get(compId);
-    for (const b of comp?.dispatch ?? []) {
-      if (ctx.componentMap.has(b.component)) {
-        reachComponent(b.component);
-        enqueueMethod(b.component, b.method);
-      }
-    }
-  };
-
-  const enqueueAllMethods = (compId: string): void => {
-    for (const intf of ctx.interfacesByComponent.get(compId) ?? []) {
-      for (const m of intf.methods) {
-        enqueueMethod(compId, m.name);
-      }
-    }
-  };
-
-  for (const seed of seeds) {
-    reachComponent(seed.compId);
-    if (seed.methodName) {
-      enqueueMethod(seed.compId, seed.methodName);
-    } else {
-      enqueueAllMethods(seed.compId);
-    }
-  }
-
-  while (queue.length > 0) {
-    const { compId, methodName } = queue.shift()!;
-
-    // The method may be implemented against any of the component's interfaces.
-    let methodImpl: (typeof ctx.implementations)[number]['methods'][number] | undefined;
-    let impl: (typeof ctx.implementations)[number] | undefined;
-    for (const intf of ctx.interfacesByComponent.get(compId) ?? []) {
-      for (const candidate of ctx.implementationsByContract.get(intf.id) ?? []) {
-        const m = candidate.methods.find(mm => mm.name === methodName);
-        if (m) { impl = candidate; methodImpl = m; break; }
-      }
-      if (impl) break;
-    }
-    if (!impl || !methodImpl) continue;
-
-    for (const step of methodImpl.narrative) {
-      if (step.type === 'call' && step.targetComponent && step.targetMethod) {
-        reachComponent(step.targetComponent);
-        enqueueMethod(step.targetComponent, step.targetMethod);
-      }
-      // A register step is a handoff, not an invocation — but the callback IS
-      // reached wherever its registering narrative is (the runtime will call it).
-      if (followRegisterEdges && step.type === 'register' && step.targetComponent && step.targetMethod) {
-        reachComponent(step.targetComponent);
-        enqueueMethod(step.targetComponent, step.targetMethod);
-      }
-      if (step.type === 'dispatch' && step.targetComponent) {
-        reachComponent(step.targetComponent);
-        const portal = ctx.componentMap.get(step.targetComponent);
-        const binding = portal?.dispatch?.find(b => b.capability === step.capability);
-        if (binding && ctx.componentMap.has(binding.component)) {
-          reachComponent(binding.component);
-          enqueueMethod(binding.component, binding.method);
-        }
-      }
-    }
-
-    // Detail-dial fallback: an intent/calls-only method with no narrative
-    // contributes no call edges, so walk its component's L2 dependsOn/owns
-    // at component granularity (all contract methods) instead — the lower
-    // declared fidelity must not false-positive its collaborators as
-    // unused. Full-detail methods get NO fallback: their missing narrative
-    // is a reported gap (MISSING_NARRATIVE) and unused-detection stays strong.
-    if (methodImpl.narrative.length === 0) {
-      const comp = ctx.componentMap.get(compId);
-      if (comp && effectiveNarrativeDetail(methodImpl, impl, comp).level !== 'full') {
-        for (const depId of [...comp.dependsOn, ...comp.owns]) {
-          if (!ctx.componentMap.has(depId)) continue;
-          reachComponent(depId);
-          enqueueAllMethods(depId);
-        }
-      }
-    }
-  }
-
-  return { reachedComponents, reachedMethods };
-}
-
 /**
  * Reachability analysis from entrypoints (Portals, Observers, published
  * components, declared lifecycle flows): unwired components/methods and
- * unreferenced types are flagged.
+ * unreferenced types are flagged. The walk itself is the narrative graph
+ * projector's.
  */
 export const reachabilityRule: SddRule = {
   name: 'unused-detection',
@@ -250,7 +101,7 @@ export const reachabilityRule: SddRule = {
 
     // Phase 1 — the INTERNAL walk (no invokedBy seeds): the baseline that
     // decides whether an invokedBy declaration is redundant.
-    const baseWalk = walkNarrativeGraph(ctx, seeds);
+    const baseWalk = walk(ctx, seeds);
 
     // Audit invokedBy declarations and collect their entrypoint seeds.
     const invokedBySeeds: WalkSeed[] = [];
@@ -273,7 +124,7 @@ export const reachabilityRule: SddRule = {
             isDraftCtx,
           );
         }
-        if (baseWalk.reachedMethods.has(methodKey(intf.component, m.name))) {
+        if (baseWalk.reachesMethod(intf.component, m.name)) {
           ctx.addIssue(
             'warning',
             'INVOKED_BY_REDUNDANT',
@@ -287,14 +138,14 @@ export const reachabilityRule: SddRule = {
 
     // Phase 2 — the FULL walk (base seeds + invokedBy entrypoints) feeds the
     // UNUSED_* verdicts, so a declared external caller's narrative propagates.
-    const { reachedComponents, reachedMethods } = invokedBySeeds.length
-      ? walkNarrativeGraph(ctx, [...seeds, ...invokedBySeeds])
+    const reach = invokedBySeeds.length
+      ? walk(ctx, [...seeds, ...invokedBySeeds])
       : baseWalk;
 
     // Generate warnings for unused components
     for (const comp of ctx.components) {
       if (!ctx.isSpecInScope(comp.id)) continue;
-      if (!reachedComponents.has(comp.id)) {
+      if (!reach.reachesComponent(comp.id)) {
         const isDraftCtx = comp.status === 'draft' || comp.status === 'design';
         ctx.addIssue(
           'warning',
@@ -307,7 +158,7 @@ export const reachabilityRule: SddRule = {
         // Warn about unused methods on this reached component (across ALL its interfaces)
         for (const intf of ctx.interfacesByComponent.get(comp.id) ?? []) {
           for (const m of intf.methods) {
-            if (!reachedMethods.has(methodKey(comp.id, m.name))) {
+            if (!reach.reachesMethod(comp.id, m.name)) {
               const isDraftCtx = comp.status === 'draft' || comp.status === 'design' || intf.status === 'draft' || intf.status === 'design';
               ctx.addIssue(
                 'warning',
@@ -325,13 +176,9 @@ export const reachabilityRule: SddRule = {
     // Generate warnings for unused types
     const referencedTypes = new Set<string>();
     const markTypeReferenced = (ref: string) => {
-      const refLower = ref.toLowerCase();
-      if (BUILTIN_TYPES.has(refLower)) return;
+      if (ctx.isBuiltinType(ref)) return;
       for (const spec of ctx.types) {
-        const typeQualifiedId = spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`)
-          ? `${spec.subsystem}::${spec.id}`
-          : spec.id;
-        if (matchTypeRef(ref, typeQualifiedId)) {
+        if (typeMatchesRef(spec, ref)) {
           referencedTypes.add(spec.id);
         }
       }
@@ -343,7 +190,7 @@ export const reachabilityRule: SddRule = {
         const refs = extractTypeIdentifiers(field.type);
         for (const ref of refs) {
           const typeGenerics = new Set(
-            Array.from(extractTypeGenerics(t.name)).map(g => g.toLowerCase()),
+            Array.from(typeGenericParameters(t)).map(g => g.toLowerCase()),
           );
           if (typeGenerics.has(ref.toLowerCase())) {
             continue;

@@ -1,13 +1,11 @@
 import {
-  ComponentSpec,
-  ImplementationSpec,
-  MethodImplementation,
-  NarrativeDetail,
+  defaultConformanceTier,
+  effectiveDetail,
   methodSourceFile,
+  passesIntentFloor,
+  pathKey,
+  type SourceFileFacts,
 } from '../../models/index.js';
-import { normalizeSourcePath, type SourceFileFacts } from '../source-analysis.js';
-import { isInChainedSubproject, stereotypeDefaultTier } from './conformance.js';
-import { getEffectiveComplexityConfig } from './complexity.js';
 import { SddRule } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -28,50 +26,11 @@ import { SddRule } from './types.js';
  */
 const LOGIC_STEREOTYPES = new Set(['Orchestrator', 'Supervisor', 'Actor', 'Specialist']);
 
-export function stereotypeDetailDefault(componentType: string | undefined): NarrativeDetail {
-  if (componentType === 'Portal' || componentType === 'Observer' || componentType === 'Adapter') {
-    return 'calls-only';
-  }
-  if (componentType === 'Store' || componentType === 'Index' || componentType === 'Registry') {
-    return 'intent';
-  }
-  return 'full';
-}
-
-export interface ResolvedDetail {
-  level: NarrativeDetail;
-  /** True when declared on the method or spec (as opposed to a stereotype default). */
-  explicit: boolean;
-}
-
-export function effectiveNarrativeDetail(
-  method: MethodImplementation,
-  impl: ImplementationSpec,
-  component: ComponentSpec | undefined,
-): ResolvedDetail {
-  if (method.detail) return { level: method.detail, explicit: true };
-  if (impl.detail) return { level: impl.detail, explicit: true };
-  return { level: stereotypeDetailDefault(component?.componentType), explicit: false };
-}
-
 // The detail-sufficiency floor: above this cyclomatic complexity a realized
 // function has enough real branching that leaving its method below detail:
 // full (with no narrative) hides logic from every deeper conformance check.
 // Overridable via rules.complexity.maxUnnarratedComplexity.
 export const DEFAULT_MAX_UNNARRATED_COMPLEXITY = 8;
-
-// The intent floor: prose short enough to be a placeholder cannot specify
-// behavior an implementer could be held to.
-const INTENT_FLOOR_MIN_CHARS = 40;
-
-export function passesIntentFloor(text: string | undefined, methodName: string): boolean {
-  if (!text) return false;
-  const t = text.trim();
-  if (t.length < INTENT_FLOOR_MIN_CHARS) return false;
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (norm(t) === norm(methodName)) return false;
-  return true;
-}
 
 /**
  * Enforces that every method carries the detail its declared (or defaulted)
@@ -91,7 +50,7 @@ export const narrativeDetailRule: SddRule = {
   ],
   check(ctx) {
     const factsByPath = new Map<string, SourceFileFacts>();
-    for (const f of ctx.codeModel.files) factsByPath.set(normalizeSourcePath(f.path), f);
+    for (const f of ctx.codeModel.files) factsByPath.set(pathKey(f.path), f);
 
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
@@ -107,7 +66,7 @@ export const narrativeDetailRule: SddRule = {
         const contractMethod = contract.methods.find(m => m.name === implMethod.name);
         if (!contractMethod) continue; // UNEXPECTED_IMPLEMENTATION_METHOD covers this
 
-        const eff = effectiveNarrativeDetail(implMethod, impl, component);
+        const eff = effectiveDetail(implMethod, impl, component);
         const hasNarrative = implMethod.narrative.length > 0;
         if (hasNarrative) continue; // floors, not ceilings
 
@@ -132,11 +91,11 @@ export const narrativeDetailRule: SddRule = {
         // sourcePath, else the implementation's.
         let complexityFired = false;
         const tier = implMethod.conformance ?? impl.conformance
-          ?? stereotypeDefaultTier(component?.componentType ?? '');
+          ?? defaultConformanceTier(component);
         const file = methodSourceFile(implMethod, impl.sourcePath);
         if (file && tier !== 'off'
-          && !(component && isInChainedSubproject(component.subsystem, ctx))) {
-          const facts = factsByPath.get(normalizeSourcePath(file));
+          && !(component && ctx.isInChainedSubproject(component.subsystem))) {
+          const facts = factsByPath.get(pathKey(file));
           const symbol = implMethod.symbol ?? implMethod.name;
           // Own-property lookup: a method named e.g. "constructor" must not
           // resolve to Object.prototype members.
@@ -145,7 +104,7 @@ export const narrativeDetailRule: SddRule = {
             && Object.prototype.hasOwnProperty.call(facts.functionComplexity, symbol)
             ? facts.functionComplexity[symbol]
             : undefined;
-          const limit = getEffectiveComplexityConfig(ctx, component?.subsystem)?.maxUnnarratedComplexity
+          const limit = ctx.complexityConfigFor(component?.subsystem)?.maxUnnarratedComplexity
             ?? DEFAULT_MAX_UNNARRATED_COMPLEXITY;
           if (complexity !== undefined && complexity > limit) {
             complexityFired = true;

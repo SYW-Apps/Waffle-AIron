@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { resolveSurfaceRef, reportAmbiguousSurfaceRef, isExternalNamespaceRef, isCollapsedCrossTreeRef } from './namespace.js';
+import { ambiguityMessage } from '../../models/index.js';
 
 /**
  * Contract ↔ implementation symmetry, and narrative-step resolution: every
@@ -89,25 +89,28 @@ export const contractsRule: SddRule = {
           // whose leading namespace segment is not a subsystem in THIS tree —
           // e.g. `waffler_core::x` authored from a parent root, where
           // `waffler_core` is not present when validating from the child dir.
-          const isCrossTreeForm = isExternalNamespaceRef(ctx, step.targetComponent);
+          const isCrossTreeForm = ctx.isExternalNamespaceRef(step.targetComponent);
           // A reference made from inside a chained mount that the loader collapsed
           // at this root may resolve against the snapshots that mount holds; one
           // they do not cover keeps the error it always had.
           const fromSubsystem = ctx.componentMap.get(contract.component)?.subsystem;
           const isCollapsedForm = !isCrossTreeForm && fromSubsystem !== undefined
-            && isCollapsedCrossTreeRef(ctx, step.targetComponent, fromSubsystem);
+            && ctx.isCollapsedCrossTreeRef(step.targetComponent, fromSubsystem);
 
           if (step.type === 'dispatch') {
             const dispatchTarget = ctx.componentMap.get(step.targetComponent);
             if (!dispatchTarget) {
               if (isCrossTreeForm || isCollapsedForm) {
-                const resolved = resolveSurfaceRef(ctx, step.targetComponent, fromSubsystem);
+                const resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem);
                 if (resolved.kind === 'ambiguous') {
-                  reportAmbiguousSurfaceRef(
-                    ctx,
-                    `Method "${implMethod.name}" in implementation "${impl.id}" dispatches (step ${step.stepNumber}) through`,
-                    step.targetComponent,
-                    resolved.providers,
+                  ctx.addIssue(
+                    'error',
+                    'SURFACE_REF_AMBIGUOUS',
+                    ambiguityMessage(
+                      resolved,
+                      `Method "${implMethod.name}" in implementation "${impl.id}" dispatches (step ${step.stepNumber}) through`,
+                      step.targetComponent,
+                    ),
                     impl.id,
                     isDraftCtx,
                   );
@@ -180,13 +183,16 @@ export const contractsRule: SddRule = {
           const targetComp = ctx.componentMap.get(step.targetComponent);
           if (!targetComp) {
             if (isCrossTreeForm || isCollapsedForm) {
-              const resolved = resolveSurfaceRef(ctx, step.targetComponent, fromSubsystem);
+              const resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem);
               if (resolved.kind === 'ambiguous') {
-                reportAmbiguousSurfaceRef(
-                  ctx,
-                  `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} "${step.targetMethod}" (step ${step.stepNumber}) on`,
-                  step.targetComponent,
-                  resolved.providers,
+                ctx.addIssue(
+                  'error',
+                  'SURFACE_REF_AMBIGUOUS',
+                  ambiguityMessage(
+                    resolved,
+                    `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} "${step.targetMethod}" (step ${step.stepNumber}) on`,
+                    step.targetComponent,
+                  ),
                   impl.id,
                   isDraftCtx,
                 );

@@ -13,6 +13,10 @@ import {
   SystemPublicInterface,
   NamedOpenApiSpec,
   TypeSpec,
+  extractTypeIdentifiers,
+  matchTypeRef,
+  methodTypeRefs,
+  BUILTIN_TYPES,
 } from '../models/index.js';
 import {
   loadSystemSpec,
@@ -26,7 +30,6 @@ import {
   type ChainingParentRef,
 } from './specs.js';
 import { computeStateId } from './statehash.js';
-import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs, BUILTIN_TYPES } from './rules/type-analysis.js';
 import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
 
 // ---------------------------------------------------------------------------

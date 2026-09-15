@@ -1,4 +1,5 @@
 import { SddRule } from './types.js';
+import { isDraftSubsystem } from '../../models/index.js';
 
 /**
  * Tree integrity: every spec points at an existing parent, and draft/design
@@ -19,7 +20,7 @@ export const hierarchyRule: SddRule = {
   check(ctx) {
     // Informational draft warnings
     for (const sub of ctx.subsystems) {
-      if (sub.status === 'draft' || sub.status === 'design') {
+      if (isDraftSubsystem(sub)) {
         ctx.addIssue('warning', 'DRAFT_SUBSYSTEM_WARNING', `Subsystem "${sub.id}" is in draft/design status.`, sub.id, true);
       }
     }
@@ -31,7 +32,7 @@ export const hierarchyRule: SddRule = {
 
     // Check subsystems reference parent system
     for (const sub of ctx.subsystems) {
-      const isDraftCtx = sub.status === 'draft' || sub.status === 'design';
+      const isDraftCtx = isDraftSubsystem(sub);
       if (!sub.parentSystem || (sub.parentSystem !== ctx.system.name && !sub.id.includes('::'))) {
         ctx.addIssue(
           'warning',

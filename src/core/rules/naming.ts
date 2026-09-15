@@ -1,4 +1,3 @@
-import { NamingRuleConfig } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
 
 const casingPatterns: Record<string, RegExp> = {
@@ -8,29 +7,6 @@ const casingPatterns: Record<string, RegExp> = {
   'kebab-case': /^[a-z0-9]+(-[a-z0-9]+)*$/,
   UPPER_CASE: /^[A-Z0-9]+(_[A-Z0-9]+)*$/,
 };
-
-function extensionProfileFor(ctx: RuleContext, subsystemId?: string) {
-  const sub = subsystemId ? ctx.subsystems.find(s => s.id === subsystemId) : undefined;
-  const profile = sub?.profile || ctx.projectType;
-  return ctx.ext.profiles[profile];
-}
-
-function getEffectiveNamingConfig(ctx: RuleContext, subsystemId?: string): NamingRuleConfig | undefined {
-  const projectNaming = ctx.rules?.naming;
-  const packDef = extensionProfileFor(ctx, subsystemId);
-  
-  if (packDef?.rules?.naming) {
-    return {
-      ...projectNaming,
-      ...packDef.rules.naming,
-      stereotypes: {
-        ...(projectNaming?.stereotypes ?? {}),
-        ...(packDef.rules.naming.stereotypes ?? {}),
-      },
-    };
-  }
-  return projectNaming;
-}
 
 function compilePattern(patternOrCasing: string): RegExp | null {
   if (casingPatterns[patternOrCasing]) return casingPatterns[patternOrCasing];
@@ -94,7 +70,7 @@ export const namingRule: SddRule = {
   check(ctx) {
     // 1. Subsystems
     for (const sub of ctx.subsystems) {
-      const namingConfig = getEffectiveNamingConfig(ctx, sub.id);
+      const namingConfig = ctx.namingConfigFor(sub.id);
       if (!namingConfig?.subsystems) continue;
 
       const baseId = getBaseId(sub.id);
@@ -104,7 +80,7 @@ export const namingRule: SddRule = {
 
     // 2. Components & Stereotypes
     for (const comp of ctx.components) {
-      const namingConfig = getEffectiveNamingConfig(ctx, comp.subsystem);
+      const namingConfig = ctx.namingConfigFor(comp.subsystem);
       const isDraft = ctx.isComponentDraft(comp.id);
 
       if (namingConfig?.components) {
@@ -170,7 +146,7 @@ export const namingRule: SddRule = {
     // 3. Interfaces & Methods & Variables
     for (const intf of ctx.interfaces) {
       const comp = ctx.componentMap.get(intf.component);
-      const namingConfig = getEffectiveNamingConfig(ctx, comp?.subsystem);
+      const namingConfig = ctx.namingConfigFor(comp?.subsystem);
       const isDraft = ctx.isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
 
       if (namingConfig?.interfaces) {
@@ -199,7 +175,7 @@ export const namingRule: SddRule = {
     for (const impl of ctx.implementations) {
       const intf = ctx.interfaceMap.get(impl.contract);
       const comp = intf ? ctx.componentMap.get(intf.component) : undefined;
-      const namingConfig = getEffectiveNamingConfig(ctx, comp?.subsystem);
+      const namingConfig = ctx.namingConfigFor(comp?.subsystem);
       const isDraft = impl.status === 'draft' || impl.status === 'design';
 
       if (namingConfig?.methods) {
@@ -211,7 +187,7 @@ export const namingRule: SddRule = {
 
     // 5. Types & Fields & Methods & Constants
     for (const t of ctx.types) {
-      const namingConfig = getEffectiveNamingConfig(ctx, t.subsystem);
+      const namingConfig = ctx.namingConfigFor(t.subsystem);
       
       // Determine type naming rule pattern based on kind (entity vs value-object)
       let typePattern = namingConfig?.types;

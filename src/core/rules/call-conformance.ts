@@ -1,8 +1,5 @@
-import type { SourceFileFacts } from '../source-analysis.js';
-import { normalizeSourcePath } from '../source-analysis.js';
-import { methodSourceFile } from '../../models/index.js';
+import { defaultConformanceTier, methodSourceFile, pathKey, type SourceFileFacts } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
-import { isInChainedSubproject, stereotypeDefaultTier } from './conformance.js';
 
 // ---------------------------------------------------------------------------
 // Call-step realization (code↔spec Level 3, the opener).
@@ -58,16 +55,16 @@ export const callConformanceRule: SddRule = {
   ],
   check(ctx: RuleContext) {
     const factsByPath = new Map<string, SourceFileFacts>();
-    for (const f of ctx.codeModel.files) factsByPath.set(normalizeSourcePath(f.path), f);
+    for (const f of ctx.codeModel.files) factsByPath.set(pathKey(f.path), f);
 
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
       if (!contract) continue;
       const component = ctx.componentMap.get(contract.component);
       if (!component) continue;
-      if (isInChainedSubproject(component.subsystem, ctx)) continue;
+      if (ctx.isInChainedSubproject(component.subsystem)) continue;
 
-      const specTier = impl.conformance ?? stereotypeDefaultTier(component.componentType);
+      const specTier = impl.conformance ?? defaultConformanceTier(component);
       const isDraftCtx = ctx.isImplementationDraft(impl);
 
       for (const implMethod of impl.methods) {
@@ -79,7 +76,7 @@ export const callConformanceRule: SddRule = {
         // sourcePath, else the implementation's. Exact grade only.
         const file = methodSourceFile(implMethod, impl.sourcePath);
         if (!file) continue;
-        const facts = factsByPath.get(normalizeSourcePath(file));
+        const facts = factsByPath.get(pathKey(file));
         if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
 
         const fnSymbol = implMethod.symbol ?? implMethod.name;

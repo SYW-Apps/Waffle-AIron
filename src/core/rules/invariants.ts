@@ -1,6 +1,5 @@
-import { ComponentSpec, ImplementationSpec, InterfaceSpec, TypeSpec } from '../../models/index.js';
+import { ComponentSpec, ImplementationSpec, InterfaceSpec, TypeSpec, typeMatchesRef } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
-import { matchTypeRef } from './type-analysis.js';
 
 // ---------------------------------------------------------------------------
 // The invariant registry — an HONEST linter, deliberately not a prover.
@@ -27,19 +26,13 @@ function splitInvariantRef(ref: string): { typeRef: string; invariantId: string 
   return { typeRef: ref.slice(0, at), invariantId: ref.slice(at + 1) };
 }
 
-function qualifiedTypeId(spec: TypeSpec): string {
-  return spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`)
-    ? `${spec.subsystem}::${spec.id}`
-    : spec.id;
-}
-
 /** Resolve an assertsInvariants reference against the declared entity invariants. */
 export function resolveInvariantRef(ref: string, types: TypeSpec[]): { type: TypeSpec; invariantId: string } | null {
   const parts = splitInvariantRef(ref);
   if (!parts) return null;
   for (const t of types) {
     if (!t.invariants?.length) continue;
-    if (!matchTypeRef(parts.typeRef, qualifiedTypeId(t))) continue;
+    if (!typeMatchesRef(t, parts.typeRef)) continue;
     if (t.invariants.some(inv => inv.id === parts.invariantId)) {
       return { type: t, invariantId: parts.invariantId };
     }
@@ -60,7 +53,7 @@ function refMatchesInvariant(ref: string, type: TypeSpec, invariantId: string): 
   const parts = splitInvariantRef(ref);
   if (!parts || parts.invariantId !== invariantId) return false;
   if (!(type.invariants ?? []).some(inv => inv.id === invariantId)) return false;
-  return matchTypeRef(parts.typeRef, qualifiedTypeId(type));
+  return typeMatchesRef(type, parts.typeRef);
 }
 
 function stepAsserts(impl: ImplementationSpec, methodName: string, type: TypeSpec, invariantId: string): boolean {

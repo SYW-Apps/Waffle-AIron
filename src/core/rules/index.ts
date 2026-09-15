@@ -6,13 +6,24 @@ import {
   ImplementationSpec,
   TypeSpec,
   RulesConfig,
+  MethodSignature,
+  ComplexityRuleConfig,
+  DocumentationRuleConfig,
+  NamingRuleConfig,
+  SurfaceContractEntry,
+  SurfaceSnapshot,
+  SurfaceRefResolution,
+  CodeModel,
+  BUILTIN_TYPES,
+  isProvidedBy,
+  sameContract,
+  typeMatchesRef,
 } from '../../models/index.js';
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
 import type { PackSelection } from '../../models/project.js';
 import { ArchProfile, BUILTIN_PROFILES, RuleContext, SddRule, Severity } from './types.js';
-import { BUILTIN_TYPES, matchTypeRef, normalizeLanguage } from './type-analysis.js';
 
 import { hierarchyRule } from './hierarchy.js';
 import { typeReferencesRule } from './type-references.js';
@@ -49,10 +60,9 @@ import { lintAllowsRule } from './lint-allows.js';
 import { packResolutionRule } from './pack-resolution.js';
 import { reproducibilityRule } from './reproducibility.js';
 import { portalCallAuthRule } from './portal-call-auth.js';
-import { emptyCodeModel, CodeModel } from '../source-analysis.js';
+import { emptyCodeModel } from '../source-analysis.js';
 
 export * from './types.js';
-export * from './type-analysis.js';
 
 // ---------------------------------------------------------------------------
 // The registry. Order matters only for issue-list readability (hierarchy first,
@@ -284,6 +294,22 @@ export function makeScopeFilter(opts: ScopeFilterOptions): (specId: string) => b
   };
 }
 
+/**
+ * Normalize a user-supplied language name onto the language-table key (ts →
+ * typescript, js or node → javascript, rs → rust, py → python, c# or dotnet →
+ * csharp, golang → go, else lowercased) — the form targetLanguageFor answers in.
+ */
+function normalizeLanguage(lang: string): string {
+  const l = lang.toLowerCase().trim();
+  if (l === 'ts' || l === 'typescript') return 'typescript';
+  if (l === 'js' || l === 'javascript' || l === 'node' || l === 'nodejs') return 'javascript';
+  if (l === 'rs' || l === 'rust') return 'rust';
+  if (l === 'py' || l === 'python') return 'python';
+  if (l === 'c#' || l === 'cs' || l === 'csharp' || l === 'dotnet') return 'csharp';
+  if (l === 'golang' || l === 'go') return 'go';
+  return l;
+}
+
 export interface BuildContextOptions {
   system: SystemSpec;
   subsystems: SubsystemSpec[];
@@ -301,11 +327,15 @@ export interface BuildContextOptions {
   /** The project's by-name pack selections (legacy path refs excluded); empty when absent. */
   packSelections?: PackSelection[];
   /** Stored surface snapshots for cross-tree/remote reference resolution. */
-  surfaceSnapshots?: import('../../models/index.js').SurfaceSnapshot[];
+  surfaceSnapshots?: SurfaceSnapshot[];
   /** Snapshots each chained mount holds, keyed by mount namespace (see RuleContext.mountSurfaceSnapshots). */
   mountSurfaceSnapshots?: import('./types.js').MountSurfaceSnapshots[];
   /** Source-code model for structural conformance; empty when not built. */
   codeModel?: CodeModel;
+  /** The writer's round-trip dry-run findings for the in-scope specs, gathered by the caller (see RuleContext.roundTripIssues). */
+  roundTripIssues: ValidationIssue[];
+  /** Every code the registered rules and loaded declarative assertions can report, gathered by the caller (see RuleContext.knownIssueCodes). */
+  knownIssueCodes: Set<string>;
   /** Collector the context's addIssue pushes into. */
   issues: ValidationIssue[];
 }
@@ -342,6 +372,9 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
       new Set(sub.publicInterfaces.map(pi => pi.component).filter((c): c is string => !!c)),
     );
   }
+
+  const surfaceSnapshots = opts.surfaceSnapshots ?? [];
+  const mountSurfaceSnapshots = opts.mountSurfaceSnapshots ?? [];
 
   const isSpecInScope = makeScopeFilter({ components, interfaces, implementations, types, scopeSubsystem });
 
@@ -412,12 +445,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     if (BUILTIN_TYPES.has(refLower)) return true;
     if (generics.has(refLower)) return true;
 
-    return types.some(spec => {
-      const typeQualifiedId = spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`)
-        ? `${spec.subsystem}::${spec.id}`
-        : spec.id;
-      return matchTypeRef(ref, typeQualifiedId);
-    });
+    return types.some(spec => typeMatchesRef(spec, ref));
   };
 
   const targetLanguageFor = (subsystemId: string | undefined): string | undefined => {
@@ -427,6 +455,143 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     }
     return system.targetLanguage ? normalizeLanguage(system.targetLanguage) : undefined;
   };
+
+  // ---- chained mounts and cross-tree references -----------------------------
+
+  const isInChainedSubproject = (subsystemId: string): boolean => {
+    const segments = subsystemId.split('::');
+    let prefix = '';
+    for (const segment of segments) {
+      prefix = prefix ? `${prefix}::${segment}` : segment;
+      const sub = subsystems.find(s => s.id === prefix);
+      if (sub?.projectPath) return true;
+    }
+    return false;
+  };
+
+  /**
+   * The chained mounts enclosing a subsystem, outermost first: every prefix of
+   * its qualified id that is a subsystem carrying `projectPath`.
+   */
+  const enclosingMounts = (subsystemId: string): string[] => {
+    const mounts: string[] = [];
+    let prefix = '';
+    for (const segment of subsystemId.split('::')) {
+      prefix = prefix ? `${prefix}::${segment}` : segment;
+      if (subsystems.some((s) => s.id === prefix && s.projectPath)) mounts.push(prefix);
+    }
+    return mounts;
+  };
+
+  const isExternalNamespaceRef = (ref: string): boolean => {
+    if (ref.startsWith('::') || ref.startsWith('super::')) return true;
+    const sep = ref.indexOf('::');
+    if (sep === -1) return false; // a bare unresolved id is a local typo, not cross-tree
+    return !subsystemIds.has(ref.slice(0, sep));
+  };
+
+  // The loader qualifies every reference a mount's spec authors locally into the
+  // mount's own namespace (`kid::x`). Only a `super::` / `::` form climbs out of
+  // it — and at a parent root that climb lands on an id WITHOUT the mount prefix,
+  // typically a bare `x`, which isExternalNamespaceRef cannot tell from a local
+  // typo. So: made from inside mount M and not under `M::` means it was authored
+  // to leave M.
+  const isCollapsedCrossTreeRef = (ref: string, fromSubsystem: string): boolean => {
+    const nearest = enclosingMounts(fromSubsystem).pop();
+    return nearest !== undefined && ref !== nearest && !ref.startsWith(`${nearest}::`);
+  };
+
+  // A hit means the edge is validated against the DECLARED contract instead of
+  // falling back to the unresolvable warning. When the matching snapshots of the
+  // first pool that has any disagree on the contract, the reference is ambiguous:
+  // picking whichever loaded first would judge the edge against a contract its
+  // author may never have meant.
+  const resolveSurfaceRef = (ref: string, fromSubsystem?: string): SurfaceRefResolution => {
+    const segments = ref.split('::').filter(seg => seg && seg !== 'super');
+    const local = segments.pop();
+    if (!local) return { kind: 'unresolved' };
+    const provider = segments.pop();
+    // For a reference made from inside a chained mount, the snapshots that mount
+    // holds come first, nearest mount first — what the child authored against,
+    // exactly as it resolves from the child's own root — then the bound root's
+    // own. A mount's snapshots are never consulted for a reference made outside it.
+    const mountPools = fromSubsystem
+      ? enclosingMounts(fromSubsystem)
+        .reverse()
+        .map((ns) => mountSurfaceSnapshots.find((m) => m.namespace === ns)?.snapshots ?? [])
+      : [];
+    for (const pool of [...mountPools, surfaceSnapshots]) {
+      const candidates: { snapshot: SurfaceSnapshot; entry: SurfaceContractEntry }[] = [];
+      for (const snapshot of pool) {
+        if (provider !== undefined && !isProvidedBy(snapshot, provider)) continue;
+        const entry = snapshot.interfaces.find(e => e.component === local || e.id === local);
+        if (entry) candidates.push({ snapshot, entry });
+      }
+      if (candidates.length === 0) continue;
+      const [first] = candidates;
+      if (candidates.every((c) => sameContract(c.entry, first.entry))) {
+        return { kind: 'resolved', ...first };
+      }
+      return { kind: 'ambiguous', providers: [...new Set(candidates.map((c) => c.snapshot.projectName))] };
+    }
+    return { kind: 'unresolved' };
+  };
+
+  // ---- contract methods, rule configs and the type vocabulary ---------------
+
+  const interfaceMethodsOf = (compId: string): MethodSignature[] => {
+    const out: MethodSignature[] = [];
+    for (const intf of interfacesByComponent.get(compId) ?? []) {
+      out.push(...intf.methods);
+    }
+    return out;
+  };
+
+  /** The pack profile governing a subsystem: its own profile, else the project type. */
+  const profileDefFor = (subsystemId?: string) => {
+    const sub = subsystemId ? subsystems.find(s => s.id === subsystemId) : undefined;
+    const profile = sub?.profile || projectType;
+    return extensions.profiles[profile];
+  };
+
+  const complexityConfigFor = (subsystemId?: string): ComplexityRuleConfig | undefined => {
+    const projectComp = rules?.complexity;
+    const packDef = profileDefFor(subsystemId);
+
+    if (packDef?.rules?.complexity) {
+      return { ...projectComp, ...packDef.rules.complexity };
+    }
+    return projectComp;
+  };
+
+  const documentationConfigFor = (subsystemId?: string): DocumentationRuleConfig | undefined => {
+    const projectDoc = rules?.documentation;
+    const packDef = profileDefFor(subsystemId);
+
+    if (packDef?.rules?.documentation) {
+      return { ...projectDoc, ...packDef.rules.documentation };
+    }
+    return projectDoc;
+  };
+
+  const namingConfigFor = (subsystemId?: string): NamingRuleConfig | undefined => {
+    const projectNaming = rules?.naming;
+    const packDef = profileDefFor(subsystemId);
+
+    if (packDef?.rules?.naming) {
+      return {
+        ...projectNaming,
+        ...packDef.rules.naming,
+        stereotypes: {
+          ...(projectNaming?.stereotypes ?? {}),
+          ...(packDef.rules.naming.stereotypes ?? {}),
+        },
+      };
+    }
+    return projectNaming;
+  };
+
+  const isBuiltinType = (ref: string): boolean => BUILTIN_TYPES.has(ref.toLowerCase());
 
   const getRuleSeverity = (
     ruleCode: string,
@@ -472,13 +637,6 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   for (const i of interfaces) collectAllows(i.id, i.lint);
   for (const im of implementations) collectAllows(im.id, im.lint);
   for (const t of types) collectAllows(t.id, t.lint);
-
-  const knownIssueCodes = new Set([
-    ...[...SDD_RULES, ...extensions.rules].flatMap(r => r.codes.map(c => c.code)),
-    // Declarative assertions bring their own namespaced codes — lint.allow
-    // and severity overrides treat them exactly like builtins.
-    ...extensions.assertions.map(a => a.fullCode),
-  ]);
 
   const addIssue = (
     defaultSeverity: Severity,
@@ -548,13 +706,23 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isTypeResolved,
     targetLanguageFor,
     isSpecInScope,
+    isInChainedSubproject,
+    isExternalNamespaceRef,
+    isCollapsedCrossTreeRef,
+    resolveSurfaceRef,
+    interfaceMethodsOf,
+    complexityConfigFor,
+    documentationConfigFor,
+    namingConfigFor,
+    isBuiltinType,
     ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [] },
     variants: opts.variants ?? [],
-    surfaceSnapshots: opts.surfaceSnapshots ?? [],
-    mountSurfaceSnapshots: opts.mountSurfaceSnapshots ?? [],
+    surfaceSnapshots,
+    mountSurfaceSnapshots,
     codeModel: opts.codeModel ?? emptyCodeModel(),
+    roundTripIssues: opts.roundTripIssues,
     lintAllows,
-    knownIssueCodes,
+    knownIssueCodes: opts.knownIssueCodes,
     addIssue,
   };
 }

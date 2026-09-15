@@ -1,8 +1,5 @@
-import * as path from 'path';
-import { implementationSourceFiles, type ImplementationSpec } from '../../models/index.js';
-import { normalizeSourcePath } from '../source-analysis.js';
+import { implementationSourceFiles, pathKey, resolveImport, type ImplementationSpec } from '../../models/index.js';
 import type { RuleContext, SddRule } from './types.js';
-import { isInChainedSubproject } from './conformance.js';
 
 // ---------------------------------------------------------------------------
 // Integration conformance (docs/design/integration-conformance.md §4).
@@ -22,24 +19,6 @@ import { isInChainedSubproject } from './conformance.js';
 // trees that have not adopted sims yet.
 // ---------------------------------------------------------------------------
 
-const normalizePath = normalizeSourcePath;
-
-/** Pure candidate resolution of a relative specifier against the analyzed-file set (mirrors dependency-conformance). */
-function resolveAgainst(mapped: Set<string>, fromFile: string, specifier: string): string | null {
-  if (!specifier.startsWith('.')) return null;
-  const joined = normalizePath(path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), specifier)));
-  const candidates = [
-    joined,
-    joined.replace(/\.js$/, '.ts'), joined.replace(/\.js$/, '.tsx'),
-    `${joined}.ts`, `${joined}.tsx`, `${joined}.js`,
-    `${joined}/index.ts`, `${joined}/index.js`,
-  ];
-  for (const c of candidates) {
-    if (mapped.has(c)) return c;
-  }
-  return null;
-}
-
 export const integrationConformanceRule: SddRule = {
   name: 'integration-conformance',
   description:
@@ -51,7 +30,7 @@ export const integrationConformanceRule: SddRule = {
     { code: 'SIM_PATH_UNCOVERED', defaultSeverity: 'warning', summary: 'A narrative path has no sim:<component>.<method>[:<label>] anchor in the component\'s coverage-opted harness' },
   ],
   check(ctx: RuleContext): void {
-    const factsByPath = new Map(ctx.codeModel.files.map(f => [normalizePath(f.path), f]));
+    const factsByPath = new Map(ctx.codeModel.files.map(f => [pathKey(f.path), f]));
     const allPaths = new Set(factsByPath.keys());
 
     // Files realizing each component / each subsystem (reach targets). The
@@ -71,7 +50,7 @@ export const integrationConformanceRule: SddRule = {
       // A component's own modules are every file its implementations name:
       // each implementation's sourcePath and each method's.
       for (const file of implementationSourceFiles(impl)) {
-        const p = normalizePath(file);
+        const p = pathKey(file);
         if (!filesByComponent.has(comp.id)) filesByComponent.set(comp.id, new Set());
         filesByComponent.get(comp.id)!.add(p);
         if (!filesBySubsystem.has(comp.subsystem)) filesBySubsystem.set(comp.subsystem, new Set());
@@ -104,7 +83,7 @@ export const integrationConformanceRule: SddRule = {
         const facts = factsByPath.get(from);
         if (!facts || facts.status !== 'analyzed') continue;
         for (const spec of [...facts.imports, ...facts.reexports]) {
-          const to = resolveAgainst(allPaths, from, spec);
+          const to = resolveImport(from, spec, allPaths);
           if (to && !seen.has(to)) { seen.add(to); stack.push(to); }
         }
       }
@@ -115,7 +94,7 @@ export const integrationConformanceRule: SddRule = {
       const contract = ctx.interfaceMap.get(impl.contract);
       const comp = contract ? ctx.componentMap.get(contract.component) : undefined;
       if (!comp) continue;
-      if (isInChainedSubproject(comp.subsystem, ctx)) continue;
+      if (ctx.isInChainedSubproject(comp.subsystem)) continue;
 
       const deps = [...new Set([...comp.dependsOn, ...comp.owns])].filter(d => ctx.componentMap.has(d));
 
@@ -136,7 +115,7 @@ export const integrationConformanceRule: SddRule = {
       }
 
       // Soundness half: the declared harness must exist and wire the real modules.
-      const simPath = normalizePath(impl.simPath);
+      const simPath = pathKey(impl.simPath);
       const facts = factsByPath.get(simPath);
       const isDraftCtx = ctx.isImplementationDraft(impl);
       if (!facts || facts.status === 'missing' || facts.status === 'escaped' || facts.status === 'unreadable') {

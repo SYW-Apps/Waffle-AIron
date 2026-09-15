@@ -4,3 +4,7 @@ export * from './project.js';
 export * from './registry.js';
 export * from './template.js';
 export * from './specs.js';
+export * from './type-references.js';
+export * from './step-graph.js';
+export * from './code-model.js';
+export * from './surface-references.js';

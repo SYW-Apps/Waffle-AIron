@@ -1,7 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { implementationSourceFiles, type ImplementationSpec } from '../models/index.js';
+import {
+  implementationSourceFiles,
+  pathKey,
+  type CodeModel,
+  type ImplementationSpec,
+  type SourceFileFacts,
+} from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Source Analysis Adapter — the validator subsystem's only source-code I/O.
@@ -21,73 +27,8 @@ import { implementationSourceFiles, type ImplementationSpec } from '../models/in
 // file's failure degrades that file, never the run.
 // ---------------------------------------------------------------------------
 
-export type AnalysisGrade = 'exact' | 'pattern' | 'generic';
-export type SourceFileStatus = 'analyzed' | 'missing' | 'escaped' | 'unreadable';
-
-export interface SourceFileFacts {
-  /** Project-relative resolved source path (many implementations may share it, N:1). */
-  path: string;
-  status: SourceFileStatus;
-  /** Effective language the file was analyzed as. */
-  language?: string;
-  analysisGrade?: AnalysisGrade;
-  /**
-   * Declaration-tier anchors: named declarations at any nesting depth,
-   * destructuring bindings, object-literal keys, import bindings, and export
-   * specifiers (export-* barrels chased through relative specifiers).
-   */
-  declaredNames: string[];
-  /** Weaker anchors: exact string-literal occurrences (tool/route registrations). */
-  anchoredNames: string[];
-  /** Exported bindings (Level 2 dependency-conformance and UNDECLARED_EXPORT fuel). */
-  exportedNames: string[];
-  /**
-   * Runtime import/require module specifiers (dependency-conformance fuel).
-   * Type-only imports and export-from specifiers are excluded — type coupling
-   * is allowed by default, and re-exporting is surface republication, not
-   * collaboration.
-   */
-  imports: string[];
-  /** Module specifiers of export-from declarations (surface republication). */
-  reexports: string[];
-  /**
-   * Cyclomatic complexity per named function-like (function/method/accessor
-   * declarations, and function/arrow initializers of named slots). EXACT grade
-   * only — lower grades omit the map rather than guess. Same-named functions
-   * in one file record their maximum. Fuel for the detail-sufficiency lint.
-   */
-  functionComplexity?: Record<string, number>;
-  /**
-   * Direct callee names per named function-like: identifiers and property
-   * names invoked as calls inside the function body (nested NAMED functions
-   * excluded — they carry their own entries; anonymous callbacks included).
-   * EXACT grade only. Same-named functions union their sets. Fuel for the
-   * call-step realization check (Level 3).
-   */
-  functionCalls?: Record<string, string[]>;
-  /**
-   * Module-scope mutable bindings (`let`/`var` at the top level of the file).
-   * EXACT grade only. The static approximation of held state a logic
-   * component may be hiding — fuel for the HIDDEN_STATE lint. (Mutation of
-   * const-bound containers is invisible to this collection; the lint says so.)
-   */
-  topLevelMutableBindings?: string[];
-}
-
-export interface CodeModel {
-  /** One facts entry per distinct resolved sourcePath (missing/escaped/unreadable included). */
-  files: SourceFileFacts[];
-  /** The root every sourcePath was resolved and containment-checked against. */
-  projectRoot: string;
-}
-
 export function emptyCodeModel(): CodeModel {
   return { files: [], projectRoot: '' };
-}
-
-/** Canonical project-relative form all sourcePath keys are stored/looked up in. */
-export function normalizeSourcePath(p: string): string {
-  return p.replace(/\\/g, '/').replace(/^\.\//, '');
 }
 
 // ---------------------------------------------------------------------------
@@ -635,7 +576,7 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
     if (impl.simPath) declaredPaths.push(impl.simPath);
   }
   for (const declared of declaredPaths) {
-    const sourcePath = normalizeSourcePath(declared);
+    const sourcePath = pathKey(declared);
     if (seen.has(sourcePath)) continue;
     seen.add(sourcePath);
 

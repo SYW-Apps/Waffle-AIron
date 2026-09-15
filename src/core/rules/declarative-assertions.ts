@@ -7,7 +7,7 @@ import type { RuleContext, SddRule, Severity } from './types.js';
 // contribute INSTANCES of closed assertion kinds — parameters, never logic —
 // so hosted (declarative-only) packs can carry real doctrine. This one rule
 // evaluates every loaded assertion; the finding codes are the packs'
-// namespaced codes, which join knownIssueCodes at context build so
+// namespaced codes, which the validator gathers into knownIssueCodes so
 // lint.allow and sddRuleSeverity treat them exactly like builtins.
 // ---------------------------------------------------------------------------
 
@@ -56,8 +56,8 @@ export const declarativeAssertionsRule: SddRule = {
   name: 'declarative-assertions',
   description:
     'Evaluates the declarative rule assertions loaded packs declare (forbid-edge / require-field / endpoint-shape) — closed kinds instantiated with pack data, the hosted-safe doctrine channel. Findings carry the pack\'s namespaced code (<PACK>_<CODE>) and its stated reason; severity is the pack\'s declaration (project sddRuleSeverity still wins, and error downgrades to warning in draft context).',
-  // Static codes are unknown here — packs bring their own. buildRuleContext
-  // adds every loaded assertion's fullCode to knownIssueCodes.
+  // Static codes are unknown here — packs bring their own. The validator
+  // gathers every loaded assertion's fullCode into knownIssueCodes.
   codes: [],
   check(ctx) {
     const assertions: LoadedAssertion[] = ctx.ext.assertions;

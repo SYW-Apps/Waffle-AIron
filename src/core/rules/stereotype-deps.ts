@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { resolveSurfaceRef, reportAmbiguousSurfaceRef, isExternalNamespaceRef, isCollapsedCrossTreeRef } from './namespace.js';
+import { ambiguityMessage } from '../../models/index.js';
 
 // The one shortcut agents reach for when a Store link is refused is the one
 // that must never happen: folding the store's state into the consumer. Say so
@@ -61,11 +61,11 @@ export const stereotypeDepsRule: SddRule = {
           // snapshot covers is genuinely missing and keeps its error.
           // Snapshots that answer the reference with different contracts decide
           // nothing either way: the ambiguity is the finding.
-          const external = isExternalNamespaceRef(ctx, depId);
-          if (external || isCollapsedCrossTreeRef(ctx, depId, comp.subsystem)) {
-            const resolved = resolveSurfaceRef(ctx, depId, comp.subsystem);
+          const external = ctx.isExternalNamespaceRef(depId);
+          if (external || ctx.isCollapsedCrossTreeRef(depId, comp.subsystem)) {
+            const resolved = ctx.resolveSurfaceRef(depId, comp.subsystem);
             if (resolved.kind === 'ambiguous') {
-              reportAmbiguousSurfaceRef(ctx, `Component "${comp.id}" depends on`, depId, resolved.providers, comp.id, isDraftCtx);
+              ctx.addIssue('error', 'SURFACE_REF_AMBIGUOUS', ambiguityMessage(resolved, `Component "${comp.id}" depends on`, depId), comp.id, isDraftCtx);
               continue;
             }
             if (resolved.kind === 'resolved') {
@@ -325,8 +325,7 @@ export const stereotypeDepsRule: SddRule = {
           if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
           const target = ctx.componentMap.get(step.targetComponent);
           if (!target || (target.componentType !== 'Repository' && target.componentType !== 'Index')) continue;
-          const targetMethod = (ctx.interfacesByComponent.get(target.id) ?? [])
-            .flatMap(i => i.methods)
+          const targetMethod = ctx.interfaceMethodsOf(target.id)
             .find(m => m.name === step.targetMethod);
           if (targetMethod?.effect !== 'write') continue;
           ctx.addIssue(

@@ -1,11 +1,8 @@
 import type { ComponentSpec } from '../models/specs.js';
 import type { RulesConfig } from '../models/project.js';
 import { saveComponentSpec, updateSpec, type SpecWriteHooks } from './specs.js';
-import {
-  validateComponentCandidate,
-  formatCandidateRefusal,
-  type CandidateVerdict,
-} from './rules/candidate.js';
+import { validateComponentCandidate } from './validation.js';
+import { formatCandidateRefusal, type CandidateVerdict } from './rules/candidate.js';
 import { projectConfigRepository } from '../config/project-config.js';
 
 // ---------------------------------------------------------------------------

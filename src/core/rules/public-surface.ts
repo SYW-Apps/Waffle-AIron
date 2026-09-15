@@ -1,4 +1,5 @@
 import { SddRule } from './types.js';
+import { isDraftSubsystem } from '../../models/index.js';
 
 const pubTypeMatches = (piType: string, ct: string, portalType?: string): boolean => {
   switch (piType) {
@@ -48,7 +49,7 @@ export const publicSurfaceRule: SddRule = {
   ],
   check(ctx) {
     for (const sub of ctx.subsystems) {
-      const isDraftCtx = sub.status === 'draft' || sub.status === 'design';
+      const isDraftCtx = isDraftSubsystem(sub);
       for (const pi of sub.publicInterfaces) {
         if (!pi.component) {
           ctx.addIssue('error', 'PUBLIC_INTERFACE_UNBOUND', `Subsystem "${sub.id}" declares a ${pi.type} public interface with no backing component. Bind it to the component that realizes it (publicInterfaces[].component).`, sub.id, isDraftCtx);

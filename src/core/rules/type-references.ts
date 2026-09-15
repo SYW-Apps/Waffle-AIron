@@ -1,12 +1,12 @@
 import { SddRule } from './types.js';
 import {
-  BUILTIN_TYPES,
   extractTypeIdentifiers,
-  extractGenericTypeVariables,
-  extractTypeGenerics,
+  interfaceGenericParameters,
+  methodGenericParameters,
   methodTypeRefs,
-  matchTypeRef,
-} from './type-analysis.js';
+  typeGenericParameters,
+  typeMatchesRef,
+} from '../../models/index.js';
 
 /**
  * Types are defined once and referenced everywhere: every type mentioned in a
@@ -52,24 +52,19 @@ export const typeReferencesRule: SddRule = {
 
       if (t.fields) {
         const typeGenerics = new Set(
-          Array.from(extractTypeGenerics(t.name)).map(g => g.toLowerCase()),
+          Array.from(typeGenericParameters(t)).map(g => g.toLowerCase()),
         );
         for (const field of t.fields) {
           const refs = extractTypeIdentifiers(field.type);
           for (const ref of refs) {
             const refLower = ref.toLowerCase();
-            if (BUILTIN_TYPES.has(refLower)) {
+            if (ctx.isBuiltinType(ref)) {
               continue;
             }
             if (typeGenerics.has(refLower)) {
               continue;
             }
-            const resolved = ctx.types.find(spec => {
-              const typeQualifiedId = spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`)
-                ? `${spec.subsystem}::${spec.id}`
-                : spec.id;
-              return matchTypeRef(ref, typeQualifiedId);
-            });
+            const resolved = ctx.types.find(spec => typeMatchesRef(spec, ref));
             if (!resolved) {
               ctx.addIssue(
                 'error',
@@ -88,11 +83,11 @@ export const typeReferencesRule: SddRule = {
     for (const intf of ctx.interfaces) {
       const isDraftCtx = ctx.isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
       const interfaceGenerics = new Set(
-        Array.from(extractTypeGenerics(intf.name)).map(g => g.toLowerCase()),
+        Array.from(interfaceGenericParameters(intf)).map(g => g.toLowerCase()),
       );
       for (const m of intf.methods) {
         const methodGenerics = new Set(
-          Array.from(extractGenericTypeVariables(m.signature)).map(g => g.toLowerCase()),
+          Array.from(methodGenericParameters(m)).map(g => g.toLowerCase()),
         );
         const allGenerics = new Set([...interfaceGenerics, ...methodGenerics]);
         const refs = methodTypeRefs(m);

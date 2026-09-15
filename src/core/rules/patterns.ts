@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { PATTERN_TYPES } from '../../models/index.js';
+import { PATTERN_TYPES, isPattern } from '../../models/index.js';
 
 /**
  * Pattern ownership: only patterns own member blocks (exactly one hop, one
@@ -28,12 +28,12 @@ export const patternsRule: SddRule = {
     const ownedBy = new Map<string, string>(); // member block id -> owning pattern id
     for (const comp of ctx.components) {
       const isDraftCtx = ctx.isComponentDraft(comp.id);
-      const isPattern = PATTERN_TYPES.has(comp.componentType);
+      const pattern = isPattern(comp);
 
-      if (isPattern && comp.owns.length === 0) {
+      if (pattern && comp.owns.length === 0) {
         ctx.addIssue('error', 'EMPTY_PATTERN', `Pattern "${comp.id}" (${comp.componentType}) must own member blocks via "owns".`, comp.id, isDraftCtx);
       }
-      if (!isPattern && comp.owns.length > 0) {
+      if (!pattern && comp.owns.length > 0) {
         ctx.addIssue('error', 'BLOCK_OWNS_MEMBERS', `Building block "${comp.id}" (${comp.componentType}) cannot own members; only patterns (${Array.from(PATTERN_TYPES).join('/')}) use "owns".`, comp.id, isDraftCtx);
       }
 
@@ -43,7 +43,7 @@ export const patternsRule: SddRule = {
           ctx.addIssue('error', 'INVALID_OWNED_MEMBER', `Component "${comp.id}" owns "${memberId}" which does not exist.`, comp.id, isDraftCtx);
           continue;
         }
-        if (PATTERN_TYPES.has(member.componentType)) {
+        if (isPattern(member)) {
           ctx.addIssue('error', 'PATTERN_OWNS_PATTERN', `Pattern "${comp.id}" owns "${memberId}", which is itself a pattern. Patterns own only building blocks — compose patterns at the subsystem (L1) level.`, comp.id, isDraftCtx);
         }
         const prev = ownedBy.get(memberId);

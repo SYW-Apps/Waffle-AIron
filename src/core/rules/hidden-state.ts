@@ -1,7 +1,5 @@
-import { implementationSourceFiles, type ImplementationSpec } from '../../models/index.js';
-import { normalizeSourcePath } from '../source-analysis.js';
+import { implementationSourceFiles, pathKey, type ImplementationSpec } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
-import { isInChainedSubproject } from './conformance.js';
 
 // ---------------------------------------------------------------------------
 // HIDDEN_STATE — the enforcement half of the fields-vs-Store criterion.
@@ -44,9 +42,9 @@ export const hiddenStateRule: SddRule = {
       const contract = ctx.interfaceMap.get(impl.contract);
       const component = contract ? ctx.componentMap.get(contract.component) : undefined;
       if (!component) continue;
-      if (isInChainedSubproject(component.subsystem, ctx)) continue;
+      if (ctx.isInChainedSubproject(component.subsystem)) continue;
       for (const file of implementationSourceFiles(impl)) {
-        const key = normalizeSourcePath(file);
+        const key = pathKey(file);
         const list = byPath.get(key) ?? [];
         if (list.some(m => m.impl === impl)) continue;
         list.push({ impl, componentType: component.componentType, compId: component.id });
@@ -59,7 +57,7 @@ export const hiddenStateRule: SddRule = {
       const bindings = facts.topLevelMutableBindings ?? [];
       if (bindings.length === 0) continue;
 
-      const mapped = byPath.get(normalizeSourcePath(facts.path)) ?? [];
+      const mapped = byPath.get(pathKey(facts.path)) ?? [];
       if (mapped.length === 0) continue;
       if (!mapped.every(m => LOGIC_STEREOTYPES.has(m.componentType))) continue;
 

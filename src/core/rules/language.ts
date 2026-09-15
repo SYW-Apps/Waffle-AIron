@@ -1,5 +1,24 @@
 import { SddRule } from './types.js';
-import { LANGUAGE_MARKERS, normalizeLanguage, methodTypeRefs } from './type-analysis.js';
+import { methodTypeRefs } from '../../models/index.js';
+
+/**
+ * Builtins that clearly belong to ONE language family. When a subsystem
+ * declares a targetLanguage, using another family's marker in a contract is
+ * flagged (LANGUAGE_FOREIGN_BUILTIN) — e.g. `usize` in a TypeScript system.
+ * Conservative on purpose: only unambiguous markers, no shared vocabulary.
+ */
+const LANGUAGE_MARKERS: Record<string, ReadonlySet<string>> = {
+  rust: new Set([
+    'u8', 'u16', 'u32', 'u64', 'u128', 'usize',
+    'i8', 'i16', 'i32', 'i64', 'i128', 'isize',
+    'f32', 'f64', 'vec', 'box', 'arc', 'rc', 'refcell', 'cell', 'mutex', 'rwlock', 'str',
+  ]),
+  typescript: new Set(['any', 'unknown', 'never', 'undefined', 'promise', 'record']),
+  javascript: new Set(['promise', 'undefined']),
+  python: new Set(['dict', 'tuple']),
+  csharp: new Set(['task']),
+  go: new Set(['chan', 'rune']),
+};
 
 /**
  * Flow constructs that do not exist in a given target language. Conservative
@@ -66,8 +85,7 @@ export const languageRule: SddRule = {
       const comp = ctx.componentMap.get(intf.component);
       const lang = ctx.targetLanguageFor(comp?.subsystem);
       if (!lang) continue;
-      const normalized = normalizeLanguage(lang);
-      const ownMarkers = markersFor(normalized);
+      const ownMarkers = markersFor(lang);
       // A language with no builtin vocabulary of its own (unknown, or a pack
       // platform that declared none) could legitimately share any builtin —
       // nothing reliable to check against.
@@ -80,12 +98,12 @@ export const languageRule: SddRule = {
           const refLower = ref.toLowerCase();
           if (ownMarkers.has(refLower)) continue;
           for (const family of families) {
-            if (family === normalized) continue;
+            if (family === lang) continue;
             if (markersFor(family)?.has(refLower)) {
               ctx.addIssue(
                 'warning',
                 'LANGUAGE_FOREIGN_BUILTIN',
-                `Method "${m.name}" on interface "${intf.id}" uses "${ref}", a ${family} builtin, but the target language here is ${normalized}. Use the ${normalized} equivalent so implementers generate idiomatic code.`,
+                `Method "${m.name}" on interface "${intf.id}" uses "${ref}", a ${family} builtin, but the target language here is ${lang}. Use the ${lang} equivalent so implementers generate idiomatic code.`,
                 intf.id,
                 isDraftCtx,
               );
@@ -103,7 +121,7 @@ export const languageRule: SddRule = {
       const comp = ctx.componentMap.get(contract.component);
       const lang = ctx.targetLanguageFor(comp?.subsystem);
       if (!lang) continue;
-      const gaps = gapsFor(normalizeLanguage(lang));
+      const gaps = gapsFor(lang);
       if (Object.keys(gaps).length === 0) continue;
 
       const isDraftCtx = impl.status === 'draft' || impl.status === 'design'
@@ -132,7 +150,7 @@ export const languageRule: SddRule = {
             ctx.addIssue(
               'warning',
               'LANGUAGE_FOREIGN_FLOW',
-              `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" uses ${label}, but the target language is ${normalizeLanguage(lang)}: ${guidance}.`,
+              `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" uses ${label}, but the target language is ${lang}: ${guidance}.`,
               impl.id,
               isDraftCtx,
             );

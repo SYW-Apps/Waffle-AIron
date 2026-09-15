@@ -13,16 +13,17 @@
  *  - growing the file back requires editing ratchet.json in a commit, which a
  *    reviewer sees as exactly what it is: deleting test coverage.
  *
- * The universe is built from the REAL rule registry (buildRuleContext's
- * knownIssueCodes) with the test fixture pack loaded, so pack-namespaced
- * assertion codes are enforced on the same terms as builtins.
+ * The universe is gathered the way the validator gathers its known issue codes:
+ * the REAL rule registry (the built-in rules plus the fixture pack's rules,
+ * registered through the rule repository and read back as knownIssueCodes)
+ * together with the test fixture pack's declarative assertion codes, so
+ * pack-namespaced assertion codes are enforced on the same terms as builtins.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildRuleContext } from '../../src/core/rules/index.js';
+import { knownIssueCodes, registerBuiltinRules, registerPackRules } from '../../src/core/rules/repository.js';
 import { loadExtensions } from '../../src/core/extensions.js';
-import type { SystemSpec } from '../../src/models/index.js';
 import { collectRuleFixtures } from './collect.js';
 import { FIXTURE_PACK_DIR, FIXTURE_PACK_NAME } from './harness.js';
 
@@ -40,25 +41,15 @@ interface Ratchet {
 
 const extensions = loadExtensions([FIXTURE_PACK_DIR], REPO_ROOT);
 
-const probeSystem = {
-  schemaVersion: '1.0.0',
-  name: 'rule-matrix-meta-probe',
-  vision: 'Minimal L0 used only to build a rule context and read knownIssueCodes.',
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-} as SystemSpec;
-
-const universe = buildRuleContext({
-  system: probeSystem,
-  subsystems: [],
-  components: [],
-  interfaces: [],
-  implementations: [],
-  types: [],
-  projectType: 'backend',
-  extensions,
-  issues: [],
-}).knownIssueCodes;
+// Gathered as the validator gathers its known issue codes: register the
+// built-in rules and the fixture pack's rules through the rule repository, read
+// their codes back, and add the fixture pack's declarative assertion codes.
+registerBuiltinRules();
+registerPackRules(extensions.rules);
+const universe = new Set<string>([
+  ...knownIssueCodes().map((c) => c.code),
+  ...extensions.assertions.map((a) => a.fullCode),
+]);
 
 const fixtures = collectRuleFixtures().map((c) => c.fixture);
 const fireCovered = new Set(fixtures.filter((f) => f.expectFire).map((f) => f.code));

@@ -1,6 +1,5 @@
-import { ImplementationSpec, NarrativeStep } from '../../models/index.js';
+import { ImplementationSpec, NarrativeStep, stepGraph } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
-import { stepGraph } from './narrative-flow.js';
 
 // ---------------------------------------------------------------------------
 // Narrative antipatterns — spec-level bug detection over the L5 step graphs
@@ -47,7 +46,7 @@ function isTerminal(step: NarrativeStep, nextOf: (n: number) => number | undefin
  * `target` removed from the graph, no terminator is reachable from the entry.
  */
 export function isUnavoidable(steps: NarrativeStep[], target: number): boolean {
-  const { nums, byNum, nextOf, successorsOf } = stepGraph(steps);
+  const { stepNumbers: nums, stepAt, nextOf, successorsOf } = stepGraph({ narrative: steps });
   if (nums.length === 0) return false;
   if (nums[0] === target) return true;
 
@@ -57,7 +56,7 @@ export function isUnavoidable(steps: NarrativeStep[], target: number): boolean {
     const n = stack.pop()!;
     if (n === target || visited.has(n)) continue;
     visited.add(n);
-    const s = byNum.get(n)!;
+    const s = stepAt(n)!;
     if (isTerminal(s, nextOf)) return false; // a completion path avoids the target
     for (const t of successorsOf(n)) {
       if (t !== target && !visited.has(t)) stack.push(t);
@@ -141,7 +140,7 @@ export const narrativeAntipatternsRule: SddRule = {
         const steps = implMethod.narrative;
         if (!steps.length) continue;
         const where = `Method "${implMethod.name}" in implementation "${impl.id}": `;
-        const graph = stepGraph(steps);
+        const graph = stepGraph(implMethod);
 
         // -- MEANINGLESS_BRANCH ---------------------------------------------
         for (const s of steps) {
@@ -174,14 +173,14 @@ export const narrativeAntipatternsRule: SddRule = {
         }
 
         // -- INESCAPABLE_CYCLE ----------------------------------------------
-        for (const scc of stronglyConnected(graph.nums, graph.successorsOf)) {
+        for (const scc of stronglyConnected(graph.stepNumbers, graph.successorsOf)) {
           const inScc = new Set(scc);
           const isCycle = scc.length > 1
             || graph.successorsOf(scc[0]).includes(scc[0]);
           if (!isCycle) continue;
           const hasExit = scc.some(n => graph.successorsOf(n).some(t => !inScc.has(t)));
           const hasTerminator = scc.some(n => {
-            const s = graph.byNum.get(n)!;
+            const s = graph.stepAt(n)!;
             return s.type === 'return' || s.type === 'throw';
           });
           if (!hasExit && !hasTerminator) {

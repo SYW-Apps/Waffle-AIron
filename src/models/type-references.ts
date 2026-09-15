@@ -1,10 +1,14 @@
+import type { InterfaceSpec, MethodSignature, TypeSpec } from './specs.js';
+
 // ---------------------------------------------------------------------------
-// Type-reference analysis over free-form signature strings.
+// The type-reference grammar over free-form type strings and signatures, and
+// the type methods that read type references through it.
 //
 // Signatures are prose-ish ("save(key: string, data: Buffer): Promise<void>"),
 // so extraction is heuristic. This module is the single home for that
-// heuristic; structured `params` on method signatures will eventually replace
-// most of it (see roadmap).
+// heuristic — the validator's rules, the canvas and the surface projector all
+// read type references through it. Structured `params` on method signatures
+// replace the prose parsing wherever they are authored.
 // ---------------------------------------------------------------------------
 
 /** Language-agnostic builtin/primitive vocabulary accepted everywhere. */
@@ -22,36 +26,9 @@ export const BUILTIN_TYPES = new Set([
 ]);
 
 /**
- * Builtins that clearly belong to ONE language family. When a subsystem
- * declares a targetLanguage, using another family's marker in a contract is
- * flagged (LANGUAGE_FOREIGN_BUILTIN) — e.g. `usize` in a TypeScript system.
- * Conservative on purpose: only unambiguous markers, no shared vocabulary.
+ * The type identifiers a type string names, with comments, trailing prose and
+ * string literals stripped. Duplicates are kept, in order of appearance.
  */
-export const LANGUAGE_MARKERS: Record<string, ReadonlySet<string>> = {
-  rust: new Set([
-    'u8', 'u16', 'u32', 'u64', 'u128', 'usize',
-    'i8', 'i16', 'i32', 'i64', 'i128', 'isize',
-    'f32', 'f64', 'vec', 'box', 'arc', 'rc', 'refcell', 'cell', 'mutex', 'rwlock', 'str',
-  ]),
-  typescript: new Set(['any', 'unknown', 'never', 'undefined', 'promise', 'record']),
-  javascript: new Set(['promise', 'undefined']),
-  python: new Set(['dict', 'tuple']),
-  csharp: new Set(['task']),
-  go: new Set(['chan', 'rune']),
-};
-
-/** Normalize user-supplied language names onto LANGUAGE_MARKERS keys. */
-export function normalizeLanguage(lang: string): string {
-  const l = lang.toLowerCase().trim();
-  if (l === 'ts' || l === 'typescript') return 'typescript';
-  if (l === 'js' || l === 'javascript' || l === 'node' || l === 'nodejs') return 'javascript';
-  if (l === 'rs' || l === 'rust') return 'rust';
-  if (l === 'py' || l === 'python') return 'python';
-  if (l === 'c#' || l === 'cs' || l === 'csharp' || l === 'dotnet') return 'csharp';
-  if (l === 'golang' || l === 'go') return 'go';
-  return l;
-}
-
 export function extractTypeIdentifiers(typeStr: string): string[] {
   // 1. Strip comments
   let cleaned = typeStr
@@ -80,7 +57,8 @@ export function extractTypeIdentifiers(typeStr: string): string[] {
   });
 }
 
-export function extractGenericTypeVariables(signature: string): Set<string> {
+/** The generic parameters declared before a prose signature's parameter list. */
+function extractGenericTypeVariables(signature: string): Set<string> {
   const vars = new Set<string>();
   const openParen = signature.indexOf('(');
   const beforeParen = openParen !== -1 ? signature.slice(0, openParen) : signature;
@@ -97,7 +75,8 @@ export function extractGenericTypeVariables(signature: string): Set<string> {
   return vars;
 }
 
-export function extractTypeGenerics(name: string): Set<string> {
+/** The generic parameters declared in a name (Page<T> gives T). */
+function extractTypeGenerics(name: string): Set<string> {
   const vars = new Set<string>();
   const openBracket = name.indexOf('<');
   const closeBracket = name.lastIndexOf('>');
@@ -111,7 +90,7 @@ export function extractTypeGenerics(name: string): Set<string> {
   return vars;
 }
 
-export function extractTypesFromSignature(signature: string, returns: string): string[] {
+function extractTypesFromSignature(signature: string, returns: string): string[] {
   const types: string[] = [];
 
   // Clean comments and trailing prose/parentheses first
@@ -165,17 +144,19 @@ export function extractTypesFromSignature(signature: string, returns: string): s
   return Array.from(new Set(types));
 }
 
-/**
- * The type references of a method. Structured `params` are authoritative when
- * present (no prose parsing); otherwise falls back to tokenizing the free-form
- * signature string.
- */
+/** The method shape the type references are read from. */
 export interface MethodLike {
   signature: string;
   returns: string;
   params?: { name: string; type: string }[];
 }
 
+/**
+ * method_signature.typeRefs — the type identifiers a method names. Structured
+ * `params` are authoritative when present (no prose parsing): the identifiers
+ * of every param type and of the returns. Otherwise the free-form signature and
+ * returns are tokenized.
+ */
 export function methodTypeRefs(m: MethodLike): string[] {
   if (m.params && m.params.length > 0) {
     const refs: string[] = [];
@@ -188,10 +169,24 @@ export function methodTypeRefs(m: MethodLike): string[] {
   return extractTypesFromSignature(m.signature, m.returns);
 }
 
+/**
+ * method_signature.genericParameters — the generic parameters declared before
+ * the parameter list of the method's prose signature (find<T>(id: string)
+ * gives T).
+ */
+export function methodGenericParameters(method: Pick<MethodSignature, 'signature'>): Set<string> {
+  return extractGenericTypeVariables(method.signature);
+}
+
 function normalizePart(part: string): string {
   return part.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+/**
+ * Whether a written type reference names a type id: the reference's `::` or
+ * `.` segments are a suffix of the id's, compared ignoring case and
+ * punctuation.
+ */
 export function matchTypeRef(ref: string, typeId: string): boolean {
   const refParts = ref.split(/::|\./).map(normalizePart).filter(Boolean);
   const typeParts = typeId.split(/::|\./).map(normalizePart).filter(Boolean);
@@ -205,4 +200,46 @@ export function matchTypeRef(ref: string, typeId: string): boolean {
     }
   }
   return true;
+}
+
+/**
+ * type_spec.qualifiedId — the type's id qualified by its owning subsystem, when
+ * the id is not already qualified.
+ */
+export function qualifiedTypeId(type: Pick<TypeSpec, 'id' | 'subsystem'>): string {
+  return type.subsystem && !type.id.startsWith(`${type.subsystem}::`)
+    ? `${type.subsystem}::${type.id}`
+    : type.id;
+}
+
+/**
+ * type_spec.matchesRef — whether a written type reference names this type: the
+ * reference's `::` or `.` segments are a suffix of the qualified id, compared
+ * ignoring case and punctuation.
+ */
+export function typeMatchesRef(type: Pick<TypeSpec, 'id' | 'subsystem'>, ref: string): boolean {
+  return matchTypeRef(ref, qualifiedTypeId(type));
+}
+
+/** type_spec.genericParameters — the generic parameters declared in the type's name (Page<T> gives T). */
+export function typeGenericParameters(type: Pick<TypeSpec, 'name'>): Set<string> {
+  return extractTypeGenerics(type.name);
+}
+
+/**
+ * type_spec.fieldTypeRefs — the type identifiers one field's type names, with
+ * comments, trailing prose and string literals stripped and the type's own
+ * generic parameters left out (compared ignoring case). The field is the first
+ * one with that name; a type with no such field names nothing.
+ */
+export function fieldTypeRefs(type: Pick<TypeSpec, 'name' | 'fields'>, fieldName: string): string[] {
+  const field = type.fields.find(f => f.name === fieldName);
+  if (!field) return [];
+  const generics = new Set(Array.from(typeGenericParameters(type)).map(g => g.toLowerCase()));
+  return extractTypeIdentifiers(field.type).filter(ref => !generics.has(ref.toLowerCase()));
+}
+
+/** interface_spec.genericParameters — the generic parameters declared in the interface's name. */
+export function interfaceGenericParameters(intf: Pick<InterfaceSpec, 'name'>): Set<string> {
+  return extractTypeGenerics(intf.name);
 }

@@ -1,6 +1,11 @@
-import type { SourceFileFacts } from '../source-analysis.js';
-import { normalizeSourcePath } from '../source-analysis.js';
-import { implementationSourceFiles, methodSourceFile } from '../../models/index.js';
+import {
+  defaultConformanceTier,
+  implementationSourceFiles,
+  methodSourceFile,
+  pathKey,
+  type ConformanceTier,
+  type SourceFileFacts,
+} from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -46,23 +51,6 @@ import { RuleContext, SddRule } from './types.js';
 // project's root, and the child validates them standalone in its own run.
 // ---------------------------------------------------------------------------
 
-export type ConformanceTier = 'declared' | 'anchored' | 'off';
-
-export function stereotypeDefaultTier(componentType: string): ConformanceTier {
-  return componentType === 'Portal' ? 'anchored' : 'declared';
-}
-
-export function isInChainedSubproject(subsystemId: string, ctx: RuleContext): boolean {
-  const segments = subsystemId.split('::');
-  let prefix = '';
-  for (const segment of segments) {
-    prefix = prefix ? `${prefix}::${segment}` : segment;
-    const sub = ctx.subsystems.find(s => s.id === prefix);
-    if (sub?.projectPath) return true;
-  }
-  return false;
-}
-
 interface FactsLookup {
   declared: Set<string>;
   anchored: Set<string>;
@@ -90,7 +78,7 @@ export const structuralConformanceRule: SddRule = {
   check(ctx: RuleContext): void {
     const lookups = new Map<string, FactsLookup>();
     for (const facts of ctx.codeModel.files) {
-      lookups.set(normalizeSourcePath(facts.path), {
+      lookups.set(pathKey(facts.path), {
         declared: new Set([...facts.declaredNames, ...facts.exportedNames]),
         anchored: new Set([...facts.declaredNames, ...facts.exportedNames, ...facts.anchoredNames]),
         literals: new Set(facts.anchoredNames),
@@ -120,7 +108,7 @@ export const structuralConformanceRule: SddRule = {
       if (!contract) continue;
       const component = ctx.componentMap.get(contract.component);
       if (!component) continue;
-      if (isInChainedSubproject(component.subsystem, ctx)) continue;
+      if (ctx.isInChainedSubproject(component.subsystem)) continue;
 
       const draft = ctx.isImplementationDraft(impl);
       const methodImplOf = (name: string) => impl.methods.find(m => m.name === name);
@@ -168,16 +156,16 @@ export const structuralConformanceRule: SddRule = {
       // path, then each method's). The existence check applies at every tier.
       const reported = new Set<string>();
       for (const file of implementationSourceFiles(impl)) {
-        const key = normalizeSourcePath(file);
+        const key = pathKey(file);
         if (reported.has(key)) continue;
         reported.add(key);
         const facts = lookups.get(key)?.facts;
         if (!facts || facts.status === 'analyzed') continue;
 
-        const isImplementationFile = !!impl.sourcePath && normalizeSourcePath(impl.sourcePath) === key;
+        const isImplementationFile = !!impl.sourcePath && pathKey(impl.sourcePath) === key;
         const users = isImplementationFile
           ? []
-          : impl.methods.filter(m => m.sourcePath && normalizeSourcePath(m.sourcePath) === key).map(m => m.name);
+          : impl.methods.filter(m => m.sourcePath && pathKey(m.sourcePath) === key).map(m => m.name);
         const owner = users.length === 0
           ? `Implementation "${impl.id}"`
           : `Implementation "${impl.id}" method${users.length === 1 ? '' : 's'} ${quoteList(users)}`;
@@ -210,7 +198,7 @@ export const structuralConformanceRule: SddRule = {
       }
 
       const specTier = (impl.conformance as ConformanceTier | undefined)
-        ?? stereotypeDefaultTier(component.componentType);
+        ?? defaultConformanceTier(component);
 
       // The analyzed facts of a contract method's own source file at a checked
       // tier, or undefined: tier off, no file (MISSING_SOURCE_PATH covers it),
@@ -223,7 +211,7 @@ export const structuralConformanceRule: SddRule = {
         if (tier === 'off') return undefined;
         const file = methodSourceFile(methodImpl ?? {}, impl.sourcePath);
         if (!file) return undefined;
-        const lookup = lookups.get(normalizeSourcePath(file));
+        const lookup = lookups.get(pathKey(file));
         if (!lookup || lookup.facts.status !== 'analyzed') return undefined;
         return { file, tier, lookup };
       };
