@@ -18,7 +18,7 @@ instructions: |
   ## Core Rules
   * **Spec tree is source of truth**: Specs live in `.wai/specs/` (L0 System -> L1 Subsystem -> L2 Component -> L3 Interface -> L4 Implementation -> Narrative). Never edit generated agent files in `.claude/agents/` / `.gemini/agents/` by hand. Run `wairon generate` to rebuild.
   * **Design before code**: Spec must be complete & valid (`sdd_validate_tree` passes with 0 errors) before implementation starts.
-  * **Stereotype compliance**: Use strict vocabulary (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist, Repository, Gateway). Do not use generic suffixes like "Manager", "Helper", "Utils".
+  * **Stereotype compliance**: Use strict vocabulary: the blocks Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer, and the pattern Repository. Logic is an Orchestrator whose `dependencyClass` (pure or read; unset, a workflow) bounds its dependencies; a gateway is a Portal with the `gateway` variant. Do not use generic suffixes like "Manager", "Helper", "Utils".
   * **Gate validation**: Use `sdd_validate_tree` to verify reference integrity, contract-implementation compatibility, stereotype dependency rules, and cycle checks.
   * **Human-in-the-loop**: Ask user approval for each spec layer before design/feature changes.
 
