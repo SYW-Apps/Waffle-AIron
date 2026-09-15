@@ -1,5 +1,5 @@
-import { computeStateId } from '../core/statehash.js';
-import { computeGateStateId, readLockState } from '../core/specs.js';
+import { computeStateId, type StateId } from '../core/statehash.js';
+import { readLockState } from '../core/specs.js';
 import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph, assertContainedProjectPath } from '../core/specs.js';
 import { exportSpecTree, importSpecTree } from '../core/treetransfer.js';
@@ -16,7 +16,7 @@ import {
   declaredPackNames,
   declaredProfileIds,
 } from '../core/index.js';
-import { validateAsComplete } from '../core/validation.js';
+import { validateAsComplete, computeGateStateId as validatorComputeGateStateId } from '../core/validation.js';
 import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
 import { globalPacksDir, discoverPacks, loadExtensionPacks, packEntryRef, packEntryLabel, globalPacksEnabled, DeclarativePackSchema } from '../core/extensions.js';
 import { BUILTIN_PROFILES, PROJECT_KINDS } from '../core/rules/types.js';
@@ -40,14 +40,13 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 // host_core_adapter → sdd_core (core_portal)
 export const hostCore = {
   provisionProject,
-  // Two identities, deliberately both exposed: computeStateId is the spec-tree
-  // CONTENT hash (surface/landscape snapshot stamps, where doctrine is
-  // irrelevant); computeGateStateId adds the governing doctrine and is what
-  // lock records and the staleness re-check must use.
+  // The spec-tree CONTENT hash (surface/landscape snapshot stamps, where doctrine
+  // is irrelevant). The gate identity lock records and the staleness re-check use
+  // is the validator's: computeGateStateId, the host validator adapter below.
   computeStateId,
-  computeGateStateId,
-  // The shared lock verdict (unlocked | locked | stale). Every reporting surface
-  // resolves it here rather than each comparing StateIds for itself.
+  // The shared lock verdict (unlocked | locked | stale), resolved against the
+  // gate identity the caller computed now. Every reporting surface resolves it
+  // here rather than each comparing StateIds for itself.
   readLockState,
   readLockRecord,
   writeLockRecord,
@@ -132,6 +131,13 @@ export function validateProjectAsComplete() {
   // gate always refused it.
   if (!config) throw new ProjectNotInitializedError();
   return validateAsComplete({ rules: config.rules, projectType: config.projectType });
+}
+
+// host_validator_adapter.computeGateStateId → validator_portal: the gate
+// identity a lock records and every staleness check compares, for the bound
+// project root.
+export function computeGateStateId(): StateId {
+  return validatorComputeGateStateId();
 }
 
 // host_mcp_adapter → sdd_mcp (mcp_portal): reuse the sdd_* tool surface in-scope,

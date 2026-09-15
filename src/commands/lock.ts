@@ -6,7 +6,6 @@ import {
 import { WAIRON_VERSION } from '../config/defaults.js';
 import * as path from 'path';
 import {
-  computeGateStateId,
   localApprover,
   writeLockRecord,
   specPathsInScope,
@@ -14,7 +13,7 @@ import {
   type LockRecord,
 } from '../core/index.js';
 import { getProjectRoot } from '../utils/fs.js';
-import type { ValidationResult } from '../core/validation.js';
+import { computeGateStateId, type ValidationResult } from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
 // cli_lock_adapter — the core-side half of `wairon lock` (lockTree, realized
@@ -118,9 +117,10 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
     : undefined;
 
   // --- Persist the commit-scoped lock record at the tree's CURRENT StateId ---
-  // The GATE identity, not the content one: the record certifies "these specs
-  // passed THIS gate", so the governing doctrine is part of what is frozen —
-  // change a pack afterwards and the lock goes stale on its own.
+  // The GATE identity from the validator portal, not the content one: the
+  // record certifies "these specs passed THIS gate", so the governing doctrine
+  // is part of what is frozen — change a pack afterwards and the lock goes
+  // stale on its own.
   //
   // `specs` is the approval itself: one digest per spec file, so `wairon status`
   // can name what moved instead of printing a banner, and validate can tell

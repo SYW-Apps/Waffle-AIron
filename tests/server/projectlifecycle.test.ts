@@ -14,7 +14,7 @@ import {
 } from '../../src/server/projectlifecycle.js';
 import { createProject, executeApprovedLock, LockValidationError } from '../../src/server/admin.js';
 import { setPackPolicyRecord } from '../../src/server/policy.js';
-import { hostCore } from '../../src/server/adapters.js';
+import { hostCore, computeGateStateId } from '../../src/server/adapters.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
@@ -456,6 +456,10 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(lock).not.toBeNull();
     expect(lock!.lockedBy).toEqual(TEST_APPROVER);
     expect(Object.keys(lock!.specs!).length).toBeGreaterThan(0);
+    // The record carries the validator's gate identity, the one every staleness
+    // check later compares against.
+    expect(lock!.stateId.algorithm).toBe('sha256+content+doctrine+inputs');
+    expect(lock!.stateId).toEqual(runWithProjectRoot(root, () => computeGateStateId()));
   });
 
   it('a qualified lock REFUSES a child boundary violation only its parent can see — judged through the parent', () => {
@@ -499,7 +503,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
 
     // Locking the PARENT leaves the child unlocked — the trees are independent.
     lockProject(cfg, MASTER, 'confine-promo');
-    expect(runWithProjectRoot(child, () => hostCore.readLockState()).state).toBe('unlocked');
+    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeGateStateId())).state).toBe('unlocked');
 
     // Lock the child: its own record appears and the parent's is untouched.
     const locked = lockProject(cfg, MASTER, 'confine-promo', 'billing');
@@ -507,7 +511,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(locked.summary).toContain('subproject "billing"');
     expect(readLock(child).status).toBe('ready');
     expect(readLock(parent).status).toBe('ready');
-    expect(runWithProjectRoot(child, () => hostCore.readLockState()).state).toBe('locked');
+    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeGateStateId())).state).toBe('locked');
 
     // Drift in the CHILD tree makes the CHILD's lock stale.
     fs.writeFileSync(
@@ -515,7 +519,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
       fs.readFileSync(path.join(child, '.wai', 'specs', '.index.yaml'), 'utf8').replace(/vision:.*/, 'vision: drifted'),
     );
     invalidateSpecCache();
-    expect(runWithProjectRoot(child, () => hostCore.readLockState()).state).toBe('stale');
+    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeGateStateId())).state).toBe('stale');
   });
 
   it('an unknown or non-chained subproject qualifier FAILS LOUDLY — it never acts on the parent', () => {
@@ -703,7 +707,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     // … the decidedBy is caller-derived (never the client-supplied value) …
     expect(decided.decidedBy?.userId).toBe('u-ad');
     // … and the lock actually happened: the project's own record reads ready.
-    expect(runWithProjectRoot(existingProjectRoot(dataDir, 'auto-lock')!, () => hostCore.readLockState()).state).toBe('locked');
+    expect(runWithProjectRoot(existingProjectRoot(dataDir, 'auto-lock')!, () => hostCore.readLockState(computeGateStateId())).state).toBe('locked');
     expect(queryAuditEvents(dataDir, { action: 'approval.decided' })[0].level).toBe('security');
   });
 

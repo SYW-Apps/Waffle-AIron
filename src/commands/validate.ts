@@ -3,7 +3,7 @@ import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, loadRegistry } from '../config/loader.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import { loadProjectConfig } from '../core/index.js';
-import { validateRegistry, validateProjectConfig, validateAsComplete, ValidationIssue } from '../core/validation.js';
+import { validateRegistry, validateProjectConfig, validateAsComplete, computeGateStateId, ValidationIssue } from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
 // validate command (cli_validator_adapter)
@@ -17,7 +17,11 @@ import { validateRegistry, validateProjectConfig, validateAsComplete, Validation
 // happens in-memory inside the validator and is restored — nothing on disk
 // changes). Republished here as the adapter's forward to the validator portal;
 // `wairon lock` gates its dry-run on this and refuses to freeze on errors.
-export { validateAsComplete };
+//
+// cli_validator_adapter.computeGateStateId — the gate identity a lock records
+// and every staleness check compares, republished as the adapter's forward to
+// the validator portal.
+export { validateAsComplete, computeGateStateId };
 
 export interface ValidateOptions {
   ci?: boolean; // treat warnings as errors (for CI pipelines)

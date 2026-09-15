@@ -7,22 +7,21 @@ import {
   loadImplementationSpecs,
   loadTypeSpecs,
 } from './specs.js';
-import type { LoadedExtensions } from './extensions.js';
-// The BUILTIN rule set, read inside doctrineIdentity only; it lives with the rule
-// repository that registers it.
-import { SDD_RULES } from './rules/repository.js';
-import type { RulesConfig } from '../models/project.js';
+import { canonicalize } from '../utils/canonical-json.js';
 
 // ---------------------------------------------------------------------------
-// State Hash Specialist (sdd_host / sdd_core)
+// State Hash Specialist (sdd_core)
 //
 // Computes the deterministic content identity (StateId) of the current
 // project's spec tree. Two trees with identical spec CONTENT produce the same
-// StateId; any edit changes it. This backs the commit-scoped lock record and
-// the staleness re-check: a lock is scoped to the StateId it validated, and
-// every later read recomputes it, so any change after locking auto-invalidates
-// the lock. Volatile metadata (createdAt/updatedAt) is excluded so a no-op re-save
-// that only bumps a timestamp does not shift the identity.
+// StateId; any edit changes it. Volatile metadata (createdAt/updatedAt) is
+// excluded so a no-op re-save that only bumps a timestamp does not shift the
+// identity.
+//
+// The gate identity a lock records digests this content identity together with
+// the governing doctrine; it is the validator's to compute
+// (src/core/rules/gate-identity.ts), since the doctrine it covers is the
+// validator's rule set.
 // ---------------------------------------------------------------------------
 
 export interface StateId {
@@ -30,34 +29,12 @@ export interface StateId {
   digest: string;
 }
 
-/**
- * The project-level half of the gate: which profile governs, and how the project
- * tuned the rules. Supplied by the caller so the hash stays a pure function of its
- * inputs rather than reading configuration behind the caller's back.
- */
-export interface GateConfig {
-  projectType?: string;
-  rules?: RulesConfig;
-}
-
 /** Algorithm marker for the CONTENT identity: the spec tree alone. */
 const CONTENT_ALGORITHM = 'sha256';
 
-/**
- * Algorithm marker for the GATE identity: the spec tree PLUS the doctrine that
- * validated it PLUS the consumed contract inputs a verdict can consult.
- * Distinct on purpose — `stateIdEquals` compares the algorithm, so a
- * content-only StateId can never satisfy a gate comparison, and neither can a
- * gate StateId computed before inputs were covered. The earlier
- * "sha256+doctrine" is no longer produced, so every lock record written under
- * it reads as STALE (forcing a re-lock) instead of silently passing the
- * staleness re-check.
- */
-const GATE_ALGORITHM = 'sha256+doctrine+inputs';
-
-/** The spec-tree content both identities digest — one loader path, so they can never disagree about the specs. */
-function loadTree(): Record<string, unknown> {
-  return {
+/** Deterministic CONTENT StateId over the current (request-scoped) project's spec tree. */
+export function computeStateId(): StateId {
+  const tree = {
     system: loadSystemSpec(),
     subsystems: loadSubsystemSpecs(),
     components: loadComponentSpecs(),
@@ -65,139 +42,11 @@ function loadTree(): Record<string, unknown> {
     implementations: loadImplementationSpecs(),
     types: loadTypeSpecs(),
   };
-}
-
-/** Deterministic CONTENT StateId over the current (request-scoped) project's spec tree. */
-export function computeStateId(): StateId {
-  const digest = crypto.createHash('sha256').update(canonicalize(loadTree())).digest('hex');
+  const digest = crypto.createHash('sha256').update(canonicalize(tree)).digest('hex');
   return { algorithm: CONTENT_ALGORITHM, digest };
 }
 
-/**
- * The identity-bearing surface of the governing doctrine — everything that can
- * change a conformance VERDICT, and nothing else.
- *
- * Excluded on purpose: `skills` and `instructions` (agent-facing prose that
- * cannot alter a verdict — including them would invalidate every lock on a
- * cosmetic documentation edit) and `errors` (transient, and a failed pack load
- * already blocks locking through EXTENSION_LOAD_ERROR). `packNames` is dropped as
- * redundant with `packs`.
- *
- * Programmatic rules are functions and cannot be digested, so a rule's name plus
- * its declared codes stands as its identity.
- */
-function doctrineIdentity(doctrine: LoadedExtensions, gate: GateConfig): Record<string, unknown> {
-  const byKey = <T>(items: T[], key: (item: T) => string): T[] =>
-    [...items].sort((a, b) => key(a).localeCompare(key(b)));
-
-  return {
-    /**
-     * The BUILTIN rule set, by identity rather than by wairon version.
-     *
-     * A binary upgrade changes the gate only when the rules change, so hashing the
-     * version would invalidate every lock on every patch while hashing nothing
-     * would let a minor that ADDS a rule leave locks asserting they passed a gate
-     * that no longer exists. Keying on the registry means a release that touches no
-     * rule keeps every lock valid, and one that adds, removes, or re-grades a code
-     * invalidates exactly the locks it should.
-     *
-     * Residual gap, accepted knowingly: a rule whose IMPLEMENTATION grows stricter
-     * without its name, codes, or default severity changing is not caught. Folding
-     * in the wairon version would catch it at the cost of churning every lock on
-     * every release — the trade this projection deliberately declines.
-     */
-    builtinRules: byKey(
-      SDD_RULES.map((r) => ({
-        name: r.name,
-        codes: byKey(r.codes.map((c) => ({ code: c.code, severity: c.defaultSeverity })), (c) => c.code),
-      })),
-      (r) => r.name,
-    ),
-    /**
-     * Which profile GOVERNS, and the project's own rule tuning. Both decide
-     * verdicts — a projectType switch changes the doctrine family outright, and
-     * `rules` carries severity overrides, complexity caps, and designDepth — so a
-     * lock taken under one and honoured under another was never validated by the
-     * gate it claims to have passed.
-     */
-    projectType: gate.projectType ?? null,
-    rulesConfig: gate.rules ?? null,
-    packs: byKey(
-      doctrine.packs.map((p) => ({ name: p.name, version: p.version ?? null, scope: p.scope })),
-      (p) => `${p.name}@${p.version ?? ''}#${p.scope}`,
-    ),
-    // Merged records already encode pack precedence, so their resolved content is
-    // the identity — a load-order change that flips a collision winner shows up here.
-    profiles: doctrine.profiles,
-    languages: doctrine.languages,
-    patterns: byKey(
-      doctrine.patterns.map((p) => ({ id: p.id, version: p.version, pack: p.pack })),
-      (p) => `${p.pack}/${p.id}@${p.version}`,
-    ),
-    guarantees: [...doctrine.guarantees].sort(),
-    assertions: byKey(doctrine.assertions.map((a) => ({ ...a })), (a) => a.fullCode),
-    rules: byKey(
-      doctrine.rules.map((r) => ({ name: r.name, codes: r.codes.map((c) => c.code).sort() })),
-      (r) => r.name,
-    ),
-  };
-}
-
-/**
- * Deterministic GATE StateId: the spec tree together with the doctrine that
- * governs it AND the consumed contract inputs a verdict can consult. Pure —
- * the caller loads the doctrine, reads the inputs, and passes both in.
- *
- * This is what a lock must be scoped to. A lock asserts "these specs pass this
- * gate", and both the pack set and the contracts the verdict was judged
- * against ARE part of the gate: without doctrine coverage you could lock a
- * tree validated under one rule set, change the packs, and still act on the
- * strength of the earlier lock, because the spec digest never moved — and
- * without input coverage the same holds for swapping a pinned contract a
- * cross-tree reference resolved against. Content-only consumers (surface
- * snapshot stamps) stay on computeStateId.
- *
- * `inputs` takes no default: every producer of a gate StateId must decide what
- * it consumed and say so explicitly — there is no silent "hash without inputs"
- * fallback to drift out of sync with what validation actually consulted.
- */
-export function hashGateState(doctrine: LoadedExtensions, inputs: string[], gate: GateConfig = {}): StateId {
-  // Order-independent: callers gather inputs from the bound root and every
-  // chained mount in no particular order, so the specialist is the one place
-  // that fixes an order — sorting the (already canonical) content keys.
-  const payload = { tree: loadTree(), doctrine: doctrineIdentity(doctrine, gate), inputs: [...inputs].sort() };
-  const digest = crypto.createHash('sha256').update(canonicalize(payload)).digest('hex');
-  return { algorithm: GATE_ALGORITHM, digest };
-}
-
-/** True when two StateIds identify the same spec-tree content. */
+/** True when two StateIds are the same identity: same algorithm, same digest. */
 export function stateIdEquals(a: StateId | null | undefined, b: StateId | null | undefined): boolean {
   return !!a && !!b && a.algorithm === b.algorithm && a.digest === b.digest;
-}
-
-/**
- * Stable serialization: object keys sorted recursively (so key/formatting
- * order never changes the digest), with volatile timestamps stripped.
- *
- * Exported so the core orchestrator can reduce a stored surface snapshot to
- * the same kind of canonical content key before handing it to `hashGateState`
- * as one of `inputs` — without importing the surfaces subsystem, which would
- * cycle back through this file (sdd_core must not depend on sdd_surfaces).
- */
-export function canonicalize(value: unknown): string {
-  return JSON.stringify(sortKeys(value));
-}
-
-function sortKeys(v: unknown): unknown {
-  if (Array.isArray(v)) return v.map(sortKeys);
-  if (v && typeof v === 'object') {
-    const src = v as Record<string, unknown>;
-    const out: Record<string, unknown> = {};
-    for (const k of Object.keys(src).sort()) {
-      if (k === 'createdAt' || k === 'updatedAt') continue; // volatile metadata
-      out[k] = sortKeys(src[k]);
-    }
-    return out;
-  }
-  return v;
 }

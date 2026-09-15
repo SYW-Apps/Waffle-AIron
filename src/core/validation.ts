@@ -25,7 +25,13 @@ import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes 
 export { validateComponentCandidate } from './rules/candidate.js';
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
 import type { PackSelection } from '../models/project.js';
-import { loadProjectConfig as loadCoreProjectConfig } from './index.js';
+import {
+  loadProjectConfig as loadCoreProjectConfig,
+  computeStateId as coreComputeStateId,
+  consumedContractInputs as coreConsumedContractInputs,
+} from './index.js';
+import { computeGateIdentity, type GateConfig } from './rules/gate-identity.js';
+import type { StateId } from './statehash.js';
 
 /**
  * validator_core_adapter: forward to the core surface's project configuration
@@ -37,6 +43,24 @@ import { loadProjectConfig as loadCoreProjectConfig } from './index.js';
  */
 export function loadProjectConfig(): ProjectConfig | null {
   return loadCoreProjectConfig();
+}
+
+/**
+ * validator_core_adapter: forward to the core surface's content identity of
+ * the spec tree. Module-private, as consumedContractInputs below: the core
+ * barrel republishes this file, and both names are already core's own there.
+ */
+function computeStateId(): StateId {
+  return coreComputeStateId();
+}
+
+/**
+ * validator_core_adapter: forward to the core surface's consumed contract
+ * inputs — every stored surface snapshot of this root and its chained mounts,
+ * as canonical content keys.
+ */
+function consumedContractInputs(): string[] {
+  return coreConsumedContractInputs();
 }
 
 /**
@@ -734,4 +758,29 @@ function settledStatusBearing(loaded: {
  */
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
   return validateSddTree({ ...(options ?? {}), treatAllAsComplete: true });
+}
+
+/**
+ * The gate identity a lock records and every staleness check compares
+ * (ispec_validator/ivalidator_portal.computeGateStateId): the spec tree's content
+ * identity digested together with the governing doctrine and the consumed
+ * contract inputs. The validator computes it because the doctrine it covers is
+ * the validator's own rule set; core only compares a lock against the identity
+ * its caller passes (readLockState).
+ */
+export function computeGateStateId(): StateId {
+  const content = computeStateId();
+  const extensions = loadProjectExtensions();
+  // The project's governing configuration decides verdicts too: which profile
+  // applies, and how it tuned the rules. A configuration that fails its schema
+  // contributes nothing, and the tree identity still stands on its own.
+  let gate: GateConfig = {};
+  try {
+    const config = loadProjectConfig();
+    if (config) gate = { projectType: config.projectType, rules: config.rules };
+  } catch { /* a configuration that fails its schema: an empty gate config */ }
+  const inputs = consumedContractInputs();
+  // The built-in rules only: pack rules enter the identity through the extensions.
+  registerBuiltinRules();
+  return computeGateIdentity(content, extensions, ruleSequence(), inputs, gate);
 }

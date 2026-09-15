@@ -22,6 +22,7 @@ import {
   listDirectChainedSubprojects as coreListDirectChainedSubprojects,
   defaultPackSelections as coreDefaultPackSelections,
 } from '../core/index.js';
+import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
 import type { SpecialistRetirement, TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
 import type {
   AgentBrief,
@@ -127,6 +128,13 @@ export function retireSpecialists(apply: boolean): SpecialistRetirement {
 // apply by default, seeded into a configuration `wairon init` composes.
 export function defaultPackSelections(): PackSelection[] {
   return coreDefaultPackSelections();
+}
+
+// cli_core_adapter.readLockState — 1:1 forward: the lock verdict (unlocked,
+// locked or stale) against the gate identity the caller computed now through
+// the validator adapter.
+export function readLockState(current: StateId): LockStatus {
+  return coreReadLockState(current);
 }
 
 interface SubsystemAddOptions {

@@ -19,7 +19,7 @@ import { createChainedSubsystem } from '../../src/core/provision.js';
 import { pinFamilySurfaces } from '../../src/core/surfaces.js';
 import { runLock } from '../../src/commands/lock.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
-import type { ValidationResult } from '../../src/core/validation.js';
+import { computeGateStateId, type ValidationResult } from '../../src/core/validation.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -134,8 +134,11 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     // The GATE flavour, not the content one: a lock certifies that these specs
     // passed THIS gate, so the governing doctrine is part of the frozen identity
     // and a later pack change invalidates the lock by state mismatch.
-    expect(record!.stateId.algorithm).toBe('sha256+doctrine+inputs');
+    expect(record!.stateId.algorithm).toBe('sha256+content+doctrine+inputs');
     expect(record!.stateId.digest).toMatch(/^[0-9a-f]{64}$/);
+    // …and it is exactly the validator's gate identity, the one readLockState
+    // is later handed to compare against.
+    expect(record!.stateId).toEqual(computeGateStateId());
     // Whoever git says is authoring here, or user@host when git has no identity —
     // never a bare OS username, which names nobody in CI.
     expect(['git', 'os']).toContain(record!.lockedBy.source);
@@ -302,24 +305,36 @@ describe('readLockState (the shared lock verdict)', () => {
 
   it('unlocked when no record exists', () => {
     project();
-    expect(readLockState().state).toBe('unlocked');
+    expect(readLockState(computeGateStateId()).state).toBe('unlocked');
   });
 
   it('locked immediately after a lock, against the CURRENT gate identity', async () => {
     project();
     await runLock({ yes: true }, { valid: true, issues: [] });
 
-    const { state, record, current } = readLockState();
+    const { state, record, current } = readLockState(computeGateStateId());
     expect(state).toBe('locked');
     // The verdict is decided against the gate flavour, and they agree.
-    expect(current.algorithm).toBe('sha256+doctrine+inputs');
+    expect(current.algorithm).toBe('sha256+content+doctrine+inputs');
     expect(record!.stateId.digest).toBe(current.digest);
+  });
+
+  it('judges the record against the identity it is handed, hashing nothing itself', async () => {
+    project();
+    const record = await runLock({ yes: true }, { valid: true, issues: [] });
+    expect(readLockState(record!.stateId).state).toBe('locked');
+
+    // Any other identity, however it was computed, is not the one the record froze.
+    const other = { algorithm: record!.stateId.algorithm, digest: '0'.repeat(64) };
+    const verdict = readLockState(other);
+    expect(verdict.state).toBe('stale');
+    expect(verdict.current).toEqual(other);
   });
 
   it('STALE once the spec tree changes after locking — the case that used to report "locked"', async () => {
     project();
     await runLock({ yes: true }, { valid: true, issues: [] });
-    expect(readLockState().state).toBe('locked');
+    expect(readLockState(computeGateStateId()).state).toBe('locked');
 
     // Any edit moves the tree past what was frozen.
     saveComponentSpec(component('gateway-portal', 'core-sub', {
@@ -329,7 +344,7 @@ describe('readLockState (the shared lock verdict)', () => {
     invalidateSpecCache();
     setProjectRoot(rootDir);
 
-    const after = readLockState();
+    const after = readLockState(computeGateStateId());
     expect(after.state).toBe('stale');
     // The record survives: staleness is a verdict ABOUT it, not its deletion, so a
     // caller can prompt for a re-lock rather than pretend it never happened.
@@ -346,9 +361,9 @@ describe('readLockState (the shared lock verdict)', () => {
     } as Partial<ComponentSpec>));
     invalidateSpecCache();
     setProjectRoot(rootDir);
-    expect(readLockState().state).toBe('stale');
+    expect(readLockState(computeGateStateId()).state).toBe('stale');
 
     await runLock({ yes: true }, { valid: true, issues: [] });
-    expect(readLockState().state).toBe('locked');
+    expect(readLockState(computeGateStateId()).state).toBe('locked');
   });
 });

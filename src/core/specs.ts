@@ -5,8 +5,8 @@ import { aiPathsAt, WaiPaths } from '../config/loader.js';
 import { projectConfigRepository } from '../config/project-config.js';
 import type { ProjectConfig, PackSelection, ProjectProfileSelection } from '../models/project.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
-import { computeStateId, hashGateState, stateIdEquals, canonicalize, type StateId, type GateConfig } from './statehash.js';
-import { loadProjectExtensions } from './extensions.js';
+import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
+import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import {
@@ -3114,45 +3114,17 @@ function consumedSurfaceInputsAt(rootDir: string): string[] {
 }
 
 /**
- * Compute the CURRENT spec-tree state hash of the project at the given root
- * (icore_orchestrator/icore_portal.computeStateIdAt). The root is bound
- * strictly READ-ONLY for the duration of the computation via the async-scoped
- * project-root binding, which restores the previous binding unconditionally —
- * also on failure paths. Returns null when the root holds no loadable spec
- * tree.
+ * The consumed contract inputs a verdict can consult
+ * (icore_orchestrator/icore_portal.consumedContractInputs): this root's own
+ * stored surface snapshots plus every chained mount's, as canonical content
+ * keys. A whole-tree validation can consult any of them when resolving a
+ * cross-tree reference, so the gate identity covers them all — swapping a
+ * pinned contract invalidates a lock.
  */
-/**
- * Compute the GATE state identity of the current project
- * (icore_orchestrator/icore_portal.computeGateStateId): load the governing
- * extension packs and the consumed contract inputs, then digest the spec tree
- * together with that doctrine and those inputs.
- *
- * This is the identity `wairon lock` records and every staleness check re-computes, so a
- * doctrine change, or swapping a pinned contract a verdict consulted, invalidates a lock by
- * state mismatch exactly as a spec edit does — nobody has to remember to invalidate it. Loading
- * the doctrine and inputs here (not inside the hash specialist) keeps that specialist pure and
- * makes every caller use the same sources, so a lock and the re-check that later judges it stale
- * can never disagree about which rule set or which contracts applied.
- */
-export function computeGateStateId(): StateId {
-  // The gate is the packs AND the project's own governing configuration: which
-  // profile applies, and how it tuned the rules. A lock taken under one and
-  // honoured under another was never validated by the gate it claims to have
-  // passed. Config is read here and passed in, so the hash itself stays pure.
-  let gate: GateConfig = {};
-  try {
-    const config = projectConfigRepository.load();
-    if (config) gate = { projectType: config.projectType, rules: config.rules };
-  } catch { /* a configuration that fails the schema: the tree hash still stands on its own */ }
-
-  // The consumed contract inputs: this root's own stored snapshots, plus every
-  // chained mount's — a whole-tree validation can consult any of them when
-  // resolving a cross-tree reference, so the gate identity must too.
+export function consumedContractInputs(): string[] {
   const root = getProjectRoot();
   const roots = [root, ...listChainedRoots(root).map((rel) => path.join(root, rel))];
-  const inputs = roots.flatMap(consumedSurfaceInputsAt);
-
-  return hashGateState(loadProjectExtensions(), inputs, gate);
+  return roots.flatMap(consumedSurfaceInputsAt);
 }
 
 /** Whether a lock is in force, void, or absent. */
@@ -3162,13 +3134,16 @@ export interface LockStatus {
   state: LockState;
   /** The persisted record, or null when the project was never locked. */
   record: LockRecord | null;
-  /** The gate identity as it stands NOW — what `state` was decided against. */
+  /** The gate identity the caller computed now — what `state` was decided against. */
   current: StateId;
 }
 
 /**
  * Resolve the project's lock into one of three honest states, comparing the
- * recorded gate identity against the current one.
+ * recorded gate identity against the one the caller computed now
+ * (validator_portal.computeGateStateId). Nothing is hashed here: the gate
+ * identity is the validator's, because the doctrine it covers is the
+ * validator's rule set.
  *
  * The ONE authority for the question "is this project locked?". Before this, the
  * promote gate compared StateIds while the project config view answered from the mere
@@ -3177,9 +3152,8 @@ export interface LockStatus {
  * one question is how a time-of-check gap gets reintroduced after being closed, so
  * every caller now shares this.
  */
-export function readLockState(): LockStatus {
+export function readLockState(current: StateId): LockStatus {
   const record = readLockRecord();
-  const current = computeGateStateId();
   if (!record) return { state: 'unlocked', record: null, current };
   return { state: stateIdEquals(record.stateId, current) ? 'locked' : 'stale', record, current };
 }
@@ -3236,6 +3210,14 @@ export function markSelectionsBundled(bundled: PackSelection[]): void {
   projectConfigRepository.markSelectionsBundled(bundled);
 }
 
+/**
+ * Compute the CURRENT spec-tree state hash of the project at the given root
+ * (icore_orchestrator/icore_portal.computeStateIdAt). The root is bound
+ * strictly READ-ONLY for the duration of the computation via the async-scoped
+ * project-root binding, which restores the previous binding unconditionally —
+ * also on failure paths. Returns null when the root holds no loadable spec
+ * tree.
+ */
 export function computeStateIdAt(root: string): string | null {
   const resolved = path.resolve(root);
   return runWithProjectRoot(resolved, () => {

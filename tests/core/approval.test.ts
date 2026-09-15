@@ -15,7 +15,7 @@ import {
   readLockRecord, writeLockRecord, normalizeApprover, describeApprover,
   type ApproverIdentity, type LockRecord,
 } from '../../src/core/lockfile.js';
-import { computeGateStateId } from '../../src/core/specs.js';
+import { computeGateStateId } from '../../src/core/validation.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ function project(name = 'approval-sys'): string {
   } as SubsystemSpec);
   saveComponentSpec({
     id: 'worker', name: 'Worker', description: 'a worker component',
-    subsystem: 'dom', componentType: 'Specialist', dependsOn: [], owns: [],
+    subsystem: 'dom', componentType: 'Orchestrator', dependsOn: [], owns: [],
     status: 'draft', createdAt: now, updatedAt: now,
   } as ComponentSpec);
   invalidateSpecCache();
@@ -88,7 +88,7 @@ function approve(
 /** Write a lock record into ANOTHER root (a chained child approving itself). */
 function approveAt(root: string, stateDigest = 'a'.repeat(64)): LockRecord {
   const record: LockRecord = {
-    stateId: { algorithm: 'sha256+doctrine+inputs', digest: stateDigest },
+    stateId: { algorithm: 'sha256+content+doctrine+inputs', digest: stateDigest },
     lockedAt: now,
     lockedBy: { id: 'child <c@example.com>', source: 'git' },
     validatorVersion: 'test',
@@ -197,7 +197,7 @@ describe('the approval', () => {
 
     saveComponentSpec({
       id: 'second', name: 'Second', description: 'a second component',
-      subsystem: 'dom', componentType: 'Specialist', dependsOn: [], owns: [],
+      subsystem: 'dom', componentType: 'Orchestrator', dependsOn: [], owns: [],
       status: 'draft', createdAt: now, updatedAt: now,
     } as ComponentSpec);
     invalidateSpecCache();

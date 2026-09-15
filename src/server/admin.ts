@@ -20,7 +20,7 @@ import {
   resolveSubprojectMounts,
   SUBPROJECT_SEPARATOR,
 } from './projects.js';
-import { hostCore, hostGit, hostProducer, validateProjectAsComplete } from './adapters.js';
+import { hostCore, hostGit, hostProducer, validateProjectAsComplete, computeGateStateId } from './adapters.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import { setSecret as storeSecret, listSecretKeys } from '../utils/secrets.js';
@@ -288,9 +288,10 @@ export function executeApprovedLock(
     if (errors.length) {
       throw new LockValidationError(errors.map((e) => ({ code: e.code, message: e.message, specId: e.specId })));
     }
-    // The GATE identity: the lock certifies that these specs passed THIS gate,
-    // so the governing doctrine is part of the frozen state.
-    const stateId = hostCore.computeGateStateId();
+    // The GATE identity, computed by the validator: the lock certifies that
+    // these specs passed THIS gate, so the governing doctrine is part of the
+    // frozen state.
+    const stateId = computeGateStateId();
 
     // THE APPROVAL, recorded in the committed lock record below rather than
     // written across the spec tree. This used to ratchet every spec's `status`

@@ -11,7 +11,7 @@ import { authorize } from './authorization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { sendJson } from './httpio.js';
 import * as packs from './packs.js';
-import { hostCore } from './adapters.js';
+import { hostCore, computeGateStateId } from './adapters.js';
 import type {
   AuditEvent,
   AuditRetentionPolicy,
@@ -1055,7 +1055,7 @@ export function getProjectConfig(
   // repair path is reconcileProjectPolicy / setProjectType.
   const classified = classifyProfile(projectType, packs.executeApprovedListProjectProfiles(cfg, projectId, config));
 
-  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState());
+  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState(computeGateStateId()));
   // "locked" means the lock is IN FORCE, not merely that a record exists: a stale
   // record freezes nothing (promotion refuses, and the tree already moved past it),
   // so reporting it as locked claimed a freeze that was not real.
@@ -1118,7 +1118,7 @@ export function setProjectType(
   recordProfileSelectionAt(root, folded);
   const remainder = folded.profileIds.slice(1);
 
-  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState());
+  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState(computeGateStateId()));
   // "locked" means the lock is IN FORCE, not merely that a record exists: a stale
   // record freezes nothing (promotion refuses, and the tree already moved past it),
   // so reporting it as locked claimed a freeze that was not real.

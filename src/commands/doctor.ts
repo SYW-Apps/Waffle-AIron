@@ -16,7 +16,9 @@ import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
 import { readStampVersion } from '../core/stamp.js';
 import { localGuideFilePath, reinjectLocalGuides } from '../utils/ai-guide.js';
 import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
-import { findLegacySpecFiles, readLockState } from '../core/specs.js';
+import { findLegacySpecFiles } from '../core/specs.js';
+import { readLockState } from './subsystem.js';
+import { computeGateStateId } from './validate.js';
 import { describeApprover } from '../core/lockfile.js';
 import { diagnoseProjectPacks, pinInstalledPacksAsSelections } from '../core/extensions.js';
 import { claudeMcpConfigPath } from './mcp.js';
@@ -223,7 +225,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   // action, which fails closed but tells you late. Silent for a project that was never locked.
   if (isProjectInitialized()) {
     try {
-      const lock = readLockState();
+      const lock = readLockState(computeGateStateId());
       if (lock.state === 'locked') {
         console.log(chalk.bold('Lock'));
         line(tally, 'ok', `frozen at ${lock.record!.lockedAt} by ${describeApprover(lock.record!.lockedBy)}`);
