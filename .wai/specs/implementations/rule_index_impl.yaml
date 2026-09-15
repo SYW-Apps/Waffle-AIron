@@ -1,8 +1,8 @@
 id: rule_index_impl
 name: Rule Index Implementation
 description: >-
-  Read path in src/core/rules/index.ts: ordered run sequence and known-code projections over the
-  rule store.
+  Read path in src/core/rules/repository.ts: the ordered run sequence (lint-allows last), its
+  spec-scoped subset and the known-code set, projected over the rule store.
 contract: irule_index
 sourcePath: src/core/rules/repository.ts
 simPath: tests/core/validation.test.ts
@@ -30,4 +30,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T19:17:48.847Z'
-updatedAt: '2026-09-14T23:05:42.696Z'
+updatedAt: '2026-09-15T00:29:31.902Z'

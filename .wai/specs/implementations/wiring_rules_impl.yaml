@@ -426,7 +426,7 @@ methods:
       - stepNumber: 20
         description: >-
           Mark the types referenced by fields: for every field of every type t in ctx.types, pass
-          each ref of t.fieldTypeRefs(field.name) to the private helper markTypeReferenced, which
+          each ref of t.fieldTypeRefs(field.type) to the private helper markTypeReferenced, which
           ignores a ref when ctx.isBuiltinType(ref) holds and otherwise records the id of every type
           in ctx.types whose matchesRef(ref) holds
         type: local
@@ -799,4 +799,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-14T23:35:36.696Z'
+updatedAt: '2026-09-15T00:30:34.013Z'

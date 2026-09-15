@@ -398,7 +398,7 @@ methods:
         endStep: 16
       - stepNumber: 9
         description: >-
-          refs = t.fieldTypeRefs(field.name) — the type identifiers the field's type names, with the
+          refs = t.fieldTypeRefs(field.type) — the type identifiers the field's type names, with the
           type's own generic parameters already left out.
         type: local
       - stepNumber: 10
@@ -695,4 +695,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-14T23:35:38.411Z'
+updatedAt: '2026-09-15T00:29:59.141Z'

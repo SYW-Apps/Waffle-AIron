@@ -77,6 +77,18 @@ methods:
         type: local
       - stepNumber: 12
         description: >-
+          Reject a --subsystem scope that names no loaded subsystem (SUBSYSTEM_NOT_FOUND, listing
+          the known subsystems) and return early
+        type: local
+      - stepNumber: 13
+        description: >-
+          Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
+          and pattern definitions — to populate the rule context's ext for this run
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 14
+        description: >-
           Gather the round-trip findings: dry-run every in-scope spec through the writer's
           relativization and schema pipeline via the core adapter (no I/O) and keep the findings for
           the rule context, where the roundtrip-serialization rule reports them, so validate
@@ -84,18 +96,6 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
-      - stepNumber: 13
-        description: >-
-          Reject a --subsystem scope that names no loaded subsystem (SUBSYSTEM_NOT_FOUND, listing
-          the known subsystems) and return early
-        type: local
-      - stepNumber: 14
-        description: >-
-          Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
-          and pattern definitions — to populate the rule context's ext for this run
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadProjectExtensions
       - stepNumber: 15
         description: Seed the built-in SDD conformance rule set into the in-memory rule set
         type: call
@@ -325,50 +325,58 @@ methods:
     sourcePath: src/core/rules/candidate.ts
     narrative:
       - stepNumber: 1
-        description: >-
-          Build a rule context holding only the candidate: a stub system spec (only its
-          targetLanguage is ever read, and a candidate carries none), no other specs, the project's
-          rules config and project type, and the loaded packs
-        type: local
-      - stepNumber: 2
         description: Seed the built-in rules
         type: call
         targetComponent: rule_repository
         targetMethod: registerBuiltinRules
-      - stepNumber: 3
+      - stepNumber: 2
         description: Do the loaded packs carry programmatic rules?
         type: branch
         condition: the loaded packs carry programmatic rules
-        onFalseStep: 5
-      - stepNumber: 4
+        onFalseStep: 4
+      - stepNumber: 3
         description: >-
           Register the pack rules after the built-ins, so pack-registered spec-scoped rules gate
           writes too
         type: call
         targetComponent: rule_repository
         targetMethod: registerPackRules
+      - stepNumber: 4
+        label: gather-codes
+        description: >-
+          Gather the known issue codes of the registered rules and the loaded declarative
+          assertions, as validateSddTree does, so any rule reading them sees the same set
+        type: call
+        targetComponent: rule_repository
+        targetMethod: knownIssueCodes
       - stepNumber: 5
-        label: read-spec-rules
+        description: >-
+          Build a rule context holding only the candidate: a stub system spec (only its
+          targetLanguage is ever read, and a candidate carries none), no other specs, no round-trip
+          findings, the known codes, the project's rules config and project type, and the loaded
+          packs
+        type: local
+      - stepNumber: 6
         description: Read the spec-scoped rules in run order
         type: call
         targetComponent: rule_repository
         targetMethod: specScopedRules
-      - stepNumber: 6
+      - stepNumber: 7
         description: For each spec-scoped rule
         type: loop
         loopKind: forEach
         over: the spec-scoped rules
-        endStep: 7
-      - stepNumber: 7
+        endStep: 8
+      - stepNumber: 8
         label: run-check
         description: Run the rule's check against the candidate context
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Keep only findings about the candidate (no spec id, or the candidate's id), so a rule that
           misdeclares its scope cannot smuggle in a finding about another spec
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Return the verdict split by severity: errors refuse the write, warnings ride along as
           notices
@@ -376,4 +384,4 @@ methods:
         outcome: CandidateVerdict
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-14T23:08:58.263Z'
+updatedAt: '2026-09-15T00:30:58.657Z'
