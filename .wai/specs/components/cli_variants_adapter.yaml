@@ -2,8 +2,8 @@ id: cli_variants_adapter
 name: CLI Variants Client Adapter
 description: >-
   Local client adapter in sdd_cli for `wairon variants list`. Loads the component-variant registry
-  (global + project) via the core surface and prints each variant's id, base stereotype, guidance,
-  and optional target/profile scope.
+  (built-in, global and project) via the core surface and prints each variant's id, base stereotype,
+  guidance, and optional target/profile scope.
 subsystem: sdd_cli
 componentType: Adapter
 owns: []
@@ -11,4 +11,4 @@ dependsOn:
   - core_portal
 status: complete
 createdAt: '2026-07-15T12:23:55.114Z'
-updatedAt: '2026-07-15T12:25:45.057Z'
+updatedAt: '2026-09-15T18:44:51.943Z'

@@ -3,8 +3,9 @@ id: variant_def
 name: VariantDef
 description: >-
   A component variant: a named, base-anchored specialization of a core stereotype (a "kind of
-  Adapter/Specialist/…") carrying implementation guidance. Lives in a dynamic registry on top of
-  packs (global + project); the base stays authoritative for generic semantics.
+  Adapter/Orchestrator/Portal/…") carrying implementation guidance. Lives in a registry on top of
+  packs, layered built-in, then global, then project; the base stays authoritative for generic
+  semantics.
 fields:
   - name: id
     type: string
@@ -14,7 +15,7 @@ fields:
     type: string
     description: >-
       The core stereotype this variant specializes — authoritative for generic semantics (Adapter,
-      Specialist, …).
+      Orchestrator, Portal, …).
     optional: false
   - name: guidance
     type: string
@@ -32,4 +33,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-15T12:23:33.024Z'
-updatedAt: '2026-07-15T12:23:33.035Z'
+updatedAt: '2026-09-15T18:44:58.813Z'

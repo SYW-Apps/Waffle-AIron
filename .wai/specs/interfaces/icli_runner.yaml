@@ -124,8 +124,8 @@ methods:
     params: []
   - name: runVariants
     description: >-
-      Handle `wairon variants list`, printing the component variants declared in the registry
-      (global + project).
+      Handle `wairon variants list`, printing the component variants in the registry (built-in,
+      global and project).
     signature: 'runVariants(): void'
     returns: void
     params: []
@@ -274,4 +274,4 @@ methods:
     returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-15T10:53:06.161Z'
+updatedAt: '2026-09-15T18:44:58.960Z'
