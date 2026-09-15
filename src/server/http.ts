@@ -9,17 +9,16 @@ import { getRealtimeHub, channelsForWebMutation, publishChange } from './realtim
 import { serveSharedView, serveSharedModel, serveSharedOpenApi, serveSharedDownload } from './sharehttp.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
-import { ensureInstanceIdentity } from './instance.js';
-import { createUnit, getOrganizationUnit } from './organization.js';
+import * as backupSchedule from './backup-schedule.js';
+import { bootstrapInstance } from './instance-bootstrap.js';
 import * as identity from './identity.js';
 import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
 import * as landscape from './landscape.js';
 import * as operations from './operations.js';
-import { AdminAuthError, LockValidationError, runPeriodicGitSync } from './admin.js';
-import { runPeriodicBackingSync } from './gitbacking.js';
+import { AdminAuthError, LockValidationError } from './admin.js';
 import { migratePermissionModel } from './migration.js';
-import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy, PrincipalSubject } from './types.js';
+import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Host HTTP Portal + Host Server (sdd_host)
@@ -654,36 +653,9 @@ export interface HostServerHandle {
   close(): void;
 }
 
-/** The stable id of the synthetic local development unit `wairon dev` boots
- *  with, so dev projects can always be placed (unitId is required at creation). */
-export const DEV_UNIT_ID = 'local';
-
-/**
- * One-time boot initialization — the sdd_host lifecycle init entrypoint, run
- * BEFORE the listeners bind (idempotent):
- *   1. Seed-or-load the persisted instance identity: the first boot generates
- *      the boot-reserved built-in subject UUIDs into <dataDir>/instance.json;
- *      every later boot loads them unchanged.
- *   2. Under devMode, ensure the synthetic local development organization unit
- *      exists so dev projects can always be placed.
- */
-export function initHostInstance(cfg: HostConfig): void {
-  ensureInstanceIdentity(cfg.dataDir);
-  if (cfg.devMode && !getOrganizationUnit(cfg.dataDir, DEV_UNIT_ID)) {
-    const system: PrincipalSubject = { userId: 'system', kind: 'service', issuer: 'local' };
-    createUnit(cfg.dataDir, {
-      id: DEV_UNIT_ID,
-      name: 'Local Development',
-      kind: 'team',
-      slug: DEV_UNIT_ID, // a root unit's qualified id IS its slug
-      status: 'active',
-      createdAt: '',
-      createdBy: system,
-    });
-  }
-}
-// ihost_server.init — the lifecycle entrypoint's contract name.
-export { initHostInstance as init };
+// ihost_server.init — the lifecycle entrypoint's contract name, realized by
+// the instance_bootstrap Orchestrator (src/server/instance-bootstrap.ts).
+export { bootstrapInstance as init };
 
 /**
  * Warn, at startup, when the data dir still holds pre-permission-model shapes.
@@ -759,7 +731,7 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   }
   // Lifecycle init runs BEFORE the listeners bind: seed the persisted instance
   // identity (and, under devMode, the synthetic local development unit).
-  initHostInstance(cfg);
+  bootstrapInstance(cfg);
 
   warnIfDataDirUnmigrated(cfg);
 
@@ -776,30 +748,16 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   dataServer.listen(cfg.port, cfg.host);
   adminServer.listen(cfg.adminPort, cfg.adminHost);
 
-  // Periodic git-backup timer: each tick sweeps the git-bound projects (a
+  // Periodic backup schedule: each tick sweeps the git-bound projects (a
   // .wai/-scoped commit+push per due project, skip-if-clean — a quiet project
   // never commits noise) AND the container-level backup bindings whose interval
   // has elapsed. Both sweeps are pre-authorized internals; per-item failures
-  // are recorded inside them and never abort a sweep. unref() so the timer
-  // never keeps a closing process alive.
-  const GIT_SYNC_TICK_MS = 60_000;
-  const gitSyncTimer = setInterval(() => {
-    try {
-      runPeriodicGitSync(cfg);
-    } catch (err) {
-      console.error('[git-sync] project sweep failed: ' + (err instanceof Error ? err.message : String(err)));
-    }
-    try {
-      runPeriodicBackingSync(cfg);
-    } catch (err) {
-      console.error('[git-backing] backing sweep failed: ' + (err instanceof Error ? err.message : String(err)));
-    }
-  }, GIT_SYNC_TICK_MS);
-  gitSyncTimer.unref();
+  // are recorded inside them and never abort the other.
+  backupSchedule.start(cfg);
 
   return {
     close() {
-      clearInterval(gitSyncTimer);
+      backupSchedule.stop();
       getRealtimeHub().closeAll();
       dataServer.close();
       adminServer.close();
