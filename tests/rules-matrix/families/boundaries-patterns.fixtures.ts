@@ -3,9 +3,11 @@
  *
  * Documented intents pinned here:
  *  - EMPTY_PATTERN (error): a pattern must own member blocks.
- *  - BLOCK_OWNS_MEMBERS (error): building blocks never use `owns`.
+ *  - BLOCK_OWNS_MEMBERS (error): building blocks never use `owns`; a block's
+ *    claim makes it no owner, so what it claims stays standalone.
  *  - INVALID_OWNED_MEMBER (error): owns must name existing components.
- *  - PATTERN_OWNS_PATTERN (error): patterns own only building blocks.
+ *  - PATTERN_OWNS_PATTERN (error): patterns own only building blocks (a block
+ *    owning a pattern is BLOCK_OWNS_MEMBERS, not this code).
  *  - SHARED_OWNED_MEMBER (error): a block has exactly one owner.
  *  - REPOSITORY_CONTAINMENT (error): Repository owns only Store/Registry/
  *    Index/Adapter.
@@ -681,6 +683,108 @@ export default [
         },
         { id: 'consent-form-store', componentType: 'Store', description: 'Holds the signed patient consent forms.' },
         { id: 'consent-form-registry', componentType: 'Registry', description: 'Validated write path for patient consent forms.' },
+      ],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // A RouterComponent has exactly one Portal facade; only a pattern's owns
+  // makes it an owner (a block's claim is wholly BLOCK_OWNS_MEMBERS)
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'ROUTER_COMPONENT_CONTAINMENT',
+    severity: 'error',
+    anchoredTo: 'pharmacy-shell-router',
+    expectFire: true,
+    scenario:
+      'The pharmacy shell router owns two Portal facades, a patient shell and a staff shell, giving the one routing pattern two front doors.',
+    tree: {
+      system: SYSTEM,
+      projectType: 'frontend-reactive',
+      subsystems: [{ id: 'pharmacy-web-ui', description: 'The pharmacy self-service web frontend.' }],
+      components: [
+        {
+          id: 'pharmacy-shell-router',
+          componentType: 'RouterComponent',
+          description: 'Routes between the pharmacy UI\'s top-level pages.',
+          owns: ['patient-shell-portal', 'staff-shell-portal', 'refill-request-view'],
+        },
+        { id: 'patient-shell-portal', componentType: 'Portal', portalType: 'Custom', description: 'The routing facade of the patient-facing pharmacy shell.' },
+        { id: 'staff-shell-portal', componentType: 'Portal', portalType: 'Custom', description: 'The routing facade of the staff-facing pharmacy shell.' },
+        { id: 'refill-request-view', componentType: 'View', description: 'Renders the refill request form.' },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNOWNED_STORE',
+    severity: 'warning',
+    anchoredTo: 'dose-plan-store',
+    expectFire: true,
+    scenario:
+      'The dose scheduling orchestrator claims the dose plan store through owns, which only a pattern may use, so the store is still owned by no pattern.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [PHARMACY_SUB],
+      components: [
+        {
+          id: 'dose-scheduling-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Schedules medication doses for admitted patients.',
+          owns: ['dose-plan-store'],
+        },
+        { id: 'dose-plan-store', componentType: 'Store', description: 'Holds the planned dose schedules.' },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'PATTERN_OWNS_PATTERN',
+    expectFire: false,
+    reason: 'The owner is a building block, whose owns is wholly the BLOCK_OWNS_MEMBERS finding; only a pattern owning a pattern is this code.',
+    scenario:
+      'The dispensing orchestrator, a building block, claims the dispensing gateway through owns instead of depending on it.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [PHARMACY_SUB],
+      components: [
+        {
+          id: 'dispensing-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Drives the dispensing workflow.',
+          owns: ['dispensing-gateway'],
+        },
+        {
+          id: 'dispensing-gateway',
+          componentType: 'Gateway',
+          description: 'Facade bundling the dispensing portal.',
+          owns: ['dispensing-portal'],
+        },
+        { id: 'dispensing-portal', componentType: 'Portal', portalType: 'Custom', description: 'Inbound surface for dispensing requests.' },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'VISIBILITY_VIOLATION',
+    expectFire: false,
+    reason: 'A building block\'s owns makes it no owner, so the store stays standalone and depending on it reaches no pattern\'s private member.',
+    scenario:
+      'The refill reminder orchestrator depends on the dose plan store that the dose scheduling orchestrator wrongly claims through owns.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [PHARMACY_SUB],
+      components: [
+        {
+          id: 'dose-scheduling-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Schedules medication doses for admitted patients.',
+          owns: ['dose-plan-store'],
+        },
+        {
+          id: 'refill-reminder-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Drives refill reminder campaigns.',
+          dependsOn: ['dose-plan-store'],
+        },
+        { id: 'dose-plan-store', componentType: 'Store', description: 'Holds the planned dose schedules.' },
       ],
     },
   }),

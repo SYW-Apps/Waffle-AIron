@@ -40,7 +40,7 @@ export const stereotypeDepsRule: SddRule = {
     { code: 'ARCHITECTURE_VIOLATION_ADAPTER_DEP', defaultSeverity: 'error', summary: 'Adapter depending on Orchestrators or Stores' },
     { code: 'ARCHITECTURE_VIOLATION_INDEX_DEP', defaultSeverity: 'error', summary: 'Index depending on anything but its Store or an Adapter' },
     { code: 'ARCHITECTURE_VIOLATION_VIEW_DEP', defaultSeverity: 'error', summary: 'View depending on logic/persistence layers' },
-    { code: 'PORTAL_WRITE_SHORTCUT', defaultSeverity: 'error', summary: 'Portal narrative calls a write-effect method on a Repository/Index directly — reads may shortcut, writes route through an Orchestrator (judged on effect-tagged facade methods; untagged methods are not yet judged)' },
+    { code: 'PORTAL_WRITE_SHORTCUT', defaultSeverity: 'error', summary: 'Portal narrative call or dispatch-table binding reaches a write-effect method on a Repository/Index directly — reads may shortcut, writes route through an Orchestrator (judged on effect-tagged facade methods; untagged methods are not yet judged)' },
   ],
   check(ctx) {
     for (const comp of ctx.components) {
@@ -147,10 +147,14 @@ export const stereotypeDepsRule: SddRule = {
               crossDraft,
             );
           } else if (depComp.componentType !== 'Portal' && depComp.componentType !== 'Gateway') {
+            // Name the crosser as what it is: the sanctioned client Adapter, or
+            // any other stereotype — a trustedLink licenses its crossing, never
+            // this target requirement, and an unlicensed one reaches here too.
+            const crosser = comp.componentType === 'Adapter' ? 'client Adapter' : comp.componentType;
             ctx.addIssue(
               'error',
               'CROSS_SUBSYSTEM_TARGET_NON_PORTAL',
-              `Boundary violation: client Adapter "${comp.id}" enters subsystem "${depComp.subsystem}" through "${depComp.id}" (${depComp.componentType}), not its inbound Portal. A cross-subsystem hop must target the remote subsystem's Portal (its front door), which dispatches inward — publishing/depending on an internal ${depComp.componentType} leaks the boundary and breaks the distribution seam. Expose a Portal for "${depComp.subsystem}" and point this Adapter at it.`,
+              `Boundary violation: ${crosser} "${comp.id}" enters subsystem "${depComp.subsystem}" through "${depComp.id}" (${depComp.componentType}), not its inbound Portal. A cross-subsystem hop must target the remote subsystem's Portal (its front door), which dispatches inward — publishing/depending on an internal ${depComp.componentType} leaks the boundary and breaks the distribution seam. Expose a Portal for "${depComp.subsystem}" and point "${comp.id}" at it.`,
               comp.id,
               crossDraft,
             );
@@ -336,6 +340,31 @@ export const stereotypeDepsRule: SddRule = {
             isDraftCtx || ctx.isComponentDraft(target.id),
           );
         }
+      }
+    }
+
+    // The same guard on a Portal's dispatch table: a binding that routes a
+    // capability straight to a write-effect data-facade method is the write
+    // shortcut declared as a route. A dispatch step reaches its server only
+    // through such a binding, so judging every binding judges each dispatch
+    // step that takes it — once, where the route is declared.
+    for (const comp of ctx.components) {
+      if (comp.componentType !== 'Portal' || !comp.dispatch || comp.dispatch.length === 0) continue;
+      const isDraftCtx = ctx.isComponentDraft(comp.id);
+
+      for (const binding of comp.dispatch) {
+        const target = ctx.componentMap.get(binding.component);
+        if (!target || (target.componentType !== 'Repository' && target.componentType !== 'Index')) continue;
+        const targetMethod = ctx.interfaceMethodsOf(target.id)
+          .find(m => m.name === binding.method);
+        if (targetMethod?.effect !== 'write') continue;
+        ctx.addIssue(
+          'error',
+          'PORTAL_WRITE_SHORTCUT',
+          `Portal "${comp.id}": dispatch binding "${binding.capability}" routes to write-effect method ${target.id}.${binding.method} directly. The Portal→${target.componentType} shortcut is licensed for READS only — route the write through an Orchestrator that owns the workflow.`,
+          comp.id,
+          isDraftCtx || ctx.isComponentDraft(target.id),
+        );
       }
     }
   },
