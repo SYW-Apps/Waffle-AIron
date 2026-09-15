@@ -3,13 +3,158 @@
  * durability/side-effect claims that exist only in prose. A local step or an
  * intent paragraph claiming persistence ("persisted", "survives restart",
  * "registered into") on a LOGIC component whose narrative has no
- * call/dispatch edge to any data-layer component (Store/Registry/Index/
- * Adapter/Repository) is UNREALIZED_CLAIM. Data-layer components are exempt —
- * they ARE the persistence.
+ * call/register/dispatch edge to any data-layer component (Store/Registry/
+ * Index/Adapter/Repository) is UNREALIZED_CLAIM. Text inside quotes or
+ * backticks names a value or quotes a message and claims nothing. Data-layer
+ * components are exempt — they ARE the persistence.
  */
 import { defineRuleFixture } from '../harness.js';
 
 export default [
+  // -------------------------------------------------------------------------
+  // Phrasings, register edges and quoted values
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNREALIZED_CLAIM',
+    severity: 'warning',
+    anchoredTo: 'cart_merger_impl',
+    expectFire: true,
+    scenario:
+      'The cart merger\'s intent claims it owns the persistence of merged carts across devices, but the specialist neither depends on nor owns any data-layer component.',
+    tree: {
+      subsystems: [{ id: 'shopping-cart', description: 'Shopper carts across devices.' }],
+      components: [
+        {
+          id: 'cart-merger',
+          componentType: 'Specialist',
+          description: 'Merges a guest cart into the signed-in shopper\'s cart.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'icart_merger',
+          component: 'cart-merger',
+          methods: [{ name: 'mergeCarts', description: 'Merge the guest cart lines into the shopper cart.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'cart_merger_impl',
+          contract: 'icart_merger',
+          methods: [
+            {
+              name: 'mergeCarts',
+              intent: 'Merges the guest cart lines into the shopper cart and owns the persistence of the merged cart across devices.',
+              narrative: [
+                { stepNumber: 1, type: 'local', description: 'Fold each guest line into the matching shopper line, summing quantities.' },
+                { stepNumber: 2, type: 'return', description: 'Hand back the merged cart.', outcome: 'success' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNREALIZED_CLAIM',
+    expectFire: false,
+    reason:
+      'A register step hands the session store\'s flush to the runtime shutdown hook: a structural edge to the data layer, just as a call is.',
+    scenario:
+      'The session orchestrator claims open sessions are persisted at shutdown and registers the session store\'s flush on the runtime shutdown hook.',
+    tree: {
+      subsystems: [{ id: 'sessions', description: 'Shopper session lifecycle.' }],
+      components: [
+        {
+          id: 'session-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Opens shopper sessions and arranges their flush.',
+          dependsOn: ['session-store'],
+        },
+        {
+          id: 'session-store',
+          componentType: 'Store',
+          description: 'Holds the open shopper sessions.',
+          durability: 'read-through',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'isession_orchestrator',
+          component: 'session-orchestrator',
+          methods: [{ name: 'openSession', description: 'Open a shopper session and arrange its flush at shutdown.' }],
+        },
+        {
+          id: 'isession_store',
+          component: 'session-store',
+          methods: [{ name: 'flushSessions', description: 'Write every open session to the backing table.', effect: 'write' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'session_orchestrator_impl',
+          contract: 'isession_orchestrator',
+          methods: [
+            {
+              name: 'openSession',
+              narrative: [
+                { stepNumber: 1, type: 'local', description: 'Open sessions are persisted when the runtime shuts down.' },
+                {
+                  stepNumber: 2,
+                  type: 'register',
+                  description: 'Hand the session store flush to the runtime shutdown hook.',
+                  targetComponent: 'session-store',
+                  targetMethod: 'flushSessions',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNREALIZED_CLAIM',
+    expectFire: false,
+    reason:
+      'The claim words sit inside quotes and backticks, where they name the tenant\'s chosen retention mode and an archiver setting rather than claim persistence.',
+    scenario:
+      'The billing orchestrator stamps the archive request with the tenant\'s retention mode "durable" and the archiver flag `persisted-copy`, persisting nothing itself.',
+    tree: {
+      subsystems: [{ id: 'billing', description: 'Invoice lifecycle and archival.' }],
+      components: [
+        {
+          id: 'billing-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Drives invoice closing and hands archive requests on.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'ibilling_orchestrator',
+          component: 'billing-orchestrator',
+          methods: [{ name: 'prepareArchiveRequest', description: 'Build the archive request for a closed invoice.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'billing_orchestrator_impl',
+          contract: 'ibilling_orchestrator',
+          methods: [
+            {
+              name: 'prepareArchiveRequest',
+              narrative: [
+                { stepNumber: 1, type: 'local', description: 'Stamp the archive request with the tenant\'s retention mode "durable".' },
+                { stepNumber: 2, type: 'local', description: 'Set the archiver flag `persisted-copy` on the request.' },
+                { stepNumber: 3, type: 'return', description: 'Hand back the archive request.', outcome: 'success' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+
   // -------------------------------------------------------------------------
   // Step-prose claim
   // -------------------------------------------------------------------------

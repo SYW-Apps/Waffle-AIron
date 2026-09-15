@@ -159,4 +159,47 @@ export default [
       },
     },
   }),
+  defineRuleFixture({
+    code: 'HIDDEN_STATE',
+    expectFire: false,
+    reason:
+      'A method dialed conformance: off names generated or vendored code, so the file it names is no mapping evidence against the orchestrator — the dial is read per method, not only per implementation.',
+    scenario:
+      'The visit planner orchestrator realizes planVisit in a generated slot table module whose method is dialed conformance off, and that generated module keeps a module-scope let binding.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [PLANNER_COMPONENT],
+      interfaces: [PLANNER_INTERFACE],
+      implementations: [
+        {
+          ...PLANNER_IMPL,
+          methods: [
+            {
+              name: 'planVisit',
+              sourcePath: 'src/scheduling/generated/slot-table.ts',
+              conformance: 'off',
+              narrative: [{ stepNumber: 1, type: 'local', description: 'Match the request against open slots and emit a visit plan.' }],
+            },
+          ],
+        },
+      ],
+      files: {
+        'src/scheduling/visit-planner.ts': [
+          '// Visit planner — matches booking requests against open clinician slots.',
+          'export const plannerName = \'visit-planner\';',
+          '',
+        ].join('\n'),
+        'src/scheduling/generated/slot-table.ts': [
+          '// GENERATED from the clinic slot schema — do not edit.',
+          'let slotTable: Record<string, string> = {};',
+          '',
+          'export function planVisit(patientId: string): void {',
+          '  slotTable[patientId] = \'next-open-slot\';',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    },
+  }),
 ];

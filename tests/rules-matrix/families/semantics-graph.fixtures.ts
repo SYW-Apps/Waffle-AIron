@@ -74,6 +74,50 @@ export default [
       ],
     },
   }),
+  defineRuleFixture({
+    code: 'CIRCULAR_DEPENDENCY',
+    severity: 'error',
+    expectFire: true,
+    scenario:
+      'A run scoped to the fulfillment subsystem still reports its shipment planner and carrier booking cycle, although the accrual journal cycle of the accounting subsystem comes first in the search.',
+    tree: {
+      scopeSubsystem: 'fulfillment',
+      subsystems: [
+        { id: 'accounting', description: 'Accrual journal upkeep and ledger posting.' },
+        { id: 'fulfillment', description: 'Shipment planning and carrier booking.' },
+      ],
+      components: [
+        {
+          id: 'accrual-journal-orchestrator',
+          subsystem: 'accounting',
+          componentType: 'Orchestrator',
+          description: 'Keeps the accrual journal in step with postings.',
+          dependsOn: ['accrual-posting-orchestrator'],
+        },
+        {
+          id: 'accrual-posting-orchestrator',
+          subsystem: 'accounting',
+          componentType: 'Orchestrator',
+          description: 'Posts accrual entries to the ledger.',
+          dependsOn: ['accrual-journal-orchestrator'],
+        },
+        {
+          id: 'carrier-booking-orchestrator',
+          subsystem: 'fulfillment',
+          componentType: 'Orchestrator',
+          description: 'Books carriers for planned shipments.',
+          dependsOn: ['shipment-planner'],
+        },
+        {
+          id: 'shipment-planner',
+          subsystem: 'fulfillment',
+          componentType: 'Orchestrator',
+          description: 'Plans shipments for packed orders.',
+          dependsOn: ['carrier-booking-orchestrator'],
+        },
+      ],
+    },
+  }),
 
   // -------------------------------------------------------------------------
   // UNUSED_COMPONENT — Portal-rooted chain with an orphan
@@ -890,7 +934,7 @@ export default [
   defineRuleFixture({
     code: 'UNUSED_METHOD',
     severity: 'warning',
-    anchoredTo: 'checkout-orchestrator',
+    anchoredTo: 'icheckout_orchestrator',
     expectFire: true,
     scenario:
       'The checkout orchestrator is reached through the portal for order placement, but its cancelOrder contract method is never called by any narrative step.',

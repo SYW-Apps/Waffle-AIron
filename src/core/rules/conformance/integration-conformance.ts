@@ -8,10 +8,12 @@ import type { RuleContext, SddRule } from '../types.js';
 // bugs live in the wiring the mocks encode away. The static gate proves — and
 // only proves — that a committed integration harness (L4 `simPath`) EXISTS
 // and its import graph WIRES the real modules: at least one of the
-// component's own modules (every file its implementations name — each
-// implementation's sourcePath and each method's) and at least one module of
-// each direct dependency. Whether the harness PASSES is CI's job (it is an
-// ordinary test file); the validator never runs anything.
+// component's own modules (every existing file its implementations name —
+// each implementation's sourcePath and each method's) and at least one module
+// of each direct dependency. A missing file is structural conformance's
+// finding alone, and chained subprojects' files are the child's own run's.
+// Whether the harness PASSES is CI's job (it is an ordinary test file); the
+// validator never runs anything.
 //
 // Adoption is subsystem-by-subsystem and mechanical: declaring the FIRST
 // simPath in a subsystem activates MISSING_INTEGRATION_SIM for that
@@ -37,25 +39,37 @@ export const integrationConformanceRule: SddRule = {
     // subsystem set exists for cross-subsystem dependencies: the published
     // portal's barrel is cosmetic at runtime (same doctrine as
     // dependency-conformance), so wiring is proven by reaching ANY module of
-    // the target subsystem.
+    // the target subsystem. Chained subprojects contribute nothing, as in
+    // dependency-conformance: their sourcePaths are relative to the child's
+    // own root, and the child validates them in its own run.
     const filesByComponent = new Map<string, Set<string>>();
     const filesBySubsystem = new Map<string, Set<string>>();
     const implsByComponent = new Map<string, ImplementationSpec[]>();
+    // Subsystems that have adopted sims: any implementation declaring one.
+    const adopted = new Set<string>();
+    // A named file is a module only when it exists: a missing or escaped file
+    // is structural conformance's finding alone, and no harness can reach it.
+    const exists = (p: string): boolean => {
+      const status = factsByPath.get(p)?.status;
+      return status === 'analyzed' || status === 'unreadable';
+    };
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
       const comp = contract ? ctx.componentMap.get(contract.component) : undefined;
-      if (!comp) continue;
+      if (!comp || ctx.isInChainedSubproject(comp.subsystem)) continue;
       if (!implsByComponent.has(comp.id)) implsByComponent.set(comp.id, []);
       implsByComponent.get(comp.id)!.push(impl);
-      // A component's own modules are every file its implementations name:
-      // each implementation's sourcePath and each method's.
+      // A component's own modules are every existing file its implementations
+      // name: each implementation's sourcePath and each method's.
       for (const file of implementationSourceFiles(impl)) {
         const p = pathKey(file);
+        if (!exists(p)) continue;
         if (!filesByComponent.has(comp.id)) filesByComponent.set(comp.id, new Set());
         filesByComponent.get(comp.id)!.add(p);
         if (!filesBySubsystem.has(comp.subsystem)) filesBySubsystem.set(comp.subsystem, new Set());
         filesBySubsystem.get(comp.subsystem)!.add(p);
       }
+      if (impl.simPath) adopted.add(comp.subsystem);
     }
 
     // A dependency whose implementations declare technologies is a technology
@@ -63,15 +77,6 @@ export const integrationConformanceRule: SddRule = {
     // not import its real module.
     const isTechBoundary = (compId: string): boolean =>
       (implsByComponent.get(compId) ?? []).some(i => (i.technologies ?? []).length > 0);
-
-    // Subsystems that have adopted sims: any implementation declaring one.
-    const adopted = new Set<string>();
-    for (const impl of ctx.implementations) {
-      if (!impl.simPath) continue;
-      const contract = ctx.interfaceMap.get(impl.contract);
-      const comp = contract ? ctx.componentMap.get(contract.component) : undefined;
-      if (comp) adopted.add(comp.subsystem);
-    }
 
     // Transitive import closure from one file over the analyzed set (imports
     // realize wiring; export-from barrels republish it — both count).
@@ -151,7 +156,7 @@ export const integrationConformanceRule: SddRule = {
         const depFiles = depComp.subsystem !== comp.subsystem
           ? filesBySubsystem.get(depComp.subsystem)
           : filesByComponent.get(dep);
-        if (!depFiles || depFiles.size === 0) continue; // unrealized dependency — its own findings cover that
+        if (!depFiles || depFiles.size === 0) continue; // no existing module here (unrealized, or in a chained subproject) — other findings or the child's own run cover that
         if (![...depFiles].some(f => reach.has(f))) {
           const label = depComp.subsystem !== comp.subsystem ? `"${dep}" (any module of subsystem "${depComp.subsystem}")` : `"${dep}" (${[...depFiles].join(' | ')})`;
           missing.push(label);

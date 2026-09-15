@@ -2,8 +2,10 @@ import { SddRule } from '../types.js';
 import { splitNamespace } from '../../../models/index.js';
 
 /** Default dependsOn count above which a component is flagged as doing too much.
- *  Overridable per project via rules.complexity.maxComponentDependencies — the
- *  same knob the EXCESSIVE_DEPENDENCIES rule reads, so both agree on the cap. */
+ *  Overridden by the effective rules.complexity.maxComponentDependencies for the
+ *  component's subsystem (the project's, overlaid with its profile pack's) — the
+ *  value EXCESSIVE_DEPENDENCIES reads, so both agree on the cap wherever one is
+ *  set; only GOD_COMPONENT falls back to this default where none is. */
 const DEFAULT_GOD_COMPONENT_THRESHOLD = 8;
 
 /**
@@ -104,9 +106,11 @@ export const couplingRule: SddRule = {
       }
     }
 
-    // --- God component detection
-    const threshold = ctx.rules?.complexity?.maxComponentDependencies ?? DEFAULT_GOD_COMPONENT_THRESHOLD;
+    // --- God component detection: each component is held to the effective
+    // cap of its own subsystem (the project's complexity config overlaid with
+    // the subsystem profile pack's), the value EXCESSIVE_DEPENDENCIES reads.
     for (const comp of ctx.components) {
+      const threshold = ctx.complexityConfigFor(comp.subsystem)?.maxComponentDependencies ?? DEFAULT_GOD_COMPONENT_THRESHOLD;
       if (comp.dependsOn.length > threshold) {
         ctx.addIssue(
           'warning',

@@ -15,12 +15,29 @@ function componentOfImpl(ctx: RuleContext, implContract: string): ComponentSpec 
   return contract ? ctx.componentMap.get(contract.component) : undefined;
 }
 
-const CLAIM_PHRASES = /\b(persist(s|ed|ent)?|survives?\s+(a\s+)?restart|writ(es?|ten)\s+to\s+disk|registered\s+into|durabl[ey])\b/i;
+const CLAIM_PHRASES = /\b(persist(s|ed|ent|ing|ence)?|survives?\s+(a\s+)?restart|writ(es?|ten)\s+to\s+disk|registered\s+into|durabl[ey])\b/i;
+
+/**
+ * A quoted span: double quotes, typographic double quotes, backticks, or single
+ * quotes (straight or typographic). A single quote opens only where no letter or
+ * digit precedes it and closes only where none follows; inside a span, a quote
+ * between two letters or digits is an apostrophe. So "the store's" opens nothing.
+ */
+const QUOTED_SPAN = /"[^"]*"|“[^”]*”|`[^`]*`|(?<![\p{L}\p{N}])['‘](?:[^'‘’]|(?<=[\p{L}\p{N}])['’](?=[\p{L}\p{N}]))*['’](?![\p{L}\p{N}])/gu;
+
+/**
+ * The text with every quoted span blanked. Quoted text names a value or quotes
+ * a message (the word durable naming a durability mode, a "Settings persisted"
+ * reply) rather than claiming anything.
+ */
+function withoutQuotedText(text: string): string {
+  return text.replace(QUOTED_SPAN, ' ');
+}
 
 export const proseClaimRule: SddRule = {
   name: 'prose-claims',
   description:
-    'Flags durability/side-effect claims that exist only in prose: a local step description or an intent paragraph claiming persistence ("persisted", "survives restart", "registered into") on a logic component whose narrative has no call/dispatch edge to any data-layer component (Store/Registry/Index/Adapter/Repository). Data-layer components are exempt — they ARE the persistence.',
+    'Flags durability/side-effect claims that exist only in prose: a local step description or an intent paragraph claiming persistence ("persisted", "persistence", "survives restart", "registered into") on a logic component whose narrative has no call, register or dispatch edge to any data-layer component (Store/Registry/Index/Adapter/Repository). Text inside quotes or backticks names a value or quotes a message and claims nothing. Data-layer components are exempt — they ARE the persistence.',
   codes: [
     { code: 'UNREALIZED_CLAIM', defaultSeverity: 'warning', summary: 'Durability/side-effect claim in prose with no matching structural edge' },
   ],
@@ -38,13 +55,15 @@ export const proseClaimRule: SddRule = {
         // graph probing below only runs on actual hits.
         const stepClaims = implMethod.narrative
           .filter(step => step.type === 'local')
-          .map(step => ({ step, claim: CLAIM_PHRASES.exec(step.description) }))
+          .map(step => ({ step, claim: CLAIM_PHRASES.exec(withoutQuotedText(step.description)) }))
           .filter((c): c is { step: (typeof implMethod.narrative)[number]; claim: RegExpExecArray } => c.claim !== null);
-        const intentClaim = implMethod.intent ? CLAIM_PHRASES.exec(implMethod.intent) : null;
+        const intentClaim = implMethod.intent ? CLAIM_PHRASES.exec(withoutQuotedText(implMethod.intent)) : null;
         if (!stepClaims.length && !intentClaim) continue;
 
+        // A register step hands the target's method to the runtime: as
+        // structural an edge to the data layer as a call.
         const hasDataEdge = implMethod.narrative.some(step => {
-          if (step.type !== 'call' && step.type !== 'dispatch') return false;
+          if (step.type !== 'call' && step.type !== 'register' && step.type !== 'dispatch') return false;
           if (!step.targetComponent) return false;
           const target = ctx.componentMap.get(step.targetComponent);
           if (target && DATA_STEREOTYPES.has(target.componentType)) return true;
@@ -55,14 +74,14 @@ export const proseClaimRule: SddRule = {
         });
 
         // Steps: a LOCAL step claiming persistence in a narrative with no
-        // data-layer edge realizes nothing. (call/dispatch steps carry their
-        // own edge and are exempt.)
+        // data-layer edge realizes nothing. (call/register/dispatch steps carry
+        // their own edge and are exempt.)
         for (const { step, claim } of stepClaims) {
           if (!hasDataEdge) {
             ctx.addIssue(
               'warning',
               'UNREALIZED_CLAIM',
-              `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" claims "${claim[0]}" but no call/dispatch edge in this narrative reaches a Store/Registry/Index/Adapter — realize the claim as a structural edge (and durability tags), or reword the prose.`,
+              `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" claims "${claim[0]}" but no call/register/dispatch edge in this narrative reaches a Store/Registry/Index/Adapter — realize the claim as a structural edge (and durability tags), or reword the prose.`,
               impl.id,
               isDraftCtx,
             );

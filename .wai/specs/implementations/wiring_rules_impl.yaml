@@ -6,86 +6,6 @@ description: >-
 contract: iwiring_rules
 simPath: tests/core/validation.test.ts
 methods:
-  - name: dependencyCycles
-    sourcePath: src/core/rules/wiring/dependency-cycles.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Start empty visited and recStack sets, shared by every descent of the private recursive
-          helper dfs(compId, pathTrace)
-        type: local
-      - stepNumber: 2
-        label: components
-        description: Search from each component that no earlier search has visited
-        type: loop
-        loopKind: forEach
-        over: ctx.components, skipping a component already visited when its turn comes
-        endStep: 11
-      - stepNumber: 3
-        description: >-
-          Descend with dfs(comp.id, []), whose body is the steps from here to the end of this loop,
-          re-entered one level deeper on each recursion: add compId to visited and recStack, push it
-          onto pathTrace, and look it up in ctx.componentMap
-        type: local
-      - stepNumber: 4
-        label: dependencies
-        description: Follow each dependency edge depId of compId
-        type: loop
-        loopKind: forEach
-        over: the looked-up component's dependsOn ids (none when compId does not resolve)
-        endStep: 10
-      - stepNumber: 5
-        description: >-
-          Classify the dependency: unvisited, on the current recursion stack, or already fully
-          searched (nothing to do)
-        type: switch
-        'on': depId's search state
-        cases:
-          - value: not yet visited
-            step: 6
-          - value: visited and still on recStack (a back edge)
-            step: 8
-        defaultStep: 4
-      - stepNumber: 6
-        label: recurse
-        description: Recurse into the unvisited dependency with dfs(depId, pathTrace)
-        type: branch
-        condition: dfs(depId, pathTrace) found a cycle
-        onFalseStep: 4
-      - stepNumber: 7
-        description: >-
-          Unwind: remove compId from recStack, pop it off pathTrace and return true to the caller;
-          the top-level search's true breaks the component loop, so only the first cycle is ever
-          reported
-        type: return
-        outcome: 'true: a cycle was found'
-      - stepNumber: 8
-        label: closeCycle
-        description: >-
-          Close the cycle: push depId onto pathTrace; the cycle path is pathTrace from depId's first
-          occurrence, joined with ' -> '
-        type: local
-      - stepNumber: 9
-        description: >-
-          Report CIRCULAR_DEPENDENCY (error; draft context when ctx.isComponentDraft(compId) or
-          ctx.isComponentDraft(depId)) on compId, with the message Circular dependency detected:
-          <cycle path>
-        type: local
-      - stepNumber: 10
-        label: dependenciesEnd
-        description: >-
-          Unwind: pop depId and compId off pathTrace, remove compId from recStack and return true;
-          the top-level search's true breaks the component loop
-        type: return
-        outcome: 'true: a cycle was found'
-      - stepNumber: 11
-        label: componentsEnd
-        description: >-
-          No cycle below compId: remove it from recStack and pop it off pathTrace, returning false,
-          so the caller goes on with its next dependency, or the component loop with its next
-          component
-        type: local
-    symbol: check
   - name: dispatchTables
     sourcePath: src/core/rules/wiring/dispatch-tables.ts
     narrative:
@@ -182,7 +102,7 @@ methods:
         over: >-
           the dispatch steps of every method narrative of every implementation impl in
           ctx.implementations
-        endStep: 29
+        endStep: 30
       - stepNumber: 17
         description: A dispatch step must name the capability it routes
         type: branch
@@ -237,21 +157,28 @@ methods:
         type: jump
         toStep: 16
       - stepNumber: 27
-        label: checkGuarantees
+        label: checkBoundMethod
         description: >-
-          Check each asserted guarantee g against the guarantees declared by the bound method: the
-          method of ctx.interfaceMethodsOf(binding.component) named binding.method, with none
-          declared when there is no such method
+          A guarantee is judged against the method the binding names, boundMethod: the method of
+          ctx.interfaceMethodsOf(binding.component) named binding.method. A binding naming a missing
+          component or method is the table side's UNSERVED_CAPABILITY, and a guarantee cannot be
+          judged against a method that does not exist, so the step's guarantees are left unjudged
+        type: branch
+        condition: boundMethod exists
+        onFalseStep: 16
+      - stepNumber: 28
+        label: checkGuarantees
+        description: Check each asserted guarantee g against the guarantees boundMethod declares
         type: loop
         loopKind: forEach
         over: step.assertsGuarantees (none when the step asserts no guarantee)
-        endStep: 29
-      - stepNumber: 28
+        endStep: 30
+      - stepNumber: 29
         description: The same consistency check call steps get
         type: branch
         condition: g is not among the bound method's declared guarantees
-        onFalseStep: 27
-      - stepNumber: 29
+        onFalseStep: 28
+      - stepNumber: 30
         label: stepsEnd
         description: >-
           Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context when
@@ -356,9 +283,10 @@ methods:
         onFalseStep: 9
       - stepNumber: 8
         description: >-
-          Report INVOKED_BY_UNDESCRIBED (warning; draft context when the component's status or
-          intf.status is draft or design) on intf.id, naming the method, the component and the
-          invokedBy kind
+          Report INVOKED_BY_UNDESCRIBED (warning; draft context when
+          ctx.isComponentDraft(intf.component) holds, which a draft or design subsystem makes true
+          as well, or intf.status is draft or design) on intf.id, naming the method, the component
+          and the invokedBy kind
         type: local
       - stepNumber: 9
         label: checkRedundant
@@ -369,8 +297,9 @@ methods:
       - stepNumber: 10
         label: declarationsEnd
         description: >-
-          Report INVOKED_BY_REDUNDANT (warning; draft context when the component's status or
-          intf.status is draft or design) on intf.id: the declaration is stale
+          Report INVOKED_BY_REDUNDANT (warning; draft context when
+          ctx.isComponentDraft(intf.component) or intf.status is draft or design) on intf.id: the
+          declaration is stale
         type: local
       - stepNumber: 11
         description: Without invokedBy seeds the full reach is baseWalk itself
@@ -398,8 +327,8 @@ methods:
         onFalseStep: 17
       - stepNumber: 15
         description: >-
-          Report UNUSED_COMPONENT (warning; draft context when comp.status is draft or design) on
-          comp.id
+          Report UNUSED_COMPONENT (warning; draft context from ctx.isComponentDraft(comp.id), which
+          a draft or design subsystem makes true as well) on comp.id
         type: local
       - stepNumber: 16
         description: Continue with the next component
@@ -420,8 +349,9 @@ methods:
       - stepNumber: 19
         label: componentsEnd
         description: >-
-          Report UNUSED_METHOD (warning; draft context when comp.status or intf.status is draft or
-          design) on comp.id, naming the method
+          Report UNUSED_METHOD (warning; draft context when ctx.isComponentDraft(comp.id) or
+          intf.status is draft or design) on intf.id, the interface declaring the method, as for the
+          invokedBy findings, naming the method and the component
         type: local
       - stepNumber: 20
         description: >-
@@ -550,9 +480,12 @@ methods:
         endStep: 6
       - stepNumber: 4
         description: >-
-          Collect the offenders: each structured param of m whose type, unwrapped from Promise<...>
-          by the private helper unwrapPromise, is in the private BARE_SEAM_TYPES set (json, any,
-          unknown, object; ignoring case), and m.returns (empty when absent) under the same test
+          Collect the offenders, reading each type through the type-reference grammar m.typeRefs()
+          uses, a ref being bare when it is in the private BARE_SEAM_TYPES set (json, any, unknown,
+          object; ignoring case): with structured params, which m.typeRefs() reads when they are
+          authored, each param whose type names a bare ref and m.returns when it names one; without
+          them, the prose signature when m.typeRefs() (read from the prose signature and returns)
+          names a bare ref
         type: local
       - stepNumber: 5
         description: Only an untyped param or return crossing the boundary is reported
@@ -583,9 +516,14 @@ methods:
         endStep: 9
       - stepNumber: 2
         description: >-
-          Find the claims with the private CLAIM_PHRASES pattern (the persistence, restart-survival,
-          write-to-disk, registration and durability phrasings): each local step whose description
-          matches, and the match in implMethod.intent when it has one
+          Find the claims with the private CLAIM_PHRASES pattern (`persist`, `persists`,
+          `persisted`, `persistent`, `persisting`, `persistence`, `survives a restart`, `writes to
+          disk`, `written to disk`, `registered into`, `durable`, `durably`) in the text the private
+          helper withoutQuotedText leaves: each local step whose description claims, and the claim
+          in implMethod.intent when it has one. withoutQuotedText blanks every span in double
+          quotes, backticks or single quotes, since quoted text names a value or quotes a message
+          rather than claiming anything; a single quote opens a span only where no letter or digit
+          precedes it and closes one only where none follows, so an apostrophe opens nothing
         type: local
       - stepNumber: 3
         description: Almost no method carries a claim, so the edge probing only runs on a hit
@@ -594,9 +532,10 @@ methods:
         onFalseStep: 1
       - stepNumber: 4
         description: >-
-          hasDataEdge: some call or dispatch step with a targetComponent reaches a data-layer
-          component, either the target itself in ctx.componentMap or the server the target's
-          dispatch binding for step.capability names
+          hasDataEdge: some call, register or dispatch step with a targetComponent reaches a
+          data-layer component, either the target itself in ctx.componentMap or the server the
+          target's dispatch binding for step.capability names; a register step hands the target's
+          method to the runtime, as structural an edge to the data layer as a call
         type: local
       - stepNumber: 5
         label: stepClaims
@@ -657,7 +596,10 @@ methods:
         onFalseStep: 2
       - stepNumber: 4
         label: idsEnd
-        description: Report DUPLICATE_INVARIANT_ID (error; no draft context) on t.id, naming the repeated id
+        description: >-
+          Report DUPLICATE_INVARIANT_ID (error; draft context from the private helper
+          isEntityDraft(t), which holds when the subsystem in ctx.subsystems whose id is t.subsystem
+          has status draft or design) on t.id, naming the repeated id
         type: local
       - stepNumber: 5
         description: >-
@@ -669,8 +611,8 @@ methods:
         onFalseStep: 8
       - stepNumber: 6
         description: >-
-          Report INVARIANT_UNANCHORED (warning; no draft context) on t.id, naming the componentClass
-          that does not resolve, or its absence
+          Report INVARIANT_UNANCHORED (warning; draft context from isEntityDraft(t)) on t.id, naming
+          the componentClass that does not resolve, or its absence
         type: local
       - stepNumber: 7
         description: 'Without an owner there is no write path to judge: continue with the next entity'
@@ -686,8 +628,8 @@ methods:
         onFalseStep: 11
       - stepNumber: 9
         description: >-
-          Report INVARIANT_UNANCHORED (warning; draft context from ctx.isComponentDraft(comp.id)) on
-          t.id: the owner declares no effect: write method
+          Report INVARIANT_UNANCHORED (warning; draft context when isEntityDraft(t) or
+          ctx.isComponentDraft(comp.id)) on t.id: the owner declares no effect: write method
         type: local
       - stepNumber: 10
         description: Continue with the next entity
@@ -707,16 +649,19 @@ methods:
           A write method's narrative asserts the invariant when one of its steps lists, in
           assertsInvariants, a ref the private helper refMatchesInvariant accepts: the ref splits at
           its last dot (splitInvariantRef) into a type ref and an invariant id equal to inv.id, t
-          declares that id, and t.matchesRef(type ref) holds
+          declares that id, and t.matchesRef(type ref) holds. An implementation that does not
+          implement the method has no such step: the obligation attaches to the contract's write
+          method, which exists, so the finding stands beside MISSING_IMPLEMENTATION_METHOD and names
+          the invariants the missing narrative must assert
         type: branch
         condition: the private helper stepAsserts(impl, method.name, t, inv.id) finds no asserting step
         onFalseStep: 11
       - stepNumber: 13
         label: entitiesEnd
         description: >-
-          Report UNASSERTED_INVARIANT (warning; draft context from ctx.isImplementationDraft(impl))
-          on impl.id, naming the write method, the owner, the implementation and the invariant with
-          its description
+          Report UNASSERTED_INVARIANT (warning; draft context when isEntityDraft(t) or
+          ctx.isImplementationDraft(impl)) on impl.id, naming the write method, the owner, the
+          implementation and the invariant with its description
         type: local
       - stepNumber: 14
         label: refs
@@ -749,7 +694,9 @@ methods:
           Collect the topic ends with the private helper collectEnds: emitters from each component's
           emits and from each MessageBus endpoint whose direction is publish; subscribers from each
           component's subscribesTo and from every other MessageBus endpoint (direction subscribe,
-          the default); each end records its topic, component id and how it was declared
+          the default). An end is one topic on one component on one side and records every
+          declaration that binds it there (an emits entry and a publish endpoint, or two endpoints,
+          make one end), so each topic is judged once per component
         type: local
       - stepNumber: 2
         description: A tree that declares no event edges pays zero noise
@@ -776,7 +723,7 @@ methods:
         label: emittersEnd
         description: >-
           Report UNCONSUMED_TOPIC (warning; draft context from ctx.isComponentDraft(e.compId)) on
-          e.compId, naming the topic and how it was declared
+          e.compId, naming the topic and every declaration of it on that component
         type: local
       - stepNumber: 7
         label: subscribers
@@ -794,9 +741,43 @@ methods:
         label: subscribersEnd
         description: >-
           Report UNSOURCED_SUBSCRIPTION (warning; draft context from ctx.isComponentDraft(s.compId))
-          on s.compId, naming the topic and how it was declared
+          on s.compId, naming the topic and every declaration of it on that component
         type: local
+    symbol: check
+  - name: dependencyCycles
+    sourcePath: src/core/rules/wiring/dependency-cycles.ts
+    narrative:
+      - stepNumber: 1
+        label: components
+        description: Search for a cycle through each component in scope, in tree order
+        type: loop
+        loopKind: forEach
+        over: >-
+          the components comp of ctx.components within scope (ctx.isSpecInScope(comp.id)); a scoped
+          run judges the cycles through its own components, since a finding anchored outside the
+          scope is dropped
+        endStep: 4
+      - stepNumber: 2
+        description: >-
+          Look for a dependency path from comp back to itself with the private helper
+          cycleFrom(comp.id): a depth-first search along dependsOn that visits each component at
+          most once and stops at a dependency that is comp.id itself, the cycle path being the
+          search path from comp.id back to comp.id
+        type: branch
+        condition: cycleFrom(comp.id) finds a path back to comp.id
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          Report CIRCULAR_DEPENDENCY (error; draft context when ctx.isComponentDraft holds for
+          comp.id or for the component whose dependency closes the cycle) on comp.id, with the
+          message Circular dependency detected: <cycle path joined with ' -> '>
+        type: local
+      - stepNumber: 4
+        label: componentsEnd
+        description: Stop at the first reported cycle
+        type: return
+        outcome: the first cycle through a component in scope is reported
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-15T00:30:34.013Z'
+updatedAt: '2026-09-15T01:35:40.841Z'

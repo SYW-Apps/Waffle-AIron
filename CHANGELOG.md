@@ -3,13 +3,14 @@
 ## Unreleased (from v5.1.0)
 
 **Breaking.** Merge dev → main with `[major]` in the merge commit message →
-**v6.0.0**. Five changes are visible on upgrade without any action by the user,
+**v6.0.0**. Six changes are visible on upgrade without any action by the user,
 and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
 a project that has not declared them, existing lock records read as stale, a
 project referencing a global pack's profile can newly fail `validate --ci`, and so
 can a chained subproject whose gate was waving cross-tree findings through or whose
-nested mount reaches outside its own project, or a Specialist that depends on a
-Registry or an Actor. Nothing here is purely additive, so `[minor]` would
+nested mount reaches outside its own project, a Specialist that depends on a
+Registry or an Actor, or a tree holding a case the fixed validator rules used to
+miss. Nothing here is purely additive, so `[minor]` would
 understate it.
 
 ### A chained subproject is judged through its parent — never waved through
@@ -224,7 +225,8 @@ the code.
   source-file share of completeness only when every named file exists.
 - **A contract method declares the findings it reports: `findings: [{ code, severity, summary }]`.**
   `sdd_define_interface` accepts it and `sdd_update_spec` upserts and deletes entries by `code`. A declared code must
-  appear as a string literal in the method's source file, or `UNREALIZED_FINDING` (warning) says so — the catalog of what
+  be anchored in the method's source file, as a string literal or a property-access name such as `Codes.X`, or
+  `UNREALIZED_FINDING` (warning) says so — the catalog of what
   a check reports sits on its contract, the way ESLint keeps a rule's messages in its `meta`. Below exact analysis grade
   the check is lenient: it can miss an unreported code, but never flags a reported one.
 - **Wairon's own tree** points 26 methods at their real files: 19 of `cli_runner`'s command methods at
@@ -270,6 +272,74 @@ codes the rules reported.
   `extractTypesFromSignature` are no longer exported. The model functions that replace their uses are:
   `methodTypeRefs`, `methodGenericParameters`, `typeGenericParameters`, `fieldTypeRefs` and
   `interfaceGenericParameters`.
+
+### The validator's rules do what their narratives say
+
+Narrating the 43 rules faithfully turned up behaviour that disagreed with a rule's own description, with its neighbours,
+or with the step graph. Each fix was reproduced by a failing test first; the rule's narrative changed, then its code, and
+each test was proven by reverting the fix. Findings a tree did not see before come first, because `validate --ci` can
+newly fail on them (see *Upgrading*).
+
+- **Newly reported.**
+  - `UNDECLARED_DEPENDENCY_CALL` (error) covers calls and dispatches that resolve against a surface snapshot: a step that
+    reaches another tree's component the caller does not list in `dependsOn` no longer passes.
+  - `PORTAL_WRITE_SHORTCUT` (error) judges a Portal's dispatch table too: a binding that routes a capability to a
+    write-effect Repository or Index method is reported once, on the Portal.
+  - `ROUTER_COMPONENT_CONTAINMENT` (error) fires on a RouterComponent that owns more than one Portal, as its message
+    always said.
+  - `CIRCULAR_DEPENDENCY` (error) in a `--subsystem` run reports a cycle through the scope even when the search meets an
+    out-of-scope cycle first; the scoped run used to report nothing. The finding is anchored on the first component of
+    the path it shows.
+  - `UNTYPED_SEAM` judges a published method through its type references, so a prose signature without structured
+    `params` gets the verdict the same params would, and a bare type nested in another (`Json[]`, `Map<string, Json>`,
+    `Record<string, unknown>`) counts. Its summary now names `object`, which it always flagged. Wairon's own
+    `icli_runner.runHostProject` and `runHostKey` took `options: object`; their signatures now name the options each
+    command passes.
+  - `UNREALIZED_CLAIM` recognises "persisting" and "persistence".
+  - `UNCONDITIONAL_CALL_CYCLE` treats a call inside a parallel arm as unavoidable, because every arm runs.
+- **No longer reported wrongly or twice.**
+  - `MEANINGLESS_BRANCH` reads fall-through from the step graph: a branch or switch ending a parallel arm falls through
+    to the join, not into the next arm, and a switch whose unmatched values end the method decides something.
+  - `INESCAPABLE_CYCLE` accepts a cycle that exits by falling off the end of the narrative.
+  - `UNREALIZED_CLAIM` ignores text in quotes or backticks, which names a value or quotes a message, and counts a
+    `register` step to a data-layer component as the structural edge it is.
+  - `UNWIRED_INTEGRATION_SIM` leaves a missing file to `MISSING_SOURCE_FILE`, and a chained subproject's child-relative
+    paths to the child's own run.
+  - `UNREALIZED_DEPENDENCY` reports a target that is both owned and depended on once, naming both relations.
+  - `UNCONSUMED_TOPIC` and `UNSOURCED_SUBSCRIPTION` report a topic once per component, listing every declaration that
+    binds it there.
+  - `NARRATIVE_SEMANTIC_UNBACKED` is not judged against a dispatch binding whose method does not exist; that is
+    `UNSERVED_CAPABILITY`.
+  - A building block's `owns` is `BLOCK_OWNS_MEMBERS` and nothing more. It no longer makes the block an owner, so a
+    Store or Registry it claims is still judged by `UNOWNED_STORE` and `REGISTRY_WITHOUT_STORE`, its dependants get no
+    `VISIBILITY_VIOLATION`, and a pattern's member it claims gets no `SHARED_OWNED_MEMBER`.
+  - `HIDDEN_STATE` honours the method-level conformance dial: a method dialled `off` does not make its file mapping
+    evidence, and a method dialled on under an implementation dialled off does.
+- **Draft context is read the same way everywhere.** A finding on an implementation reads the implementation, its
+  contract, its component and its subsystem; one on an interface also reads the interface's own status; one on a
+  subsystem or an entity reads the subsystem's. Naming, complexity, technology leakage (`TECH_LEAKAGE`,
+  `VENDOR_NAME_IN_CONTRACT`, `TECH_ON_LOGIC_COMPONENT`), unused detection, the invariant findings and the non-Portal
+  endpoint ban now follow it, so `--ci` waives their warnings in a draft subsystem as it does for the others.
+- **Findings land where the fix is made and say what was checked.**
+  - `UNUSED_METHOD` is reported on the interface that declares the method, like `INVOKED_BY_*`, so an allow covers one
+    contract.
+  - `ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT` is reported on the interface that declares the endpoint.
+  - `SHARED_OWNED_MEMBER` names the first owner against every later claimant.
+  - `CROSS_SUBSYSTEM_TARGET_NON_PORTAL` names the crossing component's stereotype instead of calling every crosser a
+    client Adapter.
+  - `UNREALIZED_FINDING` names both anchors it accepts, a string literal or a property-access name, in its summary and
+    its message.
+  - `UNCONDITIONAL_CALL_CYCLE` orders its members by code unit instead of locale collation, so its anchor, and an allow
+    on it, are the same on every machine.
+- **One configuration, one answer.** `GOD_COMPONENT` reads the effective `maxComponentDependencies` for the component's
+  subsystem, the value `EXCESSIVE_DEPENDENCIES` reads, and uses its own default of 8 only where none is set. An empty
+  `profile: ''` means no profile for severity overrides too, as it already did for rule configs and design depth.
+- **Kept, with the reason written into the narrative.** `UNASSERTED_INVARIANT` still reports a write method an
+  implementation does not implement: the obligation belongs to the contract's write method, and the finding names the
+  invariants the missing narrative must assert.
+- **The skills say what the rules check.** The narrative skill documents a switch's `on` as optional, the two ways to
+  continue a loop, and a closing step per nested loop; the guides and the architect and implement skills say
+  `PORTAL_WRITE_SHORTCUT` covers dispatch-table bindings.
 
 ### Execution budgets: the topology gains a resource axis
 
@@ -1035,6 +1105,21 @@ method's narrative. Two mechanisms close that honestly:
    `upsertPackSelection` / `removePackSelection` and `markSelectionsBundled`.
    `loadProjectConfig` from the main entry still throws when a project has no
    configuration; `projectConfigExists()` answers that question directly.
+8. **Re-run `validate --ci`: the fixed rules report what they used to miss.**
+   - New errors: a call or dispatch to a cross-tree component the caller does not
+     list in `dependsOn` (`UNDECLARED_DEPENDENCY_CALL`); a Portal dispatch binding
+     routed to a write-effect Repository or Index method (`PORTAL_WRITE_SHORTCUT`);
+     a RouterComponent owning two Portals (`ROUTER_COMPONENT_CONTAINMENT`); in a
+     `--subsystem` run, a dependency cycle through the scope (`CIRCULAR_DEPENDENCY`).
+   - New warnings: a published method whose prose signature, or a type nested in a
+     parameter or return, is a bare `Json`, `any`, `unknown` or `object`
+     (`UNTYPED_SEAM`); a "persisting" or "persistence" claim with no data edge
+     (`UNREALIZED_CLAIM`); a call cycle through a parallel arm
+     (`UNCONDITIONAL_CALL_CYCLE`).
+   - Move a `lint.allow` for `UNUSED_METHOD` from the component to the interface
+     that declares the method. An `UNCONDITIONAL_CALL_CYCLE` allow goes stale where
+     its members' ids sort differently by locale than by code unit (`_` against
+     `-`): move it to the implementation the finding now names.
 
 ## v5.1.0 (from v5.0.1)
 

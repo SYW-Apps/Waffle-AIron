@@ -291,7 +291,7 @@ export default [
   defineRuleFixture({
     code: 'ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT',
     severity: 'error',
-    anchoredTo: 'claims-scoring-specialist',
+    anchoredTo: 'iclaims_scoring',
     expectFire: true,
     scenario:
       'The claims scoring specialist\'s contract method declares an HTTP endpoint although only Portal components may carry wire endpoints.',

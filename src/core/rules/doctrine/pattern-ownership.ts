@@ -19,13 +19,13 @@ export const patternsRule: SddRule = {
     { code: 'REPOSITORY_CONTAINMENT', defaultSeverity: 'error', summary: 'Repository owning a non Store/Registry/Index/Adapter member' },
     { code: 'GATEWAY_CONTAINMENT', defaultSeverity: 'error', summary: 'Gateway owning a non Portal/Orchestrator/Specialist member' },
     { code: 'FEATURE_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'FeatureComponent not owning exactly one Orchestrator + one or more Views' },
-    { code: 'ROUTER_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'RouterComponent missing its Portal facade or children' },
+    { code: 'ROUTER_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'RouterComponent not owning exactly one Portal facade, or owning no children to route to' },
     { code: 'VISIBILITY_VIOLATION', defaultSeverity: 'error', summary: 'Dependency on a block privately owned by another pattern' },
     { code: 'UNOWNED_STORE', defaultSeverity: 'warning', summary: 'Store not owned by any pattern — recommended shape is a Repository; a deliberate standalone Store needs a lint.allow' },
     { code: 'REGISTRY_WITHOUT_STORE', defaultSeverity: 'warning', summary: 'Standalone Registry with no Store to write to — either mistyped (a fused file-backed store belongs typed Store) or orphaned' },
   ],
   check(ctx) {
-    const ownedBy = new Map<string, string>(); // member block id -> owning pattern id
+    const ownedBy = new Map<string, string>(); // member block id -> the pattern that first claimed it
     for (const comp of ctx.components) {
       const isDraftCtx = ctx.isComponentDraft(comp.id);
       const pattern = isPattern(comp);
@@ -43,14 +43,21 @@ export const patternsRule: SddRule = {
           ctx.addIssue('error', 'INVALID_OWNED_MEMBER', `Component "${comp.id}" owns "${memberId}" which does not exist.`, comp.id, isDraftCtx);
           continue;
         }
+        // A building block's owns is wholly the BLOCK_OWNS_MEMBERS finding
+        // above: the block records no owner, so a Store or Registry it claims
+        // stays standalone for UNOWNED_STORE / REGISTRY_WITHOUT_STORE, and its
+        // dependants are judged as if the claim were absent.
+        if (!pattern) continue;
         if (isPattern(member)) {
           ctx.addIssue('error', 'PATTERN_OWNS_PATTERN', `Pattern "${comp.id}" owns "${memberId}", which is itself a pattern. Patterns own only building blocks — compose patterns at the subsystem (L1) level.`, comp.id, isDraftCtx);
         }
-        const prev = ownedBy.get(memberId);
-        if (prev && prev !== comp.id) {
-          ctx.addIssue('error', 'SHARED_OWNED_MEMBER', `Block "${memberId}" is owned by both "${prev}" and "${comp.id}"; a block has exactly one owner.`, comp.id, isDraftCtx);
+        // The first pattern to claim a member stays its owner, so every later
+        // claimant is reported against that first owner.
+        const firstOwner = ownedBy.get(memberId);
+        if (firstOwner && firstOwner !== comp.id) {
+          ctx.addIssue('error', 'SHARED_OWNED_MEMBER', `Block "${memberId}" is owned by both "${firstOwner}" and "${comp.id}"; a block has exactly one owner.`, comp.id, isDraftCtx);
         }
-        ownedBy.set(memberId, comp.id);
+        if (!firstOwner) ownedBy.set(memberId, comp.id);
       }
 
       // Repository containment: only Store / Registry / Index / Adapter
@@ -94,16 +101,18 @@ export const patternsRule: SddRule = {
         }
       }
 
-      // RouterComponent containment: exactly one Portal facade and at least one other child component/View
+      // RouterComponent containment: exactly one Portal facade (a pattern
+      // exposes one facade; a second Portal is a second front door) and at
+      // least one other child component/View to route to.
       if (comp.componentType === 'RouterComponent') {
-        let hasPortal = false;
+        let portals = 0;
         let hasChildren = false;
         for (const memberId of comp.owns) {
           const t = ctx.componentMap.get(memberId)?.componentType;
-          if (t === 'Portal') hasPortal = true;
+          if (t === 'Portal') portals++;
           else if (t) hasChildren = true;
         }
-        if (!hasPortal) {
+        if (portals !== 1) {
           ctx.addIssue('error', 'ROUTER_COMPONENT_CONTAINMENT', `RouterComponent "${comp.id}" must own exactly one Portal component to act as its facade.`, comp.id, isDraftCtx);
         }
         if (!hasChildren) {

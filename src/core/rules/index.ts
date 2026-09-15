@@ -431,7 +431,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     return out;
   };
 
-  /** The pack profile governing a subsystem: its own profile, else the project type. */
+  /** The pack profile governing a subsystem: its own profile, else the project type (an empty profile is no profile). */
   const profileDefFor = (subsystemId?: string) => {
     const sub = subsystemId ? subsystems.find(s => s.id === subsystemId) : undefined;
     const profile = sub?.profile || projectType;
@@ -490,8 +490,9 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     // Then the governing pack profile's severity overrides — the mechanism a
     // platform pack (e.g. a low-code profile) uses to auto-apply its doctrine
     // to every subsystem running under it, scoped to those subsystems only.
+    // An empty profile is no profile, as in profileDefFor: the project type governs.
     const sub = subsystemId ? subsystems.find(s => s.id === subsystemId) : undefined;
-    const profileSeverity = extensions.profiles[sub?.profile ?? projectType]?.rules?.sddRuleSeverity?.[ruleCode];
+    const profileSeverity = extensions.profiles[sub?.profile || projectType]?.rules?.sddRuleSeverity?.[ruleCode];
     if (profileSeverity) {
       return profileSeverity;
     }

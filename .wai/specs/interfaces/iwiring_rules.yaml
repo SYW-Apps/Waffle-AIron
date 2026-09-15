@@ -9,8 +9,8 @@ component: wiring_rules
 methods:
   - name: dependencyCycles
     description: >-
-      Rule dependency-cycles. The component dependsOn graph must be a DAG; the first detected cycle
-      is reported with its full path.
+      Rule dependency-cycles. The component dependsOn graph must be a DAG; the first cycle through a
+      component in the run's scope is reported with its full path.
     signature: 'dependencyCycles(ctx: RuleContext): void'
     returns: void
     params:
@@ -134,9 +134,10 @@ methods:
   - name: untypedSeams
     description: >-
       Rule untyped-seams. Methods on a subsystem's published components (its public surface) should
-      not take or return bare Json/any/unknown — cross-subsystem contracts are the swap seam and
-      must be typed. Generic-dispatch portals carry per-capability types via their dispatch table
-      instead.
+      not take or return bare Json/any/unknown/object, judged through each method's type references
+      so a prose signature is judged like structured params: cross-subsystem contracts are the swap
+      seam and must be typed. Generic-dispatch portals carry per-capability types via their dispatch
+      table instead.
     signature: 'untypedSeams(ctx: RuleContext): void'
     returns: void
     params:
@@ -146,14 +147,15 @@ methods:
     findings:
       - code: UNTYPED_SEAM
         severity: warning
-        summary: Bare Json/any/unknown parameter or return crossing a subsystem public surface
+        summary: Bare Json/any/unknown/object parameter or return crossing a subsystem public surface
   - name: proseClaims
     description: >-
       Rule prose-claims. Flags durability/side-effect claims that exist only in prose: a local step
-      description or an intent paragraph claiming persistence ("persisted", "survives restart",
-      "registered into") on a logic component whose narrative has no call/dispatch edge to any
-      data-layer component (Store/Registry/Index/Adapter/Repository). Data-layer components are
-      exempt — they ARE the persistence.
+      description or an intent paragraph claiming persistence ("persisted", "persistence", "survives
+      restart", "registered into") on a logic component whose narrative has no call, register or
+      dispatch edge to any data-layer component (Store/Registry/Index/Adapter/Repository). Text
+      inside quotes or backticks names a value or quotes a message and claims nothing. Data-layer
+      components are exempt — they ARE the persistence.
     signature: 'proseClaims(ctx: RuleContext): void'
     returns: void
     params:
@@ -202,10 +204,10 @@ methods:
       Rule event-topology. Bipartite completeness of the declared pub/sub graph: every topic a
       component emits (emits declarations, MessageBus publish endpoints) must have at least one
       subscriber (subscribesTo declarations, MessageBus subscribe endpoints), and every subscription
-      must have at least one source. Pairing is by exact topic name. Trees that declare no event
-      edges see nothing — the rule costs request/response systems zero noise. Warnings + lint.allow:
-      a topic produced for (or consumed from) an EXTERNAL system is a legitimate, declarable
-      exception.
+      must have at least one source. Pairing is by exact topic name, and a topic is reported once
+      per component however many declarations bind it there. Trees that declare no event edges see
+      nothing — the rule costs request/response systems zero noise. Warnings + lint.allow: a topic
+      produced for (or consumed from) an EXTERNAL system is a legitimate, declarable exception.
     signature: 'eventTopology(ctx: RuleContext): void'
     returns: void
     params:
@@ -221,4 +223,4 @@ methods:
         summary: Topic is subscribed to but nothing in the tree emits it
 status: draft
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-09-14T06:08:14.967Z'
+updatedAt: '2026-09-15T01:23:35.857Z'

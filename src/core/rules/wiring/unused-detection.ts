@@ -50,12 +50,12 @@ export const reachabilityRule: SddRule = {
       // A declaration on an unresolvable component can't be judged (the
       // dangling reference is the hierarchy family's finding).
       if (!ctx.componentMap.has(intf.component)) continue;
-      const comp = ctx.componentMap.get(intf.component)!;
       for (const m of intf.methods) {
         if (!m.invokedBy) continue;
         invokedBySeeds.push({ compId: intf.component, methodName: m.name });
         if (!ctx.isSpecInScope(intf.id)) continue;
-        const isDraftCtx = comp.status === 'draft' || comp.status === 'design' || intf.status === 'draft' || intf.status === 'design';
+        // A draft or design subsystem makes its components draft context too.
+        const isDraftCtx = ctx.isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
         if (!passesIntentFloor(m.invokedBy.caller, m.name)) {
           ctx.addIssue(
             'warning',
@@ -87,7 +87,7 @@ export const reachabilityRule: SddRule = {
     for (const comp of ctx.components) {
       if (!ctx.isSpecInScope(comp.id)) continue;
       if (!reach.reachesComponent(comp.id)) {
-        const isDraftCtx = comp.status === 'draft' || comp.status === 'design';
+        const isDraftCtx = ctx.isComponentDraft(comp.id);
         ctx.addIssue(
           'warning',
           'UNUSED_COMPONENT',
@@ -96,16 +96,18 @@ export const reachabilityRule: SddRule = {
           isDraftCtx,
         );
       } else {
-        // Warn about unused methods on this reached component (across ALL its interfaces)
+        // Warn about unused methods on this reached component (across ALL its
+        // interfaces), each on the interface that declares it — the method is
+        // an L3 declaration, as it is for the invokedBy findings.
         for (const intf of ctx.interfacesByComponent.get(comp.id) ?? []) {
           for (const m of intf.methods) {
             if (!reach.reachesMethod(comp.id, m.name)) {
-              const isDraftCtx = comp.status === 'draft' || comp.status === 'design' || intf.status === 'draft' || intf.status === 'design';
+              const isDraftCtx = ctx.isComponentDraft(comp.id) || intf.status === 'draft' || intf.status === 'design';
               ctx.addIssue(
                 'warning',
                 'UNUSED_METHOD',
                 `Method "${m.name}" on component "${comp.id}" is defined but never called by any narrative step.`,
-                comp.id,
+                intf.id,
                 isDraftCtx,
               );
             }

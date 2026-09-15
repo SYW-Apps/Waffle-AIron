@@ -67,16 +67,19 @@ export const portalsRule: SddRule = {
         continue;
       }
 
-      // Ensure non-portal components do not carry endpoints on their interface methods
+      // Ensure non-portal components do not carry endpoints on their interface
+      // methods. Reported as the Portal-side codes are: on the interface that
+      // declares the endpoint (where the fix is made), carrying its draft status.
       for (const intf of compInterfaces) {
+        const isIntfDraft = intf.status === 'draft' || intf.status === 'design';
         for (const m of intf.methods) {
           if (m.endpoint) {
             ctx.addIssue(
               'error',
               'ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT',
               `Architectural violation: Component "${comp.id}" is a ${comp.componentType}, but method "${m.name}" on its interface "${intf.id}" declares an endpoint. Only Portal components may carry endpoints.`,
-              comp.id,
-              isDraftCtx,
+              intf.id,
+              isDraftCtx || isIntfDraft,
             );
           }
         }

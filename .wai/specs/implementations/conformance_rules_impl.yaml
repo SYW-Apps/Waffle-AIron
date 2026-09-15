@@ -13,7 +13,9 @@ methods:
         description: >-
           Index ctx.codeModel.files into lookups keyed by ctx.codeModel.pathKey(facts.path):
           declared = declaredNames plus exportedNames, anchored = declared plus anchoredNames,
-          literals = anchoredNames alone, each kept with its facts
+          findingAnchors = anchoredNames alone (string literals and property-access names at exact
+          grade; the pattern grade adds every identifier outside comments, the generic grade every
+          word), each kept with its facts
         type: local
       - stepNumber: 2
         description: >-
@@ -193,9 +195,11 @@ methods:
         over: method.findings
         endStep: 31
       - stepNumber: 30
-        description: A code present as a string-literal anchor continues with the next finding
+        description: >-
+          A code among the file's finding anchors (a string literal, or a property-access name at
+          exact grade) continues with the next finding
         type: branch
-        condition: checked.lookup.literals lacks finding.code
+        condition: checked.lookup.findingAnchors lacks finding.code
         onFalseStep: 29
       - stepNumber: 31
         label: findingReport
@@ -334,17 +338,18 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
-          An off implementation is untrusted mapping evidence, and unresolvable or
-          chained-subproject implementations map no files: continue with the next implementation
+          Unresolvable or chained-subproject implementations map no files: continue with the next
+          implementation
         type: branch
-        condition: >-
-          impl.conformance is not off, component resolves, and
-          !ctx.isInChainedSubproject(component.subsystem)
+        condition: component resolves and !ctx.isInChainedSubproject(component.subsystem)
         onFalseStep: 1
       - stepNumber: 4
         label: mapFiles
         description: >-
-          For each of impl.sourceFiles() (its own sourcePath, then each method's), add {impl,
+          Map only the files the conformance dial trusts as evidence (a file dialed off is generated
+          or vendored code): impl.sourcePath unless impl.conformance is off, and
+          method.sourceFile(impl.sourcePath) for each method of impl.methods unless
+          method.conformance ?? impl.conformance is off. For each trusted file, add {impl,
           component.componentType, component.id} to byPath under ctx.codeModel.pathKey(file), once
           per implementation per path
         type: local
@@ -492,7 +497,9 @@ methods:
         label: targetLoop
         description: Check each declared edge
         type: loop
-        over: component.dependsOn, then component.owns (targetId)
+        over: >-
+          the distinct ids of component.dependsOn then component.owns (targetId), so a target
+          declared under both is one edge
         endStep: 23
       - stepNumber: 18
         description: An unresolvable target continues with the next target
@@ -537,10 +544,10 @@ methods:
           Report UNREALIZED_DEPENDENCY (warning; spec the first implementation in
           implsByComponent[component.id], else component.id; draft context when
           ctx.isComponentDraft(component.id), ctx.isComponentDraft(targetId), or any of those
-          implementations is ctx.isImplementationDraft) naming the edge as dependsOn when
-          component.dependsOn includes targetId, else owns, with fromFiles and the target subsystem
-          across subsystems or the target's files: the collaboration is wired indirectly (DI) or the
-          declared edge is stale
+          implementations is ctx.isImplementationDraft) naming the edge as dependsOn and owns when
+          both declare targetId, else as whichever of the two does, with fromFiles and the target
+          subsystem across subsystems or the target's files: the collaboration is wired indirectly
+          (DI) or the declared edge is stale
         type: local
     symbol: check
   - name: integrationConformance
@@ -554,10 +561,14 @@ methods:
       - stepNumber: 2
         description: >-
           For each implementation whose component resolves through ctx.interfaceMap and
-          ctx.componentMap (chained subprojects included): append it to
-          implsByComponent[component.id]; add each of impl.sourceFiles(), by ctx.codeModel.pathKey,
-          to filesByComponent[component.id] and filesBySubsystem[component.subsystem]; and when it
-          declares a simPath, add component.subsystem to adopted
+          ctx.componentMap and does not sit in a chained subproject
+          (!ctx.isInChainedSubproject(component.subsystem): a chained child's sourcePaths are
+          relative to its own root, and the child validates them in its own run): append it to
+          implsByComponent[component.id]; add each of impl.sourceFiles() that exists, by
+          ctx.codeModel.pathKey, to filesByComponent[component.id] and
+          filesBySubsystem[component.subsystem] (it exists when factsByPath holds facts for it with
+          status analyzed or unreadable; a missing or escaped file is structural conformance's
+          finding alone); and when it declares a simPath, add component.subsystem to adopted
         type: local
       - stepNumber: 3
         label: implLoop
@@ -715,4 +726,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-14T23:35:28.837Z'
+updatedAt: '2026-09-15T01:22:12.694Z'

@@ -3,8 +3,9 @@ id: finding_declaration
 name: FindingDeclaration
 description: >-
   One finding code a method can report: the unit of a contract method's findings list. The code must
-  appear as a string literal in the method's source file (UNREALIZED_FINDING). For a validator rule,
-  its findings are its catalog entry.
+  be anchored in the method's source file, as a string literal or a property-access name such as
+  Codes.X, or UNREALIZED_FINDING says so; below exact analysis grade any identifier counts. For a
+  validator rule, its findings are its catalog entry.
 fields:
   - name: code
     type: string
@@ -23,4 +24,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-09-13T18:36:53.603Z'
-updatedAt: '2026-09-13T18:36:53.612Z'
+updatedAt: '2026-09-15T01:43:17.433Z'

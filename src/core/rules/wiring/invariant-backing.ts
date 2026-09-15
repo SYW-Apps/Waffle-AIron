@@ -1,4 +1,4 @@
-import { ComponentSpec, ImplementationSpec, InterfaceSpec, TypeSpec, typeMatchesRef } from '../../../models/index.js';
+import { ComponentSpec, ImplementationSpec, InterfaceSpec, TypeSpec, isDraftSubsystem, typeMatchesRef } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -56,12 +56,29 @@ function refMatchesInvariant(ref: string, type: TypeSpec, invariantId: string): 
   return typeMatchesRef(type, parts.typeRef);
 }
 
+/**
+ * Whether the implementation's realization of the write method carries a step
+ * asserting the invariant. An implementation that does not implement the method
+ * has no such step: the obligation attaches to the contract's write method,
+ * which exists, so the finding stands beside MISSING_IMPLEMENTATION_METHOD and
+ * names the invariants the missing narrative must assert.
+ */
 function stepAsserts(impl: ImplementationSpec, methodName: string, type: TypeSpec, invariantId: string): boolean {
   const method = impl.methods.find(m => m.name === methodName);
   if (!method) return false;
   return method.narrative.some(step =>
     (step.assertsInvariants ?? []).some(ref => refMatchesInvariant(ref, type, invariantId)),
   );
+}
+
+/**
+ * Whether the entity is draft context: its owning subsystem has status draft
+ * or design. A type carries no status of its own, so its subsystem decides,
+ * as it does for UNUSED_TYPE.
+ */
+function isEntityDraft(t: TypeSpec, ctx: RuleContext): boolean {
+  const sub = t.subsystem ? ctx.subsystems.find(s => s.id === t.subsystem) : undefined;
+  return sub !== undefined && isDraftSubsystem(sub);
 }
 
 /**
@@ -94,6 +111,8 @@ export const invariantBackingRule: SddRule = {
     for (const t of ctx.types) {
       const invariants = t.invariants ?? [];
       if (invariants.length === 0) continue;
+      // Every entity-side finding is draft context while the entity is.
+      const entityDraft = isEntityDraft(t, ctx);
 
       const seen = new Set<string>();
       for (const inv of invariants) {
@@ -103,6 +122,7 @@ export const invariantBackingRule: SddRule = {
             'DUPLICATE_INVARIANT_ID',
             `Entity "${t.id}" declares invariant id "${inv.id}" more than once — invariant ids must be unique within the entity.`,
             t.id,
+            entityDraft,
           );
         }
         seen.add(inv.id);
@@ -115,6 +135,7 @@ export const invariantBackingRule: SddRule = {
           'INVARIANT_UNANCHORED',
           `Entity "${t.id}" declares ${invariants.length} invariant(s) but ${t.componentClass ? `its componentClass "${t.componentClass}" does not resolve to a component` : 'has no componentClass'} — without an owning component there is no write path to hold the invariant against. Link the lifecycle owner via componentClass.`,
           t.id,
+          entityDraft,
         );
         continue;
       }
@@ -129,14 +150,14 @@ export const invariantBackingRule: SddRule = {
           'INVARIANT_UNANCHORED',
           `Entity "${t.id}" declares ${invariants.length} invariant(s) anchored to "${comp.id}", but none of that component's contract methods declare effect: write — the validator cannot identify the write paths that must assert them. Tag the mutating methods with effect: write.`,
           t.id,
-          ctx.isComponentDraft(comp.id),
+          entityDraft || ctx.isComponentDraft(comp.id),
         );
         continue;
       }
 
       for (const { intf, method } of writeMethods) {
         for (const impl of ctx.implementationsByContract.get(intf.id) ?? []) {
-          const isDraftCtx = ctx.isImplementationDraft(impl);
+          const isDraftCtx = entityDraft || ctx.isImplementationDraft(impl);
           for (const inv of invariants) {
             if (stepAsserts(impl, method.name, t, inv.id)) continue;
             ctx.addIssue(

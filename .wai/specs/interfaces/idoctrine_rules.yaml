@@ -129,9 +129,9 @@ methods:
       - code: PORTAL_WRITE_SHORTCUT
         severity: error
         summary: >-
-          Portal narrative calls a write-effect method on a Repository/Index directly — reads may
-          shortcut, writes route through an Orchestrator (judged on effect-tagged facade methods;
-          untagged methods are not yet judged)
+          Portal narrative call or dispatch-table binding reaches a write-effect method on a
+          Repository/Index directly — reads may shortcut, writes route through an Orchestrator
+          (judged on effect-tagged facade methods; untagged methods are not yet judged)
   - name: patternOwnership
     description: >-
       Rule pattern-ownership. Patterns (Repository/Gateway/FeatureComponent/RouterComponent) own
@@ -170,7 +170,7 @@ methods:
         summary: FeatureComponent not owning exactly one Orchestrator + one or more Views
       - code: ROUTER_COMPONENT_CONTAINMENT
         severity: error
-        summary: RouterComponent missing its Portal facade or children
+        summary: RouterComponent not owning exactly one Portal facade, or owning no children to route to
       - code: VISIBILITY_VIOLATION
         severity: error
         summary: Dependency on a block privately owned by another pattern
@@ -202,4 +202,4 @@ methods:
         summary: Pattern facade narrative is not a single call to an owned member
 status: draft
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-09-14T06:06:55.458Z'
+updatedAt: '2026-09-15T01:15:50.266Z'

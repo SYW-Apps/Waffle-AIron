@@ -4,7 +4,6 @@ import {
   interfaceGenericParameters,
   methodGenericParameters,
   methodTypeRefs,
-  typeMatchesRef,
 } from '../../../models/index.js';
 
 /**
@@ -52,14 +51,10 @@ export const typeReferencesRule: SddRule = {
       if (t.fields) {
         for (const field of t.fields) {
           // The field type's identifiers, the type's own generic parameters
-          // already left out.
+          // already left out — so none remain in scope to resolve against.
           const refs = fieldTypeRefs(t, field.type);
           for (const ref of refs) {
-            if (ctx.isBuiltinType(ref)) {
-              continue;
-            }
-            const resolved = ctx.types.find(spec => typeMatchesRef(spec, ref));
-            if (!resolved) {
+            if (!ctx.isTypeResolved(ref, new Set())) {
               ctx.addIssue(
                 'error',
                 'UNDEFINED_TYPE_REFERENCE',

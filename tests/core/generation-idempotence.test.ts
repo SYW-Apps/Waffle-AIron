@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -26,6 +26,15 @@ import type { SubsystemSpec } from '../../src/models/index.js';
 
 const now = '2026-01-01T00:00:00.000Z';
 const cleanups: string[] = [];
+
+/**
+ * Sets the clock a save stamps updatedAt from. Two saves in the same
+ * millisecond stamp the same instant, which hides a re-stamp (or fakes a
+ * missing one), so each save in the stamping tests runs at its own known time.
+ */
+function setClock(iso: string): void {
+  vi.setSystemTime(new Date(iso));
+}
 
 function mkProject(systemName: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-idem-'));
@@ -61,6 +70,7 @@ function subsystem(id: string, parentSystem: string): SubsystemSpec {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   setProjectRoot(null);
   invalidateSpecCache();
   for (const dir of cleanups.splice(0)) {
@@ -100,7 +110,12 @@ describe('generated docs are a pure function of the tree', () => {
 });
 
 describe('a status promotion is a mechanical re-save', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+
   it('flips status WITHOUT re-stamping updatedAt', () => {
+    setClock('2026-02-01T10:00:00.000Z');
     mkProject('Freeze System');
     saveSubsystemSpec(subsystem('core', 'Freeze System'));
     invalidateSpecCache();
@@ -108,8 +123,10 @@ describe('a status promotion is a mechanical re-save', () => {
     const authored = loadSubsystemSpec('core');
     expect(authored?.status).toBe('draft');
     const stampedAtAuthoring = authored!.updatedAt;
+    expect(stampedAtAuthoring).toBe('2026-02-01T10:00:00.000Z');
 
-    // The lock's freeze: status only, no authored content moves.
+    // The lock's freeze, a second later: status only, no authored content moves.
+    setClock('2026-02-01T10:00:01.000Z');
     applySpecStatus('subsystem', 'core', 'complete');
     invalidateSpecCache();
 
@@ -120,16 +137,20 @@ describe('a status promotion is a mechanical re-save', () => {
   });
 
   it('still stamps updatedAt on a REAL edit', () => {
+    setClock('2026-02-01T10:00:00.000Z');
     mkProject('Edit System');
     saveSubsystemSpec(subsystem('core', 'Edit System'));
     invalidateSpecCache();
     const authoredStamp = loadSubsystemSpec('core')!.updatedAt;
+    expect(authoredStamp).toBe('2026-02-01T10:00:00.000Z');
 
+    // A second later, the description genuinely changes.
+    setClock('2026-02-01T10:00:01.000Z');
     saveSubsystemSpec({ ...subsystem('core', 'Edit System'), description: 'genuinely changed' });
     invalidateSpecCache();
 
     const edited = loadSubsystemSpec('core');
     expect(edited?.description).toBe('genuinely changed');
-    expect(edited?.updatedAt).not.toBe(authoredStamp);
+    expect(edited?.updatedAt).toBe('2026-02-01T10:00:01.000Z');
   });
 });

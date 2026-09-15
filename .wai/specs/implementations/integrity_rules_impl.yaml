@@ -122,25 +122,19 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.implementations
-        endStep: 25
+        endStep: 24
       - stepNumber: 22
-        description: >-
-          Find the contract interface among ctx.interfaces whose id matches impl.contract
-          (ctx.interfaces.find(i => i.id === impl.contract)).
-        type: local
-      - stepNumber: 23
         description: 'Branch: does impl.contract reference a non-existent interface?'
         type: branch
         condition: ctx.interfaceIds does not contain impl.contract
-        onFalseStep: 25
-      - stepNumber: 24
+        onFalseStep: 24
+      - stepNumber: 23
         description: >-
-          Report INVALID_INTERFACE_REFERENCE (error; draft context from the implementation's own
-          draft/design status, or — when the contract interface resolved —
-          ctx.isComponentDraft(contract.component) or the contract's draft/design status) naming the
-          implementation and the non-existent interface contract it references.
+          Report INVALID_INTERFACE_REFERENCE (error; draft context ctx.isImplementationDraft(impl),
+          which here is the implementation's own draft/design status since its contract does not
+          resolve) naming the implementation and the non-existent interface contract it references.
         type: local
-      - stepNumber: 25
+      - stepNumber: 24
         label: l6End
         description: Continue with the next implementation.
         type: local
@@ -356,7 +350,7 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.types
-        endStep: 17
+        endStep: 15
       - stepNumber: 2
         description: >-
           Find sub = ctx.subsystems matching t.subsystem by id, and compute isDraftCtx as true when
@@ -388,14 +382,14 @@ methods:
         description: 'Branch: does the type declare a fields list at all?'
         type: branch
         condition: t.fields is set
-        onFalseStep: 17
+        onFalseStep: 15
       - stepNumber: 8
         label: trFieldsStart
         description: For each field declared on the type, resolve the type identifiers its type string names.
         type: loop
         loopKind: forEach
         over: t.fields
-        endStep: 16
+        endStep: 14
       - stepNumber: 9
         description: >-
           refs = t.fieldTypeRefs(field.type) — the type identifiers the field's type names, with the
@@ -407,91 +401,83 @@ methods:
         type: loop
         loopKind: forEach
         over: refs
-        endStep: 15
+        endStep: 13
       - stepNumber: 11
-        description: 'Branch: is the identifier not a builtin type?'
+        description: 'Branch: does the reference fail to resolve?'
         type: branch
-        condition: ctx.isBuiltinType(ref) is false (the identifier is not a builtin)
-        onFalseStep: 15
+        condition: >-
+          ctx.isTypeResolved(ref, no generics) is false (the reference resolves to neither a builtin
+          nor a defined type; t.fieldTypeRefs already left the type's own generic parameters out)
+        onFalseStep: 13
       - stepNumber: 12
-        description: >-
-          resolved = ctx.types.find(spec => spec.matchesRef(ref)) — search the loaded types for one
-          whose qualified id the reference names.
-        type: local
-      - stepNumber: 13
-        description: 'Branch: did no loaded type match the reference?'
-        type: branch
-        condition: resolved is undefined (no matching type found)
-        onFalseStep: 15
-      - stepNumber: 14
         description: >-
           Report UNDEFINED_TYPE_REFERENCE (error; isDraftCtx) naming the type, the field, and the
           undefined reference.
         type: local
-      - stepNumber: 15
+      - stepNumber: 13
         label: trRefsEnd
         description: Continue with the next type identifier.
         type: local
-      - stepNumber: 16
+      - stepNumber: 14
         label: trFieldsEnd
         description: Continue with the next field.
         type: local
-      - stepNumber: 17
+      - stepNumber: 15
         label: trTypesEnd
         description: Continue with the next type.
         type: local
-      - stepNumber: 18
+      - stepNumber: 16
         label: trIntfStart
         description: For each loaded interface, check every method signature's type references.
         type: loop
         loopKind: forEach
         over: ctx.interfaces
-        endStep: 27
-      - stepNumber: 19
+        endStep: 25
+      - stepNumber: 17
         description: >-
           Compute isDraftCtx as ctx.isComponentDraft(intf.component) or the interface's own status
           being "draft"/"design"; interfaceGenerics = intf.genericParameters().
         type: local
-      - stepNumber: 20
+      - stepNumber: 18
         label: trMethStart
         description: For each method on the interface.
         type: loop
         loopKind: forEach
         over: intf.methods
-        endStep: 26
-      - stepNumber: 21
+        endStep: 24
+      - stepNumber: 19
         description: >-
           methodGenerics = m.genericParameters(); allGenerics = the union of interfaceGenerics and
           methodGenerics; refs = m.typeRefs().
         type: local
-      - stepNumber: 22
+      - stepNumber: 20
         label: trMRefsStart
         description: For each type identifier the method's signature names.
         type: loop
         loopKind: forEach
         over: refs
-        endStep: 25
-      - stepNumber: 23
+        endStep: 23
+      - stepNumber: 21
         description: 'Branch: does the reference fail to resolve?'
         type: branch
         condition: >-
           ctx.isTypeResolved(ref, allGenerics) is false (the reference does not resolve to a
           builtin, an in-scope generic, or a defined type)
-        onFalseStep: 25
-      - stepNumber: 24
+        onFalseStep: 23
+      - stepNumber: 22
         description: >-
           Report UNDEFINED_TYPE_REFERENCE (error; isDraftCtx) naming the method, the interface, and
           the undefined reference.
         type: local
-      - stepNumber: 25
+      - stepNumber: 23
         label: trMRefsEnd
         description: Continue with the next type identifier.
         type: local
-      - stepNumber: 26
+      - stepNumber: 24
         label: trMethEnd
         description: Continue with the next method.
         type: local
-      - stepNumber: 27
+      - stepNumber: 25
         label: trIntfEnd
         description: Continue with the next interface.
         type: local
@@ -695,4 +681,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-15T00:29:59.141Z'
+updatedAt: '2026-09-15T01:27:34.831Z'

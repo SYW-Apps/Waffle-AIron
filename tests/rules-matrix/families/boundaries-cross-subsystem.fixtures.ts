@@ -16,10 +16,10 @@
  *    .wai/surfaces/ resolves it (and then the Adapter-crosser shape applies).
  *  - INVALID_DEPENDENCY_REFERENCE (error): dependsOn names a non-existent
  *    local component.
- *  - PORTAL_WRITE_SHORTCUT (error): a Portal narrative `call` into a
- *    write-effect method on a Repository/Index — the read shortcut is for
- *    READS only; writes route through an Orchestrator. Untagged methods are
- *    not judged (documented).
+ *  - PORTAL_WRITE_SHORTCUT (error): a Portal narrative `call`, or a Portal
+ *    dispatch-table binding, into a write-effect method on a Repository/Index
+ *    — the read shortcut is for READS only; writes route through an
+ *    Orchestrator. Untagged methods are not judged (documented).
  *  - allowedEdges (profile edge-delta): a governing pack profile may LICENSE
  *    an intra-subsystem edge the builtin matrix refuses — pinned as a quiet
  *    control for ARCHITECTURE_VIOLATION_SPECIALIST_DEP.
@@ -681,6 +681,128 @@ export default [
           '',
         ].join('\n'),
       },
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // PORTAL_WRITE_SHORTCUT — the same shortcut declared as a dispatch-table
+  // route (a dispatch step reaches its server only through such a binding)
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'PORTAL_WRITE_SHORTCUT',
+    severity: 'error',
+    anchoredTo: 'booking-api-portal',
+    expectFire: true,
+    scenario:
+      'The booking API portal\'s dispatch table binds the appointment booking capability straight to the repository facade\'s write-effect saveAppointment method, routing the write past the workflow layer.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [{ id: 'patient-scheduling', description: 'Appointment booking and slot management for the clinic.' }],
+      components: [
+        {
+          id: 'booking-api-portal',
+          componentType: 'Portal',
+          portalType: 'Custom',
+          subsystem: 'patient-scheduling',
+          description: 'Patient-facing API surface receiving appointment booking requests.',
+          dependsOn: ['appointment-repository', 'appointment-booking-orchestrator'],
+          dispatch: [{ capability: 'appointment.book', component: 'appointment-repository', method: 'saveAppointment' }],
+        },
+        {
+          id: 'appointment-booking-orchestrator',
+          componentType: 'Orchestrator',
+          subsystem: 'patient-scheduling',
+          description: 'Drives the appointment booking workflow.',
+          dependsOn: ['appointment-repository'],
+        },
+        {
+          id: 'appointment-repository',
+          componentType: 'Repository',
+          subsystem: 'patient-scheduling',
+          description: 'Facade over the appointment store and its write registry.',
+          owns: ['appointment-store', 'appointment-registry'],
+        },
+        { id: 'appointment-store', componentType: 'Store', subsystem: 'patient-scheduling', description: 'Holds the booked appointment records.' },
+        { id: 'appointment-registry', componentType: 'Registry', subsystem: 'patient-scheduling', description: 'Validated write path for appointment records.' },
+      ],
+      interfaces: [
+        {
+          id: 'ibooking_api',
+          component: 'booking-api-portal',
+          methods: [{ name: 'bookVisit', description: 'Book a visit for a patient.' }],
+        },
+        {
+          id: 'iappointment_booking',
+          component: 'appointment-booking-orchestrator',
+          methods: [{ name: 'bookAppointment', description: 'Book an appointment through the booking workflow.' }],
+        },
+        {
+          id: 'iappointment_repository',
+          component: 'appointment-repository',
+          methods: [
+            { name: 'saveAppointment', description: 'Persist a booked appointment.', effect: 'write' },
+            { name: 'findAppointment', description: 'Load one appointment by id.', effect: 'read' },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'PORTAL_WRITE_SHORTCUT',
+    expectFire: false,
+    reason: 'The dispatch table binds the booking capability to the booking Orchestrator, so the write routes through the workflow layer as the doctrine requires.',
+    scenario:
+      'The booking API portal\'s dispatch table binds the appointment booking capability to the booking orchestrator, which drives the repository write.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [{ id: 'patient-scheduling', description: 'Appointment booking and slot management for the clinic.' }],
+      components: [
+        {
+          id: 'booking-api-portal',
+          componentType: 'Portal',
+          portalType: 'Custom',
+          subsystem: 'patient-scheduling',
+          description: 'Patient-facing API surface receiving appointment booking requests.',
+          dependsOn: ['appointment-repository', 'appointment-booking-orchestrator'],
+          dispatch: [{ capability: 'appointment.book', component: 'appointment-booking-orchestrator', method: 'bookAppointment' }],
+        },
+        {
+          id: 'appointment-booking-orchestrator',
+          componentType: 'Orchestrator',
+          subsystem: 'patient-scheduling',
+          description: 'Drives the appointment booking workflow.',
+          dependsOn: ['appointment-repository'],
+        },
+        {
+          id: 'appointment-repository',
+          componentType: 'Repository',
+          subsystem: 'patient-scheduling',
+          description: 'Facade over the appointment store and its write registry.',
+          owns: ['appointment-store', 'appointment-registry'],
+        },
+        { id: 'appointment-store', componentType: 'Store', subsystem: 'patient-scheduling', description: 'Holds the booked appointment records.' },
+        { id: 'appointment-registry', componentType: 'Registry', subsystem: 'patient-scheduling', description: 'Validated write path for appointment records.' },
+      ],
+      interfaces: [
+        {
+          id: 'ibooking_api',
+          component: 'booking-api-portal',
+          methods: [{ name: 'bookVisit', description: 'Book a visit for a patient.' }],
+        },
+        {
+          id: 'iappointment_booking',
+          component: 'appointment-booking-orchestrator',
+          methods: [{ name: 'bookAppointment', description: 'Book an appointment through the booking workflow.' }],
+        },
+        {
+          id: 'iappointment_repository',
+          component: 'appointment-repository',
+          methods: [
+            { name: 'saveAppointment', description: 'Persist a booked appointment.', effect: 'write' },
+            { name: 'findAppointment', description: 'Load one appointment by id.', effect: 'read' },
+          ],
+        },
+      ],
     },
   }),
 ];

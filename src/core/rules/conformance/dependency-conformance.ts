@@ -209,7 +209,10 @@ export const dependencyConformanceRule: SddRule = {
       if (!fromFiles) continue;
 
       const isMountingDeclarer = component.componentType === 'Portal' || component.componentType === 'Observer';
-      const declaredTargets = [...component.dependsOn, ...(component.owns ?? [])];
+      // One edge per distinct target: a pattern may both own a member and
+      // depend on it (the visibility rule sanctions it), still one declared
+      // collaboration.
+      const declaredTargets = [...new Set([...component.dependsOn, ...(component.owns ?? [])])];
       for (const targetId of declaredTargets) {
         const target = ctx.componentMap.get(targetId);
         if (!target) continue;
@@ -234,12 +237,15 @@ export const dependencyConformanceRule: SddRule = {
 
         const impls = implsByComponent.get(component.id) ?? [];
         const anchor = impls[0];
+        const declaredDependsOn = component.dependsOn.includes(targetId);
+        const declaredOwns = (component.owns ?? []).includes(targetId);
+        const relation = declaredDependsOn && declaredOwns ? 'dependsOn and owns' : declaredDependsOn ? 'dependsOn' : 'owns';
         const draft = ctx.isComponentDraft(component.id) || ctx.isComponentDraft(targetId)
           || impls.some(i => ctx.isImplementationDraft(i));
         ctx.addIssue(
           'warning',
           'UNREALIZED_DEPENDENCY',
-          `Component "${component.id}" declares ${component.dependsOn.includes(targetId) ? 'dependsOn' : 'owns'} "${targetId}", but no runtime import connects their source files (${[...fromFiles].join(', ')} ↛ ${target.subsystem !== component.subsystem ? `subsystem ${target.subsystem}` : [...(filesByComponent.get(targetId) ?? [])].join(', ')}) — either the collaboration is wired indirectly (DI) or the declared edge is stale.`,
+          `Component "${component.id}" declares ${relation} "${targetId}", but no runtime import connects their source files (${[...fromFiles].join(', ')} ↛ ${target.subsystem !== component.subsystem ? `subsystem ${target.subsystem}` : [...(filesByComponent.get(targetId) ?? [])].join(', ')}) — either the collaboration is wired indirectly (DI) or the declared edge is stale.`,
           anchor?.id ?? component.id,
           draft,
         );
