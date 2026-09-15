@@ -128,8 +128,10 @@ methods:
         type: local
       - stepNumber: 18
         description: >-
-          Determine threshold = ctx.rules?.complexity?.maxComponentDependencies, defaulting to
-          DEFAULT_GOD_COMPONENT_THRESHOLD (8) when unset.
+          Define threshold(comp) = ctx.complexityConfigFor(comp.subsystem)?.maxComponentDependencies
+          — the project's complexity config overlaid with the subsystem profile pack's, the value
+          EXCESSIVE_DEPENDENCIES reads — defaulting to DEFAULT_GOD_COMPONENT_THRESHOLD (8) when
+          unset.
         type: local
       - stepNumber: 19
         label: godLoop
@@ -141,8 +143,9 @@ methods:
       - stepNumber: 20
         label: reportGod
         description: >-
-          When comp.dependsOn.length exceeds threshold, report GOD_COMPONENT (warning; draft context
-          ctx.isComponentDraft(comp.id)) naming comp.id, its dependency count and the threshold.
+          When comp.dependsOn.length exceeds threshold(comp), report GOD_COMPONENT (warning; draft
+          context ctx.isComponentDraft(comp.id)) naming comp.id, its dependency count and
+          threshold(comp).
         type: local
     symbol: check
   - name: targetLanguage
@@ -278,9 +281,7 @@ methods:
         toStep: 17
       - stepNumber: 21
         label: computeImplDraft
-        description: >-
-          Compute isDraftCtx = impl.status or contract.status being 'draft' or 'design', or
-          ctx.isComponentDraft(contract.component).
+        description: Compute isDraftCtx = ctx.isImplementationDraft(impl).
         type: local
       - stepNumber: 22
         label: implMethodLoop
@@ -387,7 +388,7 @@ methods:
         description: >-
           When comp.componentType is not one of the data-layer stereotypes (Adapter, Store,
           Registry, Index), report TECH_ON_LOGIC_COMPONENT (warning; draft context
-          ctx.isComponentDraft(comp.id)) naming impl.id, impl.technologies, comp.id and
+          ctx.isImplementationDraft(impl)) naming impl.id, impl.technologies, comp.id and
           comp.componentType.
         type: local
       - stepNumber: 10
@@ -450,8 +451,8 @@ methods:
           offending = the names of intf.methods whose contract identifiers (name, signature,
           returns, each param's name/type, and any endpoint values) match home; when offending is
           non-empty, report VENDOR_NAME_IN_CONTRACT (warning; draft context
-          ctx.isComponentDraft(intf.component)) naming intf.id, home.label, offending and
-          ownersDesc(home).
+          ctx.isComponentDraft(intf.component) or intf.status being 'draft' or 'design') naming
+          intf.id, home.label, offending and ownersDesc(home).
         type: local
       - stepNumber: 19
         label: leakCompLoop
@@ -479,8 +480,8 @@ methods:
         label: subLeakCheck
         description: >-
           When sub.id is outside home.scope and home matches '${sub.id} ${sub.name}
-          ${sub.description}', report TECH_LEAKAGE (warning) naming sub.id, home.label and
-          ownersDesc(home).
+          ${sub.description}', report TECH_LEAKAGE (warning; draft context sub.status being 'draft'
+          or 'design') naming sub.id, home.label and ownersDesc(home).
         type: local
       - stepNumber: 23
         label: leakIntfLoop
@@ -494,7 +495,8 @@ methods:
         description: >-
           When intf.id is outside home.scope and home matches the joined prose of intf.description
           and every method's description, report TECH_LEAKAGE (warning; draft context
-          ctx.isComponentDraft(intf.component)) naming intf.id, home.label and ownersDesc(home).
+          ctx.isComponentDraft(intf.component) or intf.status being 'draft' or 'design') naming
+          intf.id, home.label and ownersDesc(home).
         type: local
       - stepNumber: 25
         label: leakImplLoop
@@ -511,8 +513,9 @@ methods:
           When this implementation's id is outside home.scope, gather parts = its description and
           its sourceFiles(), plus for every method its intent and, for every narrative step, its
           description/targetComponent/targetMethod/condition/over/on/outcome/error and every case
-          value / catch error; when home matches the joined parts, report TECH_LEAKAGE (warning)
-          naming the implementation's id, home.label and ownersDesc(home).
+          value / catch error; when home matches the joined parts, report TECH_LEAKAGE (warning;
+          draft context ctx.isImplementationDraft(impl)) naming the implementation's id, home.label
+          and ownersDesc(home).
         type: local
       - stepNumber: 27
         label: leakTypeLoop
@@ -544,11 +547,12 @@ methods:
       - stepNumber: 2
         label: subCheck
         description: >-
-          Resolve namingConfig = ctx.namingConfigFor(sub.id); when namingConfig.subsystems is set,
-          check the last '::' segment of sub.id and sub.name against it - a casing/regex mismatch
-          reports NAMING_CONVENTION_VIOLATION (warning), and a configured pattern that is neither a
-          known casing style nor a valid regex reports INVALID_NAMING_PATTERN (error) instead - both
-          against sub.id.
+          Resolve namingConfig = ctx.namingConfigFor(sub.id) and isDraft = sub.status being 'draft'
+          or 'design'; when namingConfig.subsystems is set, check the last '::' segment of sub.id
+          and sub.name against it - a casing/regex mismatch reports NAMING_CONVENTION_VIOLATION
+          (warning), and a configured pattern that is neither a known casing style nor a valid regex
+          reports INVALID_NAMING_PATTERN (error) instead - both against sub.id, draft context
+          isDraft.
         type: local
       - stepNumber: 3
         label: compLoop
@@ -655,8 +659,8 @@ methods:
         description: >-
           Resolve intf = ctx.interfaceMap.get(impl.contract); comp = intf ?
           ctx.componentMap.get(intf.component) : undefined; namingConfig =
-          ctx.namingConfigFor(comp?.subsystem); isDraft = impl.status being 'draft' or 'design';
-          when namingConfig.methods is set, check every method in impl.methods by name against it
+          ctx.namingConfigFor(comp?.subsystem); isDraft = ctx.isImplementationDraft(impl); when
+          namingConfig.methods is set, check every method in impl.methods by name against it
           (NAMING_CONVENTION_VIOLATION or INVALID_NAMING_PATTERN, against impl.id, draft context
           isDraft).
         type: local
@@ -709,11 +713,12 @@ methods:
         endStep: 3
       - stepNumber: 2
         description: >-
-          Resolve docConfig = the effective documentation config for sub.id; when
-          docConfig.requireDescriptions and sub.description is missing or empty, report
-          MISSING_DESCRIPTION (warning) naming sub.id; otherwise, when
-          docConfig.minDescriptionLength is set and sub.description is shorter than it, report
-          DESCRIPTION_TOO_SHORT (warning) naming sub.id, its length and the minimum.
+          Resolve docConfig = the effective documentation config for sub.id and isSubDraft =
+          sub.status being 'draft' or 'design'; when docConfig.requireDescriptions and
+          sub.description is missing or empty, report MISSING_DESCRIPTION (warning; draft context
+          isSubDraft) naming sub.id; otherwise, when docConfig.minDescriptionLength is set and
+          sub.description is shorter than it, report DESCRIPTION_TOO_SHORT (warning; draft context
+          isSubDraft) naming sub.id, its length and the minimum.
         type: local
       - stepNumber: 3
         label: subComplexityCheck
@@ -721,7 +726,8 @@ methods:
           Resolve complexityConfig = the effective complexity config for sub.id; directComponents =
           the count of ctx.components whose subsystem is sub.id; when
           complexityConfig.maxSubsystemComponents is set and directComponents exceeds it, report
-          EXCESSIVE_SUBSYSTEM_COMPONENTS (warning) naming sub.id, directComponents and the limit.
+          EXCESSIVE_SUBSYSTEM_COMPONENTS (warning; draft context isSubDraft) naming sub.id,
+          directComponents and the limit.
         type: local
       - stepNumber: 4
         label: compLoop
@@ -806,8 +812,8 @@ methods:
         description: >-
           Resolve intf = ctx.interfaceMap.get(impl.contract); comp = intf ?
           ctx.componentMap.get(intf.component) : undefined; complexityConfig = the effective
-          complexity config for comp?.subsystem; isDraft = impl.status being 'draft' or 'design';
-          when complexityConfig.maxNarrativeSteps is set, for every method in impl.methods whose
+          complexity config for comp?.subsystem; isDraft = ctx.isImplementationDraft(impl); when
+          complexityConfig.maxNarrativeSteps is set, for every method in impl.methods whose
           narrative.length exceeds it, report EXCESSIVE_NARRATIVE_STEPS (warning; draft context
           isDraft) naming the method's name, impl.id, its step count and the limit.
         type: local
@@ -861,4 +867,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-14T23:27:17.890Z'
+updatedAt: '2026-09-15T01:22:33.636Z'

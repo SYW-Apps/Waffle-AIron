@@ -1,3 +1,4 @@
+import { isDraftSubsystem } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 function checkDescription(
@@ -47,7 +48,8 @@ export const complexityRule: SddRule = {
     // 1. Subsystems (Doc checks)
     for (const sub of ctx.subsystems) {
       const docConfig = ctx.documentationConfigFor(sub.id);
-      checkDescription(ctx, sub.description, docConfig?.requireDescriptions ?? false, docConfig?.minDescriptionLength, sub.id, 'Subsystem', false);
+      const isSubDraft = isDraftSubsystem(sub);
+      checkDescription(ctx, sub.description, docConfig?.requireDescriptions ?? false, docConfig?.minDescriptionLength, sub.id, 'Subsystem', isSubDraft);
 
       const complexityConfig = ctx.complexityConfigFor(sub.id);
       const directComponents = ctx.components.filter(c => c.subsystem === sub.id).length;
@@ -57,6 +59,7 @@ export const complexityRule: SddRule = {
           'EXCESSIVE_SUBSYSTEM_COMPONENTS',
           `Subsystem "${sub.id}" has ${directComponents} direct components, exceeding the configured limit of ${complexityConfig.maxSubsystemComponents}.`,
           sub.id,
+          isSubDraft,
         );
       }
     }
@@ -144,7 +147,7 @@ export const complexityRule: SddRule = {
       const intf = ctx.interfaceMap.get(impl.contract);
       const comp = intf ? ctx.componentMap.get(intf.component) : undefined;
       const complexityConfig = ctx.complexityConfigFor(comp?.subsystem);
-      const isDraft = impl.status === 'draft' || impl.status === 'design';
+      const isDraft = ctx.isImplementationDraft(impl);
 
       if (complexityConfig?.maxNarrativeSteps !== undefined) {
         for (const m of impl.methods) {

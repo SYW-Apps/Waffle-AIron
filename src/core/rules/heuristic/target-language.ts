@@ -124,9 +124,7 @@ export const languageRule: SddRule = {
       const gaps = gapsFor(lang);
       if (Object.keys(gaps).length === 0) continue;
 
-      const isDraftCtx = impl.status === 'draft' || impl.status === 'design'
-        || contract.status === 'draft' || contract.status === 'design'
-        || ctx.isComponentDraft(contract.component);
+      const isDraftCtx = ctx.isImplementationDraft(impl);
 
       for (const implMethod of impl.methods) {
         for (const step of implMethod.narrative) {

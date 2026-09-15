@@ -1,3 +1,4 @@
+import { isDraftSubsystem } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 const casingPatterns: Record<string, RegExp> = {
@@ -72,10 +73,11 @@ export const namingRule: SddRule = {
     for (const sub of ctx.subsystems) {
       const namingConfig = ctx.namingConfigFor(sub.id);
       if (!namingConfig?.subsystems) continue;
+      const isDraft = isDraftSubsystem(sub);
 
       const baseId = getBaseId(sub.id);
-      checkNamedValue(ctx, baseId, namingConfig.subsystems, `Subsystem ID "${sub.id}" does not match naming convention "${namingConfig.subsystems}".`, sub.id);
-      checkNamedValue(ctx, sub.name, namingConfig.subsystems, `Subsystem Name "${sub.name}" does not match naming convention "${namingConfig.subsystems}".`, sub.id);
+      checkNamedValue(ctx, baseId, namingConfig.subsystems, `Subsystem ID "${sub.id}" does not match naming convention "${namingConfig.subsystems}".`, sub.id, isDraft);
+      checkNamedValue(ctx, sub.name, namingConfig.subsystems, `Subsystem Name "${sub.name}" does not match naming convention "${namingConfig.subsystems}".`, sub.id, isDraft);
     }
 
     // 2. Components & Stereotypes
@@ -176,7 +178,7 @@ export const namingRule: SddRule = {
       const intf = ctx.interfaceMap.get(impl.contract);
       const comp = intf ? ctx.componentMap.get(intf.component) : undefined;
       const namingConfig = ctx.namingConfigFor(comp?.subsystem);
-      const isDraft = impl.status === 'draft' || impl.status === 'design';
+      const isDraft = ctx.isImplementationDraft(impl);
 
       if (namingConfig?.methods) {
         for (const m of impl.methods) {

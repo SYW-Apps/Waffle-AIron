@@ -1,4 +1,4 @@
-import { implementationSourceFiles, pathKey, type ImplementationSpec } from '../../../models/index.js';
+import { methodSourceFile, pathKey, type ImplementationSpec } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -17,7 +17,10 @@ import { RuleContext, SddRule } from '../types.js';
 //  - exact analysis grade only (lower grades never guess);
 //  - files mapped to ANY data/boundary component are exempt (a shared file
 //    hosting a Store's state is the Store's business — N:1 collapse);
-//  - conformance: off implementations don't count as mapping evidence;
+//  - a file dialed conformance: off is no mapping evidence: the
+//    implementation's own sourcePath when the implementation is off, and a
+//    method's file when that method's dial (its own, else the
+//    implementation's) is off;
 //  - mutation of const-bound containers (a `const map = new Map()` that is
 //    written per-request) is invisible to this check — the finding text says
 //    what was measured, never more.
@@ -34,16 +37,25 @@ export const hiddenStateRule: SddRule = {
     { code: 'HIDDEN_STATE', defaultSeverity: 'warning', summary: 'Module-scope mutable binding in a file mapped only to logic-stereotype components — held state hiding outside a Store' },
   ],
   check(ctx: RuleContext) {
-    // Source file → the implementations mapping it (with their components):
-    // an implementation maps its own sourcePath and each method's.
+    // Source file → the implementations mapping it (with their components).
     const byPath = new Map<string, { impl: ImplementationSpec; componentType: string; compId: string }[]>();
     for (const impl of ctx.implementations) {
-      if (impl.conformance === 'off') continue; // untrusted mapping
       const contract = ctx.interfaceMap.get(impl.contract);
       const component = contract ? ctx.componentMap.get(contract.component) : undefined;
       if (!component) continue;
       if (ctx.isInChainedSubproject(component.subsystem)) continue;
-      for (const file of implementationSourceFiles(impl)) {
+      // The conformance dial decides which named files are trusted mapping
+      // evidence (off marks generated or vendored code): the implementation's
+      // own sourcePath unless it is off, and each method's file unless the
+      // method's dial — its own, else the implementation's — is off.
+      const trusted: string[] = [];
+      if (impl.sourcePath && impl.conformance !== 'off') trusted.push(impl.sourcePath);
+      for (const method of impl.methods) {
+        if ((method.conformance ?? impl.conformance) === 'off') continue;
+        const file = methodSourceFile(method, impl.sourcePath);
+        if (file) trusted.push(file);
+      }
+      for (const file of trusted) {
         const key = pathKey(file);
         const list = byPath.get(key) ?? [];
         if (list.some(m => m.impl === impl)) continue;

@@ -1,5 +1,5 @@
 import { SddRule } from '../types.js';
-import { implementationSourceFiles, type MethodSignature } from '../../../models/index.js';
+import { implementationSourceFiles, isDraftSubsystem, type MethodSignature } from '../../../models/index.js';
 
 /**
  * Technology-boundary rules: an L4 that declares `technologies` (e.g.
@@ -105,7 +105,7 @@ export const technologyRule: SddRule = {
           'TECH_ON_LOGIC_COMPONENT',
           `Implementation "${impl.id}" binds technology (${impl.technologies.join(', ')}) on component "${comp.id}" (${comp.componentType}). Technology belongs behind a data-layer seam — extract an Adapter (or Store/Registry/Index) behind an intent interface and let this component depend on that.`,
           impl.id,
-          ctx.isComponentDraft(comp.id),
+          ctx.isImplementationDraft(impl),
         );
       }
 
@@ -154,7 +154,7 @@ export const technologyRule: SddRule = {
             'VENDOR_NAME_IN_CONTRACT',
             `Interface "${intf.id}" exposes technology "${home.label}" in contract identifiers (method${offending.length > 1 ? 's' : ''}: ${offending.join(', ')}). Name the intent, not the vendor — the technology is owned by component ${ownersDesc(home)} and must stay swappable behind this contract.`,
             intf.id,
-            ctx.isComponentDraft(intf.component),
+            ctx.isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design',
           );
         }
       }
@@ -189,6 +189,7 @@ export const technologyRule: SddRule = {
             'TECH_LEAKAGE',
             `Subsystem "${sub.id}" references "${home.label}" outside the technology's owning boundary (component ${ownersDesc(home)}).`,
             sub.id,
+            isDraftSubsystem(sub),
           );
         }
       }
@@ -202,7 +203,7 @@ export const technologyRule: SddRule = {
             'TECH_LEAKAGE',
             `Interface "${intf.id}" describes "${home.label}" outside its owning boundary (component ${ownersDesc(home)}) — consumers must not know backend specifics.`,
             intf.id,
-            ctx.isComponentDraft(intf.component),
+            ctx.isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design',
           );
         }
       }
@@ -224,6 +225,7 @@ export const technologyRule: SddRule = {
             'TECH_LEAKAGE',
             `Implementation "${impl.id}" references "${home.label}" outside its owning boundary — call the intent interface of component ${ownersDesc(home)} instead of naming its technology.`,
             impl.id,
+            ctx.isImplementationDraft(impl),
           );
         }
       }
