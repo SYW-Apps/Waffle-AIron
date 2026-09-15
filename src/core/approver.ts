@@ -3,7 +3,8 @@ import * as os from 'os';
 import type { ApproverIdentity } from './lockfile.js';
 
 // ---------------------------------------------------------------------------
-// Approver Identity Specialist (sdd_core)
+// Local approver identity, re-exported through core_portal (sdd_core's inbound
+// dispatch Portal, src/core/index.ts) as its localApprover method.
 //
 // Who to record as having approved a lock, on a machine where wairon has no
 // account of its own.

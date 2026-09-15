@@ -206,12 +206,12 @@ const CROSS_BOUNDARY_TARGETS: ReadonlySet<string> = new Set(['Portal', 'Observer
  * the SIBLING view a chained child receives: siblings expose exactly what they
  * publish, nothing wider. The publishable set matches what the boundary rules
  * already sanction as a cross-subsystem dependency target, so a subsystem
- * publishing through a Gateway is projected rather than silently absent from
- * every child. A published entry whose backing component can NEVER be a
- * cross-boundary target is omitted and REPORTED as a non-fatal diagnostic. The
- * snapshot is keyed '<systemName>::<subsystemId>' so sibling surfaces never
- * collide with the parent family surface or foreign imports, and carries the
- * parent tree's StateId provenance.
+ * publishing through a Portal or an Observer is projected rather than
+ * silently absent from every child. A published entry whose backing
+ * component can NEVER be a cross-boundary target is omitted and REPORTED as
+ * a non-fatal diagnostic. The snapshot is keyed '<systemName>::<subsystemId>'
+ * so sibling surfaces never collide with the parent family surface or
+ * foreign imports, and carries the parent tree's StateId provenance.
  */
 export function projectSubsystemSurface(subsystemId: string): SurfaceSnapshot {
   const system = loadSystemSpec();

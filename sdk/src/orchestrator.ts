@@ -23,7 +23,7 @@ import type {
 // ---------------------------------------------------------------------------
 // SDK Orchestrator (sdk_orchestrator_impl) — the four pack workflows and the
 // three spec-tree archive workflows. Delegates format/safety decisions to the
-// codecs, template rendering to the scaffold specialist, and all zip+fs I/O to
+// codecs, template rendering to the pack scaffold, and all zip+fs I/O to
 // the archive adapter. Holds no state.
 //
 // Root DISCOVERY stays with the caller: the SDK never walks a spec tree, it

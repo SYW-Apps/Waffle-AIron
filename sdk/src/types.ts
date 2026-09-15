@@ -129,7 +129,7 @@ export interface PackBuildResult {
 
 /**
  * One file within a pack: an archive-relative POSIX path and its raw bytes. The
- * common currency between the scaffold specialist, the archive adapter, and the
+ * common currency between the pack scaffold, the archive adapter, and the
  * codec (integrity verification over file bytes).
  */
 export interface PackFile {
