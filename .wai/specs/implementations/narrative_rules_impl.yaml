@@ -14,7 +14,7 @@ methods:
         description: For each implementation spec
         type: loop
         over: ctx.implementations
-        endStep: 62
+        endStep: 66
       - stepNumber: 2
         description: Skip an implementation whose contract interface does not resolve
         type: branch
@@ -65,7 +65,7 @@ methods:
         description: Resolve the target of every narrative step of the implementation
         type: loop
         over: each narrative step of each method in impl.methods
-        endStep: 62
+        endStep: 66
       - stepNumber: 11
         description: Only call, dispatch and register steps name a target; skip every other step
         type: branch
@@ -100,17 +100,17 @@ methods:
           resolving its capability against the portal's table is another rule's
         type: branch
         condition: step.type is dispatch
-        onFalseStep: 34
+        onFalseStep: 36
       - stepNumber: 17
         description: Does the dispatch target fail to resolve in this tree?
         type: branch
         condition: ctx.componentMap.get(step.targetComponent) finds no component
-        onFalseStep: 31
+        onFalseStep: 33
       - stepNumber: 18
         description: Only a cross-tree or collapsed reference is judged against the surface snapshots
         type: branch
         condition: isCrossTreeForm or isCollapsedForm
-        onFalseStep: 26
+        onFalseStep: 28
       - stepNumber: 19
         description: resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem)
         type: local
@@ -125,7 +125,7 @@ methods:
             step: 21
           - value: resolved
             step: 23
-        defaultStep: 26
+        defaultStep: 28
       - stepNumber: 21
         label: dispatchAmbiguous
         description: >-
@@ -138,6 +138,24 @@ methods:
         type: jump
         toStep: 10
       - stepNumber: 23
+        label: dispatchSurfaceDeps
+        description: >-
+          A dispatch target resolved through a surface is a collaborator like a local one: is it
+          undeclared?
+        type: branch
+        condition: >-
+          the calling component ctx.componentMap.get(contract.component) resolves,
+          step.targetComponent is not the caller itself, and the caller neither dependsOn nor owns
+          it (the loader qualifies a cross-tree dependsOn entry exactly as it qualifies the step's
+          target)
+        onFalseStep: 25
+      - stepNumber: 24
+        description: >-
+          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
+          ctx.isComponentDraft(caller.id); surface-resolved) naming the caller and the cross-tree
+          component it dispatches through without declaring it
+        type: local
+      - stepNumber: 25
         label: dispatchSurface
         description: Validate the dispatched capability against the declared surface
         type: branch
@@ -145,46 +163,46 @@ methods:
           step.capability is set and resolved.entry.dispatch (none when absent) has no binding for
           that capability
         onFalseStep: 10
-      - stepNumber: 24
+      - stepNumber: 26
         description: >-
           Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; surface-resolved) naming
           the capability, the cross-tree portal, the snapshot's projectName and the entry id that
           does not serve it
         type: local
-      - stepNumber: 25
+      - stepNumber: 27
         description: Continue with the next step
         type: jump
         toStep: 10
-      - stepNumber: 26
+      - stepNumber: 28
         label: dispatchUnresolved
         description: >-
           An unresolved cross-tree reference is only verifiable from the parent project; any other
           unresolved reference is broken
         type: branch
         condition: isCrossTreeForm
-        onFalseStep: 29
-      - stepNumber: 27
+        onFalseStep: 31
+      - stepNumber: 29
         description: >-
           Report CROSS_TREE_REF_UNRESOLVED (warning; draft context isDraftCtx) naming the method,
           the cross-tree component it dispatches through and the step, with the remedies: validate
           from the parent project, pin the family surfaces (wairon surface pin), or import the
           producing project's surface
         type: local
-      - stepNumber: 28
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 29
-        label: dispatchInvalid
-        description: >-
-          Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
-          dispatches through a component that does not exist, naming it and the step
-        type: local
       - stepNumber: 30
         description: Continue with the next step
         type: jump
         toStep: 10
       - stepNumber: 31
+        label: dispatchInvalid
+        description: >-
+          Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
+          dispatches through a component that does not exist, naming it and the step
+        type: local
+      - stepNumber: 32
+        description: Continue with the next step
+        type: jump
+        toStep: 10
+      - stepNumber: 33
         label: dispatchDeps
         description: Is the dispatch target an undeclared collaborator?
         type: branch
@@ -193,48 +211,48 @@ methods:
           step.targetComponent is not the caller itself, and the caller neither dependsOn nor owns
           it
         onFalseStep: 10
-      - stepNumber: 32
+      - stepNumber: 34
         description: >-
           Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
           ctx.isComponentDraft(caller.id)) naming the caller and the component it dispatches through
           without declaring it
         type: local
-      - stepNumber: 33
+      - stepNumber: 35
         description: Continue with the next step
         type: jump
         toStep: 10
-      - stepNumber: 34
+      - stepNumber: 36
         label: callPath
         description: >-
           Call and register steps share the target resolution from here, their messages saying
           'calls' or 'registers callback'. Does the step lack its target method?
         type: branch
         condition: step.targetMethod is missing
-        onFalseStep: 37
-      - stepNumber: 35
+        onFalseStep: 39
+      - stepNumber: 37
         description: >-
           Report MISSING_TARGET_METHOD (error; draft context isDraftCtx) naming the method, the step
           type and the step number
         type: local
-      - stepNumber: 36
+      - stepNumber: 38
         description: Continue with the next step
         type: jump
         toStep: 10
-      - stepNumber: 37
+      - stepNumber: 39
         label: callTarget
         description: Does the call target fail to resolve in this tree?
         type: branch
         condition: ctx.componentMap.get(step.targetComponent) finds no component
-        onFalseStep: 55
-      - stepNumber: 38
+        onFalseStep: 59
+      - stepNumber: 40
         description: Only a cross-tree or collapsed reference is judged against the surface snapshots
         type: branch
         condition: isCrossTreeForm or isCollapsedForm
-        onFalseStep: 50
-      - stepNumber: 39
+        onFalseStep: 54
+      - stepNumber: 41
         description: resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem)
         type: local
-      - stepNumber: 40
+      - stepNumber: 42
         description: >-
           Act on how the snapshots judged the reference; an unresolved one falls back to the
           unresolved-target findings
@@ -242,89 +260,107 @@ methods:
         'on': resolved.kind
         cases:
           - value: ambiguous
-            step: 41
-          - value: resolved
             step: 43
-        defaultStep: 50
-      - stepNumber: 41
+          - value: resolved
+            step: 45
+        defaultStep: 54
+      - stepNumber: 43
         label: callAmbiguous
         description: >-
           Report SURFACE_REF_AMBIGUOUS (error; draft context isDraftCtx; not surface-resolved) with
           the message resolved.ambiguityMessage('Method <method> in implementation <impl>
           calls|registers callback "<targetMethod>" (step <n>) on', step.targetComponent)
         type: local
-      - stepNumber: 42
+      - stepNumber: 44
         description: Continue with the next step
         type: jump
         toStep: 10
-      - stepNumber: 43
+      - stepNumber: 45
+        label: callSurfaceDeps
+        description: >-
+          A call or register target resolved through a surface is a collaborator like a local one:
+          is it undeclared?
+        type: branch
+        condition: >-
+          the calling component ctx.componentMap.get(contract.component) resolves,
+          step.targetComponent is not the caller itself, and the caller neither dependsOn nor owns
+          it (the loader qualifies a cross-tree dependsOn entry exactly as it qualifies the step's
+          target)
+        onFalseStep: 47
+      - stepNumber: 46
+        description: >-
+          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
+          ctx.isComponentDraft(caller.id); surface-resolved) naming the caller and the cross-tree
+          component it calls or registers a callback on without declaring it
+        type: local
+      - stepNumber: 47
         label: callSurface
         description: Validate the called method against the declared surface
         type: branch
         condition: resolved.entry.methods has no method named step.targetMethod
-        onFalseStep: 46
-      - stepNumber: 44
+        onFalseStep: 50
+      - stepNumber: 48
         description: >-
           Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; surface-resolved) naming
           the method, the cross-tree component, the snapshot's projectName and the entry id that
           does not expose it
         type: local
-      - stepNumber: 45
+      - stepNumber: 49
         description: Continue with the next step
         type: jump
         toStep: 10
-      - stepNumber: 46
+      - stepNumber: 50
         label: surfaceGuarantees
         description: Check each guarantee the step asserts against the surface method
         type: loop
         over: step.assertsGuarantees (none when absent)
-        endStep: 48
-      - stepNumber: 47
+        endStep: 52
+      - stepNumber: 51
         description: Is the asserted guarantee undeclared on the surface?
         type: branch
         condition: the surface method's guarantees (none when absent) do not include the asserted guarantee
-        onFalseStep: 46
-      - stepNumber: 48
+        onFalseStep: 50
+      - stepNumber: 52
         label: surfaceUnbacked
         description: >-
           Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx; surface-resolved)
           naming the step, the method, the guarantee, the snapshot's projectName and the entry
           method that does not declare it
         type: local
-      - stepNumber: 49
+      - stepNumber: 53
         description: Continue with the next step once every asserted guarantee is checked
         type: jump
         toStep: 10
-      - stepNumber: 50
+      - stepNumber: 54
         label: callUnresolved
         description: >-
           An unresolved cross-tree reference is only verifiable from the parent project; any other
           unresolved reference is broken
         type: branch
         condition: isCrossTreeForm
-        onFalseStep: 53
-      - stepNumber: 51
+        onFalseStep: 57
+      - stepNumber: 55
         description: >-
           Report CROSS_TREE_REF_UNRESOLVED (warning; draft context isDraftCtx) naming the method,
           the cross-tree component it calls or registers a callback on and the step, with the
           remedies: validate from the parent project, pin the family surfaces (wairon surface pin),
           or import the producing project's surface
         type: local
-      - stepNumber: 52
+      - stepNumber: 56
         description: Continue with the next step
         type: jump
         toStep: 10
-      - stepNumber: 53
+      - stepNumber: 57
         label: callInvalid
         description: >-
           Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
           calls or registers a callback on a component that does not exist, naming it and the step
         type: local
-      - stepNumber: 54
+      - stepNumber: 58
         description: Continue with the next step
         type: jump
         toStep: 10
-      - stepNumber: 55
+      - stepNumber: 59
         label: callDeps
         description: Is the call target an undeclared collaborator?
         type: branch
@@ -332,14 +368,14 @@ methods:
           the calling component ctx.componentMap.get(contract.component) resolves,
           step.targetComponent is not the caller itself, and the caller neither dependsOn nor owns
           it
-        onFalseStep: 57
-      - stepNumber: 56
+        onFalseStep: 61
+      - stepNumber: 60
         description: >-
           Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
           ctx.isComponentDraft(caller.id)) naming the caller and the component it calls or registers
           a callback on without declaring it
         type: local
-      - stepNumber: 57
+      - stepNumber: 61
         label: resolveTargetMethod
         description: Does the target component's contract lack the called method?
         type: branch
@@ -347,29 +383,29 @@ methods:
           no interface in ctx.interfacesByComponent.get(step.targetComponent) (none when absent) has
           a method named step.targetMethod; the first interface that has one supplies the target
           method
-        onFalseStep: 60
-      - stepNumber: 58
+        onFalseStep: 64
+      - stepNumber: 62
         description: >-
           Report INVALID_TARGET_METHOD_REFERENCE (error; draft context isDraftCtx or
           ctx.isComponentDraft(step.targetComponent)) naming the method, the target component and
           the step
         type: local
-      - stepNumber: 59
+      - stepNumber: 63
         description: Continue with the next step
         type: jump
         toStep: 10
-      - stepNumber: 60
+      - stepNumber: 64
         label: callGuarantees
         description: Check each guarantee the step asserts against the target method's contract
         type: loop
         over: step.assertsGuarantees (none when absent)
-        endStep: 62
-      - stepNumber: 61
+        endStep: 66
+      - stepNumber: 65
         description: Is the asserted guarantee undeclared on the called contract?
         type: branch
         condition: the target method's L3 guarantees (none when absent) do not include the asserted guarantee
-        onFalseStep: 60
-      - stepNumber: 62
+        onFalseStep: 64
+      - stepNumber: 66
         label: callUnbacked
         description: >-
           Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx or
@@ -746,7 +782,13 @@ methods:
         condition: implMethod.narrative has steps
         onFalseStep: 1
       - stepNumber: 3
-        description: graph = implMethod.stepGraph()
+        description: >-
+          graph = the completed step graph from the private completedStepGraph helper:
+          implMethod.narrative with a completion step appended, a return step numbered one past
+          every step number and every jump field value, read through stepGraph; so each place flow
+          falls off the end of the narrative (a simple step, a parallel arm whose join lies past the
+          end, a branch's true arm, a switch's default, a loop or try exit) continues at the
+          completion step under the step graph's own successor semantics
         type: local
       - stepNumber: 4
         label: decisionSteps
@@ -758,8 +800,10 @@ methods:
         description: Do both arms of a branch go to one step?
         type: branch
         condition: >-
-          the step is a branch with onFalseStep set, and its true target (onTrueStep, else
-          graph.nextOf(step.stepNumber)) exists and equals onFalseStep
+          the step is a branch with onFalseStep set whose targets are a single step: onFalseStep
+          together with onTrueStep when that is set, else together with every step
+          graph.successorsOf(step.stepNumber) continues it at (the true arm's fall-through included:
+          the last step of a parallel arm falls through to its join)
         onFalseStep: 7
       - stepNumber: 6
         description: >-
@@ -771,8 +815,10 @@ methods:
         description: Do every case and the default of a switch go to one step?
         type: branch
         condition: >-
-          the step is a switch with cases, and its case steps together with its default
-          (defaultStep, else graph.nextOf(step.stepNumber), when there is one) are a single step
+          the step is a switch with cases whose targets are a single step: its case steps together
+          with defaultStep when that is set, else together with every step
+          graph.successorsOf(step.stepNumber) continues it at (the default's fall-through included:
+          at the end of a parallel arm the join, past the narrative's end the completion step)
         onFalseStep: 4
       - stepNumber: 8
         label: reportSwitch
@@ -831,9 +877,11 @@ methods:
           Add to callEdges the edge from '<component.id>::<method name>' to '<target
           component>::<target method>' with the implementation, the method name, the step number and
           the target label 'component.method'; the edge is unconditional when the private
-          isUnavoidable helper finds the step on every path to completion: with the step removed, no
-          step the private isTerminal helper counts as terminal (a return or throw, or a step whose
-          flow falls off the narrative's end) is reachable from the first step
+          isUnavoidable helper finds the step on every path to completion: over the completed step
+          graph with the step removed, the first step cannot complete, where the steps that can
+          complete are the least set in which a return or throw step completes, a parallel header
+          completes when every arm entry does (all arms run), and any other step completes when some
+          successor does
         type: local
       - stepNumber: 17
         description: >-
@@ -860,9 +908,9 @@ methods:
         description: >-
           Report UNCONDITIONAL_CALL_CYCLE (warning; draft context when any member edge's
           implementation is ctx.isImplementationDraft) on the implementation of the anchor, the
-          member edge whose from key sorts first by localeCompare, naming the cycle's nodes in
-          sorted order and the anchor's step, method, implementation and target: it recurses without
-          a base case
+          member edge that sorts first by from key, then implementation id, compared by code unit,
+          then step number, naming the cycle's nodes in sorted order and the anchor's step, method,
+          implementation and target: it recurses without a base case
         type: local
     symbol: check
   - name: narrativeDetail
@@ -991,4 +1039,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-14T23:35:32.618Z'
+updatedAt: '2026-09-15T01:31:19.182Z'

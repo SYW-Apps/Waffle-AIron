@@ -24,6 +24,10 @@
  *    declared contract, so none may judge it — whichever loaded first used to
  *    win silently. Fired on the dependency and the call; controlled by naming
  *    the provider, and by providers that agree on the contract.
+ *  - UNDECLARED_DEPENDENCY_CALL (error): a narrative target that resolves
+ *    against a surface snapshot is a collaborator like a local one, so the
+ *    caller must list the same cross-tree reference in dependsOn. Fired on a
+ *    surface-resolved call; controlled by declaring the hub.
  */
 import * as yaml from 'js-yaml';
 import { defineRuleFixture } from '../harness.js';
@@ -442,5 +446,34 @@ export default [
       '.wai/surfaces/FleetWorks-route-ingest.yaml': telemetryHubPin('route-ingest', ['streamTelemetry']),
       '.wai/surfaces/FleetWorks-yard-ingest.yaml': telemetryHubPin('yard-ingest', ['streamTelemetry']),
     }),
+  }),
+
+  // -------------------------------------------------------------------------
+  // UNDECLARED_DEPENDENCY_CALL — a surface-resolved target is declared like a local one
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_DEPENDENCY_CALL',
+    severity: 'error',
+    anchoredTo: 'telemetry_forwarder_impl',
+    expectFire: true,
+    scenario:
+      'A chained telemetry forwarder streams batches to super::telemetry-hub, which its pinned sibling surface exposes, but the forwarder never declares the hub in dependsOn.',
+    tree: telemetryTree(
+      streamToHub('super::telemetry-hub'),
+      { '.wai/surfaces/FleetWorks-route-ingest.yaml': telemetryHubPin('route-ingest', ['streamTelemetry']) },
+      [],
+    ),
+  }),
+  defineRuleFixture({
+    code: 'UNDECLARED_DEPENDENCY_CALL',
+    expectFire: false,
+    reason:
+      'The forwarder declares super::telemetry-hub in dependsOn, the same reference its narrative calls, so the surface-resolved edge is a declared collaborator.',
+    scenario:
+      'A chained telemetry forwarder declares and calls super::telemetry-hub, which its pinned sibling surface exposes.',
+    tree: telemetryTree(
+      streamToHub('super::telemetry-hub'),
+      { '.wai/surfaces/FleetWorks-route-ingest.yaml': telemetryHubPin('route-ingest', ['streamTelemetry']) },
+    ),
   }),
 ];

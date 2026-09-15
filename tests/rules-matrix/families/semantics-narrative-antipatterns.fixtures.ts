@@ -290,4 +290,113 @@ export default [
       ],
     },
   }),
+
+  // -------------------------------------------------------------------------
+  // Step-graph successor semantics: a parallel arm's last step continues at
+  // the join, and every arm always runs
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'MEANINGLESS_BRANCH',
+    severity: 'warning',
+    anchoredTo: 'outbox_relay_impl',
+    expectFire: true,
+    scenario:
+      'The relay checks the message schema and encodes the payload concurrently; the schema arm ends with a branch that skips to publishing when the schema is cached, but its true arm falls through to that same publish step at the join, so the check decides nothing.',
+    tree: outboxTree([
+      { stepNumber: 1, type: 'parallel', description: 'Check the schema and encode the payload concurrently.', branches: [{ step: 2 }, { step: 4 }], endStep: 4 },
+      { stepNumber: 2, type: 'local', description: 'Look up the message schema in the registry cache.' },
+      { stepNumber: 3, type: 'branch', description: 'Skip straight to publishing when the schema is cached.', condition: 'the schema is cached', onFalseStep: 5 },
+      { stepNumber: 4, type: 'local', description: 'Encode the message payload for the bus.' },
+      { stepNumber: 5, type: 'local', description: 'Publish the encoded message to the bus.' },
+      { stepNumber: 6, type: 'return', description: 'Report the message published.', outcome: 'success' },
+    ]),
+  }),
+  defineRuleFixture({
+    code: 'UNCONDITIONAL_CALL_CYCLE',
+    severity: 'warning',
+    anchoredTo: 'balance_recalculator_impl',
+    expectFire: true,
+    scenario:
+      'Posting a ledger entry fans out a balance recalculation alongside the audit journal append, and the recalculation always posts a correcting entry back; every parallel arm runs, so the recalculation call is unavoidable and the cycle has no base case.',
+    tree: {
+      subsystems: [{ id: 'ledger', description: 'Double-entry ledger posting and balance upkeep.' }],
+      components: [
+        { id: 'ledger-poster', componentType: 'Orchestrator', description: 'Posts entries into the ledger.', dependsOn: ['balance-recalculator'] },
+        { id: 'balance-recalculator', componentType: 'Orchestrator', description: 'Recalculates running balances after postings.', dependsOn: ['ledger-poster'] },
+      ],
+      interfaces: [
+        { id: 'iledger_poster', component: 'ledger-poster', methods: [{ name: 'postEntry', description: 'Post one entry into the ledger.' }] },
+        { id: 'ibalance_recalculator', component: 'balance-recalculator', methods: [{ name: 'recalculate', description: 'Recalculate the running balance after a posting.' }] },
+      ],
+      implementations: [
+        {
+          id: 'ledger_poster_impl',
+          contract: 'iledger_poster',
+          methods: [{
+            name: 'postEntry',
+            narrative: [
+              { stepNumber: 1, type: 'parallel', description: 'Recalculate the balance and journal the entry concurrently.', branches: [{ step: 2 }, { step: 3 }], endStep: 3 },
+              { stepNumber: 2, type: 'call', description: 'Recalculate the running balance after the posting.', targetComponent: 'balance-recalculator', targetMethod: 'recalculate' },
+              { stepNumber: 3, type: 'local', description: 'Append the entry to the audit journal.' },
+            ],
+          }],
+        },
+        {
+          id: 'balance_recalculator_impl',
+          contract: 'ibalance_recalculator',
+          methods: [{
+            name: 'recalculate',
+            narrative: [
+              { stepNumber: 1, type: 'call', description: 'Post a correcting entry for the recalculated balance.', targetComponent: 'ledger-poster', targetMethod: 'postEntry' },
+            ],
+          }],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNCONDITIONAL_CALL_CYCLE',
+    expectFire: false,
+    reason:
+      'The recalculation arm can skip its call when the entry leaves the balance unchanged, and that arm then completes through the join past the end of the narrative, so the posting edge is guarded and the cycle is not provable.',
+    scenario:
+      'Posting a ledger entry fans out a guarded balance recalculation alongside the audit journal append; the recalculation arm skips its call for entries that leave the balance unchanged.',
+    tree: {
+      subsystems: [{ id: 'ledger', description: 'Double-entry ledger posting and balance upkeep.' }],
+      components: [
+        { id: 'ledger-poster', componentType: 'Orchestrator', description: 'Posts entries into the ledger.', dependsOn: ['balance-recalculator'] },
+        { id: 'balance-recalculator', componentType: 'Orchestrator', description: 'Recalculates running balances after postings.', dependsOn: ['ledger-poster'] },
+      ],
+      interfaces: [
+        { id: 'iledger_poster', component: 'ledger-poster', methods: [{ name: 'postEntry', description: 'Post one entry into the ledger.' }] },
+        { id: 'ibalance_recalculator', component: 'balance-recalculator', methods: [{ name: 'recalculate', description: 'Recalculate the running balance after a posting.' }] },
+      ],
+      implementations: [
+        {
+          id: 'ledger_poster_impl',
+          contract: 'iledger_poster',
+          methods: [{
+            name: 'postEntry',
+            narrative: [
+              { stepNumber: 1, type: 'parallel', description: 'Recalculate the balance and journal the entry concurrently.', branches: [{ step: 2 }, { step: 5 }], endStep: 5 },
+              { stepNumber: 2, type: 'branch', description: 'Skip the recalculation when the entry leaves the balance unchanged.', condition: 'the entry leaves the balance unchanged', onTrueStep: 4, onFalseStep: 3 },
+              { stepNumber: 3, type: 'call', description: 'Recalculate the running balance after the posting.', targetComponent: 'balance-recalculator', targetMethod: 'recalculate' },
+              { stepNumber: 4, type: 'local', description: 'Note whether a recalculation ran for the entry.' },
+              { stepNumber: 5, type: 'local', description: 'Append the entry to the audit journal.' },
+            ],
+          }],
+        },
+        {
+          id: 'balance_recalculator_impl',
+          contract: 'ibalance_recalculator',
+          methods: [{
+            name: 'recalculate',
+            narrative: [
+              { stepNumber: 1, type: 'call', description: 'Post a correcting entry for the recalculated balance.', targetComponent: 'ledger-poster', targetMethod: 'postEntry' },
+            ],
+          }],
+        },
+      ],
+    },
+  }),
 ];

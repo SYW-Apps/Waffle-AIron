@@ -79,6 +79,7 @@ export const contractsRule: SddRule = {
             );
             continue;
           }
+          const target = step.targetComponent;
 
           // An unresolved reference that points OUTSIDE this loading root — a
           // chained subproject opened standalone physically does not contain its
@@ -89,19 +90,38 @@ export const contractsRule: SddRule = {
           // whose leading namespace segment is not a subsystem in THIS tree —
           // e.g. `waffler_core::x` authored from a parent root, where
           // `waffler_core` is not present when validating from the child dir.
-          const isCrossTreeForm = ctx.isExternalNamespaceRef(step.targetComponent);
+          const isCrossTreeForm = ctx.isExternalNamespaceRef(target);
           // A reference made from inside a chained mount that the loader collapsed
           // at this root may resolve against the snapshots that mount holds; one
           // they do not cover keeps the error it always had.
-          const fromSubsystem = ctx.componentMap.get(contract.component)?.subsystem;
+          const caller = ctx.componentMap.get(contract.component);
+          const fromSubsystem = caller?.subsystem;
           const isCollapsedForm = !isCrossTreeForm && fromSubsystem !== undefined
-            && ctx.isCollapsedCrossTreeRef(step.targetComponent, fromSubsystem);
+            && ctx.isCollapsedCrossTreeRef(target, fromSubsystem);
+
+          // The caller must declare every collaborator a step reaches, wherever
+          // the target resolved: in this tree, or against a surface snapshot.
+          // The loader qualifies a cross-tree dependsOn entry exactly as it
+          // qualifies the step's target, so a declared edge names the same
+          // reference. A target that resolves nowhere gets no dependency
+          // verdict — its resolution finding is the one to fix.
+          const reportUndeclared = (reaches: string, surfaceResolved?: boolean): void => {
+            if (!caller || target === caller.id || caller.dependsOn.includes(target) || caller.owns.includes(target)) return;
+            ctx.addIssue(
+              'error',
+              'UNDECLARED_DEPENDENCY_CALL',
+              `Method "${implMethod.name}" in implementation "${impl.id}" (component "${caller.id}") ${reaches} component "${target}" (step ${step.stepNumber}) but component "${caller.id}" does not list "${target}" as a dependency.`,
+              impl.id,
+              isDraftCtx || ctx.isComponentDraft(caller.id),
+              surfaceResolved,
+            );
+          };
 
           if (step.type === 'dispatch') {
-            const dispatchTarget = ctx.componentMap.get(step.targetComponent);
+            const dispatchTarget = ctx.componentMap.get(target);
             if (!dispatchTarget) {
               if (isCrossTreeForm || isCollapsedForm) {
-                const resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem);
+                const resolved = ctx.resolveSurfaceRef(target, fromSubsystem);
                 if (resolved.kind === 'ambiguous') {
                   ctx.addIssue(
                     'error',
@@ -109,7 +129,7 @@ export const contractsRule: SddRule = {
                     ambiguityMessage(
                       resolved,
                       `Method "${implMethod.name}" in implementation "${impl.id}" dispatches (step ${step.stepNumber}) through`,
-                      step.targetComponent,
+                      target,
                     ),
                     impl.id,
                     isDraftCtx,
@@ -117,12 +137,13 @@ export const contractsRule: SddRule = {
                   continue;
                 }
                 if (resolved.kind === 'resolved') {
+                  reportUndeclared('dispatches through', true);
                   // Validate the capability against the DECLARED surface.
                   if (step.capability && !(resolved.entry.dispatch ?? []).some(b => b.capability === step.capability)) {
                     ctx.addIssue(
                       'error',
                       'SURFACE_REF_NOT_EXPOSED',
-                      `Method "${implMethod.name}" in implementation "${impl.id}" dispatches capability "${step.capability}" through cross-tree portal "${step.targetComponent}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not serve that capability on "${resolved.entry.id}".`,
+                      `Method "${implMethod.name}" in implementation "${impl.id}" dispatches capability "${step.capability}" through cross-tree portal "${target}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not serve that capability on "${resolved.entry.id}".`,
                       impl.id,
                       isDraftCtx,
                       true,
@@ -135,7 +156,7 @@ export const contractsRule: SddRule = {
                 ctx.addIssue(
                   'warning',
                   'CROSS_TREE_REF_UNRESOLVED',
-                  `Method "${implMethod.name}" in implementation "${impl.id}" dispatches through cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, pin the family surfaces ("wairon surface pin"), or import the producing project's surface.`,
+                  `Method "${implMethod.name}" in implementation "${impl.id}" dispatches through cross-tree component "${target}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, pin the family surfaces ("wairon surface pin"), or import the producing project's surface.`,
                   impl.id,
                   isDraftCtx,
                 );
@@ -143,25 +164,14 @@ export const contractsRule: SddRule = {
                 ctx.addIssue(
                   'error',
                   'INVALID_TARGET_COMPONENT_REFERENCE',
-                  `Method "${implMethod.name}" in implementation "${impl.id}" dispatches through component "${step.targetComponent}" which does not exist (step ${step.stepNumber}).`,
+                  `Method "${implMethod.name}" in implementation "${impl.id}" dispatches through component "${target}" which does not exist (step ${step.stepNumber}).`,
                   impl.id,
                   isDraftCtx,
                 );
               }
               continue;
             }
-            const dispatchCaller = ctx.componentMap.get(contract.component);
-            if (dispatchCaller && step.targetComponent !== dispatchCaller.id
-                && !dispatchCaller.dependsOn.includes(step.targetComponent)
-                && !dispatchCaller.owns.includes(step.targetComponent)) {
-              ctx.addIssue(
-                'error',
-                'UNDECLARED_DEPENDENCY_CALL',
-                `Method "${implMethod.name}" in implementation "${impl.id}" (component "${dispatchCaller.id}") dispatches through component "${step.targetComponent}" (step ${step.stepNumber}) but component "${dispatchCaller.id}" does not list "${step.targetComponent}" as a dependency.`,
-                impl.id,
-                isDraftCtx || ctx.isComponentDraft(dispatchCaller.id),
-              );
-            }
+            reportUndeclared('dispatches through');
             continue;
           }
 
@@ -180,10 +190,10 @@ export const contractsRule: SddRule = {
             continue;
           }
 
-          const targetComp = ctx.componentMap.get(step.targetComponent);
+          const targetComp = ctx.componentMap.get(target);
           if (!targetComp) {
             if (isCrossTreeForm || isCollapsedForm) {
-              const resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem);
+              const resolved = ctx.resolveSurfaceRef(target, fromSubsystem);
               if (resolved.kind === 'ambiguous') {
                 ctx.addIssue(
                   'error',
@@ -191,7 +201,7 @@ export const contractsRule: SddRule = {
                   ambiguityMessage(
                     resolved,
                     `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} "${step.targetMethod}" (step ${step.stepNumber}) on`,
-                    step.targetComponent,
+                    target,
                   ),
                   impl.id,
                   isDraftCtx,
@@ -199,13 +209,14 @@ export const contractsRule: SddRule = {
                 continue;
               }
               if (resolved.kind === 'resolved') {
+                reportUndeclared(verb, true);
                 // Validate method + asserted guarantees against the DECLARED surface.
                 const surfaceMethod = resolved.entry.methods.find(m => m.name === step.targetMethod);
                 if (!surfaceMethod) {
                   ctx.addIssue(
                     'error',
                     'SURFACE_REF_NOT_EXPOSED',
-                    `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} "${step.targetMethod}" on cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not expose that method on "${resolved.entry.id}".`,
+                    `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} "${step.targetMethod}" on cross-tree component "${target}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not expose that method on "${resolved.entry.id}".`,
                     impl.id,
                     isDraftCtx,
                     true,
@@ -232,7 +243,7 @@ export const contractsRule: SddRule = {
               ctx.addIssue(
                 'warning',
                 'CROSS_TREE_REF_UNRESOLVED',
-                `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, pin the family surfaces ("wairon surface pin"), or import the producing project's surface.`,
+                `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} cross-tree component "${target}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, pin the family surfaces ("wairon surface pin"), or import the producing project's surface.`,
                 impl.id,
                 isDraftCtx,
               );
@@ -240,7 +251,7 @@ export const contractsRule: SddRule = {
               ctx.addIssue(
                 'error',
                 'INVALID_TARGET_COMPONENT_REFERENCE',
-                `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} component "${step.targetComponent}" which does not exist (step ${step.stepNumber}).`,
+                `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} component "${target}" which does not exist (step ${step.stepNumber}).`,
                 impl.id,
                 isDraftCtx,
               );
@@ -248,23 +259,10 @@ export const contractsRule: SddRule = {
             continue;
           }
 
-          // Check if calling component declares targetComponent as dependency
-          const callingComponent = ctx.componentMap.get(contract.component);
-          if (callingComponent && step.targetComponent !== callingComponent.id) {
-            if (!callingComponent.dependsOn.includes(step.targetComponent) &&
-                !callingComponent.owns.includes(step.targetComponent)) {
-              ctx.addIssue(
-                'error',
-                'UNDECLARED_DEPENDENCY_CALL',
-                `Method "${implMethod.name}" in implementation "${impl.id}" (component "${callingComponent.id}") ${verb} component "${step.targetComponent}" (step ${step.stepNumber}) but component "${callingComponent.id}" does not list "${step.targetComponent}" as a dependency.`,
-                impl.id,
-                isDraftCtx || ctx.isComponentDraft(callingComponent.id),
-              );
-            }
-          }
+          reportUndeclared(verb);
 
           // Check if target component has an interface containing targetMethod
-          const targetInterfaces = ctx.interfacesByComponent.get(step.targetComponent) ?? [];
+          const targetInterfaces = ctx.interfacesByComponent.get(target) ?? [];
           let targetMethodSpec: (typeof targetInterfaces)[number]['methods'][number] | undefined;
           for (const targetIntf of targetInterfaces) {
             const found = targetIntf.methods.find(m => m.name === step.targetMethod);
@@ -275,9 +273,9 @@ export const contractsRule: SddRule = {
             ctx.addIssue(
               'error',
               'INVALID_TARGET_METHOD_REFERENCE',
-              `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} method "${step.targetMethod}" on component "${step.targetComponent}" which is not defined on any of its interfaces (step ${step.stepNumber}).`,
+              `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} method "${step.targetMethod}" on component "${target}" which is not defined on any of its interfaces (step ${step.stepNumber}).`,
               impl.id,
-              isDraftCtx || ctx.isComponentDraft(step.targetComponent),
+              isDraftCtx || ctx.isComponentDraft(target),
             );
           } else {
             // Semantic cross-check (consistency, not truth): the gate can't read prose, but
@@ -292,9 +290,9 @@ export const contractsRule: SddRule = {
                   ctx.addIssue(
                     'warning',
                     'NARRATIVE_SEMANTIC_UNBACKED',
-                    `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" explicitly asserts guarantee "${g}", but the method it calls — "${step.targetMethod}" on "${step.targetComponent}" — does not list "${g}" among its L3 contract guarantees. Declare it on that method (and ensure its shape can deliver it), or revise the narrative.`,
+                    `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" explicitly asserts guarantee "${g}", but the method it calls — "${step.targetMethod}" on "${target}" — does not list "${g}" among its L3 contract guarantees. Declare it on that method (and ensure its shape can deliver it), or revise the narrative.`,
                     impl.id,
-                    isDraftCtx || ctx.isComponentDraft(step.targetComponent),
+                    isDraftCtx || ctx.isComponentDraft(target),
                   );
                 }
               }

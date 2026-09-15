@@ -74,15 +74,15 @@ export const hierarchyRule: SddRule = {
 
     // Check implementations reference existing interface
     for (const impl of ctx.implementations) {
-      const contract = ctx.interfaces.find(i => i.id === impl.contract);
-      const isDraftCtx = impl.status === 'draft' || impl.status === 'design' || (contract && (ctx.isComponentDraft(contract.component) || contract.status === 'draft' || contract.status === 'design'));
       if (!ctx.interfaceIds.has(impl.contract)) {
+        // The shared draft recipe: with the contract unresolved it reads the
+        // implementation's own draft/design status.
         ctx.addIssue(
           'error',
           'INVALID_INTERFACE_REFERENCE',
           `Implementation "${impl.id}" references non-existent interface contract "${impl.contract}".`,
           impl.id,
-          isDraftCtx,
+          ctx.isImplementationDraft(impl),
         );
       }
     }

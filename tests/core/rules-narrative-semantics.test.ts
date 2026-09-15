@@ -282,6 +282,156 @@ describe('UNCONDITIONAL_CALL_CYCLE — unbounded recursion across components', (
   });
 });
 
+describe('antipatterns follow the step graph — parallel joins and completion', () => {
+  const CALL = (n: number, comp: string, method: string) =>
+    `      - { stepNumber: ${n}, description: Call ${comp}.${method}, type: call, targetComponent: ${comp}, targetMethod: ${method} }`;
+  const DONE = (n: number) => `      - { stepNumber: ${n}, description: Done, type: return, outcome: done }`;
+
+  it('MEANINGLESS_BRANCH: a branch ending a parallel arm falls through to the join, not into the next arm', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: runFlow',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Fan out the lookups, type: parallel, branches: [{ step: 2 }, { step: 4 }], endStep: 5 }',
+      '      - { stepNumber: 2, description: Warm the cache, type: local }',
+      '      - { stepNumber: 3, description: Skip to the join once the cache is warm, type: branch, condition: cache is warm, onFalseStep: 6 }',
+      '      - { stepNumber: 4, description: Fetch the profile, type: local }',
+      '      - { stepNumber: 5, description: Fetch the settings, type: local }',
+      DONE(6),
+    ].join('\n'));
+    proj.activate();
+    try {
+      const found = byCode(validateSddTree(), 'MEANINGLESS_BRANCH');
+      expect(found.map(i => i.message)).toEqual([expect.stringContaining('branch step 3 sends both arms to step 6')]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('MEANINGLESS_BRANCH: a switch default ending a parallel arm falls through to the join', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: runFlow',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Fan out the lookups, type: parallel, branches: [{ step: 2 }, { step: 4 }], endStep: 5 }',
+      '      - { stepNumber: 2, description: Classify the request, type: local }',
+      '      - { stepNumber: 3, description: Skip to the join for bulk requests, type: switch, on: request kind, cases: [{ value: bulk, step: 6 }] }',
+      '      - { stepNumber: 4, description: Fetch the profile, type: local }',
+      '      - { stepNumber: 5, description: Fetch the settings, type: local }',
+      DONE(6),
+    ].join('\n'));
+    proj.activate();
+    try {
+      const found = byCode(validateSddTree(), 'MEANINGLESS_BRANCH');
+      expect(found.map(i => i.message)).toEqual([expect.stringContaining('switch step 3 sends every case (and the default) to step 6')]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('MEANINGLESS_BRANCH stays silent for a switch whose default completes the method off the end', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: runFlow',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Read the job state, type: local }',
+      '      - { stepNumber: 2, description: Handle the job once more, type: local }',
+      '      - { stepNumber: 3, description: Route the job by its state, type: switch, on: job state, cases: [{ value: retry, step: 2 }, { value: requeue, step: 2 }] }',
+    ].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'MEANINGLESS_BRANCH')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('INESCAPABLE_CYCLE stays silent when the cycle exits by falling off the end of the narrative', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: runFlow',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Prepare the run context, type: local }',
+      '      - { stepNumber: 2, description: Poll the state, type: local }',
+      '      - { stepNumber: 3, description: Poll again until the state settles, type: branch, condition: state settled, onFalseStep: 2 }',
+    ].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('UNCONDITIONAL_CALL_CYCLE: every parallel arm runs, so a call inside an arm is unavoidable', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependsOn: [orch-a]');
+    proj.contract('orch-a', ['ping']);
+    proj.contract('orch-b', ['pong']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: ping',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Fan out the notification and the audit, type: parallel, branches: [{ step: 2 }, { step: 3 }], endStep: 3 }',
+      CALL(2, 'orch-b', 'pong'),
+      '      - { stepNumber: 3, description: Record the audit entry, type: local }',
+      DONE(4),
+    ].join('\n'));
+    proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch-a', 'ping'), DONE(2)].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(1);
+    } finally { proj.cleanup(); }
+  });
+
+  it('UNCONDITIONAL_CALL_CYCLE: an arm that can skip its call guards the cycle, even when the arm completes at a join past the end', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependsOn: [orch-a]');
+    proj.contract('orch-a', ['ping']);
+    proj.contract('orch-b', ['pong']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: ping',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Fan out the notification and the audit, type: parallel, branches: [{ step: 2 }, { step: 5 }], endStep: 5 }',
+      '      - { stepNumber: 2, description: Skip the notification once it was sent, type: branch, condition: already notified, onTrueStep: 4, onFalseStep: 3 }',
+      CALL(3, 'orch-b', 'pong'),
+      '      - { stepNumber: 4, description: Note the notification outcome, type: local }',
+      '      - { stepNumber: 5, description: Record the audit entry, type: local }',
+    ].join('\n'));
+    proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch-a', 'ping'), DONE(2)].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('UNCONDITIONAL_CALL_CYCLE anchors on the first cycle member by code unit, not by locale collation', () => {
+    // By code unit "-" (U+002D) sorts before "_" (U+005F), while locale
+    // collation puts "_" first. The anchor follows the order the path reports.
+    const proj = createTempProject();
+    proj.component('orch_a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependsOn: [orch_a]');
+    proj.contract('orch_a', ['ping']);
+    proj.contract('orch-b', ['pong']);
+    proj.impl('orch_a', ['methods:', '  - name: ping', '    narrative:', CALL(1, 'orch-b', 'pong'), DONE(2)].join('\n'));
+    proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch_a', 'ping'), DONE(2)].join('\n'));
+    proj.activate();
+    try {
+      const found = byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('orch-b::pong → orch_a::ping');
+      expect(found[0].specId).toBe('impl-orch-b');
+    } finally { proj.cleanup(); }
+  });
+});
+
 describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized function', () => {
   const NARRATIVE_CALL = [
     'methods:',

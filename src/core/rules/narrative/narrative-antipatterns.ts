@@ -1,4 +1,4 @@
-import { ImplementationSpec, NarrativeStep, stepGraph } from '../../../models/index.js';
+import { ImplementationSpec, NarrativeStep, StepGraph, stepGraph } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -18,51 +18,63 @@ import { RuleContext, SddRule } from '../types.js';
 // ---------------------------------------------------------------------------
 
 /**
- * Terminators: return/throw steps, plus every place execution can complete by
- * falling off the end of the narrative — mirroring each `?? nextOf` fallback
- * in stepGraph's successor semantics (a branch whose true arm falls off the
- * end completes there just as surely as a return).
+ * The step graph of a narrative closed by a COMPLETION step: a return numbered
+ * one past every step number and every jump field value (so no jump, however
+ * malformed, lands on it), appended so that each place flow falls off the end
+ * of the narrative — a simple step, the last step of a parallel arm whose join
+ * lies past the end, a branch's true arm, a switch's default, a loop or try
+ * exit — continues at it under stepGraph's own successor semantics. Every
+ * analysis below reads this one graph, so none re-derives what "next" means.
  */
-function isTerminal(step: NarrativeStep, nextOf: (n: number) => number | undefined): boolean {
-  if (step.type === 'return' || step.type === 'throw') return true;
-  const n = step.stepNumber;
-  switch (step.type) {
-    case 'local': case 'call': case 'register': case 'dispatch':
-      return nextOf(n) === undefined;
-    case 'branch':
-      return step.onTrueStep === undefined && nextOf(n) === undefined;
-    case 'switch':
-      return step.defaultStep === undefined && nextOf(n) === undefined;
-    case 'loop': case 'try':
-      return step.endStep !== undefined && nextOf(step.endStep) === undefined;
-    default:
-      return false;
-  }
+function completedStepGraph(steps: NarrativeStep[]): StepGraph {
+  const numbers = steps.flatMap(s => [
+    s.stepNumber, s.onTrueStep, s.onFalseStep, s.defaultStep, s.endStep, s.finallyStep, s.toStep,
+    ...(s.cases ?? []).map(c => c.step),
+    ...(s.catches ?? []).map(c => c.step),
+    ...(s.branches ?? []).map(b => b.step),
+  ]).filter((n): n is number => n !== undefined);
+  const completion: NarrativeStep = {
+    stepNumber: Math.max(0, ...numbers) + 1,
+    description: 'The method completes by falling off the end of its narrative',
+    type: 'return',
+  };
+  return stepGraph({ narrative: [...steps, completion] });
 }
 
 /**
- * True when step `target` lies on EVERY path from the entry to any terminator
- * — i.e. execution cannot complete without passing it. Computed as: with
- * `target` removed from the graph, no terminator is reachable from the entry.
+ * True when step `target` lies on EVERY path from the entry to completion —
+ * execution cannot complete without passing it. Over the completed step graph
+ * with `target` removed, the steps that can still complete are the least set
+ * in which a return or throw completes (the completion step is one), a
+ * parallel header completes only when EVERY arm entry does — all arms always
+ * run — and any other step completes when SOME successor does. The target is
+ * unavoidable when the entry is not in that set.
  */
 export function isUnavoidable(steps: NarrativeStep[], target: number): boolean {
-  const { stepNumbers: nums, stepAt, nextOf, successorsOf } = stepGraph({ narrative: steps });
-  if (nums.length === 0) return false;
-  if (nums[0] === target) return true;
-
-  const visited = new Set<number>();
-  const stack = [nums[0]];
-  while (stack.length) {
-    const n = stack.pop()!;
-    if (n === target || visited.has(n)) continue;
-    visited.add(n);
-    const s = stepAt(n)!;
-    if (isTerminal(s, nextOf)) return false; // a completion path avoids the target
-    for (const t of successorsOf(n)) {
-      if (t !== target && !visited.has(t)) stack.push(t);
+  if (steps.length === 0) return false;
+  const graph = completedStepGraph(steps);
+  const completes = new Set<number>();
+  const canComplete = (n: number): boolean => {
+    const s = graph.stepAt(n)!;
+    if (s.type === 'return' || s.type === 'throw') return true;
+    const arms = s.type === 'parallel'
+      ? (s.branches ?? []).map(b => b.step).filter(e => graph.stepAt(e) !== undefined)
+      : [];
+    if (arms.length) return arms.every(e => completes.has(e));
+    return graph.successorsOf(n).some(t => completes.has(t));
+  };
+  // Iterated to a fixed point, last step first: flow mostly runs forward, so
+  // a pass or two settles it.
+  const order = [...graph.stepNumbers].reverse();
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const n of order) {
+      if (n === target || completes.has(n) || !canComplete(n)) continue;
+      completes.add(n);
+      grew = true;
     }
   }
-  return true;
+  return !completes.has(graph.stepNumbers[0]);
 }
 
 /** Strongly connected components (Tarjan, iterative) over the step graph. */
@@ -109,6 +121,9 @@ function stronglyConnected(nums: number[], successorsOf: (n: number) => number[]
   return sccs;
 }
 
+/** Orders strings by UTF-16 code unit, independent of the runtime locale. */
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
 interface CallEdge {
   fromKey: string;
   toKey: string;
@@ -140,31 +155,39 @@ export const narrativeAntipatternsRule: SddRule = {
         const steps = implMethod.narrative;
         if (!steps.length) continue;
         const where = `Method "${implMethod.name}" in implementation "${impl.id}": `;
-        const graph = stepGraph(implMethod);
+        const graph = completedStepGraph(steps);
 
         // -- MEANINGLESS_BRANCH ---------------------------------------------
+        // A decision's targets are its explicit ones plus, when it leaves its
+        // fall-through field unset, every step the graph continues it at — so
+        // the fall-through is the graph's: the last step of a parallel arm
+        // falls through to the join, the narrative's end to completion.
+        const decisionTargets = (stepNumber: number, explicit: number[], fallThroughField: number | undefined): number[] => {
+          const targets = new Set(explicit);
+          if (fallThroughField !== undefined) targets.add(fallThroughField);
+          else for (const t of graph.successorsOf(stepNumber)) targets.add(t);
+          return [...targets];
+        };
         for (const s of steps) {
           if (s.type === 'branch' && s.onFalseStep !== undefined) {
-            const onTrue = s.onTrueStep ?? graph.nextOf(s.stepNumber);
-            if (onTrue !== undefined && onTrue === s.onFalseStep) {
+            const targets = decisionTargets(s.stepNumber, [s.onFalseStep], s.onTrueStep);
+            if (targets.length === 1) {
               ctx.addIssue(
                 'warning',
                 'MEANINGLESS_BRANCH',
-                `${where}branch step ${s.stepNumber} sends both arms to step ${onTrue} — the condition decides nothing. Point the arms at different steps, or replace the branch with a local step.`,
+                `${where}branch step ${s.stepNumber} sends both arms to step ${targets[0]} — the condition decides nothing. Point the arms at different steps, or replace the branch with a local step.`,
                 impl.id,
                 isDraftCtx,
               );
             }
           }
           if (s.type === 'switch' && s.cases?.length) {
-            const targets = new Set<number>(s.cases.map(c => c.step));
-            const def = s.defaultStep ?? graph.nextOf(s.stepNumber);
-            if (def !== undefined) targets.add(def);
-            if (targets.size === 1) {
+            const targets = decisionTargets(s.stepNumber, s.cases.map(c => c.step), s.defaultStep);
+            if (targets.length === 1) {
               ctx.addIssue(
                 'warning',
                 'MEANINGLESS_BRANCH',
-                `${where}switch step ${s.stepNumber} sends every case (and the default) to step ${[...targets][0]} — the dispatch decides nothing.`,
+                `${where}switch step ${s.stepNumber} sends every case (and the default) to step ${targets[0]} — the dispatch decides nothing.`,
                 impl.id,
                 isDraftCtx,
               );
@@ -246,10 +269,14 @@ export const narrativeAntipatternsRule: SddRule = {
       if (!isCycle) continue;
       const memberEdges = keys.flatMap(k => (adjacency.get(k) ?? []).filter(e => inScc.has(e.toKey)));
       if (memberEdges.length === 0) continue;
-      // Anchor the finding on the lexicographically first member's impl, so a
-      // single lint.allow covers the cycle finding deterministically.
-      const anchor = [...memberEdges].sort((a, b) => a.fromKey.localeCompare(b.fromKey))[0];
-      const path = [...keys].sort().join(' → ');
+      // Anchor the finding on the member edge that sorts first — from key, then
+      // implementation id, by code unit, then step number — so a single
+      // lint.allow covers the cycle finding on every runtime, whatever its
+      // locale. Every member has an edge inside the cycle, so the anchor is the
+      // first node of the path below.
+      const anchor = [...memberEdges].sort((a, b) =>
+        byCodeUnit(a.fromKey, b.fromKey) || byCodeUnit(a.impl.id, b.impl.id) || a.stepNumber - b.stepNumber)[0];
+      const path = [...keys].sort(byCodeUnit).join(' → ');
       ctx.addIssue(
         'warning',
         'UNCONDITIONAL_CALL_CYCLE',
