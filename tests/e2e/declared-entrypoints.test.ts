@@ -37,16 +37,16 @@ describe('e2e declared entrypoints (invokedBy + register, disk-verbatim)', () =>
     await callToolOk(client, 'sdd_add_component', {
       id: 'svc-sink',
       name: 'Service Sink',
-      description: 'Specialist draining buffered work',
+      description: 'Orchestrator draining buffered work',
       subsystem: 'svc',
-      componentType: 'Specialist',
+      componentType: 'Orchestrator',
     });
     await callToolOk(client, 'sdd_add_component', {
       id: 'svc-worker',
       name: 'Service Worker',
-      description: 'Specialist doing the periodic work',
+      description: 'Orchestrator doing the periodic work',
       subsystem: 'svc',
-      componentType: 'Specialist',
+      componentType: 'Orchestrator',
       dependsOn: ['svc-sink'],
     });
     await callToolOk(client, 'sdd_define_interface', {
@@ -143,9 +143,9 @@ describe('e2e declared entrypoints (invokedBy + register, disk-verbatim)', () =>
     await callToolOk(client, 'sdd_add_component', {
       id: 'svc-cron',
       name: 'Service Cron',
-      description: 'Specialist woken by a timer',
+      description: 'Orchestrator woken by a timer',
       subsystem: 'svc',
-      componentType: 'Specialist',
+      componentType: 'Orchestrator',
     });
     await callToolOk(client, 'sdd_define_interface', {
       id: 'isvc-cron',

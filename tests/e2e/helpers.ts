@@ -202,7 +202,7 @@ export function snapshotSpecTree(dir: string): Map<string, string> {
 // The shared LEGAL journey topology: a small tree that authors cleanly and
 // validates with zero errors — an Orchestrator whose entry method is a
 // declared runtime entrypoint (invokedBy seeds reachability, so no Portal
-// ceremony is needed) calling into a Specialist it dependsOn. Used by the
+// ceremony is needed) calling into a worker Orchestrator it dependsOn. Used by the
 // authoring journey and by the CLI smoke suite (whose `validate --ci` run
 // requires the tree to be warning-clean at draft status too).
 // ---------------------------------------------------------------------------
@@ -232,13 +232,13 @@ export async function authorJourneyTree(client: Client): Promise<void> {
     name: 'Journey',
     description: 'Bounded context exercised by the black-box authoring journey',
   });
-  // Dependency order: the Specialist first, then the Orchestrator that depends on it.
+  // Dependency order: the worker first, then the Orchestrator that depends on it.
   await callToolOk(client, 'sdd_add_component', {
     id: JOURNEY.worker,
     name: 'Journey Worker',
-    description: 'Specialist that enriches journey payloads on demand',
+    description: 'Logic that enriches journey payloads on demand',
     subsystem: JOURNEY.subsystem,
-    componentType: 'Specialist',
+    componentType: 'Orchestrator',
   });
   await callToolOk(client, 'sdd_add_component', {
     id: JOURNEY.orch,

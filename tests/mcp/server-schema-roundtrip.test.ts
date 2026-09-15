@@ -232,7 +232,7 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
   it('round-trips an invokedBy method declaration and a register narrative step', async () => {
     unwrapText(await client.callTool({ name: 'sdd_add_component', arguments: {
       id: 'ord-worker', name: 'Order Worker', description: 'Periodic queue drain',
-      subsystem: 'ord', componentType: 'Specialist', dependsOn: ['ord-store'],
+      subsystem: 'ord', componentType: 'Orchestrator', dependsOn: ['ord-store'],
     } }));
     unwrapText(await client.callTool({ name: 'sdd_define_interface', arguments: {
       id: 'iord-worker', name: 'IOrderWorker', description: 'Worker contract', component: 'ord-worker',

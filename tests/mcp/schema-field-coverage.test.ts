@@ -408,7 +408,7 @@ describe('MCP write-tool schema field coverage', () => {
   it("a contract method's findings survive sdd_define_interface", async () => {
     await call('sdd_add_component', {
       id: 'cov-checker', name: 'Coverage Checker', description: 'Checks coverage',
-      subsystem: 'cov', componentType: 'Specialist',
+      subsystem: 'cov', componentType: 'Orchestrator',
     });
     const findings = [
       { code: 'COV_UNREALIZED', severity: 'error', summary: 'A declared code never appears in the source file' },
@@ -444,5 +444,18 @@ describe('MCP write-tool schema field coverage', () => {
     const after = await getSpec('implementation', 'cov_runner_impl');
     expect(after.sourcePath).toBe('src/cov/runner.ts');
     expect(after.methods[0].sourcePath).toBe('src/cov/commands/run.ts');
+  }, 120_000);
+
+  // dependencyClass is EXPRESSED by sdd_add_component, so it needs no
+  // update_spec-only entry — and a component delta must still carry it.
+  it("a component's dependencyClass is authored by sdd_add_component and patched by sdd_update_spec", async () => {
+    await call('sdd_add_component', {
+      id: 'cov-verdict', name: 'Coverage Verdict', description: 'Rules on supplied coverage facts',
+      subsystem: 'cov', componentType: 'Orchestrator', dependencyClass: 'pure',
+    });
+    expect((await getSpec('component', 'cov-verdict')).dependencyClass).toBe('pure');
+
+    await call('sdd_update_spec', { kind: 'component', id: 'cov-verdict', delta: { dependencyClass: 'read' } });
+    expect((await getSpec('component', 'cov-verdict')).dependencyClass).toBe('read');
   }, 120_000);
 });

@@ -70,7 +70,7 @@ describe('e2e authoring journey (built server, empty project)', () => {
 
     const worker = findSpecOnDisk(proj.dir, JOURNEY.worker);
     expect(worker, 'worker component spec not found on disk').not.toBeNull();
-    expect(worker!['componentType']).toBe('Specialist');
+    expect(worker!['componentType']).toBe('Orchestrator');
     expect(worker!['subsystem']).toBe(JOURNEY.subsystem);
 
     const orch = findSpecOnDisk(proj.dir, JOURNEY.orch);

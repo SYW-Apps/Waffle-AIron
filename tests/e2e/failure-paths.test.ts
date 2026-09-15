@@ -43,9 +43,9 @@ describe('e2e failure paths (clean refusal, no partial write)', () => {
     await callToolOk(client, 'sdd_add_component', {
       id: 'fp-comp',
       name: 'FP Component',
-      description: 'Specialist used as the refusal target',
+      description: 'Orchestrator used as the refusal target',
       subsystem: 'fp',
-      componentType: 'Specialist',
+      componentType: 'Orchestrator',
     });
     await callToolOk(client, 'sdd_define_interface', {
       id: 'ifp-comp',

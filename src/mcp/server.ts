@@ -1061,7 +1061,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         name: z.string().describe('Human-readable display name'),
         description: z.string().describe('Responsibility / internal architecture details'),
         subsystem: z.string().describe('The L1 subsystem ID this component belongs to'),
-        componentType: z.enum(['Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Registry', 'Adapter', 'Observer', 'Specialist', 'Repository', 'Gateway']).describe('The building block, or pattern (Repository/Gateway)'),
+        componentType: z.enum(['Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Query', 'Registry', 'Adapter', 'Observer', 'Repository']).describe('The building block, or the pattern Repository. Specialist and Gateway are retired and cannot be authored: logic is an Orchestrator with a dependencyClass, a gateway is a Portal with the gateway variant'),
         owns: z.array(z.string()).optional().describe('Member block ids privately owned by this component (patterns only)'),
         dependsOn: z.array(z.string()).optional().describe('IDs of other components this collaborates with (facades or standalone blocks)'),
         portalType: z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']).optional().describe('Portal-only, and expected on every Portal. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
@@ -1073,6 +1073,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           description: z.string().optional(),
         })).optional().describe('Portal-only: capability → component.method dispatch table for generic-handle portals. Gives the reachability walker real edges and is validated against target interfaces (UNSERVED_CAPABILITY).'),
         durability: z.enum(['ram-projection', 'durable', 'read-through', 'cache']).optional().describe('Store-only — OMIT IT on any other componentType, where it is refused at the write (DURABILITY_ON_NON_STORE) and nothing is saved. Every Store should declare one (MISSING_DURABILITY): durable = persisted RAM projection (hydration read-back from a lifecycle init entrypoint required — MISSING_HYDRATION); read-through = persisted with no RAM copy (every read is the read-back, hydration exempt); ram-projection = rebuilt not restored; cache = evictable loss-safe memo state.'),
+        dependencyClass: z.enum(['pure', 'read']).optional().describe('Orchestrator-only — OMIT IT on any other componentType, where it is refused at the write (DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR) and nothing is saved. Declares what logic may depend on, enforced as a Store\'s durability is (DEPENDENCY_CLASS_VIOLATION): pure = depends only on pure Orchestrators (a computation over the values it is handed, e.g. an arbiter or codec); read = also on read Orchestrators, Repositories, Indexes and Adapters, never calling their write methods; unset = a workflow.'),
         emits: z.array(z.object({
           topic: z.string().describe('Topic/channel name exactly as used on the bus'),
           event: z.string().optional().describe('Optional event name within the topic (informational; pairing is by topic)'),
@@ -1087,13 +1088,13 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   };
   const componentInputFields = Object.keys(componentInput);
 
-  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom'; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown> }>(server,
+  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Query' | 'Registry' | 'Adapter' | 'Observer' | 'Repository'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom'; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; dependencyClass?: 'pure' | 'read'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown> }>(server,
     'sdd_add_component',
     {
-      description: 'Add an L2 Component under a subsystem. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or a pattern (Repository, Gateway). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): model the Repository recipe — a Store + Registry (write) + Index (read) owned by a Repository facade consumers depend on; a deliberately standalone Store is the sanctioned lightweight form (workflow-layer consumers + lint.allow on UNOWNED_STORE). Never hold state as fields inside an Orchestrator/Specialist because a Store link was refused. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced (an omitted array is CLEARED), while lint.allow, a Portal\'s auth, variant, patterns and externalLinks are carried forward — edit those with sdd_update_spec.',
+      description: 'Add an L2 Component under a subsystem. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer) or the pattern Repository. Specialist and Gateway are retired (STEREOTYPE_RETIRED) and cannot be authored: logic is an Orchestrator with a dependencyClass (pure | read; unset = a workflow), and a gateway is a Portal with the gateway variant (set variant with sdd_update_spec). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): model the Repository recipe — a Store + Registry (write) + Index (read), plus a Query for computed reads over the Store, owned by a Repository facade consumers depend on; a deliberately standalone Store is the sanctioned lightweight form (workflow-layer consumers + lint.allow on UNOWNED_STORE). Never hold state as fields inside an Orchestrator because a Store link was refused. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced (an omitted array is CLEARED), while lint.allow, a Portal\'s auth, variant, patterns and externalLinks are carried forward — edit those with sdd_update_spec.',
       inputSchema: componentInput,
     },
-    ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, durability, emits, subscribesTo, ext }) => {
+    ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, durability, dependencyClass, emits, subscribesTo, ext }) => {
       try {
         const { loadSubsystemSpec, loadComponentSpec } = requireSpecs();
         const sub = loadSubsystemSpec(subsystem);
@@ -1111,6 +1112,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           ...(basePath ? { basePath } : {}),
           ...(dispatch ? { dispatch } : {}),
           ...(durability ? { durability } : {}),
+          ...(dependencyClass ? { dependencyClass } : {}),
           ...(emits ? { emits } : {}),
           ...(subscribesTo ? { subscribesTo } : {}),
           ...(ext ? { ext } : {}),
@@ -1171,7 +1173,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
             code: z.string().describe('UPPER_SNAKE finding code, unique within the method; a pack\'s codes carry the pack prefix (<PACK>_<CODE>)'),
             severity: z.enum(['error', 'warning']).describe('Default severity, before project severity overrides and draft-context downgrades'),
             summary: z.string().describe('One line saying what the finding means'),
-          })).optional().describe('The finding codes this method can report, each with its default severity and summary. Each declared code must appear as a string literal in the method\'s source file (UNREALIZED_FINDING). A code is declared once per method; sdd_update_spec upserts and deletes findings by code.'),
+          })).optional().describe('The finding codes this method can report, each with its default severity and summary. Each declared code must be anchored in the method\'s source file, as a string literal or a property-access name (UNREALIZED_FINDING). A code is declared once per method; sdd_update_spec upserts and deletes findings by code.'),
           ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data for this method (namespaced keys) — preserved verbatim'),
   };
   const interfaceMethodInputFields = Object.keys(interfaceMethodShape);
@@ -1187,7 +1189,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'read' | 'write'; invokedBy?: { kind: 'runtime' | 'external' | 'sibling-subsystem'; caller?: string }; findings?: { code: string; severity: 'error' | 'warning'; summary: string }[]; ext?: Record<string, unknown> }[] }>(server,
     'sdd_define_interface',
     {
-      description: 'Define an L3 Contract / Interface with method signatures for a component. Prefer supplying structured `params` per method — they are the authoritative source for type checking (the free-form signature string then becomes display-only and is never heuristically parsed). A method declares the finding codes it reports in `findings` ({code, severity, summary}); each code must appear as a string literal in the method\'s source file. Re-defining an existing id REPLACES the method list: a method left out of the input is REMOVED (and reported); spec-level lint/ext and each method\'s endpoint binding are carried forward.',
+      description: 'Define an L3 Contract / Interface with method signatures for a component. Prefer supplying structured `params` per method — they are the authoritative source for type checking (the free-form signature string then becomes display-only and is never heuristically parsed). A method declares the finding codes it reports in `findings` ({code, severity, summary}); each code must be anchored in the method\'s source file, as a string literal or a property-access name (UNREALIZED_FINDING). Re-defining an existing id REPLACES the method list: a method left out of the input is REMOVED (and reported); spec-level lint/ext and each method\'s endpoint binding are carried forward.',
       inputSchema: interfaceInput,
     },
     ({ id, name, description, component, methods }) => {

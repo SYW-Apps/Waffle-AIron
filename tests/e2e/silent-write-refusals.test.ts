@@ -35,7 +35,7 @@ describe('the authoring surface refuses silent no-ops', () => {
       name: 'Typo Probe',
       description: 'a component authored with a misspelled field',
       subsystem: JOURNEY.subsystem,
-      componentType: 'Specialist',
+      componentType: 'Orchestrator',
       dependson: [JOURNEY.worker], // the real field is dependsOn
     });
 

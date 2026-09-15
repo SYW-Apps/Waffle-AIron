@@ -247,7 +247,7 @@ describe('list-changed notifications after spec writes', () => {
       name: 'sdd_add_component',
       arguments: {
         id: 'alpha-specialist', name: 'Alpha Specialist', description: 'd',
-        subsystem: 'alpha', componentType: 'Specialist',
+        subsystem: 'alpha', componentType: 'Orchestrator',
       },
     });
     expect(result.isError).toBeFalsy();
@@ -261,7 +261,7 @@ describe('list-changed notifications after spec writes', () => {
 
     const result = await client.callTool({
       name: 'sdd_add_component',
-      arguments: { id: 'x', name: 'X', description: 'd', subsystem: 'no-such-subsystem', componentType: 'Specialist' },
+      arguments: { id: 'x', name: 'X', description: 'd', subsystem: 'no-such-subsystem', componentType: 'Orchestrator' },
     });
     expect(result.isError).toBe(true);
 
@@ -290,7 +290,7 @@ describe('list-changed notifications after spec writes', () => {
       name: 'sdd_add_component',
       arguments: {
         id: 'alpha-hosted', name: 'Alpha Hosted', description: 'd',
-        subsystem: 'alpha', componentType: 'Specialist',
+        subsystem: 'alpha', componentType: 'Orchestrator',
       },
     });
     expect(result.isError).toBeFalsy();
