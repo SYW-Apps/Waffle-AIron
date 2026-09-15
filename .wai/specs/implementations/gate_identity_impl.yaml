@@ -1,0 +1,75 @@
+id: gate_identity_impl
+name: Gate Identity Implementation
+description: >-
+  The pure gate identity computation in src/core/rules/gate-identity.ts: it projects the governing
+  doctrine onto its identity-bearing surface and digests it together with the tree's content
+  identity and the consumed contract inputs. It reads nothing; the spec validator gathers every
+  input.
+contract: igate_identity
+sourcePath: src/core/rules/gate-identity.ts
+methods:
+  - name: compute
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Project the built-in rules onto their identity: each rule by name with its codes, each
+          code with its default severity, the codes sorted by code and the rules sorted by name. A
+          rule is a function and cannot be digested, so its name and codes stand for it. The wairon
+          version is left out: a release that changes no rule keeps every lock valid, and one that
+          adds, removes or re-grades a code invalidates exactly the locks it should. Accepted gap: a
+          rule whose check grows stricter without a name, code or severity change is not caught.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Take the project type and the rule config from the gate config, each null when absent.
+          Both decide verdicts: a project type switch changes the doctrine family, and the rule
+          config carries severity overrides, complexity caps and design depth.
+        type: local
+      - stepNumber: 3
+        description: >-
+          Project the packs by name, version (null when absent) and scope, sorted by name, version
+          and scope.
+        type: local
+      - stepNumber: 4
+        description: >-
+          Take the merged profile and language records as they are, since they already encode pack
+          precedence (a load-order change that flips a collision winner shows here), and project the
+          patterns by pack, id and version, sorted by pack, id and version.
+        type: local
+      - stepNumber: 5
+        description: >-
+          Sort the guarantee tokens, the assertions by fullCode, and the pack rules by name, each
+          pack rule with its codes sorted.
+        type: local
+      - stepNumber: 6
+        description: >-
+          Leave out of the identity the skills and instructions (agent-facing prose that cannot
+          change a verdict, so a documentation edit never invalidates a lock), the load errors
+          (transient, and a failed pack load already blocks the lock through EXTENSION_LOAD_ERROR)
+          and the pack names (redundant with the packs).
+        type: local
+      - stepNumber: 7
+        description: >-
+          Sort the consumed contract inputs, so the identity does not depend on the order the caller
+          gathered them from the bound root and each chained mount.
+        type: local
+      - stepNumber: 8
+        description: >-
+          Digest with sha256, in hex, the canonical form of {content: the content identity's digest,
+          doctrine: the projected doctrine identity, inputs: the sorted inputs}: object keys sorted
+          recursively and the volatile createdAt and updatedAt stripped, serialized as JSON.
+        type: local
+      - stepNumber: 9
+        description: >-
+          Return the gate identity {algorithm: 'sha256+content+doctrine+inputs', digest}. The marker
+          changes from sha256+doctrine+inputs because the composition changed (the content digest
+          instead of the tree itself), so a record written under the old marker never matches: every
+          existing lock reads stale once, which the retired rule codes force anyway. A content
+          identity (sha256) never compares equal to a gate identity.
+        type: return
+        outcome: StateId (the gate identity)
+    detail: full
+    symbol: computeGateIdentity
+status: draft
+createdAt: '2026-09-15T17:55:53.605Z'
+updatedAt: '2026-09-15T17:55:53.607Z'

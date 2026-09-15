@@ -1,18 +1,17 @@
 id: icli_lock_adapter
 name: CLI Lock Adapter Interface
 description: >-
-  Contract for the core-side half of `wairon lock`: status promotion plus the commit-scoped lock
-  record write. Callers gate on an as-complete validation FIRST — this adapter never locks an
-  invalid tree on its own authority.
+  Contract for the lock-record half of `wairon lock`: the commit-scoped lock record carrying the
+  approved spec content and the tree's gate identity. Callers gate on an as-complete validation
+  FIRST — this adapter never locks an invalid tree on its own authority.
 component: cli_lock_adapter
 methods:
   - name: lockTree
     description: >-
-      Freeze the (scope-filtered) tree: record the approval baseline — the approved spec content,
-      held OUTSIDE the working copy — and persist the commit-scoped lock record carrying the tree's
-      current GATE StateId (spec content plus the governing doctrine, so a later doctrine change
-      invalidates the lock by state mismatch exactly as a spec edit does). Writes NOTHING into the
-      spec tree. Returns the written record.
+      Write the (scope-filtered) lock record: the approval, one digest per approved spec, and the
+      tree's current gate identity from the validator (spec content plus the governing doctrine and
+      consumed contract inputs, so a later doctrine change invalidates the lock by state mismatch
+      exactly as a spec edit does). Writes nothing into the spec tree. Returns the written record.
     signature: 'lockTree(subsystem?: string): LockRecord'
     returns: LockRecord
     params:
@@ -22,4 +21,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-09-11T23:36:24.243Z'
+updatedAt: '2026-09-15T18:01:06.776Z'

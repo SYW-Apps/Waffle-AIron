@@ -1,8 +1,6 @@
 id: istate_hash_specialist
 name: State Hash Specialist Interface
-description: >-
-  Contract for computing the deterministic content identity of the spec tree, and the identity of
-  the GATE that validated it (spec tree + governing doctrine).
+description: Contract for computing the deterministic content identity of the spec tree.
 component: state_hash_specialist
 methods:
   - name: hashSpecTree
@@ -15,4 +13,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:48:43.305Z'
-updatedAt: '2026-09-15T10:52:16.200Z'
+updatedAt: '2026-09-15T18:00:58.389Z'

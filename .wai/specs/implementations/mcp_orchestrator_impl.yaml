@@ -230,7 +230,25 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: composeAgentBrief
     symbol: sdd_get_agent_brief
+  - name: renameComponent
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the tool's id, namespaced if needed, to the qualified component id in the bound
+          tree, so core can refuse a component inside a chained subproject
+        type: local
+      - stepNumber: 2
+        description: Rename the component and rewrite every reference to it via the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameComponent
+      - stepNumber: 3
+        description: >-
+          Shape the tool response from the report: each spec moved with its old and new id, and the
+          specs whose references were rewritten
+        type: return
+        outcome: ComponentRename
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-13T12:27:17.434Z'
+updatedAt: '2026-09-15T17:59:01.218Z'

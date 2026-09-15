@@ -107,13 +107,13 @@ methods:
       - stepNumber: 6
         description: >-
           Resolve the target subsystem's published entries to the components that can legally serve
-          a cross-boundary caller — a Portal, a Gateway, or an Observer for an event surface, the
-          same set the boundary rules sanction as a cross-subsystem dependency target — and copy the
-          full contracts at the family ('project') ceiling: methods with params, returns,
-          guarantees, effect, endpoints, the dispatch table, and the backing component's projected
-          auth and basePath. Siblings expose exactly what they publish, nothing wider; a published
-          entry whose backing component can never be a cross-boundary target is collected as
-          unprojectable rather than exported.
+          a cross-boundary caller — a Portal, or an Observer for an event surface: the Portal the
+          boundary rules sanction as a cross-subsystem dependency target, plus the Observer that may
+          back a MessageBus public interface — and copy the full contracts at the family ('project')
+          ceiling: methods with params, returns, guarantees, effect, endpoints, the dispatch table,
+          and the backing component's projected auth and basePath. Siblings expose exactly what they
+          publish, nothing wider; a published entry whose backing component can never be a
+          cross-boundary target is collected as unprojectable rather than exported.
         type: local
       - stepNumber: 7
         description: >-
@@ -138,4 +138,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-07-25T16:35:33.728Z'
+updatedAt: '2026-09-15T17:59:24.008Z'

@@ -1,9 +1,10 @@
 id: ihost_validator_adapter
 name: Host Validator Client Adapter Interface
 description: >-
-  Contract for the as-complete conformance run the lock flow and the web graph require: it reads the
-  bound project's rule severities and projectType through the host core adapter, then forwards the
-  run to the validator portal.
+  Contract for the validator runs the hosted flows require: the as-complete conformance run the lock
+  flow and the web graph require, which reads the bound project's rule severities and projectType
+  through the host core adapter before forwarding the run to the validator portal; and the gate
+  identity a lock records and a lock check compares.
 component: host_validator_adapter
 methods:
   - name: validateAsComplete
@@ -21,4 +22,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-09-15T10:52:06.517Z'
+updatedAt: '2026-09-15T18:01:01.769Z'

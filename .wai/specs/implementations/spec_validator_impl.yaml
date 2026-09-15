@@ -382,6 +382,63 @@ methods:
           notices
         type: return
         outcome: CandidateVerdict
+  - name: computeGateStateId
+    narrative:
+      - stepNumber: 1
+        description: Compute the spec tree's content identity through the core adapter
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 2
+        description: >-
+          Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
+          and pattern definitions — the doctrine the gate identity covers
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 3
+        description: >-
+          Read the bound project's configuration through the core adapter for its projectType and
+          rule tuning, both of which decide verdicts
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 4
+        description: >-
+          Take the gate config from the configuration's projectType and rules, empty when the
+          project has no configuration or its configuration fails its schema: the tree identity
+          still stands on its own
+        type: local
+      - stepNumber: 5
+        description: >-
+          Read the consumed contract inputs through the core adapter: this root's stored surface
+          snapshots and every chained mount's, as canonical content keys
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: consumedContractInputs
+      - stepNumber: 6
+        description: Seed the built-in SDD conformance rule set into the in-memory rule set
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 7
+        description: >-
+          Read the rule sequence: the built-in rules. No pack rule is registered yet; pack rules
+          enter the identity through the extensions
+        type: call
+        targetComponent: rule_repository
+        targetMethod: ruleSequence
+      - stepNumber: 8
+        description: >-
+          Compute the gate identity from the content identity, the extensions, the built-in rules,
+          the consumed contract inputs and the gate config
+        type: call
+        targetComponent: gate_identity
+        targetMethod: compute
+      - stepNumber: 9
+        description: Return the gate identity
+        type: return
+        outcome: StateId (the gate identity)
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-15T00:30:58.657Z'
+updatedAt: '2026-09-15T17:56:56.805Z'

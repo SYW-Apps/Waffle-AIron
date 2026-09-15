@@ -222,7 +222,7 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 42
+        endStep: 53
       - stepNumber: 2
         description: isDraftCtx = ctx.isComponentDraft(comp.id)
         type: local
@@ -232,7 +232,7 @@ methods:
         type: loop
         loopKind: forEach
         over: comp.dependsOn
-        endStep: 42
+        endStep: 53
       - stepNumber: 4
         description: Does the dependency fail to resolve in this tree? (depComp = ctx.componentMap.get(depId))
         type: branch
@@ -318,14 +318,23 @@ methods:
         type: jump
         toStep: 3
       - stepNumber: 17
+        label: retiredEnd
+        description: >-
+          Are both ends of the edge live stereotypes? An edge with a retired end (a Specialist or
+          Gateway) is judged by no boundary or matrix rule, because retired-stereotypes reports the
+          retired component once: continue with the next dependency
+        type: branch
+        condition: neither comp.isRetired() nor depComp.isRetired()
+        onFalseStep: 3
+      - stepNumber: 18
         label: crossSubsystem
         description: >-
           Does the dependency cross into another subsystem? Then only the boundary rules judge it,
           never the stereotype matrix (crossDraft = isDraftCtx || ctx.isComponentDraft(depComp.id))
         type: branch
         condition: depComp.subsystem differs from comp.subsystem
-        onFalseStep: 26
-      - stepNumber: 18
+        onFalseStep: 27
+      - stepNumber: 19
         description: >-
           Does a non-Adapter cross the boundary without a trustedLink license from its own
           subsystem?
@@ -334,180 +343,278 @@ methods:
           comp.componentType is not Adapter and the edge is not licensed: the subsystem in
           ctx.subsystems whose id is comp.subsystem declares no trustedLink whose subsystem is
           depComp.subsystem
-        onFalseStep: 20
-      - stepNumber: 19
+        onFalseStep: 21
+      - stepNumber: 20
         description: >-
           Report CROSS_SUBSYSTEM_NON_ADAPTER (error, on comp.id; draft context crossDraft) naming
           both components and their subsystems: route the hop through a client Adapter that calls
           the peer's public interface, or declare a trustedLink on comp.subsystem with the reason
         type: local
-      - stepNumber: 20
+      - stepNumber: 21
         label: publicTarget
         description: Is the target outside the peer subsystem's published public surface?
         type: branch
         condition: ctx.publicSet for depComp.subsystem does not contain depComp.id
-        onFalseStep: 23
-      - stepNumber: 21
+        onFalseStep: 24
+      - stepNumber: 22
         description: >-
           Report CROSS_SUBSYSTEM_PRIVATE_ACCESS (error, on comp.id; draft context crossDraft) naming
           the component, the target and its subsystem: depend on one of its publicInterfaces
           components instead
         type: local
-      - stepNumber: 22
+      - stepNumber: 23
         description: Continue with the next dependency
         type: jump
         toStep: 3
-      - stepNumber: 23
+      - stepNumber: 24
         label: portalTarget
         description: >-
           The target is published: does the hop enter through something other than the peer's
-          inbound Portal or a Gateway?
+          inbound Portal? Across subsystems only a Portal is a front door
         type: branch
-        condition: depComp.componentType is neither Portal nor Gateway
+        condition: depComp.componentType is not Portal
         onFalseStep: 3
-      - stepNumber: 24
+      - stepNumber: 25
         description: >-
           Report CROSS_SUBSYSTEM_TARGET_NON_PORTAL (error, on comp.id; draft context crossDraft)
           naming the component as what it is (client Adapter when it is an Adapter, otherwise its
           componentType, whether a trustedLink licenses the edge or not), the target subsystem and
           the target with its componentType: a cross-subsystem hop must target the remote
-          subsystem's Portal, which dispatches inward, so expose one and point the component at it
+          subsystem's Portal, which dispatches inward, and a published non-Portal of any stereotype
+          leaks the boundary, so expose a Portal and point the component at it
         type: local
-      - stepNumber: 25
+      - stepNumber: 26
         description: 'Boundary rules done: continue with the next dependency, skipping the stereotype matrix'
         type: jump
         toStep: 3
-      - stepNumber: 26
+      - stepNumber: 27
         label: profileLicense
         description: >-
           Does the governing pack profile license this intra-subsystem edge as its platform idiom?
-          Then the matrix does not judge it: continue with the next dependency
+          Then no matrix rule judges it, the dependency-class, Supervisor, Actor and Query rules
+          included: continue with the next dependency
         type: branch
         condition: >-
           an allowedEdges entry of the governing profile has comp.componentType in its from and
           depComp.componentType in its to, the governing profile being
           ctx.ext.profiles[ctx.getComponentProfile(comp.id)]
         onTrueStep: 3
-        onFalseStep: 27
-      - stepNumber: 27
+        onFalseStep: 28
+      - stepNumber: 28
+        label: matrixTerms
+        description: >-
+          depPure = depComp is pure logic, an Orchestrator whose dependencyClass is pure; depRead =
+          depComp is read logic, an Orchestrator whose dependencyClass is read
+        type: local
+      - stepNumber: 29
         label: portalDep
         description: Does the component depend on a Portal or Observer?
         type: branch
         condition: depComp.componentType is Portal or Observer
-        onFalseStep: 29
-      - stepNumber: 28
+        onFalseStep: 32
+      - stepNumber: 30
         description: >-
           Report ARCHITECTURE_VIOLATION_PORTAL_DEP (error, on comp.id; draft context isDraftCtx ||
           ctx.isComponentDraft(depComp.id)) naming both components: Portals and Observers are
           top-level entry points and subscribers, never dependencies
         type: local
-      - stepNumber: 29
+      - stepNumber: 31
+        description: >-
+          A Portal or Observer target is this edge's one finding: continue with the next dependency,
+          so no later matrix check reports the same edge
+        type: jump
+        toStep: 3
+      - stepNumber: 32
         label: portalForbidden
         description: Does a Portal or Observer reach the data layer directly?
         type: branch
         condition: >-
-          comp is a Portal and depComp is a Store, Registry or Adapter, or comp is an Observer and
-          depComp is a Store, Registry, Repository or Index
-        onFalseStep: 31
-      - stepNumber: 30
+          comp is a Portal and depComp is a Store, Registry, Adapter or Query, or comp is an
+          Observer and depComp is a Store, Registry, Repository, Index or Query
+        onFalseStep: 34
+      - stepNumber: 33
         description: >-
           Report ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP (error, on comp.id; draft context
           isDraftCtx || ctx.isComponentDraft(depComp.id)) naming both components and stereotypes:
           they coordinate through Orchestrators and Supervisors. When depComp is a Store the message
           appends storeResolutionHint(comp.componentType, depComp.id), a private helper of this file
-          with its NEVER_INLINE_STATE sentence: wrap the Store in a Repository reached through an
-          Orchestrator on its facade, and never merge the state into the consumer
+          ending in its NEVER_INLINE_STATE sentence: a logic consumer (an Orchestrator) is told to
+          wrap the Store in a Repository and depend on that facade, any other consumer to wrap it in
+          a Repository reached through an Orchestrator on its facade, and both never to merge the
+          state into the consumer
         type: local
-      - stepNumber: 31
-        label: specialistDep
-        description: Does a Specialist depend on a workflow, runtime, boundary or raw persistence block?
+      - stepNumber: 34
+        label: pureClass
+        description: Does pure logic depend on anything but pure logic?
+        type: branch
+        condition: comp is an Orchestrator whose dependencyClass is pure, and not depPure
+        onFalseStep: 36
+      - stepNumber: 35
+        description: >-
+          Report DEPENDENCY_CLASS_VIOLATION (error, on comp.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(depComp.id)) naming comp as an Orchestrator of class pure and depComp
+          with its componentType and its dependencyClass when it has one: pure logic depends only on
+          pure Orchestrators, so move that dependency to the workflow that calls comp, or declare
+          comp read when it reads through read logic, a Repository, an Index or an Adapter. When
+          depComp is a Store the message appends storeResolutionHint(comp.componentType, depComp.id)
+        type: local
+      - stepNumber: 36
+        label: readClass
+        description: >-
+          Does read logic depend on anything but pure or read logic, a Repository, an Index or an
+          Adapter? Only the dependency's stereotype and class are judged here: whether read logic
+          calls a write method on a Repository, Index or Adapter is judged only once facade methods
+          carry effect tags
         type: branch
         condition: >-
-          comp is a Specialist and depComp is a Portal, Observer, Orchestrator, Store, Registry,
-          Supervisor or Actor
-        onFalseStep: 33
-      - stepNumber: 32
+          comp is an Orchestrator whose dependencyClass is read, and depComp is not depPure, not
+          depRead, and not a Repository, an Index or an Adapter
+        onFalseStep: 38
+      - stepNumber: 37
         description: >-
-          Report ARCHITECTURE_VIOLATION_SPECIALIST_DEP (error, on comp.id; draft context isDraftCtx
-          || ctx.isComponentDraft(depComp.id)) naming both components: Specialists are pure
-          capabilities using Repository facades, Indexes and Adapters. When depComp is a Store the
-          message appends storeResolutionHint(comp.componentType, depComp.id): wrap the Store in a
-          Repository and depend on its facade, never inline the state
+          Report DEPENDENCY_CLASS_VIOLATION (error, on comp.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(depComp.id)) naming comp as an Orchestrator of class read and depComp
+          with its componentType and its dependencyClass when it has one: read logic depends only on
+          pure or read Orchestrators, Repositories, Indexes and Adapters, so move that dependency to
+          the workflow that calls comp, or unset comp's dependencyClass when comp is itself a
+          workflow. When depComp is a Store the message appends
+          storeResolutionHint(comp.componentType, depComp.id)
         type: local
-      - stepNumber: 33
+      - stepNumber: 38
         label: storeDep
-        description: Does a Store depend on anything but another Store or a backend Adapter?
+        description: Does a Store depend on anything but another Store, a backend Adapter or pure logic?
         type: branch
-        condition: comp is a Store and depComp is neither a Store nor an Adapter
-        onFalseStep: 35
-      - stepNumber: 34
+        condition: comp is a Store, depComp is neither a Store nor an Adapter, and not depPure
+        onFalseStep: 40
+      - stepNumber: 39
         description: >-
           Report ARCHITECTURE_VIOLATION_STORE_DEP (error, on comp.id; draft context isDraftCtx ||
-          ctx.isComponentDraft(depComp.id)) naming both components: Registries and Indexes depend on
-          the Store, never the reverse
+          ctx.isComponentDraft(depComp.id)) naming both components: a Store may depend only on other
+          Stores, a backend Adapter or pure logic, and Registries and Indexes depend on the Store,
+          never the reverse
         type: local
-      - stepNumber: 35
+      - stepNumber: 40
         label: registryDep
-        description: >-
-          Does a Registry depend on anything but its Store, a backend Adapter or a validation
-          Specialist?
+        description: Does a Registry depend on anything but its Store, a backend Adapter or pure logic?
         type: branch
-        condition: comp is a Registry and depComp is not a Store, Adapter or Specialist
-        onFalseStep: 37
-      - stepNumber: 36
+        condition: comp is a Registry, depComp is neither a Store nor an Adapter, and not depPure
+        onFalseStep: 42
+      - stepNumber: 41
         description: >-
           Report ARCHITECTURE_VIOLATION_REGISTRY_DEP (warning, on comp.id; draft context isDraftCtx
           || ctx.isComponentDraft(depComp.id)) naming both components: a Registry is the write path
-          to its Store and never updates Indexes or drives workflow
+          to its Store, validating through pure logic, and never updates Indexes or drives workflow
         type: local
-      - stepNumber: 37
+      - stepNumber: 42
         label: adapterDep
-        description: Does an Adapter, a sink toward the system, depend on an Orchestrator or a Store?
+        description: >-
+          Does an Adapter, a sink toward the system, depend on a Store or on an Orchestrator that is
+          not pure logic?
         type: branch
-        condition: comp is an Adapter and depComp is an Orchestrator or a Store
-        onFalseStep: 39
-      - stepNumber: 38
+        condition: comp is an Adapter and depComp is a Store, or an Orchestrator that is not depPure
+        onFalseStep: 44
+      - stepNumber: 43
         description: >-
           Report ARCHITECTURE_VIOLATION_ADAPTER_DEP (error, on comp.id; draft context isDraftCtx ||
-          ctx.isComponentDraft(depComp.id)) naming both components: Adapters cannot depend on
-          Orchestrators or Stores
+          ctx.isComponentDraft(depComp.id)) naming both components: an Adapter may use pure logic,
+          but never a Store or any other Orchestrator
         type: local
-      - stepNumber: 39
+      - stepNumber: 44
         label: indexDep
-        description: Does an Index, a read projection, depend on anything but its Store or a backend Adapter?
+        description: >-
+          Does an Index, a read projection, depend on anything but its Store, a backend Adapter or
+          pure logic?
         type: branch
-        condition: comp is an Index and depComp is neither a Store nor an Adapter
-        onFalseStep: 41
-      - stepNumber: 40
+        condition: comp is an Index, depComp is neither a Store nor an Adapter, and not depPure
+        onFalseStep: 46
+      - stepNumber: 45
         description: >-
           Report ARCHITECTURE_VIOLATION_INDEX_DEP (error, on comp.id; draft context isDraftCtx ||
           ctx.isComponentDraft(depComp.id)) naming both components: an Index may depend only on its
-          Store or a backend Adapter
+          Store, a backend Adapter or pure logic
         type: local
-      - stepNumber: 41
+      - stepNumber: 46
+        label: queryDep
+        description: >-
+          Does a Query, a computed read over its Repository's Store, depend on anything but a Store,
+          a backend Adapter or pure logic?
+        type: branch
+        condition: comp is a Query, depComp is neither a Store nor an Adapter, and not depPure
+        onFalseStep: 48
+      - stepNumber: 47
+        description: >-
+          Report ARCHITECTURE_VIOLATION_QUERY_DEP (error, on comp.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(depComp.id)) naming comp as a Query and depComp with its
+          componentType and its dependencyClass when it has one: a Query computes reads over its
+          Store, through a backend Adapter where one serves it, with pure logic, so move any other
+          dependency to the workflow that calls the Repository facade
+        type: local
+      - stepNumber: 48
         label: viewCheck
-        description: Does a View, a passive presenter, depend on a logic, persistence or boundary block?
+        description: >-
+          Does a View, a passive presenter, depend on a persistence or boundary block, or on logic
+          that is not pure?
         type: branch
         condition: >-
-          comp is a View and depComp is a Store, Registry, Index, Adapter, Portal, Observer,
-          Repository, Gateway or Orchestrator
-        onFalseStep: 3
-      - stepNumber: 42
+          comp is a View and depComp is a Store, Registry, Index, Query, Adapter or Repository, or
+          an Orchestrator that is not depPure
+        onFalseStep: 50
+      - stepNumber: 49
         label: viewDep
         description: >-
           Report ARCHITECTURE_VIOLATION_VIEW_DEP (error, on comp.id; draft context isDraftCtx ||
-          ctx.isComponentDraft(depComp.id)) naming both components: Views stay passive UI blocks.
-          When depComp is a Store the message appends storeResolutionHint(comp.componentType,
-          depComp.id)
+          ctx.isComponentDraft(depComp.id)) naming both components: Views stay passive UI blocks
+          that use pure logic at most. When depComp is a Store the message appends
+          storeResolutionHint(comp.componentType, depComp.id)
         type: local
-      - stepNumber: 43
+      - stepNumber: 50
+        label: supervisorDep
+        description: >-
+          Does a Supervisor reach data or presentation directly instead of through workflows? It may
+          depend on Actors, Orchestrators, Adapters and other Supervisors; a Portal or Observer
+          target is reported once, by ARCHITECTURE_VIOLATION_PORTAL_DEP
+        type: branch
+        condition: >-
+          comp is a Supervisor and depComp is a Store, Registry, Repository, Index, Query, View,
+          FeatureComponent or RouterComponent
+        onFalseStep: 52
+      - stepNumber: 51
+        description: >-
+          Report ARCHITECTURE_VIOLATION_SUPERVISOR_DEP (error, on comp.id; draft context isDraftCtx
+          || ctx.isComponentDraft(depComp.id)) naming comp as a Supervisor and depComp with its
+          componentType and its dependencyClass when it has one: a Supervisor reaches data only
+          through workflows, so depend on the Orchestrator, Actor or Adapter that does that work
+          instead. When depComp is a Store the message appends
+          storeResolutionHint(comp.componentType, depComp.id)
+        type: local
+      - stepNumber: 52
+        label: actorCheck
+        description: >-
+          Is a live Actor reached by a component that does not supervise it and depends on no
+          Supervisor that does? A Supervisor depending on the Actor supervises it
+        type: branch
+        condition: >-
+          depComp is an Actor, comp is not a Supervisor, and no id in comp.dependsOn resolves
+          through ctx.componentMap to a Supervisor whose dependsOn includes depComp.id
+        onFalseStep: 3
+      - stepNumber: 53
+        label: actorReport
+        description: >-
+          Report ACTOR_REACHED_WITHOUT_SUPERVISOR (error, on comp.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(depComp.id)) naming comp with its componentType and its
+          dependencyClass when it has one, the Actor depComp, and the Supervisors in ctx.components
+          whose dependsOn includes depComp.id, or that none does: a live Actor is reached by id
+          through a Supervisor that supervises it, so also depend on one of those Supervisors, or
+          give the Actor a Supervisor that depends on it
+        type: local
+      - stepNumber: 54
         label: portalImpl
         description: 'Portal read-face pass: for each implementation in ctx.implementations'
         type: loop
         loopKind: forEach
         over: ctx.implementations
-        endStep: 47
-      - stepNumber: 44
+        endStep: 58
+      - stepNumber: 55
         description: >-
           Does the implementation realize a Portal's contract? (component = that Portal; isDraftCtx
           = ctx.isImplementationDraft(impl))
@@ -515,15 +622,15 @@ methods:
         condition: >-
           ctx.interfaceMap resolves impl.contract, ctx.componentMap resolves its component, and that
           component is a Portal
-        onFalseStep: 43
-      - stepNumber: 45
+        onFalseStep: 54
+      - stepNumber: 56
         label: portalStep
         description: For each narrative step of each of the Portal implementation's methods
         type: loop
         loopKind: forEach
         over: each narrative step of each method of impl
-        endStep: 47
-      - stepNumber: 46
+        endStep: 58
+      - stepNumber: 57
         description: >-
           Does the step call a write-effect method on a Repository or Index directly? Methods
           without an effect tag are not judged
@@ -532,8 +639,8 @@ methods:
           step.type is call with targetComponent and targetMethod set, ctx.componentMap resolves the
           target to a Repository or an Index, and the method named step.targetMethod among
           ctx.interfaceMethodsOf(target.id) declares effect write
-        onFalseStep: 45
-      - stepNumber: 47
+        onFalseStep: 56
+      - stepNumber: 58
         label: writeShortcut
         description: >-
           Report PORTAL_WRITE_SHORTCUT (error, on impl.id; draft context isDraftCtx ||
@@ -541,7 +648,7 @@ methods:
           called target.id and targetMethod, and the target's componentType: the shortcut is
           licensed for reads only, so route the write through an Orchestrator
         type: local
-      - stepNumber: 48
+      - stepNumber: 59
         label: portalTable
         description: >-
           Portal dispatch-table pass: for each component in ctx.components. A dispatch step reaches
@@ -550,20 +657,20 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 52
-      - stepNumber: 49
+        endStep: 63
+      - stepNumber: 60
         description: Is it a Portal with a dispatch table? (isDraftCtx = ctx.isComponentDraft(comp.id))
         type: branch
         condition: comp is a Portal and comp.dispatch is non-empty
-        onFalseStep: 48
-      - stepNumber: 50
+        onFalseStep: 59
+      - stepNumber: 61
         label: binding
         description: For each binding in the Portal's dispatch table
         type: loop
         loopKind: forEach
         over: comp.dispatch
-        endStep: 52
-      - stepNumber: 51
+        endStep: 63
+      - stepNumber: 62
         description: >-
           Does the binding route its capability to a write-effect method on a Repository or Index
           directly? Methods without an effect tag are not judged
@@ -572,8 +679,8 @@ methods:
           ctx.componentMap resolves binding.component to a target that is a Repository or an Index,
           and the method named binding.method among ctx.interfaceMethodsOf(target.id) declares
           effect write
-        onFalseStep: 50
-      - stepNumber: 52
+        onFalseStep: 61
+      - stepNumber: 63
         label: tableWriteShortcut
         description: >-
           Report PORTAL_WRITE_SHORTCUT (error, on comp.id; draft context isDraftCtx ||
@@ -594,56 +701,66 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 35
+        endStep: 34
       - stepNumber: 3
+        label: liveComponent
+        description: >-
+          Is the component a live stereotype? A retired component (a Specialist or Gateway) is
+          skipped entirely: it records no ownership and gets no pattern or containment finding, and
+          no UNOWNED pass judges it either, since those judge only Stores, Registries and Queries;
+          retired-stereotypes reports it once. Otherwise continue with the next component
+        type: branch
+        condition: not comp.isRetired()
+        onFalseStep: 2
+      - stepNumber: 4
         description: >-
           isDraftCtx = ctx.isComponentDraft(comp.id); isPattern = comp.isPattern() (the models'
-          pattern stereotypes: Repository, Gateway, FeatureComponent, RouterComponent)
+          pattern stereotypes: Repository, FeatureComponent, RouterComponent)
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Is it a pattern with no members?
         type: branch
         condition: isPattern and comp.owns is empty
-        onFalseStep: 6
-      - stepNumber: 5
+        onFalseStep: 7
+      - stepNumber: 6
         description: >-
           Report EMPTY_PATTERN (error, on comp.id; draft context isDraftCtx) naming the pattern and
           its componentType: it must own member blocks via owns
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         label: blockOwns
         description: Is it a building block that owns members?
         type: branch
         condition: not isPattern and comp.owns is non-empty
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 9
+      - stepNumber: 8
         description: >-
           Report BLOCK_OWNS_MEMBERS (error, on comp.id; draft context isDraftCtx) naming the block
-          and its componentType, and listing the pattern stereotypes (Repository, Gateway,
-          FeatureComponent, RouterComponent) joined by / as the only ones that use owns
+          and its componentType, and listing the pattern stereotypes (Repository, FeatureComponent,
+          RouterComponent) joined by / as the only ones that use owns
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         label: member
         description: For each owned member id memberId in comp.owns
         type: loop
         loopKind: forEach
         over: comp.owns
-        endStep: 17
-      - stepNumber: 9
+        endStep: 19
+      - stepNumber: 10
         description: Does the member fail to resolve? (member = ctx.componentMap.get(memberId))
         type: branch
         condition: ctx.componentMap has no component memberId
-        onFalseStep: 12
-      - stepNumber: 10
+        onFalseStep: 13
+      - stepNumber: 11
         description: >-
           Report INVALID_OWNED_MEMBER (error, on comp.id; draft context isDraftCtx) naming the
           component and the member id that does not exist
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: Continue with the next member, recording no owner for this one
         type: jump
-        toStep: 8
-      - stepNumber: 12
+        toStep: 9
+      - stepNumber: 13
         label: patternOwner
         description: >-
           Is the owner a pattern? A building block's owns is wholly the BLOCK_OWNS_MEMBERS finding:
@@ -651,37 +768,58 @@ methods:
           dependants are judged as if the claim were absent. Otherwise continue with the next member
         type: branch
         condition: isPattern
-        onFalseStep: 8
-      - stepNumber: 13
+        onFalseStep: 9
+      - stepNumber: 14
         label: patternMember
         description: Is the member itself a pattern?
         type: branch
         condition: member.isPattern()
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 17
+      - stepNumber: 15
         description: >-
           Report PATTERN_OWNS_PATTERN (error, on comp.id; draft context isDraftCtx) naming the
           owning pattern and the member: patterns own only building blocks and are composed at the
           subsystem level
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
+        description: >-
+          Record no owner for the inner pattern, so its dependants get no VISIBILITY_VIOLATION:
+          continue with the next member
+        type: jump
+        toStep: 9
+      - stepNumber: 17
         label: sharedMember
         description: Has another pattern already claimed this member?
         type: branch
         condition: 'ownedBy maps memberId to a component other than comp.id: the member''s first owner'
-        onFalseStep: 17
-      - stepNumber: 16
+        onFalseStep: 19
+      - stepNumber: 18
         description: >-
           Report SHARED_OWNED_MEMBER (error, on comp.id; draft context isDraftCtx) naming the
           member, its first owner and comp.id: a block has exactly one owner
         type: local
-      - stepNumber: 17
+      - stepNumber: 19
         label: recordOwner
         description: >-
           Record ownedBy[memberId] = comp.id unless the member already has an owner: the first
           pattern to claim a member stays its owner, and every later claimant is reported against it
         type: local
-      - stepNumber: 18
+      - stepNumber: 20
+        label: liveMembers
+        description: >-
+          Can the counting containment checks judge this pattern? A FeatureComponent or
+          RouterComponent owning a retired member is not judged for containment until that member is
+          migrated: its member counts would change with the migration, and the member's
+          STEREOTYPE_RETIRED is the one finding. A Repository judges each member on its own below,
+          skipping only retired ones. Ownership recording, SHARED_OWNED_MEMBER, INVALID_OWNED_MEMBER
+          and EMPTY_PATTERN above, and visibility below, still apply. A counting pattern with a
+          retired member continues with the next component
+        type: branch
+        condition: >-
+          comp is neither a FeatureComponent nor a RouterComponent, or no member id in comp.owns
+          resolves through ctx.componentMap to a component whose isRetired() holds
+        onFalseStep: 2
+      - stepNumber: 21
         description: >-
           Check the containment the pattern's definition prescribes; any other stereotype prescribes
           none: continue with the next component
@@ -689,126 +827,102 @@ methods:
         'on': comp.componentType
         cases:
           - value: Repository
-            step: 19
-          - value: Gateway
-            step: 23
+            step: 22
           - value: FeatureComponent
-            step: 27
+            step: 26
           - value: RouterComponent
-            step: 31
+            step: 30
         defaultStep: 2
-      - stepNumber: 19
+      - stepNumber: 22
         label: repositoryMember
         description: For each member id the Repository owns
         type: loop
         loopKind: forEach
         over: comp.owns
-        endStep: 21
-      - stepNumber: 20
-        description: Does the Repository own a member type it may not?
+        endStep: 24
+      - stepNumber: 23
+        description: >-
+          Does the Repository own a member type it may not? Each member is judged on its own: a
+          retired member is skipped, its STEREOTYPE_RETIRED being its one finding, while a live
+          member's mistake still reports
         type: branch
         condition: >-
-          ctx.componentMap resolves the member and its componentType is not Store, Registry, Index
-          or Adapter
-        onFalseStep: 19
-      - stepNumber: 21
+          ctx.componentMap resolves the member, the member is not retired (isRetired() is false),
+          and its componentType is not Store, Registry, Index, Query or Adapter
+        onFalseStep: 22
+      - stepNumber: 24
         label: repositoryViolation
         description: >-
           Report REPOSITORY_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming the
-          Repository, the member and its type: a Repository may own only Store, Registry, Index and
-          optionally Adapter
+          Repository, the member and its type: a Repository may own only Store, Registry, Index,
+          Query and optionally Adapter
         type: local
-      - stepNumber: 22
-        description: Continue with the next component
-        type: jump
-        toStep: 2
-      - stepNumber: 23
-        label: gatewayMember
-        description: For each member id the Gateway owns
-        type: loop
-        loopKind: forEach
-        over: comp.owns
-        endStep: 25
-      - stepNumber: 24
-        description: Does the Gateway own a member type it may not?
-        type: branch
-        condition: >-
-          ctx.componentMap resolves the member and its componentType is not Portal, Orchestrator or
-          Specialist
-        onFalseStep: 23
       - stepNumber: 25
-        label: gatewayViolation
-        description: >-
-          Report GATEWAY_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming the
-          Gateway, the member and its type: a Gateway may own only a Portal, Orchestrators and
-          Specialists
-        type: local
-      - stepNumber: 26
         description: Continue with the next component
         type: jump
         toStep: 2
-      - stepNumber: 27
+      - stepNumber: 26
         label: featureCount
         description: >-
           Count the FeatureComponent's members by the componentType ctx.componentMap resolves:
           orchestrators, views and others (a member that does not resolve counts as none)
         type: local
-      - stepNumber: 28
+      - stepNumber: 27
         description: Is the feature slice shaped other than one Orchestrator with one or more Views?
         type: branch
         condition: orchestrators is not exactly 1, or views is below 1, or others is above 0
         onFalseStep: 2
-      - stepNumber: 29
+      - stepNumber: 28
         description: >-
           Report FEATURE_COMPONENT_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming
           the FeatureComponent: it must own exactly one Orchestrator and one or more Views, and no
           other member types
         type: local
-      - stepNumber: 30
+      - stepNumber: 29
         description: Continue with the next component
         type: jump
         toStep: 2
-      - stepNumber: 31
+      - stepNumber: 30
         label: routerCount
         description: >-
           portals = the number of the RouterComponent's members that resolve through
           ctx.componentMap to a Portal; hasChildren = some member resolves to any other type
         type: local
-      - stepNumber: 32
+      - stepNumber: 31
         description: Does the RouterComponent own no Portal facade, or more than one?
         type: branch
         condition: portals is not exactly 1
-        onFalseStep: 34
-      - stepNumber: 33
+        onFalseStep: 33
+      - stepNumber: 32
         description: >-
           Report ROUTER_COMPONENT_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming
           the RouterComponent: it must own exactly one Portal to act as its facade
         type: local
-      - stepNumber: 34
+      - stepNumber: 33
         label: routerChildrenCheck
         description: Does the RouterComponent lack children to route to?
         type: branch
         condition: not hasChildren
         onFalseStep: 2
-      - stepNumber: 35
+      - stepNumber: 34
         label: routerChildren
         description: >-
           Report ROUTER_COMPONENT_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming
           the RouterComponent: it must own at least one child component or View to route to
         type: local
-      - stepNumber: 36
+      - stepNumber: 35
         label: unownedStore
         description: 'Standalone Store pass: for each component in ctx.components'
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 38
-      - stepNumber: 37
+        endStep: 37
+      - stepNumber: 36
         description: Is the Store owned by no pattern?
         type: branch
         condition: comp is a Store and ownedBy has no entry for comp.id
-        onFalseStep: 36
-      - stepNumber: 38
+        onFalseStep: 35
+      - stepNumber: 37
         label: unownedStoreReport
         description: >-
           Report UNOWNED_STORE (warning, on comp.id; draft context ctx.isComponentDraft(comp.id))
@@ -816,21 +930,21 @@ methods:
           Index; a deliberate standalone Store stays visible, is reached from the workflow layer and
           carries a lint.allow reason; never merge the state into a consuming component
         type: local
-      - stepNumber: 39
+      - stepNumber: 38
         label: standaloneRegistry
         description: 'Standalone Registry pass: for each component in ctx.components'
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 41
-      - stepNumber: 40
+        endStep: 40
+      - stepNumber: 39
         description: Is it a Registry outside any Repository with no Store to write to?
         type: branch
         condition: >-
           comp is a Registry, ownedBy has no entry for comp.id, and no id in comp.dependsOn resolves
           through ctx.componentMap to a Store
-        onFalseStep: 39
-      - stepNumber: 41
+        onFalseStep: 38
+      - stepNumber: 40
         label: registryReport
         description: >-
           Report REGISTRY_WITHOUT_STORE (warning, on comp.id; draft context
@@ -838,23 +952,45 @@ methods:
           retype it as a Store with honest durability; otherwise wire its Store, or lint.allow with
           a reason
         type: local
+      - stepNumber: 41
+        label: unownedQuery
+        description: 'Unowned Query pass: for each component in ctx.components'
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 43
       - stepNumber: 42
+        description: >-
+          Is the Query owned by no pattern? A Query that a non-Repository pattern owns is that
+          pattern's containment finding, not this one
+        type: branch
+        condition: comp is a Query and ownedBy has no entry for comp.id
+        onFalseStep: 41
+      - stepNumber: 43
+        label: unownedQueryReport
+        description: >-
+          Report UNOWNED_QUERY (error, on comp.id; draft context ctx.isComponentDraft(comp.id))
+          naming the Query: a Query computes reads over its own Repository's Store, so make it a
+          member of the Repository whose Store it reads
+        type: local
+      - stepNumber: 44
         label: visibility
         description: 'Visibility pass: for each dependency of each component'
         type: loop
         loopKind: forEach
         over: each dependency id depId of each component comp in ctx.components
-        endStep: 44
-      - stepNumber: 43
+        endStep: 46
+      - stepNumber: 45
         description: >-
-          Is the dependency a block privately owned by another group? A facade or standalone block,
-          the owner's own member, and a sibling member of the same owner are all fine
+          Is the dependency a block privately owned by another group? A retired depending component
+          is skipped, as in the membership pass; a facade or standalone block, the owner's own
+          member, and a sibling member of the same owner are all fine
         type: branch
         condition: >-
-          owner = ownedBy.get(depId) is set, owner is not comp.id, and ownedBy.get(comp.id) is not
-          owner
-        onFalseStep: 42
-      - stepNumber: 44
+          comp is not retired (comp.isRetired() is false), owner = ownedBy.get(depId) is set, owner
+          is not comp.id, and ownedBy.get(comp.id) is not owner
+        onFalseStep: 44
+      - stepNumber: 46
         label: visibilityReport
         description: >-
           Report VISIBILITY_VIOLATION (error, on comp.id; draft context
@@ -874,13 +1010,12 @@ methods:
         endStep: 7
       - stepNumber: 2
         description: >-
-          Does the implementation realize a facade? FACADE_TYPES is a private constant of this file
-          (Repository, Gateway): the backend patterns whose facade semantics the architecture
-          standard defines
+          Does the implementation realize a Repository facade? The Repository is the backend pattern
+          whose facade semantics the architecture standard defines
         type: branch
         condition: >-
           ctx.interfaceMap resolves impl.contract, ctx.componentMap resolves its component comp, and
-          FACADE_TYPES has comp.componentType
+          comp is a Repository
         onFalseStep: 1
       - stepNumber: 3
         description: owned = comp.owns as a set; isDraftCtx = ctx.isImplementationDraft(impl)
@@ -916,4 +1051,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-15T01:19:25.215Z'
+updatedAt: '2026-09-15T18:08:54.724Z'

@@ -4,9 +4,11 @@ description: >-
   The validation workflow. It gathers the spec tree, the surface snapshots, the source-code model,
   the writer's round-trip results and the project's pack selections into one rule context; seeds the
   rule set with the built-in and pack rules; runs the rule sequence over that context; and returns
-  the findings. Its write-gate half runs only the spec-scoped rules against a component candidate
-  before the component is saved. It holds no state of its own: the rule set belongs to the rule
-  Repository, and each rule's verdict to its rule family.
+  the findings. It also gathers the inputs of the gate identity a lock records (the content
+  identity, the governing extensions and gate config, the consumed contract inputs and the built-in
+  rules) and has the gate identity computed from them. Its write-gate half runs only the spec-scoped
+  rules against a component candidate before the component is saved. It holds no state of its own:
+  the rule set belongs to the rule Repository, and each rule's verdict to its rule family.
 subsystem: sdd_validator
 componentType: Orchestrator
 owns: []
@@ -15,6 +17,7 @@ dependsOn:
   - validator_surfaces_adapter
   - source_analysis_adapter
   - rule_repository
+  - gate_identity
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-14T22:56:54.131Z'
+updatedAt: '2026-09-15T18:01:09.526Z'

@@ -222,17 +222,10 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: computeStateIdAt
-  - name: computeGateStateId
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: computeGateStateId
   - name: readLockState
     narrative:
       - stepNumber: 1
-        description: Forward to the core orchestrator
+        description: Forward to the core orchestrator, with the gate identity the caller computed
         type: call
         targetComponent: core_orchestrator
         targetMethod: readLockState
@@ -384,6 +377,27 @@ methods:
         type: call
         targetComponent: extension_orchestrator
         targetMethod: defaultPackSelections
+  - name: consumedContractInputs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: consumedContractInputs
+  - name: renameComponent
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameComponent
+  - name: retireSpecialists
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: retireSpecialists
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T22:56:30.678Z'
+updatedAt: '2026-09-15T17:58:40.280Z'

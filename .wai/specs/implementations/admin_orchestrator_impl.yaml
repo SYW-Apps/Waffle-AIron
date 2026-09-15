@@ -320,9 +320,11 @@ methods:
         type: return
         outcome: cannot lock — validation failed
       - stepNumber: 6
-        description: Compute the validated GATE StateId (spec content + governing doctrine)
+        description: >-
+          Compute the validated GATE StateId (spec content + governing doctrine + consumed contract
+          inputs) through the validator adapter
         type: call
-        targetComponent: host_core_adapter
+        targetComponent: host_validator_adapter
         targetMethod: computeGateStateId
       - stepNumber: 7
         description: >-
@@ -520,9 +522,11 @@ methods:
         type: return
         outcome: cannot lock — validation failed
       - stepNumber: 10
-        description: Compute the validated GATE StateId (spec content + governing doctrine)
+        description: >-
+          Compute the validated GATE StateId (spec content + governing doctrine + consumed contract
+          inputs) through the validator adapter
         type: call
-        targetComponent: host_core_adapter
+        targetComponent: host_validator_adapter
         targetMethod: computeGateStateId
       - stepNumber: 11
         description: >-
@@ -1069,4 +1073,4 @@ methods:
         outcome: imported tree
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-12T00:20:39.406Z'
+updatedAt: '2026-09-15T17:56:05.532Z'

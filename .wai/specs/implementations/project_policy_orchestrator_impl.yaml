@@ -871,28 +871,35 @@ methods:
         type: local
       - stepNumber: 9
         description: >-
-          Resolve the lock VERDICT through the shared authority rather than testing whether a record
-          merely exists: a stale record freezes nothing, so reporting it as locked claimed a freeze
-          that did not hold. Reported as locked plus a distinct stale flag, so a UI can prompt for
-          the re-lock.
+          Compute the gate identity as it stands now through the validator adapter: spec content,
+          governing doctrine and consumed contract inputs
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 10
+        description: >-
+          Resolve the lock VERDICT through the shared authority, passing the gate identity just
+          computed, rather than testing whether a record merely exists: a stale record freezes
+          nothing, so reporting it as locked claimed a freeze that did not hold. Reported as locked
+          plus a distinct stale flag, so a UI can prompt for the re-lock.
         type: call
         targetComponent: host_core_adapter
         targetMethod: readLockState
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Read the project's L1 subsystem specs to collect the subsystems declaring their own
           profile, which the project-level profile does not govern.
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadSubsystemSpecs
-      - stepNumber: 11
-        description: >-
-          Assemble the ProjectConfigView from the resolved projectType, the locked flag (true when
-          the lock record is non-null), the classified profileSource and profileResolvable, the
-          recorded selection ids that are not the governing one (unappliedProfileIds), and the
-          overriding subsystem ids.
-        type: local
       - stepNumber: 12
+        description: >-
+          Assemble the ProjectConfigView from the resolved projectType, the locked flag (true only
+          when the verdict is locked, with a stale flag when it is stale), the classified
+          profileSource and profileResolvable, the recorded selection ids that are not the governing
+          one (unappliedProfileIds), and the overriding subsystem ids.
+        type: local
+      - stepNumber: 13
         description: Return the project configuration view
         type: return
         outcome: the project configuration view
@@ -989,27 +996,34 @@ methods:
         targetMethod: recordProfileSelection
       - stepNumber: 13
         description: >-
-          Resolve the lock VERDICT through the shared authority (locked only when a record exists
-          AND its gate identity still matches).
+          Compute the gate identity as it stands now through the validator adapter: spec content,
+          governing doctrine and consumed contract inputs
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 14
+        description: >-
+          Resolve the lock VERDICT through the shared authority, passing the gate identity just
+          computed (locked only when a record exists AND its gate identity equals that one).
         type: call
         targetComponent: host_core_adapter
         targetMethod: readLockState
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Read the project's L1 subsystem specs to collect the subsystems declaring a profile of
           their own, which takes precedence over the project-level profile for their components.
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadSubsystemSpecs
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Assemble the updated ProjectConfigView: the applied projectType, the locked flag (true
-          when the lock record is non-null), profileSource from the ensure result, profileResolvable
-          true (the write path guarantees resolvability), adoptedPackName when a pack had to be
-          vendored, the unapplied recorded-selection remainder, and the ids of the subsystems that
-          override the project-level profile.
+          only when the verdict is locked, with a stale flag when it is stale), profileSource from
+          the ensure result, profileResolvable true (the write path guarantees resolvability),
+          adoptedPackName when a pack had to be vendored, the unapplied recorded-selection
+          remainder, and the ids of the subsystems that override the project-level profile.
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Return the updated project configuration view
         type: return
         outcome: the updated project configuration view
@@ -1017,4 +1031,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-09-13T12:07:04.030Z'
+updatedAt: '2026-09-15T17:57:22.821Z'

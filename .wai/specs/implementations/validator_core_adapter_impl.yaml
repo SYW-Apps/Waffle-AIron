@@ -70,6 +70,20 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadProjectConfig
+  - name: computeStateId
+    narrative:
+      - stepNumber: 1
+        description: Call computeStateId on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: computeStateId
+  - name: consumedContractInputs
+    narrative:
+      - stepNumber: 1
+        description: Call consumedContractInputs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: consumedContractInputs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T11:20:01.221Z'
+updatedAt: '2026-09-15T17:55:57.489Z'

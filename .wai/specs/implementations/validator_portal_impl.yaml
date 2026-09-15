@@ -48,6 +48,13 @@ methods:
         type: call
         targetComponent: spec_validator
         targetMethod: validateComponentCandidate
+  - name: computeGateStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward the gate identity computation to the spec validator
+        type: call
+        targetComponent: spec_validator
+        targetMethod: computeGateStateId
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-14T23:05:45.933Z'
+updatedAt: '2026-09-15T17:55:55.213Z'

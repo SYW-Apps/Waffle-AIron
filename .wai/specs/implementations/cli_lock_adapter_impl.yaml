@@ -1,8 +1,9 @@
 id: cli_lock_adapter_impl
 name: CLI Lock Adapter Implementation
 description: >-
-  Forwards the core-side lock mechanics (status freeze + commit-scoped record write) to the core
-  subsystem's published portal. Realized by the existing runLock command module.
+  Forwards the lock mechanics to the published portals: the tree's gate identity from the validator
+  portal, and the commit-scoped lock record write to the core portal. Realized by the existing
+  runLock command module.
 contract: icli_lock_adapter
 sourcePath: src/commands/lock.ts
 methods:
@@ -11,10 +12,11 @@ methods:
       - stepNumber: 1
         description: >-
           Assemble the lock scope (optional subsystem narrowing), then obtain the record identity
-          from the tree's current GATE StateId — spec content plus governing doctrine, so the lock
-          records which rule set validated it
+          from the tree's current gate identity through the validator portal: spec content,
+          governing doctrine and consumed contract inputs, so the lock records which gate validated
+          it
         type: call
-        targetComponent: core_portal
+        targetComponent: validator_portal
         targetMethod: computeGateStateId
       - stepNumber: 2
         description: Persist the commit-scoped lock record
@@ -28,4 +30,4 @@ methods:
     symbol: runLock
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-09-11T21:01:06.021Z'
+updatedAt: '2026-09-15T17:56:08.160Z'

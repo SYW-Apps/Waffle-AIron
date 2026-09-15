@@ -320,14 +320,14 @@ Each reported behaviour is reproduced with a failing test first; a confirmed one
   - The gate identity moves to a pure `gate_identity` in sdd_validator: core compares a lock against the gate id its caller passes, and the state hash's allow goes.
   - Renames go through a new `sdd_rename_component` that rewrites every reference.
   - The realtime hub, also an Actor, stays with track D.
-- [x] L3 (approved 2026-09-15; the Gateway question is open):
-  - `component_spec.dependencyClass`, plus the type methods `isLogic()` and `holdsState()`, giving each of the two logic-stereotype sets one home. Hidden-state judges logic that holds no state.
+- [x] L3 (approved 2026-09-15; amended the same day when the Gateway pattern retired into a built-in variant):
+  - `component_spec.dependencyClass`, plus the type methods `isLogic()`, `holdsState()` and `isRetired()`. The first two give each of the two logic-stereotype sets one home: hidden-state judges logic that holds no state.
   - Doctrine codes:
-    - retired: `ARCHITECTURE_VIOLATION_SPECIALIST_DEP`;
+    - retired: `ARCHITECTURE_VIOLATION_SPECIALIST_DEP` and `GATEWAY_CONTAINMENT`;
     - new: `DEPENDENCY_CLASS_VIOLATION`, `ARCHITECTURE_VIOLATION_SUPERVISOR_DEP`, `ACTOR_REACHED_WITHOUT_SUPERVISOR`, `ARCHITECTURE_VIOLATION_QUERY_DEP`, and `UNOWNED_QUERY` (an error: a Query lives only inside a Repository);
-    - pure logic is allowed under Stores, Registries, Adapters, Indexes and Views;
+    - pure logic is allowed under Stores, Registries, Adapters, Indexes and Views, and facade forwarding covers Repositories;
     - no Actor-specific rule.
-  - The intrinsic rule `logicDeclaration`: `SPECIALIST_RETIRED` and `DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR`.
+  - Intrinsic rules: `logicDeclaration` (`DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR`) and `retiredStereotypes` (`STEREOTYPE_RETIRED`, covering Specialist and Gateway).
   - Gate identity:
     - `gate_identity.compute`;
     - `computeGateStateId` on the validator portal, the spec validator and the CLI and host validator adapters;
@@ -335,6 +335,17 @@ Each reported behaviour is reproduced with a failing test first; a confirmed one
     - the state hash loses its gate method.
   - `renameComponent`, from `sdd_rename_component` down to the core orchestrator; `retireSpecialists(apply)` behind a modelled `runDoctor`.
   - `backup_schedule` (start, stop, sweep) and `instance_bootstrap` (seed).
+- [x] L4/L5 (approved 2026-09-15; authored by four agents, reviewed and amended):
+  - Validator rules: the class, Supervisor, Actor and Query checks; retired components and Portal or Observer targets judged once; containment waits only where a retired member changes a count; the two intrinsic rules registered after durability-declaration.
+  - Gate identity: `gate_identity.compute` keeps today's doctrine identity under the marker `sha256+content+doctrine+inputs`; the host lock and policy flows and the CLI lock ask the validator; the state hash computes content only, types included.
+  - Core, CLI and MCP:
+    - `renameComponent`: four labelled refusals, every reference position rewritten;
+    - `retireSpecialists`: fixed-point classification, with variants rebased through the variant adapter, which gains `listProjectVariants`, `rebaseProjectVariants` and its built-in layer;
+    - `readLockState(current)` and `consumedContractInputs`;
+    - `runDoctor`, at calls-only detail.
+  - Hosted process: `backup_schedule` and `instance_bootstrap`, with `host_server` delegating to both.
+  - Descriptions made untrue by D1 are rewritten.
+  - `wairon doctor` imports core directly for work no spec models yet. A reasoned UNDECLARED_DEPENDENCY allow on `cli_runner_impl` acknowledges it, and track D routes those reads through modelled adapters.
 - [ ] Logic is an Orchestrator: a flowchart that may nest others, with one or more cohesive methods (a class, or a module of functions). A logic component declares `dependencyClass: pure | read`, a first-class field the validator enforces as it enforces a Store's `durability` (decided 2026-09-15, revising E7's variant wording); unset means a workflow. `pure` depends only on pure components; `read` adds read methods of Repositories, Indexes and Adapters, the write check judged once facade methods carry effect tags. Specialist retires, with a migration for existing trees; the four shape variants stay guidance-only, rebased onto Orchestrator
 - [ ] Process layer: an Actor owns one live thing, entity instances included, and its methods are full flowcharts; a Supervisor owns the set and may supervise Supervisors; a live Actor is reached by id through its Supervisor (`dependsOn` lists both) and is the only writer of its aggregate; the method owning a workflow owns its transaction and applies in-memory state only after commit; a Portal may message a Supervisor by id; dependency rules for Orchestrator, Supervisor and Actor; `hidden-state` stops treating Supervisor and Actor as stateless
 - [ ] Data access: a Store covers one aggregate; `Query` joins Store, Registry and Index as a Repository member for computed reads; cross-aggregate reads go through a read Orchestrator or a read-model Repository; the outbox is a sibling Repository (§7 and §10 aligned)
@@ -404,6 +415,7 @@ Each reported behaviour is reproduced with a failing test first; a confirmed one
 - [ ] Permission-model migration, version stamp, demo seed
 - [ ] Domains (detection, scan, add/remove) and the aliases command
 - [ ] AI guide files and project context
+- [ ] `wairon doctor` through modelled adapters: its direct reads of legacy spec filenames, subproject config backfill, context sync, version stamps, guide injection, skill freshness, approver text and pack diagnosis, so the reasoned allow on `cli_runner_impl` can go
 - [ ] Execution profiles and budgets (with C6)
 - [ ] User config and update channels, download, logger, errors, HTTP helpers
 - [ ] The React app (`web/src`), with the generated canvas engine claimed under `conformance: off` — or a decision, recorded in the standard with its reason, that UI is outside SDD

@@ -1014,8 +1014,8 @@ methods:
           floor?
         type: branch
         condition: >-
-          complexityFired is false, eff.explicit, and the component resolves with a componentType
-          among the private LOGIC_STEREOTYPES (Orchestrator, Supervisor, Actor, Specialist)
+          complexityFired is false, eff.explicit, and the component resolves and component.isLogic()
+          holds: an Orchestrator, Supervisor or Actor (or a Specialist until it is migrated)
         onFalseStep: 19
       - stepNumber: 18
         description: >-
@@ -1039,4 +1039,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-15T01:31:19.182Z'
+updatedAt: '2026-09-15T17:58:04.681Z'

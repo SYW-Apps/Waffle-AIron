@@ -115,6 +115,93 @@ methods:
         description: Continue with the next component.
         type: local
     symbol: check
+  - name: logicDeclaration
+    sourcePath: src/core/rules/intrinsic/logic-declaration.ts
+    narrative:
+      - stepNumber: 1
+        label: ldStart
+        description: For each component, check its dependencyClass declaration against its own stereotype.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 5
+      - stepNumber: 2
+        description: isDraftCtx = ctx.isComponentDraft(comp.id).
+        type: local
+      - stepNumber: 3
+        description: >-
+          Branch: does a live component other than an Orchestrator declare a dependencyClass? Only
+          the stereotype is judged: the component schema refuses any value but pure and read before
+          a rule runs, and what a class allows is the stereotype-dependencies verdict. A retired
+          component is skipped: a Specialist's STEREOTYPE_RETIRED is its one finding, and its
+          migration sets the class.
+        type: branch
+        condition: >-
+          comp.dependencyClass is set, comp.componentType is not "Orchestrator", and not
+          comp.isRetired()
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR (error; isDraftCtx) naming the component, its
+          componentType and its declared dependencyClass: a dependencyClass is an Orchestrator
+          property, because logic is an Orchestrator. Drop it, or make the component an
+          Orchestrator.
+        type: local
+      - stepNumber: 5
+        label: ldEnd
+        description: Continue with the next component.
+        type: local
+    symbol: check
+  - name: retiredStereotypes
+    sourcePath: src/core/rules/intrinsic/retired-stereotypes.ts
+    narrative:
+      - stepNumber: 1
+        label: rsStart
+        description: For each component, check its own stereotype against the retired ones.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 8
+      - stepNumber: 2
+        description: isDraftCtx = ctx.isComponentDraft(comp.id).
+        type: local
+      - stepNumber: 3
+        description: >-
+          Branch: is the component typed with a retired stereotype? A live stereotype has nothing to
+          migrate.
+        type: branch
+        condition: comp.isRetired() (componentType Specialist or Gateway)
+        onFalseStep: 8
+      - stepNumber: 4
+        description: 'Branch (retired): is it a Specialist? Otherwise it is a Gateway.'
+        type: branch
+        condition: comp.componentType is "Specialist"
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Report STEREOTYPE_RETIRED (error; isDraftCtx) naming the component as a retired
+          Specialist: it is logic, an Orchestrator with the dependencyClass its dependencies give
+          it. Run wairon doctor --fix to retype it (the doctor names the class), or set
+          componentType: Orchestrator and its dependencyClass yourself.
+        type: local
+      - stepNumber: 6
+        description: Continue with the next component.
+        type: jump
+        toStep: 8
+      - stepNumber: 7
+        label: rsGateway
+        description: >-
+          Report STEREOTYPE_RETIRED (error; isDraftCtx) naming the component as a retired Gateway
+          and listing its migration: (1) the Portal it owns becomes the front door, with the gateway
+          variant; (2) its other members become dependencies of that Portal instead of owned
+          members; (3) its consumers depend on that Portal; (4) delete the Gateway spec.
+          sdd_rename_component can then give the Portal the Gateway's id.
+        type: local
+      - stepNumber: 8
+        label: rsEnd
+        description: Continue with the next component.
+        type: local
+    symbol: check
 status: draft
 createdAt: '2026-09-14T23:17:12.294Z'
-updatedAt: '2026-09-14T23:21:42.373Z'
+updatedAt: '2026-09-15T18:06:42.428Z'

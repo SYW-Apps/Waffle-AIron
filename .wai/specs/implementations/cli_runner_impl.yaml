@@ -1288,6 +1288,141 @@ methods:
         type: return
         outcome: tier set
     conformance: 'off'
+  - name: runDoctor
+    sourcePath: src/commands/doctor.ts
+    narrative:
+      - stepNumber: 1
+        description: With --fix, apply the repairs before the report, so the report shows the repaired state
+        type: branch
+        condition: '--fix was given'
+        onFalseStep: 10
+      - stepNumber: 2
+        description: 'Read the configuration: the fixes need an initialized project whose configuration is valid'
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: Skip the fixes otherwise, warning when the configuration is invalid; the report flags both
+        type: branch
+        condition: the project is initialized and its configuration is valid
+        onFalseStep: 10
+      - stepNumber: 4
+        description: Regenerate the context files under .wai/context
+        type: local
+      - stepNumber: 5
+        description: Re-export the SDD skills for the active targets
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: exportSddSkills
+      - stepNumber: 6
+        description: >-
+          Re-inject the local AI guides for the active targets, record the installed packs the
+          project no longer applies as explicit selections, migrate legacy spec filenames, and
+          initialize the chained subprojects that have specs but no project.yaml
+        type: local
+      - stepNumber: 7
+        description: >-
+          Retire the Specialists with apply true: each becomes an Orchestrator with the
+          dependencyClass its dependencies decide, and each Specialist-based variant rebases onto
+          Orchestrator; print what was retyped. Runs after the filename migration, so the retyped
+          specs save under current names
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: retireSpecialists
+      - stepNumber: 8
+        description: Register or repair the MCP server for each active backend
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: installMcpServer
+      - stepNumber: 9
+        description: >-
+          For a Gemini or Antigravity target, remove the legacy global Antigravity plugin whose name
+          collides with the MCP server
+        type: local
+      - stepNumber: 10
+        label: report
+        description: 'Project: is this an initialized wairon project?'
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 11
+        description: Stop at a folder that is not a wairon project
+        type: branch
+        condition: the project is not initialized
+        onFalseStep: 13
+      - stepNumber: 12
+        description: Report it, naming `wairon init`, print the summary and exit non-zero
+        type: return
+        outcome: not a wairon project
+      - stepNumber: 13
+        description: Report whether the configuration is valid, and read its active targets
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 14
+        description: >-
+          Report whether the system spec is present, whether the spec filenames are current, and any
+          chained subproject with specs but no project.yaml
+        type: local
+      - stepNumber: 15
+        description: >-
+          Spec tree: with a system spec and a valid configuration, run the conformance gate and
+          report its error and warning counts
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateSddTree
+      - stepNumber: 16
+        description: >-
+          Stereotypes: plan the Specialist retirement with apply false and report each Specialist
+          with the dependencyClass it would take as an Orchestrator, and each variant to rebase,
+          pointing at `wairon doctor --fix`; silent when no Specialist remains
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: retireSpecialists
+      - stepNumber: 17
+        description: >-
+          Generated files and skills: compare the version stamps of the context files and injected
+          guides with the installed wairon, and check each active target's skills for stale or
+          missing files
+        type: local
+      - stepNumber: 18
+        description: 'Lock: compute the gate identity as it stands now'
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 19
+        description: >-
+          Resolve the lock against that identity: a locked lock reports when and by whom it was
+          frozen, warning when it predates per-spec approval; a stale one warns to re-lock; a
+          project never locked reports nothing. A failure here never breaks the report
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: readLockState
+      - stepNumber: 20
+        description: >-
+          Report leftover approval baselines outside the project, never deleting them, and the
+          extension packs: those unresolved, those installed but not applied, and those applied from
+          the machine-wide store
+        type: local
+      - stepNumber: 21
+        description: >-
+          MCP server: check that each active backend's registration points at a launchable server,
+          and flag a legacy global Antigravity plugin
+        type: local
+      - stepNumber: 22
+        description: Print the summary, exiting non-zero when any check reported an error
+        type: return
+        outcome: reported
+    detail: calls-only
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        src/commands/doctor.ts imports core directly for work no spec models yet: legacy spec
+        filenames and chained-subproject config backfill (specs.ts, provision.ts), skill freshness
+        and active targets (skills.ts), the approver text (lockfile.ts), and pack diagnosis and
+        pinning (extensions.ts). Track D designs those areas and routes doctor through modelled
+        adapters. The validation import goes when D1's code routes it through cli_validator_adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-13T22:58:33.102Z'
+updatedAt: '2026-09-15T18:14:28.716Z'

@@ -1,12 +1,15 @@
 id: ivariant_registry_adapter
 name: Variant Registry Adapter Interface
-description: Loads and merges the component-variant registry (global + project) into the VariantDef set.
+description: >-
+  Loads and merges the component-variant registry (built-in, global and project) into the VariantDef
+  set, and rewrites the project's own variant files.
 component: variant_registry_adapter
 methods:
   - name: loadProjectVariants
     description: >-
-      Load the component-variant registry governing the current project: the global variants
-      (WAIRON_VARIANTS_DIR) then the project's .wai/variants/, project winning on an id collision.
+      Load the component-variant registry governing the current project: wairon's built-in variants,
+      then the global variants (WAIRON_VARIANTS_DIR, else ~/.wairon/variants), then the project's
+      .wai/variants/, a later layer winning on an id collision.
     signature: 'loadProjectVariants(): VariantDef[]'
     returns: VariantDef[]
     params: []
@@ -58,6 +61,26 @@ methods:
       - name: variantsById
         type: VariantDef[]
         description: The loaded variant registry, keyed by id.
+  - name: listProjectVariants
+    description: >-
+      The variants the project's own .wai/variants/ files define, without the built-in or global
+      layers: the variants a migration may rewrite.
+    signature: 'listProjectVariants(): VariantDef[]'
+    returns: VariantDef[]
+    params: []
+  - name: rebaseProjectVariants
+    description: >-
+      Rewrite the base of every project variant whose base is fromBase to toBase, in place in its
+      .wai/variants/ file, keeping the file's other content; returns the ids rebased.
+    signature: 'rebaseProjectVariants(fromBase: string, toBase: string): string[]'
+    returns: string[]
+    params:
+      - name: fromBase
+        type: string
+        description: The retired base stereotype
+      - name: toBase
+        type: string
+        description: The stereotype that replaces it
 status: complete
 createdAt: '2026-07-15T12:24:19.110Z'
-updatedAt: '2026-08-11T17:05:41.603Z'
+updatedAt: '2026-09-15T18:07:22.128Z'

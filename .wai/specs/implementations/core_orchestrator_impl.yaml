@@ -2,10 +2,11 @@ id: core_orchestrator_impl
 name: Core Orchestrator Implementation
 description: >-
   Concrete implementation of the Core Orchestrator: spec tree read/write workflows in
-  src/core/specs.ts. Provisioning, chained-subsystem, lock, state-hash, and diagram forwarding
-  methods are realized in sibling core modules (provision.ts, lockfile.ts, statehash.ts, diagram.ts)
-  republished by the core portal barrel — their structural-conformance method checks are dialed off
-  under the single-sourcePath Level 1 model; Level 2 dependency conformance will cover the edges.
+  src/core/specs.ts. Methods whose bodies live in sibling core modules name them in their own
+  sourcePath: the provisioning, chained-subsystem and rename workflows in provision.ts, and the
+  Specialist retirement in stereotype-migration.ts. The lock, state-hash and diagram forwards
+  realized in lockfile.ts, statehash.ts and diagram.ts, republished by the core portal barrel, keep
+  their structural-conformance checks dialed off.
 contract: icore_orchestrator
 sourcePath: src/core/specs.ts
 methods:
@@ -432,72 +433,6 @@ methods:
         description: Return the computed state hash
         type: return
         outcome: StateId or null
-  - name: computeGateStateId
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Load the governing extension packs through the extension workflow (global then project,
-          project winning on collision) — the doctrine the gate ran with.
-        type: call
-        targetComponent: extension_orchestrator
-        targetMethod: loadProjectExtensions
-      - stepNumber: 2
-        description: >-
-          List every chained mount root beneath this project — each holds stored surface snapshots a
-          verdict can consult alongside this root's own.
-        type: call
-        targetComponent: spec_loader
-        targetMethod: listChainedRoots
-      - stepNumber: 3
-        description: >-
-          Read the consumed contract inputs: every stored surface snapshot under .wai/surfaces of
-          this root and of each chained root, reduced to its content key — provenance (stateId,
-          generatedAt, origin) stripped, so re-pinning an unchanged contract never moves the
-          identity.
-        type: local
-      - stepNumber: 4
-        description: >-
-          Hand the doctrine and those inputs to the state hash specialist, which digests them
-          together with the spec tree.
-        type: call
-        targetComponent: state_hash_specialist
-        targetMethod: hashGateState
-      - stepNumber: 5
-        description: Return the gate StateId.
-        type: return
-        outcome: gate StateId
-    conformance: 'off'
-  - name: readLockState
-    narrative:
-      - stepNumber: 1
-        description: Read the persisted lock record via the lock registry.
-        type: call
-        targetComponent: lock_registry
-        targetMethod: read
-      - stepNumber: 2
-        description: No record means the project was simply never locked — a normal state, not a fault.
-        type: branch
-        condition: no lock record exists
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return the unlocked verdict, carrying the current gate identity a lock would record.
-        type: return
-        outcome: unlocked
-      - stepNumber: 4
-        description: >-
-          Compute the GATE identity as it stands now — spec content plus governing doctrine plus the
-          consumed contract inputs.
-        type: call
-        targetComponent: state_hash_specialist
-        targetMethod: hashGateState
-      - stepNumber: 5
-        description: >-
-          Compare the recorded identity with the current one and return locked or stale, keeping the
-          record either way: staleness is a judgement ABOUT the record, so a caller can prompt for a
-          re-lock rather than present the project as never frozen.
-        type: return
-        outcome: locked or stale
-    conformance: 'off'
   - name: resolveSubprojectForNamespace
     narrative:
       - stepNumber: 1
@@ -647,6 +582,327 @@ methods:
         description: Return the direct chained subprojects
         type: return
         outcome: ChainedSubprojectDir[]
+  - name: readLockState
+    narrative:
+      - stepNumber: 1
+        description: Read the persisted lock record through the lock registry
+        type: call
+        targetComponent: lock_registry
+        targetMethod: read
+      - stepNumber: 2
+        description: No record means the project was never locked, a normal state rather than a fault
+        type: branch
+        condition: no lock record exists
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return unlocked with no record, carrying current as the identity a lock would record
+        type: return
+        outcome: unlocked
+      - stepNumber: 4
+        description: >-
+          Compare the recorded gate identity with the one the caller computed now; nothing is hashed
+          here
+        type: branch
+        condition: the record's stateId equals current
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Return locked with the record and current
+        type: return
+        outcome: locked
+      - stepNumber: 6
+        description: >-
+          Return stale with the record and current, keeping the record: staleness is a judgement
+          about the record, so a caller can prompt for a re-lock rather than present the project as
+          never frozen
+        type: return
+        outcome: stale
+  - name: consumedContractInputs
+    narrative:
+      - stepNumber: 1
+        description: List every chained mount root beneath the bound project, project-relative in walk order
+        type: call
+        targetComponent: spec_loader
+        targetMethod: listChainedRoots
+      - stepNumber: 2
+        description: 'The roots to read: the bound root, then each chained root joined onto it'
+        type: local
+      - stepNumber: 3
+        description: Read each root's consumed contract inputs
+        type: loop
+        loopKind: forEach
+        over: the roots
+        endStep: 5
+      - stepNumber: 4
+        description: >-
+          Read the root's stored surface snapshots under .wai/surfaces: a missing directory holds
+          none, and a malformed file is skipped rather than aborting the read. Read locally: the
+          snapshot files are modelled in sdd_surfaces, which sdd_core must not depend on
+        type: local
+      - stepNumber: 5
+        description: >-
+          Reduce each snapshot to its canonical content key: provenance (stateId, generatedAt,
+          origin) stripped and the rest canonicalized, so re-pinning an unchanged contract never
+          moves the key
+        type: local
+      - stepNumber: 6
+        description: Return every root's content keys
+        type: return
+        outcome: string[]
+  - name: renameComponent
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the component to rename
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: 'Guard: the component must exist'
+        type: branch
+        condition: the component does not exist
+        onFalseStep: 4
+      - stepNumber: 3
+        label: component-missing
+        description: Refuse a component that does not exist
+        type: throw
+        error: 'component-missing: no component has this id'
+      - stepNumber: 4
+        description: 'Guard: the component must belong to the bound project itself'
+        type: branch
+        condition: 'componentId is namespaced into a chained mount (it carries the :: separator)'
+        onFalseStep: 6
+      - stepNumber: 5
+        label: chained-component
+        description: Refuse a component inside a chained subproject
+        type: throw
+        error: >-
+          chained-component: the component lives in a chained subproject; rename it from that
+          project's own root
+      - stepNumber: 6
+        description: 'Guard: the new id must be a plain lowercase identifier'
+        type: branch
+        condition: >-
+          newId is outside the id grammar: not a lowercase identifier, or carrying a namespace
+          separator
+        onFalseStep: 8
+      - stepNumber: 7
+        label: invalid-id
+        description: Refuse a new id outside the grammar
+        type: throw
+        error: 'invalid-id: the new id must be a lowercase identifier with no namespace separator'
+      - stepNumber: 8
+        description: Load every component spec, for the component ids already taken
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 9
+        description: Load every interface spec, for the interface ids taken and the component's own contracts
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 10
+        description: >-
+          Load every implementation spec, for the implementation ids taken and the realizations of
+          those contracts
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 11
+        description: 'Guard: nothing may already hold the new ids'
+        type: branch
+        condition: >-
+          newId is already a component id, or i<newId> is an interface id, or <newId>_impl is an
+          implementation id
+        onFalseStep: 13
+      - stepNumber: 12
+        label: id-taken
+        description: Refuse a new id already taken
+        type: throw
+        error: 'id-taken: the new id, or the interface or implementation id it implies, is already in use'
+      - stepNumber: 13
+        description: >-
+          Collect what moves: the component's interface named i<componentId>, and the implementation
+          named <componentId>_impl that realizes one of the component's contracts. Interfaces and
+          implementations named otherwise keep their ids; only their component and contract
+          references change
+        type: local
+      - stepNumber: 14
+        description: Write the component under newId, its own id rewritten
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 15
+        description: Does the component's own interface move?
+        type: branch
+        condition: an interface named i<componentId> moves
+        onFalseStep: 17
+      - stepNumber: 16
+        description: Write the interface under i<newId>, its id and component rewritten
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 17
+        description: Does the component's own implementation move?
+        type: branch
+        condition: an implementation named <componentId>_impl moves
+        onFalseStep: 19
+      - stepNumber: 18
+        description: >-
+          Write the implementation under <newId>_impl, its id rewritten and its contract following a
+          renamed interface
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 19
+        description: Remove each moved spec's old file
+        type: local
+      - stepNumber: 20
+        description: >-
+          Rewrite every reference to a renamed id across the bound tree with the provisioning
+          rewriter, whose reach this extends: a component's dependsOn, owns and dispatch components;
+          a subsystem's lifecycle and publicInterfaces components; the system's publicInterfaces
+          components; narrative call, dispatch and register targets; an interface's component and an
+          implementation's contract; an entity type's componentClass. invokedBy callers are prose
+          and stay as written, and lint allows belong to their spec and moved with it. Each spec
+          rewritten is recorded by id
+        type: local
+      - stepNumber: 21
+        description: >-
+          Drop the cached spec index: the removed files and the rewritten references changed the
+          tree outside the save paths
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 22
+        description: >-
+          Return renamed (each moved spec's kind with its old and new id) and rewritten (the ids of
+          the other specs whose references changed)
+        type: return
+        outcome: ComponentRename
+  - name: retireSpecialists
+    sourcePath: src/core/stereotype-migration.ts
+    narrative:
+      - stepNumber: 1
+        description: Load every component spec in the bound tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: >-
+          Collect the Specialists, each unclassified. Gateways are not migrated here:
+          STEREOTYPE_RETIRED gives their manual steps
+        type: local
+      - stepNumber: 3
+        description: Classify over the dependency graph in passes, until a pass classifies nothing
+        type: loop
+        condition: the pass classified at least one Specialist
+        loopKind: doWhile
+        endStep: 14
+      - stepNumber: 4
+        description: Try each Specialist still unclassified
+        type: loop
+        loopKind: forEach
+        over: each Specialist still unclassified
+        endStep: 13
+      - stepNumber: 5
+        description: A Specialist with a dependency still unclassified waits for the next pass
+        type: branch
+        condition: 'every dependency is decided: none is a Specialist still unclassified'
+        onFalseStep: 4
+      - stepNumber: 6
+        description: Pure when every dependency is pure
+        type: branch
+        condition: >-
+          every dependency is pure: an Orchestrator declaring dependencyClass pure, or a Specialist
+          classified pure
+        onFalseStep: 9
+      - stepNumber: 7
+        description: Classify it pure
+        type: local
+      - stepNumber: 8
+        description: Go record its reason
+        type: jump
+        toStep: 13
+      - stepNumber: 9
+        description: Read when every dependency is pure or read logic, or a data facade it may read
+        type: branch
+        condition: >-
+          every dependency is pure or read logic (declared or classified), or a Repository, Index or
+          Adapter
+        onFalseStep: 12
+      - stepNumber: 10
+        description: Classify it read
+        type: local
+      - stepNumber: 11
+        description: Go record its reason
+        type: jump
+        toStep: 13
+      - stepNumber: 12
+        description: 'Leave its class unset, a workflow Orchestrator: some dependency fits neither class'
+        type: local
+      - stepNumber: 13
+        label: record
+        description: Record the dependencies that decided its class as its reason
+        type: local
+      - stepNumber: 14
+        description: Close the pass, noting whether it classified any Specialist
+        type: local
+      - stepNumber: 15
+        description: >-
+          Settle the Specialists still unclassified, those in a dependency cycle or waiting on one,
+          with the weakest class that fits: read when every dependency is pure or read logic, a
+          Repository, Index or Adapter, or another of them; otherwise unset. One left unset makes
+          those depending on it unset in turn, until nothing changes. Each records the dependencies
+          that decided it
+        type: local
+      - stepNumber: 16
+        description: >-
+          Read the project's own variants through the variant registry adapter, keeping those whose
+          base is Specialist
+        type: call
+        targetComponent: variant_registry_adapter
+        targetMethod: listProjectVariants
+      - stepNumber: 17
+        description: >-
+          Compose the plan: retyped, each Specialist with its dependencyClass when set and its
+          reason; rebasedVariants, the ids of those variants
+        type: local
+      - stepNumber: 18
+        description: Without apply, nothing is written
+        type: branch
+        condition: apply is false
+        onFalseStep: 20
+      - stepNumber: 19
+        description: Return the plan with applied false
+        type: return
+        outcome: planned
+      - stepNumber: 20
+        description: Write each retype
+        type: loop
+        loopKind: forEach
+        over: each retyped Specialist
+        endStep: 21
+      - stepNumber: 21
+        description: Save it with componentType Orchestrator and its dependencyClass when set
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 22
+        description: >-
+          Rebase those variant files in place through the variant registry adapter, from base
+          Specialist to base Orchestrator; its result gives the rebased ids
+        type: call
+        targetComponent: variant_registry_adapter
+        targetMethod: rebaseProjectVariants
+      - stepNumber: 23
+        description: Invalidate the spec cache
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 24
+        description: Return the plan with applied true
+        type: return
+        outcome: applied
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T22:56:39.169Z'
+updatedAt: '2026-09-15T18:08:02.732Z'

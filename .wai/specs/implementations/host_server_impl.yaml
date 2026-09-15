@@ -36,20 +36,12 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
-          Schedule the periodic git-backup timer: register the pre-authorized .wai/-scoped backup
-          sweep over the git-bound projects as the interval callback (skip-if-clean — a quiet
-          project never commits noise); the runtime invokes it each interval, not this method
-        type: register
-        targetComponent: admin_orchestrator
-        targetMethod: runPeriodicGitSync
+          Start the periodic backup schedule (git-bound project sweep + container-level backing
+          sweep, ticking every 60 seconds), passing the running instance's configuration
+        type: call
+        targetComponent: backup_schedule
+        targetMethod: start
       - stepNumber: 7
-        description: >-
-          Register the container-level backing sweep (unit container repos + the instance-structure
-          backup repo, interval-elapsed gated) on the same periodic timer
-        type: register
-        targetComponent: git_backing_orchestrator
-        targetMethod: runPeriodicBackingSync
-      - stepNumber: 8
         description: Return the running server handle
         type: return
         outcome: running
@@ -57,8 +49,10 @@ methods:
   - name: stop
     narrative:
       - stepNumber: 1
-        description: Cancel the periodic git-backup timer
-        type: local
+        description: Stop the periodic backup schedule
+        type: call
+        targetComponent: backup_schedule
+        targetMethod: stop
       - stepNumber: 2
         description: Stop accepting new connections and drain in-flight requests
         type: local
@@ -75,42 +69,17 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Seed-or-load the boot-reserved built-in subject UUIDs (first boot generates and persists
-          them to instance.json; later boots return the record unchanged)
+          Run the one-time instance bootstrap: seed-or-load the persisted instance identity and,
+          under devMode, ensure the synthetic local development unit exists, passing the running
+          instance's configuration
         type: call
-        targetComponent: instance_identity_repository
-        targetMethod: ensureSeeded
-        assertsGuarantees:
-          - idempotent
+        targetComponent: instance_bootstrap
+        targetMethod: seed
       - stepNumber: 2
-        description: If devMode is not enabled, skip the synthetic local development unit
-        type: branch
-        condition: config.devMode is enabled
-        onTrueStep: 3
-        onFalseStep: 6
-      - stepNumber: 3
-        description: Look up the synthetic local development unit
-        type: call
-        targetComponent: organization_repository
-        targetMethod: getUnit
-      - stepNumber: 4
-        description: If the synthetic local development unit already exists, skip creation
-        type: branch
-        condition: the synthetic local development unit already exists
-        onTrueStep: 6
-        onFalseStep: 5
-      - stepNumber: 5
-        description: >-
-          Create the synthetic local development unit so dev projects can always be placed (unitId
-          is required at creation)
-        type: call
-        targetComponent: organization_repository
-        targetMethod: createUnit
-      - stepNumber: 6
         description: Return once the instance is initialized
         type: return
         outcome: initialized
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-08-11T17:05:54.243Z'
+updatedAt: '2026-09-15T17:54:16.259Z'

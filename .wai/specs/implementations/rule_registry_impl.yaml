@@ -140,102 +140,112 @@ methods:
         targetComponent: intrinsic_rules
         targetMethod: durabilityDeclaration
       - stepNumber: 27
+        description: Register logic-declaration
+        type: register
+        targetComponent: intrinsic_rules
+        targetMethod: logicDeclaration
+      - stepNumber: 28
+        description: Register retired-stereotypes
+        type: register
+        targetComponent: intrinsic_rules
+        targetMethod: retiredStereotypes
+      - stepNumber: 29
         description: Register durability-round-trip
         type: register
         targetComponent: wiring_rules
         targetMethod: durabilityRoundTrip
-      - stepNumber: 28
+      - stepNumber: 30
         description: Register untyped-seams
         type: register
         targetComponent: wiring_rules
         targetMethod: untypedSeams
-      - stepNumber: 29
+      - stepNumber: 31
         description: Register prose-claims
         type: register
         targetComponent: wiring_rules
         targetMethod: proseClaims
-      - stepNumber: 30
+      - stepNumber: 32
         description: Register invariant-backing
         type: register
         targetComponent: wiring_rules
         targetMethod: invariantBacking
-      - stepNumber: 31
+      - stepNumber: 33
         description: Register event-topology
         type: register
         targetComponent: wiring_rules
         targetMethod: eventTopology
-      - stepNumber: 32
+      - stepNumber: 34
         description: Register structural-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: structuralConformance
-      - stepNumber: 33
+      - stepNumber: 35
         description: Register call-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: callConformance
-      - stepNumber: 34
+      - stepNumber: 36
         description: Register hidden-state
         type: register
         targetComponent: conformance_rules
         targetMethod: hiddenState
-      - stepNumber: 35
+      - stepNumber: 37
         description: Register dependency-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: dependencyConformance
-      - stepNumber: 36
+      - stepNumber: 38
         description: Register integration-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: integrationConformance
-      - stepNumber: 37
+      - stepNumber: 39
         description: Register coupling-health
         type: register
         targetComponent: heuristic_rules
         targetMethod: couplingHealth
-      - stepNumber: 38
+      - stepNumber: 40
         description: Register target-language
         type: register
         targetComponent: heuristic_rules
         targetMethod: targetLanguage
-      - stepNumber: 39
+      - stepNumber: 41
         description: Register technology-boundaries
         type: register
         targetComponent: heuristic_rules
         targetMethod: technologyBoundaries
-      - stepNumber: 40
+      - stepNumber: 42
         description: Register naming-conventions
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingConventions
-      - stepNumber: 41
+      - stepNumber: 43
         description: Register complexity-and-metadata
         type: register
         targetComponent: heuristic_rules
         targetMethod: complexityAndMetadata
-      - stepNumber: 42
+      - stepNumber: 44
         description: Register pack-resolution
         type: register
         targetComponent: extension_rules
         targetMethod: packResolution
-      - stepNumber: 43
+      - stepNumber: 45
         description: Register pack-reproducibility
         type: register
         targetComponent: extension_rules
         targetMethod: packReproducibility
-      - stepNumber: 44
+      - stepNumber: 46
         description: Register lint-allows (the rule index later moves it after any pack rules)
         type: register
         targetComponent: integrity_rules
         targetMethod: lintAllows
-      - stepNumber: 45
+      - stepNumber: 47
         description: For each registered built-in rule, in that order
         type: loop
         loopKind: forEach
         over: the registered built-in rules
-        endStep: 46
-      - stepNumber: 46
+        endStep: 48
+      - stepNumber: 48
         label: append-builtin
         description: Append the rule to the store
         type: call
@@ -260,4 +270,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-09-14T23:07:53.058Z'
+updatedAt: '2026-09-15T18:00:35.494Z'

@@ -1,15 +1,16 @@
 id: variant_registry_adapter
 name: Variant Registry Adapter
 description: >-
-  The filesystem loader for the component-variant registry — a dynamic layer on top of packs — plus
-  the resolution and rendering of a component's variant guidance. Reads variant definitions from the
-  global variants directory (WAIRON_VARIANTS_DIR) and the project's .wai/variants/, and merges them
-  (project wins on id collision) into the VariantDef set the validator and agent resolver consume.
-  Resolution and composition live here rather than in the agent resolver so the generated-agent
-  renderer and the MCP spec-read path share ONE implementation: a hosted agent and a local session
-  are told the same thing about a variant by construction. A malformed variant file is skipped,
-  never fatal; the registry lives outside packs so variants can be defined and shared without a pack
-  release.
+  The filesystem loader for the component-variant registry, plus the resolution and rendering of a
+  component's variant guidance. Loads wairon's built-in variants (shipped in its templates), then
+  the global variants directory (WAIRON_VARIANTS_DIR, else ~/.wairon/variants), then the project's
+  .wai/variants/, a later layer winning on an id collision, into the VariantDef set the validator
+  and agent resolver consume; and rewrites the project's own variant files when a migration rebases
+  them. Resolution and composition live here rather than in the agent resolver so the
+  generated-agent renderer and the MCP spec-read path share ONE implementation: a hosted agent and a
+  local session are told the same thing about a variant by construction. A malformed variant file is
+  skipped, never fatal; the registry lives outside packs so variants can be defined and shared
+  without a pack release.
 subsystem: sdd_core
 componentType: Adapter
 owns: []
@@ -18,4 +19,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-15T12:23:50.906Z'
-updatedAt: '2026-08-11T17:06:02.523Z'
+updatedAt: '2026-09-15T18:07:25.163Z'

@@ -162,7 +162,14 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadProjectConfig
+  - name: renameComponent
+    narrative:
+      - stepNumber: 1
+        description: Call renameComponent on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: renameComponent
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T12:27:15.566Z'
+updatedAt: '2026-09-15T17:59:02.529Z'

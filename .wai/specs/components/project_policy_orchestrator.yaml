@@ -21,6 +21,7 @@ dependsOn:
   - admin_orchestrator
   - audit_repository
   - host_core_adapter
+  - host_validator_adapter
 status: complete
 createdAt: '2026-07-08T21:59:23.605Z'
-updatedAt: '2026-09-13T11:39:54.007Z'
+updatedAt: '2026-09-15T17:56:12.525Z'

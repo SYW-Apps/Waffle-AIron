@@ -1,0 +1,94 @@
+id: backup_schedule_impl
+name: Backup Schedule Implementation
+description: >-
+  The hosted instance's periodic 60-second backup timer: sweeps the git-bound projects and the
+  container-level backing repositories each tick, isolating a failure in one sweep from the other.
+contract: ibackup_schedule
+sourcePath: src/server/backup-schedule.ts
+methods:
+  - name: start
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Register sweep as the 60-second interval callback; the runtime invokes it each interval,
+          not this method
+        type: register
+        targetComponent: backup_schedule
+        targetMethod: sweep
+      - stepNumber: 2
+        description: Unref the timer so it never keeps a closing process alive
+        type: local
+      - stepNumber: 3
+        description: Return once the timer is scheduled
+        type: return
+        outcome: started
+  - name: stop
+    narrative:
+      - stepNumber: 1
+        description: Cancel the timer; a sweep already running completes
+        type: local
+      - stepNumber: 2
+        description: Return once the timer is cancelled
+        type: return
+        outcome: stopped
+  - name: sweep
+    narrative:
+      - stepNumber: 1
+        label: try_git_sync
+        description: >-
+          Attempt the periodic git sync sweep over git-bound projects; a failure here must not stop
+          the backing sweep
+        type: try
+        endStep: 2
+        catches:
+          - error: project sweep failure
+            step: 4
+      - stepNumber: 2
+        label: call_git_sync
+        description: >-
+          Run the periodic git sync sweep: a .wai/-scoped commit+push per due git-bound project,
+          skip-if-clean
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: runPeriodicGitSync
+      - stepNumber: 3
+        description: Skip the catch handler
+        type: jump
+        toStep: 5
+      - stepNumber: 4
+        label: catch_git_sync
+        description: Log the project sweep failure and continue
+        type: local
+      - stepNumber: 5
+        label: after_git_sync
+        description: Attempt the periodic container-level backing sweep
+        type: try
+        endStep: 6
+        catches:
+          - error: backing sweep failure
+            step: 8
+      - stepNumber: 6
+        label: call_backing_sync
+        description: >-
+          Run the periodic backing sweep over unit container repos and the instance-structure backup
+          repo (interval-elapsed gated)
+        type: call
+        targetComponent: git_backing_orchestrator
+        targetMethod: runPeriodicBackingSync
+      - stepNumber: 7
+        description: Skip the catch handler
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        label: catch_backing_sync
+        description: Log the backing sweep failure
+        type: local
+      - stepNumber: 9
+        label: sweep_return
+        description: Return once both sweeps have been attempted
+        type: return
+        outcome: swept
+detail: full
+status: draft
+createdAt: '2026-09-15T17:53:55.547Z'
+updatedAt: '2026-09-15T17:53:55.551Z'

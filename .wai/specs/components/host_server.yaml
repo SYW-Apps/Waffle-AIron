@@ -1,26 +1,21 @@
 id: host_server
 name: Host Server
 description: >-
-  Supervisor for the hosted instance lifecycle: one-time boot initialization (seeding the persisted
-  instance identity and, under devMode, the synthetic local development unit) followed by the HTTP
-  listener lifecycle serving both the data-plane and admin-plane portals — binds host/port(s),
-  accepts connections, manages graceful startup and shutdown. It also owns the PERIODIC GIT-BACKUP
-  TIMER: on start it schedules the admin orchestrator's pre-authorized runPeriodicGitSync sweep
-  (git-bound projects with periodic sync enabled publish a .wai/-scoped commit+push, skip-if-clean)
-  and stops it on shutdown. Owns the live server processes and timers; holds no domain logic and no
-  persistence. It is also the control-plane exposure-enforcement point: control-plane routers are
-  mounted on the admin listener only as permitted by the resolved HostExposurePolicy (secure default
-  when unset), and a disabled surface is not served.
+  Supervisor for the hosted instance lifecycle. On init it runs the instance bootstrap, the one-time
+  boot initialization; on start it binds the data-plane and admin-plane HTTP listeners, accepts
+  connections and starts the backup schedule; on stop it stops the schedule and shuts the listeners
+  down gracefully. Owns the live listeners and supervises the backup schedule; holds no domain logic
+  and no persistence. It is also the control-plane exposure-enforcement point: control-plane routers
+  are mounted on the admin listener only as permitted by the resolved HostExposurePolicy (secure
+  default when unset), and a disabled surface is not served.
 subsystem: sdd_host
 componentType: Supervisor
 owns: []
 dependsOn:
-  - instance_identity_repository
-  - organization_repository
-  - admin_orchestrator
-  - git_backing_orchestrator
+  - backup_schedule
+  - instance_bootstrap
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:33:41.732Z'
-updatedAt: '2026-08-11T17:06:06.834Z'
+updatedAt: '2026-09-15T17:57:07.542Z'

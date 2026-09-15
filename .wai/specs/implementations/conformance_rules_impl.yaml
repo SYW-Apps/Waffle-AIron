@@ -350,8 +350,7 @@ methods:
           or vendored code): impl.sourcePath unless impl.conformance is off, and
           method.sourceFile(impl.sourcePath) for each method of impl.methods unless
           method.conformance ?? impl.conformance is off. For each trusted file, add {impl,
-          component.componentType, component.id} to byPath under ctx.codeModel.pathKey(file), once
-          per implementation per path
+          component} to byPath under ctx.codeModel.pathKey(file), once per implementation per path
         type: local
       - stepNumber: 5
         label: fileLoop
@@ -366,14 +365,16 @@ methods:
         onFalseStep: 5
       - stepNumber: 7
         description: >-
-          A file with no module-scope let or var, an unmapped file, or a file also mapped to a data
-          or boundary component (N:1 collapse) is exempt: continue with the next file
+          A file with no module-scope let or var, an unmapped file, or a file also mapped to any
+          component that is not stateless logic is exempt: a data or boundary component's file hosts
+          that component's state (N:1 collapse), and a Supervisor or Actor holds runtime state by
+          definition, so its file may keep module-scope state. Continue with the next file
         type: branch
         condition: >-
           facts.topLevelMutableBindings is non-empty, mapped =
-          byPath.get(ctx.codeModel.pathKey(facts.path)) is non-empty, and every mapped componentType
-          is a logic stereotype (the private LOGIC_STEREOTYPES: Orchestrator, Supervisor, Actor,
-          Specialist)
+          byPath.get(ctx.codeModel.pathKey(facts.path)) is non-empty, and every mapped component is
+          stateless logic: component.isLogic() and not component.holdsState(), which is an
+          Orchestrator (or a Specialist until it is migrated)
         onFalseStep: 5
       - stepNumber: 8
         label: report
@@ -726,4 +727,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-15T01:22:12.694Z'
+updatedAt: '2026-09-15T17:58:02.934Z'
