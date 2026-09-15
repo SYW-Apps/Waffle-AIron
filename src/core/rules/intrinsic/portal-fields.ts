@@ -16,7 +16,7 @@ export const portalFieldsRule: SddRule = {
   name: 'portal-fields',
   scope: 'spec',
   description:
-    'A Portal declares its portalType. Non-Portal components carry no portalType, basePath, or auth (auth is inbound transport auth — a Gateway carries it on the Portal it owns). Intrinsic to one component: no tree required.',
+    'A Portal declares its portalType. Non-Portal components carry no portalType, basePath, or auth (auth is inbound transport auth — it belongs on the Portal that exposes the surface). Intrinsic to one component: no tree required.',
   codes: [
     { code: 'MISSING_PORTAL_TYPE', defaultSeverity: 'error', summary: 'Portal without a portalType' },
     { code: 'UNEXPECTED_PORTAL_FIELD', defaultSeverity: 'error', summary: 'Non-Portal component with portalType/basePath' },
@@ -54,12 +54,13 @@ export const portalFieldsRule: SddRule = {
       // Auth is inbound transport auth — it only means something on a
       // component that exposes a surface (a Portal). On anything else it is
       // ignored by the OpenAPI projection, so its presence is a modeling
-      // mistake: a Gateway carries auth on the Portal it owns, not on itself.
+      // mistake: auth belongs on the Portal that exposes the surface, not on
+      // whatever sits behind it.
       if (comp.auth !== undefined) {
         ctx.addIssue(
           'warning',
           'AUTH_ON_NON_PORTAL',
-          `Component "${comp.id}" is a ${comp.componentType}, not a Portal, but declares "auth". Auth is inbound transport auth and is only meaningful on a Portal (a Gateway carries it on the Portal it owns). Move it to the exposed Portal, or remove it.`,
+          `Component "${comp.id}" is a ${comp.componentType}, not a Portal, but declares "auth". Auth is inbound transport auth and is only meaningful on a Portal (auth belongs on the Portal that exposes the surface). Move it to the exposed Portal, or remove it.`,
           comp.id,
           isDraftCtx,
         );
