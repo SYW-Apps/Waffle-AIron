@@ -1,0 +1,13 @@
+# wairon's built-in Portal shapes — named, base-anchored kinds of Portal. A
+# global (~/.wairon/variants) or project (.wai/variants/) variant with the same
+# id overrides one of these.
+- id: gateway
+  base: Portal
+  guidance: >-
+    A Portal that authenticates, authorizes, validates or rate-limits inbound
+    requests before dispatching them. Declare its inbound authentication in
+    `auth`, and hold NO verification logic in its own steps: CALL that logic —
+    read or pure Orchestrators, or one ingress Orchestrator when the admission
+    sequence carries its own policy — and return early on a rejection, before
+    anything is dispatched. Once a request is admitted, dispatch it as any
+    Portal does.

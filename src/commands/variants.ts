@@ -4,9 +4,10 @@ import { loadProjectVariants } from '../core/variants.js';
 
 // ---------------------------------------------------------------------------
 // variants command — the component variant registry governing this project:
-// global (WAIRON_VARIANTS_DIR) then project (.wai/variants/). A dynamic layer
-// ON TOP of packs — define a variant on demand without touching a pack, share
-// it anywhere. Each variant is a base-anchored kind + implementation guidance a
+// wairon's built-in variants, then global (WAIRON_VARIANTS_DIR), then project
+// (.wai/variants/), a later layer overriding by id. A dynamic layer ON TOP of
+// packs — define a variant on demand without touching a pack, share it
+// anywhere. Each variant is a base-anchored kind + implementation guidance a
 // component opts into via `variant: <id>`.
 // ---------------------------------------------------------------------------
 

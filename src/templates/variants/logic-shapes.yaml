@@ -1,0 +1,59 @@
+# wairon's built-in logic shapes — named, base-anchored kinds of Orchestrator.
+# Each states the dependencyClass the shape takes (pure | read) and the
+# discipline an implementer reuses across every component of the kind. A global
+# (~/.wairon/variants) or project (.wai/variants/) variant with the same id
+# overrides one of these. Registered as variants, not stereotypes: a variant
+# carries identity + implementation guidance at zero rule-matrix cost.
+# PROMOTION CRITERION: a variant earns first-class stereotype status when
+# independent projects/packs keep re-registering it, or when its edge rules
+# exceed what guidance (or a future variant-scoped assertion) can express.
+- id: arbiter
+  base: Orchestrator
+  guidance: >-
+    A stateless ruling authority, declared dependencyClass: pure. Given a
+    subject/candidate plus an EXPLICITLY SUPPLIED world of facts, compute a
+    deterministic verdict (permit/deny, visible/hidden, pass/warn/fail)
+    together with the deciding reason. The arbiter performs NO I/O and holds
+    NO dependencies on stores, registries, repositories, indexes, or adapters
+    — only on other pure Orchestrators — so the caller gathers the world and
+    passes it in (the canonical companion shape: a read Orchestrator or a
+    workflow assembles the facts, the arbiter rules). Same inputs MUST always
+    yield the same verdict: no clock reads, no randomness — take timestamps as
+    parameters. Declare `idempotent` on verdict methods where it holds. This
+    purity is what keeps rulings replayable, testable, and auditable; if you
+    feel the need to fetch something, that fetch belongs in the caller.
+- id: projector
+  base: Orchestrator
+  guidance: >-
+    A stateless derivation of a self-contained view — a snapshot, graph model,
+    document tree, rendered artifact, or digest — computed on demand from a
+    source model. Handed its source as parameters, it is dependencyClass:
+    pure; loading the source itself through AT MOST ONE read facade (a
+    Repository, or a read-only adapter of the owning subsystem), it is
+    dependencyClass: read. The same source must always yield the same view.
+    Own nothing, write nothing: the caller persists or serves the result.
+    Distinct from an Index: an Index is a MAINTAINED read model over a Store
+    it shares references with; a projector is RECOMPUTED per call and owns no
+    state. If the derivation starts coordinating multiple facades or deciding
+    what to do with its output, it is drifting toward a workflow — split it.
+- id: composer
+  base: Orchestrator
+  guidance: >-
+    Renders authored text or file sets — scaffolds, briefings, composed
+    documents — from embedded templates plus supplied values, for a human or
+    connecting-agent audience. Handed its values, it is dependencyClass: pure;
+    loading its own source through a read facade, it is dependencyClass: read.
+    Return the composed content (e.g. an in-memory file map or markdown
+    string); NEVER write it to disk or execute it — the caller owns
+    persistence and delivery. Degrade gracefully when optional inputs are
+    missing (an absent block composes to nothing, not an error), so
+    composition never takes down the surface that serves it.
+- id: codec
+  base: Orchestrator
+  guidance: >-
+    A pure bidirectional translator, declared dependencyClass: pure, between
+    two formats (native model ↔ wire or archive format), with validation and
+    safety checking on the inbound half (schema conformance, integrity,
+    resource-abuse guards). Whole values in, whole values out; no I/O — the
+    bytes and the clock arrive as parameters. Keep BOTH directions in one
+    component so the round-trip stays testable as a single property.
