@@ -104,8 +104,8 @@ methods:
       - code: HIDDEN_STATE
         severity: warning
         summary: >-
-          Module-scope mutable binding in a file mapped only to logic-stereotype components — held
-          state hiding outside a Store
+          Module-scope mutable binding in a file mapped only to stateless logic (Orchestrators) —
+          held state hiding outside a Store, Supervisor or Actor
   - name: dependencyConformance
     description: >-
       Rule dependency-conformance. Code↔spec Level 2: runtime import edges between component-mapped
@@ -167,4 +167,4 @@ methods:
           coverage-opted harness
 status: draft
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-15T01:22:16.823Z'
+updatedAt: '2026-09-15T10:51:43.952Z'

@@ -68,6 +68,13 @@ methods:
         type: CandidateOptions
         description: Rules config, project type and loaded packs
         optional: true
+  - name: computeGateStateId
+    description: >-
+      Gather the content identity, the governing extensions, the project's gate config, the consumed
+      contract inputs and the built-in rule sequence, and compute the gate identity from them.
+    signature: 'computeGateStateId(): StateId'
+    returns: StateId
+    params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-14T06:07:11.066Z'
+updatedAt: '2026-09-15T10:51:47.510Z'

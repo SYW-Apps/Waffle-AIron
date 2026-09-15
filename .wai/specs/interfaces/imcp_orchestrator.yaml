@@ -86,6 +86,19 @@ methods:
       - name: agentId
         type: string
         description: The resolved agent id to brief.
+  - name: renameComponent
+    description: >-
+      Resolve the namespaced component id against the bound tree, then rename it through the core
+      adapter
+    signature: 'renameComponent(id: string, newId: string): ComponentRename'
+    returns: ComponentRename
+    params:
+      - name: id
+        type: string
+        description: The component to rename (namespaced if needed)
+      - name: newId
+        type: string
+        description: Its new id
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-12T17:38:31.123Z'
+updatedAt: '2026-09-15T10:52:13.009Z'

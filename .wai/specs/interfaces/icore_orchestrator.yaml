@@ -167,30 +167,17 @@ methods:
     params:
       - name: root
         type: string
-  - name: computeGateStateId
-    description: >-
-      Compute the GATE state identity of the current project: load the governing extension packs and
-      read the consumed contract inputs — the content of every stored surface snapshot this root and
-      each of its chained mounts hold — then digest the spec tree together with that doctrine and
-      those inputs via the state hash specialist. This is the identity a lock must be scoped to — a
-      lock asserts "these specs pass this gate", and both the pack set and the contracts the verdict
-      was judged against ARE part of the gate. Content-only consumers keep using computeStateId, so
-      a pack bump never marks a vendored contract snapshot stale.
-    signature: 'computeGateStateId(): StateId'
-    returns: StateId
-    params: []
   - name: readLockState
     description: >-
-      Resolve the project's lock into one of three honest states — unlocked | locked | stale — by
-      comparing the recorded gate identity against the current one, returning the record and that
-      current identity alongside the verdict. The ONE authority for "is this project locked?":
-      promotion previously compared StateIds while the project config view answered from the mere
-      EXISTENCE of a record, so a project whose specs changed after locking still reported itself
-      locked and claimed a freeze that did not hold. Two answers to one question is how a
-      time-of-check gap gets reintroduced after being closed.
-    signature: 'readLockState(): LockStatus'
+      Resolve the project's lock against the gate identity the caller computed now
+      (validator_portal.computeGateStateId): unlocked when no record exists, locked when the
+      record's gate identity equals it, stale otherwise.
+    signature: 'readLockState(current: StateId): LockStatus'
     returns: LockStatus
-    params: []
+    params:
+      - name: current
+        type: StateId
+        description: The gate identity as it stands now
   - name: resolveSubprojectForNamespace
     description: >-
       Resolve a chained mount's qualified namespace to its project root (containment-checked against
@@ -318,6 +305,47 @@ methods:
         description: The project whose own spec tree declares the mounts
     guarantees:
       - idempotent
+  - name: consumedContractInputs
+    description: >-
+      The consumed contract inputs a verdict can consult, as canonical content keys: this root's
+      stored surface snapshots and every chained mount's. The gate identity covers them, so swapping
+      a pinned contract invalidates a lock.
+    signature: 'consumedContractInputs(): string[]'
+    returns: string[]
+    params: []
+  - name: renameComponent
+    description: >-
+      Rename a component and every reference to it. The component, and each interface and
+      implementation named after it (i<id>, <id>_impl), move to the new id and file; every reference
+      in the bound tree is rewritten: dependsOn, owns, dispatch and lifecycle entries, published
+      interfaces at L1 and L0, narrative targets, an entity's componentClass, an interface's
+      component and an implementation's contract. Refuses a component that does not exist, a new id
+      already taken or outside the id grammar, and a component inside a chained subproject (rename
+      it from that project's root). Human-readable names are left to the author, and a lock goes
+      stale as with any edit.
+    signature: 'renameComponent(componentId: string, newId: string): ComponentRename'
+    returns: ComponentRename
+    params:
+      - name: componentId
+        type: string
+        description: The component to rename
+      - name: newId
+        type: string
+        description: Its new id
+  - name: retireSpecialists
+    description: >-
+      Plan, and with apply write, the migration off the retired Specialist stereotype. Every
+      Specialist becomes an Orchestrator whose dependencyClass follows from its dependencies: pure
+      when it depends only on pure logic, read when it also depends on Repositories, Indexes,
+      Adapters or read logic, unset when a dependency fits neither. Classes are decided over the
+      whole graph, so a Specialist is classified after those it depends on. Every project variant
+      based on Specialist is rebased onto Orchestrator. Without apply nothing is written.
+    signature: 'retireSpecialists(apply: boolean): SpecialistRetirement'
+    returns: SpecialistRetirement
+    params:
+      - name: apply
+        type: boolean
+        description: Write the plan; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T22:56:23.750Z'
+updatedAt: '2026-09-15T10:51:57.720Z'

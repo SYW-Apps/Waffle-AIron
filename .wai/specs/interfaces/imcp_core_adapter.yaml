@@ -113,6 +113,17 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: renameComponent
+    description: 'Forward to core_portal.renameComponent: rename a component and every reference to it'
+    signature: 'renameComponent(componentId: string, newId: string): ComponentRename'
+    returns: ComponentRename
+    params:
+      - name: componentId
+        type: string
+        description: The component to rename
+      - name: newId
+        type: string
+        description: Its new id
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T12:27:13.882Z'
+updatedAt: '2026-09-15T10:52:15.076Z'

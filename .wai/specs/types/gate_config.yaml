@@ -1,0 +1,19 @@
+kind: value-object
+id: gate_config
+name: GateConfig
+description: >-
+  The project-level half of the gate identity: which profile governs, and how the project tuned the
+  rules. A lock taken under one and honoured under another was never judged by the gate it claims to
+  have passed.
+fields:
+  - name: projectType
+    type: string
+    description: The project type, whose profile governs every subsystem that names none
+    optional: true
+  - name: rules
+    type: RulesConfig
+    description: 'The project''s rule tuning: severity overrides, complexity caps and design depth'
+    optional: true
+methods: []
+createdAt: '2026-09-15T10:51:01.644Z'
+updatedAt: '2026-09-15T10:51:01.661Z'

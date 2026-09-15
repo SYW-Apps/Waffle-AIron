@@ -1,0 +1,20 @@
+kind: value-object
+id: specialist_retirement
+name: SpecialistRetirement
+description: The migration off the retired Specialist stereotype, planned or applied
+fields:
+  - name: retyped
+    type: SpecialistRetype[]
+    description: Every Specialist and the Orchestrator it becomes
+    optional: false
+  - name: rebasedVariants
+    type: string[]
+    description: Ids of the project variants based on Specialist, rebased onto Orchestrator
+    optional: false
+  - name: applied
+    type: boolean
+    description: Whether the plan was written; false for a dry run
+    optional: false
+methods: []
+createdAt: '2026-09-15T10:51:11.075Z'
+updatedAt: '2026-09-15T10:51:11.085Z'

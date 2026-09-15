@@ -1,0 +1,20 @@
+kind: value-object
+id: spec_rename
+name: SpecRename
+description: One spec a component rename moved to a new id
+fields:
+  - name: kind
+    type: string
+    description: component | interface | implementation
+    optional: false
+  - name: from
+    type: string
+    description: The id before the rename
+    optional: false
+  - name: to
+    type: string
+    description: The id after the rename
+    optional: false
+methods: []
+createdAt: '2026-09-15T10:51:03.580Z'
+updatedAt: '2026-09-15T10:51:03.580Z'

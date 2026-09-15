@@ -1,0 +1,20 @@
+id: iinstance_bootstrap
+name: Instance Bootstrap Interface
+description: One-time boot initialization of a hosted instance, before its listeners bind.
+component: instance_bootstrap
+methods:
+  - name: seed
+    description: >-
+      Seed or load the persisted instance identity, then, under devMode, create the synthetic local
+      development unit when it is missing. A later boot changes nothing.
+    signature: 'seed(config: HostConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: HostConfig
+        description: The instance's configuration
+    guarantees:
+      - idempotent
+status: draft
+createdAt: '2026-09-15T10:52:56.292Z'
+updatedAt: '2026-09-15T10:52:56.295Z'

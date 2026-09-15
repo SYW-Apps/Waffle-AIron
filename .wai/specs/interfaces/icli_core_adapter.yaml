@@ -139,6 +139,24 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: readLockState
+    description: Forward to core_portal.readLockState with the gate identity the caller computed now
+    signature: 'readLockState(current: StateId): LockStatus'
+    returns: LockStatus
+    params:
+      - name: current
+        type: StateId
+        description: The gate identity as it stands now
+  - name: retireSpecialists
+    description: >-
+      Forward to core_portal.retireSpecialists: plan, and with apply write, the migration off the
+      retired Specialist stereotype
+    signature: 'retireSpecialists(apply: boolean): SpecialistRetirement'
+    returns: SpecialistRetirement
+    params:
+      - name: apply
+        type: boolean
+        description: Write the plan; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T22:56:14.812Z'
+updatedAt: '2026-09-15T10:53:04.101Z'

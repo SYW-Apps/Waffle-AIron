@@ -1,0 +1,38 @@
+id: igate_identity
+name: Gate Identity Interface
+description: 'The gate identity: the value a lock records and every staleness check compares.'
+component: gate_identity
+methods:
+  - name: compute
+    description: >-
+      The gate identity of a spec tree: its content identity digested together with the doctrine
+      that governs it (the built-in rules by name, codes and default severities; the packs,
+      profiles, languages, patterns, guarantees, assertions and pack rules; the project's type and
+      rule tuning) and the consumed contract inputs. Agent-facing prose (skills, instructions) is
+      left out, so a documentation edit never invalidates a lock. Pure: the same inputs always give
+      the same identity.
+    signature: >-
+      compute(content: StateId, doctrine: LoadedExtensions, builtinRules: SddRule[], inputs:
+      string[], gate: GateConfig): StateId
+    returns: StateId
+    params:
+      - name: content
+        type: StateId
+        description: The spec tree's content identity
+      - name: doctrine
+        type: LoadedExtensions
+        description: The governing extensions
+      - name: builtinRules
+        type: SddRule[]
+        description: The built-in rule sequence
+      - name: inputs
+        type: string[]
+        description: The consumed contract inputs, as canonical content keys
+      - name: gate
+        type: GateConfig
+        description: The project's type and rule tuning
+    guarantees:
+      - idempotent
+status: draft
+createdAt: '2026-09-15T10:53:01.174Z'
+updatedAt: '2026-09-15T10:53:01.177Z'

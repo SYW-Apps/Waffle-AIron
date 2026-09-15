@@ -48,6 +48,14 @@ methods:
         type: CandidateOptions
         description: Rules config, project type and loaded packs
         optional: true
+  - name: computeGateStateId
+    description: >-
+      The gate identity of the bound project as it stands now: the value a lock records and every
+      staleness check compares. Served by the validator because the doctrine it covers includes the
+      validator's own built-in rules.
+    signature: 'computeGateStateId(): StateId'
+    returns: StateId
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-14T06:10:23.406Z'
+updatedAt: '2026-09-15T10:51:45.761Z'

@@ -53,6 +53,18 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: computeStateId
+    description: 'Forward to core_portal.computeStateId: the spec tree''s content identity'
+    signature: 'computeStateId(): StateId'
+    returns: StateId
+    params: []
+  - name: consumedContractInputs
+    description: >-
+      Forward to core_portal.consumedContractInputs: the consumed contract inputs a verdict can
+      consult
+    signature: 'consumedContractInputs(): string[]'
+    returns: string[]
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T11:17:29.406Z'
+updatedAt: '2026-09-15T10:51:49.709Z'

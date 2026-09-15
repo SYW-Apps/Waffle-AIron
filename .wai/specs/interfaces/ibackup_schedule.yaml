@@ -1,0 +1,35 @@
+id: ibackup_schedule
+name: Backup Schedule Interface
+description: >-
+  The hosted instance's periodic backup timer: started and stopped by the host server, ticking every
+  60 seconds.
+component: backup_schedule
+methods:
+  - name: start
+    description: >-
+      Start the 60-second timer with sweep as its callback; the timer never keeps a closing process
+      alive.
+    signature: 'start(config: HostConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: HostConfig
+        description: The running instance's configuration
+  - name: stop
+    description: Cancel the timer; a sweep already running completes.
+    signature: 'stop(): void'
+    returns: void
+    params: []
+  - name: sweep
+    description: >-
+      One tick: the git-bound projects' backup sweep, then the container-level backing sweep. A
+      failure in either is recorded inside it and never stops the other.
+    signature: 'sweep(config: HostConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: HostConfig
+        description: The running instance's configuration
+status: draft
+createdAt: '2026-09-15T10:52:53.539Z'
+updatedAt: '2026-09-15T10:52:53.541Z'

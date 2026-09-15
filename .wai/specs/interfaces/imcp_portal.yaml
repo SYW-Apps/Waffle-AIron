@@ -139,6 +139,22 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_get_agent_brief
+  - name: sdd_rename_component
+    description: >-
+      Tool: rename a component and rewrite every reference to it; the interfaces and implementations
+      named after it move too. Reports the specs moved and the specs rewritten.
+    signature: 'sdd_rename_component(id: string, newId: string): ComponentRename'
+    returns: ComponentRename
+    params:
+      - name: id
+        type: string
+        description: The component to rename (namespaced if needed)
+      - name: newId
+        type: string
+        description: Its new id
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_rename_component
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-08T11:14:00.256Z'
+updatedAt: '2026-09-15T10:52:10.896Z'

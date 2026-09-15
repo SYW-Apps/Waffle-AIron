@@ -286,7 +286,7 @@ Wairon's own tree read and wrote `.wai/project.yaml` directly from 10 components
   - [ ] PR to dev; the maintainer runs `wairon lock` after merge
 
 ## Wairon friction fixes (before stage 2a) — decided by Robbe 2026-09-13
-Most of the friction log (F1–F28) is resolved, not deferred: the tool must be clear and truthful, with no unneeded silence or confusion. Every pull request is spec-first, and all land before stage 2a. Order, decided with the rule model's shape (B′) and extended 2026-09-15: schema PR → rule model PR → doctrine PR → data-model PR → PR A → PR B → PR C; track D follows. Proposals, examples and every decision: `docs/design/chained-subsystems/friction-fixes-proposals.md` and `decisions.md`.
+Most of the friction log (F1–F28) is resolved, not deferred: the tool must be clear and truthful, with no unneeded silence or confusion. Every pull request is spec-first, and all land before stage 2a. Order, decided with the rule model's shape (B′) and extended 2026-09-15: schema PR → rule model PR → rule fixes PR → doctrine D1 → doctrine D2 → data-model PR → PR A → PR B → PR C; track D follows. Proposals, examples and every decision: `docs/design/chained-subsystems/friction-fixes-proposals.md` and `decisions.md`.
 
 ### Schema PR — method-level source files and findings (ACTIVE, branch feat/method-source-and-findings, stacked on PR #70)
 - [x] L3 (approved 2026-09-13, with both refinements): `method_implementation` (types `implementation_spec.methods`) with a per-method `sourcePath` (B3, moved up from PR B); `narrative_step` (fields only); `finding_declaration` and `findings` on `method_signature`; the MCP write tools express both fields
@@ -310,19 +310,53 @@ Each reported behaviour is reproduced with a failing test first; a confirmed one
 - [x] Heuristic family: GOD_COMPONENT and EXCESSIVE_DEPENDENCIES read one effective cap; draft context consistent across naming, complexity, language and technology; an empty profile is no profile for severity overrides
 - [x] Integrity family and docs: the unresolved-contract finding reads the shared draft recipe; one type-resolution path; the switch `on` field documented as optional, with the two loop continues and a closing step per nested loop
 - [x] Code and gates (2026-09-15): each fix reproduced by a failing test and proven by revert; tsc, 178 files / 2794 tests, e2e 21, `validate --ci` green (nine draft warnings until the lock); rule-matrix ratchet unchanged; PR to dev after the rule model PR, the maintainer runs `wairon lock` after merge
-- [ ] Left for the doctrine PR, which reworks these rules: UNCONDITIONAL_CALL_CYCLE misses a call in a `doWhile` body or the first step of a `try` body, both of which always run (the step graph gives a try's catch edges to its header rather than its body steps, so the fix changes the graph every flow analysis reads); a pattern owning a pattern also raises VISIBILITY_VIOLATION on the inner pattern's dependants; whether GATEWAY_CONTAINMENT requires exactly one Portal, as RouterComponent does; draft checks on interfaces and subsystems inline the status test in many rules instead of calling a type method
+- [x] Left for the doctrine PRs and queued there, each with its reason: the pattern-owning-pattern report and the Gateway Portal count in D1; in D2, the call-cycle miss in `doWhile` and `try` bodies (the step graph gives a try's catch edges to its header rather than its body steps, so the fix changes the graph every flow analysis reads) and draft checks as type methods
 
-### Doctrine PR — logic, process and data-access blocks (decided by Robbe 2026-09-15; proposals E6–E10)
-- [ ] Logic is an Orchestrator: a flowchart that may nest others, with one or more cohesive methods (a class, or a module of functions). Variants declare a dependency class the validator enforces: `pure` (only pure components) and `read` (reads of Repositories, Indexes and Adapters, judged once facade methods carry effect tags). Specialist retired; wairon's 28 Specialists migrated
-- [ ] A warning when an Orchestrator's methods form groups that call no common component
+### Doctrine D1 — logic and process blocks (decided by Robbe 2026-09-15; proposals E6–E10; branch feat/doctrine-blocks)
+- [x] L2 (approved 2026-09-15):
+  - The 27 Specialists become Orchestrators (18 `pure`, 9 `read`, shape variants kept), and 14 are renamed for what they are responsible for: `architecture_diagrams`, `state_hash`, `authentication`, `authorization`, `diagnostics`, `landscape_graph`, `permission_rules`, `quota_rules`, `share_snapshots`, `visibility_rules`, `spec_doc_pages`, `pack_scaffold`, `server_instructions`, `skill_resources`.
+  - `mcp_server` becomes an Orchestrator, a factory that supervises nothing.
+  - `host_server` stays the root Supervisor, with a new `backup_schedule` Actor (the 60-second backup timer) and a new `instance_bootstrap` Orchestrator (boot seeding).
+  - The gate identity moves to a pure `gate_identity` in sdd_validator: core compares a lock against the gate id its caller passes, and the state hash's allow goes.
+  - Renames go through a new `sdd_rename_component` that rewrites every reference.
+  - The realtime hub, also an Actor, stays with track D.
+- [x] L3 (approved 2026-09-15; the Gateway question is open):
+  - `component_spec.dependencyClass`, plus the type methods `isLogic()` and `holdsState()`, giving each of the two logic-stereotype sets one home. Hidden-state judges logic that holds no state.
+  - Doctrine codes:
+    - retired: `ARCHITECTURE_VIOLATION_SPECIALIST_DEP`;
+    - new: `DEPENDENCY_CLASS_VIOLATION`, `ARCHITECTURE_VIOLATION_SUPERVISOR_DEP`, `ACTOR_REACHED_WITHOUT_SUPERVISOR`, `ARCHITECTURE_VIOLATION_QUERY_DEP`, and `UNOWNED_QUERY` (an error: a Query lives only inside a Repository);
+    - pure logic is allowed under Stores, Registries, Adapters, Indexes and Views;
+    - no Actor-specific rule.
+  - The intrinsic rule `logicDeclaration`: `SPECIALIST_RETIRED` and `DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR`.
+  - Gate identity:
+    - `gate_identity.compute`;
+    - `computeGateStateId` on the validator portal, the spec validator and the CLI and host validator adapters;
+    - core's `readLockState(current)` and `consumedContractInputs()`;
+    - the state hash loses its gate method.
+  - `renameComponent`, from `sdd_rename_component` down to the core orchestrator; `retireSpecialists(apply)` behind a modelled `runDoctor`.
+  - `backup_schedule` (start, stop, sweep) and `instance_bootstrap` (seed).
+- [ ] Logic is an Orchestrator: a flowchart that may nest others, with one or more cohesive methods (a class, or a module of functions). A logic component declares `dependencyClass: pure | read`, a first-class field the validator enforces as it enforces a Store's `durability` (decided 2026-09-15, revising E7's variant wording); unset means a workflow. `pure` depends only on pure components; `read` adds read methods of Repositories, Indexes and Adapters, the write check judged once facade methods carry effect tags. Specialist retires, with a migration for existing trees; the four shape variants stay guidance-only, rebased onto Orchestrator
 - [ ] Process layer: an Actor owns one live thing, entity instances included, and its methods are full flowcharts; a Supervisor owns the set and may supervise Supervisors; a live Actor is reached by id through its Supervisor (`dependsOn` lists both) and is the only writer of its aggregate; the method owning a workflow owns its transaction and applies in-memory state only after commit; a Portal may message a Supervisor by id; dependency rules for Orchestrator, Supervisor and Actor; `hidden-state` stops treating Supervisor and Actor as stateless
 - [ ] Data access: a Store covers one aggregate; `Query` joins Store, Registry and Index as a Repository member for computed reads; cross-aggregate reads go through a read Orchestrator or a read-model Repository; the outbox is a sibling Repository (§7 and §10 aligned)
 - [ ] Timers: per-instance timers are Actor state; deadlines are aggregate fields read by an Index; a schedule aggregate only for timers that span aggregates
-- [ ] Complexity: a level from a cognitive score (linear, simple, moderate, complex, severe) and a step count, each with a warning and an optional max on separate codes; defaults warn above moderate and above 25 steps, with no max; precedence built-in, then pack profile, then project
-- [ ] Naming: stutter, generic words, a role word contradicting the component type, a one-method component named after its method; wairon's own seven mismatched names fixed
 - [ ] The standard gains the module realization in the language bindings and the live auction as its worked example
 - [ ] Decide how the lock's gate hash gets the validator's built-in rule identity. `state_hash_specialist` (sdd_core) reads `SDD_RULES` from sdd_validator's rule repository — a cross-subsystem edge no spec declares, made visible when the rule model PR moved the list; acknowledged with a reasoned UNDECLARED_DEPENDENCY allow on `state_hash_specialist_impl` until decided. Options: sdd_core reads it through sdd_validator's published surface (a mutual subsystem dependency to acknowledge), or the lock workflow passes it in with the doctrine
 - [ ] `LOGIC_STEREOTYPES` is defined twice (narrative-detail and hidden-state); give the logic-stereotype test a home when the stereotypes change
+- [ ] From the rule fixes: a pattern owning a pattern also raises VISIBILITY_VIOLATION on the inner pattern's dependants. The Gateway Portal-count question closed when the Gateway pattern retired.
+- [ ] Variants built in (decided 2026-09-15):
+  - A built-in layer under the global and project variant directories ships arbiter, projector, composer and codec, based on Orchestrator, and `gateway`, based on Portal. Wairon's own `.wai/variants/specialist-shapes.yaml` goes.
+  - The Gateway pattern retires:
+    - `GATEWAY_CONTAINMENT` goes;
+    - facade forwarding covers Repositories only;
+    - the cross-subsystem rule no longer accepts a Gateway as a front door;
+    - `STEREOTYPE_RETIRED` reports a Gateway with manual steps, while `doctor --fix` retypes Specialists.
+
+### Doctrine D2 — complexity, naming and cohesion checks (decided by Robbe 2026-09-15; after D1, on the final shapes)
+- [ ] A warning when an Orchestrator's methods form groups that call no common component
+- [ ] Complexity: a level from a cognitive score (linear, simple, moderate, complex, severe) and a step count, each with a warning and an optional max on separate codes; defaults warn above moderate and above 25 steps, with no max; precedence built-in, then pack profile, then project
+- [ ] Naming: stutter, generic words, a role word contradicting the component type, a one-method component named after its method; wairon's own mismatched names fixed (the seven role words, and any stutter left after D1's renames)
+- [ ] Narratives above the new complexity defaults are split (27 of the 44 rule narratives exceed the cognitive default)
+- [ ] From the rule fixes: UNCONDITIONAL_CALL_CYCLE misses a call in a `doWhile` body or the first step of a `try` body; draft checks on interfaces and subsystems as type methods
 
 ### Data-model PR — entities as table schemas (decided by Robbe 2026-09-15; proposal E10)
 - [ ] One type per entity with persistence metadata (`database`, `table`, a per-field `column`, `transient`); relations stated on fields with derived foreign keys — other aggregates by id, value objects embedded, owned collections as child tables, many-to-many join tables derived; `linkedEntity`, `references` and `key: foreign` retired

@@ -1,0 +1,22 @@
+kind: value-object
+id: specialist_retype
+name: SpecialistRetype
+description: One retired Specialist and the Orchestrator it becomes
+fields:
+  - name: component
+    type: string
+    description: The component id
+    optional: false
+  - name: dependencyClass
+    type: string
+    description: >-
+      pure when it depends only on pure logic; read when it also depends on Repositories, Indexes,
+      Adapters or read logic; unset when a dependency fits neither, leaving a workflow Orchestrator
+    optional: true
+  - name: reason
+    type: string
+    description: The dependencies that decided the class, as readable text
+    optional: false
+methods: []
+createdAt: '2026-09-15T10:51:08.543Z'
+updatedAt: '2026-09-15T10:51:08.553Z'

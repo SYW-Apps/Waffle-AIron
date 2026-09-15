@@ -264,6 +264,14 @@ methods:
     params:
       - name: tier
         type: string
+  - name: runDoctor
+    description: >-
+      `wairon doctor`: a health check of the project (initialization and configuration, spec
+      conformance, generated guides and skills, the lock, MCP registration). With --fix it applies
+      the repairs it can: regenerating stale guides, context and skills, registering the MCP server,
+      and retiring Specialists into Orchestrators.
+    signature: 'runDoctor(options: { fix?: boolean }): Promise<void>'
+    returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-15T01:43:15.694Z'
+updatedAt: '2026-09-15T10:53:06.161Z'

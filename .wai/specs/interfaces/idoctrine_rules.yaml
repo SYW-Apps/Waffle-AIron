@@ -65,10 +65,13 @@ methods:
         summary: 'The presenter declares a component: credential source it does not depend on or own'
   - name: stereotypeDependencies
     description: >-
-      Rule stereotype-dependencies. Enforces the component-stereotype interaction matrix (Portal
-      reaches the data layer only through Repository/Index READ faces — writes route through
-      Orchestrators (PORTAL_WRITE_SHORTCUT); Stores are depended upon; Registries write their Store;
-      Adapters are sinks; Views stay passive; …) and the cross-subsystem shape: client Adapter →
+      Rule stereotype-dependencies. Enforces the component-stereotype interaction matrix and the
+      cross-subsystem shape. The matrix: a Portal reaches the data layer only through
+      Repository/Index READ faces, and writes route through Orchestrators (PORTAL_WRITE_SHORTCUT);
+      Stores are depended upon; Registries write their Store; Adapters are sinks; Views stay
+      passive; an Orchestrator's dependencyClass bounds what it may depend on; a Supervisor reaches
+      data only through workflows; a live Actor is reached through a Supervisor that supervises it;
+      a Query reads its Store; any block may use pure logic. Across subsystems: client Adapter →
       published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the
       SOURCE subsystem (the published-Portal target requirement applies either way). A governing
       pack profile may license intra-subsystem edges the matrix refuses via allowedEdges (its
@@ -106,37 +109,53 @@ methods:
       - code: ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP
         severity: error
         summary: Portal/Observer reaching the data layer directly
-      - code: ARCHITECTURE_VIOLATION_SPECIALIST_DEP
-        severity: error
-        summary: Specialist depending on workflow/runtime/state blocks
       - code: ARCHITECTURE_VIOLATION_STORE_DEP
         severity: error
-        summary: Store depending on anything but another Store or a backend Adapter
+        summary: Store depending on anything but another Store, a backend Adapter or pure logic
       - code: ARCHITECTURE_VIOLATION_REGISTRY_DEP
         severity: warning
         summary: >-
-          Registry depending on anything but its Store, a backend Adapter, or a validation
-          Specialist (warning while new; aligned to the standard §7 validate→write path)
+          Registry depending on anything but its Store, a backend Adapter or pure logic (warning
+          while new; aligned to the standard §7 validate→write path)
       - code: ARCHITECTURE_VIOLATION_ADAPTER_DEP
         severity: error
-        summary: Adapter depending on Orchestrators or Stores
+        summary: Adapter depending on a Store or on an Orchestrator that is not pure
       - code: ARCHITECTURE_VIOLATION_INDEX_DEP
         severity: error
-        summary: Index depending on anything but its Store or an Adapter
+        summary: Index depending on anything but its Store, an Adapter or pure logic
       - code: ARCHITECTURE_VIOLATION_VIEW_DEP
         severity: error
-        summary: View depending on logic/persistence layers
+        summary: View depending on persistence layers or on logic that is not pure
       - code: PORTAL_WRITE_SHORTCUT
         severity: error
         summary: >-
           Portal narrative call or dispatch-table binding reaches a write-effect method on a
           Repository/Index directly — reads may shortcut, writes route through an Orchestrator
           (judged on effect-tagged facade methods; untagged methods are not yet judged)
+      - code: DEPENDENCY_CLASS_VIOLATION
+        severity: error
+        summary: >-
+          Orchestrator depending on a component its dependencyClass does not allow: pure logic
+          depends only on pure Orchestrators; read logic also on read Orchestrators, Repositories,
+          Indexes and Adapters
+      - code: ARCHITECTURE_VIOLATION_SUPERVISOR_DEP
+        severity: error
+        summary: >-
+          Supervisor depending on anything but Actors, Orchestrators, Adapters or other Supervisors
+          — it reaches data only through workflows
+      - code: ACTOR_REACHED_WITHOUT_SUPERVISOR
+        severity: error
+        summary: >-
+          Component depending on a live Actor it does not supervise, without also depending on a
+          Supervisor that supervises it — a live Actor is reached by id through its Supervisor
+      - code: ARCHITECTURE_VIOLATION_QUERY_DEP
+        severity: error
+        summary: Query depending on anything but its Store, a backend Adapter or pure logic
   - name: patternOwnership
     description: >-
-      Rule pattern-ownership. Patterns (Repository/Gateway/FeatureComponent/RouterComponent) own
-      member blocks with the containment their definition prescribes; blocks own nothing; a member
-      has exactly one owner; and private members are reachable only via their facade or siblings.
+      Rule pattern-ownership. Patterns (Repository/FeatureComponent/RouterComponent) own member
+      blocks with the containment their definition prescribes; blocks own nothing; a member has
+      exactly one owner; and private members are reachable only via their facade or siblings.
     signature: 'patternOwnership(ctx: RuleContext): void'
     returns: void
     params:
@@ -161,10 +180,7 @@ methods:
         summary: Block owned by two patterns
       - code: REPOSITORY_CONTAINMENT
         severity: error
-        summary: Repository owning a non Store/Registry/Index/Adapter member
-      - code: GATEWAY_CONTAINMENT
-        severity: error
-        summary: Gateway owning a non Portal/Orchestrator/Specialist member
+        summary: Repository owning a non Store/Registry/Index/Query/Adapter member
       - code: FEATURE_COMPONENT_CONTAINMENT
         severity: error
         summary: FeatureComponent not owning exactly one Orchestrator + one or more Views
@@ -184,12 +200,15 @@ methods:
         summary: >-
           Standalone Registry with no Store to write to — either mistyped (a fused file-backed store
           belongs typed Store) or orphaned
+      - code: UNOWNED_QUERY
+        severity: error
+        summary: Query not owned by a Repository — a Query computes reads over its own Repository's Store
   - name: facadeForwarding
     description: >-
-      Rule facade-forwarding. A Repository/Gateway facade method with an authored narrative must be
-      pure 1:1 forwarding: exactly one call step, targeting one of the pattern's owned members.
-      Anything else is logic living on the facade — move it into a member block, or acknowledge a
-      deliberate exception via lint.allow.
+      Rule facade-forwarding. A Repository facade method with an authored narrative must be pure 1:1
+      forwarding: exactly one call step, targeting one of the pattern's owned members. Anything else
+      is logic living on the facade — move it into a member block, or acknowledge a deliberate
+      exception via lint.allow.
     signature: 'facadeForwarding(ctx: RuleContext): void'
     returns: void
     params:
@@ -202,4 +221,4 @@ methods:
         summary: Pattern facade narrative is not a single call to an owned member
 status: draft
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-09-15T01:15:50.266Z'
+updatedAt: '2026-09-15T17:42:33.459Z'

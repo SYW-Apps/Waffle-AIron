@@ -1,0 +1,20 @@
+kind: value-object
+id: component_rename
+name: ComponentRename
+description: >-
+  What renaming a component changed: the specs moved to new ids, and the specs whose references were
+  rewritten
+fields:
+  - name: renamed
+    type: SpecRename[]
+    description: >-
+      The component, and each interface and implementation named after it (i<id>, <id>_impl), with
+      its old and new id
+    optional: false
+  - name: rewritten
+    type: string[]
+    description: Ids of the other specs whose references to a renamed id were rewritten
+    optional: false
+methods: []
+createdAt: '2026-09-15T10:51:05.887Z'
+updatedAt: '2026-09-15T10:51:05.897Z'

@@ -10,8 +10,8 @@ methods:
   - name: portalFields
     description: >-
       Rule portal-fields. A Portal declares its portalType. Non-Portal components carry no
-      portalType, basePath, or auth (auth is inbound transport auth — a Gateway carries it on the
-      Portal it owns). Intrinsic to one component: no tree required.
+      portalType, basePath, or auth (auth is the Portal's inbound transport authentication).
+      Intrinsic to one component: no tree required.
     signature: 'portalFields(ctx: RuleContext): void'
     returns: void
     params:
@@ -51,6 +51,41 @@ methods:
         summary: >-
           Store with no durability declaration — the round-trip machinery cannot know whether
           restart-survival is promised
+  - name: logicDeclaration
+    description: >-
+      Rule logic-declaration. Only an Orchestrator may declare a dependencyClass
+      (DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR); what the class allows is judged by
+      stereotype-dependencies. Intrinsic to one component: no tree required.
+    signature: 'logicDeclaration(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR
+        severity: error
+        summary: dependencyClass declared on a component that is not an Orchestrator
+  - name: retiredStereotypes
+    description: >-
+      Rule retired-stereotypes. A component typed with a retired stereotype is an error until it is
+      migrated (STEREOTYPE_RETIRED). A Specialist becomes an Orchestrator with the dependencyClass
+      its dependencies give it, which `wairon doctor --fix` applies. A Gateway becomes the Portal it
+      owns, with the gateway variant: its other members are depended on rather than owned, its
+      consumers depend on that Portal, and the Gateway spec is deleted, steps the finding lists for
+      the author. Intrinsic to one component: no tree required.
+    signature: 'retiredStereotypes(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: STEREOTYPE_RETIRED
+        severity: error
+        summary: >-
+          Component typed with a retired stereotype: a Specialist is an Orchestrator with a
+          dependencyClass, a Gateway is a Portal with the gateway variant
 status: draft
 createdAt: '2026-09-14T06:06:25.571Z'
-updatedAt: '2026-09-14T06:06:25.574Z'
+updatedAt: '2026-09-15T17:42:30.484Z'

@@ -22,7 +22,12 @@ fields:
     optional: false
   - name: componentType
     type: string
-    description: 'Stereotype: Portal, Orchestrator, Store, Adapter, …'
+    description: >-
+      Stereotype. Blocks: Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry,
+      Adapter, Observer, and the UI block View; patterns: Repository, and the UI patterns
+      FeatureComponent and RouterComponent. Specialist and Gateway are retired (STEREOTYPE_RETIRED):
+      logic is an Orchestrator with a dependencyClass, and a gateway is a Portal with the gateway
+      variant
     optional: false
   - name: portalType
     type: string
@@ -75,7 +80,9 @@ fields:
     type: string
     description: >-
       Optional component variant — a declared, base-anchored specialization of this component's
-      stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH).
+      stereotype, resolved against the variant registry: wairon's built-in variants, then the global
+      and project directories, a later layer overriding by id (UNKNOWN_VARIANT /
+      VARIANT_BASE_MISMATCH)
     optional: true
   - name: basePath
     type: string
@@ -83,9 +90,7 @@ fields:
     optional: true
   - name: auth
     type: PortalAuth
-    description: >-
-      Portal-only: the inbound transport authentication the Portal requires (a Gateway carries it on
-      the Portal it owns)
+    description: 'Portal-only: the inbound transport authentication the Portal requires'
     optional: true
   - name: emits
     type: EventBinding[]
@@ -103,6 +108,14 @@ fields:
     type: ExternalLink[]
     description: Opaque external references; an implementation link stands in for a local source path
     optional: true
+  - name: dependencyClass
+    type: string
+    description: >-
+      Orchestrator-only: pure | read, enforced as a Store's durability is. pure depends only on pure
+      Orchestrators; read also depends on read Orchestrators and on Repositories, Indexes and
+      Adapters, whose write methods it never calls (judged once facade methods carry effect tags);
+      unset means a workflow (DEPENDENCY_CLASS_VIOLATION, DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR)
+    optional: true
 methods:
   - name: defaultConformanceTier
     signature: 'defaultConformanceTier(): string'
@@ -115,13 +128,30 @@ methods:
     returns: string
     description: >-
       The narrative detail its methods get when neither the method nor its implementation sets one:
-      calls-only for Portals, Observers and Adapters; intent for Stores, Indexes and Registries;
-      full otherwise
+      calls-only for Portals, Observers and Adapters; intent for Stores, Indexes, Queries and
+      Registries; full otherwise
   - name: isPattern
     signature: 'isPattern(): boolean'
     returns: boolean
     description: >-
-      Whether the component is a pattern that owns member blocks: Repository, Gateway,
-      FeatureComponent or RouterComponent
+      Whether the component is a pattern that owns member blocks: Repository, FeatureComponent or
+      RouterComponent
+  - name: isLogic
+    signature: 'isLogic(): boolean'
+    returns: boolean
+    description: >-
+      Whether its methods are flowcharts of the system's logic: an Orchestrator, Supervisor or Actor
+      (or a Specialist until it is retired)
+  - name: holdsState
+    signature: 'holdsState(): boolean'
+    returns: boolean
+    description: 'Whether it owns domain or runtime state between calls: a Store, Index, Supervisor or Actor'
+  - name: isRetired
+    signature: 'isRetired(): boolean'
+    returns: boolean
+    description: >-
+      Whether its componentType is a retired stereotype (Specialist or Gateway). The rules that
+      judge a stereotype's shape skip it, and retired-stereotypes reports it once, until it is
+      migrated
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-14T23:23:25.862Z'
+updatedAt: '2026-09-15T17:45:25.107Z'

@@ -117,20 +117,14 @@ methods:
     signature: 'builtinProjectKinds(): string[]'
     returns: string[]
     params: []
-  - name: computeGateStateId
-    description: >-
-      Compute the current GATE StateId (spec tree + governing doctrine) — what the hosted lock is
-      scoped to.
-    signature: 'computeGateStateId(): StateId'
-    returns: StateId
-    params: []
   - name: readLockState
-    description: >-
-      Resolve the bound project's lock verdict (unlocked | locked | stale) through the core portal —
-      the shared authority every reporting surface answers from.
-    signature: 'readLockState(): LockStatus'
+    description: Forward to core_portal.readLockState with the gate identity the caller computed now
+    signature: 'readLockState(current: StateId): LockStatus'
     returns: LockStatus
-    params: []
+    params:
+      - name: current
+        type: StateId
+        description: The gate identity as it stands now
   - name: exportSpecTree
     description: >-
       Pack the bound project's whole spec tree (its own .wai plus every chained subproject) into a
@@ -243,4 +237,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-13T11:49:39.143Z'
+updatedAt: '2026-09-15T10:52:04.827Z'

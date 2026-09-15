@@ -31,6 +31,13 @@ methods:
       runValidation(options: { ci?: boolean; subsystem?: string; recursive?: boolean }):
       Promise<void>
     returns: Promise<void>
+  - name: computeGateStateId
+    description: >-
+      Forward to validator_portal.computeGateStateId: the gate identity a lock records and every
+      staleness check compares
+    signature: 'computeGateStateId(): StateId'
+    returns: StateId
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-08-12T18:54:24.322Z'
+updatedAt: '2026-09-15T10:52:08.149Z'

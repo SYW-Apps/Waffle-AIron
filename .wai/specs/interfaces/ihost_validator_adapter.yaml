@@ -12,6 +12,13 @@ methods:
       project's own rule severities and projectType, and return the result.
     signature: 'validateAsComplete(): ValidationResult'
     returns: ValidationResult
+  - name: computeGateStateId
+    description: >-
+      Forward to validator_portal.computeGateStateId: the gate identity a lock records and every
+      staleness check compares
+    signature: 'computeGateStateId(): StateId'
+    returns: StateId
+    params: []
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-09-13T12:28:29.043Z'
+updatedAt: '2026-09-15T10:52:06.517Z'
