@@ -2,7 +2,7 @@ id: igit_backing_orchestrator
 name: Git Backing Orchestrator Interface
 description: >-
   Contract for container-level backup administration. Binding/unbinding and syncing authorize
-  through the permission resolver — project:admin over the unit for a 'unit' binding, instance-level
+  through the permission rules — project:admin over the unit for a 'unit' binding, instance-level
   project:admin for an 'instance' binding; the listing filters to the caller's project:admin reach.
   The secret store is never mirrored.
 component: git_backing_orchestrator
@@ -69,4 +69,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-16T15:39:32.918Z'
-updatedAt: '2026-07-16T15:48:49.029Z'
+updatedAt: '2026-09-15T21:02:37.902Z'

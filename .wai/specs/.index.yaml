@@ -19,8 +19,8 @@ globalRequirements:
   - Expose an MCP server with tools for spec manipulation, validation, and analysis.
   - Verify method implementation contracts against interface method signatures.
   - >-
-    Enforce component interaction boundaries based on component type categories (Orchestrator,
-    Store, Adapter, Repository, Resolver, Supervisor, Registry).
+    Enforce component interaction boundaries based on component type: the building blocks and
+    patterns that the architecture standard (docs/standards/architecture.md) defines.
   - >-
     Export structured workflow skills to local AI agent configurations on project initialization and
     generation.
@@ -51,4 +51,4 @@ publicInterfaces:
 databases: []
 targetLanguage: typescript
 createdAt: '2026-06-10T20:23:00.000Z'
-updatedAt: '2026-09-11T23:04:38.604Z'
+updatedAt: '2026-09-15T21:07:21.080Z'

@@ -7,9 +7,8 @@ description: >-
   per-project evaluate/reconcile), producer targets (configure/list/remove/run), per-project git
   backing (bind/unbind/sync/commit/status/sync-cadence), the scoped audit viewer, and the instance
   exposure policy. Every method is a pure 1:1 forward passing the caller's credential to the OWNING
-  orchestrator, which authenticates and authorizes through the permission resolver — no
-  authorization logic and no state lives here, so the two portals stay lean and the gates stay
-  single-sourced.
+  orchestrator, which authenticates and authorizes through the permission rules — no authorization
+  logic and no state lives here, so the two portals stay lean and the gates stay single-sourced.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -22,4 +21,4 @@ dependsOn:
   - git_backing_orchestrator
 status: complete
 createdAt: '2026-07-16T15:29:55.392Z'
-updatedAt: '2026-09-13T12:08:37.465Z'
+updatedAt: '2026-09-15T21:03:13.853Z'

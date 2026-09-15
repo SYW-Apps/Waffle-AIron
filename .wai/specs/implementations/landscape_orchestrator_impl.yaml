@@ -4,8 +4,8 @@ description: >-
   Hosted-instance landscape ADMINISTRATION workflows: organization-unit administration, project
   placement, public-surface snapshot refresh, cross-project relation management (visibility-gated
   once organization units exist), and landscape graph generation. Authorization resolves through the
-  permission resolver — project:admin over the relevant unit/project for writes, project:read
-  visible scopes for reads (actionable scopes plus their ancestor breadcrumb) — never stored grants.
+  permission rules — project:admin over the relevant unit/project for writes, project:read visible
+  scopes for reads (actionable scopes plus their ancestor breadcrumb) — never stored grants.
   Cross-project reads never touch target private specs. Audit appends are best-effort.
   Consumer-facing discovery/exchange workflows live on the surface exchange orchestrator.
 contract: ilandscape_orchestrator
@@ -16,7 +16,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Gather all organization units (also used to resolve the caller's landscape-read scope)
@@ -33,7 +33,7 @@ methods:
           Compute the caller's project:read visible scopes over the organization tree (also gating
           the landscape read)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 5
         description: If the caller has no actionable project/unit scope, deny
@@ -84,7 +84,7 @@ methods:
           Project the in-scope units, projects, placements, snapshots, and relations into a
           LandscapeGraphModel
         type: call
-        targetComponent: landscape_diagram_specialist
+        targetComponent: landscape_graph
         targetMethod: buildGraph
       - stepNumber: 14
         description: Return the landscape graph model scoped to the caller
@@ -95,12 +95,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target unit (placement.unitId)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -161,12 +161,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -241,14 +241,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the relation's source project
           (relation.sourceProjectId)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -277,14 +277,14 @@ methods:
           Resolve the SOURCE project's surface-visibility view over the unit graph (postures,
           exposeTo grants)
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: resolveVisibility
       - stepNumber: 8
         description: >-
           Point-check whether the target project (relation.targetPublicInterface.projectId) is
           visible to the source
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: isVisible
       - stepNumber: 9
         description: If the target project's surface is not visible to the source, deny
@@ -366,7 +366,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: List cross-project relations to resolve the relation being removed by its id
@@ -381,7 +381,7 @@ methods:
       - stepNumber: 4
         description: Resolve the caller's project:admin permission over the relation's source project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 5
         description: If the effective project:admin value is not yes, deny
@@ -429,12 +429,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Compute the caller's project:read visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: If the caller has no actionable project scope, deny
@@ -466,7 +466,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the target unit by id (to distinguish an update from a create)
@@ -479,7 +479,7 @@ methods:
           updating, its parent unit when creating a child; an instance-admin may create top-level
           units)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 4
         description: If the effective project:admin value is not yes, deny
@@ -546,4 +546,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-09T22:10:36.787Z'
-updatedAt: '2026-07-18T23:48:26.026Z'
+updatedAt: '2026-09-15T21:03:27.885Z'

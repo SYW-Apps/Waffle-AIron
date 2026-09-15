@@ -14,7 +14,7 @@ methods:
           Resolve the browser session to a Principal through the single auth authority's session
           bridge (rejects an expired or absent session as unauthenticated)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: Dispatch on the requested graph tier
@@ -100,7 +100,7 @@ methods:
           Resolve the browser session to a Principal through the single auth authority's session
           bridge (rejects an expired or absent session as unauthenticated)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: >-

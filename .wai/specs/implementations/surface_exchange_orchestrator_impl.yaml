@@ -13,7 +13,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential through the single auth authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: List the ACTIVE cross-project relations whose sourceProjectId is currentProjectId
@@ -35,7 +35,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential through the single auth authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: List the ACTIVE cross-project relations whose sourceProjectId is currentProjectId
@@ -80,14 +80,14 @@ methods:
       - stepNumber: 10
         description: Resolve the current project's visibility view over the unit graph
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: resolveVisibility
       - stepNumber: 11
         description: >-
           Classify the observer→target audience distance (an invisible target classifies as the
           farthest class; a unit-less instance keeps all entries)
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: audienceDistance
       - stepNumber: 12
         description: >-
@@ -100,7 +100,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential through the single auth authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Gather all organization units (postures + exposeTo grants)
@@ -115,7 +115,7 @@ methods:
       - stepNumber: 4
         description: Resolve the observer project's visibility view over the unit graph
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: resolveVisibility
       - stepNumber: 5
         description: For each visible target project in the resolution
@@ -149,7 +149,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential through the single auth authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Gather all organization units
@@ -187,14 +187,14 @@ methods:
       - stepNumber: 8
         description: Resolve the current project's visibility view over the unit graph
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: resolveVisibility
       - stepNumber: 9
         description: >-
           Classify the observer→target audience distance — it becomes the ceiling of the generated
           snapshot
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: audienceDistance
       - stepNumber: 10
         description: The target is not visible to the current project (distance is null)
@@ -232,14 +232,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the target project (an instance-admin
           bypasses to yes)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny

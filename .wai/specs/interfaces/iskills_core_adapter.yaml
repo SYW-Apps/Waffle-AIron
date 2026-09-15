@@ -6,7 +6,7 @@ methods:
   - name: loadProjectExtensions
     description: >-
       Load and merge the governing extension packs via the core portal, returning the
-      LoadedExtensions whose skills the exporter and resource specialist consume.
+      LoadedExtensions whose skills the exporter and skill_resources consume.
     signature: 'loadProjectExtensions(): LoadedExtensions'
     returns: LoadedExtensions
     params: []
@@ -21,4 +21,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-14T20:14:02.590Z'
-updatedAt: '2026-09-13T11:17:27.284Z'
+updatedAt: '2026-09-15T20:49:33.379Z'

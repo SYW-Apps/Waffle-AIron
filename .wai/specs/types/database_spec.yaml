@@ -3,7 +3,7 @@ id: database_spec
 name: DatabaseSpec
 description: >-
   A database definition at the L0 system level. Groups type specs that represent table schemas for a
-  specific database engine, enabling the diagram specialist to render database-specific ERD views.
+  specific database engine, enabling architecture_diagrams to render database-specific ERD views.
 fields:
   - name: id
     type: string
@@ -27,4 +27,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-06T20:47:22.939Z'
-updatedAt: '2026-07-06T20:47:22.971Z'
+updatedAt: '2026-09-15T20:47:21.066Z'

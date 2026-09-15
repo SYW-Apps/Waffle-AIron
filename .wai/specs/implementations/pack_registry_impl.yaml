@@ -84,14 +84,14 @@ methods:
     intent: >-
       Binds the named project's isolated root and probes the packs the supplied configuration
       registers exactly as listProjectPacks does — no credential gate; the approval workflow or
-      resolver has already authorized the caller, and the caller loaded the configuration.
+      permission rules have already authorized the caller, and the caller loaded the configuration.
   - name: executeApprovedInstallProjectPack
     narrative: []
     intent: >-
       Binds the named project's isolated root and vendors the pack content into its .wai/packs/
       exactly as installProjectPack does, returning the probe whose ref the caller registers — no
-      credential gate; the approval workflow or resolver has already authorized the caller. Writes
-      nothing to .wai/project.yaml.
+      credential gate; the approval workflow or permission rules have already authorized the caller.
+      Writes nothing to .wai/project.yaml.
   - name: installGlobalPackArchive
     narrative: []
     detail: intent
@@ -186,4 +186,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-09-13T12:15:41.564Z'
+updatedAt: '2026-09-15T21:03:38.860Z'

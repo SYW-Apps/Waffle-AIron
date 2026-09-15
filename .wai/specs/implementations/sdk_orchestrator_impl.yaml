@@ -2,8 +2,8 @@ id: sdk_orchestrator_impl
 name: SDK Orchestrator Implementation
 description: >-
   sdk/src/orchestrator.ts — the four pack workflows, delegating format/safety decisions to the
-  codec, template rendering to the scaffold specialist, and all zip+fs I/O to the archive adapter.
-  Holds no state.
+  codec, template rendering to pack_scaffold, and all zip+fs I/O to the archive adapter. Holds no
+  state.
 contract: isdk_orchestrator
 sourcePath: sdk/src/orchestrator.ts
 methods:
@@ -12,7 +12,7 @@ methods:
       - stepNumber: 1
         description: Render the scaffold file map for the requested pack.
         type: call
-        targetComponent: pack_scaffold_specialist
+        targetComponent: pack_scaffold
         targetMethod: render
       - stepNumber: 2
         description: Write the rendered files as a directory tree under the request's targetDir.
@@ -408,4 +408,4 @@ methods:
         outcome: success
 status: complete
 createdAt: '2026-07-21T18:23:59.148Z'
-updatedAt: '2026-08-12T17:21:34.476Z'
+updatedAt: '2026-09-15T20:47:19.790Z'

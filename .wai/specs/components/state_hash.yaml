@@ -1,0 +1,18 @@
+id: state_hash
+name: State Hash
+description: >-
+  Computes the deterministic content identity (StateId) of the spec tree: loads every spec through
+  the loader (the system, subsystems, components, interfaces, implementations and types),
+  canonicalizes it (stable key ordering, normalized serialization) and digests it. Side-effect-free:
+  identical spec content always yields the same StateId. The gate identity a lock records combines
+  this content identity with the governing doctrine, and the validator's gate identity computes it.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - spec_loader
+dependencyClass: read
+variant: projector
+status: complete
+createdAt: '2026-07-04T12:44:46.997Z'
+updatedAt: '2026-09-15T20:46:02.696Z'

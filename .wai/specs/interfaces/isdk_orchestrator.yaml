@@ -2,14 +2,14 @@ id: isdk_orchestrator
 name: SDK Orchestrator Interface
 description: >-
   The pack-authoring/archive workflows plus the spec-tree archive workflows, delegating format
-  decisions to the codecs, template rendering to the scaffold specialist, and all I/O to the archive
-  adapter. Stateless.
+  decisions to the codecs, template rendering to pack_scaffold, and all I/O to the archive adapter.
+  Stateless.
 component: sdk_orchestrator
 methods:
   - name: scaffoldPack
     description: >-
-      Render the scaffold file map (specialist) and write it under the target directory (adapter);
-      return the created file paths.
+      Render the scaffold file map (pack_scaffold) and write it under the target directory
+      (adapter); return the created file paths.
     signature: 'scaffoldPack(request: PackScaffoldRequest): string[]'
     returns: string[]
     params:
@@ -115,4 +115,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-21T18:13:51.375Z'
-updatedAt: '2026-08-12T17:19:38.983Z'
+updatedAt: '2026-09-15T20:49:31.874Z'

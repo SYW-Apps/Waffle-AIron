@@ -14,8 +14,8 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - identity_orchestrator
-  - auth_specialist
-  - authorization_specialist
+  - authentication
+  - authorization
   - organization_repository
   - permission_repository
   - user_repository

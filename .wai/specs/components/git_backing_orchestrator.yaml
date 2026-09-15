@@ -13,8 +13,8 @@ subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - auth_specialist
-  - authorization_specialist
+  - authentication
+  - authorization
   - git_backing_repository
   - git_backing_adapter
   - organization_repository

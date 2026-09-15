@@ -1,7 +1,7 @@
 import { listOrganizationUnits, listProjectPlacements } from './organization.js';
 import { listAssignments } from './permissions.js';
 import { listRoles, BUILTIN_ROLES, isBuiltinRoleId } from './roles.js';
-import { resolvePermission, resolveVisibleScopes } from './permission_resolver.js';
+import { resolvePermission, resolveVisibleScopes } from './permission-rules.js';
 import type {
   EffectivePermission,
   PermissionWorld,

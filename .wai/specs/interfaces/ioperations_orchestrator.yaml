@@ -14,7 +14,7 @@ methods:
       super-admin sees all), list both server-global pack tiers and read each in-scope project's
       pack/profile references, then assemble a redacted instance health report (diagnostic checks —
       including pack-shadowing and missing-pack-references — plus usage snapshots) via the
-      diagnostics specialist. Read-only; performs no writes and no audit.
+      diagnostics component. Read-only; performs no writes and no audit.
     signature: 'getHealthReport(credential: string, scope: string): InstanceHealthReport'
     returns: InstanceHealthReport
     params:
@@ -55,4 +55,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-09T09:10:20.273Z'
-updatedAt: '2026-09-13T12:07:53.701Z'
+updatedAt: '2026-09-15T20:49:29.892Z'

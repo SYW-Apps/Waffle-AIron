@@ -130,9 +130,9 @@ methods:
   - name: computeStateId
     narrative:
       - stepNumber: 1
-        description: Delegate to the state hash specialist
+        description: Delegate to state_hash
         type: call
-        targetComponent: state_hash_specialist
+        targetComponent: state_hash
         targetMethod: hashSpecTree
     conformance: 'off'
   - name: readLockRecord
@@ -154,9 +154,9 @@ methods:
   - name: renderDiagram
     narrative:
       - stepNumber: 1
-        description: Delegate to the diagram specialist
+        description: Delegate to architecture_diagrams
         type: call
-        targetComponent: diagram_specialist
+        targetComponent: architecture_diagrams
         targetMethod: renderDiagram
     conformance: 'off'
   - name: createChainedSubsystem
@@ -402,9 +402,9 @@ methods:
   - name: buildProjectGraph
     narrative:
       - stepNumber: 1
-        description: Forward to the diagram specialist's pure graph projection
+        description: Forward to the pure graph projection of architecture_diagrams
         type: call
-        targetComponent: diagram_specialist
+        targetComponent: architecture_diagrams
         targetMethod: buildGraphModel
     detail: calls-only
   - name: resolveChainingParent
@@ -424,7 +424,7 @@ methods:
       - stepNumber: 2
         description: Digest the bound tree into its deterministic StateId
         type: call
-        targetComponent: state_hash_specialist
+        targetComponent: state_hash
         targetMethod: hashSpecTree
       - stepNumber: 3
         description: Restore the previous root binding unconditionally (also on failure paths)
@@ -947,4 +947,4 @@ methods:
         type: return
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T19:39:05.193Z'
+updatedAt: '2026-09-15T20:48:47.337Z'

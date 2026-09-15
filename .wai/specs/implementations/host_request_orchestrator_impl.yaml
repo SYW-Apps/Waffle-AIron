@@ -7,7 +7,7 @@ description: >-
   sdd_host_await_approval) to the project lifecycle orchestrator, the hosted landscape discovery
   tools to the surface exchange orchestrator (currentProjectId = the bound project), and every other
   tool to the scoped MCP server after enforcing the granular data-plane permission through the
-  authorization specialist (project:read for reads, project:write for writes — unknown tools fail
+  authorization component (project:read for reads, project:write for writes — unknown tools fail
   closed as writes) over the bound project.
 contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
@@ -20,7 +20,7 @@ methods:
       - stepNumber: 2
         description: Verify the token (signature + expiry); rejects if invalid
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: verifyViewToken
       - stepNumber: 3
         description: Resolve the granted project's isolated root and bind it
@@ -48,7 +48,7 @@ methods:
           Authenticate the token to a principal (resolving its subject, projects narrowing, and
           permissionSubject)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticate
       - stepNumber: 3
         description: If the principal is unauthenticated, reject
@@ -363,9 +363,9 @@ methods:
       - stepNumber: 49
         description: >-
           Resolve the caller's required capability (project:read or project:write) over the bound
-          project through the authorization specialist
+          project through the authorization component
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 50
         description: >-
@@ -422,4 +422,4 @@ methods:
     symbol: handleMcpRequest
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-15T19:24:54.050Z'
+updatedAt: '2026-09-15T20:48:50.758Z'

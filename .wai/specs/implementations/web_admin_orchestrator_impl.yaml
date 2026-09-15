@@ -61,10 +61,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the browser session to a Principal through the auth specialist (an expired or
-          absent session yields an unauthenticated principal)
+          Resolve the browser session to a Principal through the authentication component (an
+          expired or absent session yields an unauthenticated principal)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: If the principal lacks an instance-wide admin grant, deny
@@ -88,9 +88,9 @@ methods:
   - name: placeProject
     narrative:
       - stepNumber: 1
-        description: Resolve the browser session to a Principal through the auth specialist
+        description: Resolve the browser session to a Principal through the authentication component
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: If the principal lacks an instance-wide admin grant, deny
@@ -177,7 +177,7 @@ methods:
       - stepNumber: 1
         description: Resolve the browser session to a Principal
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: If the principal lacks an instance-wide admin grant, deny
@@ -201,9 +201,9 @@ methods:
   - name: upsertOrganizationUnit
     narrative:
       - stepNumber: 1
-        description: Resolve the browser session to a Principal through the auth specialist
+        description: Resolve the browser session to a Principal through the authentication component
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: If the principal lacks an instance-wide admin grant, deny
@@ -273,9 +273,9 @@ methods:
   - name: removeUnit
     narrative:
       - stepNumber: 1
-        description: Resolve the browser session to a Principal through the auth specialist
+        description: Resolve the browser session to a Principal through the authentication component
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: If the principal is not an instance admin (permissionSubject.instanceAdmin is false), deny
@@ -561,4 +561,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T18:28:58.935Z'
-updatedAt: '2026-07-15T22:49:35.442Z'
+updatedAt: '2026-09-15T20:49:01.760Z'

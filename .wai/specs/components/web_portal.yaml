@@ -13,13 +13,13 @@ description: >-
   user, identity-provider/SSO, organization-unit, role, and permission-assignment management under
   /web/admin/* to the web admin orchestrator; packs, pack policy, the audit viewer, and the exposure
   editor under /web/admin/* and per-project packs/policy/producers/git under /web/projects/* to the
-  PROJECT OPS orchestrator, whose owning orchestrators re-apply the exact resolver authorization.
-  Session-lifecycle/SSO/graph routes forward to the web orchestrator; project lifecycle to the web
-  project orchestrator. The login screen is DYNAMIC: the unauthenticated pre-auth GET
-  /web/login-options read (gated like every /web route) reports which sign-in methods exist — the
-  password-login flag plus enabled-provider { id, displayName } pairs — so the served shell renders
-  exactly the available options and never a free-text provider input. Served by the host server and
-  exposure-gated by HostExposurePolicy (webUiEnabled).
+  PROJECT OPS orchestrator, whose owning orchestrators re-apply the exact permission-rules
+  authorization. Session-lifecycle/SSO/graph routes forward to the web orchestrator; project
+  lifecycle to the web project orchestrator. The login screen is DYNAMIC: the unauthenticated
+  pre-auth GET /web/login-options read (gated like every /web route) reports which sign-in methods
+  exist — the password-login flag plus enabled-provider { id, displayName } pairs — so the served
+  shell renders exactly the available options and never a free-text provider input. Served by the
+  host server and exposure-gated by HostExposurePolicy (webUiEnabled).
 subsystem: sdd_host
 componentType: Portal
 owns: []
@@ -33,4 +33,4 @@ dependsOn:
 portalType: HTTP_API
 status: complete
 createdAt: '2026-07-11T11:31:55.624Z'
-updatedAt: '2026-07-18T13:17:03.040Z'
+updatedAt: '2026-09-15T21:04:09.597Z'

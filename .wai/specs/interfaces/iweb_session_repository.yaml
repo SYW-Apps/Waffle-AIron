@@ -1,10 +1,10 @@
 id: iweb_session_repository
 name: Web Session Repository Interface
 description: >-
-  Facade contract for durable browser-session state. The auth specialist and web orchestrators
-  depend on this contract instead of the private store, registry, or index. Pure 1:1 forwarding:
-  create/touch/remove/pruneExpired to the registry; getById/listBySubject to the index. No logic
-  lives on this facade.
+  Facade contract for durable browser-session state. The authentication component and web
+  orchestrators depend on this contract instead of the private store, registry, or index. Pure 1:1
+  forwarding: create/touch/remove/pruneExpired to the registry; getById/listBySubject to the index.
+  No logic lives on this facade.
 component: web_session_repository
 methods:
   - name: create
@@ -72,4 +72,4 @@ methods:
       - atomic
 status: complete
 createdAt: '2026-07-11T11:32:56.623Z'
-updatedAt: '2026-07-11T13:17:35.874Z'
+updatedAt: '2026-09-15T20:47:03.378Z'

@@ -2,7 +2,7 @@ id: ipermission_admin_orchestrator
 name: Permission Admin Orchestrator Interface
 description: >-
   Control-plane contract for managing roles, the permission-assignment grid, and user role bindings.
-  Every method authenticates the caller and authorizes via the authorization specialist; role
+  Every method authenticates the caller and authorizes via the authorization component; role
   management requires instance-level project:admin, assignment/binding management requires
   project:admin over the target scope. The reserved '*' instance-admin marker is never settable
   here.
@@ -37,7 +37,7 @@ methods:
   - name: deleteRole
     description: >-
       Authenticate, require instance-level project:admin, delete a role through the role repository,
-      and audit. Bindings referencing a deleted role become inert (the resolver ignores unknown
+      and audit. Bindings referencing a deleted role become inert (permission rules ignore unknown
       roles).
     signature: 'deleteRole(credential: string, roleId: string): void'
     returns: void
@@ -147,4 +147,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-15T22:00:18.881Z'
-updatedAt: '2026-07-15T22:22:07.140Z'
+updatedAt: '2026-09-15T21:03:10.910Z'

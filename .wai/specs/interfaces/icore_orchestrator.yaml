@@ -66,9 +66,7 @@ methods:
     signature: 'provisionProject(name: string): void'
     returns: void
   - name: computeStateId
-    description: >-
-      Compute the deterministic content hash (StateId) of the current spec tree via the state hash
-      specialist.
+    description: Compute the deterministic content hash (StateId) of the current spec tree via state_hash.
     signature: 'computeStateId(): StateId'
     returns: StateId
   - name: readLockRecord
@@ -80,7 +78,7 @@ methods:
     signature: 'writeLockRecord(record: LockRecord): void'
     returns: void
   - name: renderDiagram
-    description: Delegate diagram rendering to the diagram specialist.
+    description: Delegate diagram rendering to architecture_diagrams.
     signature: 'renderDiagram(format: string): string'
     returns: string
   - name: createChainedSubsystem
@@ -142,7 +140,7 @@ methods:
   - name: buildProjectGraph
     description: >-
       Project the current project's spec tree into a level-filtered WebGraphModel for the web UI,
-      forwarded to the diagram specialist's pure graph projection.
+      forwarded to the pure graph projection of architecture_diagrams.
     signature: 'buildProjectGraph(level: number): WebGraphModel'
     returns: WebGraphModel
     params:
@@ -351,4 +349,4 @@ methods:
         description: Write the plan; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T19:24:57.118Z'
+updatedAt: '2026-09-15T20:44:34.146Z'

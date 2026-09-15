@@ -33,12 +33,12 @@ methods:
           Resolve the browser session to a Principal (an expired or absent session yields an
           unauthenticated principal)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: Compute the caller's project-read visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: List all hosted project records

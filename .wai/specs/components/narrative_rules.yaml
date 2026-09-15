@@ -4,10 +4,10 @@ description: >-
   Judges whether contracts and narratives agree and are sound: implementations mirror their
   contracts, call steps resolve and are declared, guarantee tokens are known and backed, flow steps
   are well-formed and reachable, narratives avoid provable antipatterns, and narrative detail
-  matches the realized code's complexity. Specialist by last resort: its verdicts are not type
-  methods, because the rule set is open (packs register rules at runtime) and most verdicts read
-  many specs; it holds no state (the rule set belongs to the rule Repository), does no I/O and runs
-  no workflow, which is the arbiter shape.
+  matches the realized code's complexity. Pure logic (dependencyClass: pure, the arbiter variant):
+  it holds no state (the rule set belongs to the rule Repository), does no I/O and runs no workflow.
+  Its verdicts are not type methods, because the rule set is open (packs register rules at runtime)
+  and most verdicts read many specs.
 subsystem: sdd_validator
 componentType: Orchestrator
 owns: []
@@ -16,4 +16,4 @@ dependencyClass: pure
 variant: arbiter
 status: draft
 createdAt: '2026-09-14T05:42:08.356Z'
-updatedAt: '2026-09-15T20:01:58.885Z'
+updatedAt: '2026-09-15T20:40:50.554Z'
