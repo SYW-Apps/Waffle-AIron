@@ -1,5 +1,5 @@
 /**
- * Event-topology family (src/core/rules/event-topology.ts): bipartite
+ * Event-topology family (src/core/rules/wiring/event-topology.ts): bipartite
  * completeness of the declared pub/sub graph. Every emitted topic (emits
  * declarations, MessageBus publish endpoints) needs at least one subscriber
  * (subscribesTo declarations, MessageBus subscribe endpoints) and vice versa;

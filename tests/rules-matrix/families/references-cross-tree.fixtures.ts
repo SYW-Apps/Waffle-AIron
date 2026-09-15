@@ -1,6 +1,7 @@
 /**
- * Cross-tree reference resolution (src/core/rules/contracts.ts +
- * isExternalNamespaceRef/resolveSurfaceRef in src/core/rules/namespace.ts).
+ * Cross-tree reference resolution (src/core/rules/narrative/contract-symmetry-and-narratives.ts +
+ * isExternalNamespaceRef/resolveSurfaceRef, queries built onto the rule
+ * context in src/core/rules/index.ts and declared in src/core/rules/types.ts).
  *
  * Documented intents pinned here:
  *  - CROSS_TREE_REF_UNRESOLVED (warning): an unresolved narrative target that

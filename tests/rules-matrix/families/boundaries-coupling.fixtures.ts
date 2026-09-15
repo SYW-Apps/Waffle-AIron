@@ -1,5 +1,5 @@
 /**
- * Coupling-health fixtures (src/core/rules/coupling.ts).
+ * Coupling-health fixtures (src/core/rules/heuristic/coupling-health.ts).
  *
  * Documented intents pinned here:
  *  - MUTUAL_SUBSYSTEM_DEPENDENCY (warning): two subsystems depending on each

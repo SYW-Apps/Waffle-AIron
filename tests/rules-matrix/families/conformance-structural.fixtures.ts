@@ -1,5 +1,5 @@
 /**
- * Structural code↔spec conformance (Level 1) — src/core/rules/conformance.ts.
+ * Structural code↔spec conformance (Level 1) — src/core/rules/conformance/structural-conformance.ts.
  *
  * Documented intents pinned here (rule description + doc comments + the
  * ConformanceTierSchema doc in src/models/specs.ts):

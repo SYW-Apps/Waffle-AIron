@@ -1,5 +1,5 @@
 /**
- * Invariant-registry family (src/core/rules/invariants.ts): entities declare
+ * Invariant-registry family (src/core/rules/wiring/invariant-backing.ts): entities declare
  * domain invariants, anchored through componentClass; every write-effect
  * contract method of the owning component must carry a narrative step
  * asserting each invariant. An HONEST lint over declarations — a green run

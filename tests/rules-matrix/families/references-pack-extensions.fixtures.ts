@@ -1,6 +1,6 @@
 /**
  * Pack-declared reusable pattern references
- * (src/core/rules/pattern-references.ts).
+ * (src/core/rules/extension/pattern-references.ts).
  *
  * Documented intents pinned here:
  *  - UNKNOWN_PATTERN_REF (warning): a component's `patterns` entry must name a

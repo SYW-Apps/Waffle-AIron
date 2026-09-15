@@ -1,6 +1,6 @@
 /**
- * Type definition and reference integrity (src/core/rules/type-references.ts,
- * with the extraction heuristics of src/core/rules/type-analysis.ts).
+ * Type definition and reference integrity (src/core/rules/integrity/type-references.ts,
+ * with the extraction heuristics of src/models/type-references.ts).
  *
  * Documented intents pinned here:
  *  - INVALID_SUBSYSTEM_REFERENCE (error): a type's owning `subsystem` must

@@ -1,6 +1,6 @@
 /**
  * Cross-subsystem / cross-tree boundary fixtures for the remaining
- * stereotype-deps.ts codes (the intra-subsystem matrix lives in
+ * doctrine/stereotype-dependencies.ts codes (the intra-subsystem matrix lives in
  * boundaries-stereotype-matrix.fixtures.ts).
  *
  * Documented intents pinned here (rule description + doc comments):

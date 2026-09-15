@@ -1,5 +1,5 @@
 /**
- * The lint-allow audit (src/core/rules/lint-allows.ts) — wairon's
+ * The lint-allow audit (src/core/rules/integrity/lint-allows.ts) — wairon's
  * #[allow(...)], which must name real issue codes and actually suppress a
  * finding.
  *

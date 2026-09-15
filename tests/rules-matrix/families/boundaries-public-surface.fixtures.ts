@@ -1,5 +1,5 @@
 /**
- * Public-surface binding fixtures (src/core/rules/public-surface.ts).
+ * Public-surface binding fixtures (src/core/rules/integrity/public-surface.ts).
  *
  * Documented intents pinned here:
  *  - PUBLIC_INTERFACE_UNBOUND (error): every declared publicInterface names a

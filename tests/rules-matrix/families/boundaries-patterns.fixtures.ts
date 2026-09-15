@@ -1,5 +1,5 @@
 /**
- * Pattern-ownership fixtures (src/core/rules/patterns.ts).
+ * Pattern-ownership fixtures (src/core/rules/doctrine/pattern-ownership.ts).
  *
  * Documented intents pinned here:
  *  - EMPTY_PATTERN (error): a pattern must own member blocks.

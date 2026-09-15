@@ -1,6 +1,6 @@
 /**
  * Integration conformance (the static sim gate) —
- * src/core/rules/integration-conformance.ts (docs/design/integration-conformance.md §4).
+ * src/core/rules/conformance/integration-conformance.ts (docs/design/integration-conformance.md §4).
  *
  * Documented intents pinned here (rule description + module doc comment):
  *  - MISSING_INTEGRATION_SIM (warning): once a subsystem adopts sims (its

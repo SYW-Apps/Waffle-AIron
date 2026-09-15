@@ -1,6 +1,6 @@
 /**
  * The full stereotype × stereotype `dependsOn` matrix sweep for the
- * dependency-boundary rules in src/core/rules/stereotype-deps.ts.
+ * dependency-boundary rules in src/core/rules/doctrine/stereotype-dependencies.ts.
  *
  * Every pair over {Portal, Orchestrator, Supervisor, Actor, Store, Index,
  * Registry, Adapter, Observer, Specialist} + patterns {Repository, Gateway}

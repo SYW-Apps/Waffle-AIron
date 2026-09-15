@@ -1,6 +1,7 @@
 /**
- * Durability family (src/core/rules/semantic-edges.ts,
- * durabilityDeclarationRule + durabilityRule): the declaration axis and the
+ * Durability family (durabilityDeclarationRule in
+ * src/core/rules/intrinsic/durability-declaration.ts, durabilityRule in
+ * src/core/rules/wiring/durability-round-trip.ts): the declaration axis and the
  * round-trip consequence.
  *
  * Documented intents pinned here:

@@ -1,5 +1,5 @@
 /**
- * Dispatch-table family (src/core/rules/semantic-edges.ts, dispatchRule):
+ * Dispatch-table family (src/core/rules/wiring/dispatch-tables.ts, dispatchRule):
  * machine-readable capability -> component.method maps on generic-dispatch
  * Portals, plus the dispatch narrative step routed through them.
  *

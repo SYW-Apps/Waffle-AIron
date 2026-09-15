@@ -1,6 +1,6 @@
 /**
  * Contract ↔ implementation symmetry and narrative target resolution
- * (src/core/rules/contracts.ts).
+ * (src/core/rules/narrative/contract-symmetry-and-narratives.ts).
  *
  * Documented intents pinned here:
  *  - UNEXPECTED_IMPLEMENTATION_METHOD (error): implementation declares a method

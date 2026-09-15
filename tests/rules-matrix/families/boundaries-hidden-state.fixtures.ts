@@ -1,5 +1,5 @@
 /**
- * HIDDEN_STATE fixtures (src/core/rules/hidden-state.ts) — the enforcement
+ * HIDDEN_STATE fixtures (src/core/rules/conformance/hidden-state.ts) — the enforcement
  * half of the fields-vs-Store criterion, statically approximated.
  *
  * Documented intent: module-scope MUTABLE bindings (`let`/`var`) in a source

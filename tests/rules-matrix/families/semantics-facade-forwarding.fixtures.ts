@@ -1,5 +1,5 @@
 /**
- * Facade-forwarding family (src/core/rules/facade-forwarding.ts, standard
+ * Facade-forwarding family (src/core/rules/doctrine/facade-forwarding.ts, standard
  * §7): a Repository/Gateway facade method with an authored narrative must be
  * PURE 1:1 forwarding — exactly one call step, targeting one of the pattern's
  * owned members. More steps, a non-call step, or a call leaving the pattern

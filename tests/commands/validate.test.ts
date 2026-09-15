@@ -30,9 +30,9 @@ describe('isCiDraftWaivable (--ci draft tolerance)', () => {
   });
 
   it('waives DRAFT_SUBSYSTEM_WARNING exactly like the component variant', () => {
-    // hierarchy.ts emits it with the same unconditional draftContext as
-    // DRAFT_COMPONENT_WARNING — it is a pure status notice, so a fresh draft
-    // tree must not fail --ci on it.
+    // integrity/hierarchy-integrity.ts emits it with the same unconditional
+    // draftContext as DRAFT_COMPONENT_WARNING — it is a pure status notice, so
+    // a fresh draft tree must not fail --ci on it.
     expect(isCiDraftWaivable(warn('DRAFT_SUBSYSTEM_WARNING', { draftContext: true }))).toBe(true);
     // Robust even if the draftContext flag were ever absent for this code.
     expect(isCiDraftWaivable(warn('DRAFT_SUBSYSTEM_WARNING'))).toBe(true);
@@ -147,10 +147,11 @@ describe('--ci failure decision over a real tree (draft-waiver end to end)', () 
   });
 
   it('control: a draft-downgraded completeness warning (MISSING_ENDPOINT) still fails --ci', () => {
-    // DRAFT_SUBSYSTEM_WARNING cannot be emitted without draftContext (hierarchy.ts
-    // hardcodes it), so the control is a different draft-context warning that the
-    // waiver must NOT cover: an unbound Portal method, downgraded to a warning
-    // while the tree is draft, is real unfinished work — the gate stays strict.
+    // DRAFT_SUBSYSTEM_WARNING cannot be emitted without draftContext
+    // (integrity/hierarchy-integrity.ts hardcodes it), so the control is a
+    // different draft-context warning that the waiver must NOT cover: an
+    // unbound Portal method, downgraded to a warning while the tree is draft,
+    // is real unfinished work — the gate stays strict.
     const proj = createDraftPortalProject();
     try {
       const result = validateSddTree();

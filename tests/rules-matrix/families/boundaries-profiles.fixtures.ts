@@ -1,5 +1,5 @@
 /**
- * Architectural-profile fixtures (src/core/rules/profiles.ts).
+ * Architectural-profile fixtures (src/core/rules/extension/architectural-profiles.ts).
  *
  * Documented intents pinned here:
  *  - FRONTEND_STEREOTYPE_IN_BACKEND (error): View/FeatureComponent/
