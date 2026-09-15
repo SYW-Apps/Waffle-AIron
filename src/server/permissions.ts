@@ -16,7 +16,7 @@ import type { PermissionAssignment, UnitIdRemap } from './types.js';
 // The exported functions are the permission_repository facade: 1:1 forwarding.
 //
 // The grid holds ONE value per (subjectKind, subjectId, scopeKind, scopeId,
-// capability) key — the atom the hierarchical resolver walks.
+// capability) key — the atom hierarchical permission rules walk.
 // ---------------------------------------------------------------------------
 
 function storePath(dataDir: string): string {
@@ -78,7 +78,7 @@ function replaceAll(dataDir: string, assignments: PermissionAssignment[]): void 
  * so the grid never holds two values for one subject × scope × capability.
  * Stamps id/createdAt on create and preserves them on replace. Setting the value
  * to 'inherit' CLEARS the override — it is stored as an explicit removal, which
- * is exactly what the resolver treats as non-deciding.
+ * is exactly what permission rules treat as non-deciding.
  */
 function registrySet(dataDir: string, assignment: PermissionAssignment): PermissionAssignment {
   const assignments = load(dataDir);

@@ -3052,8 +3052,8 @@ export function dryRunSerializeSpecs(include?: (specId: string) => boolean): Val
 }
 
 /** Project the current project's spec tree into a level-filtered WebGraphModel,
- *  forwarded to the diagram specialist's pure graph projection (core_orchestrator
- *  → diagram_specialist). */
+ *  forwarded to the architecture diagrams component's pure graph projection
+ *  (core_orchestrator → architecture_diagrams). */
 export function buildProjectGraph(level: number): WebGraphModel {
   return buildGraphModel(level);
 }

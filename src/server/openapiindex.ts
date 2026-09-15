@@ -10,8 +10,8 @@
 // by openapiIndex=true; the string type is unchanged either way.
 //
 // This is a neutral, component-free helper (like errors.ts / httpio.ts): both
-// the surface-exchange orchestrator (landscape.ts) and the share-snapshot
-// specialist (sharesnapshots.ts) build the SAME shape, so it is constructed in
+// the surface-exchange orchestrator (landscape.ts) and share_snapshots
+// (sharesnapshots.ts) build the SAME shape, so it is constructed in
 // exactly ONE place here rather than reconstructed inline in each. The share
 // portal (sharehttp.ts) and web explorer (web.ts) parse/render this same shape;
 // they stay decoupled by parsing it structurally rather than importing.

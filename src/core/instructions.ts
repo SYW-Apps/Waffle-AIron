@@ -19,12 +19,12 @@ import { listSkillResources, loadProjectConfig, loadProjectExtensions, type Skil
 // never restates what is below.
 //
 // Layering (folded into this module, as skills.ts folds its own):
-//   instructions_specialist → buildServerInstructions
+//   server_instructions → buildServerInstructions
 // ---------------------------------------------------------------------------
 
 // This module and skills.ts import each other: the guidance orchestrator in
 // skills.ts forwards HERE to compose, and the composition reads back through
-// skills.ts for the skill descriptors (skills_resource_specialist) and the pack
+// skills.ts for the skill descriptors (skill_resources) and the pack
 // load (skills_core_adapter). The cycle is safe in both the ESM and the bundled
 // CJS output because every access happens inside a function body at call time —
 // nothing here runs during module initialization.

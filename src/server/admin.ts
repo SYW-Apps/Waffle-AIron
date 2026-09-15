@@ -84,7 +84,7 @@ function principalSubject(principal: Principal): PrincipalSubject {
 
 /**
  * Authenticate the caller, validate the REQUIRED target unit (every project is
- * placed at creation so the permission resolver can always enumerate it — a
+ * placed at creation so permission rules can always enumerate it — a
  * fresh instance must create its first organization unit before creating
  * projects; `wairon dev` provisions a synthetic local unit at boot), resolve the
  * caller's project:create permission over that unit (must be yes; an
@@ -102,7 +102,7 @@ export function createProject(
   // Validate the REQUIRED target unit up front (missing or unknown rejects) and
   // resolve the caller's project:create permission over it — a creator must hold
   // project:create over THE unit the project is placed in (an instance-admin
-  // passes via the resolver bypass).
+  // passes via the permission-rules bypass).
   requireExistingUnit(cfg, unitId);
   if (authorize(cfg.dataDir, principal, 'project:create', 'unit', unitId).value !== 'yes') {
     throw new AdminAuthError(

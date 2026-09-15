@@ -10,7 +10,7 @@ import {
 import { canonicalize } from '../utils/canonical-json.js';
 
 // ---------------------------------------------------------------------------
-// State Hash Specialist (sdd_core)
+// State Hash (sdd_core)
 //
 // Computes the deterministic content identity (StateId) of the current
 // project's spec tree. Two trees with identical spec CONTENT produce the same

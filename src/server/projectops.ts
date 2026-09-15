@@ -32,8 +32,8 @@ import type {
 // instance exposure policy.
 //
 // Every method is a pure 1:1 forward passing the caller's credential to the
-// OWNING orchestrator, which authenticates and authorizes through the
-// permission resolver — no authorization logic and no state lives here, so the
+// OWNING orchestrator, which authenticates and authorizes through
+// permission rules — no authorization logic and no state lives here, so the
 // two portals stay lean and the gates stay single-sourced.
 // ---------------------------------------------------------------------------
 

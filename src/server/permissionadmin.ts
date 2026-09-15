@@ -55,10 +55,10 @@ const PROJECT_ADMIN_CAPABILITY = 'project:admin';
 
 /**
  * The canonical assignment key for a user subject is the subject's userId —
- * the id every live Principal carries into the resolver. Callers routinely
+ * the id every live Principal carries into permission rules. Callers routinely
  * pass the user RECORD id instead (the Users list shows it); when the two
- * have diverged, storing the record id would key a row the resolver only
- * honors via the alias path. Canonicalize at the write/read boundary; an id
+ * have diverged, storing the record id would key a row permission rules only
+ * honor via the alias path. Canonicalize at the write/read boundary; an id
  * with no user record (a pre-provisioned subject) passes through unchanged.
  */
 function canonicalSubjectId(cfg: HostConfig, subjectId: string): string {
@@ -169,7 +169,7 @@ export function updateRole(cfg: HostConfig, credential: string | null, role: Rol
 /**
  * Authenticate, require instance-level project:admin, delete a role through the
  * role repository, and audit. Bindings referencing a deleted role become inert
- * (the resolver ignores unknown roles). A reserved built-in id is refused
+ * (permission rules ignore unknown roles). A reserved built-in id is refused
  * before anything else.
  */
 export function deleteRole(cfg: HostConfig, credential: string | null, roleId: string): void {
@@ -219,7 +219,7 @@ export function setAssignment(
   const stored = repoSetAssignment(cfg.dataDir, {
     ...assignment,
     // Canonical grid key: user-kind subjects store the subject's userId, so
-    // the resolver's primary match (not the legacy-alias path) serves them.
+    // permission rules' primary match (not the legacy-alias path) serves them.
     ...(assignment.subjectKind === 'user' && assignment.subjectId
       ? { subjectId: canonicalSubjectId(cfg, assignment.subjectId) }
       : {}),

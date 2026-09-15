@@ -47,8 +47,8 @@ import type {
 // authorizes the mint strictly against the caller's OWN access to that project.
 //
 // ORGANIZATION-UNIT reads/writes have no upstream orchestrator, so this component
-// owns that workflow directly: resolve the session to a Principal via the auth
-// specialist, require an instance-wide admin grant, mutate through the
+// owns that workflow directly: resolve the session to a Principal via
+// authentication, require an instance-wide admin grant, mutate through the
 // organization repository, and append a best-effort audit event.
 // ---------------------------------------------------------------------------
 
@@ -164,7 +164,7 @@ function buildOrgAuditEvent(principal: Principal, action: string, target: string
  *  project:admin, or reject. Shared by the organization-unit, secret-ref, and
  *  identity-provider methods — the instance-structure surfaces.
  *
- *  This is the resolver check `authorize(project:admin, instance)`, NOT the
+ *  This is the permission-rules check `authorize(project:admin, instance)`, NOT the
  *  env-super-admin bypass flag: the env super-admin, the master credential, and
  *  a DELEGATED instance-wide admin (an SSO admin whose sso-admin role binds
  *  project:admin at instance scope, or a direct project:admin@instance

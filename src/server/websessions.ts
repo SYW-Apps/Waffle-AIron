@@ -18,13 +18,13 @@ import type { WebSession } from './types.js';
 //                          owned store; never touches the index.
 //   - WebSessionIndex    : the read path — by-id lookup and per-subject listing
 //                          over the store's set; never mutates and enforces no
-//                          expiry (the auth specialist rejects expired sessions
+//                          expiry (authentication rejects expired sessions
 //                          on resolution).
 //   - facade             : the exported dataDir-first functions; pure 1:1
 //                          forwarding (writes -> registry, reads -> index).
 //
 // The session id carries a RESERVED PREFIX (WEB_SESSION_PREFIX) and is itself a
-// first-class credential: the auth specialist recognizes it by that prefix and
+// first-class credential: authentication recognizes it by that prefix and
 // resolves it to a Principal exactly like a bearer token. Every write goes
 // through write-temp-then-rename so a crashed write leaves the prior set intact —
 // a lost session would silently sign a user out.

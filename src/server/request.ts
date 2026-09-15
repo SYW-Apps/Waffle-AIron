@@ -167,7 +167,7 @@ const LANDSCAPE_DISCOVERY_TOOLS = new Set<string>([
 /** The six hosted project-ops tools the data plane handles directly, routing
  *  them to the project ops orchestrator — ALWAYS bound to THE one authorized
  *  project (instance-level operations are deliberately absent from the data
- *  plane). Each is resolver-gated upstream by its owning orchestrator. */
+ *  plane). Each is permission-rules-gated upstream by its owning orchestrator. */
 const PROJECT_OPS_TOOLS = new Set<string>([
   'sdd_host_pack_list',
   'sdd_host_pack_install',
@@ -389,7 +389,7 @@ export function mcpChangeChannels(body: unknown, projectId: string, response: un
  * the call proceed. A non-`tools/call` message (initialize, tools/list) or a call
  * with no tool name is never gated — those do not mutate project state.
  *
- * This resolves through the permission resolver over the bound project, so a
+ * This resolves through permission rules over the bound project, so a
  * token always acts as its owner's LIVE permission: the token's `projects`
  * narrowing (enforced separately at resolveProjectRoot) bounds WHICH projects it
  * may name, and this gate decides what it may DO there.
@@ -564,7 +564,7 @@ export async function dispatchProjectLifecycleTool(
         value = getProjectSurfaceForMcp(cfg, credential, projectId, String(args.projectId ?? ''));
         break;
       // ── Hosted project ops — always the BOUND project (no project argument
-      // exists on the data plane); resolver-gated by the owning orchestrators.
+      // exists on the data plane); permission-rules-gated by the owning orchestrators.
       case 'sdd_host_pack_list':
         value = projectops.listProjectPacks(cfg, credential, projectId);
         break;
@@ -676,7 +676,7 @@ export async function handleMcpRequest(
   } else {
     // Trusted-network mode (auth disabled): no credential required, but a project
     // must still be named. The anonymous principal is an instance-admin, so it
-    // holds the resolver bypass — satisfying the data-plane gate below exactly as
+    // holds the permission-rules bypass — satisfying the data-plane gate below exactly as
     // the master credential does.
     principal = {
       tokenId: 'anonymous',
@@ -763,8 +763,8 @@ export async function handleMcpRequest(
 
     // Steps 25–27: enforce the granular data-plane permission BEFORE dispatching
     // an ordinary sdd_* tool. A read tool needs project:read, every other tool
-    // project:write (fail closed), resolved LIVE through the hierarchical
-    // permission resolver over the TOP project (a subproject qualifier narrows
+    // project:write (fail closed), resolved LIVE through hierarchical
+    // permission rules over the TOP project (a subproject qualifier narrows
     // which tree is bound, never which grants apply). Capabilities match EXACTLY —
     // there is no wildcard capability, and the '*'@instance instance-admin
     // marker is reserved (setAssignment rejects it); only the env-anchored

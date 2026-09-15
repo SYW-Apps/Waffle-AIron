@@ -306,9 +306,9 @@ export function removeIdentityProviderRecord(dataDir: string, id: string): void 
 // canonical identity.ts helpers; keep this copy in lockstep).
 //
 // Project-scoped methods (evaluateProjectPolicy, reconcileProjectPolicy)
-// authorize project:write over the project through the permission resolver — a
-// unit admin is first-class over the projects placed in its subtree, because the
-// resolver's leaf->root walk reaches their unit-scoped permission. Only the
+// authorize project:write over the project through permission rules — a
+// unit admin is first-class over the projects placed in its subtree, because
+// permission rules' leaf->root walk reaches their unit-scoped permission. Only the
 // instance-WIDE capabilities (initializeProjectWithProfile, setPackPolicy)
 // authorize at the instance root by design.
 
@@ -728,7 +728,7 @@ function performInit(
 
   // Create AND place the project in its required owner unit (executeApprovedCreate
   // validates the unit and writes the placement, so no init path can mint an
-  // unplaced project the permission resolver cannot see).
+  // unplaced project permission rules cannot see).
   const record = executeApprovedCreate(
     cfg,
     request.id,

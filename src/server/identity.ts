@@ -48,7 +48,7 @@ import type {
 // Identity Orchestrator + Portal (sdd_host)
 //
 // The identity control-plane workflows: authenticate the caller credential
-// (bootstrap master or user-bound token) via the auth specialist, resolve the
+// (bootstrap master or user-bound token) via authentication, resolve the
 // caller's permission through the authorization seam, then manage user-bound
 // MCP/API tokens, hosted users, and audit access. Exported as plain functions so
 // both the HTTP identity portal (handleIdentityRequest, below) and any
@@ -81,13 +81,13 @@ export interface TokenMintRequest {
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 export { UnauthenticatedError, ForbiddenError };
 
-// ── authorization helpers (hierarchical resolver) ───────────────────────────
+// ── authorization helpers (hierarchical permission rules) ───────────────────
 //
 // Every decision resolves through the authorization seam (authorization.ts):
 // user administration = project:admin over the target user's home unit; audit
 // reads = project:admin over the caller's actionable projects; IdP config and
 // audit administration = project:admin at the instance root. isInstanceAdmin is
-// the env-anchored resolver bypass (built-in super-admin / master / devMode
+// the env-anchored permission-rules bypass (built-in super-admin / master / devMode
 // subject) — a delegated instance-wide project:admin is NOT instanceAdmin.
 
 /** The capability the legacy user:admin / audit:read / key:manage / grant
@@ -422,7 +422,7 @@ export function mintSelfToken(
     );
   }
 
-  // Self-scoped authorization through the resolver: the caller must ALREADY hold
+  // Self-scoped authorization through permission rules: the caller must ALREADY hold
   // a yes-valued permission over this exact (TOP) project (a unit-scoped
   // assignment covers its own subtree, never another tenant's).
   if (authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', parsed.projectId).value !== 'yes') {
@@ -680,7 +680,7 @@ export function setUserStatus(
 // ── headless SSO login (unauthenticated pair) ────────────────────────────────
 //
 // The SSO state is a signed, self-describing payload — a JSON string
-// `{ providerId, nonce, redirectUri }` sealed by the auth specialist (signSsoState)
+// `{ providerId, nonce, redirectUri }` sealed by authentication (signSsoState)
 // on start and verified (verifySsoState) on completion. It is the ONLY integrity
 // anchor the callback carries: there is no server-side login session. The pair is
 // unauthenticated by design — no caller credential is required or accepted; trust
@@ -767,8 +767,8 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
       status: 'active',
       // first-login: bind the built-in sso-admin ROLE when the verified groups
       // match adminGroupClaims, otherwise no bindings — an admin assigns roles
-      // and grid assignments later. The role resolves through the permission
-      // resolver (project:admin + project:create @instance, OVERRIDABLE — never
+      // and grid assignments later. The role resolves through permission
+      // rules (project:admin + project:create @instance, OVERRIDABLE — never
       // the instance-admin bypass).
       roleBindings: inAdminGroup ? [{ roleId: SSO_ADMIN_ROLE_ID }] : [],
       createdAt: new Date().toISOString(),
@@ -811,7 +811,7 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
 
   // Mint a user-bound token (same record shape as mintToken). It carries NO
   // permissions and no narrowing: it acts as the owner's LIVE permission,
-  // resolved by the auth specialist + resolver on every request — so a later
+  // resolved by authentication + permission rules on every request — so a later
   // role/assignment revocation cuts this token down immediately.
   const token = 'wk_' + crypto.randomBytes(24).toString('hex');
   const record: ApiKeyRecord = {

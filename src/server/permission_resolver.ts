@@ -12,7 +12,7 @@ import type {
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Permission Resolver (sdd_host) — the PURE hierarchical resolution core.
+// Permission Rules (sdd_host) — the PURE hierarchical resolution core.
 //
 // Performs no I/O and never authenticates: the caller has authenticated the
 // principal and gathered the PermissionWorld. Deterministic over its inputs.
