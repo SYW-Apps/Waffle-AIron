@@ -648,137 +648,6 @@ methods:
         description: Return every root's content keys
         type: return
         outcome: string[]
-  - name: renameComponent
-    sourcePath: src/core/provision.ts
-    narrative:
-      - stepNumber: 1
-        description: Load the component to rename
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadComponentSpec
-      - stepNumber: 2
-        description: 'Guard: the component must exist'
-        type: branch
-        condition: the component does not exist
-        onFalseStep: 4
-      - stepNumber: 3
-        label: component-missing
-        description: Refuse a component that does not exist
-        type: throw
-        error: 'component-missing: no component has this id'
-      - stepNumber: 4
-        description: 'Guard: the component must belong to the bound project itself'
-        type: branch
-        condition: 'componentId is namespaced into a chained mount (it carries the :: separator)'
-        onFalseStep: 6
-      - stepNumber: 5
-        label: chained-component
-        description: Refuse a component inside a chained subproject
-        type: throw
-        error: >-
-          chained-component: the component lives in a chained subproject; rename it from that
-          project's own root
-      - stepNumber: 6
-        description: 'Guard: the new id must be a plain lowercase identifier'
-        type: branch
-        condition: >-
-          newId is outside the id grammar: not a lowercase identifier, or carrying a namespace
-          separator
-        onFalseStep: 8
-      - stepNumber: 7
-        label: invalid-id
-        description: Refuse a new id outside the grammar
-        type: throw
-        error: 'invalid-id: the new id must be a lowercase identifier with no namespace separator'
-      - stepNumber: 8
-        description: Load every component spec, for the component ids already taken
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadComponentSpecs
-      - stepNumber: 9
-        description: Load every interface spec, for the interface ids taken and the component's own contracts
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadInterfaceSpecs
-      - stepNumber: 10
-        description: >-
-          Load every implementation spec, for the implementation ids taken and the realizations of
-          those contracts
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadImplementationSpecs
-      - stepNumber: 11
-        description: 'Guard: nothing may already hold the new ids'
-        type: branch
-        condition: >-
-          newId is already a component id, or i<newId> is an interface id, or <newId>_impl is an
-          implementation id
-        onFalseStep: 13
-      - stepNumber: 12
-        label: id-taken
-        description: Refuse a new id already taken
-        type: throw
-        error: 'id-taken: the new id, or the interface or implementation id it implies, is already in use'
-      - stepNumber: 13
-        description: >-
-          Collect what moves: the component's interface named i<componentId>, and the implementation
-          named <componentId>_impl that realizes one of the component's contracts. Interfaces and
-          implementations named otherwise keep their ids; only their component and contract
-          references change
-        type: local
-      - stepNumber: 14
-        description: Write the component under newId, its own id rewritten
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveComponentSpec
-      - stepNumber: 15
-        description: Does the component's own interface move?
-        type: branch
-        condition: an interface named i<componentId> moves
-        onFalseStep: 17
-      - stepNumber: 16
-        description: Write the interface under i<newId>, its id and component rewritten
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveInterfaceSpec
-      - stepNumber: 17
-        description: Does the component's own implementation move?
-        type: branch
-        condition: an implementation named <componentId>_impl moves
-        onFalseStep: 19
-      - stepNumber: 18
-        description: >-
-          Write the implementation under <newId>_impl, its id rewritten and its contract following a
-          renamed interface
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveImplementationSpec
-      - stepNumber: 19
-        description: Remove each moved spec's old file
-        type: local
-      - stepNumber: 20
-        description: >-
-          Rewrite every reference to a renamed id across the bound tree with the provisioning
-          rewriter, whose reach this extends: a component's dependsOn, owns and dispatch components;
-          a subsystem's lifecycle and publicInterfaces components; the system's publicInterfaces
-          components; narrative call, dispatch and register targets; an interface's component and an
-          implementation's contract; an entity type's componentClass. invokedBy callers are prose
-          and stay as written, and lint allows belong to their spec and moved with it. Each spec
-          rewritten is recorded by id
-        type: local
-      - stepNumber: 21
-        description: >-
-          Drop the cached spec index: the removed files and the rewritten references changed the
-          tree outside the save paths
-        type: call
-        targetComponent: spec_loader
-        targetMethod: invalidateCache
-      - stepNumber: 22
-        description: >-
-          Return renamed (each moved spec's kind with its old and new id) and rewritten (the ids of
-          the other specs whose references changed)
-        type: return
-        outcome: ComponentRename
   - name: retireSpecialists
     sourcePath: src/core/stereotype-migration.ts
     narrative:
@@ -903,6 +772,179 @@ methods:
         description: Return the plan with applied true
         type: return
         outcome: applied
+  - name: renameComponent
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the component to rename
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: 'Guard: the component must exist'
+        type: branch
+        condition: the component does not exist
+        onFalseStep: 4
+      - stepNumber: 3
+        label: component-missing
+        description: Refuse a component that does not exist
+        type: throw
+        error: 'component-missing: no component has this id'
+      - stepNumber: 4
+        description: 'Guard: the component must belong to the bound project itself'
+        type: branch
+        condition: 'componentId is namespaced into a chained mount (it carries the :: separator)'
+        onFalseStep: 6
+      - stepNumber: 5
+        label: chained-component
+        description: Refuse a component inside a chained subproject
+        type: throw
+        error: >-
+          chained-component: the component lives in a chained subproject; rename it from that
+          project's own root
+      - stepNumber: 6
+        description: 'Guard: the new id must be a plain lowercase identifier'
+        type: branch
+        condition: >-
+          newId is outside the id grammar: not a lowercase identifier, or carrying a namespace
+          separator
+        onFalseStep: 8
+      - stepNumber: 7
+        label: invalid-id
+        description: Refuse a new id outside the grammar
+        type: throw
+        error: 'invalid-id: the new id must be a lowercase identifier with no namespace separator'
+      - stepNumber: 8
+        description: Load every component spec, for the component ids already taken
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 9
+        description: Load every interface spec, for the interface ids taken and the component's own contracts
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 10
+        description: >-
+          Load every implementation spec, for the implementation ids taken and the realizations of
+          those contracts
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 11
+        description: 'Guard: nothing may already hold the new ids'
+        type: branch
+        condition: >-
+          newId is already a component id, or i<newId> is an interface id, or <newId>_impl is an
+          implementation id
+        onFalseStep: 13
+      - stepNumber: 12
+        label: id-taken
+        description: Refuse a new id already taken
+        type: throw
+        error: 'id-taken: the new id, or the interface or implementation id it implies, is already in use'
+      - stepNumber: 13
+        description: >-
+          Collect what moves: the component's interface named i<componentId>, and the implementation
+          named <componentId>_impl that realizes one of the component's contracts. Interfaces and
+          implementations named otherwise keep their ids; only their component and contract
+          references change
+        type: local
+      - stepNumber: 14
+        description: >-
+          Rewrite every reference to a renamed id across the bound tree with the provisioning
+          rewriter, the moved specs' own files included: a component's dependsOn, owns and dispatch
+          components; a subsystem's lifecycle components and its published interfaces' component and
+          interface; the system's published interfaces' component and interface; narrative call,
+          dispatch and register targets, and a step's auth.from component source; an interface's
+          component; an implementation's contract; and an entity's componentClass. Record the other
+          specs it rewrote (the moved specs, matched by their old ids, are not among them).
+          References from chained subprojects are not rewritten
+        type: local
+      - stepNumber: 15
+        description: Drop the cached spec index, so the saves below place specs by the rewritten owns
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 16
+        description: Reload the component as the rewrite left it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 17
+        description: Does the component's own interface move?
+        type: branch
+        condition: the component's interface named i<componentId> moves
+        onFalseStep: 19
+      - stepNumber: 18
+        description: Reload the interface as the rewrite left it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpec
+      - stepNumber: 19
+        description: Does the component's own implementation move?
+        type: branch
+        condition: the implementation named <componentId>_impl moves
+        onFalseStep: 21
+      - stepNumber: 20
+        description: Reload the implementation as the rewrite left it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpec
+      - stepNumber: 21
+        description: >-
+          Write the component under newId, its own id rewritten; the loader nests a member of a
+          pattern under its owner
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 22
+        description: Save the moved interface?
+        type: branch
+        condition: the component's interface moves
+        onFalseStep: 24
+      - stepNumber: 23
+        description: Write the interface under i<newId>, its id and component rewritten
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 24
+        description: Save the moved implementation?
+        type: branch
+        condition: the component's implementation moves
+        onFalseStep: 28
+      - stepNumber: 25
+        description: Does the new path collide with the implementation's current file?
+        type: branch
+        condition: >-
+          the implementation's new path is the file it already occupies (the nested layout, with a
+          contract that keeps its id)
+        onFalseStep: 27
+      - stepNumber: 26
+        description: 'Delete that file first: the loader refuses to write a spec over a file holding another id'
+        type: local
+      - stepNumber: 27
+        description: >-
+          Write the implementation under <newId>_impl, its id rewritten and its contract following a
+          renamed interface
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 28
+        description: Remove each moved spec's old file, found by its old id, and prune the folders left empty
+        type: local
+      - stepNumber: 29
+        description: >-
+          Drop the cached spec index again: the removed files changed the tree outside the save
+          paths
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 30
+        description: >-
+          Return renamed (each moved spec's kind with its old and new id) and rewritten (the ids of
+          the other specs whose references changed)
+        type: return
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T18:08:02.732Z'
+updatedAt: '2026-09-15T19:39:05.193Z'
