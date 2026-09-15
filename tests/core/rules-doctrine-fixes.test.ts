@@ -131,23 +131,47 @@ describe('pattern-ownership: PATTERN_OWNS_PATTERN names a pattern owner', () => 
   it('a building block owning a pattern reports BLOCK_OWNS_MEMBERS only', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
-    proj.component('dispensing-orchestrator', 'pharmacy', 'Orchestrator', 'owns: [dispensing-gateway]');
-    proj.component('dispensing-gateway', 'pharmacy', 'Gateway', 'owns: [dispensing-portal]');
-    proj.component('dispensing-portal', 'pharmacy', 'Portal', 'portalType: Custom');
+    proj.component('dispensing-orchestrator', 'pharmacy', 'Orchestrator', 'owns: [medication-repository]');
+    proj.component('medication-repository', 'pharmacy', 'Repository', 'owns: [medication-store]');
+    proj.component('medication-store', 'pharmacy', 'Store', 'durability: ram-projection');
     const issues = proj.validate();
     expect(byCode(issues, 'PATTERN_OWNS_PATTERN')).toEqual([]);
     expect(byCode(issues, 'BLOCK_OWNS_MEMBERS').map(i => i.specId)).toEqual(['dispensing-orchestrator']);
   });
 
-  it('a pattern owning a pattern is still reported, naming its owner a pattern', () => {
+  it.each(['FeatureComponent', 'RouterComponent', 'Repository'])('a Repository owning a %s is reported, naming its owner a pattern', (innerType) => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
-    proj.component('pharmacy-repository', 'pharmacy', 'Repository', 'owns: [dispensing-gateway]');
-    proj.component('dispensing-gateway', 'pharmacy', 'Gateway', 'owns: [dispensing-portal]');
-    proj.component('dispensing-portal', 'pharmacy', 'Portal', 'portalType: Custom');
+    proj.component('pharmacy-repository', 'pharmacy', 'Repository', 'owns: [medication-store, refill-slice]');
+    proj.component('medication-store', 'pharmacy', 'Store', 'durability: ram-projection');
+    proj.component('refill-slice', 'pharmacy', innerType, 'owns: [refill-store]');
+    proj.component('refill-store', 'pharmacy', 'Store', 'durability: ram-projection');
     const found = byCode(proj.validate(), 'PATTERN_OWNS_PATTERN');
     expect(found.map(i => i.specId)).toEqual(['pharmacy-repository']);
     expect(found[0].message.startsWith('Pattern "pharmacy-repository"')).toBe(true);
+  });
+
+  it('the inner pattern gets no owner, so depending on it is no VISIBILITY_VIOLATION', () => {
+    const proj = createTempProject();
+    proj.subsystem('pharmacy');
+    proj.component('pharmacy-repository', 'pharmacy', 'Repository', 'owns: [medication-store, refill-repository]');
+    proj.component('medication-store', 'pharmacy', 'Store', 'durability: ram-projection');
+    proj.component('refill-repository', 'pharmacy', 'Repository', 'owns: [refill-store]');
+    proj.component('refill-store', 'pharmacy', 'Store', 'durability: ram-projection');
+    proj.component('refill-orchestrator', 'pharmacy', 'Orchestrator', 'dependsOn: [refill-repository]');
+    const issues = proj.validate();
+    expect(byCode(issues, 'PATTERN_OWNS_PATTERN').map(i => i.specId)).toEqual(['pharmacy-repository']);
+    expect(byCode(issues, 'VISIBILITY_VIOLATION')).toEqual([]);
+  });
+
+  it('two patterns side by side own no pattern', () => {
+    const proj = createTempProject();
+    proj.subsystem('pharmacy');
+    proj.component('pharmacy-repository', 'pharmacy', 'Repository', 'owns: [medication-store]');
+    proj.component('medication-store', 'pharmacy', 'Store', 'durability: ram-projection');
+    proj.component('refill-repository', 'pharmacy', 'Repository', 'owns: [refill-store]');
+    proj.component('refill-store', 'pharmacy', 'Store', 'durability: ram-projection');
+    expect(byCode(proj.validate(), 'PATTERN_OWNS_PATTERN')).toEqual([]);
   });
 });
 
@@ -275,18 +299,18 @@ describe('portal-endpoints: the non-Portal endpoint ban reports like the Portal-
   it('anchors ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT on the interface that declares the endpoint', () => {
     const proj = createTempProject();
     proj.subsystem('claims');
-    proj.component('claims-scoring-specialist', 'claims', 'Specialist');
-    proj.contract('claims-scoring-specialist', [{ name: 'scoreClaim', endpoint: true }]);
+    proj.component('claims-scoring-arbiter', 'claims', 'Orchestrator', 'dependencyClass: pure');
+    proj.contract('claims-scoring-arbiter', [{ name: 'scoreClaim', endpoint: true }]);
     const found = byCode(proj.validate(), 'ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT');
-    expect(found.map(i => i.specId)).toEqual(['iclaims-scoring-specialist']);
+    expect(found.map(i => i.specId)).toEqual(['iclaims-scoring-arbiter']);
     expect(found[0].draftContext).toBeUndefined();
   });
 
   it('carries a draft interface into the finding\'s draft context', () => {
     const proj = createTempProject();
     proj.subsystem('claims');
-    proj.component('claims-scoring-specialist', 'claims', 'Specialist');
-    proj.contract('claims-scoring-specialist', [{ name: 'scoreClaim', endpoint: true }], 'status: draft');
+    proj.component('claims-scoring-arbiter', 'claims', 'Orchestrator', 'dependencyClass: pure');
+    proj.contract('claims-scoring-arbiter', [{ name: 'scoreClaim', endpoint: true }], 'status: draft');
     const found = byCode(proj.validate(), 'ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT');
     expect(found).toHaveLength(1);
     expect(found[0].draftContext).toBe(true);

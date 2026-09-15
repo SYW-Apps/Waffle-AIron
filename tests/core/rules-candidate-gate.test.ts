@@ -52,7 +52,7 @@ describe('candidate gate — what it refuses', () => {
   });
 
   it('refuses durability on a non-Store', () => {
-    const verdict = validateComponentCandidate(comp({ componentType: 'Specialist', durability: 'durable' }));
+    const verdict = validateComponentCandidate(comp({ componentType: 'Orchestrator', durability: 'durable' }));
     expect(codes(verdict.errors)).toContain('DURABILITY_ON_NON_STORE');
   });
 
@@ -109,7 +109,7 @@ describe('rule scope declarations', () => {
   it('only rules that declare scope "spec" reach the candidate path', () => {
     registerBuiltinRules();
     const names = specScopedRules().map(r => r.name).sort();
-    expect(names).toEqual(['durability-declaration', 'portal-fields']);
+    expect(names).toEqual(['durability-declaration', 'logic-declaration', 'portal-fields', 'retired-stereotypes']);
   });
 
   it('the spec-scoped subset emits exactly the intrinsic codes', () => {
@@ -117,9 +117,11 @@ describe('rule scope declarations', () => {
     const emitted = specScopedRules().flatMap(r => r.codes.map(c => c.code)).sort();
     expect(emitted).toEqual([
       'AUTH_ON_NON_PORTAL',
+      'DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR',
       'DURABILITY_ON_NON_STORE',
       'MISSING_DURABILITY',
       'MISSING_PORTAL_TYPE',
+      'STEREOTYPE_RETIRED',
       'UNEXPECTED_PORTAL_FIELD',
     ]);
   });
@@ -164,7 +166,7 @@ describe('the split is behaviour-preserving for a tree run', () => {
     const { tempDir, writeSpec } = createTempProject();
     setProjectRoot(tempDir);
     writeSpec('component', 'orch', 'schemaVersion: 1.0.0\nid: orch\nname: Orch\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\nstatus: complete\nbasePath: /api');
-    writeSpec('component', 'spec1', 'schemaVersion: 1.0.0\nid: spec1\nname: Spec1\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nstatus: complete\ndurability: durable');
+    writeSpec('component', 'rate-arbiter', 'schemaVersion: 1.0.0\nid: rate-arbiter\nname: RateArbiter\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nstatus: complete\ndurability: durable');
     invalidateSpecCache();
 
     const result = validateSddTree();

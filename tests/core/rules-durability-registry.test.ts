@@ -135,7 +135,7 @@ describe('durability modes — only durable demands the boot read-back', () => {
 
   it('DURABILITY_ON_NON_STORE still rejects the new modes on non-Stores', () => {
     const proj = createTempProject();
-    proj.component('sneaky-specialist', 'Specialist', 'durability: cache');
+    proj.component('sneaky-cache-orchestrator', 'Orchestrator', 'durability: cache');
     proj.activate();
     try {
       const found = byCode(validateSddTree(), 'DURABILITY_ON_NON_STORE');
@@ -171,10 +171,10 @@ describe('Registry matrix — write path to its Store, nothing else', () => {
     } finally { proj.cleanup(); }
   });
 
-  it('accepts Registry → validation Specialist (the standard §7 validate→write path)', () => {
+  it('accepts Registry → pure validation logic (the standard §7 validate→write path)', () => {
     const proj = createTempProject();
     proj.component('rec-store2', 'Store', 'durability: ram-projection');
-    proj.component('shape-validator', 'Specialist');
+    proj.component('shape-validator', 'Orchestrator', 'dependencyClass: pure');
     proj.component('rec-registry2', 'Registry', 'dependsOn: [rec-store2, shape-validator]');
     proj.activate();
     try {
