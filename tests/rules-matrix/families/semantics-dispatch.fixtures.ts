@@ -695,6 +695,69 @@ export default [
   defineRuleFixture({
     code: 'NARRATIVE_SEMANTIC_UNBACKED',
     expectFire: false,
+    reason:
+      'The binding names a captureCharge method the executor does not declare: that is the table side\'s UNSERVED_CAPABILITY, and a guarantee cannot be judged against a method that does not exist.',
+    scenario:
+      'The payments portal binds payment.capture to a captureCharge method the charge executor never declared, and the orchestrator\'s dispatch step asserts idempotency through that binding.',
+    tree: {
+      subsystems: [{ id: 'payment-processing', description: 'Payment capture routed through the payments portal.' }],
+      components: [
+        {
+          id: 'payments-portal',
+          componentType: 'Portal',
+          portalType: 'HTTP_API',
+          description: 'Generic payments portal dispatching capture capabilities inward.',
+          dependsOn: ['charge-executor'],
+          dispatch: [
+            { capability: 'payment.capture', component: 'charge-executor', method: 'captureCharge', description: 'Capture an authorized charge.' },
+          ],
+        },
+        { id: 'charge-executor', componentType: 'Specialist', description: 'Executes charge authorizations against the gateway.' },
+        {
+          id: 'payment-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Drives the capture flow for authorized payments.',
+          dependsOn: ['payments-portal'],
+        },
+      ],
+      interfaces: [
+        {
+          id: 'icharge_executor',
+          component: 'charge-executor',
+          methods: [{ name: 'authorizeCharge', description: 'Authorize the amount for one payment.' }],
+        },
+        {
+          id: 'ipayment_orchestrator',
+          component: 'payment-orchestrator',
+          methods: [{ name: 'capturePayment', description: 'Capture the authorized amount for a completed order.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'payment_orchestrator_impl',
+          contract: 'ipayment_orchestrator',
+          methods: [
+            {
+              name: 'capturePayment',
+              narrative: [
+                {
+                  stepNumber: 1,
+                  type: 'dispatch',
+                  description: 'Capture the authorized amount exactly once via the payments portal.',
+                  targetComponent: 'payments-portal',
+                  capability: 'payment.capture',
+                  assertsGuarantees: ['idempotent'],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'NARRATIVE_SEMANTIC_UNBACKED',
+    expectFire: false,
     reason: 'The bound captureCharge method declares the idempotent guarantee, so the narrative assertion is backed by the contract.',
     scenario:
       'The charge executor\'s captureCharge contract declares idempotency, backing the orchestrator\'s asserted guarantee on the dispatch step.',

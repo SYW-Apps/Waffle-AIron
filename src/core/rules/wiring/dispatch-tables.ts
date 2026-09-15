@@ -141,19 +141,21 @@ export const dispatchRule: SddRule = {
 
           // Same consistency check call steps get: a guarantee this step
           // asserts must be declared by the method the capability resolves to.
-          if (step.assertsGuarantees?.length) {
-            const boundMethod = ctx.interfaceMethodsOf(binding.component).find(m => m.name === binding.method);
-            const declared = new Set(boundMethod?.guarantees ?? []);
-            for (const g of step.assertsGuarantees) {
-              if (!declared.has(g)) {
-                ctx.addIssue(
-                  'warning',
-                  'NARRATIVE_SEMANTIC_UNBACKED',
-                  `${where} asserts guarantee "${g}", but capability "${step.capability}" resolves to "${binding.component}.${binding.method}", which does not list "${g}" among its L3 contract guarantees. Declare it there (and ensure its shape can deliver it), or revise the narrative.`,
-                  impl.id,
-                  isDraftCtx || ctx.isComponentDraft(binding.component),
-                );
-              }
+          // A binding naming a missing component or method is the table side's
+          // UNSERVED_CAPABILITY, and a guarantee cannot be judged against a
+          // method that does not exist.
+          const boundMethod = ctx.interfaceMethodsOf(binding.component).find(m => m.name === binding.method);
+          if (!boundMethod) continue;
+          const declared = new Set(boundMethod.guarantees ?? []);
+          for (const g of step.assertsGuarantees ?? []) {
+            if (!declared.has(g)) {
+              ctx.addIssue(
+                'warning',
+                'NARRATIVE_SEMANTIC_UNBACKED',
+                `${where} asserts guarantee "${g}", but capability "${step.capability}" resolves to "${binding.component}.${binding.method}", which does not list "${g}" among its L3 contract guarantees. Declare it there (and ensure its shape can deliver it), or revise the narrative.`,
+                impl.id,
+                isDraftCtx || ctx.isComponentDraft(binding.component),
+              );
             }
           }
         }

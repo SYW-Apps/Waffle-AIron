@@ -1,13 +1,56 @@
 /**
  * Untyped-seam family (src/core/rules/wiring/untyped-seams.ts, untypedSeamRule):
  * methods on a subsystem's PUBLISHED components should not take or return
- * bare Json/any/unknown — cross-subsystem contracts are the swap seam and
- * must be typed. Generic-dispatch portals carry per-capability types via
- * their dispatch table instead (the documented exemption).
+ * bare Json/any/unknown/object — cross-subsystem contracts are the swap seam
+ * and must be typed. Every method is judged through its type references, so a
+ * prose signature is judged like structured params. Generic-dispatch portals
+ * carry per-capability types via their dispatch table instead (the documented
+ * exemption).
  */
 import { defineRuleFixture } from '../harness.js';
 
 export default [
+  defineRuleFixture({
+    code: 'UNTYPED_SEAM',
+    severity: 'warning',
+    anchoredTo: 'iorder_intake_portal',
+    expectFire: true,
+    scenario:
+      'The published order-intake portal declares amendOrder with only a prose signature taking a bare Json patch, which is judged like structured params and crosses the public surface untyped.',
+    tree: {
+      subsystems: [
+        {
+          id: 'storefront',
+          description: 'Customer-facing shop: order intake.',
+          publicInterfaces: [
+            { type: 'REST', details: 'Public order intake API for the storefront.', component: 'order-intake-portal' },
+          ],
+        },
+      ],
+      components: [
+        {
+          id: 'order-intake-portal',
+          componentType: 'Portal',
+          portalType: 'HTTP_API',
+          description: 'Public HTTP entry for order submission and amendment.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'iorder_intake_portal',
+          component: 'order-intake-portal',
+          methods: [
+            {
+              name: 'amendOrder',
+              description: 'Apply a customer amendment to an open order.',
+              signature: 'amendOrder(orderId: string, patch: Json): string',
+              returns: 'string',
+            },
+          ],
+        },
+      ],
+    },
+  }),
   defineRuleFixture({
     code: 'UNTYPED_SEAM',
     severity: 'warning',
