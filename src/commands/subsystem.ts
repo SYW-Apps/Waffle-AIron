@@ -9,6 +9,7 @@ import {
   moveSubsystemProject,
   externalizeSubsystem,
   internalizeSubsystem,
+  retireSpecialists as coreRetireSpecialists,
   composeAgentBrief as coreComposeAgentBrief,
   exportSpecTree as coreExportSpecTree,
   importSpecTree as coreImportSpecTree,
@@ -21,7 +22,7 @@ import {
   listDirectChainedSubprojects as coreListDirectChainedSubprojects,
   defaultPackSelections as coreDefaultPackSelections,
 } from '../core/index.js';
-import type { TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
+import type { SpecialistRetirement, TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
 import type {
   AgentBrief,
   AgentRecord,
@@ -112,6 +113,14 @@ export function ensureProjectInitialized(fallbackName: string): { wroteConfig: b
 
 export function listDirectChainedSubprojects(projectRoot: string): { dir: string; subsystemId: string }[] {
   return coreListDirectChainedSubprojects(projectRoot);
+}
+
+// cli_core_adapter.retireSpecialists — 1:1 forward backing `wairon doctor`: the
+// migration off the retired Specialist stereotype, planned, and with apply
+// written — each Specialist retyped as an Orchestrator with the dependencyClass
+// its dependencies decide, and each Specialist-based project variant rebased.
+export function retireSpecialists(apply: boolean): SpecialistRetirement {
+  return coreRetireSpecialists(apply);
 }
 
 // cli_core_adapter.defaultPackSelections — 1:1 forward: the store packs that
