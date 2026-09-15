@@ -20,10 +20,11 @@ description: >-
   not the pack profile: a real spec tree is thousands of small YAML files across several chained
   roots.
 subsystem: sdd_sdk
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn: []
+dependencyClass: pure
 variant: codec
 status: complete
 createdAt: '2026-08-12T17:18:40.203Z'
-updatedAt: '2026-08-12T17:21:54.948Z'
+updatedAt: '2026-09-15T20:01:59.867Z'

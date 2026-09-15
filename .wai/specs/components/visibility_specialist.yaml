@@ -9,10 +9,11 @@ description: >-
   units granted via exposeTo; tenant roots are always closed toward other tenant roots (cross-tenant
   visibility ONLY via exposeTo — fail-closed); no deny-lists.
 subsystem: sdd_host
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn: []
+dependencyClass: pure
 variant: arbiter
 status: complete
 createdAt: '2026-07-11T09:37:05.981Z'
-updatedAt: '2026-08-12T05:25:54.220Z'
+updatedAt: '2026-09-15T20:01:59.948Z'

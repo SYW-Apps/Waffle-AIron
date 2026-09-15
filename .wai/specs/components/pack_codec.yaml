@@ -15,10 +15,11 @@ description: >-
   digest matches. Provides the default limit profile and lets callers (hosted stricter, local
   looser) override it.
 subsystem: sdd_sdk
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn: []
+dependencyClass: pure
 variant: codec
 status: complete
 createdAt: '2026-07-21T17:22:15.864Z'
-updatedAt: '2026-08-12T05:26:22.087Z'
+updatedAt: '2026-09-15T20:01:59.057Z'

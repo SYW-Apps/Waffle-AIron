@@ -7,10 +7,11 @@ description: >-
   (observe/warn). Actual blocking or throttling enforcement requires a future data-plane integration
   and is explicitly out of scope for now.
 subsystem: sdd_host
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn: []
+dependencyClass: pure
 variant: arbiter
 status: complete
 createdAt: '2026-07-09T09:09:10.171Z'
-updatedAt: '2026-08-12T05:25:54.921Z'
+updatedAt: '2026-09-15T20:01:59.314Z'

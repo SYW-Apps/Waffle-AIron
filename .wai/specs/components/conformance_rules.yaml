@@ -9,10 +9,11 @@ description: >-
   it holds no state (the rule set belongs to the rule Repository), does no I/O and runs no workflow,
   which is the arbiter shape.
 subsystem: sdd_validator
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn: []
+dependencyClass: pure
 variant: arbiter
 status: draft
 createdAt: '2026-09-14T05:42:20.209Z'
-updatedAt: '2026-09-14T05:42:47.033Z'
+updatedAt: '2026-09-15T20:01:57.909Z'

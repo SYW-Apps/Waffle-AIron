@@ -14,10 +14,11 @@ description: >-
   maintained over a Store, so it is not an Index; and it is a derivation rather than a verdict, so
   it does not sit on a rule family's arbiter contract.
 subsystem: sdd_validator
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn: []
+dependencyClass: pure
 variant: projector
 status: draft
 createdAt: '2026-09-14T05:42:27.585Z'
-updatedAt: '2026-09-14T05:42:48.765Z'
+updatedAt: '2026-09-15T20:01:58.801Z'

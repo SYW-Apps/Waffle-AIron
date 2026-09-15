@@ -11,10 +11,11 @@ description: >-
   `@wairon/sdk` dependency to the running SDK version so a scaffolded pack builds against a matching
   contract.
 subsystem: sdd_sdk
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn: []
+dependencyClass: pure
 variant: composer
 status: complete
 createdAt: '2026-07-21T17:22:21.759Z'
-updatedAt: '2026-08-12T05:26:19.441Z'
+updatedAt: '2026-09-15T20:01:59.144Z'

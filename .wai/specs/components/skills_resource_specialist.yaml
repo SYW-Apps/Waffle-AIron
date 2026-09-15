@@ -7,11 +7,12 @@ description: >-
   skills_exporter copies to the filesystem. This lets cloud-only MCP agents, which cannot receive
   filesystem-exported skills, read the SDD guidance over the MCP protocol.
 subsystem: sdd_skills
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn:
   - skills_core_adapter
+dependencyClass: read
 variant: composer
 status: complete
 createdAt: '2026-07-08T22:01:27.596Z'
-updatedAt: '2026-08-12T05:26:20.849Z'
+updatedAt: '2026-09-15T20:01:59.487Z'

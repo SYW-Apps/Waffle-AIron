@@ -6,11 +6,12 @@ description: >-
   diagram code block, plus an optional live-canvas link). Pure transformation, reused by every
   producer target.
 subsystem: sdd_producers
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn:
   - producer_core_adapter
+dependencyClass: read
 variant: projector
 status: complete
 createdAt: '2026-07-04T17:29:01.496Z'
-updatedAt: '2026-08-12T05:26:10.201Z'
+updatedAt: '2026-09-15T20:01:59.583Z'

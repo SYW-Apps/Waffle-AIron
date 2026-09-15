@@ -5,11 +5,12 @@ description: >-
   ceiling, resolves each to its subsystem-published Portal with the full L3 contract and dispatch
   table, and computes the transitive type closure so the snapshot is self-contained.
 subsystem: sdd_surfaces
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn:
   - surfaces_core_adapter
+dependencyClass: read
 variant: projector
 status: complete
 createdAt: '2026-07-10T23:12:25.556Z'
-updatedAt: '2026-08-12T05:26:08.716Z'
+updatedAt: '2026-09-15T20:01:59.782Z'

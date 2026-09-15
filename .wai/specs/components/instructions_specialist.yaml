@@ -13,12 +13,13 @@ description: >-
   declares one — the hook that lets a platform wrapper ADJUST the default without owning or
   restating it.
 subsystem: sdd_skills
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn:
   - skills_core_adapter
   - skills_resource_specialist
+dependencyClass: read
 variant: composer
 status: complete
 createdAt: '2026-07-29T10:49:01.675Z'
-updatedAt: '2026-08-12T05:26:20.139Z'
+updatedAt: '2026-09-15T20:01:58.448Z'

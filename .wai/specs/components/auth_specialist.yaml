@@ -15,7 +15,7 @@ description: >-
   UUID = unguessable, guard = unclaimable). The single authority for authentication; performs no
   authorization routing itself.
 subsystem: sdd_host
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn:
   - credential_registry
@@ -23,6 +23,7 @@ dependsOn:
   - secret_registry
   - user_repository
   - instance_identity_repository
+dependencyClass: read
 status: complete
 createdAt: '2026-07-04T12:33:41.835Z'
-updatedAt: '2026-07-16T00:25:18.328Z'
+updatedAt: '2026-09-15T20:01:57.709Z'

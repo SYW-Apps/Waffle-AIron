@@ -5,12 +5,13 @@ description: >-
   HTTP-transport entries of a snapshot as an OpenAPI spec (types rendered as JSON-Schema
   components), and imports a 3rd-party OpenAPI document into an authored-origin snapshot.
 subsystem: sdd_surfaces
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn: []
+dependencyClass: pure
 variant: codec
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:12:27.905Z'
-updatedAt: '2026-08-12T05:26:21.551Z'
+updatedAt: '2026-09-15T20:01:58.968Z'
