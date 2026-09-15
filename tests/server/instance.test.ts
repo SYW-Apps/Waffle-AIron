@@ -10,8 +10,7 @@ import {
   authenticateMaster,
 } from '../../src/server/auth.js';
 import { createWebSession, getWebSessionById } from '../../src/server/websessions.js';
-import { initHostInstance, DEV_UNIT_ID } from '../../src/server/http.js';
-import { getOrganizationUnit } from '../../src/server/organization.js';
+import { bootstrapInstance } from '../../src/server/instance-bootstrap.js';
 import { startDevSession } from '../../src/server/web.js';
 import type { HostConfig } from '../../src/server/types.js';
 
@@ -156,26 +155,8 @@ describe('instance identity (sdd_host)', () => {
     expect(isReservedSubject(dataDir, 'u-ordinary')).toBe(false);
   });
 
-  // ── lifecycle init entrypoint ────────────────────────────────────────────────
-
-  it('initHostInstance seeds the identity; under devMode it also ensures the synthetic local unit (idempotently)', () => {
-    // Hosted posture: identity seeded, NO synthetic unit.
-    initHostInstance(cfg);
-    expect(getInstanceIdentity(dataDir)).not.toBeNull();
-    expect(getOrganizationUnit(dataDir, DEV_UNIT_ID)).toBeNull();
-
-    // Dev posture: the synthetic local unit exists so dev projects can be placed.
-    const devCfg: HostConfig = { ...cfg, authEnabled: false, devMode: true };
-    initHostInstance(devCfg);
-    const unit = getOrganizationUnit(dataDir, DEV_UNIT_ID);
-    expect(unit?.id).toBe(DEV_UNIT_ID);
-
-    // Idempotent: a re-run neither duplicates the unit nor rotates the identity.
-    const before = getInstanceIdentity(dataDir);
-    initHostInstance(devCfg);
-    expect(getInstanceIdentity(dataDir)).toEqual(before);
-    expect(getOrganizationUnit(dataDir, DEV_UNIT_ID)?.createdAt).toBe(unit?.createdAt);
-  });
+  // The lifecycle init entrypoint's own boot-seeding coverage lives in
+  // tests/server/instance-bootstrap.test.ts, alongside the component it moved to.
 
   it('startDevSession binds the persisted local-developer UUID (and refuses before init seeded it)', () => {
     const devCfg: HostConfig = { ...cfg, authEnabled: false, devMode: true };
@@ -183,7 +164,7 @@ describe('instance identity (sdd_host)', () => {
     // Before init: fail closed rather than minting a nameless session.
     expect(() => startDevSession(devCfg)).toThrow(/instance identity is not seeded/i);
 
-    initHostInstance(devCfg);
+    bootstrapInstance(devCfg);
     const identity = getInstanceIdentity(dataDir)!;
     const sessionId = startDevSession(devCfg);
     const principal = authenticateSession(dataDir, sessionId);

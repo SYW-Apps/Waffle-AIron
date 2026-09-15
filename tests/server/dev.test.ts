@@ -15,7 +15,8 @@ import {
   getWebSessionById,
   listWebSessionsBySubject,
 } from '../../src/server/websessions.js';
-import { routeData, initHostInstance } from '../../src/server/http.js';
+import { routeData } from '../../src/server/http.js';
+import { bootstrapInstance } from '../../src/server/instance-bootstrap.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import type { HostConfig, Principal } from '../../src/server/types.js';
 
@@ -181,7 +182,7 @@ describe('dev-mode HTTP wiring (routeData) (sdd_host)', () => {
     // Mirror startHostServer: the lifecycle init entrypoint runs before the
     // listener binds (seeds the instance identity; devMode also seeds the
     // synthetic 'local' organization unit).
-    initHostInstance(cfg);
+    bootstrapInstance(cfg);
     server = http.createServer((req, res) => routeData(cfg, req, res));
     return new Promise((resolve) =>
       server!.listen(0, '127.0.0.1', () => {
