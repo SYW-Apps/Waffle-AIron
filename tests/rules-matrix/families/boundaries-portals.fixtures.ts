@@ -8,8 +8,8 @@
  *  - UNEXPECTED_PORTAL_FIELD (error): non-Portal components carry no
  *    portalType or basePath — both behaviors get a fire.
  *  - AUTH_ON_NON_PORTAL (warning): auth is inbound transport auth, only
- *    meaningful on a Portal; a Gateway carries it on the Portal it owns
- *    (the documented example, modeled literally).
+ *    meaningful on a Portal; a gateway is a Portal with the gateway variant, so
+ *    it carries the auth itself, never the Orchestrator it dispatches to.
  *  - MISSING_ENDPOINT (error): a Portal whose portalType maps to a transport
  *    binds every interface method to a concrete endpoint.
  *  - ENDPOINT_TRANSPORT_MISMATCH (error): the endpoint's transport must match
@@ -120,52 +120,53 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // AUTH_ON_NON_PORTAL — the documented Gateway example, literally
+  // AUTH_ON_NON_PORTAL — the documented gateway example, literally
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'AUTH_ON_NON_PORTAL',
     severity: 'warning',
-    anchoredTo: 'partner-api-gateway',
+    anchoredTo: 'partner-request-orchestrator',
     expectFire: true,
     scenario:
-      'The partner API gateway declares the apiKey auth scheme on itself instead of on the partner portal it owns, so the OpenAPI projection would ignore it.',
+      'The partner request orchestrator declares the apiKey auth scheme on itself instead of on the partner API gateway portal that exposes the surface, so the OpenAPI projection would ignore it.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'partner-integrations', description: 'Partner clinic and lab integrations.' }],
       components: [
         {
           id: 'partner-api-gateway',
-          componentType: 'Gateway',
-          description: 'Facade bundling the partner API portal and its orchestrator.',
-          owns: ['partner-api-portal', 'partner-request-orchestrator'],
+          componentType: 'Portal',
+          portalType: 'Custom',
+          variant: 'gateway',
+          description: 'Front door for partner requests, dispatching to the partner request orchestrator.',
+          dependsOn: ['partner-request-orchestrator'],
+        },
+        {
+          id: 'partner-request-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Drives partner-initiated request flows.',
           auth: { scheme: 'apiKey', in: 'header', name: 'X-Partner-Key' },
         },
-        { id: 'partner-api-portal', componentType: 'Portal', portalType: 'Custom', description: 'Inbound surface for partner requests.' },
-        { id: 'partner-request-orchestrator', componentType: 'Orchestrator', description: 'Drives partner-initiated request flows.' },
       ],
     },
   }),
   defineRuleFixture({
     code: 'AUTH_ON_NON_PORTAL',
     expectFire: false,
-    reason: 'Auth sits on the exposed Portal — the documented resolution ("a Gateway carries it on the Portal it owns").',
+    reason: 'Auth sits on the exposed Portal — the gateway is a Portal with the gateway variant, so it carries the auth itself.',
     scenario:
-      'The partner API gateway leaves auth to the partner portal it owns, which declares the apiKey scheme on the exposed surface.',
+      'The partner API gateway portal declares the apiKey scheme on the surface it exposes, and the partner request orchestrator behind it declares none.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'partner-integrations', description: 'Partner clinic and lab integrations.' }],
       components: [
         {
           id: 'partner-api-gateway',
-          componentType: 'Gateway',
-          description: 'Facade bundling the partner API portal and its orchestrator.',
-          owns: ['partner-api-portal', 'partner-request-orchestrator'],
-        },
-        {
-          id: 'partner-api-portal',
           componentType: 'Portal',
           portalType: 'Custom',
-          description: 'Inbound surface for partner requests.',
+          variant: 'gateway',
+          description: 'Front door for partner requests, dispatching to the partner request orchestrator.',
+          dependsOn: ['partner-request-orchestrator'],
           auth: { scheme: 'apiKey', in: 'header', name: 'X-Partner-Key' },
         },
         { id: 'partner-request-orchestrator', componentType: 'Orchestrator', description: 'Drives partner-initiated request flows.' },
@@ -294,17 +295,17 @@ export default [
     anchoredTo: 'iclaims_scoring',
     expectFire: true,
     scenario:
-      'The claims scoring specialist\'s contract method declares an HTTP endpoint although only Portal components may carry wire endpoints.',
+      'The claims scoring arbiter\'s contract method declares an HTTP endpoint although only Portal components may carry wire endpoints.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'claims', description: 'Insurance claim intake and adjudication.' }],
       components: [
-        { id: 'claims-scoring-specialist', componentType: 'Specialist', description: 'Scores a claim against the payer\'s adjudication rules.' },
+        { id: 'claims-scoring-arbiter', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Scores a claim against the payer\'s adjudication rules.' },
       ],
       interfaces: [
         {
           id: 'iclaims_scoring',
-          component: 'claims-scoring-specialist',
+          component: 'claims-scoring-arbiter',
           methods: [
             {
               name: 'scoreClaim',
@@ -319,19 +320,19 @@ export default [
   defineRuleFixture({
     code: 'ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT',
     expectFire: false,
-    reason: 'The Specialist\'s contract carries no endpoint; wire bindings belong to the Portal that exposes the capability.',
+    reason: 'The arbiter\'s contract carries no endpoint; wire bindings belong to the Portal that exposes the capability.',
     scenario:
-      'The claims scoring specialist exposes scoreClaim as a plain in-process contract method with no wire endpoint.',
+      'The claims scoring arbiter exposes scoreClaim as a plain in-process contract method with no wire endpoint.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'claims', description: 'Insurance claim intake and adjudication.' }],
       components: [
-        { id: 'claims-scoring-specialist', componentType: 'Specialist', description: 'Scores a claim against the payer\'s adjudication rules.' },
+        { id: 'claims-scoring-arbiter', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Scores a claim against the payer\'s adjudication rules.' },
       ],
       interfaces: [
         {
           id: 'iclaims_scoring',
-          component: 'claims-scoring-specialist',
+          component: 'claims-scoring-arbiter',
           methods: [{ name: 'scoreClaim', description: 'Score one claim for adjudication.' }],
         },
       ],

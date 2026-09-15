@@ -48,7 +48,8 @@ export default [
         },
         {
           id: 'cart-pricing-engine',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'checkout',
           description: 'Prices the cart including promotions and tax.',
         },
@@ -134,7 +135,8 @@ export default [
         },
         {
           id: 'cart-pricing-engine',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'checkout',
           description: 'Prices the cart including promotions and tax.',
         },
@@ -230,7 +232,8 @@ export default [
         },
         {
           id: 'cart-pricing-engine',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'checkout',
           description: 'Prices the cart including promotions and tax.',
         },
@@ -420,7 +423,8 @@ export default [
         },
         {
           id: 'cart-pricing-engine',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'checkout',
           description: 'Prices the cart including promotions and tax.',
         },
@@ -509,7 +513,8 @@ export default [
         },
         {
           id: 'cart-pricing-engine',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'checkout',
           description: 'Prices the cart including promotions and tax.',
         },
@@ -986,7 +991,8 @@ export default [
         },
         {
           id: 'cart-pricing-engine',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'checkout',
           description: 'Prices the cart including promotions and tax.',
         },
@@ -1164,7 +1170,8 @@ function placeOrderCommandTree(harness: string): import('../harness.js').Fixture
       },
       {
         id: 'cart-pricing-engine',
-        componentType: 'Specialist',
+        componentType: 'Orchestrator',
+        dependencyClass: 'pure',
         subsystem: 'checkout',
         description: 'Prices the cart including promotions and tax.',
       },

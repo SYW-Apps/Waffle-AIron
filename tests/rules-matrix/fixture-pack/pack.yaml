@@ -20,8 +20,8 @@ assertions:
     severity: error
     reason: >-
       Ledger-platform doctrine: workflow orchestrators must reach payment
-      vendors through the payout Gateway facade, never the raw vendor Adapter —
-      vendor failover and sandboxing live in the Gateway.
+      vendors through the payout vendor supervisor, never the raw vendor
+      Adapter — vendor failover and sandboxing live in the supervisor.
     from:
       componentType: [Orchestrator]
     to:

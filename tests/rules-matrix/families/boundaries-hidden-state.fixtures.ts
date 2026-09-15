@@ -3,11 +3,11 @@
  * half of the fields-vs-Store criterion, statically approximated.
  *
  * Documented intent: module-scope MUTABLE bindings (`let`/`var`) in a source
- * file mapped EXCLUSIVELY to logic-stereotype components (Orchestrator/
- * Supervisor/Actor/Specialist) are held state hiding outside a Store. The
- * check is deliberately conservative (documented):
+ * file mapped EXCLUSIVELY to stateless logic (Orchestrators) are held state
+ * hiding outside a Store. The check is deliberately conservative (documented):
  *  - exact analysis grade only;
- *  - files also mapped to a data/boundary component are exempt (N:1 collapse);
+ *  - files also mapped to a data/boundary component, or to a Supervisor or
+ *    Actor (which hold runtime state by definition), are exempt (N:1 collapse);
  *  - mutation of const-bound containers is invisible to the check.
  *
  * The fixtures materialize a real TypeScript source file via tree.files and

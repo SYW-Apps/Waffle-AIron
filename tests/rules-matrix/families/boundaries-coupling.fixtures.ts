@@ -58,10 +58,10 @@ const BILLING_SUB = { id: 'billing', description: 'Invoicing and payment collect
 
 /** N existing collaborator components for the god-component fan-out trees. */
 const INTAKE_COLLABORATORS: FixtureSpecInput[] = [
-  { id: 'eligibility-specialist', componentType: 'Specialist', description: 'Checks a patient\'s insurance eligibility.' },
-  { id: 'triage-specialist', componentType: 'Specialist', description: 'Scores intake urgency for triage.' },
-  { id: 'consent-specialist', componentType: 'Specialist', description: 'Verifies the required consent forms are on file.' },
-  { id: 'copay-quote-specialist', componentType: 'Specialist', description: 'Quotes the expected copay for a visit.' },
+  { id: 'eligibility-checker', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Checks a patient\'s insurance eligibility.' },
+  { id: 'triage-scorer', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Scores intake urgency for triage.' },
+  { id: 'consent-verifier', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Verifies the required consent forms are on file.' },
+  { id: 'copay-quoter', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Quotes the expected copay for a visit.' },
   { id: 'sms-notify-adapter', componentType: 'Adapter', description: 'Wraps the SMS provider API for patient notifications.' },
   { id: 'email-notify-adapter', componentType: 'Adapter', description: 'Wraps the email provider API for patient notifications.' },
   { id: 'insurance-api-adapter', componentType: 'Adapter', description: 'Wraps the insurer eligibility API.' },
