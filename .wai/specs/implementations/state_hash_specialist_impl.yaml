@@ -84,6 +84,16 @@ methods:
         type: return
         outcome: gate StateId
     detail: full
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        statehash.ts reads the validator's built-in rule list to hash the doctrine a lock covers
+        (doctrineIdentity.builtinRules). The edge predates the rule model PR; importing through the
+        unmapped rules/index.ts barrel hid it. How sdd_core obtains the built-in rule identity
+        (through sdd_validator's published surface, or passed in by the lock workflow) is an open
+        decision recorded in .wai/phased_design.md under the doctrine PR; this allow is removed when
+        that is decided.
 status: complete
 createdAt: '2026-07-04T12:54:31.981Z'
-updatedAt: '2026-09-12T17:36:45.338Z'
+updatedAt: '2026-09-15T00:53:50.361Z'

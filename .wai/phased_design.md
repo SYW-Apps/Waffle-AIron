@@ -319,6 +319,8 @@ Each reported behaviour is reproduced with a failing test first; a confirmed one
 - [ ] Complexity: a level from a cognitive score (linear, simple, moderate, complex, severe) and a step count, each with a warning and an optional max on separate codes; defaults warn above moderate and above 25 steps, with no max; precedence built-in, then pack profile, then project
 - [ ] Naming: stutter, generic words, a role word contradicting the component type, a one-method component named after its method; wairon's own seven mismatched names fixed
 - [ ] The standard gains the module realization in the language bindings and the live auction as its worked example
+- [ ] Decide how the lock's gate hash gets the validator's built-in rule identity. `state_hash_specialist` (sdd_core) reads `SDD_RULES` from sdd_validator's rule repository — a cross-subsystem edge no spec declares, made visible when the rule model PR moved the list; acknowledged with a reasoned UNDECLARED_DEPENDENCY allow on `state_hash_specialist_impl` until decided. Options: sdd_core reads it through sdd_validator's published surface (a mutual subsystem dependency to acknowledge), or the lock workflow passes it in with the doctrine
+- [ ] `LOGIC_STEREOTYPES` is defined twice (narrative-detail and hidden-state); give the logic-stereotype test a home when the stereotypes change
 
 ### Data-model PR — entities as table schemas (decided by Robbe 2026-09-15; proposal E10)
 - [ ] One type per entity with persistence metadata (`database`, `table`, a per-field `column`, `transient`); relations stated on fields with derived foreign keys — other aggregates by id, value objects embedded, owned collections as child tables, many-to-many join tables derived; `linkedEntity`, `references` and `key: foreign` retired
