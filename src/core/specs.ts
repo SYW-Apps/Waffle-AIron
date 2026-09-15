@@ -27,6 +27,7 @@ import {
   SpecStatus,
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
+  splitNamespace,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -157,15 +158,6 @@ function qualifyDeclaredId(id: string, prefix: string, mountRealization = false)
 function qualifySubsystemRef(id: string, prefix: string, rootSubsystems: ReadonlySet<string>): string {
   if (prefix && !id.includes('::') && id === prefix.split('::').pop()) return prefix;
   return qualifyId(id, prefix, rootSubsystems);
-}
-
-export function splitNamespace(qualifiedId: string): { prefix: string; localId: string } {
-  if (!qualifiedId.includes('::')) {
-    return { prefix: '', localId: qualifiedId };
-  }
-  const parts = qualifiedId.split('::');
-  const localId = parts.pop()!;
-  return { prefix: parts.join('::'), localId };
 }
 
 /**

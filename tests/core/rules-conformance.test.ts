@@ -7,7 +7,7 @@ import { buildCodeModel } from '../../src/core/source-analysis.js';
 import { buildRuleContext } from '../../src/core/rules/index.js';
 import { knownIssueCodes, registerBuiltinRules, registerPackRules } from '../../src/core/rules/repository.js';
 import { emptyExtensions, type LoadedExtensions } from '../../src/core/extensions.js';
-import { structuralConformanceRule } from '../../src/core/rules/conformance.js';
+import { structuralConformanceRule } from '../../src/core/rules/conformance/structural-conformance.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 /** The known issue codes a rule context carries, gathered as the validator gathers them. */

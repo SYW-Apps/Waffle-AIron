@@ -3,7 +3,7 @@ import type { RulesConfig } from '../../models/project.js';
 import type { ValidationIssue } from '../validation.js';
 import type { LoadedExtensions } from '../extensions.js';
 import { buildRuleContext } from './index.js';
-import { registerBuiltinRules, registerPackRules, specScopedRules } from './repository.js';
+import { registerBuiltinRules, registerPackRules, knownIssueCodes, specScopedRules } from './repository.js';
 
 // ---------------------------------------------------------------------------
 // Candidate validation — the write-boundary half of the rule set.
@@ -86,6 +86,16 @@ export function validateComponentCandidate(
 ): CandidateVerdict {
   const issues: ValidationIssue[] = [];
 
+  registerBuiltinRules();
+  if (opts.extensions?.rules?.length) registerPackRules(opts.extensions.rules);
+  // Every code the registered rules and the loaded declarative assertions can
+  // report, gathered as validateSddTree gathers them, so any rule reading the
+  // context's known codes sees the same set.
+  const knownCodes = new Set([
+    ...knownIssueCodes().map((rc) => rc.code),
+    ...(opts.extensions?.assertions ?? []).map((a) => a.fullCode),
+  ]);
+
   const ctx = buildRuleContext({
     system: stubSystem(),
     subsystems: [],
@@ -96,15 +106,13 @@ export function validateComponentCandidate(
     rules: opts.rules,
     projectType: opts.projectType ?? 'backend',
     extensions: opts.extensions,
-    // Only tree-scoped rules read these (roundtrip-serialization and the
-    // lint-allows audit); no spec-scoped rule does, so a candidate carries none.
+    // Only a tree-scoped rule reads these (roundtrip-serialization); no
+    // spec-scoped rule does, so a candidate carries none.
     roundTripIssues: [],
-    knownIssueCodes: new Set<string>(),
+    knownIssueCodes: knownCodes,
     issues,
   });
 
-  registerBuiltinRules();
-  if (opts.extensions?.rules?.length) registerPackRules(opts.extensions.rules);
   for (const rule of specScopedRules()) {
     rule.check(ctx);
   }

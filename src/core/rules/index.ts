@@ -24,131 +24,15 @@ import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
 import type { PackSelection } from '../../models/project.js';
 import { ArchProfile, BUILTIN_PROFILES, RuleContext, SddRule, Severity } from './types.js';
-
-import { hierarchyRule } from './hierarchy.js';
-import { typeReferencesRule } from './type-references.js';
-import { contractsRule } from './contracts.js';
-import { narrativeFlowRule } from './narrative-flow.js';
-import { narrativeDetailRule } from './narrative-detail.js';
-import { portalsRule, portalFieldsRule } from './portals.js';
-import { stereotypeDepsRule } from './stereotype-deps.js';
-import { patternsRule } from './patterns.js';
-import { facadeForwardingRule } from './facade-forwarding.js';
-import { patternReferencesRule } from './pattern-references.js';
-import { variantReferencesRule } from './variant-references.js';
-import { declarativeAssertionsRule } from './declarative-assertions.js';
-import { profilesRule } from './profiles.js';
-import { publicSurfaceRule } from './public-surface.js';
-import { cyclesRule, reachabilityRule } from './graph.js';
-import { dispatchRule, lifecycleRule, durabilityRule, durabilityDeclarationRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
-import { invariantBackingRule } from './invariants.js';
-import { guaranteeTokensRule } from './guarantee-tokens.js';
-import { eventTopologyRule } from './event-topology.js';
-import { narrativeAntipatternsRule } from './narrative-antipatterns.js';
-import { callConformanceRule } from './call-conformance.js';
-import { roundtripRule, namespaceHygieneRule } from './namespace.js';
-import { couplingRule } from './coupling.js';
-import { languageRule } from './language.js';
-import { technologyRule } from './technology.js';
-import { namingRule } from './naming.js';
-import { complexityRule } from './complexity.js';
-import { structuralConformanceRule } from './conformance.js';
-import { integrationConformanceRule } from './integration-conformance.js';
-import { hiddenStateRule } from './hidden-state.js';
-import { dependencyConformanceRule } from './dependency-conformance.js';
-import { lintAllowsRule } from './lint-allows.js';
-import { packResolutionRule } from './pack-resolution.js';
-import { reproducibilityRule } from './reproducibility.js';
-import { portalCallAuthRule } from './portal-call-auth.js';
+import { SDD_RULES } from './repository.js';
+import { lintAllowsRule } from './integrity/lint-allows.js';
 import { emptyCodeModel } from '../source-analysis.js';
 
 export * from './types.js';
 
-// ---------------------------------------------------------------------------
-// The registry. Order matters only for issue-list readability (hierarchy first,
-// heuristics last) — rules are independent.
-// ---------------------------------------------------------------------------
-
-export const SDD_RULES: SddRule[] = [
-  hierarchyRule,
-  // Namespace integrity right after hierarchy: unresolvable/unwritable ids
-  // explain many downstream findings, so surface them early in the list.
-  namespaceHygieneRule,
-  roundtripRule,
-  typeReferencesRule,
-  contractsRule,
-  // Vocabulary check right after contracts: an unknown token explains why the
-  // consistency findings around it are absent, so surface them together.
-  guaranteeTokensRule,
-  narrativeFlowRule,
-  // Antipatterns right after flow soundness: they analyze the same step
-  // graphs and only make sense once the graphs are structurally valid.
-  narrativeAntipatternsRule,
-  narrativeDetailRule,
-  // Field shape before endpoint bindings: a Portal-only field on the wrong
-  // stereotype explains the endpoint findings around it, and this half is
-  // spec-scoped so the write boundary refuses it first.
-  portalFieldsRule,
-  portalsRule,
-  // Cross-call auth: a narrative call into an authed Portal must name its
-  // credential source (rides with the portal family).
-  portalCallAuthRule,
-  stereotypeDepsRule,
-  patternsRule,
-  // Facade shape rides with pattern ownership: same §7 doctrine, narrative side.
-  facadeForwardingRule,
-  profilesRule,
-  patternReferencesRule,
-  variantReferencesRule,
-  // Pack-instantiated declarative doctrine rides with the pack-reference
-  // family: same data source, same provenance-bearing findings.
-  declarativeAssertionsRule,
-  publicSurfaceRule,
-  cyclesRule,
-  // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
-  // reader sees the broken edge finding next to the unused-detection fallout
-  // it explains.
-  dispatchRule,
-  lifecycleRule,
-  reachabilityRule,
-  // The declaration (spec-scoped, refused at the write boundary) before the
-  // round-trip consequences it enables.
-  durabilityDeclarationRule,
-  durabilityRule,
-  untypedSeamRule,
-  proseClaimRule,
-  // Invariant registry rides with the semantic-edge family: declared entity
-  // invariants must be asserted on every write path (declarations, not proofs).
-  invariantBackingRule,
-  // Pub/sub completeness: emitted topics need subscribers and vice versa.
-  eventTopologyRule,
-  // Code↔spec: structural conformance consumes the injected CodeModel (built
-  // by the source analysis adapter next to the surface snapshots); dependency
-  // conformance lifts its import edges onto the declared dependsOn/owns graph.
-  structuralConformanceRule,
-  // Level 3 opener: narrative call steps must be realized as callees of the
-  // realized function (set membership, exact grade).
-  callConformanceRule,
-  // The fields-vs-Store criterion: mutable module state in logic-only files.
-  hiddenStateRule,
-  dependencyConformanceRule,
-  // Integration wiring proof rides after the code↔spec family: it consumes
-  // the same code model and speaks about the same sourcePath modules.
-  integrationConformanceRule,
-  couplingRule,
-  languageRule,
-  technologyRule,
-  namingRule,
-  complexityRule,
-  // Pack resolution and reproducibility run late: they are about project
-  // CONFIGURATION (does the declared pack set resolve, and can it be reproduced
-  // elsewhere?) rather than spec content.
-  packResolutionRule,
-  reproducibilityRule,
-  // MUST run last: it audits which lint.allow entries the earlier rules
-  // actually consumed (stale/unknown allows).
-  lintAllowsRule,
-];
+// The built-in rule set lives with the rule repository that registers it; it
+// stays published on this barrel so the public surface is unchanged.
+export { SDD_RULES };
 
 /**
  * The full rule sequence for a validation run: built-ins, then extension-pack

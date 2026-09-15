@@ -416,7 +416,7 @@ export function validateSddTree(
       issues.push(...loaderErrors);
     }
     // Round-trip serializability runs as a registered rule (roundtripRule in
-    // rules/namespace.ts) — visible in `rules list`, severity-tunable, scoped
+    // rules/integrity/roundtrip-serialization.ts) — visible in `rules list`, severity-tunable, scoped
     // like every other finding. Its dry-run findings are gathered below, before
     // the rules run.
 

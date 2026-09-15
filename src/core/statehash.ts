@@ -8,10 +8,9 @@ import {
   loadTypeSpecs,
 } from './specs.js';
 import type { LoadedExtensions } from './extensions.js';
-// The BUILTIN rule registry, read inside doctrineIdentity only. This closes an
-// import cycle (rules → coupling → specs → statehash), which is safe for the same
-// reason the existing statehash ↔ specs cycle is: nothing here runs at module init.
-import { SDD_RULES } from './rules/index.js';
+// The BUILTIN rule set, read inside doctrineIdentity only; it lives with the rule
+// repository that registers it.
+import { SDD_RULES } from './rules/repository.js';
 import type { RulesConfig } from '../models/project.js';
 
 // ---------------------------------------------------------------------------

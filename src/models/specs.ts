@@ -5,6 +5,19 @@ import { z } from 'zod';
 // ---------------------------------------------------------------------------
 export const SpecIdSchema = z.string().regex(/^[a-z0-9-_]+$/, 'Identifier must be lowercase alphanumeric with dashes or underscores');
 
+/**
+ * Split a qualified id at its last `::` into the namespace prefix and the local
+ * id. An unqualified id has an empty prefix and is its own local id.
+ */
+export function splitNamespace(qualifiedId: string): { prefix: string; localId: string } {
+  if (!qualifiedId.includes('::')) {
+    return { prefix: '', localId: qualifiedId };
+  }
+  const parts = qualifiedId.split('::');
+  const localId = parts.pop()!;
+  return { prefix: parts.join('::'), localId };
+}
+
 export const SpecStatusSchema = z.enum(['draft', 'design', 'complete']).default('complete');
 export type SpecStatus = z.infer<typeof SpecStatusSchema>;
 

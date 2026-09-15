@@ -25,11 +25,12 @@ import type { ValidationIssue } from '../validation.js';
 //
 // Every SDD conformance check is an SddRule: a named, documented unit with the
 // issue codes it can emit and a check(ctx) over the shared RuleContext. The
-// registry (rules/index.ts) runs them in order; severity resolution (user
-// overrides + draft-context downgrades) is centralized in ctx.addIssue.
+// rule repository (rules/repository.ts) holds them in run order; severity
+// resolution (user overrides + draft-context downgrades) is centralized in
+// ctx.addIssue.
 //
-// This is the "custom linter" foundation: adding a rule is a new module in
-// this directory plus a registry entry — no surgery on a monolith.
+// This is the "custom linter" foundation: adding a rule is a new module in its
+// family's folder plus a registry entry — no surgery on a monolith.
 // ---------------------------------------------------------------------------
 
 export type Severity = 'error' | 'warning';

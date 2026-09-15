@@ -227,16 +227,15 @@ export function typeGenericParameters(type: Pick<TypeSpec, 'name'>): Set<string>
 }
 
 /**
- * type_spec.fieldTypeRefs — the type identifiers one field's type names, with
- * comments, trailing prose and string literals stripped and the type's own
- * generic parameters left out (compared ignoring case). The field is the first
- * one with that name; a type with no such field names nothing.
+ * type_spec.fieldTypeRefs — the type identifiers one of this type's field types
+ * names, with comments, trailing prose and string literals stripped and the
+ * type's own generic parameters left out (compared ignoring case). It takes the
+ * field's type rather than its name, because nothing makes field names unique
+ * within a type.
  */
-export function fieldTypeRefs(type: Pick<TypeSpec, 'name' | 'fields'>, fieldName: string): string[] {
-  const field = type.fields.find(f => f.name === fieldName);
-  if (!field) return [];
+export function fieldTypeRefs(type: Pick<TypeSpec, 'name'>, fieldType: string): string[] {
   const generics = new Set(Array.from(typeGenericParameters(type)).map(g => g.toLowerCase()));
-  return extractTypeIdentifiers(field.type).filter(ref => !generics.has(ref.toLowerCase()));
+  return extractTypeIdentifiers(fieldType).filter(ref => !generics.has(ref.toLowerCase()));
 }
 
 /** interface_spec.genericParameters — the generic parameters declared in the interface's name. */
