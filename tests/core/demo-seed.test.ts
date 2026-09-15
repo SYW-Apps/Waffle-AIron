@@ -6,6 +6,7 @@ import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { seedDemoTree, DEMO_SYSTEM_NAME } from '../../src/core/demo-seed.js';
 import { buildCanvasModel, type CanvasModel } from '../../src/core/canvas.js';
+import { validateSddTree } from '../../src/core/validation.js';
 import { runHostDemo } from '../../src/commands/host.js';
 import { existingProjectRoot } from '../../src/server/projects.js';
 
@@ -78,6 +79,18 @@ describe('demo-project seeder', () => {
     );
   });
 
+  it('seeds a tree with no retired stereotypes and no dependency-class violations', () => {
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-demo-seed-'));
+    cleanups.push(proj);
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    const result = runWithProjectRoot(proj, () => {
+      seedDemoTree();
+      return validateSddTree();
+    });
+    expect(result.issues.filter((i) => i.code === 'STEREOTYPE_RETIRED')).toEqual([]);
+    expect(result.issues.filter((i) => i.code === 'DEPENDENCY_CLASS_VIOLATION')).toEqual([]);
+  });
+
   it('fills the interface details: methods with structured params, returns, and HTTP endpoints', () => {
     const model = seedInto();
     const portal = model.components.find((c) => c.id === 'ordering-portal')!;
@@ -123,7 +136,7 @@ describe('demo-project seeder', () => {
     const checkout = stepKinds(model, 'ordering-orchestrator', 'checkout');
     expect(checkout).toEqual(expect.arrayContaining(['local', 'loop', 'call', 'branch', 'throw', 'return']));
     // A multiway dispatch (switch) + jump in pricing.
-    expect(stepKinds(model, 'pricing-specialist', 'quote')).toEqual(expect.arrayContaining(['switch', 'jump', 'return']));
+    expect(stepKinds(model, 'pricing', 'quote')).toEqual(expect.arrayContaining(['switch', 'jump', 'return']));
     // A guarded region (try) in settlement.
     expect(stepKinds(model, 'payments-orchestrator', 'settle')).toEqual(expect.arrayContaining(['try', 'call', 'return']));
 
