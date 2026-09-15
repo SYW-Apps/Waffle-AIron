@@ -1,6 +1,6 @@
 /**
  * Call-step realization (code↔spec Level 3, the opener) —
- * src/core/rules/call-conformance.ts.
+ * src/core/rules/conformance/call-conformance.ts.
  *
  * Documented intent pinned here (rule description + module doc comment +
  * the narrative step-type vocabulary in src/models/specs.ts):

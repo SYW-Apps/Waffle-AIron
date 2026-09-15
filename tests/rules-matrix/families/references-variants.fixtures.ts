@@ -1,5 +1,5 @@
 /**
- * Component-variant references (src/core/rules/variant-references.ts, over the
+ * Component-variant references (src/core/rules/extension/component-variants.ts, over the
  * registry loaded from .wai/variants/ by src/core/variants.ts).
  *
  * Documented intents pinned here:

@@ -236,6 +236,41 @@ the code.
   default), yet `init` wrote one regardless, and the next `wairon generate` removed it again. A project that opts in gets
   its agent files, the architect included, from `wairon generate`, rendered from the resolved topology.
 
+### The validator's rules are designed in the spec tree
+
+The validator's 43 rules existed only as code. The spec tree modelled the rule machinery but described the rules in one
+prose step, so a rule change had no spec to change first, and nothing checked that the codes the specs promised were the
+codes the rules reported.
+
+- **Eight rule families and a projector.** `sdd_validator` gains `integrity_rules`, `narrative_rules`, `intrinsic_rules`,
+  `doctrine_rules`, `extension_rules`, `wiring_rules`, `conformance_rules` and `heuristic_rules`, plus
+  `narrative_graph_projector`, the reachability walk two wiring rules share. Each rule is one method named after it,
+  declares the codes it reports as `findings`, and has a full narrative; `rule_registry` registers every rule in run
+  order.
+- **One file per rule.** Each rule lives in `src/core/rules/<family>/<rule>.ts`, and its spec method names that file with
+  `symbol: check`. No rule file imports another: shared analysis goes through queries on the rule context, model
+  functions in `src/models` (type references, the code model, the step graph, surface references) and the projector.
+- **The validator gathers, then the rules judge.** `validate` runs the writer's round-trip dry run and gathers the known
+  issue codes before any rule runs, so no rule calls core. The write gate, `validateComponentCandidate`, is served
+  through the validator portal and gathers the same codes.
+- **`spec_validator` is modelled as an Orchestrator**, because validation is a workflow, and `rule_store` gains `clear`.
+- **No finding changes.** Every message, severity and order is the same. The existing tests, the e2e journeys and the
+  rule-matrix tier pass with their assertions unchanged, and the matrix's code universe is the same 160 codes. A new test
+  keeps the code's rule registry and the spec catalog identical in both directions: rules and methods, codes, severities,
+  summaries, spec scope, registration order, and one file per rule.
+- **The type specs model what the rules read**, among them a component's Portal, event and link fields, an
+  implementation's `simPath` and `technologies`, a type's `invariants`, the code model's analysis fields and the
+  project's pack selections.
+- **What narrating the rules surfaced.** The gate hash in `sdd_core` reads the validator's built-in rule list, an edge
+  the old import path hid from dependency conformance; `state_hash_specialist_impl` acknowledges it until a design change
+  decides how core obtains the list. 27 of the 44 narratives exceed the coming complexity defaults; they stay faithful
+  here and are split in a later change. Rule behaviour that looks wrong is fixed separately, each fix with a failing test
+  first.
+- **Library exports.** `LANGUAGE_MARKERS`, `normalizeLanguage`, `extractGenericTypeVariables`, `extractTypeGenerics` and
+  `extractTypesFromSignature` are no longer exported. The model functions that replace their uses are:
+  `methodTypeRefs`, `methodGenericParameters`, `typeGenericParameters`, `fieldTypeRefs` and
+  `interfaceGenericParameters`.
+
 ### Execution budgets: the topology gains a resource axis
 
 The derived topology said who owns what, and nothing about what their work costs

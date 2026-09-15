@@ -1,0 +1,147 @@
+id: iintegrity_rules
+name: Integrity Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules judge whether the
+  spec tree holds together: references, the namespace grammar, the writer round-trip, published
+  surfaces and lint allows.
+component: integrity_rules
+methods:
+  - name: hierarchyIntegrity
+    description: >-
+      Rule hierarchy-integrity. Every subsystem references the system, every component an existing
+      subsystem, every interface an existing component, and every implementation an existing
+      interface contract. Draft/design specs are reported informationally.
+    signature: 'hierarchyIntegrity(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DRAFT_SUBSYSTEM_WARNING
+        severity: warning
+        summary: Subsystem is in draft/design status
+      - code: DRAFT_COMPONENT_WARNING
+        severity: warning
+        summary: Component is in draft/design status
+      - code: ORPHANED_SUBSYSTEM
+        severity: warning
+        summary: Subsystem does not reference the L0 system
+      - code: INVALID_SUBSYSTEM_REFERENCE
+        severity: error
+        summary: Reference to a non-existent subsystem
+      - code: INVALID_COMPONENT_REFERENCE
+        severity: error
+        summary: Interface references a non-existent component
+      - code: INVALID_INTERFACE_REFERENCE
+        severity: error
+        summary: Implementation references a non-existent interface contract
+  - name: namespaceHygiene
+    description: >-
+      Rule namespace-hygiene. Ids must stay resolvable in the :: namespace grammar: no id segment
+      may be the reserved keyword "super", and a subproject-local name must not shadow a root-level
+      subsystem id — a bare reference to a shadowed name silently anchors to the ROOT subsystem, so
+      the local spec becomes unaddressable.
+    signature: 'namespaceHygiene(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: RESERVED_ID_SEGMENT
+        severity: error
+        summary: Id uses the reserved namespace keyword "super"
+      - code: NAMESPACE_SHADOWING
+        severity: error
+        summary: Subproject-local id shadows a root subsystem id (bare references anchor to the root)
+  - name: roundtripSerialization
+    description: >-
+      Rule roundtrip-serialization. Every loaded spec must re-serialize through the exact writer
+      pipeline (same relativization, same schema, no I/O) — validate must predict every refusal that
+      lock's status promotion or any later save would otherwise raise mid-write.
+    signature: 'roundtripSerialization(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ROUNDTRIP_SERIALIZATION
+        severity: error
+        summary: Spec cannot be re-serialized through the writer schema (any save or lock would refuse it)
+  - name: typeReferences
+    description: >-
+      Rule type-references. Type fields and interface method signatures may only reference builtins,
+      in-scope generic parameters, or defined entity/value-object types. Types owned by a subsystem
+      must reference an existing subsystem.
+    signature: 'typeReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: INVALID_SUBSYSTEM_REFERENCE
+        severity: error
+        summary: Type references a non-existent owning subsystem
+      - code: UNDEFINED_TYPE_REFERENCE
+        severity: error
+        summary: Reference to a type that is not defined anywhere
+      - code: HOLLOW_TYPE
+        severity: warning
+        summary: >-
+          Type declares no fields and no methods — a placeholder that informs neither implementers
+          nor the ERD
+  - name: publicSurface
+    description: >-
+      Rule public-surface. Every declared publicInterface is bound to an existing component of this
+      subsystem whose stereotype can realize the declared interface type; Custom entries whose prose
+      implies eventing must be backed by an event-capable component.
+    signature: 'publicSurface(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PUBLIC_INTERFACE_UNBOUND
+        severity: error
+        summary: Public interface with no backing component
+      - code: PUBLIC_INTERFACE_INVALID_COMPONENT
+        severity: error
+        summary: Public interface references a non-existent component
+      - code: PUBLIC_INTERFACE_FOREIGN_COMPONENT
+        severity: error
+        summary: Subsystem publishing a component it does not own
+      - code: PUBLIC_INTERFACE_TYPE_MISMATCH
+        severity: error
+        summary: Backing component cannot realize the declared interface type
+      - code: PUBLIC_INTERFACE_INVALID_INTERFACE
+        severity: error
+        summary: Bound L3 interface missing or belonging to another component
+      - code: PUBLIC_INTERFACE_EVENT_MISTYPED
+        severity: warning
+        summary: Custom interface describing eventing backed by a non-event component
+  - name: lintAllows
+    description: >-
+      Rule lint-allows. Per-spec lint suppressions (lint.allow) must name real issue codes and
+      actually suppress a finding — unknown codes and stale allows are flagged. Allows silence
+      warnings only; errors always surface.
+    signature: 'lintAllows(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNKNOWN_LINT_ALLOW_CODE
+        severity: warning
+        summary: lint.allow names an issue code no registered rule emits
+      - code: UNUSED_LINT_ALLOW
+        severity: warning
+        summary: lint.allow entry matched no finding this run — remove the stale allow
+status: draft
+createdAt: '2026-09-14T06:05:51.190Z'
+updatedAt: '2026-09-14T06:05:51.196Z'

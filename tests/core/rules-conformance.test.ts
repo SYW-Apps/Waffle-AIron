@@ -5,8 +5,17 @@ import * as os from 'os';
 import { validateSddTree, type ValidationIssue } from '../../src/core/validation.js';
 import { buildCodeModel } from '../../src/core/source-analysis.js';
 import { buildRuleContext } from '../../src/core/rules/index.js';
-import { structuralConformanceRule } from '../../src/core/rules/conformance.js';
+import { knownIssueCodes, registerBuiltinRules, registerPackRules } from '../../src/core/rules/repository.js';
+import { emptyExtensions, type LoadedExtensions } from '../../src/core/extensions.js';
+import { structuralConformanceRule } from '../../src/core/rules/conformance/structural-conformance.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+
+/** The known issue codes a rule context carries, gathered as the validator gathers them. */
+function gatherKnownIssueCodes(extensions: LoadedExtensions = emptyExtensions()): Set<string> {
+  registerBuiltinRules();
+  registerPackRules(extensions.rules);
+  return new Set([...knownIssueCodes().map((c) => c.code), ...extensions.assertions.map((a) => a.fullCode)]);
+}
 
 // ---------------------------------------------------------------------------
 // Structural conformance (code↔spec Level 1): sourcePaths must resolve to real
@@ -631,6 +640,8 @@ describe('UNREALIZED_FINDING — declared finding codes appear as string literal
       implementations: [],
       types: [],
       projectType: 'backend',
+      roundTripIssues: [],
+      knownIssueCodes: gatherKnownIssueCodes(),
       issues,
     });
     ctx.addIssue('error', 'UNREALIZED_FINDING', 'declared finding code missing from the realized file', 'impl-audit-orch', true);
@@ -678,6 +689,8 @@ describe('conformance degradation visibility', () => {
           declaredNames: [], anchoredNames: [], exportedNames: [], imports: [], reexports: [],
         }],
       },
+      roundTripIssues: [],
+      knownIssueCodes: gatherKnownIssueCodes(),
       issues,
     });
     structuralConformanceRule.check(ctx);

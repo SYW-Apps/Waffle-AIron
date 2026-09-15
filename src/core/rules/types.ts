@@ -7,23 +7,30 @@ import {
   TypeSpec,
   RulesConfig,
   SurfaceSnapshot,
+  MethodSignature,
+  ComplexityRuleConfig,
+  DocumentationRuleConfig,
+  NamingRuleConfig,
+  CodeModel,
+  SurfaceRefResolution,
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
 import type { PackSelection } from '../../models/project.js';
 import type { PackSelectionFailure } from '../extensions.js';
-import type { CodeModel } from '../source-analysis.js';
+import type { ValidationIssue } from '../validation.js';
 
 // ---------------------------------------------------------------------------
 // Rule registry contracts
 //
 // Every SDD conformance check is an SddRule: a named, documented unit with the
 // issue codes it can emit and a check(ctx) over the shared RuleContext. The
-// registry (rules/index.ts) runs them in order; severity resolution (user
-// overrides + draft-context downgrades) is centralized in ctx.addIssue.
+// rule repository (rules/repository.ts) holds them in run order; severity
+// resolution (user overrides + draft-context downgrades) is centralized in
+// ctx.addIssue.
 //
-// This is the "custom linter" foundation: adding a rule is a new module in
-// this directory plus a registry entry — no surgery on a monolith.
+// This is the "custom linter" foundation: adding a rule is a new module in its
+// family's folder plus a registry entry — no surgery on a monolith.
 // ---------------------------------------------------------------------------
 
 export type Severity = 'error' | 'warning';
@@ -99,6 +106,12 @@ export interface RuleContext {
   codeModel: CodeModel;
   /** Implementations grouped by their contract interface id. */
   implementationsByContract: Map<string, ImplementationSpec[]>;
+  /**
+   * The writer's round-trip dry-run findings for every in-scope spec, gathered
+   * by the validator before the rules run, so the roundtrip-serialization rule
+   * reports them without doing I/O.
+   */
+  roundTripIssues: ValidationIssue[];
 
   /** True when the spec (or its ancestors) is in draft/design status. */
   isComponentDraft(compId: string): boolean;
@@ -108,10 +121,58 @@ export interface RuleContext {
   getComponentProfile(compId: string): ArchProfile;
   /** Whether a type reference resolves against builtins, generics, or defined types. */
   isTypeResolved(ref: string, generics: Set<string>): boolean;
-  /** Effective target language for a subsystem (subsystem override, else system), lowercase, or undefined. */
+  /** Effective target language for a subsystem (subsystem override, else system), normalized to the language-table key, or undefined. */
   targetLanguageFor(subsystemId: string | undefined): string | undefined;
   /** Scope filter for granular (per-subsystem) validation. */
   isSpecInScope(specId: string): boolean;
+  /**
+   * True when the subsystem sits inside a chained mount: some prefix of its
+   * qualified id is a subsystem carrying `projectPath`. Conformance skips such
+   * specs — their sourcePaths are relative to the child project's root, and
+   * the child validates them standalone in its own run.
+   */
+  isInChainedSubproject(subsystemId: string): boolean;
+  /**
+   * True when an unresolved reference points OUTSIDE the current loading root,
+   * rather than being a genuine local typo — so it warrants the softer
+   * CROSS_TREE_REF_UNRESOLVED warning ("validate from the parent project")
+   * instead of a hard "does not exist" error. Two shapes qualify:
+   *  - an explicit relative form (`::x` / `super::x`), and
+   *  - a qualified id whose leading namespace segment is not a subsystem in THIS
+   *    tree — e.g. `waffler_core::blueprints-portal` authored from a parent root,
+   *    where `waffler_core` is absent when the same specs are validated from the
+   *    child subproject's own directory.
+   */
+  isExternalNamespaceRef(ref: string): boolean;
+  /**
+   * True when an unresolved reference made from inside a chained mount was
+   * authored in a cross-tree form that the loader collapsed at THIS root: made
+   * from inside mount M and not under `M::`, so it was authored to leave M. This
+   * only licenses consulting the snapshots M holds; a reference they do not
+   * cover is judged exactly as it was before.
+   */
+  isCollapsedCrossTreeRef(ref: string, fromSubsystem: string): boolean;
+  /**
+   * Resolve a cross-tree reference against the stored surface snapshots,
+   * matched by provider. The final segment is the local name, matched against
+   * each snapshot's exported entry ids and backing component names; the segment
+   * before it, when there is one, names the provider, and only that provider's
+   * snapshots are consulted. The snapshots of the mounts enclosing
+   * `fromSubsystem` come first, nearest mount first, then the bound root's own;
+   * the first pool with matches decides, and matches that disagree on the
+   * contract make the reference ambiguous.
+   */
+  resolveSurfaceRef(ref: string, fromSubsystem?: string): SurfaceRefResolution;
+  /** Every contract method across the component's interfaces. */
+  interfaceMethodsOf(compId: string): MethodSignature[];
+  /** The complexity rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one. */
+  complexityConfigFor(subsystemId?: string): ComplexityRuleConfig | undefined;
+  /** The documentation rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one. */
+  documentationConfigFor(subsystemId?: string): DocumentationRuleConfig | undefined;
+  /** The naming rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one, stereotype patterns merged key by key. */
+  namingConfigFor(subsystemId?: string): NamingRuleConfig | undefined;
+  /** Whether a type identifier is in the language-agnostic builtin vocabulary, compared ignoring case. */
+  isBuiltinType(ref: string): boolean;
 
   /**
    * Extension-pack data (empty when no packs are loaded): pack-registered
@@ -157,7 +218,7 @@ export interface RuleContext {
    * the lint-allows rule audits these entries at the end of the run.
    */
   lintAllows: { specId: string; code: string; reason: string; used: boolean }[];
-  /** Every issue code any registered rule can emit (for allow validation). */
+  /** Every issue code a registered rule or loaded declarative assertion can emit, gathered by the validator (for allow validation). */
   knownIssueCodes: Set<string>;
 
   /**

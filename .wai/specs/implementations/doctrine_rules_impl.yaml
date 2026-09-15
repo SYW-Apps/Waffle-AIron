@@ -1,0 +1,863 @@
+id: doctrine_rules_impl
+name: Doctrine Rules Implementation
+description: >-
+  The doctrine rule family in src/core/rules/doctrine/, one file per rule whose exported rule
+  object's check realizes the contract method named after that rule.
+contract: idoctrine_rules
+simPath: tests/core/validation.test.ts
+methods:
+  - name: portalEndpoints
+    sourcePath: src/core/rules/doctrine/portal-endpoints.ts
+    narrative:
+      - stepNumber: 1
+        label: component
+        description: For each component in ctx.components
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 14
+      - stepNumber: 2
+        description: >-
+          isDraftCtx = ctx.isComponentDraft(comp.id); compInterfaces = the ctx.interfaces whose
+          component is comp.id
+        type: local
+      - stepNumber: 3
+        description: Is the component a Portal? A non-Portal goes to the endpoint ban instead
+        type: branch
+        condition: comp.componentType is Portal
+        onFalseStep: 12
+      - stepNumber: 4
+        description: >-
+          Look up the transport this Portal's methods must bind: expected =
+          PORTAL_TRANSPORT[comp.portalType], a private constant of this file (HTTP_API to HTTP,
+          gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI; Custom to none). A Portal without a
+          portalType (the portal-fields rule reports that) or a Custom one carries no endpoint
+          obligation: continue with the next component
+        type: branch
+        condition: comp.portalType is set and PORTAL_TRANSPORT maps it to a transport
+        onFalseStep: 1
+      - stepNumber: 5
+        label: portalMethod
+        description: >-
+          For each method of each of the Portal's interfaces, with isIntfDraft = intf.status is
+          draft or design
+        type: loop
+        loopKind: forEach
+        over: each method m of each interface intf in compInterfaces
+        endStep: 10
+      - stepNumber: 6
+        description: Does the method lack an endpoint binding?
+        type: branch
+        condition: m.endpoint is not set
+        onFalseStep: 9
+      - stepNumber: 7
+        description: >-
+          Report MISSING_ENDPOINT (error, on intf.id; draft context isDraftCtx || isIntfDraft)
+          naming the method, the interface and the Portal's portalType, and telling the author to
+          bind it with sdd_set_endpoints under the expected transport
+        type: local
+      - stepNumber: 8
+        description: Continue with the next method
+        type: jump
+        toStep: 5
+      - stepNumber: 9
+        label: mismatchCheck
+        description: Does the bound endpoint use another transport than the Portal's portalType expects?
+        type: branch
+        condition: m.endpoint.transport differs from expected
+        onFalseStep: 5
+      - stepNumber: 10
+        label: mismatch
+        description: >-
+          Report ENDPOINT_TRANSPORT_MISMATCH (error, on intf.id; draft context isDraftCtx ||
+          isIntfDraft) naming the method, the interface, its declared transport, the Portal with its
+          portalType, and the expected transport
+        type: local
+      - stepNumber: 11
+        description: >-
+          The Portal's methods are judged: continue with the next component, skipping the non-Portal
+          endpoint ban
+        type: jump
+        toStep: 1
+      - stepNumber: 12
+        label: nonPortalMethod
+        description: For a non-Portal component, for each method of each of its interfaces
+        type: loop
+        loopKind: forEach
+        over: each method m of each interface intf in compInterfaces
+        endStep: 14
+      - stepNumber: 13
+        description: Does the method declare an endpoint?
+        type: branch
+        condition: m.endpoint is set
+        onFalseStep: 12
+      - stepNumber: 14
+        label: componentEnd
+        description: >-
+          Report ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT (error, on comp.id; draft context
+          isDraftCtx) naming the component, its componentType, the method and the interface: only
+          Portal components may carry endpoints
+        type: local
+    symbol: check
+  - name: portalCallAuth
+    sourcePath: src/core/rules/doctrine/portal-call-auth.ts
+    narrative:
+      - stepNumber: 1
+        label: impl
+        description: For each implementation in ctx.implementations
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 17
+      - stepNumber: 2
+        description: >-
+          ownComponent = the component of ctx.interfaceMap.get(impl.contract); presenter =
+          ctx.componentMap.get(ownComponent) when there is one, the component making the calls;
+          draft = ctx.isImplementationDraft(impl)
+        type: local
+      - stepNumber: 3
+        label: step
+        description: For each narrative step of each of the implementation's methods
+        type: loop
+        loopKind: forEach
+        over: each narrative step of each method of impl
+        endStep: 17
+      - stepNumber: 4
+        description: >-
+          Is the step an outbound call into another component's authenticated Portal? Dispatch steps
+          (a portal's own inbound routing), self-calls, unresolved or non-Portal targets, and
+          Portals without auth or with scheme none are skipped
+        type: branch
+        condition: >-
+          step.type is call, step.targetComponent is set and is not ownComponent, ctx.componentMap
+          resolves it to a Portal, and that Portal's auth is set with a scheme other than none
+        onFalseStep: 3
+      - stepNumber: 5
+        description: Is the credential presenter something other than an Adapter?
+        type: branch
+        condition: presenter is resolved and presenter.componentType is not Adapter
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report AUTH_PRESENTER_NOT_ADAPTER (warning, on impl.id; draft context draft) naming the
+          step number, the method, the presenter with its componentType and the target Portal: an
+          authenticated cross-service call is external I/O, so route it through a client Adapter
+        type: local
+      - stepNumber: 7
+        label: source
+        description: Does the step leave out where its credential loads from? (from = step.auth.from)
+        type: branch
+        condition: step.auth.from is not set
+        onFalseStep: 10
+      - stepNumber: 8
+        description: >-
+          Report PORTAL_AUTH_UNMET (warning, on impl.id; draft context draft) naming the step
+          number, the method, the target Portal and its auth scheme: add the step's auth.from (a
+          secret-store component, env var, config key or vault ref), or drop the Portal's auth if it
+          needs none
+        type: local
+      - stepNumber: 9
+        description: 'No source to resolve: continue with the next step'
+        type: jump
+        toStep: 3
+      - stepNumber: 10
+        label: modeled
+        description: >-
+          Is the source a modeled component reference? COMPONENT_REF_PREFIX is a private constant of
+          this file; opaque sources (env:, config:, vault:, a free note) stay design notes and are
+          not resolved
+        type: branch
+        condition: from starts with COMPONENT_REF_PREFIX (component:)
+        onFalseStep: 3
+      - stepNumber: 11
+        description: >-
+          Does the referenced source exist? srcId = from without the component: prefix; src =
+          ctx.componentMap.get(srcId)
+        type: branch
+        condition: ctx.componentMap has no component srcId
+        onFalseStep: 14
+      - stepNumber: 12
+        description: >-
+          Report UNKNOWN_AUTH_SOURCE (warning, on impl.id; draft context draft) naming the step
+          number, the method and srcId, which does not exist
+        type: local
+      - stepNumber: 13
+        description: Continue with the next step
+        type: jump
+        toStep: 3
+      - stepNumber: 14
+        label: provider
+        description: Is the source something other than a credential provider?
+        type: branch
+        condition: src.componentType is neither Adapter nor Store
+        onFalseStep: 16
+      - stepNumber: 15
+        description: >-
+          Report AUTH_SOURCE_NOT_PROVIDER (warning, on impl.id; draft context draft) naming the step
+          number, the method, srcId and its componentType: a credential source must be an Adapter
+          (loads the secret) or a Store (holds it)
+        type: local
+      - stepNumber: 16
+        label: wiredCheck
+        description: Is the presenter not wired to its credential source?
+        type: branch
+        condition: presenter is resolved and neither presenter.dependsOn nor presenter.owns includes srcId
+        onFalseStep: 3
+      - stepNumber: 17
+        label: unwired
+        description: >-
+          Report AUTH_SOURCE_UNWIRED (warning, on impl.id; draft context draft) naming the step
+          number, the method, the presenter and srcId: declare the dependsOn edge so the credential
+          wiring is real
+        type: local
+    symbol: check
+  - name: stereotypeDependencies
+    sourcePath: src/core/rules/doctrine/stereotype-dependencies.ts
+    narrative:
+      - stepNumber: 1
+        label: component
+        description: 'Dependency pass: for each component in ctx.components'
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 42
+      - stepNumber: 2
+        description: isDraftCtx = ctx.isComponentDraft(comp.id)
+        type: local
+      - stepNumber: 3
+        label: dependency
+        description: For each dependency id depId in comp.dependsOn
+        type: loop
+        loopKind: forEach
+        over: comp.dependsOn
+        endStep: 42
+      - stepNumber: 4
+        description: Does the dependency fail to resolve in this tree? (depComp = ctx.componentMap.get(depId))
+        type: branch
+        condition: ctx.componentMap has no component depId
+        onFalseStep: 17
+      - stepNumber: 5
+        description: >-
+          Is it a cross-tree reference, authored outside this loading root or collapsed by the
+          loader from inside a chained mount? Only those are resolved against the surface snapshots
+        type: branch
+        condition: >-
+          external = ctx.isExternalNamespaceRef(depId) holds, or ctx.isCollapsedCrossTreeRef(depId,
+          comp.subsystem) does
+        onFalseStep: 15
+      - stepNumber: 6
+        description: >-
+          Resolve the reference against the stored surface snapshots (the mounts enclosing
+          comp.subsystem first) and act on the outcome
+        type: switch
+        'on': resolved.kind, where resolved = ctx.resolveSurfaceRef(depId, comp.subsystem)
+        cases:
+          - value: ambiguous
+            step: 7
+          - value: resolved
+            step: 9
+        defaultStep: 12
+      - stepNumber: 7
+        label: ambiguous
+        description: >-
+          Report SURFACE_REF_AMBIGUOUS (error, on comp.id; draft context isDraftCtx) with the
+          message resolved.ambiguityMessage('Component "<comp.id>" depends on', depId): snapshots of
+          several providers expose the name with different contracts
+        type: local
+      - stepNumber: 8
+        description: Continue with the next dependency
+        type: jump
+        toStep: 3
+      - stepNumber: 9
+        label: surfaceResolved
+        description: >-
+          A snapshot declares the remote surface: is the depending component something other than an
+          Adapter?
+        type: branch
+        condition: comp.componentType is not Adapter
+        onFalseStep: 3
+      - stepNumber: 10
+        description: >-
+          Report CROSS_SUBSYSTEM_NON_ADAPTER (error, on comp.id; draft context isDraftCtx;
+          surfaceResolved true, so it keeps full strength in a chained subproject) naming the
+          component, its componentType, depId and resolved.snapshot.projectName: only a local client
+          Adapter may cross a project boundary
+        type: local
+      - stepNumber: 11
+        description: Continue with the next dependency
+        type: jump
+        toStep: 3
+      - stepNumber: 12
+        label: unresolvedExternal
+        description: >-
+          No snapshot covers it: was the reference authored outside this root? A merely collapsed
+          reference no snapshot covers is genuinely missing from this root
+        type: branch
+        condition: external
+        onFalseStep: 15
+      - stepNumber: 13
+        description: >-
+          Report CROSS_TREE_REF_UNRESOLVED (warning, on comp.id; draft context isDraftCtx) naming
+          the component and depId: validate from the parent project, pin the family surfaces (wairon
+          surface pin), or import the producing project's surface
+        type: local
+      - stepNumber: 14
+        description: Continue with the next dependency
+        type: jump
+        toStep: 3
+      - stepNumber: 15
+        label: invalidReference
+        description: >-
+          Report INVALID_DEPENDENCY_REFERENCE (error, on comp.id; draft context isDraftCtx) naming
+          the component and the dependency id that does not exist
+        type: local
+      - stepNumber: 16
+        description: Continue with the next dependency
+        type: jump
+        toStep: 3
+      - stepNumber: 17
+        label: crossSubsystem
+        description: >-
+          Does the dependency cross into another subsystem? Then only the boundary rules judge it,
+          never the stereotype matrix (crossDraft = isDraftCtx || ctx.isComponentDraft(depComp.id))
+        type: branch
+        condition: depComp.subsystem differs from comp.subsystem
+        onFalseStep: 26
+      - stepNumber: 18
+        description: >-
+          Does a non-Adapter cross the boundary without a trustedLink license from its own
+          subsystem?
+        type: branch
+        condition: >-
+          comp.componentType is not Adapter and the edge is not licensed: the subsystem in
+          ctx.subsystems whose id is comp.subsystem declares no trustedLink whose subsystem is
+          depComp.subsystem
+        onFalseStep: 20
+      - stepNumber: 19
+        description: >-
+          Report CROSS_SUBSYSTEM_NON_ADAPTER (error, on comp.id; draft context crossDraft) naming
+          both components and their subsystems: route the hop through a client Adapter that calls
+          the peer's public interface, or declare a trustedLink on comp.subsystem with the reason
+        type: local
+      - stepNumber: 20
+        label: publicTarget
+        description: Is the target outside the peer subsystem's published public surface?
+        type: branch
+        condition: ctx.publicSet for depComp.subsystem does not contain depComp.id
+        onFalseStep: 23
+      - stepNumber: 21
+        description: >-
+          Report CROSS_SUBSYSTEM_PRIVATE_ACCESS (error, on comp.id; draft context crossDraft) naming
+          the component, the target and its subsystem: depend on one of its publicInterfaces
+          components instead
+        type: local
+      - stepNumber: 22
+        description: Continue with the next dependency
+        type: jump
+        toStep: 3
+      - stepNumber: 23
+        label: portalTarget
+        description: >-
+          The target is published: does the hop enter through something other than the peer's
+          inbound Portal or a Gateway?
+        type: branch
+        condition: depComp.componentType is neither Portal nor Gateway
+        onFalseStep: 3
+      - stepNumber: 24
+        description: >-
+          Report CROSS_SUBSYSTEM_TARGET_NON_PORTAL (error, on comp.id; draft context crossDraft)
+          naming the component, the target subsystem and the target with its componentType: a
+          cross-subsystem hop must target the remote subsystem's Portal, which dispatches inward
+        type: local
+      - stepNumber: 25
+        description: 'Boundary rules done: continue with the next dependency, skipping the stereotype matrix'
+        type: jump
+        toStep: 3
+      - stepNumber: 26
+        label: profileLicense
+        description: >-
+          Does the governing pack profile license this intra-subsystem edge as its platform idiom?
+          Then the matrix does not judge it: continue with the next dependency
+        type: branch
+        condition: >-
+          an allowedEdges entry of the governing profile has comp.componentType in its from and
+          depComp.componentType in its to, the governing profile being
+          ctx.ext.profiles[ctx.getComponentProfile(comp.id)]
+        onTrueStep: 3
+        onFalseStep: 27
+      - stepNumber: 27
+        label: portalDep
+        description: Does the component depend on a Portal or Observer?
+        type: branch
+        condition: depComp.componentType is Portal or Observer
+        onFalseStep: 29
+      - stepNumber: 28
+        description: >-
+          Report ARCHITECTURE_VIOLATION_PORTAL_DEP (error, on comp.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(depComp.id)) naming both components: Portals and Observers are
+          top-level entry points and subscribers, never dependencies
+        type: local
+      - stepNumber: 29
+        label: portalForbidden
+        description: Does a Portal or Observer reach the data layer directly?
+        type: branch
+        condition: >-
+          comp is a Portal and depComp is a Store, Registry or Adapter, or comp is an Observer and
+          depComp is a Store, Registry, Repository or Index
+        onFalseStep: 31
+      - stepNumber: 30
+        description: >-
+          Report ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP (error, on comp.id; draft context
+          isDraftCtx || ctx.isComponentDraft(depComp.id)) naming both components and stereotypes:
+          they coordinate through Orchestrators and Supervisors. When depComp is a Store the message
+          appends storeResolutionHint(comp.componentType, depComp.id), a private helper of this file
+          with its NEVER_INLINE_STATE sentence: wrap the Store in a Repository reached through an
+          Orchestrator on its facade, and never merge the state into the consumer
+        type: local
+      - stepNumber: 31
+        label: specialistDep
+        description: Does a Specialist depend on a workflow, runtime, boundary or raw persistence block?
+        type: branch
+        condition: >-
+          comp is a Specialist and depComp is a Portal, Observer, Orchestrator, Store, Registry,
+          Supervisor or Actor
+        onFalseStep: 33
+      - stepNumber: 32
+        description: >-
+          Report ARCHITECTURE_VIOLATION_SPECIALIST_DEP (error, on comp.id; draft context isDraftCtx
+          || ctx.isComponentDraft(depComp.id)) naming both components: Specialists are pure
+          capabilities using Repository facades, Indexes and Adapters. When depComp is a Store the
+          message appends storeResolutionHint(comp.componentType, depComp.id): wrap the Store in a
+          Repository and depend on its facade, never inline the state
+        type: local
+      - stepNumber: 33
+        label: storeDep
+        description: Does a Store depend on anything but another Store or a backend Adapter?
+        type: branch
+        condition: comp is a Store and depComp is neither a Store nor an Adapter
+        onFalseStep: 35
+      - stepNumber: 34
+        description: >-
+          Report ARCHITECTURE_VIOLATION_STORE_DEP (error, on comp.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(depComp.id)) naming both components: Registries and Indexes depend on
+          the Store, never the reverse
+        type: local
+      - stepNumber: 35
+        label: registryDep
+        description: >-
+          Does a Registry depend on anything but its Store, a backend Adapter or a validation
+          Specialist?
+        type: branch
+        condition: comp is a Registry and depComp is not a Store, Adapter or Specialist
+        onFalseStep: 37
+      - stepNumber: 36
+        description: >-
+          Report ARCHITECTURE_VIOLATION_REGISTRY_DEP (warning, on comp.id; draft context isDraftCtx
+          || ctx.isComponentDraft(depComp.id)) naming both components: a Registry is the write path
+          to its Store and never updates Indexes or drives workflow
+        type: local
+      - stepNumber: 37
+        label: adapterDep
+        description: Does an Adapter, a sink toward the system, depend on an Orchestrator or a Store?
+        type: branch
+        condition: comp is an Adapter and depComp is an Orchestrator or a Store
+        onFalseStep: 39
+      - stepNumber: 38
+        description: >-
+          Report ARCHITECTURE_VIOLATION_ADAPTER_DEP (error, on comp.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(depComp.id)) naming both components: Adapters cannot depend on
+          Orchestrators or Stores
+        type: local
+      - stepNumber: 39
+        label: indexDep
+        description: Does an Index, a read projection, depend on anything but its Store or a backend Adapter?
+        type: branch
+        condition: comp is an Index and depComp is neither a Store nor an Adapter
+        onFalseStep: 41
+      - stepNumber: 40
+        description: >-
+          Report ARCHITECTURE_VIOLATION_INDEX_DEP (error, on comp.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(depComp.id)) naming both components: an Index may depend only on its
+          Store or a backend Adapter
+        type: local
+      - stepNumber: 41
+        label: viewCheck
+        description: Does a View, a passive presenter, depend on a logic, persistence or boundary block?
+        type: branch
+        condition: >-
+          comp is a View and depComp is a Store, Registry, Index, Adapter, Portal, Observer,
+          Repository, Gateway or Orchestrator
+        onFalseStep: 3
+      - stepNumber: 42
+        label: viewDep
+        description: >-
+          Report ARCHITECTURE_VIOLATION_VIEW_DEP (error, on comp.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(depComp.id)) naming both components: Views stay passive UI blocks.
+          When depComp is a Store the message appends storeResolutionHint(comp.componentType,
+          depComp.id)
+        type: local
+      - stepNumber: 43
+        label: portalImpl
+        description: 'Portal read-face pass: for each implementation in ctx.implementations'
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 47
+      - stepNumber: 44
+        description: >-
+          Does the implementation realize a Portal's contract? (component = that Portal; isDraftCtx
+          = ctx.isImplementationDraft(impl))
+        type: branch
+        condition: >-
+          ctx.interfaceMap resolves impl.contract, ctx.componentMap resolves its component, and that
+          component is a Portal
+        onFalseStep: 43
+      - stepNumber: 45
+        label: portalStep
+        description: For each narrative step of each of the Portal implementation's methods
+        type: loop
+        loopKind: forEach
+        over: each narrative step of each method of impl
+        endStep: 47
+      - stepNumber: 46
+        description: >-
+          Does the step call a write-effect method on a Repository or Index directly? Methods
+          without an effect tag are not judged
+        type: branch
+        condition: >-
+          step.type is call with targetComponent and targetMethod set, ctx.componentMap resolves the
+          target to a Repository or an Index, and the method named step.targetMethod among
+          ctx.interfaceMethodsOf(target.id) declares effect write
+        onFalseStep: 45
+      - stepNumber: 47
+        label: writeShortcut
+        description: >-
+          Report PORTAL_WRITE_SHORTCUT (error, on impl.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(target.id)) naming the Portal, the step number, the method, the
+          called target.id and targetMethod, and the target's componentType: the shortcut is
+          licensed for reads only, so route the write through an Orchestrator
+        type: local
+    symbol: check
+  - name: patternOwnership
+    sourcePath: src/core/rules/doctrine/pattern-ownership.ts
+    narrative:
+      - stepNumber: 1
+        description: ownedBy = an empty map from member block id to the id of the component that owns it
+        type: local
+      - stepNumber: 2
+        label: component
+        description: 'Membership and containment pass: for each component in ctx.components'
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 34
+      - stepNumber: 3
+        description: >-
+          isDraftCtx = ctx.isComponentDraft(comp.id); isPattern = comp.isPattern() (the models'
+          pattern stereotypes: Repository, Gateway, FeatureComponent, RouterComponent)
+        type: local
+      - stepNumber: 4
+        description: Is it a pattern with no members?
+        type: branch
+        condition: isPattern and comp.owns is empty
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report EMPTY_PATTERN (error, on comp.id; draft context isDraftCtx) naming the pattern and
+          its componentType: it must own member blocks via owns
+        type: local
+      - stepNumber: 6
+        label: blockOwns
+        description: Is it a building block that owns members?
+        type: branch
+        condition: not isPattern and comp.owns is non-empty
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report BLOCK_OWNS_MEMBERS (error, on comp.id; draft context isDraftCtx) naming the block
+          and its componentType, and listing the pattern stereotypes (Repository, Gateway,
+          FeatureComponent, RouterComponent) joined by / as the only ones that use owns
+        type: local
+      - stepNumber: 8
+        label: member
+        description: For each owned member id memberId in comp.owns
+        type: loop
+        loopKind: forEach
+        over: comp.owns
+        endStep: 16
+      - stepNumber: 9
+        description: Does the member fail to resolve? (member = ctx.componentMap.get(memberId))
+        type: branch
+        condition: ctx.componentMap has no component memberId
+        onFalseStep: 12
+      - stepNumber: 10
+        description: >-
+          Report INVALID_OWNED_MEMBER (error, on comp.id; draft context isDraftCtx) naming the
+          component and the member id that does not exist
+        type: local
+      - stepNumber: 11
+        description: Continue with the next member, recording no owner for this one
+        type: jump
+        toStep: 8
+      - stepNumber: 12
+        label: patternMember
+        description: Is the member itself a pattern?
+        type: branch
+        condition: member.isPattern()
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Report PATTERN_OWNS_PATTERN (error, on comp.id; draft context isDraftCtx) naming the owner
+          and the member: patterns own only building blocks and are composed at the subsystem level
+        type: local
+      - stepNumber: 14
+        label: sharedMember
+        description: Has another component already claimed this member?
+        type: branch
+        condition: ownedBy already maps memberId to a component other than comp.id
+        onFalseStep: 16
+      - stepNumber: 15
+        description: >-
+          Report SHARED_OWNED_MEMBER (error, on comp.id; draft context isDraftCtx) naming the
+          member, its previous owner and comp.id: a block has exactly one owner
+        type: local
+      - stepNumber: 16
+        label: recordOwner
+        description: Record ownedBy[memberId] = comp.id, replacing any previous owner
+        type: local
+      - stepNumber: 17
+        description: >-
+          Check the containment the pattern's definition prescribes; any other stereotype prescribes
+          none: continue with the next component
+        type: switch
+        'on': comp.componentType
+        cases:
+          - value: Repository
+            step: 18
+          - value: Gateway
+            step: 22
+          - value: FeatureComponent
+            step: 26
+          - value: RouterComponent
+            step: 30
+        defaultStep: 2
+      - stepNumber: 18
+        label: repositoryMember
+        description: For each member id the Repository owns
+        type: loop
+        loopKind: forEach
+        over: comp.owns
+        endStep: 20
+      - stepNumber: 19
+        description: Does the Repository own a member type it may not?
+        type: branch
+        condition: >-
+          ctx.componentMap resolves the member and its componentType is not Store, Registry, Index
+          or Adapter
+        onFalseStep: 18
+      - stepNumber: 20
+        label: repositoryViolation
+        description: >-
+          Report REPOSITORY_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming the
+          Repository, the member and its type: a Repository may own only Store, Registry, Index and
+          optionally Adapter
+        type: local
+      - stepNumber: 21
+        description: Continue with the next component
+        type: jump
+        toStep: 2
+      - stepNumber: 22
+        label: gatewayMember
+        description: For each member id the Gateway owns
+        type: loop
+        loopKind: forEach
+        over: comp.owns
+        endStep: 24
+      - stepNumber: 23
+        description: Does the Gateway own a member type it may not?
+        type: branch
+        condition: >-
+          ctx.componentMap resolves the member and its componentType is not Portal, Orchestrator or
+          Specialist
+        onFalseStep: 22
+      - stepNumber: 24
+        label: gatewayViolation
+        description: >-
+          Report GATEWAY_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming the
+          Gateway, the member and its type: a Gateway may own only a Portal, Orchestrators and
+          Specialists
+        type: local
+      - stepNumber: 25
+        description: Continue with the next component
+        type: jump
+        toStep: 2
+      - stepNumber: 26
+        label: featureCount
+        description: >-
+          Count the FeatureComponent's members by the componentType ctx.componentMap resolves:
+          orchestrators, views and others (a member that does not resolve counts as none)
+        type: local
+      - stepNumber: 27
+        description: Is the feature slice shaped other than one Orchestrator with one or more Views?
+        type: branch
+        condition: orchestrators is not exactly 1, or views is below 1, or others is above 0
+        onFalseStep: 2
+      - stepNumber: 28
+        description: >-
+          Report FEATURE_COMPONENT_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming
+          the FeatureComponent: it must own exactly one Orchestrator and one or more Views, and no
+          other member types
+        type: local
+      - stepNumber: 29
+        description: Continue with the next component
+        type: jump
+        toStep: 2
+      - stepNumber: 30
+        label: routerCount
+        description: >-
+          hasPortal = some member of the RouterComponent resolves through ctx.componentMap to a
+          Portal; hasChildren = some member resolves to any other type
+        type: local
+      - stepNumber: 31
+        description: Does the RouterComponent lack its Portal facade?
+        type: branch
+        condition: not hasPortal
+        onFalseStep: 33
+      - stepNumber: 32
+        description: >-
+          Report ROUTER_COMPONENT_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming
+          the RouterComponent: it must own exactly one Portal to act as its facade
+        type: local
+      - stepNumber: 33
+        label: routerChildrenCheck
+        description: Does the RouterComponent lack children to route to?
+        type: branch
+        condition: not hasChildren
+        onFalseStep: 2
+      - stepNumber: 34
+        label: routerChildren
+        description: >-
+          Report ROUTER_COMPONENT_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming
+          the RouterComponent: it must own at least one child component or View to route to
+        type: local
+      - stepNumber: 35
+        label: unownedStore
+        description: 'Standalone Store pass: for each component in ctx.components'
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 37
+      - stepNumber: 36
+        description: Is the Store owned by no pattern?
+        type: branch
+        condition: comp is a Store and ownedBy has no entry for comp.id
+        onFalseStep: 35
+      - stepNumber: 37
+        label: unownedStoreReport
+        description: >-
+          Report UNOWNED_STORE (warning, on comp.id; draft context ctx.isComponentDraft(comp.id))
+          naming the Store: the recommended shape is a Repository owning it with its Registry and
+          Index; a deliberate standalone Store stays visible, is reached from the workflow layer and
+          carries a lint.allow reason; never merge the state into a consuming component
+        type: local
+      - stepNumber: 38
+        label: standaloneRegistry
+        description: 'Standalone Registry pass: for each component in ctx.components'
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 40
+      - stepNumber: 39
+        description: Is it a Registry outside any Repository with no Store to write to?
+        type: branch
+        condition: >-
+          comp is a Registry, ownedBy has no entry for comp.id, and no id in comp.dependsOn resolves
+          through ctx.componentMap to a Store
+        onFalseStep: 38
+      - stepNumber: 40
+        label: registryReport
+        description: >-
+          Report REGISTRY_WITHOUT_STORE (warning, on comp.id; draft context
+          ctx.isComponentDraft(comp.id)) naming the Registry: if it holds the record state itself,
+          retype it as a Store with honest durability; otherwise wire its Store, or lint.allow with
+          a reason
+        type: local
+      - stepNumber: 41
+        label: visibility
+        description: 'Visibility pass: for each dependency of each component'
+        type: loop
+        loopKind: forEach
+        over: each dependency id depId of each component comp in ctx.components
+        endStep: 43
+      - stepNumber: 42
+        description: >-
+          Is the dependency a block privately owned by another group? A facade or standalone block,
+          the owner's own member, and a sibling member of the same owner are all fine
+        type: branch
+        condition: >-
+          owner = ownedBy.get(depId) is set, owner is not comp.id, and ownedBy.get(comp.id) is not
+          owner
+        onFalseStep: 41
+      - stepNumber: 43
+        label: visibilityReport
+        description: >-
+          Report VISIBILITY_VIOLATION (error, on comp.id; draft context
+          ctx.isComponentDraft(comp.id) || ctx.isComponentDraft(depId)) naming the component, depId
+          and its owner: depend on the facade instead
+        type: local
+    symbol: check
+  - name: facadeForwarding
+    sourcePath: src/core/rules/doctrine/facade-forwarding.ts
+    narrative:
+      - stepNumber: 1
+        label: impl
+        description: For each implementation in ctx.implementations
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 7
+      - stepNumber: 2
+        description: >-
+          Does the implementation realize a facade? FACADE_TYPES is a private constant of this file
+          (Repository, Gateway): the backend patterns whose facade semantics the architecture
+          standard defines
+        type: branch
+        condition: >-
+          ctx.interfaceMap resolves impl.contract, ctx.componentMap resolves its component comp, and
+          FACADE_TYPES has comp.componentType
+        onFalseStep: 1
+      - stepNumber: 3
+        description: owned = comp.owns as a set; isDraftCtx = ctx.isImplementationDraft(impl)
+        type: local
+      - stepNumber: 4
+        label: method
+        description: For each method of the facade implementation
+        type: loop
+        loopKind: forEach
+        over: impl.methods
+        endStep: 7
+      - stepNumber: 5
+        description: >-
+          Classify the method's narrative steps: an empty narrative is not judged (how much is
+          narrated is the detail dial's business); otherwise problem = 'has N steps (their types)'
+          when there is not exactly one step, else 'is a single <type> step, not a call' when that
+          step is not a call, else 'forwards outside the pattern' naming the target when the call's
+          targetComponent is set and not in owned; a single call to an owned member has no problem
+        type: local
+      - stepNumber: 6
+        description: Is the facade method anything but pure 1:1 forwarding?
+        type: branch
+        condition: the narrative is non-empty and has a problem
+        onFalseStep: 4
+      - stepNumber: 7
+        label: facadeReport
+        description: >-
+          Report FACADE_FORWARDING (warning, on impl.id; draft context isDraftCtx) naming the
+          method, comp's componentType and id, the implementation, the owned members (comp.owns
+          joined, or none declared) and the problem: move the logic into a member block, or
+          lint.allow a deliberate exception
+        type: local
+    symbol: check
+status: draft
+createdAt: '2026-09-14T23:15:53.747Z'
+updatedAt: '2026-09-14T23:35:34.007Z'

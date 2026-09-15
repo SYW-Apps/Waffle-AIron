@@ -1,5 +1,5 @@
 /**
- * Cross-call auth conformance fixtures (src/core/rules/portal-call-auth.ts).
+ * Cross-call auth conformance fixtures (src/core/rules/doctrine/portal-call-auth.ts).
  *
  * Documented intents pinned here (all warnings by default):
  *  - PORTAL_AUTH_UNMET: an outbound narrative `call` into another component's

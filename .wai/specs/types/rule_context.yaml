@@ -2,38 +2,230 @@ kind: value-object
 id: rule_context
 name: RuleContext
 description: >-
-  The shared read-model and issue sink passed to every validation rule's check. Carries the loaded
-  spec collections (system, subsystems, components, interfaces, implementations, types) plus derived
-  lookup maps, the source-code model, per-spec lint-allow bookkeeping, and the extension-pack data
-  (ext). Rules report findings through its addIssue, which applies scope filtering, user severity
-  overrides, and draft-context downgrades. Only the salient fields are modeled here; the full
-  read-model is described in prose.
+  The read model and issue sink every rule method takes. The validator gathers it once per run — the
+  loaded spec collections and their lookup maps, the surface snapshots, the source-code model, the
+  writer's round-trip dry-run results, the known issue codes, pack data and lint-allow bookkeeping —
+  so no rule does I/O or calls core. Its query methods are the analysis rules share, the way ESLint
+  rules share analysis through their context; addIssue is its one effectful method.
 fields:
+  - name: system
+    type: SystemSpec
+    description: The L0 system spec
+    optional: false
+  - name: subsystems
+    type: SubsystemSpec[]
+    description: The loaded subsystem specs
+    optional: false
   - name: components
     type: ComponentSpec[]
+    description: The loaded component specs
+    optional: false
+  - name: interfaces
+    type: InterfaceSpec[]
+    description: The loaded interface specs
+    optional: false
+  - name: implementations
+    type: ImplementationSpec[]
+    description: The loaded implementation specs
+    optional: false
+  - name: types
+    type: TypeSpec[]
+    description: The loaded type specs
+    optional: false
+  - name: rules
+    type: RulesConfig
+    description: 'The project''s rules config: severity overrides, naming, complexity and documentation settings'
+    optional: true
+  - name: projectType
+    type: string
+    description: The project type or profile id
+    optional: false
+  - name: scopeSubsystem
+    type: string
+    description: The subsystem a scoped run is limited to
+    optional: true
+  - name: componentMap
+    type: Map<string, ComponentSpec>
+    description: Components by id
+    optional: false
+  - name: interfaceMap
+    type: Map<string, InterfaceSpec>
+    description: Interfaces by id
+    optional: false
+  - name: subsystemIds
+    type: Set<string>
+    description: Ids of the loaded subsystems
+    optional: false
+  - name: componentIds
+    type: Set<string>
+    description: Ids of the loaded components
+    optional: false
+  - name: interfaceIds
+    type: Set<string>
+    description: Ids of the loaded interfaces
+    optional: false
+  - name: publicSet
+    type: Map<string, Set<string>>
+    description: Per subsystem, the ids of its published components
+    optional: false
+  - name: interfacesByComponent
+    type: Map<string, InterfaceSpec[]>
     description: >-
-      The loaded component specs the rules read (representative of the full spec collections
-      carried).
+      Interfaces grouped by owning component: the one enumeration of a component's contract methods
+      that rules and the walk share
+    optional: false
+  - name: implementationsByContract
+    type: Map<string, ImplementationSpec[]>
+    description: Implementations grouped by contract interface id
+    optional: false
+  - name: surfaceSnapshots
+    type: SurfaceSnapshot[]
+    description: >-
+      The stored surface snapshots (.wai/surfaces/) that unresolved cross-tree references are
+      checked against
+    optional: false
+  - name: mountSurfaceSnapshots
+    type: MountSurfaceSnapshots[]
+    description: >-
+      The snapshots each chained mount holds, by mount namespace; consulted only for references made
+      inside that mount
+    optional: false
+  - name: codeModel
+    type: CodeModel
+    description: >-
+      The source-code model the source analysis adapter builds for the run; empty when the run has
+      none
+    optional: false
+  - name: roundTripIssues
+    type: ValidationIssue[]
+    description: >-
+      The writer's dry-run findings for every in-scope spec, gathered by the validator so the
+      round-trip rule does no I/O
     optional: false
   - name: ext
     type: RuleExt
     description: >-
-      Extension-pack data merged into validation: profiles, languages, and reusable pattern
-      definitions.
+      Pack data: profiles, language tables, patterns, guarantee tokens, declarative assertions, pack
+      selections and their resolution failures
     optional: false
   - name: variants
     type: VariantDef[]
-    description: >-
-      Component-variant registry (the dynamic layer on top of packs; empty when none) — the
-      resolution set for component.variant references, exposed to programmatic pack rules.
+    description: The component-variant registry
     optional: false
-methods: []
-lint:
-  allow:
-    - code: UNUSED_TYPE
-      reason: >-
-        RuleContext is the shared read-model and issue sink passed to every rule's check — behaviour
-        held by the rule registry, not a modeled method parameter; the type documents that contract
-        for the design record.
+  - name: lintAllows
+    type: object[]
+    description: >-
+      Per-spec lint.allow entries ({specId, code, reason, used}): addIssue marks the ones it
+      applies, and the lint-allows rule audits them last
+    optional: false
+  - name: knownIssueCodes
+    type: Set<string>
+    description: >-
+      Every code a registered rule or declarative assertion can report, gathered by the validator
+      for the lint-allow audit
+    optional: false
+methods:
+  - name: isComponentDraft
+    signature: 'isComponentDraft(compId: string): boolean'
+    returns: boolean
+    description: Whether the component or an ancestor is in draft or design status
+  - name: isImplementationDraft
+    signature: 'isImplementationDraft(impl: ImplementationSpec): boolean'
+    returns: boolean
+    description: >-
+      Whether the implementation, its contract or the contract's component is in draft or design
+      status
+  - name: getComponentProfile
+    signature: 'getComponentProfile(compId: string): string'
+    returns: string
+    description: >-
+      The architectural profile governing the component: its subsystem's profile, else the project
+      type
+  - name: isTypeResolved
+    signature: 'isTypeResolved(ref: string, generics: Set<string>): boolean'
+    returns: boolean
+    description: >-
+      Whether a type reference resolves to a builtin, one of the given generic parameters, or a
+      defined type
+  - name: targetLanguageFor
+    signature: 'targetLanguageFor(subsystemId?: string): string | undefined'
+    returns: string | undefined
+    description: >-
+      The effective target language for a subsystem — its own, else the system's — normalized to the
+      language-table key (ts → typescript, js or node → javascript, rs → rust, py → python, c# or
+      dotnet → csharp, golang → go, else lowercased)
+  - name: isSpecInScope
+    signature: 'isSpecInScope(specId: string): boolean'
+    returns: boolean
+    description: Whether a spec is inside the run's subsystem scope; always true for an unscoped run
+  - name: addIssue
+    signature: >-
+      addIssue(defaultSeverity: string, code: string, message: string, specId?: string,
+      isDraftContext?: boolean, surfaceResolved?: boolean): void
+    returns: void
+    description: >-
+      Record a finding in the run's issue sink, the context's one effectful method. It drops
+      findings outside the scope, applies the project's severity overrides (off drops the finding),
+      downgrades completeness findings in draft context, lets a matching lint allow silence a
+      warning, and keeps a finding resolved against a surface snapshot at full strength in a chained
+      subproject.
+  - name: isInChainedSubproject
+    signature: 'isInChainedSubproject(subsystemId: string): boolean'
+    returns: boolean
+    description: >-
+      Whether the subsystem sits inside a chained mount: some prefix of its qualified id is a
+      subsystem with a projectPath. Conformance skips such specs, whose source paths are relative to
+      the child project's root.
+  - name: isExternalNamespaceRef
+    signature: 'isExternalNamespaceRef(ref: string): boolean'
+    returns: boolean
+    description: >-
+      Whether an unresolved reference points outside this loading root rather than being a local
+      typo: a ::x or super::x form, or a qualified id whose leading segment is not a subsystem of
+      this tree
+  - name: isCollapsedCrossTreeRef
+    signature: 'isCollapsedCrossTreeRef(ref: string, fromSubsystem: string): boolean'
+    returns: boolean
+    description: >-
+      Whether an unresolved reference made from inside a chained mount was authored to leave it: it
+      is not under the nearest enclosing mount's namespace, because the loader collapsed its super::
+      or :: form at this root
+  - name: resolveSurfaceRef
+    signature: 'resolveSurfaceRef(ref: string, fromSubsystem?: string): SurfaceRefResolution'
+    returns: SurfaceRefResolution
+    description: >-
+      Resolve a cross-tree reference against the stored surface snapshots. The last segment is the
+      local name and the one before it, if any, the provider. The snapshots of the mounts enclosing
+      fromSubsystem are consulted first, nearest mount first, then the bound root's own; the first
+      pool with matches decides, and matches that disagree on the contract make the reference
+      ambiguous.
+  - name: interfaceMethodsOf
+    signature: 'interfaceMethodsOf(compId: string): MethodSignature[]'
+    returns: MethodSignature[]
+    description: Every contract method across the component's interfaces
+  - name: complexityConfigFor
+    signature: 'complexityConfigFor(subsystemId?: string): ComplexityRuleConfig | undefined'
+    returns: ComplexityRuleConfig | undefined
+    description: >-
+      The complexity rule config in force for a subsystem: the project's, overlaid with its profile
+      pack's when the pack sets one
+  - name: documentationConfigFor
+    signature: 'documentationConfigFor(subsystemId?: string): DocumentationRuleConfig | undefined'
+    returns: DocumentationRuleConfig | undefined
+    description: >-
+      The documentation rule config in force for a subsystem: the project's, overlaid with its
+      profile pack's when the pack sets one
+  - name: isBuiltinType
+    signature: 'isBuiltinType(ref: string): boolean'
+    returns: boolean
+    description: >-
+      Whether a type identifier is in the language-agnostic builtin vocabulary (string, u64,
+      Promise, Map, and the rest), compared ignoring case
+  - name: namingConfigFor
+    signature: 'namingConfigFor(subsystemId?: string): NamingRuleConfig | undefined'
+    returns: NamingRuleConfig | undefined
+    description: >-
+      The naming rule config in force for a subsystem: the project's, overlaid with its profile
+      pack's when the pack sets one, stereotype patterns merged key by key
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-07-15T12:23:36.051Z'
+updatedAt: '2026-09-14T23:26:20.942Z'

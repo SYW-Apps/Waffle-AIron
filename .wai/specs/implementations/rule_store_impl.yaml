@@ -1,8 +1,8 @@
 id: rule_store_impl
 name: Rule Store Implementation
 description: >-
-  In-memory rule set held in src/core/rules/index.ts. Authoritative for one validation run; rebuilt
-  on the next.
+  The in-memory rule set in src/core/rules/repository.ts: a registration-order list the registry
+  appends to and clears, and the index reads.
 contract: irule_store
 sourcePath: src/core/rules/repository.ts
 methods:
@@ -16,7 +16,12 @@ methods:
     intent: >-
       Return the current rule set by shared reference, in registration order. Read-only; an empty
       set before seeding is normal, never an error.
+  - name: clear
+    narrative: []
+    intent: >-
+      Replace the held rule set with an empty one, so a repeated validation run in the same process
+      never holds a rule twice; registration order restarts with the next addRule.
 detail: intent
 status: complete
 createdAt: '2026-07-14T19:17:41.361Z'
-updatedAt: '2026-07-15T06:23:42.791Z'
+updatedAt: '2026-09-15T00:29:34.337Z'

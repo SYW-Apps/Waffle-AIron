@@ -4,11 +4,13 @@
  * CONTROL that must stay quiet for that code.
  *
  * Documented intents (the thing these fixtures pin — see README):
- *  - ORPHANED_SUBSYSTEM (hierarchy.ts, warning): "Subsystem does not reference
- *    the L0 system" — parentSystem is missing or names something other than
- *    the system's name (namespaced subproject subsystems are exempt).
- *  - MISSING_TARGET_COMPONENT (contracts.ts, error): a narrative call /
- *    dispatch / register step carries no `targetComponent`.
+ *  - ORPHANED_SUBSYSTEM (integrity/hierarchy-integrity.ts, warning):
+ *    "Subsystem does not reference the L0 system" — parentSystem is missing
+ *    or names something other than the system's name (namespaced subproject
+ *    subsystems are exempt).
+ *  - MISSING_TARGET_COMPONENT (narrative/contract-symmetry-and-narratives.ts,
+ *    error): a narrative call / dispatch / register step carries no
+ *    `targetComponent`.
  */
 import { defineRuleFixture } from '../harness.js';
 

@@ -1,5 +1,5 @@
 /**
- * Narrative-antipattern family (src/core/rules/narrative-antipatterns.ts):
+ * Narrative-antipattern family (src/core/rules/narrative/narrative-antipatterns.ts):
  * provable narrative bugs, restricted to what structure alone proves.
  *
  * Documented intents pinned here:

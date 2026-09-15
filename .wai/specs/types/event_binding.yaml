@@ -1,0 +1,23 @@
+kind: value-object
+id: event_binding
+name: EventBinding
+description: >-
+  One edge of the declared pub/sub topology: a topic a component emits to or consumes from. The
+  event-topology rule pairs every emitted topic with a subscriber and every subscription with a
+  source, by topic.
+fields:
+  - name: topic
+    type: string
+    description: Topic or channel name exactly as used on the bus
+    optional: false
+  - name: event
+    type: string
+    description: Event name within the topic; informational, since pairing is by topic
+    optional: true
+  - name: description
+    type: string
+    description: What flows on this edge
+    optional: true
+methods: []
+createdAt: '2026-09-14T23:23:17.286Z'
+updatedAt: '2026-09-14T23:23:17.295Z'

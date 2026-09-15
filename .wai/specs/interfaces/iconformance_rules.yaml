@@ -1,0 +1,170 @@
+id: iconformance_rules
+name: Conformance Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules judge whether
+  code matches the spec, from the source-code model the validator gathers.
+component: conformance_rules
+methods:
+  - name: structuralConformance
+    description: >-
+      Rule structural-conformance. Code↔spec Level 1: every source file an implementation names —
+      its own sourcePath and each method's — must resolve to a real file inside the project root,
+      and every L3 contract method must be realized in its own source file (the method's sourcePath,
+      else the implementation's) at its conformance tier (declared | anchored | off; Portals default
+      to anchored, everything else to declared; per-method `symbol` maps intent-language names to
+      code names), and every finding code a contract method declares must appear as a string literal
+      in that file (UNREALIZED_FINDING). A file that escapes the root, is missing or cannot be read
+      is reported once and blocks only the methods realized in it. Findings carry the analysis grade
+      (exact AST | pattern table | generic scan) so weaker analysis is visible. Implementations
+      under chained subsystems (projectPath) validate standalone in their own project run and are
+      skipped here.
+    signature: 'structuralConformance(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MISSING_SOURCE_PATH
+        severity: warning
+        summary: >-
+          An implementation names no source file at all, or a contract method is left without one —
+          structural conformance cannot link it to code
+      - code: MISSING_SOURCE_FILE
+        severity: error
+        summary: >-
+          A source file an implementation or one of its methods names does not resolve to a file on
+          disk
+      - code: SOURCE_PATH_ESCAPES_ROOT
+        severity: error
+        summary: >-
+          A source file an implementation or one of its methods names is absolute or escapes the
+          project root (containment refusal)
+      - code: UNREALIZED_METHOD
+        severity: warning
+        summary: >-
+          An L3 contract method has no anchor in its own source file (the method's sourcePath, else
+          the implementation's) at the required conformance tier
+      - code: UNREALIZED_FINDING
+        severity: warning
+        summary: >-
+          A finding code a contract method declares does not appear as a string literal in the
+          method's source file
+      - code: CONFORMANCE_ANALYSIS_SKIPPED
+        severity: warning
+        summary: >-
+          A source file an implementation or one of its methods names could not be analyzed
+          (binary/unreadable) — realization of the methods in it was not checked
+      - code: CONFORMANCE_DEGRADED
+        severity: warning
+        summary: >-
+          TypeScript/JavaScript files were analyzed below exact grade (compiler not resolvable) —
+          dependency conformance skips them
+  - name: callConformance
+    description: >-
+      Rule call-conformance. Code↔spec Level 3 (opener): every narrative `call` step of an
+      exactly-analyzed method must be realized as a call in the realized function, read from the
+      method's own source file (its sourcePath, else the implementation's) — the target method's
+      contract name or its per-method symbol override must appear among the function's callees,
+      closed transitively over same-file named helpers. Set membership only: order, arguments, and
+      conditions are deliberately unverified, and dispatch steps (runtime-table routed) are skipped.
+      Respects the conformance dial (off skips) and fires only at exact analysis grade — weaker
+      grades never guess.
+    signature: 'callConformance(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: CALL_STEP_UNREALIZED
+        severity: warning
+        summary: >-
+          Narrative call step whose target method name (or symbol) never appears among the realized
+          function's callees in the method's source file (exact grade, set membership)
+  - name: hiddenState
+    description: >-
+      Rule hidden-state. The fields-vs-Store criterion, statically approximated: module-scope
+      mutable bindings (let/var) in a source file mapped EXCLUSIVELY to logic-stereotype components
+      (Orchestrator/Supervisor/Actor/Specialist) — a component maps every file its implementations
+      and their methods name — are flagged as hidden held state — state a logic component keeps for
+      itself is invisible to the spec, the canvas, and every persistence rule. Promote it to a Store
+      (durability: cache for loss-safe memo state), or lint.allow with the reason it is genuinely
+      wiring/ephemeral. Exact analysis grade only; files also mapped to data or boundary components
+      are exempt (N:1 collapse); const-bound container mutation is beyond this check and the finding
+      says so.
+    signature: 'hiddenState(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: HIDDEN_STATE
+        severity: warning
+        summary: >-
+          Module-scope mutable binding in a file mapped only to logic-stereotype components — held
+          state hiding outside a Store
+  - name: dependencyConformance
+    description: >-
+      Rule dependency-conformance. Code↔spec Level 2: runtime import edges between component-mapped
+      source files (a component maps to every file its implementations and their methods name) must
+      be justified by declared relations — a direct dependsOn/owns pair, a shared component,
+      membership in a depended-on pattern, or (across subsystems) a declared edge to the target
+      subsystem's published surface (UNDECLARED_DEPENDENCY). Conversely, a declared dependsOn/owns
+      edge between components realized in different files should be visible as an import between any
+      file of the source and any file of the target (UNREALIZED_DEPENDENCY — DI indirection can
+      defeat this, hence warning). Only exact-grade analyzed files participate; type-only imports
+      are exempt; chained subprojects validate standalone.
+    signature: 'dependencyConformance(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNDECLARED_DEPENDENCY
+        severity: warning
+        summary: >-
+          A runtime import between component-mapped files has no declared dependsOn/owns (or
+          published-surface) justification
+      - code: UNREALIZED_DEPENDENCY
+        severity: warning
+        summary: >-
+          A declared dependsOn/owns edge between components in different files is realized by no
+          import between any of their files
+  - name: integrationConformance
+    description: >-
+      Rule integration-conformance. A component cannot honestly claim completeness until a committed
+      integration harness wires it to its REAL dependencies (L4 simPath). Statically checked: the
+      harness file exists inside the project root, and its import graph — closed transitively over
+      the analyzed module set, exact grade only — reaches at least one of the component's own source
+      modules (its implementation's or a method's) and at least one source module of each direct
+      dependsOn/owns component (technology-boundary dependencies exempt: their fakes are
+      sanctioned). Execution is CI's job — these findings prove wiring, never that the sim passes.
+      MISSING_INTEGRATION_SIM activates per subsystem once its first simPath is declared.
+    signature: 'integrationConformance(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MISSING_INTEGRATION_SIM
+        severity: warning
+        summary: Complete non-leaf implementation in a sim-adopting subsystem declares no simPath
+      - code: SIM_FILE_MISSING
+        severity: warning
+        summary: Declared simPath resolves to no file inside the project root
+      - code: UNWIRED_INTEGRATION_SIM
+        severity: warning
+        summary: Sim file does not import the real modules it claims to wire
+      - code: SIM_PATH_UNCOVERED
+        severity: warning
+        summary: >-
+          A narrative path has no sim:<component>.<method>[:<label>] anchor in the component's
+          coverage-opted harness
+status: draft
+createdAt: '2026-09-14T06:08:40.026Z'
+updatedAt: '2026-09-14T06:08:40.029Z'

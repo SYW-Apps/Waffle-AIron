@@ -1,5 +1,5 @@
 /**
- * Naming-convention fixtures (src/core/rules/naming.ts). Config-gated via
+ * Naming-convention fixtures (src/core/rules/heuristic/naming-conventions.ts). Config-gated via
  * rules.naming.
  *
  * Documented intents pinned here:

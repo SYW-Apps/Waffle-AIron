@@ -5,7 +5,7 @@ import * as os from 'os';
 import { validateSddTree } from '../../src/core/validation.js';
 import { invalidateSpecCache, updateSpec, saveSubsystemSpec, saveInterfaceSpec, saveImplementationSpec, loadImplementationSpec } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { stepGraph } from '../../src/core/rules/narrative-flow.js';
+import { stepGraph } from '../../src/models/index.js';
 import type { NarrativeStep } from '../../src/models/index.js';
 
 const now = new Date().toISOString();
@@ -30,12 +30,12 @@ describe('stepGraph parallel successor semantics', () => {
   ];
 
   it('fans out to every arm entry plus the join continuation', () => {
-    const g = stepGraph(steps);
+    const g = stepGraph({ narrative: steps });
     expect(g.successorsOf(1).sort()).toEqual([2, 4, 6]);
   });
 
   it('an arm-end falls through to the JOIN, never into the neighbor arm', () => {
-    const g = stepGraph(steps);
+    const g = stepGraph({ narrative: steps });
     expect(g.successorsOf(3)).toEqual([6]); // not 4
     expect(g.successorsOf(5)).toEqual([6]);
   });
@@ -50,7 +50,7 @@ describe('stepGraph parallel successor semantics', () => {
       step({ stepNumber: 6, type: 'local' }), // outer arm 2
       step({ stepNumber: 7, type: 'return' }),
     ];
-    const g = stepGraph(nested);
+    const g = stepGraph({ narrative: nested });
     // Outer arm 1 spans 2..5 (its end 5 maps to outer join 7); the inner
     // parallel's own join = fallNext(5) = 7 as well.
     expect(g.successorsOf(3)).toEqual([7]);

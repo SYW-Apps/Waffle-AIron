@@ -9,7 +9,7 @@ import {
   loadTypeSpecs,
 } from './specs.js';
 import type { ValidationIssue } from './validation.js';
-import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs } from './rules/type-analysis.js';
+import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs } from '../models/index.js';
 import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 /**
- * Untyped-seam family (src/core/rules/semantic-edges.ts, untypedSeamRule):
+ * Untyped-seam family (src/core/rules/wiring/untyped-seams.ts, untypedSeamRule):
  * methods on a subsystem's PUBLISHED components should not take or return
  * bare Json/any/unknown — cross-subsystem contracts are the swap seam and
  * must be typed. Generic-dispatch portals carry per-capability types via

@@ -1,5 +1,5 @@
 /**
- * Tree-integrity fixtures (src/core/rules/hierarchy.ts). ORPHANED_SUBSYSTEM
+ * Tree-integrity fixtures (src/core/rules/integrity/hierarchy-integrity.ts). ORPHANED_SUBSYSTEM
  * is deliberately NOT covered here — the exemplars family owns it.
  *
  * Documented intents pinned here:

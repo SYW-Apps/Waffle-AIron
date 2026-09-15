@@ -13,6 +13,10 @@ import {
   SystemPublicInterface,
   NamedOpenApiSpec,
   TypeSpec,
+  extractTypeIdentifiers,
+  matchTypeRef,
+  methodTypeRefs,
+  BUILTIN_TYPES,
 } from '../models/index.js';
 import {
   loadSystemSpec,
@@ -26,7 +30,6 @@ import {
   type ChainingParentRef,
 } from './specs.js';
 import { computeStateId } from './statehash.js';
-import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs, BUILTIN_TYPES } from './rules/type-analysis.js';
 import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
 
 // ---------------------------------------------------------------------------
@@ -186,8 +189,8 @@ function localName(id: string): string {
  * The stereotypes that can legally serve a cross-boundary caller, and therefore
  * the only ones a sibling surface may project. This is exactly the set the
  * boundary rules already sanction as a cross-subsystem dependency target
- * (Portal / Gateway — see rules/stereotype-deps.ts) plus the Observer that may
- * back a MessageBus public interface (see rules/public-surface.ts). Anything
+ * (Portal / Gateway — see rules/doctrine/stereotype-dependencies.ts) plus the Observer that may
+ * back a MessageBus public interface (see rules/integrity/public-surface.ts). Anything
  * else is declarable as a published entry but never consumable across a
  * boundary, so projecting it would export a contract no sibling can call.
  */

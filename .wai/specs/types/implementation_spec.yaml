@@ -58,6 +58,19 @@ fields:
       (omitted = stereotype default: Portal → anchored, else declared). off skips method realization
       checks; the existence check of every named source file always applies.
     optional: true
+  - name: simPath
+    type: string
+    description: >-
+      The committed integration-sim harness file (project-relative, shareable N:1); integration
+      conformance proves it exists and that its import graph wires this component's real modules and
+      each direct dependency's
+    optional: true
+  - name: technologies
+    type: string[]
+    description: >-
+      External technologies this implementation binds to (e.g. mysql); its component's ownership
+      tree becomes each technology's home, which the technology-boundaries rule enforces
+    optional: true
 methods:
   - name: sourceFiles
     signature: 'sourceFiles(): string[]'
@@ -67,4 +80,4 @@ methods:
       deduplicated, in declaration order. The simPath harness is not a source file of the
       implementation and is not included.
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-13T21:16:50.417Z'
+updatedAt: '2026-09-14T23:22:50.601Z'

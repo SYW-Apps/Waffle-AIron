@@ -1,5 +1,7 @@
 /**
- * Namespace integrity (src/core/rules/namespace.ts).
+ * Namespace integrity (RESERVED_ID_SEGMENT and NAMESPACE_SHADOWING in
+ * src/core/rules/integrity/namespace-hygiene.ts; ROUNDTRIP_SERIALIZATION in
+ * src/core/rules/integrity/roundtrip-serialization.ts).
  *
  * Documented intents pinned here:
  *  - RESERVED_ID_SEGMENT (error): no id segment may be the reserved namespace

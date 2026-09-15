@@ -1,5 +1,5 @@
 /**
- * Prose-claim family (src/core/rules/semantic-edges.ts, proseClaimRule):
+ * Prose-claim family (src/core/rules/wiring/prose-claims.ts, proseClaimRule):
  * durability/side-effect claims that exist only in prose. A local step or an
  * intent paragraph claiming persistence ("persisted", "survives restart",
  * "registered into") on a LOGIC component whose narrative has no

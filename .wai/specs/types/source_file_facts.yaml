@@ -63,6 +63,34 @@ fields:
       never accused as an undeclared dependency, but realizes a declared forwarding edge (a portal
       barrel republishing its orchestrator).
     optional: false
-methods: []
+  - name: functionComplexity
+    type: Record<string, number>
+    description: >-
+      Cyclomatic complexity per named function-like (function, method and accessor declarations, and
+      function or arrow initializers of named slots); exact grade only, and same-named functions
+      record their maximum — fuel for the detail-sufficiency lint
+    optional: true
+  - name: functionCalls
+    type: Record<string, string[]>
+    description: >-
+      Direct callee names per named function-like (nested named functions carry their own entries;
+      anonymous callbacks count toward their enclosing function); exact grade only, and same-named
+      functions union their sets — fuel for call-step realization
+    optional: true
+  - name: topLevelMutableBindings
+    type: string[]
+    description: >-
+      Module-scope let and var bindings; exact grade only — fuel for the hidden-state lint, which
+      cannot see mutation of const-bound containers
+    optional: true
+methods:
+  - name: resolveImport
+    signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
+    returns: string | undefined
+    description: >-
+      Resolve one of this file's relative import specifiers against a set of known source paths:
+      join it with this file's directory, then try the joined path, .js swapped for .ts or .tsx, the
+      .ts, .tsx and .js extensions, and an index file; undefined for a bare package specifier or
+      when nothing matches
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-09-13T20:55:24.242Z'
+updatedAt: '2026-09-14T23:22:48.290Z'

@@ -1,0 +1,24 @@
+kind: value-object
+id: walk_options
+name: WalkOptions
+description: >-
+  Which optional edges the narrative graph walk follows. Call steps and dispatch steps are always
+  followed.
+fields:
+  - name: followDispatchTables
+    type: boolean
+    description: >-
+      Whether reaching a Portal reaches every binding of its dispatch table (default true).
+      Unused-detection follows them, since the table is the Portal's served surface; the durability
+      boot walk does not, since a capability a reached Portal merely offers is not a boot-time read.
+    optional: true
+  - name: followRegisterEdges
+    type: boolean
+    description: >-
+      Whether register steps contribute edges (default true). Unused-detection follows them, since a
+      registered callback is reached wherever its registration is; the boot walk does not, since
+      registering a read at init does not run it at boot.
+    optional: true
+methods: []
+createdAt: '2026-09-14T06:03:45.606Z'
+updatedAt: '2026-09-14T06:03:45.614Z'

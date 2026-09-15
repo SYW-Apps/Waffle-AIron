@@ -5,8 +5,16 @@ import * as os from 'os';
 import { validateSddTree, type ValidationIssue } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { buildRuleContext } from '../../src/core/rules/index.js';
+import { knownIssueCodes, registerBuiltinRules, registerPackRules } from '../../src/core/rules/repository.js';
 import { RulesConfigSchema } from '../../src/models/project.js';
-import { emptyExtensions } from '../../src/core/extensions.js';
+import { emptyExtensions, type LoadedExtensions } from '../../src/core/extensions.js';
+
+/** The known issue codes a rule context carries, gathered as the validator gathers them. */
+function gatherKnownIssueCodes(extensions: LoadedExtensions = emptyExtensions()): Set<string> {
+  registerBuiltinRules();
+  registerPackRules(extensions.rules);
+  return new Set([...knownIssueCodes().map((c) => c.code), ...extensions.assertions.map((a) => a.fullCode)]);
+}
 
 // ---------------------------------------------------------------------------
 // designDepth — teams choose how deep they design (components | interfaces |
@@ -177,6 +185,8 @@ describe('designDepth gates expectation checks', () => {
       types: [],
       projectType: 'backend',
       extensions: ext,
+      roundTripIssues: [],
+      knownIssueCodes: gatherKnownIssueCodes(ext),
       issues,
     });
     // Pack-profile depth (interfaces) gates the narrative-level expectation…
@@ -198,6 +208,8 @@ describe('designDepth gates expectation checks', () => {
       rules: RulesConfigSchema.parse({ designDepth: 'narratives' }),
       projectType: 'backend',
       extensions: ext,
+      roundTripIssues: [],
+      knownIssueCodes: gatherKnownIssueCodes(ext),
       issues: issues2,
     });
     ctx2.addIssue('warning', 'MISSING_NARRATIVE', 'not gated at explicit narratives depth', 'orch-a');
@@ -220,6 +232,8 @@ describe('designDepth gates expectation checks', () => {
       types: [],
       projectType: 'backend',
       extensions: ext,
+      roundTripIssues: [],
+      knownIssueCodes: gatherKnownIssueCodes(ext),
     };
 
     // Profile turns UNOWNED_STORE off for its subsystem…

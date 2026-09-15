@@ -1,0 +1,192 @@
+id: inarrative_rules
+name: Narrative Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules judge whether
+  contracts and narratives agree and are sound.
+component: narrative_rules
+methods:
+  - name: contractSymmetryAndNarratives
+    description: >-
+      Rule contract-symmetry-and-narratives. Implementations mirror their contract
+      method-for-method. Narrative call steps (and register handoffs, which share the identical
+      target shape) must name an existing component and method, the caller must declare the
+      dependency, and asserted semantic guarantees must be backed by the target contract.
+    signature: 'contractSymmetryAndNarratives(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNEXPECTED_IMPLEMENTATION_METHOD
+        severity: error
+        summary: Implementation method not present on the contract
+      - code: MISSING_IMPLEMENTATION_METHOD
+        severity: error
+        summary: Contract method missing from the implementation
+      - code: MISSING_TARGET_COMPONENT
+        severity: error
+        summary: Call/register step missing targetComponent
+      - code: MISSING_TARGET_METHOD
+        severity: error
+        summary: Call/register step missing targetMethod
+      - code: INVALID_TARGET_COMPONENT_REFERENCE
+        severity: error
+        summary: Call/register step targets a non-existent component
+      - code: CROSS_TREE_REF_UNRESOLVED
+        severity: warning
+        summary: >-
+          Cross-tree reference (super::/:: form) with no surface snapshot covering it — only the
+          parent project can verify it
+      - code: SURFACE_REF_NOT_EXPOSED
+        severity: error
+        summary: >-
+          Cross-tree reference resolves to a surface snapshot that does not expose the called
+          method/capability
+      - code: SURFACE_REF_AMBIGUOUS
+        severity: error
+        summary: >-
+          Cross-tree call/dispatch/register target matched by surface snapshots of several providers
+          with different contracts
+      - code: UNDECLARED_DEPENDENCY_CALL
+        severity: error
+        summary: Call step targets a component the caller does not depend on or own
+      - code: INVALID_TARGET_METHOD_REFERENCE
+        severity: error
+        summary: Call step targets a method not on any target interface
+      - code: NARRATIVE_SEMANTIC_UNBACKED
+        severity: warning
+        summary: Narrative asserts a guarantee the called contract does not declare
+  - name: guaranteeTokens
+    description: >-
+      Rule guarantee-tokens. Every semantic-guarantee token an L3 method declares or a narrative
+      step asserts must be a builtin guarantee or one a loaded extension pack declares in its
+      `guarantees` list. The vocabulary is open for packs, not for typos — an undeclared token is
+      matched by nothing and silently escapes the narrative↔contract consistency checks.
+    signature: 'guaranteeTokens(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNKNOWN_GUARANTEE
+        severity: warning
+        summary: Guarantee token is neither builtin nor pack-declared
+  - name: narrativeFlow
+    description: >-
+      Rule narrative-flow. Control-flow soundness of L5 narratives: flow steps (branch, switch,
+      loop, try, parallel, jump) must carry their required config, every jump field must target an
+      existing step number in the same narrative, and every step must be reachable from the first
+      step following fall-through and jumps. A parallel body is covered by contiguous, ordered arms
+      (>= 2) whose last steps continue at the join after endStep; "detach" (fire-and-forget) is
+      legal on call/dispatch steps only.
+    signature: 'narrativeFlow(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MALFORMED_FLOW_STEP
+        severity: error
+        summary: Flow step missing required config (or flow config on a local/call step)
+      - code: INVALID_STEP_JUMP
+        severity: error
+        summary: Jump field targets a step number that does not exist in the narrative
+      - code: UNREACHABLE_STEP
+        severity: warning
+        summary: Step not reachable from the first step following fall-through and jumps
+      - code: REGION_OVERLAP
+        severity: error
+        summary: loop/try regions interleave — regions must nest or be disjoint to map onto structured code
+      - code: JUMP_INTO_REGION
+        severity: warning
+        summary: >-
+          Jump lands in the middle of a loop/try body from outside — regions are entered through
+          their header
+      - code: FALLTHROUGH_INTO_HANDLER
+        severity: warning
+        summary: try body falls through into its own catch/finally region on the success path
+      - code: BACKWARD_JUMP
+        severity: warning
+        summary: >-
+          Backward jump that is not a continue to an enclosing loop header — model repetition with a
+          loop step
+      - code: DUPLICATE_STEP_LABEL
+        severity: error
+        summary: Two steps in one narrative share a label — the symbolic anchor later deltas address by
+  - name: narrativeAntipatterns
+    description: >-
+      Rule narrative-antipatterns. Provable narrative bugs, caught at spec level before
+      implementation: a step-graph cycle with no exit edge and no return/throw member never
+      terminates by construction (INESCAPABLE_CYCLE); a branch or switch whose arms all target the
+      same step decides nothing (MEANINGLESS_BRANCH); a method-level call cycle across components in
+      which every call edge is unavoidable on every entry-to-exit path is unbounded recursion
+      (UNCONDITIONAL_CALL_CYCLE — dispatch steps resolved through their portal tables; a cycle with
+      even one guarded edge is NOT flagged, since prose conditions are never judged). Structure-only
+      claims — warnings, lint.allow-suppressible.
+    signature: 'narrativeAntipatterns(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: INESCAPABLE_CYCLE
+        severity: warning
+        summary: Step cycle with no exit edge and no return/throw member — never terminates by construction
+      - code: MEANINGLESS_BRANCH
+        severity: warning
+        summary: Branch/switch whose arms all target the same step — the decision changes nothing
+      - code: UNCONDITIONAL_CALL_CYCLE
+        severity: warning
+        summary: >-
+          Cross-component call cycle in which every call edge is unavoidable — unbounded recursion
+          by construction
+  - name: narrativeDetail
+    description: >-
+      Rule narrative-detail. The narrative detail dial: each method resolves to full | calls-only |
+      intent (method override → spec default → stereotype default). full requires a narrative;
+      intent-level methods without a narrative must specify behavior as non-trivial prose (L4 intent
+      or L3 description) — dialing detail down never means leaving behavior unspecified. Explicit
+      declarations are held to their promise as errors; stereotype-defaulted gaps surface as
+      warnings. Detail sufficiency rides along: a method whose realized function — in the method's
+      own source file, else the implementation's — measures real branching (cyclomatic complexity
+      above rules.complexity.maxUnnarratedComplexity, exact AST grade only) may not hide below
+      detail: full without a narrative (UNNARRATED_COMPLEXITY), and an explicit dial below a
+      full-floor logic stereotype without a narrative is a visible, lint.allow-justifiable choice
+      (DETAIL_BELOW_STEREOTYPE). Both are honest lints over declarations — they never claim the
+      narrative or prose is CORRECT.
+    signature: 'narrativeDetail(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MISSING_NARRATIVE
+        severity: warning
+        summary: >-
+          Method resolved to detail: full but has no narrative (error when the level was declared
+          explicitly)
+      - code: INTENT_FLOOR
+        severity: warning
+        summary: >-
+          Intent-level method whose intent/description prose is missing or placeholder-thin (error
+          when declared explicitly)
+      - code: UNNARRATED_COMPLEXITY
+        severity: warning
+        summary: >-
+          Method below detail: full with no narrative whose realized function, in the method's
+          source file, has real branching (cyclomatic complexity over the configured threshold,
+          exact-grade analysis only)
+      - code: DETAIL_BELOW_STEREOTYPE
+        severity: warning
+        summary: >-
+          Method explicitly dialed below the full narrative floor of its logic stereotype, with no
+          narrative
+status: draft
+createdAt: '2026-09-14T06:06:18.256Z'
+updatedAt: '2026-09-14T06:06:18.259Z'

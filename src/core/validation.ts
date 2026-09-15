@@ -13,9 +13,16 @@ import {
   getLoaderIssues,
   scanAllSpecs,
   invalidateSpecCache,
+  dryRunSerializeSpecs,
 } from './specs.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes } from './rules/repository.js';
+
+// validator_portal: the write-boundary half of the rule set — judge one
+// component before it is written. The spec validator realizes it in
+// rules/candidate.ts; it is published here, on the validator's entry point, so
+// callers reach it through the portal.
+export { validateComponentCandidate } from './rules/candidate.js';
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
 import type { PackSelection } from '../models/project.js';
 import { loadProjectConfig as loadCoreProjectConfig } from './index.js';
@@ -409,8 +416,9 @@ export function validateSddTree(
       issues.push(...loaderErrors);
     }
     // Round-trip serializability runs as a registered rule (roundtripRule in
-    // rules/namespace.ts) — visible in `rules list`, severity-tunable, scoped
-    // like every other finding.
+    // rules/integrity/roundtrip-serialization.ts) — visible in `rules list`, severity-tunable, scoped
+    // like every other finding. Its dry-run findings are gathered below, before
+    // the rules run.
 
     if (!system) {
       // Everything below needs an L0 to walk, so this returns early — which means
@@ -465,6 +473,24 @@ export function validateSddTree(
       subsystems.filter((s) => s.projectPath).map((s) => s.id),
     );
 
+    // The writer's round-trip dry run over every in-scope spec (same
+    // relativization, same schema, no I/O), gathered here so the
+    // roundtrip-serialization rule reports it from the context. Like the mount
+    // snapshots, it runs after the loader issues were collected.
+    const roundTripIssues = dryRunSerializeSpecs(isSpecInScope);
+
+    // Register the built-in rules and the loaded pack rules into the rule
+    // repository, and read the composed run sequence.
+    registerBuiltinRules();
+    registerPackRules(extensions.rules);
+    const sequence = ruleSequence();
+    // Every code the registered rules and the loaded declarative assertions can
+    // report: what the lint-allows audit checks lint.allow references against.
+    const knownCodes = new Set([
+      ...knownIssueCodes().map((rc) => rc.code),
+      ...extensions.assertions.map((a) => a.fullCode),
+    ]);
+
     const ctx = buildRuleContext({
       system,
       subsystems,
@@ -482,14 +508,13 @@ export function validateSddTree(
       surfaceSnapshots,
       mountSurfaceSnapshots,
       codeModel,
+      roundTripIssues,
+      knownIssueCodes: knownCodes,
       issues,
     });
 
-    // Register the built-in rules and the loaded pack rules into the rule
-    // repository, then run the composed sequence against the context.
-    registerBuiltinRules();
-    registerPackRules(extensions.rules);
-    for (const rule of ruleSequence()) {
+    // Run the composed sequence against the context.
+    for (const rule of sequence) {
       rule.check(ctx);
     }
 

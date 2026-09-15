@@ -1,0 +1,150 @@
+id: iextension_rules
+name: Extension Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules judge what
+  extension packs contribute: profiles, pattern references, variants and declarative assertions
+  resolve and apply, and pack selections resolve and are pinned.
+component: extension_rules
+methods:
+  - name: architecturalProfiles
+    description: >-
+      Rule architectural-profiles. Per-profile stereotype constraints:
+      View/FeatureComponent/RouterComponent only in frontend profiles; Actor/Supervisor forbidden in
+      plc-cyclic (single scan cycle); Actor/Supervisor in frontend profiles warned. Extension packs
+      may register custom profiles (family + forbidden/discouraged stereotype lists); unknown
+      profile names are flagged.
+    signature: 'architecturalProfiles(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: FRONTEND_STEREOTYPE_IN_BACKEND
+        severity: error
+        summary: Frontend stereotype in a backend-oriented subsystem
+      - code: PLC_CYCLIC_CONCURRENCY_VIOLATION
+        severity: error
+        summary: Concurrent stereotype in a PLC-cyclic profile
+      - code: BACKEND_STEREOTYPE_IN_FRONTEND
+        severity: warning
+        summary: Backend runtime stereotype in a frontend subsystem
+      - code: PROFILE_FORBIDDEN_STEREOTYPE
+        severity: error
+        summary: Stereotype forbidden by the governing pack-defined profile
+      - code: PROFILE_DISCOURAGED_STEREOTYPE
+        severity: warning
+        summary: Stereotype discouraged by the governing pack-defined profile
+      - code: UNKNOWN_PROFILE
+        severity: warning
+        summary: Profile name is neither built-in nor registered by an extension pack
+  - name: patternReferences
+    description: >-
+      Rule pattern-references. Every component pattern reference resolves to a reusable pattern
+      declared by a loaded extension pack (UNKNOWN_PATTERN_REF); a pinned version with no matching
+      pack pattern is warned (PATTERN_VERSION_MISMATCH). Pattern constraint enforcement itself is
+      delegated to the declaring pack's rules.
+    signature: 'patternReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNKNOWN_PATTERN_REF
+        severity: warning
+        summary: Component references a pattern no loaded pack declares
+      - code: PATTERN_VERSION_MISMATCH
+        severity: warning
+        summary: Referenced pattern version matches no loaded pack pattern
+  - name: componentVariants
+    description: >-
+      Rule component-variants. A component's variant resolves to a declared registry variant
+      (UNKNOWN_VARIANT), and the component's stereotype equals the variant's declared base
+      (VARIANT_BASE_MISMATCH). A variant is a base-anchored specialization (a kind of the base
+      stereotype), not a cross-cutting attribute — those stay method guarantees.
+    signature: 'componentVariants(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNKNOWN_VARIANT
+        severity: warning
+        summary: Component references a variant no registry declares
+      - code: VARIANT_BASE_MISMATCH
+        severity: error
+        summary: Component's stereotype does not match the variant's declared base
+  - name: declarativeAssertions
+    description: >-
+      Rule declarative-assertions. Evaluates the declarative rule assertions loaded packs declare
+      (forbid-edge / require-field / endpoint-shape) — closed kinds instantiated with pack data, the
+      hosted-safe doctrine channel. Findings carry the pack's namespaced code (<PACK>_<CODE>) and
+      its stated reason; severity is the pack's declaration (project sddRuleSeverity still wins, and
+      error downgrades to warning in draft context). Its finding codes are the packs' own
+      (<PACK>_<CODE>), so the method declares none.
+    signature: 'declarativeAssertions(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings: []
+  - name: packResolution
+    description: >-
+      Rule pack-resolution. Every pack a project declares must resolve — from a committed bundle
+      under .wai/packs/, or from this wairon install's pack store — and must be the content it
+      claims. An unresolvable selection is an error reported under the code that names the remedy:
+      PACK_NOT_INSTALLED (absent entirely), PACK_VERSION_UNSATISFIED (installed, but no version
+      satisfies the pin), or PACK_INTEGRITY_MISMATCH (resolved content does not match the pinned
+      integrity digest, recomputed from the files rather than read from metadata, on whichever path
+      won). Those never downgrade to warnings: a project whose declared doctrine is missing or
+      altered is misconfigured, and a gate running without it must not look clean. PACK_STORE_DRIFT
+      is the one warning — a committed bundle and the store hold different content for the same
+      name@version; the bundle applies, so the store copy is silently ignored and that deserves
+      saying.
+    signature: 'packResolution(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PACK_NOT_INSTALLED
+        severity: error
+        summary: A declared pack is neither bundled nor installed in the pack store
+      - code: PACK_VERSION_UNSATISFIED
+        severity: error
+        summary: The pack is installed, but no installed version satisfies the selection's pin
+      - code: PACK_INTEGRITY_MISMATCH
+        severity: error
+        summary: Resolved pack content does not match the selection's pinned integrity digest
+      - code: PACK_STORE_DRIFT
+        severity: warning
+        summary: A committed bundle and the pack store hold different content for the same name@version
+  - name: packReproducibility
+    description: >-
+      Rule pack-reproducibility. Under rules.enforceReproducibility (default true), every by-name
+      pack selection must be reproducible elsewhere: pinned to an exact version (ideally with an
+      integrity digest) or bundled into the repository. A floating selection resolves against
+      whatever the local machine happens to have installed, so a clone or CI can validate the same
+      tree against a different rule set (UNPINNED_PACK_SELECTION). A selection that records no
+      fetchable source cannot be obtained by CI at all (PACK_SOURCE_UNFETCHABLE).
+    signature: 'packReproducibility(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNPINNED_PACK_SELECTION
+        severity: warning
+        summary: Pack selection floats to the latest installed version instead of pinning one
+      - code: PACK_SOURCE_UNFETCHABLE
+        severity: warning
+        summary: Pack selection is neither bundled nor obtainable from a recorded source
+status: draft
+createdAt: '2026-09-14T06:07:43.654Z'
+updatedAt: '2026-09-14T06:07:43.658Z'

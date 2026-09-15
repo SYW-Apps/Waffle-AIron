@@ -28,6 +28,26 @@ methods:
     signature: 'listRules(): SddRule[]'
     returns: SddRule[]
     params: []
+  - name: validateComponentCandidate
+    description: >-
+      Judge one component before it is written: run the spec-scoped rules against it and return the
+      verdict split by severity. The write-boundary half of the rule set, with the same rules, codes
+      and messages as validate, for the verdicts that need no tree. sdd_core's gated authoring calls
+      it before any component spec reaches disk (authoring.ts: addComponent, and the component gate
+      sdd_update_spec writes through) and refuses the write when the verdict holds an error; no
+      sdd_core narrative models that call yet, because no spec names authoring.ts.
+    signature: >-
+      validateComponentCandidate(candidate: ComponentSpec, opts?: CandidateOptions):
+      CandidateVerdict
+    returns: CandidateVerdict
+    params:
+      - name: candidate
+        type: ComponentSpec
+        description: The component about to be written
+      - name: opts
+        type: CandidateOptions
+        description: Rules config, project type and loaded packs
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-14T20:09:04.994Z'
+updatedAt: '2026-09-14T06:10:23.406Z'

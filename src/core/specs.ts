@@ -27,6 +27,7 @@ import {
   SpecStatus,
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
+  splitNamespace,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -157,15 +158,6 @@ function qualifyDeclaredId(id: string, prefix: string, mountRealization = false)
 function qualifySubsystemRef(id: string, prefix: string, rootSubsystems: ReadonlySet<string>): string {
   if (prefix && !id.includes('::') && id === prefix.split('::').pop()) return prefix;
   return qualifyId(id, prefix, rootSubsystems);
-}
-
-export function splitNamespace(qualifiedId: string): { prefix: string; localId: string } {
-  if (!qualifiedId.includes('::')) {
-    return { prefix: '', localId: qualifiedId };
-  }
-  const parts = qualifiedId.split('::');
-  const localId = parts.pop()!;
-  return { prefix: parts.join('::'), localId };
 }
 
 /**
@@ -774,13 +766,13 @@ export interface SaveSpecOptions {
  *
  * `gate` sees the fully merged spec immediately before it is persisted, and
  * throws to refuse the write. It exists as an injected hook rather than a direct
- * call because the spec store must not depend on the rule engine — rules/
- * coupling.ts and rules/namespace.ts already read this module, so importing the
- * validator here would close an import cycle. Inversion keeps the dependency
- * pointing one way and keeps mechanical re-saves (status promotion, layout
- * normalization, migrations) ungated: they pass no hooks and behave exactly as
- * before, which matters because a spec that predates a rule must stay loadable
- * and repairable.
+ * call because the spec store must not depend on the rule engine —
+ * core/validation.ts (the rule engine's entry point) already reads this
+ * module, so importing the validator here would close an import cycle.
+ * Inversion keeps the dependency pointing one way and keeps mechanical
+ * re-saves (status promotion, layout normalization, migrations) ungated: they
+ * pass no hooks and behave exactly as before, which matters because a spec
+ * that predates a rule must stay loadable and repairable.
  *
  * Return notices to surface alongside the write's own.
  */

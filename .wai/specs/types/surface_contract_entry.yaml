@@ -67,6 +67,12 @@ fields:
       The backing Portal's basePath, projected onto the entry so the codec can emit this portal's
       OpenAPI `servers`.
     optional: true
-methods: []
+methods:
+  - name: sameContract
+    signature: 'sameContract(other: SurfaceContractEntry): boolean'
+    returns: boolean
+    description: >-
+      Whether two entries carry the same contract: the same backing component by local name, the
+      same methods and the same dispatch table, so whichever judges an edge the verdict is the same
 createdAt: '2026-07-10T23:11:38.492Z'
-updatedAt: '2026-07-23T15:53:56.510Z'
+updatedAt: '2026-09-14T06:04:11.735Z'

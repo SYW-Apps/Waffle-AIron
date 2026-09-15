@@ -1,5 +1,5 @@
 /**
- * Lifecycle-entrypoint family (src/core/rules/semantic-edges.ts,
+ * Lifecycle-entrypoint family (src/core/rules/wiring/lifecycle-entrypoints.ts,
  * lifecycleRule): declared init/shutdown/scheduled flow roots must name an
  * existing component and a method on one of its interfaces — they are
  * reachability roots, so a dangling entrypoint would silently detach every

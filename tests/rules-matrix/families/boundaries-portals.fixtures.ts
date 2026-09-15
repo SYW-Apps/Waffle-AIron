@@ -1,6 +1,7 @@
 /**
- * Portal field + endpoint-binding fixtures (src/core/rules/portals.ts —
- * portalFieldsRule and portalsRule).
+ * Portal field + endpoint-binding fixtures (portalFieldsRule in
+ * src/core/rules/intrinsic/portal-fields.ts, portalsRule in
+ * src/core/rules/doctrine/portal-endpoints.ts).
  *
  * Documented intents pinned here:
  *  - MISSING_PORTAL_TYPE (error): a Portal declares its portalType.

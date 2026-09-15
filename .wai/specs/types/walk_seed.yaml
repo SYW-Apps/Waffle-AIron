@@ -1,0 +1,18 @@
+kind: value-object
+id: walk_seed
+name: WalkSeed
+description: >-
+  A starting point for the narrative graph walk: one method, or every contract method of a
+  component.
+fields:
+  - name: compId
+    type: string
+    description: The component to start from
+    optional: false
+  - name: methodName
+    type: string
+    description: The one method to start at; when omitted, every contract method of the component
+    optional: true
+methods: []
+createdAt: '2026-09-14T06:03:42.422Z'
+updatedAt: '2026-09-14T06:03:42.433Z'

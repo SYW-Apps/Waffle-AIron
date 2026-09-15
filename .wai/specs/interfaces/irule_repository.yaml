@@ -27,6 +27,11 @@ methods:
     signature: 'knownIssueCodes(): RuleCode[]'
     returns: RuleCode[]
     params: []
+  - name: specScopedRules
+    description: Return the spec-scoped rules in run order, for the write gate.
+    signature: 'specScopedRules(): SddRule[]'
+    returns: SddRule[]
+    params: []
 status: complete
 createdAt: '2026-07-14T19:17:21.194Z'
-updatedAt: '2026-07-14T20:23:49.378Z'
+updatedAt: '2026-09-14T06:07:03.628Z'

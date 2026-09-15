@@ -1,5 +1,5 @@
 /**
- * Narrative-detail family (src/core/rules/narrative-detail.ts): the detail
+ * Narrative-detail family (src/core/rules/narrative/narrative-detail.ts): the detail
  * dial — levels are floors, not ceilings; resolution method -> spec ->
  * stereotype default.
  *

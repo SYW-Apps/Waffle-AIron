@@ -1,6 +1,6 @@
 /**
  * Pack-selection resolution and reproducibility
- * (src/core/rules/pack-resolution.ts + src/core/rules/reproducibility.ts).
+ * (src/core/rules/extension/pack-resolution.ts + src/core/rules/extension/pack-reproducibility.ts).
  *
  * Documented intents pinned here:
  *  - PACK_NOT_INSTALLED (error): a declared pack that is neither bundled under

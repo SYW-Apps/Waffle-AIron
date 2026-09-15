@@ -1,5 +1,5 @@
 /**
- * Dependency conformance (code↔spec Level 2) — src/core/rules/dependency-conformance.ts.
+ * Dependency conformance (code↔spec Level 2) — src/core/rules/conformance/dependency-conformance.ts.
  *
  * Documented intents pinned here (rule description + module doc comment):
  *  - UNDECLARED_DEPENDENCY (warning): a runtime import edge between

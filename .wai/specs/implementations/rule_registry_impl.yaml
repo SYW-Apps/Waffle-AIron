@@ -1,26 +1,263 @@
 id: rule_registry_impl
 name: Rule Registry Implementation
 description: >-
-  Write path in src/core/rules/index.ts: seeds built-in rules and registers pack rules into the rule
-  store.
+  Write path in src/core/rules/repository.ts: seeds the built-in rules, one registration per rule in
+  run order, and appends pack rules after them.
 contract: irule_registry
 sourcePath: src/core/rules/repository.ts
 simPath: tests/core/validation.test.ts
 methods:
   - name: registerBuiltinRules
-    narrative: []
-    intent: >-
-      Add each built-in SDD conformance rule to the rule store in canonical run order via the
-      store's addRule. Against a fresh ram-projection store this seeds the set once at the start of
-      a validation run.
+    narrative:
+      - stepNumber: 1
+        description: Start from an empty rule set, so a repeated run never holds a rule twice
+        type: call
+        targetComponent: rule_store
+        targetMethod: clear
+      - stepNumber: 2
+        description: Register hierarchy-integrity
+        type: register
+        targetComponent: integrity_rules
+        targetMethod: hierarchyIntegrity
+      - stepNumber: 3
+        description: Register namespace-hygiene
+        type: register
+        targetComponent: integrity_rules
+        targetMethod: namespaceHygiene
+      - stepNumber: 4
+        description: Register roundtrip-serialization
+        type: register
+        targetComponent: integrity_rules
+        targetMethod: roundtripSerialization
+      - stepNumber: 5
+        description: Register type-references
+        type: register
+        targetComponent: integrity_rules
+        targetMethod: typeReferences
+      - stepNumber: 6
+        description: Register contract-symmetry-and-narratives
+        type: register
+        targetComponent: narrative_rules
+        targetMethod: contractSymmetryAndNarratives
+      - stepNumber: 7
+        description: Register guarantee-tokens
+        type: register
+        targetComponent: narrative_rules
+        targetMethod: guaranteeTokens
+      - stepNumber: 8
+        description: Register narrative-flow
+        type: register
+        targetComponent: narrative_rules
+        targetMethod: narrativeFlow
+      - stepNumber: 9
+        description: Register narrative-antipatterns
+        type: register
+        targetComponent: narrative_rules
+        targetMethod: narrativeAntipatterns
+      - stepNumber: 10
+        description: Register narrative-detail
+        type: register
+        targetComponent: narrative_rules
+        targetMethod: narrativeDetail
+      - stepNumber: 11
+        description: Register portal-fields
+        type: register
+        targetComponent: intrinsic_rules
+        targetMethod: portalFields
+      - stepNumber: 12
+        description: Register portal-endpoints
+        type: register
+        targetComponent: doctrine_rules
+        targetMethod: portalEndpoints
+      - stepNumber: 13
+        description: Register portal-call-auth
+        type: register
+        targetComponent: doctrine_rules
+        targetMethod: portalCallAuth
+      - stepNumber: 14
+        description: Register stereotype-dependencies
+        type: register
+        targetComponent: doctrine_rules
+        targetMethod: stereotypeDependencies
+      - stepNumber: 15
+        description: Register pattern-ownership
+        type: register
+        targetComponent: doctrine_rules
+        targetMethod: patternOwnership
+      - stepNumber: 16
+        description: Register facade-forwarding
+        type: register
+        targetComponent: doctrine_rules
+        targetMethod: facadeForwarding
+      - stepNumber: 17
+        description: Register architectural-profiles
+        type: register
+        targetComponent: extension_rules
+        targetMethod: architecturalProfiles
+      - stepNumber: 18
+        description: Register pattern-references
+        type: register
+        targetComponent: extension_rules
+        targetMethod: patternReferences
+      - stepNumber: 19
+        description: Register component-variants
+        type: register
+        targetComponent: extension_rules
+        targetMethod: componentVariants
+      - stepNumber: 20
+        description: Register declarative-assertions
+        type: register
+        targetComponent: extension_rules
+        targetMethod: declarativeAssertions
+      - stepNumber: 21
+        description: Register public-surface
+        type: register
+        targetComponent: integrity_rules
+        targetMethod: publicSurface
+      - stepNumber: 22
+        description: Register dependency-cycles
+        type: register
+        targetComponent: wiring_rules
+        targetMethod: dependencyCycles
+      - stepNumber: 23
+        description: Register dispatch-tables
+        type: register
+        targetComponent: wiring_rules
+        targetMethod: dispatchTables
+      - stepNumber: 24
+        description: Register lifecycle-entrypoints
+        type: register
+        targetComponent: wiring_rules
+        targetMethod: lifecycleEntrypoints
+      - stepNumber: 25
+        description: Register unused-detection
+        type: register
+        targetComponent: wiring_rules
+        targetMethod: unusedDetection
+      - stepNumber: 26
+        description: Register durability-declaration
+        type: register
+        targetComponent: intrinsic_rules
+        targetMethod: durabilityDeclaration
+      - stepNumber: 27
+        description: Register durability-round-trip
+        type: register
+        targetComponent: wiring_rules
+        targetMethod: durabilityRoundTrip
+      - stepNumber: 28
+        description: Register untyped-seams
+        type: register
+        targetComponent: wiring_rules
+        targetMethod: untypedSeams
+      - stepNumber: 29
+        description: Register prose-claims
+        type: register
+        targetComponent: wiring_rules
+        targetMethod: proseClaims
+      - stepNumber: 30
+        description: Register invariant-backing
+        type: register
+        targetComponent: wiring_rules
+        targetMethod: invariantBacking
+      - stepNumber: 31
+        description: Register event-topology
+        type: register
+        targetComponent: wiring_rules
+        targetMethod: eventTopology
+      - stepNumber: 32
+        description: Register structural-conformance
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: structuralConformance
+      - stepNumber: 33
+        description: Register call-conformance
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: callConformance
+      - stepNumber: 34
+        description: Register hidden-state
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: hiddenState
+      - stepNumber: 35
+        description: Register dependency-conformance
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: dependencyConformance
+      - stepNumber: 36
+        description: Register integration-conformance
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: integrationConformance
+      - stepNumber: 37
+        description: Register coupling-health
+        type: register
+        targetComponent: heuristic_rules
+        targetMethod: couplingHealth
+      - stepNumber: 38
+        description: Register target-language
+        type: register
+        targetComponent: heuristic_rules
+        targetMethod: targetLanguage
+      - stepNumber: 39
+        description: Register technology-boundaries
+        type: register
+        targetComponent: heuristic_rules
+        targetMethod: technologyBoundaries
+      - stepNumber: 40
+        description: Register naming-conventions
+        type: register
+        targetComponent: heuristic_rules
+        targetMethod: namingConventions
+      - stepNumber: 41
+        description: Register complexity-and-metadata
+        type: register
+        targetComponent: heuristic_rules
+        targetMethod: complexityAndMetadata
+      - stepNumber: 42
+        description: Register pack-resolution
+        type: register
+        targetComponent: extension_rules
+        targetMethod: packResolution
+      - stepNumber: 43
+        description: Register pack-reproducibility
+        type: register
+        targetComponent: extension_rules
+        targetMethod: packReproducibility
+      - stepNumber: 44
+        description: Register lint-allows (the rule index later moves it after any pack rules)
+        type: register
+        targetComponent: integrity_rules
+        targetMethod: lintAllows
+      - stepNumber: 45
+        description: For each registered built-in rule, in that order
+        type: loop
+        loopKind: forEach
+        over: the registered built-in rules
+        endStep: 46
+      - stepNumber: 46
+        label: append-builtin
+        description: Append the rule to the store
+        type: call
+        targetComponent: rule_store
+        targetMethod: addRule
   - name: registerPackRules
-    narrative: []
-    intent: >-
-      For each programmatic pack rule, verify it is rule-shaped ({ name, description, codes, check
-      }) and append it to the rule store after the built-ins via addRule, so a later project pack's
-      rules run last. A malformed entry is refused as an EXTENSION_LOAD_ERROR upstream rather than
-      silently added.
-detail: intent
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each pack rule, in project pack order (the extension loader has already refused any
+          entry that is not rule-shaped)
+        type: loop
+        loopKind: forEach
+        over: the pack rules
+        endStep: 2
+      - stepNumber: 2
+        label: append-pack
+        description: Append the pack rule to the store, after the built-ins
+        type: call
+        targetComponent: rule_store
+        targetMethod: addRule
+detail: full
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-07-18T22:34:35.082Z'
+updatedAt: '2026-09-14T23:07:53.058Z'

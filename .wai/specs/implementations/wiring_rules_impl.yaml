@@ -1,0 +1,802 @@
+id: wiring_rules_impl
+name: Wiring Rules Implementation
+description: >-
+  The wiring rule family, one rule per file under src/core/rules/wiring/, each exporting a rule
+  object whose check realizes its contract method.
+contract: iwiring_rules
+simPath: tests/core/validation.test.ts
+methods:
+  - name: dependencyCycles
+    sourcePath: src/core/rules/wiring/dependency-cycles.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Start empty visited and recStack sets, shared by every descent of the private recursive
+          helper dfs(compId, pathTrace)
+        type: local
+      - stepNumber: 2
+        label: components
+        description: Search from each component that no earlier search has visited
+        type: loop
+        loopKind: forEach
+        over: ctx.components, skipping a component already visited when its turn comes
+        endStep: 11
+      - stepNumber: 3
+        description: >-
+          Descend with dfs(comp.id, []), whose body is the steps from here to the end of this loop,
+          re-entered one level deeper on each recursion: add compId to visited and recStack, push it
+          onto pathTrace, and look it up in ctx.componentMap
+        type: local
+      - stepNumber: 4
+        label: dependencies
+        description: Follow each dependency edge depId of compId
+        type: loop
+        loopKind: forEach
+        over: the looked-up component's dependsOn ids (none when compId does not resolve)
+        endStep: 10
+      - stepNumber: 5
+        description: >-
+          Classify the dependency: unvisited, on the current recursion stack, or already fully
+          searched (nothing to do)
+        type: switch
+        'on': depId's search state
+        cases:
+          - value: not yet visited
+            step: 6
+          - value: visited and still on recStack (a back edge)
+            step: 8
+        defaultStep: 4
+      - stepNumber: 6
+        label: recurse
+        description: Recurse into the unvisited dependency with dfs(depId, pathTrace)
+        type: branch
+        condition: dfs(depId, pathTrace) found a cycle
+        onFalseStep: 4
+      - stepNumber: 7
+        description: >-
+          Unwind: remove compId from recStack, pop it off pathTrace and return true to the caller;
+          the top-level search's true breaks the component loop, so only the first cycle is ever
+          reported
+        type: return
+        outcome: 'true: a cycle was found'
+      - stepNumber: 8
+        label: closeCycle
+        description: >-
+          Close the cycle: push depId onto pathTrace; the cycle path is pathTrace from depId's first
+          occurrence, joined with ' -> '
+        type: local
+      - stepNumber: 9
+        description: >-
+          Report CIRCULAR_DEPENDENCY (error; draft context when ctx.isComponentDraft(compId) or
+          ctx.isComponentDraft(depId)) on compId, with the message Circular dependency detected:
+          <cycle path>
+        type: local
+      - stepNumber: 10
+        label: dependenciesEnd
+        description: >-
+          Unwind: pop depId and compId off pathTrace, remove compId from recStack and return true;
+          the top-level search's true breaks the component loop
+        type: return
+        outcome: 'true: a cycle was found'
+      - stepNumber: 11
+        label: componentsEnd
+        description: >-
+          No cycle below compId: remove it from recStack and pop it off pathTrace, returning false,
+          so the caller goes on with its next dependency, or the component loop with its next
+          component
+        type: local
+    symbol: check
+  - name: dispatchTables
+    sourcePath: src/core/rules/wiring/dispatch-tables.ts
+    narrative:
+      - stepNumber: 1
+        label: tables
+        description: 'Table side: check each declared dispatch table'
+        type: loop
+        loopKind: forEach
+        over: the components comp of ctx.components that declare a non-empty dispatch table
+        endStep: 15
+      - stepNumber: 2
+        description: Capability dispatch is a Portal responsibility
+        type: branch
+        condition: comp.componentType is not Portal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report DISPATCH_ON_NON_PORTAL (error; draft context from ctx.isComponentDraft(comp.id)) on
+          comp.id, naming its componentType
+        type: local
+      - stepNumber: 4
+        label: bindings
+        description: Check each binding b of the table
+        type: loop
+        loopKind: forEach
+        over: comp.dispatch, tracking the capabilities seen so far in this table
+        endStep: 15
+      - stepNumber: 5
+        description: A capability bound twice makes runtime routing ambiguous
+        type: branch
+        condition: b.capability was already seen in this table
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report DUPLICATE_CAPABILITY (error; draft context from ctx.isComponentDraft(comp.id)) on
+          comp.id, naming the capability
+        type: local
+      - stepNumber: 7
+        label: resolveTarget
+        description: Record b.capability as seen and look the bound component target up in ctx.componentMap
+        type: branch
+        condition: b.component does not resolve
+        onFalseStep: 10
+      - stepNumber: 8
+        description: >-
+          Report UNSERVED_CAPABILITY (error; draft context from ctx.isComponentDraft(comp.id)) on
+          comp.id: the capability is bound to a component that does not exist
+        type: local
+      - stepNumber: 9
+        description: 'A binding with no server has nothing more to check: continue with the next binding'
+        type: jump
+        toStep: 4
+      - stepNumber: 10
+        label: checkMethod
+        description: The bound method must exist on one of the target's contracts
+        type: branch
+        condition: no method in ctx.interfaceMethodsOf(target.id) is named b.method
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Report UNSERVED_CAPABILITY (error; draft context when ctx.isComponentDraft(comp.id) or
+          ctx.isComponentDraft(target.id)) on comp.id: the target declares no such method on any of
+          its interfaces
+        type: local
+      - stepNumber: 12
+        label: checkSubsystem
+        description: A portal dispatches inward, into its own subsystem
+        type: branch
+        condition: target.subsystem is not comp.subsystem
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Report DISPATCH_CROSS_SUBSYSTEM (error; draft context when ctx.isComponentDraft(comp.id)
+          or ctx.isComponentDraft(target.id)) on comp.id, naming both subsystems
+        type: local
+      - stepNumber: 14
+        label: checkDeclared
+        description: The table is a runtime invocation path, so the portal must declare the edge
+        type: branch
+        condition: target is not comp itself and neither comp.dependsOn nor comp.owns lists target.id
+        onFalseStep: 4
+      - stepNumber: 15
+        label: tablesEnd
+        description: >-
+          Report UNDECLARED_DISPATCH_TARGET (error; draft context when ctx.isComponentDraft(comp.id)
+          or ctx.isComponentDraft(target.id)) on comp.id: the target is not listed under dependsOn
+          or owns
+        type: local
+      - stepNumber: 16
+        label: dispatchSteps
+        description: 'Step side: check each dispatch step'
+        type: loop
+        loopKind: forEach
+        over: >-
+          the dispatch steps of every method narrative of every implementation impl in
+          ctx.implementations
+        endStep: 29
+      - stepNumber: 17
+        description: A dispatch step must name the capability it routes
+        type: branch
+        condition: step.capability is missing
+        onFalseStep: 20
+      - stepNumber: 18
+        description: >-
+          Report MALFORMED_DISPATCH_STEP (error; draft context from ctx.isImplementationDraft(impl))
+          on impl.id, naming the method and the step number
+        type: local
+      - stepNumber: 19
+        description: Continue with the next dispatch step
+        type: jump
+        toStep: 16
+      - stepNumber: 20
+        label: resolvePortal
+        description: >-
+          Look the target portal up; a missing or dangling targetComponent is the contracts rule's
+          finding, so such a step is skipped
+        type: branch
+        condition: step.targetComponent is set and resolves in ctx.componentMap
+        onFalseStep: 16
+      - stepNumber: 21
+        description: Only a Portal's dispatch table can resolve a capability to a server
+        type: branch
+        condition: portal is not a Portal or declares no dispatch table
+        onFalseStep: 24
+      - stepNumber: 22
+        description: >-
+          Report UNSERVED_CAPABILITY (error; draft context when ctx.isImplementationDraft(impl) or
+          ctx.isComponentDraft(portal.id)) on impl.id: the target is not a Portal, or declares no
+          dispatch table
+        type: local
+      - stepNumber: 23
+        description: Continue with the next dispatch step
+        type: jump
+        toStep: 16
+      - stepNumber: 24
+        label: findBinding
+        description: Look the capability up in the portal's dispatch table
+        type: branch
+        condition: portal.dispatch has no binding for step.capability
+        onFalseStep: 27
+      - stepNumber: 25
+        description: >-
+          Report UNSERVED_CAPABILITY (error; draft context when ctx.isImplementationDraft(impl) or
+          ctx.isComponentDraft(portal.id)) on impl.id: the portal does not serve the capability,
+          listing the capabilities it declares
+        type: local
+      - stepNumber: 26
+        description: Continue with the next dispatch step
+        type: jump
+        toStep: 16
+      - stepNumber: 27
+        label: checkGuarantees
+        description: >-
+          Check each asserted guarantee g against the guarantees declared by the bound method: the
+          method of ctx.interfaceMethodsOf(binding.component) named binding.method, with none
+          declared when there is no such method
+        type: loop
+        loopKind: forEach
+        over: step.assertsGuarantees (none when the step asserts no guarantee)
+        endStep: 29
+      - stepNumber: 28
+        description: The same consistency check call steps get
+        type: branch
+        condition: g is not among the bound method's declared guarantees
+        onFalseStep: 27
+      - stepNumber: 29
+        label: stepsEnd
+        description: >-
+          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context when
+          ctx.isImplementationDraft(impl) or ctx.isComponentDraft(binding.component)) on impl.id,
+          naming the guarantee, the capability and the bound component and method
+        type: local
+    symbol: check
+  - name: lifecycleEntrypoints
+    sourcePath: src/core/rules/wiring/lifecycle-entrypoints.ts
+    narrative:
+      - stepNumber: 1
+        label: entrypoints
+        description: Check every declared lifecycle entrypoint
+        type: loop
+        loopKind: forEach
+        over: >-
+          each lifecycle entrypoint le of each subsystem sub in ctx.subsystems (none when sub
+          declares no lifecycle)
+        endStep: 8
+      - stepNumber: 2
+        description: The entrypoint must name an existing component
+        type: branch
+        condition: le.component does not resolve in ctx.componentMap
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Report INVALID_LIFECYCLE_ENTRYPOINT (error; draft context when sub.isDraft()) on sub.id,
+          naming the phase and the missing component
+        type: local
+      - stepNumber: 4
+        description: 'Without a component there is nothing more to check: continue with the next entrypoint'
+        type: jump
+        toStep: 1
+      - stepNumber: 5
+        label: checkSubsystem
+        description: A lifecycle flow is the subsystem's own boot or shutdown wiring
+        type: branch
+        condition: comp.subsystem is not sub.id
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report LIFECYCLE_CROSS_SUBSYSTEM (error; draft context when sub.isDraft() or
+          ctx.isComponentDraft(comp.id)) on sub.id, naming the component's owning subsystem
+        type: local
+      - stepNumber: 7
+        label: checkMethod
+        description: The entrypoint must name a method on one of the component's contracts
+        type: branch
+        condition: no method in ctx.interfaceMethodsOf(comp.id) is named le.method
+        onFalseStep: 1
+      - stepNumber: 8
+        label: entrypointsEnd
+        description: >-
+          Report INVALID_LIFECYCLE_ENTRYPOINT (error; draft context when sub.isDraft() or
+          ctx.isComponentDraft(comp.id)) on sub.id: the component declares no such method on any of
+          its interfaces
+        type: local
+    symbol: check
+  - name: unusedDetection
+    sourcePath: src/core/rules/wiring/unused-detection.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Collect the base seeds from ctx.components: every Portal and every Observer, each seeding
+          all its contract methods
+        type: local
+      - stepNumber: 2
+        description: >-
+          Add the seeds from ctx.subsystems: the component behind each publicInterfaces entry that
+          names one, seeding all its contract methods, and each lifecycle entrypoint, seeding its
+          one method
+        type: local
+      - stepNumber: 3
+        description: >-
+          Phase 1, the internal walk: baseWalk = walk(ctx, seeds) with the default options, the
+          baseline an invokedBy declaration is judged redundant against
+        type: call
+        targetComponent: narrative_graph_projector
+        targetMethod: walk
+      - stepNumber: 4
+        label: declarations
+        description: Audit every invokedBy declaration
+        type: loop
+        loopKind: forEach
+        over: >-
+          each method m that declares invokedBy, on each interface intf of ctx.interfaces whose
+          component resolves in ctx.componentMap (a declaration on a dangling component is the
+          hierarchy family's finding)
+        endStep: 10
+      - stepNumber: 5
+        description: 'Add the seed {compId: intf.component, methodName: m.name} to invokedBySeeds'
+        type: local
+      - stepNumber: 6
+        description: An out-of-scope declaration still seeds the walk but is not audited
+        type: branch
+        condition: ctx.isSpecInScope(intf.id)
+        onFalseStep: 4
+      - stepNumber: 7
+        description: The caller prose must say who invokes the method and when
+        type: branch
+        condition: m.passesIntentFloor(m.invokedBy.caller) is false
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Report INVOKED_BY_UNDESCRIBED (warning; draft context when the component's status or
+          intf.status is draft or design) on intf.id, naming the method, the component and the
+          invokedBy kind
+        type: local
+      - stepNumber: 9
+        label: checkRedundant
+        description: A method the internal walk already reaches needs no declared entrypoint
+        type: branch
+        condition: baseWalk.reachesMethod(intf.component, m.name)
+        onFalseStep: 4
+      - stepNumber: 10
+        label: declarationsEnd
+        description: >-
+          Report INVOKED_BY_REDUNDANT (warning; draft context when the component's status or
+          intf.status is draft or design) on intf.id: the declaration is stale
+        type: local
+      - stepNumber: 11
+        description: Without invokedBy seeds the full reach is baseWalk itself
+        type: branch
+        condition: invokedBySeeds is non-empty
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Phase 2, the full walk: reach = walk(ctx, seeds followed by invokedBySeeds) with the
+          default options, so a declared external caller's narrative propagates reachability
+        type: call
+        targetComponent: narrative_graph_projector
+        targetMethod: walk
+      - stepNumber: 13
+        label: components
+        description: Judge each component against the full reach
+        type: loop
+        loopKind: forEach
+        over: the components comp of ctx.components within scope (ctx.isSpecInScope(comp.id))
+        endStep: 19
+      - stepNumber: 14
+        description: An unreached component is reported whole, without its methods
+        type: branch
+        condition: reach.reachesComponent(comp.id) is false
+        onFalseStep: 17
+      - stepNumber: 15
+        description: >-
+          Report UNUSED_COMPONENT (warning; draft context when comp.status is draft or design) on
+          comp.id
+        type: local
+      - stepNumber: 16
+        description: Continue with the next component
+        type: jump
+        toStep: 13
+      - stepNumber: 17
+        label: methods
+        description: Check every contract method of the reached component
+        type: loop
+        loopKind: forEach
+        over: each contract method m of each interface intf in ctx.interfacesByComponent for comp.id
+        endStep: 19
+      - stepNumber: 18
+        description: A method no narrative step reaches is unused
+        type: branch
+        condition: reach.reachesMethod(comp.id, m.name) is false
+        onFalseStep: 17
+      - stepNumber: 19
+        label: componentsEnd
+        description: >-
+          Report UNUSED_METHOD (warning; draft context when comp.status or intf.status is draft or
+          design) on comp.id, naming the method
+        type: local
+      - stepNumber: 20
+        description: >-
+          Mark the types referenced by fields: for every field of every type t in ctx.types, pass
+          each ref of t.fieldTypeRefs(field.type) to the private helper markTypeReferenced, which
+          ignores a ref when ctx.isBuiltinType(ref) holds and otherwise records the id of every type
+          in ctx.types whose matchesRef(ref) holds
+        type: local
+      - stepNumber: 21
+        description: >-
+          Mark the types referenced by signatures: pass each ref of m.typeRefs(), for every method m
+          of every interface in ctx.interfaces, to markTypeReferenced
+        type: local
+      - stepNumber: 22
+        label: types
+        description: Judge each type against the recorded references
+        type: loop
+        loopKind: forEach
+        over: the types t of ctx.types within scope (ctx.isSpecInScope(t.id))
+        endStep: 24
+      - stepNumber: 23
+        description: A type no field or signature names is unused
+        type: branch
+        condition: t.id was never recorded as referenced
+        onFalseStep: 22
+      - stepNumber: 24
+        label: typesEnd
+        description: >-
+          Report UNUSED_TYPE (warning; draft context when the subsystem in ctx.subsystems whose id
+          is t.subsystem has status draft or design, none when there is no such subsystem) on t.id
+        type: local
+    symbol: check
+  - name: durabilityRoundTrip
+    sourcePath: src/core/rules/wiring/durability-round-trip.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Collect initSeeds: each lifecycle entrypoint of each subsystem in ctx.subsystems whose
+          phase is init and whose component resolves in ctx.componentMap, seeding its one method
+        type: local
+      - stepNumber: 2
+        description: With no init entrypoint anywhere there is no boot walk, and initReach stays absent
+        type: branch
+        condition: initSeeds is non-empty
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          The boot walk: initReach = walk(ctx, initSeeds, {followDispatchTables: false,
+          followRegisterEdges: false}), since at boot only the edges the init narratives actually
+          take count: a capability a reached Portal merely offers is not a boot-time read, and a
+          callback registered at init runs later
+        type: call
+        targetComponent: narrative_graph_projector
+        targetMethod: walk
+      - stepNumber: 4
+        label: stores
+        description: Judge each durable Store
+        type: loop
+        loopKind: forEach
+        over: >-
+          the Stores comp of ctx.components whose durability is durable (read-through,
+          ram-projection and cache need no read-back; a misplaced or absent declaration is
+          durability-declaration's finding)
+        endStep: 9
+      - stepNumber: 5
+        description: Writes can only be paired with read-backs over tagged methods
+        type: branch
+        condition: some method of ctx.interfaceMethodsOf(comp.id) carries no effect tag
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report MISSING_EFFECT_TAG (warning; draft context from ctx.isComponentDraft(comp.id)) on
+          comp.id, listing the untagged methods
+        type: local
+      - stepNumber: 7
+        label: checkWrites
+        description: >-
+          Split the methods into writes and reads by effect; a store with no write keeps nothing to
+          hydrate
+        type: branch
+        condition: some method has effect write
+        onFalseStep: 4
+      - stepNumber: 8
+        description: The store is hydrated when a lifecycle init flow reaches one of its reads
+        type: branch
+        condition: >-
+          initReach is absent, or initReach.reachesMethod(comp.id, read.name) holds for none of the
+          read-effect methods
+        onFalseStep: 4
+      - stepNumber: 9
+        label: storesEnd
+        description: >-
+          Report MISSING_HYDRATION (error; draft context from ctx.isComponentDraft(comp.id)) on
+          comp.id, naming the write methods and the reason: no subsystem declares a lifecycle init
+          entrypoint at all when initReach is absent, else the store declares no read-effect method,
+          else none of its listed read-effect methods is reachable from a declared lifecycle init
+          flow
+        type: local
+    symbol: check
+  - name: untypedSeams
+    sourcePath: src/core/rules/wiring/untyped-seams.ts
+    narrative:
+      - stepNumber: 1
+        label: published
+        description: Check every component on a subsystem's public surface
+        type: loop
+        loopKind: forEach
+        over: >-
+          each published component id compId of each subsystem sub in ctx.subsystems
+          (ctx.publicSet.get(sub.id); a subsystem publishing nothing is skipped) that resolves in
+          ctx.componentMap
+        endStep: 6
+      - stepNumber: 2
+        description: >-
+          A generic-dispatch portal's untyped envelope is sanctioned once its dispatch table carries
+          the per-capability types
+        type: branch
+        condition: comp is not a Portal with a non-empty dispatch table
+        onFalseStep: 1
+      - stepNumber: 3
+        label: methods
+        description: Check every contract method of the published component
+        type: loop
+        loopKind: forEach
+        over: each method m of each interface intf in ctx.interfacesByComponent for compId
+        endStep: 6
+      - stepNumber: 4
+        description: >-
+          Collect the offenders: each structured param of m whose type, unwrapped from Promise<...>
+          by the private helper unwrapPromise, is in the private BARE_SEAM_TYPES set (json, any,
+          unknown, object; ignoring case), and m.returns (empty when absent) under the same test
+        type: local
+      - stepNumber: 5
+        description: Only an untyped param or return crossing the boundary is reported
+        type: branch
+        condition: there is at least one offender
+        onFalseStep: 3
+      - stepNumber: 6
+        label: publishedEnd
+        description: >-
+          Report UNTYPED_SEAM (warning; draft context when ctx.isComponentDraft(compId) or
+          intf.status is draft or design) on intf.id, naming the method, the component, the
+          subsystem and the offenders
+        type: local
+    symbol: check
+  - name: proseClaims
+    sourcePath: src/core/rules/wiring/prose-claims.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: Check every method of a logic component's implementations
+        type: loop
+        loopKind: forEach
+        over: >-
+          each method implMethod of each implementation impl in ctx.implementations whose component
+          comp, resolved by the private helper componentOfImpl through ctx.interfaceMap and
+          ctx.componentMap, exists and is not in the private DATA_STEREOTYPES set (Store, Registry,
+          Index, Adapter, Repository), since the data layer legitimately talks about persisting
+        endStep: 9
+      - stepNumber: 2
+        description: >-
+          Find the claims with the private CLAIM_PHRASES pattern (the persistence, restart-survival,
+          write-to-disk, registration and durability phrasings): each local step whose description
+          matches, and the match in implMethod.intent when it has one
+        type: local
+      - stepNumber: 3
+        description: Almost no method carries a claim, so the edge probing only runs on a hit
+        type: branch
+        condition: a local step or the intent claims
+        onFalseStep: 1
+      - stepNumber: 4
+        description: >-
+          hasDataEdge: some call or dispatch step with a targetComponent reaches a data-layer
+          component, either the target itself in ctx.componentMap or the server the target's
+          dispatch binding for step.capability names
+        type: local
+      - stepNumber: 5
+        label: stepClaims
+        description: Judge each local-step claim
+        type: loop
+        loopKind: forEach
+        over: the claiming local steps
+        endStep: 7
+      - stepNumber: 6
+        description: A claim in a narrative with a data-layer edge is realized
+        type: branch
+        condition: hasDataEdge is false
+        onFalseStep: 5
+      - stepNumber: 7
+        label: stepClaimsEnd
+        description: >-
+          Report UNREALIZED_CLAIM (warning; draft context from ctx.isImplementationDraft(impl)) on
+          impl.id, naming the step number, the claimed phrase and the method
+        type: local
+      - stepNumber: 8
+        description: >-
+          Intent prose has no steps to inspect, so fall back to the component's declared
+          collaborators
+        type: branch
+        condition: >-
+          the intent claims, hasDataEdge is false, and no id in comp.dependsOn or comp.owns resolves
+          in ctx.componentMap to a data-layer component
+        onFalseStep: 1
+      - stepNumber: 9
+        label: methodsEnd
+        description: >-
+          Report UNREALIZED_CLAIM (warning; draft context from ctx.isImplementationDraft(impl)) on
+          impl.id: the intent claims the phrase but the component neither depends on nor owns any
+          data-layer component
+        type: local
+    symbol: check
+  - name: invariantBacking
+    sourcePath: src/core/rules/wiring/invariant-backing.ts
+    narrative:
+      - stepNumber: 1
+        label: entities
+        description: 'Entity side: judge each entity''s invariants'
+        type: loop
+        loopKind: forEach
+        over: the types t of ctx.types that declare at least one invariant
+        endStep: 13
+      - stepNumber: 2
+        label: ids
+        description: Check the invariant ids for repeats
+        type: loop
+        loopKind: forEach
+        over: t.invariants, tracking the invariant ids seen so far
+        endStep: 4
+      - stepNumber: 3
+        description: Invariant ids must be unique within the entity
+        type: branch
+        condition: inv.id was already seen
+        onFalseStep: 2
+      - stepNumber: 4
+        label: idsEnd
+        description: Report DUPLICATE_INVARIANT_ID (error; no draft context) on t.id, naming the repeated id
+        type: local
+      - stepNumber: 5
+        description: >-
+          Resolve the owning component with the private helper resolveComponentClass:
+          t.componentClass exactly in ctx.componentMap, else inside t's mount namespace (the part of
+          t.id before its last ::); no componentClass means no owner
+        type: branch
+        condition: the owner comp does not resolve
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Report INVARIANT_UNANCHORED (warning; no draft context) on t.id, naming the componentClass
+          that does not resolve, or its absence
+        type: local
+      - stepNumber: 7
+        description: 'Without an owner there is no write path to judge: continue with the next entity'
+        type: jump
+        toStep: 1
+      - stepNumber: 8
+        label: checkWritePaths
+        description: The write-effect contract methods are the paths that must assert the invariants
+        type: branch
+        condition: >-
+          no method of the owner's contracts (ctx.interfacesByComponent for comp.id) has effect
+          write
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Report INVARIANT_UNANCHORED (warning; draft context from ctx.isComponentDraft(comp.id)) on
+          t.id: the owner declares no effect: write method
+        type: local
+      - stepNumber: 10
+        description: Continue with the next entity
+        type: jump
+        toStep: 1
+      - stepNumber: 11
+        label: writePaths
+        description: Check every write path of every implementation against every invariant
+        type: loop
+        loopKind: forEach
+        over: >-
+          each write-effect method of each owner contract intf, then each implementation impl of
+          that contract (ctx.implementationsByContract.get(intf.id)), then each invariant inv of t
+        endStep: 13
+      - stepNumber: 12
+        description: >-
+          A write method's narrative asserts the invariant when one of its steps lists, in
+          assertsInvariants, a ref the private helper refMatchesInvariant accepts: the ref splits at
+          its last dot (splitInvariantRef) into a type ref and an invariant id equal to inv.id, t
+          declares that id, and t.matchesRef(type ref) holds
+        type: branch
+        condition: the private helper stepAsserts(impl, method.name, t, inv.id) finds no asserting step
+        onFalseStep: 11
+      - stepNumber: 13
+        label: entitiesEnd
+        description: >-
+          Report UNASSERTED_INVARIANT (warning; draft context from ctx.isImplementationDraft(impl))
+          on impl.id, naming the write method, the owner, the implementation and the invariant with
+          its description
+        type: local
+      - stepNumber: 14
+        label: refs
+        description: 'Reference side: every asserted invariant reference must resolve'
+        type: loop
+        loopKind: forEach
+        over: >-
+          each ref in the assertsInvariants of each narrative step of each method of each
+          implementation impl in ctx.implementations
+        endStep: 16
+      - stepNumber: 15
+        description: >-
+          The ref resolves when it splits at its last dot and some type in ctx.types with invariants
+          both matchesRef(type ref) and declares that invariant id
+        type: branch
+        condition: the private helper resolveInvariantRef(ref, ctx.types) resolves nothing
+        onFalseStep: 14
+      - stepNumber: 16
+        label: refsEnd
+        description: >-
+          Report UNKNOWN_INVARIANT_REF (error; draft context from ctx.isImplementationDraft(impl))
+          on impl.id, naming the step number, the method and the ref
+        type: local
+    symbol: check
+  - name: eventTopology
+    sourcePath: src/core/rules/wiring/event-topology.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Collect the topic ends with the private helper collectEnds: emitters from each component's
+          emits and from each MessageBus endpoint whose direction is publish; subscribers from each
+          component's subscribesTo and from every other MessageBus endpoint (direction subscribe,
+          the default); each end records its topic, component id and how it was declared
+        type: local
+      - stepNumber: 2
+        description: A tree that declares no event edges pays zero noise
+        type: branch
+        condition: there are no emitters and no subscribers
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return without findings
+        type: return
+        outcome: nothing to pair
+      - stepNumber: 4
+        label: emitters
+        description: Pair each emitted topic with a subscriber
+        type: loop
+        loopKind: forEach
+        over: the emitters e
+        endStep: 6
+      - stepNumber: 5
+        description: An emitted topic needs at least one subscriber
+        type: branch
+        condition: no subscriber has e.topic (exact match against the set of subscribed topics)
+        onFalseStep: 4
+      - stepNumber: 6
+        label: emittersEnd
+        description: >-
+          Report UNCONSUMED_TOPIC (warning; draft context from ctx.isComponentDraft(e.compId)) on
+          e.compId, naming the topic and how it was declared
+        type: local
+      - stepNumber: 7
+        label: subscribers
+        description: Pair each subscription with a source
+        type: loop
+        loopKind: forEach
+        over: the subscribers s
+        endStep: 9
+      - stepNumber: 8
+        description: A subscription needs at least one emitter
+        type: branch
+        condition: no emitter has s.topic (exact match against the set of emitted topics)
+        onFalseStep: 7
+      - stepNumber: 9
+        label: subscribersEnd
+        description: >-
+          Report UNSOURCED_SUBSCRIPTION (warning; draft context from ctx.isComponentDraft(s.compId))
+          on s.compId, naming the topic and how it was declared
+        type: local
+    symbol: check
+status: draft
+createdAt: '2026-09-14T23:16:43.135Z'
+updatedAt: '2026-09-15T00:30:34.013Z'

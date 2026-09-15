@@ -5,6 +5,19 @@ import { z } from 'zod';
 // ---------------------------------------------------------------------------
 export const SpecIdSchema = z.string().regex(/^[a-z0-9-_]+$/, 'Identifier must be lowercase alphanumeric with dashes or underscores');
 
+/**
+ * Split a qualified id at its last `::` into the namespace prefix and the local
+ * id. An unqualified id has an empty prefix and is its own local id.
+ */
+export function splitNamespace(qualifiedId: string): { prefix: string; localId: string } {
+  if (!qualifiedId.includes('::')) {
+    return { prefix: '', localId: qualifiedId };
+  }
+  const parts = qualifiedId.split('::');
+  const localId = parts.pop()!;
+  return { prefix: parts.join('::'), localId };
+}
+
 export const SpecStatusSchema = z.enum(['draft', 'design', 'complete']).default('complete');
 export type SpecStatus = z.infer<typeof SpecStatusSchema>;
 
@@ -243,6 +256,11 @@ export const SubsystemSpecSchema = z.object({
 
 export type SubsystemSpec = z.infer<typeof SubsystemSpecSchema>;
 
+/** subsystem_spec.isDraft — whether the subsystem's status is draft or design. */
+export function isDraftSubsystem(subsystem: Pick<SubsystemSpec, 'status'>): boolean {
+  return subsystem.status === 'draft' || subsystem.status === 'design';
+}
+
 // ---------------------------------------------------------------------------
 // Level 2: Component Spec (components/*.yaml)
 // ---------------------------------------------------------------------------
@@ -424,6 +442,43 @@ export const ComponentSpecSchema = z.object({
 
 export type ComponentSpec = z.infer<typeof ComponentSpecSchema>;
 
+/**
+ * component_spec.defaultConformanceTier — the conformance tier the component's
+ * methods get when neither the method nor its implementation sets one:
+ * anchored for a Portal, declared otherwise (and declared when the component
+ * does not resolve).
+ */
+export function defaultConformanceTier(component?: Pick<ComponentSpec, 'componentType'>): ConformanceTier {
+  return component?.componentType === 'Portal' ? 'anchored' : 'declared';
+}
+
+/**
+ * component_spec.defaultNarrativeDetail — the narrative detail the component's
+ * methods get when neither the method nor its implementation sets one:
+ * calls-only for Portals, Observers and Adapters (boundary pass-throughs);
+ * intent for Stores, Indexes and Registries (a contract paragraph, not
+ * choreography); full otherwise, and full when the component does not resolve.
+ */
+export function defaultNarrativeDetail(component?: Pick<ComponentSpec, 'componentType'>): NarrativeDetail {
+  const componentType = component?.componentType;
+  if (componentType === 'Portal' || componentType === 'Observer' || componentType === 'Adapter') {
+    return 'calls-only';
+  }
+  if (componentType === 'Store' || componentType === 'Index' || componentType === 'Registry') {
+    return 'intent';
+  }
+  return 'full';
+}
+
+/**
+ * component_spec.isPattern — whether the component is a pattern that owns
+ * member blocks (Repository, Gateway, FeatureComponent or RouterComponent)
+ * rather than a building block.
+ */
+export function isPattern(component: Pick<ComponentSpec, 'componentType'>): boolean {
+  return PATTERN_TYPES.has(component.componentType);
+}
+
 // ---------------------------------------------------------------------------
 // Level 3: Interface / Contract Spec (interfaces/*.yaml)
 // ---------------------------------------------------------------------------
@@ -556,6 +611,24 @@ export const MethodSignatureSchema = z.object({
 });
 
 export type MethodSignature = z.infer<typeof MethodSignatureSchema>;
+
+// The intent floor: prose short enough to be a placeholder cannot specify
+// behavior an implementer could be held to.
+const INTENT_FLOOR_MIN_CHARS = 40;
+
+/**
+ * method_signature.passesIntentFloor — whether prose is substantial enough to
+ * specify the method: at least 40 characters once trimmed, and not just the
+ * method's name (compared ignoring case and punctuation).
+ */
+export function passesIntentFloor(text: string | undefined, methodName: string): boolean {
+  if (!text) return false;
+  const t = text.trim();
+  if (t.length < INTENT_FLOOR_MIN_CHARS) return false;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (norm(t) === norm(methodName)) return false;
+  return true;
+}
 
 export const InterfaceSpecSchema = z.object({
   id: SpecIdSchema.regex(/^i[a-z0-9-_]+$/, 'Interface id must be prefixed with a lowercase "i"'),
@@ -800,6 +873,33 @@ export function methodSourceFile(
   implementationSourcePath?: string,
 ): string | undefined {
   return method.sourcePath || implementationSourcePath || undefined;
+}
+
+/**
+ * The narrative detail a method is held to (resolved_detail), and whether the
+ * method or its implementation set it rather than it defaulting from the
+ * component's type.
+ */
+export interface ResolvedDetail {
+  level: NarrativeDetail;
+  /** True when declared on the method or its implementation (as opposed to the component type's default). */
+  explicit: boolean;
+}
+
+/**
+ * method_implementation.effectiveDetail — the narrative detail this method is
+ * held to: its own detail, else the implementation's, else the component's
+ * default (component_spec.defaultNarrativeDetail); explicit when either of the
+ * first two set it.
+ */
+export function effectiveDetail(
+  method: Pick<MethodImplementation, 'detail'>,
+  implementation: Pick<ImplementationSpec, 'detail'>,
+  component?: Pick<ComponentSpec, 'componentType'>,
+): ResolvedDetail {
+  if (method.detail) return { level: method.detail, explicit: true };
+  if (implementation.detail) return { level: implementation.detail, explicit: true };
+  return { level: defaultNarrativeDetail(component), explicit: false };
 }
 
 /**

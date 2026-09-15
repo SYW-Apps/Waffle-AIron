@@ -1,8 +1,8 @@
 id: rule_index_impl
 name: Rule Index Implementation
 description: >-
-  Read path in src/core/rules/index.ts: ordered run sequence and known-code projections over the
-  rule store.
+  Read path in src/core/rules/repository.ts: the ordered run sequence (lint-allows last), its
+  spec-scoped subset and the known-code set, projected over the rule store.
 contract: irule_index
 sourcePath: src/core/rules/repository.ts
 simPath: tests/core/validation.test.ts
@@ -10,17 +10,24 @@ methods:
   - name: ruleSequence
     narrative: []
     intent: >-
-      Read the rule store's rules and return them as the ordered run sequence — built-ins first,
-      then pack rules, in registration order. A read-only projection sharing the store's references.
+      Read the rule store's rules in registration order (built-ins, then pack rules) and return them
+      as the run sequence with the lint-allows rule moved to the end, so its audit sees every allow
+      the pack rules consumed. A read-only projection sharing the store's references.
   - name: knownIssueCodes
     narrative: []
     intent: >-
       Read the rule store's rules and aggregate every RuleCode each can emit into the known-code set
       used to validate lint.allow references (UNKNOWN_LINT_ALLOW_CODE). Read-only, derived fresh
       from the store.
+  - name: specScopedRules
+    narrative: []
+    intent: >-
+      Read the run sequence and keep, in order, the rules whose scope is spec: the rules that read
+      only one spec's own fields, which the write gate runs on a candidate before saving it. A rule
+      that declares no scope is a tree rule and is never included. Read-only.
 detail: intent
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T19:17:48.847Z'
-updatedAt: '2026-07-18T22:34:35.024Z'
+updatedAt: '2026-09-15T00:29:31.902Z'

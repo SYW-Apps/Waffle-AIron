@@ -51,6 +51,34 @@ fields:
     type: string
     description: Optional logical entity id represented by a table-schema type
     optional: true
-methods: []
+  - name: invariants
+    type: Invariant[]
+    description: >-
+      Declared domain invariants (entities); every write-effect method of the componentClass must
+      carry a narrative step asserting each one
+    optional: true
+methods:
+  - name: qualifiedId
+    signature: 'qualifiedId(): string'
+    returns: string
+    description: Its id qualified by its owning subsystem, when the id is not already qualified
+  - name: matchesRef
+    signature: 'matchesRef(ref: string): boolean'
+    returns: boolean
+    description: >-
+      Whether a written type reference names this type: the reference's :: or . segments are a
+      suffix of the qualified id, compared ignoring case and punctuation
+  - name: genericParameters
+    signature: 'genericParameters(): Set<string>'
+    returns: Set<string>
+    description: The generic parameters declared in its name (Page<T> gives T)
+  - name: fieldTypeRefs
+    signature: 'fieldTypeRefs(fieldType: string): string[]'
+    returns: string[]
+    description: >-
+      The type identifiers one of this type's field types names, with comments, trailing prose and
+      string literals stripped and this type's own generic parameters left out (compared ignoring
+      case). It takes the field's type rather than its name, because nothing makes field names
+      unique within a type.
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-07-06T21:22:25.916Z'
+updatedAt: '2026-09-15T00:29:27.346Z'

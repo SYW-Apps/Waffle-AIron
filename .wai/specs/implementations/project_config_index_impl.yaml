@@ -26,6 +26,6 @@ methods:
       `.wairon`) when the project has no configuration or declares no such path, so a configuration
       that fails the schema still locates its specs.
 detail: intent
-status: draft
+status: complete
 createdAt: '2026-09-13T11:19:27.409Z'
-updatedAt: '2026-09-13T13:08:47.580Z'
+updatedAt: '2026-09-14T05:16:00.105Z'

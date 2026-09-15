@@ -1,10 +1,14 @@
 id: spec_validator
 name: Spec Validator
 description: >-
-  Validation linter checking spec completeness, method contracts, component type boundaries, and
-  subsystem public-surface bindings.
+  The validation workflow. It gathers the spec tree, the surface snapshots, the source-code model,
+  the writer's round-trip results and the project's pack selections into one rule context; seeds the
+  rule set with the built-in and pack rules; runs the rule sequence over that context; and returns
+  the findings. Its write-gate half runs only the spec-scoped rules against a component candidate
+  before the component is saved. It holds no state of its own: the rule set belongs to the rule
+  Repository, and each rule's verdict to its rule family.
 subsystem: sdd_validator
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn:
   - validator_core_adapter
@@ -13,4 +17,4 @@ dependsOn:
   - rule_repository
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-14T19:21:21.528Z'
+updatedAt: '2026-09-14T22:56:54.131Z'

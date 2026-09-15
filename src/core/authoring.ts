@@ -1,11 +1,8 @@
 import type { ComponentSpec } from '../models/specs.js';
 import type { RulesConfig } from '../models/project.js';
 import { saveComponentSpec, updateSpec, type SpecWriteHooks } from './specs.js';
-import {
-  validateComponentCandidate,
-  formatCandidateRefusal,
-  type CandidateVerdict,
-} from './rules/candidate.js';
+import { validateComponentCandidate } from './validation.js';
+import { formatCandidateRefusal, type CandidateVerdict } from './rules/candidate.js';
 import { projectConfigRepository } from '../config/project-config.js';
 
 // ---------------------------------------------------------------------------
@@ -22,13 +19,14 @@ import { projectConfigRepository } from '../config/project-config.js';
 //
 //   access paths (cli / mcp / hosted http)  ->  authoring  ->  specs + rules
 //
-// `core/specs.ts` stays a dumb store: rules/coupling.ts and rules/namespace.ts
-// already read it, so a store that imported the rule engine would close an
-// import cycle. This module sits above both and owns the composition, injecting
-// the gate through SpecWriteHooks. That also keeps MECHANICAL writes ungated by
-// construction — status promotion, layout normalization, and migrations call the
-// store directly and are unaffected, which is what lets a spec authored before a
-// rule existed still load and still be repaired.
+// `core/specs.ts` stays a dumb store: core/validation.ts (the rule engine's
+// entry point) already reads it, so a store that imported the rule engine
+// back would close an import cycle. This module sits above both and owns the
+// composition, injecting the gate through SpecWriteHooks. That also keeps
+// MECHANICAL writes ungated by construction — status promotion, layout
+// normalization, and migrations call the store directly and are unaffected,
+// which is what lets a spec authored before a rule existed still load and
+// still be repaired.
 // ---------------------------------------------------------------------------
 
 /** The project's severity overrides, so `sddRuleSeverity` disarms a gate exactly as it disarms validate. */

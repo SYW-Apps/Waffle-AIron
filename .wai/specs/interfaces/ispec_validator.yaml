@@ -49,6 +49,25 @@ methods:
     signature: 'listRules(): SddRule[]'
     returns: SddRule[]
     params: []
+  - name: validateComponentCandidate
+    description: >-
+      Run the spec-scoped rules against one component that is not yet written: a rule context
+      holding only the candidate (a stub system and no other specs), the rule set seeded with the
+      built-ins and any pack rules, then only the candidate's own findings, split by severity. Draft
+      status relaxes completeness findings as in a tree run; a misplaced field is an error, and the
+      write is refused.
+    signature: >-
+      validateComponentCandidate(candidate: ComponentSpec, opts?: CandidateOptions):
+      CandidateVerdict
+    returns: CandidateVerdict
+    params:
+      - name: candidate
+        type: ComponentSpec
+        description: The component about to be written
+      - name: opts
+        type: CandidateOptions
+        description: Rules config, project type and loaded packs
+        optional: true
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-13T20:56:33.265Z'
+updatedAt: '2026-09-14T06:07:11.066Z'

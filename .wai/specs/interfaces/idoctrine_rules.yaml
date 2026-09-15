@@ -1,0 +1,205 @@
+id: idoctrine_rules
+name: Doctrine Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules judge the
+  architecture standard's stereotype and pattern doctrine.
+component: doctrine_rules
+methods:
+  - name: portalEndpoints
+    description: >-
+      Rule portal-endpoints. A Portal binds every interface method to a concrete endpoint of the
+      matching transport, and only a Portal may carry endpoints at all.
+    signature: 'portalEndpoints(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MISSING_ENDPOINT
+        severity: error
+        summary: Portal method without a wire endpoint binding
+      - code: ENDPOINT_TRANSPORT_MISMATCH
+        severity: error
+        summary: Endpoint transport does not match the Portal portalType
+      - code: ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT
+        severity: error
+        summary: Non-Portal component method declaring an endpoint
+  - name: portalCallAuth
+    description: >-
+      Rule portal-call-auth. Hardens authenticated cross-service calls. An OUTBOUND narrative `call`
+      into ANOTHER component's Portal whose auth is not `none` must (a) be made by an Adapter — the
+      only block that does external I/O — and (b) declare the credential source it presents via the
+      step's `auth.from`. Absence of a source warns PORTAL_AUTH_UNMET; a non-Adapter presenter warns
+      AUTH_PRESENTER_NOT_ADAPTER. When `auth.from` is a modeled reference (`component:<id>`) it must
+      resolve to an Adapter/Store the presenter is wired to (UNKNOWN_AUTH_SOURCE /
+      AUTH_SOURCE_NOT_PROVIDER / AUTH_SOURCE_UNWIRED). The actual secret is never stored in the
+      spec. Dispatch steps (a portal's OWN inbound routing) and self-calls are not cross-service
+      calls and are excluded.
+    signature: 'portalCallAuth(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PORTAL_AUTH_UNMET
+        severity: warning
+        summary: >-
+          A narrative call into another component's authed Portal does not declare where its
+          credential loads from
+      - code: AUTH_PRESENTER_NOT_ADAPTER
+        severity: warning
+        summary: >-
+          A non-Adapter component authenticates an outbound call to a portal (external I/O must go
+          through an Adapter)
+      - code: UNKNOWN_AUTH_SOURCE
+        severity: warning
+        summary: 'auth.from references a component: source that does not exist'
+      - code: AUTH_SOURCE_NOT_PROVIDER
+        severity: warning
+        summary: auth.from references a component that is not an Adapter or Store
+      - code: AUTH_SOURCE_UNWIRED
+        severity: warning
+        summary: 'The presenter declares a component: credential source it does not depend on or own'
+  - name: stereotypeDependencies
+    description: >-
+      Rule stereotype-dependencies. Enforces the component-stereotype interaction matrix (Portal
+      reaches the data layer only through Repository/Index READ faces — writes route through
+      Orchestrators (PORTAL_WRITE_SHORTCUT); Stores are depended upon; Registries write their Store;
+      Adapters are sinks; Views stay passive; …) and the cross-subsystem shape: client Adapter →
+      published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the
+      SOURCE subsystem (the published-Portal target requirement applies either way). A governing
+      pack profile may license intra-subsystem edges the matrix refuses via allowedEdges (its
+      platform idiom, with the stated reason); boundary rules stay unrelaxable.
+    signature: 'stereotypeDependencies(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: INVALID_DEPENDENCY_REFERENCE
+        severity: error
+        summary: dependsOn names a non-existent component
+      - code: CROSS_TREE_REF_UNRESOLVED
+        severity: warning
+        summary: 'Cross-tree dependsOn (super::/:: form) with no surface snapshot covering it'
+      - code: SURFACE_REF_AMBIGUOUS
+        severity: error
+        summary: >-
+          Cross-tree dependsOn matched by surface snapshots of several providers with different
+          contracts
+      - code: CROSS_SUBSYSTEM_NON_ADAPTER
+        severity: error
+        summary: Non-Adapter component crossing a subsystem boundary
+      - code: CROSS_SUBSYSTEM_PRIVATE_ACCESS
+        severity: error
+        summary: Cross-subsystem dependency on an unpublished component
+      - code: CROSS_SUBSYSTEM_TARGET_NON_PORTAL
+        severity: error
+        summary: Cross-subsystem hop entering through a non-Portal
+      - code: ARCHITECTURE_VIOLATION_PORTAL_DEP
+        severity: error
+        summary: Component depending on a Portal/Observer
+      - code: ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP
+        severity: error
+        summary: Portal/Observer reaching the data layer directly
+      - code: ARCHITECTURE_VIOLATION_SPECIALIST_DEP
+        severity: error
+        summary: Specialist depending on workflow/runtime/state blocks
+      - code: ARCHITECTURE_VIOLATION_STORE_DEP
+        severity: error
+        summary: Store depending on anything but another Store or a backend Adapter
+      - code: ARCHITECTURE_VIOLATION_REGISTRY_DEP
+        severity: warning
+        summary: >-
+          Registry depending on anything but its Store, a backend Adapter, or a validation
+          Specialist (warning while new; aligned to the standard §7 validate→write path)
+      - code: ARCHITECTURE_VIOLATION_ADAPTER_DEP
+        severity: error
+        summary: Adapter depending on Orchestrators or Stores
+      - code: ARCHITECTURE_VIOLATION_INDEX_DEP
+        severity: error
+        summary: Index depending on anything but its Store or an Adapter
+      - code: ARCHITECTURE_VIOLATION_VIEW_DEP
+        severity: error
+        summary: View depending on logic/persistence layers
+      - code: PORTAL_WRITE_SHORTCUT
+        severity: error
+        summary: >-
+          Portal narrative calls a write-effect method on a Repository/Index directly — reads may
+          shortcut, writes route through an Orchestrator (judged on effect-tagged facade methods;
+          untagged methods are not yet judged)
+  - name: patternOwnership
+    description: >-
+      Rule pattern-ownership. Patterns (Repository/Gateway/FeatureComponent/RouterComponent) own
+      member blocks with the containment their definition prescribes; blocks own nothing; a member
+      has exactly one owner; and private members are reachable only via their facade or siblings.
+    signature: 'patternOwnership(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: EMPTY_PATTERN
+        severity: error
+        summary: Pattern with no owned member blocks
+      - code: BLOCK_OWNS_MEMBERS
+        severity: error
+        summary: Building block using owns
+      - code: INVALID_OWNED_MEMBER
+        severity: error
+        summary: owns names a non-existent component
+      - code: PATTERN_OWNS_PATTERN
+        severity: error
+        summary: Pattern owning another pattern
+      - code: SHARED_OWNED_MEMBER
+        severity: error
+        summary: Block owned by two patterns
+      - code: REPOSITORY_CONTAINMENT
+        severity: error
+        summary: Repository owning a non Store/Registry/Index/Adapter member
+      - code: GATEWAY_CONTAINMENT
+        severity: error
+        summary: Gateway owning a non Portal/Orchestrator/Specialist member
+      - code: FEATURE_COMPONENT_CONTAINMENT
+        severity: error
+        summary: FeatureComponent not owning exactly one Orchestrator + one or more Views
+      - code: ROUTER_COMPONENT_CONTAINMENT
+        severity: error
+        summary: RouterComponent missing its Portal facade or children
+      - code: VISIBILITY_VIOLATION
+        severity: error
+        summary: Dependency on a block privately owned by another pattern
+      - code: UNOWNED_STORE
+        severity: warning
+        summary: >-
+          Store not owned by any pattern — recommended shape is a Repository; a deliberate
+          standalone Store needs a lint.allow
+      - code: REGISTRY_WITHOUT_STORE
+        severity: warning
+        summary: >-
+          Standalone Registry with no Store to write to — either mistyped (a fused file-backed store
+          belongs typed Store) or orphaned
+  - name: facadeForwarding
+    description: >-
+      Rule facade-forwarding. A Repository/Gateway facade method with an authored narrative must be
+      pure 1:1 forwarding: exactly one call step, targeting one of the pattern's owned members.
+      Anything else is logic living on the facade — move it into a member block, or acknowledge a
+      deliberate exception via lint.allow.
+    signature: 'facadeForwarding(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: FACADE_FORWARDING
+        severity: warning
+        summary: Pattern facade narrative is not a single call to an owned member
+status: draft
+createdAt: '2026-09-14T06:06:55.453Z'
+updatedAt: '2026-09-14T06:06:55.458Z'

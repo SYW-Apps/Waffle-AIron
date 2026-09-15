@@ -1,5 +1,5 @@
 /**
- * Target-language hygiene fixtures (src/core/rules/language.ts).
+ * Target-language hygiene fixtures (src/core/rules/heuristic/target-language.ts).
  *
  * Documented intents pinned here (warnings, opt-in via targetLanguage):
  *  - LANGUAGE_FOREIGN_BUILTIN: builtin types that unambiguously belong to a

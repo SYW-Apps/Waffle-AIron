@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { computeStateId, stateIdEquals } from '../../src/core/statehash.js';
 import { computeGateStateId, invalidateSpecCache } from '../../src/core/specs.js';
-import { SDD_RULES } from '../../src/core/rules/index.js';
+import { SDD_RULES } from '../../src/core/rules/repository.js';
 
 // ---------------------------------------------------------------------------
 // The GATE StateId — doctrine coverage for the commit-scoped lock.

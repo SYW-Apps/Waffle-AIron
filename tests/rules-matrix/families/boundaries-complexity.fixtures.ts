@@ -1,6 +1,6 @@
 /**
  * Documentation-completeness + complexity-cap fixtures
- * (src/core/rules/complexity.ts). All warnings; all config-gated, so each
+ * (src/core/rules/heuristic/complexity-and-metadata.ts). All warnings; all config-gated, so each
  * tree opts in via rules.documentation / rules.complexity.
  *
  * Documented intents pinned here:

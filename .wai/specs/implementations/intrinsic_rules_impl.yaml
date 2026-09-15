@@ -1,0 +1,120 @@
+id: intrinsic_rules_impl
+name: Intrinsic Rules Implementation
+description: The intrinsic rule family's methods, one per rule file under src/core/rules/intrinsic/.
+contract: iintrinsic_rules
+simPath: tests/core/validation.test.ts
+methods:
+  - name: portalFields
+    sourcePath: src/core/rules/intrinsic/portal-fields.ts
+    narrative:
+      - stepNumber: 1
+        label: pfStart
+        description: For each component, check its Portal-only wire fields against its own stereotype.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 11
+      - stepNumber: 2
+        description: isDraftCtx = ctx.isComponentDraft(comp.id).
+        type: local
+      - stepNumber: 3
+        description: 'Branch: is the component a Portal?'
+        type: branch
+        condition: comp.componentType is "Portal"
+        onFalseStep: 7
+      - stepNumber: 4
+        description: 'Branch (Portal only): is portalType missing?'
+        type: branch
+        condition: comp.portalType is unset
+        onFalseStep: 11
+      - stepNumber: 5
+        description: >-
+          Report MISSING_PORTAL_TYPE (error; isDraftCtx) naming the component as a Portal with no
+          portalType.
+        type: local
+      - stepNumber: 6
+        description: >-
+          Continue with the next component (mirrors the source's unconditional continue after the
+          Portal branch).
+        type: jump
+        toStep: 11
+      - stepNumber: 7
+        label: pfNotPortal
+        description: 'Branch (non-Portal): is portalType or basePath set?'
+        type: branch
+        condition: comp.portalType is set or comp.basePath is set
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Report UNEXPECTED_PORTAL_FIELD (error; isDraftCtx) naming the component's actual
+          componentType and that portalType/basePath are Portal-only.
+        type: local
+      - stepNumber: 9
+        label: pfAfterUnexpected
+        description: 'Branch (non-Portal): is auth declared?'
+        type: branch
+        condition: comp.auth is set
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report AUTH_ON_NON_PORTAL (warning; isDraftCtx) naming the component's componentType and
+          that auth is inbound transport auth, meaningful only on a Portal.
+        type: local
+      - stepNumber: 11
+        label: pfEnd
+        description: Continue with the next component.
+        type: local
+    symbol: check
+  - name: durabilityDeclaration
+    sourcePath: src/core/rules/intrinsic/durability-declaration.ts
+    narrative:
+      - stepNumber: 1
+        label: ddStart
+        description: For each component, check its durability declaration against its own stereotype.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 9
+      - stepNumber: 2
+        description: isDraftCtx = ctx.isComponentDraft(comp.id).
+        type: local
+      - stepNumber: 3
+        description: 'Branch: is durability undeclared?'
+        type: branch
+        condition: comp.durability is unset
+        onFalseStep: 7
+      - stepNumber: 4
+        description: 'Branch (no durability declared): is the component a Store?'
+        type: branch
+        condition: comp.componentType is "Store"
+        onFalseStep: 9
+      - stepNumber: 5
+        description: >-
+          Report MISSING_DURABILITY (warning; isDraftCtx) naming the Store and the four durability
+          modes it must choose among
+        type: local
+      - stepNumber: 6
+        description: >-
+          Continue with the next component (mirrors the source's unconditional continue after the
+          no-durability branch).
+        type: jump
+        toStep: 9
+      - stepNumber: 7
+        label: ddHasDurability
+        description: 'Branch (durability declared): is the component not a Store?'
+        type: branch
+        condition: comp.componentType is not "Store"
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Report DURABILITY_ON_NON_STORE (error; isDraftCtx) naming the component's componentType
+          and its declared durability value.
+        type: local
+      - stepNumber: 9
+        label: ddEnd
+        description: Continue with the next component.
+        type: local
+    symbol: check
+status: draft
+createdAt: '2026-09-14T23:17:12.294Z'
+updatedAt: '2026-09-14T23:21:42.373Z'
