@@ -21,7 +21,7 @@ import { projectConfigRepository } from '../config/project-config.js';
 import type { WebGraphModel, WebGraphNode, LandscapeEdge } from '../server/types.js';
 
 // ---------------------------------------------------------------------------
-// Diagram Specialist entrypoint (sdd_core diagram_specialist)
+// Architecture diagrams entrypoint (sdd_core architecture_diagrams)
 //
 // Render the current (request-scoped) project's spec tree into a diagram
 // artifact STRING — the engine behind `wairon diagram`, reused by the hosting
@@ -289,6 +289,8 @@ function stereotypeClass(comp: ComponentSpec): string {
     case 'Portal':
     case 'Observer':
       return 'entry';
+    case 'Query':
+      return 'query';
     case 'Store':
     case 'Index':
     case 'Registry':
@@ -308,6 +310,7 @@ const CLASS_DEFS = [
   'classDef entry fill:#eef4ff,stroke:#4a7dcf,color:#1a2b4a;',
   'classDef logic fill:#f4effd,stroke:#8a63c9,color:#2d1f45;',
   'classDef data fill:#fdf6e3,stroke:#c9963f,color:#4a3517;',
+  'classDef query fill:#fbeee4,stroke:#b0643a,color:#3b1d08;',
   'classDef adapter fill:#eef8f1,stroke:#4f9e6b,color:#173322;',
   'classDef pattern fill:#f6f8fa,stroke:#6a737d,color:#24292e;',
   'classDef retired fill:#efedeb,stroke:#8a817c,color:#35302b,stroke-dasharray:3 3;',

@@ -161,6 +161,24 @@ describe('diagram generation from the spec tree', () => {
     expect(/^\s*class (\S+) pattern$/m.exec(mmd)?.[1] ?? '').not.toContain('edge_gateway');
   });
 
+  it('classes a Query as its own stereotype and draws it as a Repository member beside its Index', () => {
+    buildFixture();
+    const at = { description: 'd', subsystem: 'billing', owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now };
+    saveComponentSpec({ ...at, id: 'billing-index', name: 'Billing Index', componentType: 'Index' } as any);
+    saveComponentSpec({ ...at, id: 'billing-query', name: 'Billing Query', componentType: 'Query' } as any);
+    saveComponentSpec({ ...at, id: 'billing-repo', name: 'Billing Repository', componentType: 'Repository', owns: ['billing-store', 'billing-index', 'billing-query'] } as any);
+    const mmd = generateComponentDiagram();
+
+    expect(mmd).toContain('classDef query');
+    // owns → dashed containment edge, same as any other Repository member
+    expect(mmd).toMatch(/billing_repo -\. owns \.-> billing_query/);
+    expect(mmd).toMatch(/billing_repo -\. owns \.-> billing_index/);
+    const queryIds = (/^\s*class (\S+) query$/m.exec(mmd)?.[1] ?? '').split(',');
+    expect(queryIds).toContain('billing_query');
+    expect(/^\s*class (\S+) data$/m.exec(mmd)?.[1] ?? '').not.toContain('billing_query');
+    expect(/^\s*class (\S+) logic$/m.exec(mmd)?.[1] ?? '').not.toContain('billing_query');
+  });
+
   it('scopes a component diagram to a subsystem plus its external neighbors', () => {
     buildFixture();
     const mmd = generateComponentDiagram({ subsystem: 'shipping' });
