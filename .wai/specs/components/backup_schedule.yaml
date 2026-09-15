@@ -1,0 +1,16 @@
+id: backup_schedule
+name: Backup Schedule
+description: >-
+  Owns the hosted instance's periodic backup timer. Every 60 seconds it sweeps the git-bound
+  projects (a .wai/-scoped commit and push per due project, skip-if-clean, so a quiet project never
+  commits noise) and the container-level backing repositories whose interval has elapsed. A failure
+  in one sweep never stops the other, and the timer never keeps a closing process alive.
+subsystem: sdd_host
+componentType: Actor
+owns: []
+dependsOn:
+  - admin_orchestrator
+  - git_backing_orchestrator
+status: draft
+createdAt: '2026-09-15T10:51:19.458Z'
+updatedAt: '2026-09-15T10:51:19.463Z'
