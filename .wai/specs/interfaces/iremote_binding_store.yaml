@@ -90,6 +90,10 @@ methods:
     guarantees:
       - idempotent
     effect: read
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames readBinding, writeBinding, and clearBinding to drop the component's own concept.
 status: complete
 createdAt: '2026-08-12T18:41:53.798Z'
-updatedAt: '2026-08-12T19:21:57.586Z'
+updatedAt: '2026-09-17T17:52:27.154Z'

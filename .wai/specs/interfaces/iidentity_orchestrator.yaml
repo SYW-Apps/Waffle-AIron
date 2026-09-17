@@ -276,6 +276,12 @@ methods:
       choreography reused by the identity and web planes.
     signature: 'appendAuditBestEffort(event: AuditEvent): void'
     returns: void
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: >-
+        D2b renames listIdentityProviders, upsertIdentityProvider, and removeIdentityProvider to
+        drop the component's own concept.
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-09-17T16:41:57.705Z'
+updatedAt: '2026-09-17T17:52:23.837Z'

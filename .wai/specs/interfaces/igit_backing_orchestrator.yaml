@@ -67,6 +67,10 @@ methods:
     signature: 'runPeriodicBackingSync(): void'
     returns: void
     params: []
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames listBackingBindings and syncBackingScope to drop the component's own concept.
 status: complete
 createdAt: '2026-07-16T15:39:32.918Z'
-updatedAt: '2026-09-15T21:02:37.902Z'
+updatedAt: '2026-09-17T17:52:21.872Z'

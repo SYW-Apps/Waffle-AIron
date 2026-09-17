@@ -15,6 +15,10 @@ dependsOn:
   - host_surfaces_adapter
   - project_repository
 dependencyClass: read
+lint:
+  allow:
+    - code: COMPONENT_IS_ITS_ONLY_METHOD
+      reason: D2b either folds this component into its caller or names it for its responsibility.
 status: complete
 createdAt: '2026-07-17T22:09:44.091Z'
-updatedAt: '2026-09-15T20:46:11.558Z'
+updatedAt: '2026-09-17T17:53:13.360Z'

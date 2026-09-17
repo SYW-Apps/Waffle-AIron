@@ -25,6 +25,10 @@ methods:
         type: ProjectPublicSurfaceSnapshot[]
       - name: relations
         type: ProjectRelationRecord[]
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames buildGraph to drop the component's own concept.
 status: complete
 createdAt: '2026-07-08T21:13:30.746Z'
-updatedAt: '2026-09-15T20:46:50.526Z'
+updatedAt: '2026-09-17T17:52:24.928Z'

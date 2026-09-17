@@ -125,6 +125,10 @@ methods:
     signature: 'defaultPackSelections(): PackSelection[]'
     returns: PackSelection[]
     params: []
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames loadExtensions to drop the component's own concept.
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-09-17T16:37:07.424Z'
+updatedAt: '2026-09-17T17:52:20.337Z'

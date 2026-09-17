@@ -35,6 +35,12 @@ methods:
     signature: 'listRoles(): Role[]'
     returns: Role[]
     params: []
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: >-
+        D2b renames createRole, updateRole, deleteRole, and listRoles to drop the component's own
+        concept.
 status: complete
 createdAt: '2026-07-15T20:27:40.646Z'
-updatedAt: '2026-07-16T15:03:12.939Z'
+updatedAt: '2026-09-17T17:52:31.161Z'

@@ -24,6 +24,10 @@ methods:
     params:
       - name: level
         type: number
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames renderDiagram to drop the component's own concept.
 status: complete
 createdAt: '2026-07-04T15:59:08.698Z'
-updatedAt: '2026-09-15T20:46:45.559Z'
+updatedAt: '2026-09-17T17:52:19.257Z'

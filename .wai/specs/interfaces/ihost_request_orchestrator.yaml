@@ -43,6 +43,10 @@ methods:
       it as HTML.
     signature: 'viewDiagram(request: HttpRequest): HttpResponse'
     returns: HttpResponse
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames handleRequest to drop the component's own concept.
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-09-15T20:49:27.133Z'
+updatedAt: '2026-09-17T17:52:22.608Z'

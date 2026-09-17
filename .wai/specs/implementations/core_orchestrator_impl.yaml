@@ -945,6 +945,14 @@ methods:
           Return renamed (each moved spec's kind with its old and new id) and rewritten (the ids of
           the other specs whose references changed)
         type: return
+lint:
+  allow:
+    - code: NARRATIVE_COMPLEXITY
+      reason: >-
+        D2b splits the narrative this reports (retireSpecialists) into steps that call smaller
+        methods.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits renameComponent, which lists more than 25 steps.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T16:41:51.844Z'
+updatedAt: '2026-09-17T17:55:03.497Z'

@@ -283,6 +283,10 @@ methods:
         targetComponent: rule_store
         targetMethod: addRule
 detail: full
+lint:
+  allow:
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits registerBuiltinRules, which lists more than 25 steps.
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-09-17T15:19:37.157Z'
+updatedAt: '2026-09-17T17:53:01.233Z'

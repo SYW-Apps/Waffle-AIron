@@ -25,6 +25,10 @@ methods:
         type: string
       - name: artifacts
         type: string[]
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames captureSnapshot to drop the component's own concept.
 status: complete
 createdAt: '2026-07-17T22:30:09.552Z'
-updatedAt: '2026-09-15T20:46:53.506Z'
+updatedAt: '2026-09-17T17:52:33.168Z'

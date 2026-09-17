@@ -13,6 +13,10 @@ dependsOn:
   - spec_loader
 dependencyClass: read
 variant: projector
+lint:
+  allow:
+    - code: COMPONENT_IS_ITS_ONLY_METHOD
+      reason: D2b either folds this component into its caller or names it for its responsibility.
 status: complete
 createdAt: '2026-07-04T12:44:46.997Z'
-updatedAt: '2026-09-15T20:46:02.696Z'
+updatedAt: '2026-09-17T17:53:15.269Z'

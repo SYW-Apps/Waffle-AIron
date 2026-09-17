@@ -36,6 +36,10 @@ methods:
     params:
       - name: roleId
         type: string
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames createRole, updateRole, and deleteRole to drop the component's own concept.
 status: complete
 createdAt: '2026-07-15T20:27:34.104Z'
-updatedAt: '2026-07-15T22:22:07.491Z'
+updatedAt: '2026-09-17T17:52:30.111Z'

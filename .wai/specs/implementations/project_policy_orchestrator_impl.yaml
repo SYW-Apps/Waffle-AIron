@@ -1029,6 +1029,12 @@ methods:
         outcome: the updated project configuration view
     detail: full
 detail: full
+lint:
+  allow:
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: >-
+        D2b splits initializeProjectWithProfile and reconcileProjectPolicy, which list more than 25
+        steps.
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-09-17T16:42:13.988Z'
+updatedAt: '2026-09-17T17:53:00.239Z'

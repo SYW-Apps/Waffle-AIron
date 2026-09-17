@@ -8,6 +8,10 @@ methods:
     signature: 'listRoles(): Role[]'
     returns: Role[]
     params: []
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames listRoles to drop the component's own concept.
 status: complete
 createdAt: '2026-07-15T20:27:36.106Z'
-updatedAt: '2026-07-16T15:03:12.140Z'
+updatedAt: '2026-09-17T17:52:27.930Z'

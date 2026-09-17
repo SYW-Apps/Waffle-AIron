@@ -1064,6 +1064,15 @@ methods:
           id and carrying ctx.isComponentDraft(component.id).
         type: local
     symbol: check
+lint:
+  allow:
+    - code: NARRATIVE_COMPLEXITY
+      reason: >-
+        D2b splits the narratives this reports (couplingHealth, targetLanguage,
+        technologyBoundaries, namingConventions, and complexityAndMetadata); the doctrine's own
+        rules are the worst offenders and go first.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits targetLanguage and technologyBoundaries, which list more than 25 steps.
 status: draft
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-17T17:33:10.980Z'
+updatedAt: '2026-09-17T17:52:47.511Z'

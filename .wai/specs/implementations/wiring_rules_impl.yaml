@@ -778,6 +778,14 @@ methods:
         type: return
         outcome: the first cycle through a component in scope is reported
     symbol: check
+lint:
+  allow:
+    - code: NARRATIVE_COMPLEXITY
+      reason: >-
+        D2b splits the narratives this reports (dispatchTables, unusedDetection, proseClaims, and
+        invariantBacking); the doctrine's own rules are the worst offenders and go first.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits dispatchTables, which lists more than 25 steps.
 status: draft
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-15T01:35:40.841Z'
+updatedAt: '2026-09-17T17:53:05.278Z'

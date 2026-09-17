@@ -1081,6 +1081,10 @@ methods:
         type: return
         outcome: void
     symbol: tryAppendAudit
+lint:
+  allow:
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits completeSsoLogin, which lists more than 25 steps.
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-09-17T16:41:56.583Z'
+updatedAt: '2026-09-17T17:52:49.933Z'

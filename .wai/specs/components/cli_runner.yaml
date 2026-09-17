@@ -30,6 +30,11 @@ lint:
       reason: >-
         Same deliberate hub shape as the GOD_COMPONENT allow: 11 thin command adapters fanned out
         from the one CLI entry orchestrator.
+    - code: INCOHESIVE_METHODS
+      reason: >-
+        This is a deliberate facade and keeps this allow permanently: it is the terminal dispatch
+        hub whose dependencies are thin per-concern adapters, so splitting would add a hop without
+        separating a responsibility.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-08-12T18:46:36.615Z'
+updatedAt: '2026-09-17T17:53:17.960Z'

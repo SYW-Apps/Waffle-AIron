@@ -420,6 +420,12 @@ methods:
         type: return
         outcome: MCP response
     symbol: handleMcpRequest
+lint:
+  allow:
+    - code: NARRATIVE_COMPLEXITY
+      reason: D2b splits the narrative this reports (handleRequest) into steps that call smaller methods.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits handleRequest, which lists more than 25 steps.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-15T20:48:50.758Z'
+updatedAt: '2026-09-17T17:55:04.851Z'

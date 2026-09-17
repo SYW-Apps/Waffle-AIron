@@ -559,6 +559,12 @@ methods:
         targetMethod: unbindRole
     detail: calls-only
 detail: calls-only
+lint:
+  allow:
+    - code: NARRATIVE_COMPLEXITY
+      reason: D2b splits the narrative this reports (removeUnit) into steps that call smaller methods.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits removeUnit, which lists more than 25 steps.
 status: complete
 createdAt: '2026-07-13T18:28:58.935Z'
-updatedAt: '2026-09-17T16:42:30.937Z'
+updatedAt: '2026-09-17T17:55:07.361Z'

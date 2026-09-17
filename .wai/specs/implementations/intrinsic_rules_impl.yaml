@@ -202,6 +202,12 @@ methods:
         description: Continue with the next component.
         type: local
     symbol: check
+lint:
+  allow:
+    - code: NARRATIVE_COMPLEXITY
+      reason: >-
+        D2b splits the narrative this reports (portalFields); the doctrine's own rules are the worst
+        offenders and go first.
 status: draft
 createdAt: '2026-09-14T23:17:12.294Z'
-updatedAt: '2026-09-15T18:06:42.428Z'
+updatedAt: '2026-09-17T17:52:56.186Z'
