@@ -113,11 +113,18 @@ export const namingDisciplineRule: SddRule = {
       //     not the head noun: a component whose id ends in a block word
       //     (skills_orchestrator, secret_write_registry) is named after its
       //     single method just as plainly, but its head noun never matches.
+      //     A method named exactly the concept, singular or plural, is the
+      //     component's one verb rather than a restatement of it — write() on
+      //     secret_write_registry and hash() on state_hash say no more than
+      //     the concept alone, so they stay silent. Only a method that adds
+      //     words around the concept (buildGraph, createMcpServer, listRoles)
+      //     restates the component's name and fires.
       const methods = ctx.interfaceMethodsOf(comp.id);
       if (comp.componentType !== 'Adapter' && methods.length === 1) {
         const only = methods[0];
         const concept = conceptNoun(comp);
-        if (words(only.name).some(w => isSameNoun(w, concept))) {
+        const onlyWords = words(only.name);
+        if (onlyWords.length > 1 && onlyWords.some(w => isSameNoun(w, concept))) {
           ctx.addIssue(
             'warning',
             'COMPONENT_IS_ITS_ONLY_METHOD',

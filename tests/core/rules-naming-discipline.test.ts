@@ -167,11 +167,35 @@ describe('naming-discipline — COMPONENT_IS_ITS_ONLY_METHOD', () => {
 
   it('walks past a trailing block word to find the concept, even two deep', () => {
     // secret_write_registry: "registry" is a block word, so the concept noun is "write".
-    const issue = of(run({
+    // The method is exactly that concept — the component's one verb, not a restatement —
+    // so unlike skills_orchestrator/loadSkills above, this stays quiet.
+    expect(of(run({
       components: [comp('secret_write_registry', 'Registry')],
       interfaces: [intf('isecret_write_registry', 'secret_write_registry', ['write'])],
+    }), 'COMPONENT_IS_ITS_ONLY_METHOD')).toEqual([]);
+  });
+
+  it('stays quiet when the lone method IS the concept noun, singular or plural', () => {
+    // state_hash: concept noun is "hash"; hash() says no more than the concept alone.
+    expect(of(run({
+      components: [comp('state_hash', 'Store')],
+      interfaces: [intf('istate_hash', 'state_hash', ['hash'])],
+    }), 'COMPONENT_IS_ITS_ONLY_METHOD')).toEqual([]);
+
+    // Plural form of the concept is still "exactly the concept".
+    expect(of(run({
+      components: [comp('role_index', 'Index')],
+      interfaces: [intf('irole_index', 'role_index', ['roles'])],
+    }), 'COMPONENT_IS_ITS_ONLY_METHOD')).toEqual([]);
+  });
+
+  it('fires once the method adds words around the concept, not just the concept alone', () => {
+    // role_index: concept noun is "role"; listRoles() says more than the concept alone.
+    const issue = of(run({
+      components: [comp('role_index', 'Index')],
+      interfaces: [intf('irole_index', 'role_index', ['listRoles'])],
     }), 'COMPONENT_IS_ITS_ONLY_METHOD')[0];
-    expect(issue?.specId).toBe('secret_write_registry');
-    expect(issue?.message).toContain('"write"');
+    expect(issue?.specId).toBe('role_index');
+    expect(issue?.message).toContain('"listRoles"');
   });
 });
