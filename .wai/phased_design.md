@@ -383,11 +383,17 @@ Measured on wairon own tree after D1 (1061 narratives): 777 linear, 211 simple, 
   - ships as D2a (checks, config, precedence, the 7 registry renames, allows) then D2b (the cleanup, removing each allow).
 - [x] L2 approved (2026-09-17): no new components. Three methods on `heuristic_rules` — `narrativeComplexity`, `namingDiscipline`, `methodCohesion` — carrying nine codes; `cognitiveScore`/`complexityLevel` on `method_implementation` and `headNoun` on `component_spec` as pure type methods; four fields on `complexity_rule_config`
 - [x] L3, types written: the score and band, the head noun, and the four config fields (`maxNarrativeSteps` defaults to 25, `narrativeStepsHardMax`, `cognitiveWarnAbove` default moderate, `maxCognitiveLevel`)
-- [ ] L3, rules: the three methods with their findings; `EXCESSIVE_NARRATIVE_STEPS` moves from `complexityAndMetadata` to `narrativeComplexity`
-- [ ] Config precedence, open: config VALUES let a profile pack override the project (documented that way on `complexityConfigFor`, `documentationConfigFor` and `namingConfigFor`), while `sddRuleSeverity` lets the project win. One order, and the spec text with it
-- [ ] L4/L5, then code in waves
-- [ ] From the rule fixes: UNCONDITIONAL_CALL_CYCLE misses a call in a `doWhile` body or the first step of a `try` body; draft checks on interfaces and subsystems as type methods
-- [ ] D2b: 7 registry renames, 33 stutter renames, 6 one-method components reviewed, 24 severe narratives split, 3 Orchestrators split
+- [x] L3, rules: the three methods with their findings; `EXCESSIVE_NARRATIVE_STEPS` moved from `complexityAndMetadata` to `narrativeComplexity`
+- [x] Config precedence DECIDED and shipped: the project wins, aligning values with severities. The three `*ConfigFor` methods and their specs say so, and the CHANGELOG carries the upgrade note
+- [x] L4/L5 approved, then five code waves, all merged by cherry-pick. **D2a is PR #76**, gates green: 3166 tests, 21 e2e, validate --ci with only the 12 drafts
+- [ ] Carried to D2b, from the rule fixes: UNCONDITIONAL_CALL_CYCLE misses a call in a `doWhile` body or the first step of a `try` body; draft checks on interfaces and subsystems as type methods
+- [ ] D2b, the cleanup that removes D2a's 58 allows:
+  - 33 stutter renames across 17 interfaces (METHOD_REPEATS_COMPONENT);
+  - 7 one-method components folded or renamed, `mcp_server` also dropping "Manager" from its name;
+  - the 24 severe narratives split, the doctrine's own rule families first, and the 21 above 25 steps;
+  - `project_ops_orchestrator`, `web_admin_orchestrator` and `web_orchestrator` split along the groups the finding names; `cli_runner` and `core_orchestrator` keep their facade allows;
+  - the 7 registry renames are DONE, in D2a;
+  - last: promote the 12 draft components, which turns on the completeness checks the draft waiver suppresses.
 
 ### Data-model PR — entities as table schemas (decided by Robbe 2026-09-15; proposal E10)
 - [ ] One type per entity with persistence metadata (`database`, `table`, a per-field `column`, `transient`); relations stated on fields with derived foreign keys — other aggregates by id, value objects embedded, owned collections as child tables, many-to-many join tables derived; `linkedEntity`, `references` and `key: foreign` retired
