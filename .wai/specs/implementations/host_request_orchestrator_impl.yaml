@@ -92,8 +92,8 @@ methods:
       - stepNumber: 10
         description: >-
           Confine a subproject-qualified credential by the called tool's declared scope. A
-          TREE-scoped tool — every scoped spec tool (sdd_rename_component among them), lock, and the
-          two tree transfer tools — acts on the bound child tree (lock and transfer receive the
+          TREE-scoped tool — every scoped spec tool (the sdd_rename_ tools among them), lock, and
+          the two tree transfer tools — acts on the bound child tree (lock and transfer receive the
           qualifier). A RECORD-scoped tool acts on the project record or its repository, or answers
           for the hosted project's relations to other projects, so serving it would let a token
           scoped to one chained child reach the whole parent — the qualifier would narrow nothing. A
@@ -355,10 +355,10 @@ methods:
           when it is one of the explicitly listed read tools — sdd_list_external_interfaces and the
           topology reads listAgents, getAgent, listDomains, validateTopology and getProjectConfig —
           requiring project:read; ANY other tool — the explicit write prefixes
-          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_),
-          the explicitly named write tools (sdd_rename_component), AND any unrecognized or newly
-          added name — is treated as a write requiring project:write (fail closed: an unknown tool
-          never falls through to read-level gating)
+          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_/sdd_rename_),
+          AND any unrecognized or newly added name — is treated as a write requiring project:write
+          (fail closed: an unknown tool never falls through to read-level gating, and a rename tool
+          added later is a write by its prefix rather than by a hand-kept list)
         type: local
       - stepNumber: 49
         description: >-
@@ -428,4 +428,4 @@ lint:
       reason: D2b splits handleRequest, which lists more than 25 steps.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-17T17:55:04.851Z'
+updatedAt: '2026-09-17T19:55:58.164Z'
