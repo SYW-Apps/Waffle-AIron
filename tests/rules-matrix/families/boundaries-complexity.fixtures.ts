@@ -9,10 +9,12 @@
  *  - EXCESSIVE_METHODS: maxInterfaceMethods caps methods per interface.
  *  - EXCESSIVE_METHOD_PARAMS: maxMethodParams caps params per method.
  *  - EXCESSIVE_DEPENDENCIES: maxComponentDependencies caps dependsOn size.
- *  - EXCESSIVE_NARRATIVE_STEPS: maxNarrativeSteps caps steps per method.
  *  - EXCESSIVE_SUBSYSTEM_COMPONENTS: maxSubsystemComponents caps direct
  *    components per subsystem.
  * Every cap fires only ABOVE the limit; controls sit exactly AT it.
+ * EXCESSIVE_NARRATIVE_STEPS is NOT here: the step axis moved to the
+ * narrative-complexity rule, and its fixtures moved with it (see
+ * boundaries-narrative-complexity.fixtures.ts).
  */
 import { defineRuleFixture, type FixtureSpecInput } from '../harness.js';
 
@@ -276,86 +278,6 @@ export default [
           dependsOn: INTAKE_CHECKS.slice(0, 2).map(s => s.id),
         },
         ...INTAKE_CHECKS.slice(0, 2).map(s => ({ ...s, subsystem: 'patient-intake' })),
-      ],
-    },
-  }),
-
-  // -------------------------------------------------------------------------
-  // EXCESSIVE_NARRATIVE_STEPS
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'EXCESSIVE_NARRATIVE_STEPS',
-    severity: 'warning',
-    anchoredTo: 'booking_flow_impl',
-    expectFire: true,
-    scenario:
-      'With narratives capped at two steps, the booking flow\'s bookVisit method spells out three.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [SCHEDULING_SUB],
-      rules: { complexity: { maxNarrativeSteps: 2 } },
-      components: [
-        { id: 'appointment-orchestrator', componentType: 'Orchestrator', description: 'Coordinates the appointment booking workflow end to end.' },
-      ],
-      interfaces: [
-        {
-          id: 'ischeduling_api',
-          component: 'appointment-orchestrator',
-          methods: [{ name: 'bookVisit', description: 'Book a visit for a patient.' }],
-        },
-      ],
-      implementations: [
-        {
-          id: 'booking_flow_impl',
-          contract: 'ischeduling_api',
-          methods: [
-            {
-              name: 'bookVisit',
-              narrative: [
-                { stepNumber: 1, type: 'local', description: 'Match the request against open slots.' },
-                { stepNumber: 2, type: 'local', description: 'Reserve the chosen slot for the patient.' },
-                { stepNumber: 3, type: 'local', description: 'Queue the booking confirmation notification.' },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  }),
-  defineRuleFixture({
-    code: 'EXCESSIVE_NARRATIVE_STEPS',
-    expectFire: false,
-    reason: 'The narrative has exactly the configured maximum (2 steps) — the cap fires only above the limit.',
-    scenario:
-      'With narratives capped at two steps, the booking flow\'s bookVisit method matches a slot and reserves it.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [SCHEDULING_SUB],
-      rules: { complexity: { maxNarrativeSteps: 2 } },
-      components: [
-        { id: 'appointment-orchestrator', componentType: 'Orchestrator', description: 'Coordinates the appointment booking workflow end to end.' },
-      ],
-      interfaces: [
-        {
-          id: 'ischeduling_api',
-          component: 'appointment-orchestrator',
-          methods: [{ name: 'bookVisit', description: 'Book a visit for a patient.' }],
-        },
-      ],
-      implementations: [
-        {
-          id: 'booking_flow_impl',
-          contract: 'ischeduling_api',
-          methods: [
-            {
-              name: 'bookVisit',
-              narrative: [
-                { stepNumber: 1, type: 'local', description: 'Match the request against open slots.' },
-                { stepNumber: 2, type: 'local', description: 'Reserve the chosen slot for the patient.' },
-              ],
-            },
-          ],
-        },
       ],
     },
   }),
