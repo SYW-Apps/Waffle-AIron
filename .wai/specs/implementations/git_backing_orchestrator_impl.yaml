@@ -275,7 +275,7 @@ methods:
         description: Return whether anything was published
         type: return
         outcome: published flag
-    symbol: syncBackingScope
+    symbol: syncScope
   - name: runPeriodicBackingSync
     narrative:
       - stepNumber: 1
@@ -322,4 +322,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-16T15:40:54.973Z'
-updatedAt: '2026-09-17T20:28:35.065Z'
+updatedAt: '2026-09-17T20:56:08.217Z'

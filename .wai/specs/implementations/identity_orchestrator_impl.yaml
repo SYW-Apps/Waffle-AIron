@@ -921,7 +921,7 @@ methods:
         type: return
         outcome: identity-provider configurations
     detail: full
-    symbol: listIdentityProviders
+    symbol: listProviders
   - name: upsertProvider
     narrative:
       - stepNumber: 1
@@ -977,7 +977,7 @@ methods:
         type: return
         outcome: stored identity-provider configuration
     detail: full
-    symbol: upsertIdentityProvider
+    symbol: upsertProvider
   - name: removeProvider
     narrative:
       - stepNumber: 1
@@ -1033,7 +1033,7 @@ methods:
         type: return
         outcome: identity provider removed
     detail: full
-    symbol: removeIdentityProvider
+    symbol: removeProvider
   - name: resolveEnabledProvider
     narrative:
       - stepNumber: 1
@@ -1090,4 +1090,4 @@ lint:
       reason: D2b splits completeSsoLogin, which lists more than 25 steps.
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-09-17T20:28:50.841Z'
+updatedAt: '2026-09-17T20:56:09.680Z'
