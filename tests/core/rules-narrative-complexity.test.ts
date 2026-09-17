@@ -44,14 +44,19 @@ const narrative = (flat: number, branches = 0) => [
 ];
 
 /** One dispatch orchestrator realizing one method, whose narrative and complexity dial the caller chooses. */
-function run(steps: Record<string, unknown>[], complexity: Record<string, unknown> = {}, compExtra: Record<string, unknown> = {}): ValidationIssue[] {
+function run(
+  steps: Record<string, unknown>[],
+  complexity: Record<string, unknown> = {},
+  compExtra: Record<string, unknown> = {},
+  implExtra: Record<string, unknown> = {},
+): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const opts: BuildContextOptions = {
     system: { schemaVersion: '1.0.0', name: 'Freightline', vision: 'v', ...stamp } as never,
     subsystems: [sub('dispatch')],
     components: [comp('shipment-orchestrator', compExtra)],
     interfaces: [intf('ishipment_orchestrator', 'shipment-orchestrator', ['routeShipment'])],
-    implementations: [impl('shipment_orchestrator_impl', 'ishipment_orchestrator', [{ name: 'routeShipment', narrative: steps }])],
+    implementations: [impl('shipment_orchestrator_impl', 'ishipment_orchestrator', [{ name: 'routeShipment', narrative: steps }], implExtra)],
     types: [],
     projectType: 'backend',
     roundTripIssues: [],
@@ -124,6 +129,10 @@ describe('narrative-complexity — context', () => {
   it('takes its draft context from the realized component', () => {
     expect(run(narrative(0, 10), {}, { status: 'draft' }).find(i => i.code === 'NARRATIVE_COMPLEXITY')?.draftContext).toBe(true);
     expect(run(narrative(0, 10)).find(i => i.code === 'NARRATIVE_COMPLEXITY')?.draftContext).toBeFalsy();
+  });
+
+  it('also downgrades from a draft IMPLEMENTATION alone, even under a complete component', () => {
+    expect(run(narrative(0, 10), {}, {}, { status: 'draft' }).find(i => i.code === 'NARRATIVE_COMPLEXITY')?.draftContext).toBe(true);
   });
 
   it('says nothing about a method with no narrative at all', () => {

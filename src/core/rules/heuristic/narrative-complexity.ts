@@ -66,7 +66,7 @@ export const narrativeComplexityRule: SddRule = {
     // 2. Judge each narrative on both axes.
     for (const entry of entries) {
       const cfg = ctx.complexityConfigFor(entry.subsystem);
-      const isDraft = ctx.isComponentDraft(entry.component.id);
+      const isDraft = ctx.isImplementationDraft(entry.implementation);
       const steps = entry.method.narrative.length;
       const score = cognitiveScore(entry.method);
       const band = complexityLevel(entry.method);
