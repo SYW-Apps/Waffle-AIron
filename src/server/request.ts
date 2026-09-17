@@ -288,6 +288,7 @@ const READ_TOOL_NAMES = new Set<string>([
  *  mutates the bound spec tree as a prefixed write does. */
 const WRITE_TOOL_NAMES = new Set<string>([
   'sdd_rename_component',
+  'sdd_rename_method',
 ]);
 
 /**
