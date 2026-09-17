@@ -155,6 +155,34 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_rename_component
+  - name: sdd_rename_method
+    description: >-
+      Tool: rename a contract method and retarget every reference to it; the method moves on the
+      component's interfaces and their implementations, carrying its narrative and bindings. Reports
+      the specs moved, the specs retargeted, and the specs whose prose still names it.
+    signature: >-
+      sdd_rename_method(id: string, method: string, newName: string, pinSymbol?: boolean):
+      MethodRename
+    returns: MethodRename
+    params:
+      - name: id
+        type: string
+        description: The component whose method is renamed (namespaced if needed)
+      - name: method
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: Its new name, a camel-case identifier
+      - name: pinSymbol
+        type: boolean
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name so its
+          function still binds; true when omitted
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_rename_method
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T10:52:10.896Z'
+updatedAt: '2026-09-17T19:22:35.839Z'

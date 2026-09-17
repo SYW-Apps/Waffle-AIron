@@ -347,6 +347,39 @@ methods:
       - name: apply
         type: boolean
         description: Write the plan; false plans without writing
+  - name: renameMethod
+    description: >-
+      Rename a contract method and every reference to it. The method moves on every interface of the
+      component that declares it — its name, and the name inside its signature — and on the
+      implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and
+      findings unchanged. Narrative call, register and dispatch steps naming it, dispatch-table
+      bindings and lifecycle entrypoints are retargeted. An implementation that declared no symbol
+      is pinned to the old name unless pinSymbol is false, so the function it already binds to keeps
+      binding. Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming
+      a contract method must not silently rename an RPC; both are reported as mentions. Refuses,
+      before the first write: a component or method that does not exist, a name already declared on
+      that interface, a name outside the identifier grammar, and a component inside a chained
+      subproject (rename it from that project's root). A lock goes stale as with any edit.
+    signature: >-
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean):
+      MethodRename
+    returns: MethodRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method is renamed
+      - name: methodName
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: Its new name, a camel-case identifier
+      - name: pinSymbol
+        type: boolean
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name so its
+          function still binds; true when omitted
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T20:44:34.146Z'
+updatedAt: '2026-09-17T19:22:19.157Z'

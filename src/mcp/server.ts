@@ -20,15 +20,17 @@ import { ProjectNotInitializedError } from '../utils/errors.js';
 import { getStatusReport } from '../commands/status.js';
 import type { ProjectConfig } from '../models/project.js';
 // mcp_core_adapter's project configuration read (icore_portal loadProjectConfig,
-// null when the project has none) and component rename (icore_portal
-// renameComponent). STATIC, not lazily required: same reasoning as
-// requireLoader below — a static binding stays correct per bound project, and a
-// lazy require of a relative path does not resolve under the test runner or
+// null when the project has none) and the renames (icore_portal
+// renameComponent / renameMethod). STATIC, not lazily required: same reasoning
+// as requireLoader below — a static binding stays correct per bound project, and
+// a lazy require of a relative path does not resolve under the test runner or
 // inside the bundled hosted server.
 import {
   loadProjectConfig as coreLoadProjectConfig,
   renameComponent as coreRenameComponent,
+  renameMethod as coreRenameMethod,
   type ComponentRename,
+  type MethodRename,
 } from '../core/index.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
@@ -192,10 +194,18 @@ function renameComponent(componentId: string, newId: string): ComponentRename {
   return coreRenameComponent(componentId, newId);
 }
 
+// mcp_core_adapter.renameMethod — the same forward for a contract-method
+// rename: core moves the method on the component's contracts and their
+// implementations, retargets every reference to it, and reports what it moved,
+// what it retargeted and what still merely names it.
+function renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean): MethodRename {
+  return coreRenameMethod(componentId, methodName, newName, pinSymbol);
+}
+
 /**
- * mcp_orchestrator.renameComponent step 1 — the component id a tool's id names
- * in the bound tree: the id itself when a component holds it, a root-anchored
- * `::id` as its bare id, and a bare id naming exactly one chained component as
+ * mcp_orchestrator.renameComponent and .renameMethod step 1 — the component id
+ * a tool's id names in the bound tree: the id itself when a component holds it,
+ * a root-anchored `::id` as its bare id, and a bare id naming exactly one chained component as
  * that component's qualified id, so core refuses it as a chained component
  * rather than a missing one. Any other id is passed on as given, for core to
  * refuse.
@@ -305,6 +315,7 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_externalize_subsystem',
   'sdd_internalize_subsystem',
   'sdd_rename_component',
+  'sdd_rename_method',
   'sdd_add_component',
   'sdd_define_interface',
   'sdd_set_endpoints',
@@ -1100,6 +1111,28 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // mcp_orchestrator.renameComponent: resolve the id in the bound tree,
         // rename through the core adapter, and return the report as the result.
         return json(renameComponent(qualifiedComponentId(id), newId));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ id: string; method: string; newName: string; pinSymbol?: boolean }>(server,
+    'sdd_rename_method',
+    {
+      description: 'Rename a contract method and retarget every reference to it in the bound tree. The method moves on every interface of the component that declares it — its name, and the name inside its signature — and on the implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and findings unchanged; an implementation that declared no symbol is pinned to the old name unless pinSymbol is false, so the function it already binds to keeps binding. Narrative call, register and dispatch steps naming this component and method, dispatch-table bindings and lifecycle entrypoints are retargeted. Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently rename an RPC; both are reported as mentions. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename its method from that project\'s own root), a new name that is not a camel-case identifier (invalid-name), a method the component does not declare (method-missing), and a name a moving contract already declares (name-taken). Returns the specs the method moved in, the specs retargeted, the specs whose prose still names it, and the pinned symbol when one was set.',
+      inputSchema: {
+        id: z.string().describe('The component whose method is renamed (namespaced if needed)'),
+        method: z.string().describe('The method name as it stands'),
+        newName: z.string().describe('Its new name: a camel-case identifier'),
+        pinSymbol: z.boolean().optional().describe('Whether an implementation that declares no symbol is pinned to the old name so its function still binds; true when omitted'),
+      },
+    },
+    ({ id, method, newName, pinSymbol }) => {
+      try {
+        // mcp_orchestrator.renameMethod: resolve the id in the bound tree,
+        // rename through the core adapter, and return the report as the result.
+        return json(renameMethod(qualifiedComponentId(id), method, newName, pinSymbol));
       } catch (e) {
         return errText(String(e));
       }

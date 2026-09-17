@@ -124,6 +124,28 @@ methods:
       - name: newId
         type: string
         description: Its new id
+  - name: renameMethod
+    description: 'Forward to core_portal.renameMethod: rename a contract method and every reference to it'
+    signature: >-
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean):
+      MethodRename
+    returns: MethodRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method is renamed
+      - name: methodName
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: Its new name, a camel-case identifier
+      - name: pinSymbol
+        type: boolean
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name; true when
+          omitted
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T10:52:15.076Z'
+updatedAt: '2026-09-17T19:22:24.766Z'

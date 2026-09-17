@@ -50,12 +50,21 @@ describe('data-plane tool classification', () => {
     }
   });
 
-  it('gates a write that carries no write prefix as a tree-scoped write, on purpose', () => {
+  it('gates sdd_rename_component as a tree-scoped write, on purpose', () => {
     expect(requiredDataPlaneCapability('sdd_rename_component')).toBe('project:write');
     expect(toolScope('sdd_rename_component')).toBe('tree');
     expect(isExplicitlyClassifiedTool('sdd_rename_component')).toBe(true);
     expect(subprojectConfinementError('proj', 'kid', {
       jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'sdd_rename_component', arguments: {} },
+    })).toBeUndefined();
+  });
+
+  it('gates a never-listed rename tool as a tree-scoped write by its sdd_rename_ prefix alone, not a hand-kept name list', () => {
+    expect(requiredDataPlaneCapability('sdd_rename_anything')).toBe('project:write');
+    expect(toolScope('sdd_rename_anything')).toBe('tree');
+    expect(isExplicitlyClassifiedTool('sdd_rename_anything')).toBe(true);
+    expect(subprojectConfinementError('proj', 'kid', {
+      jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'sdd_rename_anything', arguments: {} },
     })).toBeUndefined();
   });
 

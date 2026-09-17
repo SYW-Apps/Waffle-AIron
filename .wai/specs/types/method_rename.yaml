@@ -1,0 +1,47 @@
+kind: value-object
+id: method_rename
+name: MethodRename
+description: >-
+  What renaming a contract method changed: the specs the method itself moved in, the specs whose
+  references were retargeted, and the specs whose prose still names it.
+fields:
+  - name: component
+    type: string
+    description: The component whose method was renamed
+    optional: false
+  - name: from
+    type: string
+    description: The method name before the rename
+    optional: false
+  - name: to
+    type: string
+    description: The method name after it
+    optional: false
+  - name: renamed
+    type: string[]
+    description: >-
+      Ids of the specs the method moved in: every interface of the component that declared it, and
+      the implementations of those contracts
+    optional: false
+  - name: rewritten
+    type: string[]
+    description: >-
+      Ids of the specs whose references were retargeted: narrative call, register and dispatch
+      steps, dispatch-table bindings, and lifecycle entrypoints
+    optional: false
+  - name: mentions
+    type: string[]
+    description: >-
+      Ids of the specs whose prose still names the old method, and gRPC endpoint bindings whose wire
+      method keeps it. Nothing here was rewritten — a rename never edits prose, and never changes a
+      published wire name
+    optional: false
+  - name: pinnedSymbol
+    type: string
+    description: >-
+      The code symbol an implementation now declares, when the rename pinned the old name so the
+      existing function still binds
+    optional: true
+methods: []
+createdAt: '2026-09-17T19:21:55.866Z'
+updatedAt: '2026-09-17T19:21:55.881Z'

@@ -248,7 +248,26 @@ methods:
           specs whose references were rewritten
         type: return
         outcome: ComponentRename
+  - name: renameMethod
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the tool's id, namespaced if needed, to the qualified component id in the bound
+          tree, so core can refuse a component inside a chained subproject
+        type: local
+      - stepNumber: 2
+        description: Rename the contract method and retarget every reference to it via the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameMethod
+      - stepNumber: 3
+        description: >-
+          Shape the tool response from the report: the specs the method moved in, the specs whose
+          references were retargeted, the specs whose prose still names it, and the pinned symbol
+          when one was set
+        type: return
+        outcome: MethodRename
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-15T17:59:01.218Z'
+updatedAt: '2026-09-17T19:27:25.459Z'

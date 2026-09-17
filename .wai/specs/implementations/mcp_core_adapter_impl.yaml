@@ -169,7 +169,14 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: renameComponent
+  - name: renameMethod
+    narrative:
+      - stepNumber: 1
+        description: Call renameMethod on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: renameMethod
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T17:59:02.529Z'
+updatedAt: '2026-09-17T19:27:21.504Z'

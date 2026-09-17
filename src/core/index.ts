@@ -38,10 +38,11 @@ export { composeAgentBrief } from './agent_resolver.js';
 // anchored conformance check.
 export { exportSpecTree, importSpecTree } from './treetransfer.js';
 
-// Component rename and Specialist retirement (icore_portal renameComponent /
-// retireSpecialists) — pure 1:1 forwards to the core orchestrator, stated
-// explicitly for the same anchored conformance check.
-export { renameComponent } from './provision.js';
+// Component rename, contract-method rename and Specialist retirement
+// (icore_portal renameComponent / renameMethod / retireSpecialists) — pure 1:1
+// forwards to the core orchestrator, stated explicitly for the same anchored
+// conformance check.
+export { renameComponent, renameMethod } from './provision.js';
 export { retireSpecialists } from './stereotype-migration.js';
 export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migration.js';
 

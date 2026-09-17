@@ -397,6 +397,12 @@ shared. Findings a tree did not see before come first, because `validate --ci` c
 - **`sdd_rename_component`** renames a component together with the interfaces and implementations named after it, and
   rewrites every reference in the tree: ownership, published interfaces, an interface's component, an implementation's
   contract, component classes and `auth` sources.
+- **`sdd_rename_method`** renames a contract method the same way: it moves on every interface of the component that
+  declares it — its name, and the name inside its signature — and on the implementations of those contracts, and
+  narrative `call`, `register` and `dispatch` steps, dispatch-table bindings and lifecycle entrypoints follow. An
+  implementation that declared no `symbol` is pinned to the old name (`pinSymbol: false` declines), so the function it
+  already binds to keeps binding. Prose is never rewritten and a gRPC binding keeps its wire method — renaming a
+  contract method must not silently rename an RPC — and both are reported as mentions.
 - **Wairon's own tree:**
   - its 27 Specialists are Orchestrators (18 pure, 9 read), and 14 are renamed for what they are responsible for;
   - `mcp_server` is an Orchestrator;
