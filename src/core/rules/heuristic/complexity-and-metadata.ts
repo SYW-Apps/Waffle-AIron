@@ -41,7 +41,6 @@ export const complexityRule: SddRule = {
     { code: 'EXCESSIVE_METHODS', defaultSeverity: 'warning', summary: 'Interface declares more methods than the configured limit' },
     { code: 'EXCESSIVE_METHOD_PARAMS', defaultSeverity: 'warning', summary: 'Interface method declares more parameters than the configured limit' },
     { code: 'EXCESSIVE_DEPENDENCIES', defaultSeverity: 'warning', summary: 'Component has more dependencies than the configured limit' },
-    { code: 'EXCESSIVE_NARRATIVE_STEPS', defaultSeverity: 'warning', summary: 'Method implementation contains more narrative steps than the configured limit' },
     { code: 'EXCESSIVE_SUBSYSTEM_COMPONENTS', defaultSeverity: 'warning', summary: 'Subsystem has more direct components than the configured limit' },
   ],
   check(ctx) {
@@ -142,29 +141,7 @@ export const complexityRule: SddRule = {
       }
     }
 
-    // 4. Implementations (Complexity checks)
-    for (const impl of ctx.implementations) {
-      const intf = ctx.interfaceMap.get(impl.contract);
-      const comp = intf ? ctx.componentMap.get(intf.component) : undefined;
-      const complexityConfig = ctx.complexityConfigFor(comp?.subsystem);
-      const isDraft = ctx.isImplementationDraft(impl);
-
-      if (complexityConfig?.maxNarrativeSteps !== undefined) {
-        for (const m of impl.methods) {
-          if (m.narrative.length > complexityConfig.maxNarrativeSteps) {
-            ctx.addIssue(
-              'warning',
-              'EXCESSIVE_NARRATIVE_STEPS',
-              `Method "${m.name}" in implementation "${impl.id}" contains ${m.narrative.length} narrative steps, exceeding the configured limit of ${complexityConfig.maxNarrativeSteps}.`,
-              impl.id,
-              isDraft
-            );
-          }
-        }
-      }
-    }
-
-    // 5. Types (Doc checks)
+    // 4. Types (Doc checks)
     for (const t of ctx.types) {
       const docConfig = ctx.documentationConfigFor(t.subsystem);
 

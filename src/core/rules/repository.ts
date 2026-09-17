@@ -45,6 +45,9 @@ import { languageRule } from './heuristic/target-language.js';
 import { technologyRule } from './heuristic/technology-boundaries.js';
 import { namingRule } from './heuristic/naming-conventions.js';
 import { complexityRule } from './heuristic/complexity-and-metadata.js';
+import { narrativeComplexityRule } from './heuristic/narrative-complexity.js';
+import { namingDisciplineRule } from './heuristic/naming-discipline.js';
+import { methodCohesionRule } from './heuristic/method-cohesion.js';
 
 // ---------------------------------------------------------------------------
 // Rule repository (rule_store + rule_registry + rule_index + rule_repository).
@@ -134,6 +137,12 @@ export const SDD_RULES: SddRule[] = [
   technologyRule,
   namingRule,
   complexityRule,
+  // The doctrine heuristics ride with the structural caps: same subject
+  // (size, name, shape), judgements rather than errors, and they read the
+  // same complexity dial.
+  narrativeComplexityRule,
+  namingDisciplineRule,
+  methodCohesionRule,
   // Pack resolution and reproducibility run late: they are about project
   // CONFIGURATION (does the declared pack set resolve, and can it be reproduced
   // elsewhere?) rather than spec content.
