@@ -153,4 +153,25 @@ describe('naming-discipline — COMPONENT_IS_ITS_ONLY_METHOD', () => {
       interfaces: [intf('icarrier_quote_adapter', 'carrier_quote_adapter', ['fetchAdapter'])],
     }), 'COMPONENT_IS_ITS_ONLY_METHOD')).toEqual([]);
   });
+
+  it('matches the CONCEPT noun, not the head noun — an id ending in a block word is caught too', () => {
+    // skills_orchestrator's head noun is "orchestrator" (never matches a method), but its
+    // concept noun is "skills" — the component is named after its one method just as plainly.
+    const issue = of(run({
+      components: [comp('skills_orchestrator', 'Orchestrator')],
+      interfaces: [intf('iskills_orchestrator', 'skills_orchestrator', ['loadSkills'])],
+    }), 'COMPONENT_IS_ITS_ONLY_METHOD')[0];
+    expect(issue?.specId).toBe('skills_orchestrator');
+    expect(issue?.message).toContain('"loadSkills"');
+  });
+
+  it('walks past a trailing block word to find the concept, even two deep', () => {
+    // secret_write_registry: "registry" is a block word, so the concept noun is "write".
+    const issue = of(run({
+      components: [comp('secret_write_registry', 'Registry')],
+      interfaces: [intf('isecret_write_registry', 'secret_write_registry', ['write'])],
+    }), 'COMPONENT_IS_ITS_ONLY_METHOD')[0];
+    expect(issue?.specId).toBe('secret_write_registry');
+    expect(issue?.message).toContain('"write"');
+  });
 });

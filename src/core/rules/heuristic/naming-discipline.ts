@@ -109,11 +109,15 @@ export const namingDisciplineRule: SddRule = {
 
       // 1c. One method, named after the component: a function in a component's
       //     costume. Adapters are exempt — a client shim legitimately exposes
-      //     the single remote call it wraps.
+      //     the single remote call it wraps. Matched against the CONCEPT noun,
+      //     not the head noun: a component whose id ends in a block word
+      //     (skills_orchestrator, secret_write_registry) is named after its
+      //     single method just as plainly, but its head noun never matches.
       const methods = ctx.interfaceMethodsOf(comp.id);
       if (comp.componentType !== 'Adapter' && methods.length === 1) {
         const only = methods[0];
-        if (words(only.name).some(w => isSameNoun(w, head))) {
+        const concept = conceptNoun(comp);
+        if (words(only.name).some(w => isSameNoun(w, concept))) {
           ctx.addIssue(
             'warning',
             'COMPONENT_IS_ITS_ONLY_METHOD',
