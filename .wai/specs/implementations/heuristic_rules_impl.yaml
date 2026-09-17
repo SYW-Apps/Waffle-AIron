@@ -801,23 +801,6 @@ methods:
           the parameter count and the limit.
         type: local
       - stepNumber: 13
-        label: implLoop
-        description: For each implementation, check every method's narrative length.
-        type: loop
-        loopKind: forEach
-        over: ctx.implementations
-        endStep: 14
-      - stepNumber: 14
-        label: narrativeStepCheck
-        description: >-
-          Resolve intf = ctx.interfaceMap.get(impl.contract); comp = intf ?
-          ctx.componentMap.get(intf.component) : undefined; complexityConfig = the effective
-          complexity config for comp?.subsystem; isDraft = ctx.isImplementationDraft(impl); when
-          complexityConfig.maxNarrativeSteps is set, for every method in impl.methods whose
-          narrative.length exceeds it, report EXCESSIVE_NARRATIVE_STEPS (warning; draft context
-          isDraft) naming the method's name, impl.id, its step count and the limit.
-        type: local
-      - stepNumber: 15
         label: typeLoop
         description: >-
           For each type, check its own description, every field's description, and every method's
@@ -825,8 +808,8 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.types
-        endStep: 20
-      - stepNumber: 16
+        endStep: 18
+      - stepNumber: 14
         description: >-
           Resolve docConfig = the effective documentation config for t.subsystem; when
           docConfig.requireDescriptions and t.description is missing or empty, report
@@ -834,14 +817,14 @@ methods:
           is set and t.description is shorter, report DESCRIPTION_TOO_SHORT (warning) naming t.id,
           its length and the minimum.
         type: local
-      - stepNumber: 17
+      - stepNumber: 15
         label: fieldLoop
         description: For each field, check its description.
         type: loop
         loopKind: forEach
         over: t.fields
-        endStep: 18
-      - stepNumber: 18
+        endStep: 16
+      - stepNumber: 16
         label: fieldDocCheck
         description: >-
           When docConfig.requireFieldDescriptions and f.description is missing or empty, report
@@ -849,14 +832,14 @@ methods:
           docConfig.minDescriptionLength is set and f.description is shorter, report
           DESCRIPTION_TOO_SHORT (warning) the same way.
         type: local
-      - stepNumber: 19
+      - stepNumber: 17
         label: typeMethodLoop
         description: For each method, check its description.
         type: loop
         loopKind: forEach
         over: t.methods
-        endStep: 20
-      - stepNumber: 20
+        endStep: 18
+      - stepNumber: 18
         label: typeMethodDocCheck
         description: >-
           When docConfig.requireMethodDescriptions and m.description is missing or empty, report
@@ -890,7 +873,9 @@ methods:
       - stepNumber: 4
         description: >-
           Read cfg = ctx.complexityConfigFor(entry.subsystem), isDraft =
-          ctx.isComponentDraft(entry.component.id), steps = entry.method.narrative.length, score =
+          ctx.isImplementationDraft(entry.implementation) — the shared recipe for an
+          implementation-anchored finding, which reads the implementation, its contract, its
+          component and its subsystem — steps = entry.method.narrative.length, score =
           entry.method.cognitiveScore() and band = entry.method.complexityLevel().
         type: local
       - stepNumber: 5
@@ -941,6 +926,7 @@ methods:
           ctx.addIssue('error', 'NARRATIVE_STEPS_OVER_MAX', naming the step count and the configured
           hard maximum), anchored on the implementation id and carrying isDraft.
         type: local
+    symbol: check
   - name: namingDiscipline
     sourcePath: src/core/rules/heuristic/naming-discipline.ts
     narrative:
@@ -991,10 +977,12 @@ methods:
       - stepNumber: 8
         description: >-
           When the component is not an Adapter and ctx.interfaceMethodsOf(component.id) holds
-          exactly one method whose camel-case words include the head noun in singular or plural,
-          ctx.addIssue('warning', 'COMPONENT_IS_ITS_ONLY_METHOD', naming the method and asking
-          either to fold it into its caller or to name the component for its responsibility),
-          anchored on the component id and carrying isDraft.
+          exactly one method whose camel-case words include component.conceptNoun() in singular or
+          plural, ctx.addIssue('warning', 'COMPONENT_IS_ITS_ONLY_METHOD', naming the method and
+          asking either to fold it into its caller or to name the component for its responsibility),
+          anchored on the component id and carrying isDraft. The concept noun, not the head noun: a
+          component whose id ends in a block word, such as skills_orchestrator or
+          secret_write_registry, is named after its single method just as plainly.
         type: local
       - stepNumber: 9
         description: >-
@@ -1028,6 +1016,7 @@ methods:
           interface that declares the method, as UNUSED_METHOD is, and carrying the component's
           draft state.
         type: local
+    symbol: check
   - name: methodCohesion
     sourcePath: src/core/rules/heuristic/method-cohesion.ts
     narrative:
@@ -1070,6 +1059,7 @@ methods:
           to acknowledge a deliberate facade with a reasoned lint.allow), anchored on the component
           id and carrying ctx.isComponentDraft(component.id).
         type: local
+    symbol: check
 status: draft
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-17T15:19:26.150Z'
+updatedAt: '2026-09-17T16:29:45.851Z'
