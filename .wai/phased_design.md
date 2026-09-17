@@ -387,6 +387,8 @@ Measured on wairon own tree after D1 (1061 narratives): 777 linear, 211 simple, 
 - [x] Config precedence DECIDED and shipped: the project wins, aligning values with severities. The three `*ConfigFor` methods and their specs say so, and the CHANGELOG carries the upgrade note
 - [x] L4/L5 approved, then five code waves, all merged by cherry-pick. **D2a is PR #76**, gates green: 3166 tests, 21 e2e, validate --ci with only the 12 drafts
 - [ ] Carried to D2b, from the rule fixes: UNCONDITIONAL_CALL_CYCLE misses a call in a `doWhile` body or the first step of a `try` body; draft checks on interfaces and subsystems as type methods
+- [ ] D2b-0, the tool the cleanup needs: `sdd_rename_method` (branch feat/rename-method). A contract method has no rename — `sdd_update_spec` upserts by name — so 37 renames would mean re-sending every implementation narrative by hand (F16). It mirrors `sdd_rename_component` down the same chain, pins the symbol so code keeps binding, and reports the prose it leaves alone (F43). Specs approved and committed; code in progress.
+  - NOTE for D2b-3: `renameComponent` and `renameMethod` both score exactly 9, the top of the moderate band. Five guards cost 5, and a nested branch costs 2, so one more refusal on either tips it to complex. Extracting the shared refusal block is the concrete first candidate when the component splits are designed.
 - [ ] D2b, the cleanup that removes D2a's 58 allows:
   - 33 stutter renames across 17 interfaces (METHOD_REPEATS_COMPONENT);
   - 7 one-method components folded or renamed, `mcp_server` also dropping "Manager" from its name;
