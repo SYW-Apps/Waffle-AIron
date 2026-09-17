@@ -945,6 +945,153 @@ methods:
           Return renamed (each moved spec's kind with its old and new id) and rewritten (the ids of
           the other specs whose references changed)
         type: return
+  - name: renameMethod
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the component whose contract method is renamed
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: 'Guard: the component must exist'
+        type: branch
+        condition: the component does not exist
+        onFalseStep: 4
+      - stepNumber: 3
+        label: component-missing
+        description: Refuse a component that does not exist
+        type: throw
+        error: 'component-missing: no component has this id'
+      - stepNumber: 4
+        description: 'Guard: the component must belong to the bound project itself'
+        type: branch
+        condition: 'componentId is namespaced into a chained mount (it carries the :: separator)'
+        onFalseStep: 6
+      - stepNumber: 5
+        label: chained-component
+        description: Refuse a component inside a chained subproject
+        type: throw
+        error: >-
+          chained-component: the component lives in a chained subproject; rename its method from
+          that project's own root
+      - stepNumber: 6
+        description: 'Guard: the new name must be a camel-case identifier'
+        type: branch
+        condition: >-
+          newName is outside the identifier grammar: not a camel-case identifier, or carrying a
+          separator
+        onFalseStep: 8
+      - stepNumber: 7
+        label: invalid-name
+        description: Refuse a new name outside the grammar
+        type: throw
+        error: 'invalid-name: the new name must be a camel-case identifier'
+      - stepNumber: 8
+        description: >-
+          Load every interface spec, for the component's own contracts and the names they already
+          declare
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 9
+        description: >-
+          Collect the contracts that move: every interface of this component that declares
+          methodName
+        type: local
+      - stepNumber: 10
+        description: 'Guard: the component must declare the method'
+        type: branch
+        condition: no contract of the component declares methodName
+        onFalseStep: 12
+      - stepNumber: 11
+        label: method-missing
+        description: Refuse a method the component does not declare
+        type: throw
+        error: 'method-missing: no contract of this component declares that method'
+      - stepNumber: 12
+        description: 'Guard: the new name must be free on every contract that moves'
+        type: branch
+        condition: one of those contracts already declares a method under newName
+        onFalseStep: 14
+      - stepNumber: 13
+        label: name-taken
+        description: Refuse a new name already declared on that interface
+        type: throw
+        error: 'name-taken: that interface already declares a method under the new name'
+      - stepNumber: 14
+        description: >-
+          Load every implementation spec, for the realizations of those contracts and the narratives
+          that refer to the method
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 15
+        description: Move the method on every contract of the component that declares it
+        type: loop
+        loopKind: forEach
+        over: each contract that declares the method
+        endStep: 16
+      - stepNumber: 16
+        description: >-
+          Write the contract with the method under newName: its name, and the method name inside its
+          signature string. Params, returns, description, guarantees and findings stay as they are
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 17
+        description: Move it on the implementations of those contracts too
+        type: loop
+        loopKind: forEach
+        over: each implementation realizing one of those contracts that declares the method
+        endStep: 20
+      - stepNumber: 18
+        description: >-
+          An implementation that named no symbol needs one now: the function it binds to still
+          carries the old name
+        type: branch
+        condition: the method declares no symbol and pinSymbol is not false
+        onFalseStep: 20
+      - stepNumber: 19
+        description: >-
+          Pin it: declare symbol <the old name> on the moved method, so that function keeps binding,
+          and record it as the pinned symbol
+        type: local
+      - stepNumber: 20
+        description: >-
+          Write the implementation with the method under newName, carrying its narrative,
+          sourcePath, symbol, detail and intent unchanged
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 21
+        description: >-
+          Drop the cached spec index, so the retargeting below reads the moved names rather than the
+          cached ones
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 22
+        description: >-
+          Retarget every reference to the method with the provisioning rewriter, which persists what
+          it changes: narrative call, register and dispatch steps naming this component and this
+          method; dispatch-table bindings routing a capability to this component and method; and
+          lifecycle entrypoints naming it for a phase. Record the specs it rewrote
+        type: local
+      - stepNumber: 23
+        description: >-
+          Collect what names the method but is left alone: the specs whose description, intent or
+          narrative text still carries the old name, and the gRPC endpoint bindings whose wire
+          method still carries it. A rename never edits prose, and never changes a published wire
+          name
+        type: local
+      - stepNumber: 24
+        description: >-
+          Return the report: the component, from and to, the specs the method moved in, the specs
+          whose references were retargeted, the mentions left alone, and the pinned symbol when one
+          was set
+        type: return
+        outcome: renamed
 lint:
   allow:
     - code: NARRATIVE_COMPLEXITY
@@ -955,4 +1102,4 @@ lint:
       reason: D2b splits renameComponent, which lists more than 25 steps.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T17:55:03.497Z'
+updatedAt: '2026-09-17T19:27:48.156Z'

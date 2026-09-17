@@ -121,6 +121,13 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: renameComponent
+  - name: sdd_rename_method
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameMethod workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameMethod
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T17:58:58.466Z'
+updatedAt: '2026-09-17T19:27:27.881Z'
