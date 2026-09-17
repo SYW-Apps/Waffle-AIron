@@ -197,11 +197,15 @@ describe('rule_context rule configs (complexityConfigFor, documentationConfigFor
     extensions: extensions(),
   });
 
-  it("namingConfigFor overlays the subsystem profile pack's naming, merging stereotype patterns key by key", () => {
+  it("namingConfigFor bases on the subsystem profile pack's naming but lets the project's own win, merging stereotype patterns key by key", () => {
     const naming = packed().namingConfigFor('packed')!;
-    expect(naming.methods).toBe('camelCase');
+    // methods is set by both the pack (camelCase) and the project (PascalCase) — the project wins.
+    expect(naming.methods).toBe('PascalCase');
     expect(naming.types).toBe('PascalCase');
-    expect(naming.stereotypes?.Store).toEqual({ suffix: 'Store' });
+    // Store is set by both — the project's own key wins over the pack's entirely.
+    expect(naming.stereotypes?.Store).toMatchObject({ prefix: 'S' });
+    expect(naming.stereotypes?.Store).not.toHaveProperty('suffix');
+    // Index is set only by the project — carried through untouched.
     expect(naming.stereotypes?.Index).toMatchObject({ suffix: 'Index' });
   });
 
@@ -221,15 +225,17 @@ describe('rule_context rule configs (complexityConfigFor, documentationConfigFor
     expect(context().namingConfigFor('anything')).toBeUndefined();
   });
 
-  it("complexityConfigFor overlays the pack's complexity on the project's", () => {
+  it("complexityConfigFor bases on the pack's complexity but the project's own explicit setting wins", () => {
     const ctx = packed();
-    expect(ctx.complexityConfigFor('packed')).toMatchObject({ maxInterfaceMethods: 3, maxMethodParams: 4 });
+    // maxInterfaceMethods is set by both (pack: 3, project: 10) — the project wins.
+    expect(ctx.complexityConfigFor('packed')).toMatchObject({ maxInterfaceMethods: 10, maxMethodParams: 4 });
     expect(ctx.complexityConfigFor('plain')).toBe(rules.complexity);
   });
 
-  it("documentationConfigFor overlays the pack's documentation on the project's", () => {
+  it("documentationConfigFor bases on the pack's documentation but the project's own explicit setting wins", () => {
     const ctx = packed();
-    expect(ctx.documentationConfigFor('packed')).toMatchObject({ requireDescriptions: true, minDescriptionLength: 20 });
+    // minDescriptionLength is set by both (pack: 20, project: 5) — the project wins.
+    expect(ctx.documentationConfigFor('packed')).toMatchObject({ requireDescriptions: true, minDescriptionLength: 5 });
     expect(ctx.documentationConfigFor('plain')).toBe(rules.documentation);
   });
 });
