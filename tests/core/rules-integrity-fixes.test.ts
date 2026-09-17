@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildRuleContext, type BuildContextOptions } from '../../src/core/rules/index.js';
-import { typeReferencesRule } from '../../src/core/rules/integrity/type-references.js';
+import { fieldTypeReferencesRule } from '../../src/core/rules/integrity/field-type-references.js';
 import { hierarchyRule } from '../../src/core/rules/integrity/hierarchy-integrity.js';
 import { fieldTypeRefs } from '../../src/models/index.js';
 import type { ValidationIssue } from '../../src/core/validation.js';
@@ -33,7 +33,7 @@ function context(overrides: Partial<BuildContextOptions>) {
   return { ctx, issues };
 }
 
-describe('type-references — field references resolve exactly as ctx.isTypeResolved does', () => {
+describe('field-type-references — field references resolve exactly as ctx.isTypeResolved does', () => {
   const FIELD_TYPES = [
     'STRING', 'List<T>', 't', 'Map<string, T>', 'billing::money', 'Money', 'ledger::money',
     'Customer', 'Page<Customer>', 'decimal // minor units', "'pending' | 'settled'",
@@ -45,7 +45,7 @@ describe('type-references — field references resolve exactly as ctx.isTypeReso
     const billing = { id: 'billing', name: 'billing', description: 'd', parentSystem: 'LedgerSystem', publicInterfaces: [], trustedLinks: [], status: 'complete', ...stamp };
     const { ctx, issues } = context({ subsystems: [billing] as never, types: [money, page] as never });
 
-    typeReferencesRule.check(ctx);
+    fieldTypeReferencesRule.check(ctx);
 
     const reported = issues
       .filter(i => i.code === 'UNDEFINED_TYPE_REFERENCE' && i.specId === 'page')

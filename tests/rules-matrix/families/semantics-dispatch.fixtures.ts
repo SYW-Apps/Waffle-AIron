@@ -1,7 +1,8 @@
 /**
- * Dispatch-table family (src/core/rules/wiring/dispatch-tables.ts, dispatchRule):
- * machine-readable capability -> component.method maps on generic-dispatch
- * Portals, plus the dispatch narrative step routed through them.
+ * Dispatch family (src/core/rules/wiring/dispatch-table-bindings.ts and
+ * dispatch-step-routing.ts): machine-readable capability -> component.method
+ * maps on generic-dispatch Portals, plus the dispatch narrative step routed
+ * through them.
  *
  * Documented intents pinned here:
  *  - DISPATCH_ON_NON_PORTAL (error): capability dispatch is a Portal

@@ -71,12 +71,12 @@ methods:
       - code: ROUNDTRIP_SERIALIZATION
         severity: error
         summary: Spec cannot be re-serialized through the writer schema (any save or lock would refuse it)
-  - name: typeReferences
+  - name: typeDeclarations
     description: >-
-      Rule type-references. Type fields and interface method signatures may only reference builtins,
-      in-scope generic parameters, or defined entity/value-object types. Types owned by a subsystem
-      must reference an existing subsystem.
-    signature: 'typeReferences(ctx: RuleContext): void'
+      Rule type-declarations. A type owned by a subsystem must reference an existing one, and a type
+      declaring neither fields nor methods is a placeholder that can inform neither implementers nor
+      the ERD.
+    signature: 'typeDeclarations(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -86,14 +86,41 @@ methods:
       - code: INVALID_SUBSYSTEM_REFERENCE
         severity: error
         summary: Type references a non-existent owning subsystem
-      - code: UNDEFINED_TYPE_REFERENCE
-        severity: error
-        summary: Reference to a type that is not defined anywhere
       - code: HOLLOW_TYPE
         severity: warning
         summary: >-
           Type declares no fields and no methods — a placeholder that informs neither implementers
           nor the ERD
+  - name: fieldTypeReferences
+    description: >-
+      Rule field-type-references. Every type identifier a type field's declared type names must
+      resolve to a builtin or a defined entity/value-object type — the type's own generic parameters
+      are not field references.
+    signature: 'fieldTypeReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNDEFINED_TYPE_REFERENCE
+        severity: error
+        summary: Reference to a type that is not defined anywhere
+  - name: signatureTypeReferences
+    description: >-
+      Rule signature-type-references. Every type identifier an interface method signature names must
+      resolve to a builtin, a generic parameter in scope on the interface or the method, or a
+      defined entity/value-object type.
+    signature: 'signatureTypeReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNDEFINED_TYPE_REFERENCE
+        severity: error
+        summary: Reference to a type that is not defined anywhere
   - name: publicSurface
     description: >-
       Rule public-surface. Every declared publicInterface is bound to an existing component of this
@@ -144,4 +171,4 @@ methods:
         summary: lint.allow entry matched no finding this run — remove the stale allow
 status: draft
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-14T06:05:51.196Z'
+updatedAt: '2026-09-17T21:53:57.507Z'

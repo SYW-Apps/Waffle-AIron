@@ -6,186 +6,6 @@ description: >-
 contract: iwiring_rules
 simPath: tests/core/validation.test.ts
 methods:
-  - name: dispatchTables
-    sourcePath: src/core/rules/wiring/dispatch-tables.ts
-    narrative:
-      - stepNumber: 1
-        label: tables
-        description: 'Table side: check each declared dispatch table'
-        type: loop
-        loopKind: forEach
-        over: the components comp of ctx.components that declare a non-empty dispatch table
-        endStep: 15
-      - stepNumber: 2
-        description: Capability dispatch is a Portal responsibility
-        type: branch
-        condition: comp.componentType is not Portal
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Report DISPATCH_ON_NON_PORTAL (error; draft context from ctx.isComponentDraft(comp.id)) on
-          comp.id, naming its componentType
-        type: local
-      - stepNumber: 4
-        label: bindings
-        description: Check each binding b of the table
-        type: loop
-        loopKind: forEach
-        over: comp.dispatch, tracking the capabilities seen so far in this table
-        endStep: 15
-      - stepNumber: 5
-        description: A capability bound twice makes runtime routing ambiguous
-        type: branch
-        condition: b.capability was already seen in this table
-        onFalseStep: 7
-      - stepNumber: 6
-        description: >-
-          Report DUPLICATE_CAPABILITY (error; draft context from ctx.isComponentDraft(comp.id)) on
-          comp.id, naming the capability
-        type: local
-      - stepNumber: 7
-        label: resolveTarget
-        description: Record b.capability as seen and look the bound component target up in ctx.componentMap
-        type: branch
-        condition: b.component does not resolve
-        onFalseStep: 10
-      - stepNumber: 8
-        description: >-
-          Report UNSERVED_CAPABILITY (error; draft context from ctx.isComponentDraft(comp.id)) on
-          comp.id: the capability is bound to a component that does not exist
-        type: local
-      - stepNumber: 9
-        description: 'A binding with no server has nothing more to check: continue with the next binding'
-        type: jump
-        toStep: 4
-      - stepNumber: 10
-        label: checkMethod
-        description: The bound method must exist on one of the target's contracts
-        type: branch
-        condition: no method in ctx.interfaceMethodsOf(target.id) is named b.method
-        onFalseStep: 12
-      - stepNumber: 11
-        description: >-
-          Report UNSERVED_CAPABILITY (error; draft context when ctx.isComponentDraft(comp.id) or
-          ctx.isComponentDraft(target.id)) on comp.id: the target declares no such method on any of
-          its interfaces
-        type: local
-      - stepNumber: 12
-        label: checkSubsystem
-        description: A portal dispatches inward, into its own subsystem
-        type: branch
-        condition: target.subsystem is not comp.subsystem
-        onFalseStep: 14
-      - stepNumber: 13
-        description: >-
-          Report DISPATCH_CROSS_SUBSYSTEM (error; draft context when ctx.isComponentDraft(comp.id)
-          or ctx.isComponentDraft(target.id)) on comp.id, naming both subsystems
-        type: local
-      - stepNumber: 14
-        label: checkDeclared
-        description: The table is a runtime invocation path, so the portal must declare the edge
-        type: branch
-        condition: target is not comp itself and neither comp.dependsOn nor comp.owns lists target.id
-        onFalseStep: 4
-      - stepNumber: 15
-        label: tablesEnd
-        description: >-
-          Report UNDECLARED_DISPATCH_TARGET (error; draft context when ctx.isComponentDraft(comp.id)
-          or ctx.isComponentDraft(target.id)) on comp.id: the target is not listed under dependsOn
-          or owns
-        type: local
-      - stepNumber: 16
-        label: dispatchSteps
-        description: 'Step side: check each dispatch step'
-        type: loop
-        loopKind: forEach
-        over: >-
-          the dispatch steps of every method narrative of every implementation impl in
-          ctx.implementations
-        endStep: 30
-      - stepNumber: 17
-        description: A dispatch step must name the capability it routes
-        type: branch
-        condition: step.capability is missing
-        onFalseStep: 20
-      - stepNumber: 18
-        description: >-
-          Report MALFORMED_DISPATCH_STEP (error; draft context from ctx.isImplementationDraft(impl))
-          on impl.id, naming the method and the step number
-        type: local
-      - stepNumber: 19
-        description: Continue with the next dispatch step
-        type: jump
-        toStep: 16
-      - stepNumber: 20
-        label: resolvePortal
-        description: >-
-          Look the target portal up; a missing or dangling targetComponent is the contracts rule's
-          finding, so such a step is skipped
-        type: branch
-        condition: step.targetComponent is set and resolves in ctx.componentMap
-        onFalseStep: 16
-      - stepNumber: 21
-        description: Only a Portal's dispatch table can resolve a capability to a server
-        type: branch
-        condition: portal is not a Portal or declares no dispatch table
-        onFalseStep: 24
-      - stepNumber: 22
-        description: >-
-          Report UNSERVED_CAPABILITY (error; draft context when ctx.isImplementationDraft(impl) or
-          ctx.isComponentDraft(portal.id)) on impl.id: the target is not a Portal, or declares no
-          dispatch table
-        type: local
-      - stepNumber: 23
-        description: Continue with the next dispatch step
-        type: jump
-        toStep: 16
-      - stepNumber: 24
-        label: findBinding
-        description: Look the capability up in the portal's dispatch table
-        type: branch
-        condition: portal.dispatch has no binding for step.capability
-        onFalseStep: 27
-      - stepNumber: 25
-        description: >-
-          Report UNSERVED_CAPABILITY (error; draft context when ctx.isImplementationDraft(impl) or
-          ctx.isComponentDraft(portal.id)) on impl.id: the portal does not serve the capability,
-          listing the capabilities it declares
-        type: local
-      - stepNumber: 26
-        description: Continue with the next dispatch step
-        type: jump
-        toStep: 16
-      - stepNumber: 27
-        label: checkBoundMethod
-        description: >-
-          A guarantee is judged against the method the binding names, boundMethod: the method of
-          ctx.interfaceMethodsOf(binding.component) named binding.method. A binding naming a missing
-          component or method is the table side's UNSERVED_CAPABILITY, and a guarantee cannot be
-          judged against a method that does not exist, so the step's guarantees are left unjudged
-        type: branch
-        condition: boundMethod exists
-        onFalseStep: 16
-      - stepNumber: 28
-        label: checkGuarantees
-        description: Check each asserted guarantee g against the guarantees boundMethod declares
-        type: loop
-        loopKind: forEach
-        over: step.assertsGuarantees (none when the step asserts no guarantee)
-        endStep: 30
-      - stepNumber: 29
-        description: The same consistency check call steps get
-        type: branch
-        condition: g is not among the bound method's declared guarantees
-        onFalseStep: 28
-      - stepNumber: 30
-        label: stepsEnd
-        description: >-
-          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context when
-          ctx.isImplementationDraft(impl) or ctx.isComponentDraft(binding.component)) on impl.id,
-          naming the guarantee, the capability and the bound component and method
-        type: local
-    symbol: check
   - name: lifecycleEntrypoints
     sourcePath: src/core/rules/wiring/lifecycle-entrypoints.ts
     narrative:
@@ -778,14 +598,202 @@ methods:
         type: return
         outcome: the first cycle through a component in scope is reported
     symbol: check
+  - name: dispatchTableBindings
+    sourcePath: src/core/rules/wiring/dispatch-table-bindings.ts
+    narrative:
+      - stepNumber: 1
+        label: tables
+        description: >-
+          Capability dispatch is a Portal responsibility, so check the stereotype of each component
+          that declares a table
+        type: loop
+        loopKind: forEach
+        over: the components comp of ctx.components that declare a non-empty dispatch table
+        endStep: 3
+      - stepNumber: 2
+        description: The component declaring the table is not a Portal
+        type: branch
+        condition: comp.componentType is not Portal
+        onFalseStep: 1
+      - stepNumber: 3
+        label: tablesEnd
+        description: >-
+          Report DISPATCH_ON_NON_PORTAL (error; draft context from ctx.isComponentDraft(comp.id)) on
+          comp.id, naming its componentType
+        type: local
+      - stepNumber: 4
+        label: bindings
+        description: Check every binding the tables declare
+        type: loop
+        loopKind: forEach
+        over: >-
+          every binding b of every component comp of ctx.components that declares a non-empty
+          dispatch table, tracking the capabilities seen so far within comp's own table
+        endStep: 15
+      - stepNumber: 5
+        description: A capability bound twice makes runtime routing ambiguous
+        type: branch
+        condition: b.capability was already seen in comp's table
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report DUPLICATE_CAPABILITY (error; draft context from ctx.isComponentDraft(comp.id)) on
+          comp.id, naming the capability
+        type: local
+      - stepNumber: 7
+        label: resolveTarget
+        description: Record b.capability as seen and look the bound component target up in ctx.componentMap
+        type: branch
+        condition: b.component does not resolve
+        onFalseStep: 10
+      - stepNumber: 8
+        description: >-
+          Report UNSERVED_CAPABILITY (error; draft context from ctx.isComponentDraft(comp.id)) on
+          comp.id: the capability is bound to a component that does not exist
+        type: local
+      - stepNumber: 9
+        description: 'A binding with no server has nothing more to check: continue with the next binding'
+        type: jump
+        toStep: 4
+      - stepNumber: 10
+        label: checkMethod
+        description: The bound method must exist on one of the target's contracts
+        type: branch
+        condition: no method in ctx.interfaceMethodsOf(target.id) is named b.method
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Report UNSERVED_CAPABILITY (error; draft context when ctx.isComponentDraft(comp.id) or
+          ctx.isComponentDraft(target.id)) on comp.id: the target declares no such method on any of
+          its interfaces
+        type: local
+      - stepNumber: 12
+        label: checkSubsystem
+        description: A portal dispatches inward, into its own subsystem
+        type: branch
+        condition: target.subsystem is not comp.subsystem
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Report DISPATCH_CROSS_SUBSYSTEM (error; draft context when ctx.isComponentDraft(comp.id)
+          or ctx.isComponentDraft(target.id)) on comp.id, naming both subsystems
+        type: local
+      - stepNumber: 14
+        label: checkDeclared
+        description: The table is a runtime invocation path, so the portal must declare the edge
+        type: branch
+        condition: target is not comp itself and neither comp.dependsOn nor comp.owns lists target.id
+        onFalseStep: 4
+      - stepNumber: 15
+        label: bindingsEnd
+        description: >-
+          Report UNDECLARED_DISPATCH_TARGET (error; draft context when ctx.isComponentDraft(comp.id)
+          or ctx.isComponentDraft(target.id)) on comp.id: the target is not listed under dependsOn
+          or owns
+        type: local
+    symbol: check
+  - name: dispatchStepRouting
+    sourcePath: src/core/rules/wiring/dispatch-step-routing.ts
+    narrative:
+      - stepNumber: 1
+        label: steps
+        description: Check each dispatch step of each narrative
+        type: loop
+        loopKind: forEach
+        over: >-
+          the dispatch steps of every method narrative of every implementation impl in
+          ctx.implementations
+        endStep: 15
+      - stepNumber: 2
+        description: A dispatch step must name the capability it routes
+        type: branch
+        condition: step.capability is missing
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Report MALFORMED_DISPATCH_STEP (error; draft context from ctx.isImplementationDraft(impl))
+          on impl.id, naming the method and the step number
+        type: local
+      - stepNumber: 4
+        description: Continue with the next dispatch step
+        type: jump
+        toStep: 1
+      - stepNumber: 5
+        label: resolvePortal
+        description: >-
+          Look the target portal up; a missing or dangling targetComponent is the contracts rule's
+          finding, so such a step is skipped
+        type: branch
+        condition: step.targetComponent is set and resolves in ctx.componentMap
+        onFalseStep: 1
+      - stepNumber: 6
+        description: Only a Portal's dispatch table can resolve a capability to a server
+        type: branch
+        condition: portal is not a Portal or declares no dispatch table
+        onFalseStep: 9
+      - stepNumber: 7
+        description: >-
+          Report UNSERVED_CAPABILITY (error; draft context when ctx.isImplementationDraft(impl) or
+          ctx.isComponentDraft(portal.id)) on impl.id: the target is not a Portal, or declares no
+          dispatch table
+        type: local
+      - stepNumber: 8
+        description: Continue with the next dispatch step
+        type: jump
+        toStep: 1
+      - stepNumber: 9
+        label: findBinding
+        description: Look the capability up in the portal's dispatch table
+        type: branch
+        condition: portal.dispatch has no binding for step.capability
+        onFalseStep: 12
+      - stepNumber: 10
+        description: >-
+          Report UNSERVED_CAPABILITY (error; draft context when ctx.isImplementationDraft(impl) or
+          ctx.isComponentDraft(portal.id)) on impl.id: the portal does not serve the capability,
+          listing the capabilities it declares
+        type: local
+      - stepNumber: 11
+        description: Continue with the next dispatch step
+        type: jump
+        toStep: 1
+      - stepNumber: 12
+        label: checkBoundMethod
+        description: >-
+          A guarantee is judged against the method the binding names, boundMethod: the method of
+          ctx.interfaceMethodsOf(binding.component) named binding.method. A binding naming a missing
+          component or method is the table side's UNSERVED_CAPABILITY, and a guarantee cannot be
+          judged against a method that does not exist, so the step's guarantees are left unjudged
+        type: branch
+        condition: boundMethod exists
+        onFalseStep: 1
+      - stepNumber: 13
+        label: guarantees
+        description: Check each asserted guarantee g against the guarantees boundMethod declares
+        type: loop
+        loopKind: forEach
+        over: step.assertsGuarantees (none when the step asserts no guarantee)
+        endStep: 15
+      - stepNumber: 14
+        description: The same consistency check call steps get
+        type: branch
+        condition: g is not among the bound method's declared guarantees
+        onFalseStep: 13
+      - stepNumber: 15
+        label: stepsEnd
+        description: >-
+          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context when
+          ctx.isImplementationDraft(impl) or ctx.isComponentDraft(binding.component)) on impl.id,
+          naming the guarantee, the capability and the bound component and method
+        type: local
+    symbol: check
 lint:
   allow:
     - code: NARRATIVE_COMPLEXITY
       reason: >-
-        D2b splits the narratives this reports (dispatchTables, unusedDetection, proseClaims, and
-        invariantBacking); the doctrine's own rules are the worst offenders and go first.
-    - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits dispatchTables, which lists more than 25 steps.
+        D2b splits the narratives this still reports (unusedDetection and invariantBacking);
+        dispatchTables has already been split into dispatch-table-bindings and
+        dispatch-step-routing.
 status: draft
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-17T17:53:05.278Z'
+updatedAt: '2026-09-17T22:00:18.030Z'

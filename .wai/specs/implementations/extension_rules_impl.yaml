@@ -8,185 +8,6 @@ description: >-
 contract: iextension_rules
 simPath: tests/core/validation.test.ts
 methods:
-  - name: architecturalProfiles
-    sourcePath: src/core/rules/extension/architectural-profiles.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Build the registered profile set: the built-in profile ids (BUILTIN_PROFILES) unioned with
-          the keys of ctx.ext.profiles (pack-registered profiles).
-        type: local
-      - stepNumber: 2
-        description: Walk every loaded subsystem, checking its declared profile.
-        type: loop
-        loopKind: forEach
-        over: ctx.subsystems
-        endStep: 5
-      - stepNumber: 3
-        description: A subsystem declares a profile that is neither built-in nor pack-registered.
-        type: branch
-        condition: sub.profile is declared and is not a member of the registered set
-        onFalseStep: 5
-      - stepNumber: 4
-        description: >-
-          Report UNKNOWN_PROFILE (warning) naming the subsystem's declared profile as neither a
-          built-in profile nor registered by a loaded pack, so no profile doctrine governs it;
-          specId = sub.id, no draft-context argument.
-        type: local
-      - stepNumber: 5
-        label: sub_done
-        description: This subsystem is processed.
-        type: local
-      - stepNumber: 6
-        description: >-
-          The project's own projectType (project.yaml) must itself be a legal profile or composite
-          kind.
-        type: branch
-        condition: >-
-          ctx.projectType is not in the registered set and is not one of the composite PROJECT_KINDS
-          (fullstack, system-of-systems, monorepo)
-        onFalseStep: 8
-      - stepNumber: 7
-        description: >-
-          Report UNKNOWN_PROFILE (warning) naming projectType as neither a built-in profile/kind nor
-          pack-registered; components default to backend doctrine. No specId, no draft-context
-          argument.
-        type: local
-      - stepNumber: 8
-        label: comp_loop
-        description: Walk every loaded component, judging it against its governing profile's doctrine.
-        type: loop
-        loopKind: forEach
-        over: ctx.components
-        endStep: 31
-      - stepNumber: 9
-        description: >-
-          ctx.isComponentDraft(comp.id) — capture isDraftCtx for this component, used by every
-          finding below.
-        type: local
-      - stepNumber: 10
-        description: >-
-          ctx.getComponentProfile(comp.id) — the profile governing this component (its subsystem's
-          override, else the project type).
-        type: local
-      - stepNumber: 11
-        description: >-
-          Look up packDef = ctx.ext.profiles[profile]. Compute family: packDef.family when a pack
-          registers this profile; else 'frontend-like' when profile is one of the built-in
-          frontend-like profiles (frontend-reactive, frontend-controller); else 'backend-like' when
-          profile is one of the built-in backend-like profiles (backend, lowlevel-os, game-ecs,
-          realtime-embedded, plc-cyclic); else 'neutral' (an already-flagged unknown profile with no
-          doctrine to guess).
-        type: local
-      - stepNumber: 12
-        description: The governing profile's family is backend-like.
-        type: branch
-        condition: family is 'backend-like'
-        onFalseStep: 19
-      - stepNumber: 13
-        description: A backend-like profile forbids frontend view/routing stereotypes.
-        type: branch
-        condition: comp.componentType is one of View, FeatureComponent, RouterComponent
-        onFalseStep: 15
-      - stepNumber: 14
-        description: >-
-          Report FRONTEND_STEREOTYPE_IN_BACKEND (error; draft context from isDraftCtx) naming the
-          component's frontend stereotype and its backend-oriented subsystem.
-        type: local
-      - stepNumber: 15
-        label: check_plc
-        description: >-
-          The PLC-cyclic profile additionally forbids concurrent stereotypes (the runtime is a
-          single scan cycle).
-        type: branch
-        condition: profile is 'plc-cyclic'
-        onFalseStep: 22
-      - stepNumber: 16
-        description: Actor and Supervisor are concurrent stereotypes, incompatible with a single scan cycle.
-        type: branch
-        condition: comp.componentType is Actor or Supervisor
-        onFalseStep: 22
-      - stepNumber: 17
-        description: >-
-          Report PLC_CYCLIC_CONCURRENCY_VIOLATION (error; draft context from isDraftCtx) naming the
-          concurrent stereotype forbidden in the PLC-cyclic profile's single execution scan cycle.
-        type: local
-      - stepNumber: 18
-        description: >-
-          Backend-like handled — skip the frontend-like check entirely (the two families are
-          mutually exclusive).
-        type: jump
-        toStep: 22
-      - stepNumber: 19
-        label: check_frontend_like
-        description: The governing profile's family is frontend-like.
-        type: branch
-        condition: family is 'frontend-like'
-        onFalseStep: 22
-      - stepNumber: 20
-        description: A frontend-like profile warns on backend runtime stereotypes.
-        type: branch
-        condition: comp.componentType is Supervisor or Actor
-        onFalseStep: 22
-      - stepNumber: 21
-        description: >-
-          Report BACKEND_STEREOTYPE_IN_FRONTEND (warning; draft context from isDraftCtx) naming the
-          component's backend stereotype inside a frontend subsystem, asking to confirm the concern
-          is genuinely client-side.
-        type: local
-      - stepNumber: 22
-        label: after_family_if
-        description: >-
-          A loaded pack may govern this profile with its own doctrine, applied on top of the family
-          fencing.
-        type: branch
-        condition: packDef is defined (a loaded pack registers this profile)
-        onFalseStep: 31
-      - stepNumber: 23
-        description: Check the pack's forbidden-stereotype rules for this profile.
-        type: loop
-        loopKind: forEach
-        over: packDef.forbiddenStereotypes
-        endStep: 26
-      - stepNumber: 24
-        description: This forbidden-stereotype rule names the component's stereotype.
-        type: branch
-        condition: rule.types includes comp.componentType
-        onFalseStep: 26
-      - stepNumber: 25
-        description: >-
-          Report PROFILE_FORBIDDEN_STEREOTYPE (error; draft context from isDraftCtx) naming the
-          component's stereotype, the governing profile and the pack rule's stated reason.
-        type: local
-      - stepNumber: 26
-        label: forbidden_done
-        description: This forbidden-stereotype rule is processed.
-        type: local
-      - stepNumber: 27
-        description: Check the pack's discouraged-stereotype rules for this profile.
-        type: loop
-        loopKind: forEach
-        over: packDef.discouragedStereotypes
-        endStep: 30
-      - stepNumber: 28
-        description: This discouraged-stereotype rule names the component's stereotype.
-        type: branch
-        condition: rule.types includes comp.componentType
-        onFalseStep: 30
-      - stepNumber: 29
-        description: >-
-          Report PROFILE_DISCOURAGED_STEREOTYPE (warning; draft context from isDraftCtx) naming the
-          component's stereotype, the governing profile and the pack rule's stated reason.
-        type: local
-      - stepNumber: 30
-        label: discouraged_done
-        description: This discouraged-stereotype rule is processed.
-        type: local
-      - stepNumber: 31
-        label: comp_done
-        description: This component is processed.
-        type: local
-    symbol: check
   - name: patternReferences
     sourcePath: src/core/rules/extension/pattern-references.ts
     narrative:
@@ -667,14 +488,207 @@ methods:
         description: This selection is processed.
         type: local
     symbol: check
+  - name: profileRegistration
+    sourcePath: src/core/rules/extension/profile-registration.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the registered profile set: the built-in profile ids (BUILTIN_PROFILES) unioned with
+          the keys of ctx.ext.profiles (pack-registered profiles).
+        type: local
+      - stepNumber: 2
+        description: >-
+          The project's own projectType (project.yaml) must itself be a legal profile or composite
+          kind.
+        type: branch
+        condition: >-
+          ctx.projectType is not in the registered set and is not one of the composite PROJECT_KINDS
+          (fullstack, system-of-systems, monorepo)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report UNKNOWN_PROFILE (warning) naming projectType as neither a built-in profile/kind nor
+          pack-registered; components default to backend doctrine. No specId, no draft-context
+          argument.
+        type: local
+      - stepNumber: 4
+        label: subsystems
+        description: Walk every loaded subsystem, checking its declared profile.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 6
+      - stepNumber: 5
+        description: A subsystem declares a profile that is neither built-in nor pack-registered.
+        type: branch
+        condition: sub.profile is declared and is not a member of the registered set
+        onFalseStep: 4
+      - stepNumber: 6
+        label: subsystemsEnd
+        description: >-
+          Report UNKNOWN_PROFILE (warning) naming the subsystem's declared profile as neither a
+          built-in profile nor registered by a loaded pack, so no profile doctrine governs it;
+          specId = sub.id, no draft-context argument.
+        type: local
+    symbol: check
+  - name: profileStereotypeFencing
+    sourcePath: src/core/rules/extension/profile-stereotype-fencing.ts
+    narrative:
+      - stepNumber: 1
+        label: components
+        description: >-
+          Walk every loaded component, judging it against the doctrine of its governing profile's
+          family.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 13
+      - stepNumber: 2
+        description: >-
+          ctx.isComponentDraft(comp.id) — capture isDraftCtx for this component, used by every
+          finding below.
+        type: local
+      - stepNumber: 3
+        description: >-
+          profile = ctx.getComponentProfile(comp.id) (its subsystem's override, else the project
+          type); packDef = ctx.ext.profiles[profile]. Compute family: packDef.family when a pack
+          registers this profile; else 'frontend-like' when profile is one of the built-in
+          frontend-like profiles (frontend-reactive, frontend-controller); else 'backend-like' when
+          profile is one of the built-in backend-like profiles (backend, lowlevel-os, game-ecs,
+          realtime-embedded, plc-cyclic); else 'neutral' (an unknown profile, which
+          profile-registration flags — no doctrine to guess).
+        type: local
+      - stepNumber: 4
+        description: The governing profile's family is backend-like.
+        type: branch
+        condition: family is 'backend-like'
+        onFalseStep: 11
+      - stepNumber: 5
+        description: A backend-like profile forbids frontend view/routing stereotypes.
+        type: branch
+        condition: comp.componentType is one of View, FeatureComponent, RouterComponent
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report FRONTEND_STEREOTYPE_IN_BACKEND (error; draft context from isDraftCtx) naming the
+          component's frontend stereotype and its backend-oriented subsystem.
+        type: local
+      - stepNumber: 7
+        label: checkPlc
+        description: >-
+          The PLC-cyclic profile additionally forbids concurrent stereotypes (the runtime is a
+          single scan cycle).
+        type: branch
+        condition: profile is 'plc-cyclic'
+        onFalseStep: 1
+      - stepNumber: 8
+        description: Actor and Supervisor are concurrent stereotypes, incompatible with a single scan cycle.
+        type: branch
+        condition: comp.componentType is Actor or Supervisor
+        onFalseStep: 1
+      - stepNumber: 9
+        description: >-
+          Report PLC_CYCLIC_CONCURRENCY_VIOLATION (error; draft context from isDraftCtx) naming the
+          concurrent stereotype forbidden in the PLC-cyclic profile's single execution scan cycle.
+        type: local
+      - stepNumber: 10
+        description: >-
+          Backend-like handled — skip the frontend-like check entirely (the two families are
+          mutually exclusive) and continue with the next component.
+        type: jump
+        toStep: 1
+      - stepNumber: 11
+        label: frontendLike
+        description: The governing profile's family is frontend-like.
+        type: branch
+        condition: family is 'frontend-like'
+        onFalseStep: 1
+      - stepNumber: 12
+        description: A frontend-like profile warns on backend runtime stereotypes.
+        type: branch
+        condition: comp.componentType is Supervisor or Actor
+        onFalseStep: 1
+      - stepNumber: 13
+        label: componentsEnd
+        description: >-
+          Report BACKEND_STEREOTYPE_IN_FRONTEND (warning; draft context from isDraftCtx) naming the
+          component's backend stereotype inside a frontend subsystem, asking to confirm the concern
+          is genuinely client-side.
+        type: local
+    symbol: check
+  - name: packProfileStereotypes
+    sourcePath: src/core/rules/extension/pack-profile-stereotypes.ts
+    narrative:
+      - stepNumber: 1
+        label: components
+        description: >-
+          Walk every loaded component, judging it against the doctrine its governing pack profile
+          declares.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 10
+      - stepNumber: 2
+        description: profile = ctx.getComponentProfile(comp.id); packDef = ctx.ext.profiles[profile].
+        type: local
+      - stepNumber: 3
+        description: >-
+          Only a loaded pack that registers this profile carries doctrine of its own; a built-in
+          profile has none to apply here.
+        type: branch
+        condition: packDef is defined
+        onFalseStep: 1
+      - stepNumber: 4
+        description: >-
+          ctx.isComponentDraft(comp.id) — capture isDraftCtx for this component, used by both
+          findings below.
+        type: local
+      - stepNumber: 5
+        label: forbidden
+        description: Check the pack's forbidden-stereotype rules for this profile.
+        type: loop
+        loopKind: forEach
+        over: packDef.forbiddenStereotypes
+        endStep: 7
+      - stepNumber: 6
+        description: This forbidden-stereotype rule names the component's stereotype.
+        type: branch
+        condition: rule.types includes comp.componentType
+        onFalseStep: 5
+      - stepNumber: 7
+        label: forbiddenEnd
+        description: >-
+          Report PROFILE_FORBIDDEN_STEREOTYPE (error; draft context from isDraftCtx) naming the
+          component's stereotype, the governing profile and the pack rule's stated reason.
+        type: local
+      - stepNumber: 8
+        label: discouraged
+        description: Check the pack's discouraged-stereotype rules for this profile.
+        type: loop
+        loopKind: forEach
+        over: packDef.discouragedStereotypes
+        endStep: 10
+      - stepNumber: 9
+        description: This discouraged-stereotype rule names the component's stereotype.
+        type: branch
+        condition: rule.types includes comp.componentType
+        onFalseStep: 8
+      - stepNumber: 10
+        label: componentsEnd
+        description: >-
+          Report PROFILE_DISCOURAGED_STEREOTYPE (warning; draft context from isDraftCtx) naming the
+          component's stereotype, the governing profile and the pack rule's stated reason.
+        type: local
+    symbol: check
 lint:
   allow:
     - code: NARRATIVE_COMPLEXITY
       reason: >-
-        D2b splits the narratives this reports (architecturalProfiles, patternReferences, and
-        declarativeAssertions); the doctrine's own rules are the worst offenders and go first.
+        D2b splits the narrative this still reports (declarativeAssertions); architecturalProfiles
+        has already been split into profile-registration, profile-stereotype-fencing and
+        pack-profile-stereotypes.
     - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits architecturalProfiles and declarativeAssertions, which list more than 25 steps.
+      reason: D2b splits declarativeAssertions, which lists more than 25 steps.
 status: draft
 createdAt: '2026-09-14T23:15:33.948Z'
-updatedAt: '2026-09-17T17:52:45.797Z'
+updatedAt: '2026-09-17T22:00:23.806Z'

@@ -30,237 +30,262 @@ methods:
         targetComponent: integrity_rules
         targetMethod: roundtripSerialization
       - stepNumber: 5
-        description: Register type-references
+        description: Register type-declarations
         type: register
         targetComponent: integrity_rules
-        targetMethod: typeReferences
+        targetMethod: typeDeclarations
       - stepNumber: 6
+        description: Register field-type-references
+        type: register
+        targetComponent: integrity_rules
+        targetMethod: fieldTypeReferences
+      - stepNumber: 7
+        description: Register signature-type-references
+        type: register
+        targetComponent: integrity_rules
+        targetMethod: signatureTypeReferences
+      - stepNumber: 8
         description: Register contract-symmetry-and-narratives
         type: register
         targetComponent: narrative_rules
         targetMethod: contractSymmetryAndNarratives
-      - stepNumber: 7
+      - stepNumber: 9
         description: Register guarantee-tokens
         type: register
         targetComponent: narrative_rules
         targetMethod: guaranteeTokens
-      - stepNumber: 8
+      - stepNumber: 10
         description: Register narrative-flow
         type: register
         targetComponent: narrative_rules
         targetMethod: narrativeFlow
-      - stepNumber: 9
+      - stepNumber: 11
         description: Register narrative-antipatterns
         type: register
         targetComponent: narrative_rules
         targetMethod: narrativeAntipatterns
-      - stepNumber: 10
+      - stepNumber: 12
         description: Register narrative-detail
         type: register
         targetComponent: narrative_rules
         targetMethod: narrativeDetail
-      - stepNumber: 11
+      - stepNumber: 13
         description: Register portal-fields
         type: register
         targetComponent: intrinsic_rules
         targetMethod: portalFields
-      - stepNumber: 12
+      - stepNumber: 14
         description: Register portal-endpoints
         type: register
         targetComponent: doctrine_rules
         targetMethod: portalEndpoints
-      - stepNumber: 13
+      - stepNumber: 15
         description: Register portal-call-auth
         type: register
         targetComponent: doctrine_rules
         targetMethod: portalCallAuth
-      - stepNumber: 14
+      - stepNumber: 16
         description: Register stereotype-dependencies
         type: register
         targetComponent: doctrine_rules
         targetMethod: stereotypeDependencies
-      - stepNumber: 15
+      - stepNumber: 17
         description: Register pattern-ownership
         type: register
         targetComponent: doctrine_rules
         targetMethod: patternOwnership
-      - stepNumber: 16
+      - stepNumber: 18
         description: Register facade-forwarding
         type: register
         targetComponent: doctrine_rules
         targetMethod: facadeForwarding
-      - stepNumber: 17
-        description: Register architectural-profiles
+      - stepNumber: 19
+        description: Register profile-registration
         type: register
         targetComponent: extension_rules
-        targetMethod: architecturalProfiles
-      - stepNumber: 18
+        targetMethod: profileRegistration
+      - stepNumber: 20
+        description: Register profile-stereotype-fencing
+        type: register
+        targetComponent: extension_rules
+        targetMethod: profileStereotypeFencing
+      - stepNumber: 21
+        description: Register pack-profile-stereotypes
+        type: register
+        targetComponent: extension_rules
+        targetMethod: packProfileStereotypes
+      - stepNumber: 22
         description: Register pattern-references
         type: register
         targetComponent: extension_rules
         targetMethod: patternReferences
-      - stepNumber: 19
+      - stepNumber: 23
         description: Register component-variants
         type: register
         targetComponent: extension_rules
         targetMethod: componentVariants
-      - stepNumber: 20
+      - stepNumber: 24
         description: Register declarative-assertions
         type: register
         targetComponent: extension_rules
         targetMethod: declarativeAssertions
-      - stepNumber: 21
+      - stepNumber: 25
         description: Register public-surface
         type: register
         targetComponent: integrity_rules
         targetMethod: publicSurface
-      - stepNumber: 22
+      - stepNumber: 26
         description: Register dependency-cycles
         type: register
         targetComponent: wiring_rules
         targetMethod: dependencyCycles
-      - stepNumber: 23
-        description: Register dispatch-tables
+      - stepNumber: 27
+        description: Register dispatch-table-bindings
         type: register
         targetComponent: wiring_rules
-        targetMethod: dispatchTables
-      - stepNumber: 24
+        targetMethod: dispatchTableBindings
+      - stepNumber: 28
+        description: Register dispatch-step-routing
+        type: register
+        targetComponent: wiring_rules
+        targetMethod: dispatchStepRouting
+      - stepNumber: 29
         description: Register lifecycle-entrypoints
         type: register
         targetComponent: wiring_rules
         targetMethod: lifecycleEntrypoints
-      - stepNumber: 25
+      - stepNumber: 30
         description: Register unused-detection
         type: register
         targetComponent: wiring_rules
         targetMethod: unusedDetection
-      - stepNumber: 26
+      - stepNumber: 31
         description: Register durability-declaration
         type: register
         targetComponent: intrinsic_rules
         targetMethod: durabilityDeclaration
-      - stepNumber: 27
+      - stepNumber: 32
         description: Register logic-declaration
         type: register
         targetComponent: intrinsic_rules
         targetMethod: logicDeclaration
-      - stepNumber: 28
+      - stepNumber: 33
         description: Register retired-stereotypes
         type: register
         targetComponent: intrinsic_rules
         targetMethod: retiredStereotypes
-      - stepNumber: 29
+      - stepNumber: 34
         description: Register durability-round-trip
         type: register
         targetComponent: wiring_rules
         targetMethod: durabilityRoundTrip
-      - stepNumber: 30
+      - stepNumber: 35
         description: Register untyped-seams
         type: register
         targetComponent: wiring_rules
         targetMethod: untypedSeams
-      - stepNumber: 31
+      - stepNumber: 36
         description: Register prose-claims
         type: register
         targetComponent: wiring_rules
         targetMethod: proseClaims
-      - stepNumber: 32
+      - stepNumber: 37
         description: Register invariant-backing
         type: register
         targetComponent: wiring_rules
         targetMethod: invariantBacking
-      - stepNumber: 33
+      - stepNumber: 38
         description: Register event-topology
         type: register
         targetComponent: wiring_rules
         targetMethod: eventTopology
-      - stepNumber: 34
+      - stepNumber: 39
         description: Register structural-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: structuralConformance
-      - stepNumber: 35
+      - stepNumber: 40
         description: Register call-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: callConformance
-      - stepNumber: 36
+      - stepNumber: 41
         description: Register hidden-state
         type: register
         targetComponent: conformance_rules
         targetMethod: hiddenState
-      - stepNumber: 37
+      - stepNumber: 42
         description: Register dependency-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: dependencyConformance
-      - stepNumber: 38
+      - stepNumber: 43
         description: Register integration-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: integrationConformance
-      - stepNumber: 39
+      - stepNumber: 44
         description: Register coupling-health
         type: register
         targetComponent: heuristic_rules
         targetMethod: couplingHealth
-      - stepNumber: 40
+      - stepNumber: 45
         description: Register target-language
         type: register
         targetComponent: heuristic_rules
         targetMethod: targetLanguage
-      - stepNumber: 41
+      - stepNumber: 46
         description: Register technology-boundaries
         type: register
         targetComponent: heuristic_rules
         targetMethod: technologyBoundaries
-      - stepNumber: 42
+      - stepNumber: 47
         description: Register naming-conventions
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingConventions
-      - stepNumber: 43
+      - stepNumber: 48
         description: Register complexity-and-metadata
         type: register
         targetComponent: heuristic_rules
         targetMethod: complexityAndMetadata
-      - stepNumber: 44
+      - stepNumber: 49
         description: Register narrative-complexity
         type: register
         targetComponent: heuristic_rules
         targetMethod: narrativeComplexity
-      - stepNumber: 45
+      - stepNumber: 50
         description: Register naming-discipline
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingDiscipline
-      - stepNumber: 46
+      - stepNumber: 51
         description: Register method-cohesion
         type: register
         targetComponent: heuristic_rules
         targetMethod: methodCohesion
-      - stepNumber: 47
+      - stepNumber: 52
         description: Register pack-resolution
         type: register
         targetComponent: extension_rules
         targetMethod: packResolution
-      - stepNumber: 48
+      - stepNumber: 53
         description: Register pack-reproducibility
         type: register
         targetComponent: extension_rules
         targetMethod: packReproducibility
-      - stepNumber: 49
+      - stepNumber: 54
         description: Register lint-allows (the rule index later moves it after any pack rules)
         type: register
         targetComponent: integrity_rules
         targetMethod: lintAllows
-      - stepNumber: 50
+      - stepNumber: 55
         description: For each registered built-in rule, in that order
         type: loop
         loopKind: forEach
         over: the registered built-in rules
-        endStep: 51
-      - stepNumber: 51
+        endStep: 56
+      - stepNumber: 56
         label: append-builtin
         description: Append the rule to the store
         type: call
@@ -289,4 +314,4 @@ lint:
       reason: D2b splits registerBuiltinRules, which lists more than 25 steps.
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-09-17T17:53:01.233Z'
+updatedAt: '2026-09-17T21:58:59.519Z'

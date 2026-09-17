@@ -7,14 +7,30 @@ description: >-
   resolve and apply, and pack selections resolve and are pinned.
 component: extension_rules
 methods:
-  - name: architecturalProfiles
+  - name: profileRegistration
     description: >-
-      Rule architectural-profiles. Per-profile stereotype constraints:
-      View/FeatureComponent/RouterComponent only in frontend profiles; Actor/Supervisor forbidden in
-      plc-cyclic (single scan cycle); Actor/Supervisor in frontend profiles warned. Extension packs
-      may register custom profiles (family + forbidden/discouraged stereotype lists); unknown
-      profile names are flagged.
-    signature: 'architecturalProfiles(ctx: RuleContext): void'
+      Rule profile-registration. Every profile name in play — the project's own projectType and each
+      subsystem's declared profile — must be a built-in profile, a composite project kind, or one a
+      loaded extension pack registers. An unregistered name is flagged rather than guessed at: no
+      doctrine is governing it.
+    signature: 'profileRegistration(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNKNOWN_PROFILE
+        severity: warning
+        summary: Profile name is neither built-in nor registered by an extension pack
+  - name: profileStereotypeFencing
+    description: >-
+      Rule profile-stereotype-fencing. The built-in profile families fence which stereotypes may run
+      under them: View/FeatureComponent/RouterComponent only in a frontend-like profile;
+      Actor/Supervisor forbidden in plc-cyclic, whose logic runs single-threaded inside one
+      execution scan cycle; Actor/Supervisor in a frontend-like profile warned. A pack profile opts
+      in by declaring its family; an unregistered profile is neutral, with no doctrine to guess.
+    signature: 'profileStereotypeFencing(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -30,15 +46,24 @@ methods:
       - code: BACKEND_STEREOTYPE_IN_FRONTEND
         severity: warning
         summary: Backend runtime stereotype in a frontend subsystem
+  - name: packProfileStereotypes
+    description: >-
+      Rule pack-profile-stereotypes. A pack-registered profile carries its own stereotype doctrine
+      on top of the built-in family fencing: the stereotypes it lists as forbidden are errors and
+      the ones it discourages are warnings, each reported with the reason the pack states for it.
+    signature: 'packProfileStereotypes(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: PROFILE_FORBIDDEN_STEREOTYPE
         severity: error
         summary: Stereotype forbidden by the governing pack-defined profile
       - code: PROFILE_DISCOURAGED_STEREOTYPE
         severity: warning
         summary: Stereotype discouraged by the governing pack-defined profile
-      - code: UNKNOWN_PROFILE
-        severity: warning
-        summary: Profile name is neither built-in nor registered by an extension pack
   - name: patternReferences
     description: >-
       Rule pattern-references. Every component pattern reference resolves to a reusable pattern
@@ -147,4 +172,4 @@ methods:
         summary: Pack selection is neither bundled nor obtainable from a recorded source
 status: draft
 createdAt: '2026-09-14T06:07:43.654Z'
-updatedAt: '2026-09-17T17:47:44.823Z'
+updatedAt: '2026-09-17T21:55:33.283Z'

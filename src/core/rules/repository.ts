@@ -3,7 +3,9 @@ import { SddRule, RuleCode } from './types.js';
 import { hierarchyRule } from './integrity/hierarchy-integrity.js';
 import { namespaceHygieneRule } from './integrity/namespace-hygiene.js';
 import { roundtripRule } from './integrity/roundtrip-serialization.js';
-import { typeReferencesRule } from './integrity/type-references.js';
+import { typeDeclarationsRule } from './integrity/type-declarations.js';
+import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
+import { signatureTypeReferencesRule } from './integrity/signature-type-references.js';
 import { publicSurfaceRule } from './integrity/public-surface.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { contractsRule } from './narrative/contract-symmetry-and-narratives.js';
@@ -20,14 +22,17 @@ import { portalCallAuthRule } from './doctrine/portal-call-auth.js';
 import { stereotypeDepsRule } from './doctrine/stereotype-dependencies.js';
 import { patternsRule } from './doctrine/pattern-ownership.js';
 import { facadeForwardingRule } from './doctrine/facade-forwarding.js';
-import { profilesRule } from './extension/architectural-profiles.js';
+import { profileRegistrationRule } from './extension/profile-registration.js';
+import { profileStereotypeFencingRule } from './extension/profile-stereotype-fencing.js';
+import { packProfileStereotypesRule } from './extension/pack-profile-stereotypes.js';
 import { patternReferencesRule } from './extension/pattern-references.js';
 import { variantReferencesRule } from './extension/component-variants.js';
 import { declarativeAssertionsRule } from './extension/declarative-assertions.js';
 import { packResolutionRule } from './extension/pack-resolution.js';
 import { reproducibilityRule } from './extension/pack-reproducibility.js';
 import { cyclesRule } from './wiring/dependency-cycles.js';
-import { dispatchRule } from './wiring/dispatch-tables.js';
+import { dispatchTableBindingsRule } from './wiring/dispatch-table-bindings.js';
+import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
 import { lifecycleRule } from './wiring/lifecycle-entrypoints.js';
 import { reachabilityRule } from './wiring/unused-detection.js';
 import { durabilityRule } from './wiring/durability-round-trip.js';
@@ -68,7 +73,12 @@ export const SDD_RULES: SddRule[] = [
   // explain many downstream findings, so surface them early in the list.
   namespaceHygieneRule,
   roundtripRule,
-  typeReferencesRule,
+  // The type vocabulary in three questions: what a type declares about
+  // itself, then the identifiers its fields name, then the ones its
+  // contracts' signatures name.
+  typeDeclarationsRule,
+  fieldTypeReferencesRule,
+  signatureTypeReferencesRule,
   contractsRule,
   // Vocabulary check right after contracts: an unknown token explains why the
   // consistency findings around it are absent, so surface them together.
@@ -90,7 +100,12 @@ export const SDD_RULES: SddRule[] = [
   patternsRule,
   // Facade shape rides with pattern ownership: same §7 doctrine, narrative side.
   facadeForwardingRule,
-  profilesRule,
+  // Profiles in three questions, three owners: is the name real (the
+  // project's config), does the built-in family doctrine allow this
+  // stereotype (wairon), does the pack's declared doctrine allow it (the pack).
+  profileRegistrationRule,
+  profileStereotypeFencingRule,
+  packProfileStereotypesRule,
   patternReferencesRule,
   variantReferencesRule,
   // Pack-instantiated declarative doctrine rides with the pack-reference
@@ -101,7 +116,8 @@ export const SDD_RULES: SddRule[] = [
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
   // reader sees the broken edge finding next to the unused-detection fallout
   // it explains.
-  dispatchRule,
+  dispatchTableBindingsRule,
+  dispatchStepRoutingRule,
   lifecycleRule,
   reachabilityRule,
   // The declaration (spec-scoped, refused at the write boundary) before the

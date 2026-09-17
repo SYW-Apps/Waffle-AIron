@@ -410,6 +410,26 @@ shared. Findings a tree did not see before come first, because `validate --ci` c
 - **The standard:** §3, §7, §8, §10 and §12 teach the model above, the language bindings add the module-of-functions
   form, and a live auction is the worked example.
 
+### One rule, one question: rule methods that were several rules are split
+
+The complexity dial the section below adds turned on wairon's own validator family and found rule methods that were not
+one rule at all: one method, several finding codes, several independent loops, and a narrative nobody could hold in
+their head. Splitting them makes each rule a thing a user can name in `wairon rules list`, in a `lint.allow` reason or
+in a bug report, and drops each narrative under the `complex` band. Every finding code is preserved exactly — no code
+is added, removed or re-graded — so no `sddRuleSeverity` override, no `lint.allow` keyed on those codes and no rule-matrix
+fixture changes. A code may now be owned by two rules, which is the honest shape where the same sentence is true on both
+sides of a seam.
+
+| was | is | why |
+| --- | --- | --- |
+| `dispatch-tables` | `dispatch-table-bindings` + `dispatch-step-routing` | the table a Portal declares, and the narrative step that routes through it — `UNSERVED_CAPABILITY` means "this capability has no server" on both sides |
+| `type-references` | `type-declarations` + `field-type-references` + `signature-type-references` | what a type declares about itself, and the two places a reference to a missing type actually bites |
+| `architectural-profiles` | `profile-registration` + `profile-stereotype-fencing` + `pack-profile-stereotypes` | three questions with three owners: is the name real (the project's config), does the built-in family doctrine allow this stereotype (wairon), does the pack's own declared doctrine allow it (the pack) |
+
+`profile-registration` also checks the project's own `projectType` before each subsystem's profile rather than after —
+the project-wide question first. On wairon's own tree the split retires `wiring_rules_impl`'s
+`EXCESSIVE_NARRATIVE_STEPS` allow outright — no narrative in that family lists more than 25 steps any more.
+
 ### Complexity, naming and cohesion are checked
 
 Wairon judged a tree's structure but not its readability. A narrative could grow to sixty steps of nested guards, a
