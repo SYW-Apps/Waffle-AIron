@@ -59,7 +59,7 @@ function fieldValue(spec: Record<string, unknown>, field: string): unknown {
 export const declarativeAssertionsRule: SddRule = {
   name: 'declarative-assertions',
   description:
-    'Evaluates the declarative rule assertions loaded packs declare (forbid-edge / require-field / endpoint-shape) — closed kinds instantiated with pack data, the hosted-safe doctrine channel. Findings carry the pack\'s namespaced code (<PACK>_<CODE>) and its stated reason; severity is the pack\'s declaration (project sddRuleSeverity still wins, and error downgrades to warning in draft context).',
+    'Evaluates the declarative rule assertions loaded packs declare (forbid-edge / require-field / endpoint-shape) — closed kinds instantiated with pack data, the hosted-safe doctrine channel. Findings carry the pack\'s namespaced code (<PACK>_<CODE>) and its stated reason; severity is the pack\'s declaration (project sddRuleSeverity still wins, and error downgrades to warning in draft context). The codes are the packs\' own, so no fixed code list applies.',
   // Static codes are unknown here — packs bring their own. The validator
   // gathers every loaded assertion's fullCode into knownIssueCodes.
   codes: [],

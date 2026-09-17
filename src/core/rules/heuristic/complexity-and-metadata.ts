@@ -34,7 +34,7 @@ function checkDescription(
 export const complexityRule: SddRule = {
   name: 'complexity-and-metadata',
   description:
-    'Rule complexity-and-metadata. Enforces metadata documentation completeness (checking if descriptions are missing or too short) and structural complexity caps (limits on methods per interface, parameters per method, dependencies per component, and components per subsystem) configured globally or in architectural profiles. A narrative\'s own length and shape are judged by narrative-complexity.',
+    'Enforces metadata documentation completeness (checking if descriptions are missing or too short) and structural complexity caps (limits on methods per interface, parameters per method, dependencies per component, and components per subsystem) configured globally or in architectural profiles. A narrative\'s own length and shape are judged by narrative-complexity.',
   codes: [
     { code: 'MISSING_DESCRIPTION', defaultSeverity: 'warning', summary: 'Required description field is missing or empty' },
     { code: 'DESCRIPTION_TOO_SHORT', defaultSeverity: 'warning', summary: 'Description is shorter than the configured minimum length' },
