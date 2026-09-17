@@ -208,7 +208,7 @@ export function unbindBackingScope(cfg: HostConfig, credential: string | null, b
 }
 
 export function syncBackingScope(cfg: HostConfig, credential: string | null, bindingId: string): boolean {
-  return gitbacking.syncBackingScope(cfg, credential, bindingId);
+  return gitbacking.syncScope(cfg, credential, bindingId);
 }
 
 // ── audit viewer ──────────────────────────────────────────────────────────────

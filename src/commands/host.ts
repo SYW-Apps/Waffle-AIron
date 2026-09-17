@@ -143,7 +143,7 @@ function envCsv(name: string): string[] {
  * raw secret; an existing stored ref may be named via
  * WAIRON_OIDC_CLIENT_SECRET_REF instead), and UPSERTS the provider through the
  * policy repository — the same store the identity plane's
- * upsertIdentityProvider writes to. Server-side bootstrap: no credential is
+ * upsertProvider writes to. Server-side bootstrap: no credential is
  * involved, and the upsert is idempotent, so every boot re-seeds declaratively
  * (env is the source of truth for the `default` provider; the web UI still
  * manages providers on top). Exported for tests.

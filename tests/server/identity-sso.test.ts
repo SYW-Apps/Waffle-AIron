@@ -363,20 +363,20 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     const editor = tokenWith('project:read', 'instance');
 
     // Editor (not instance-admin) is denied on every IdP admin method.
-    expect(() => identity.upsertIdentityProvider(cfg, editor, providerConfig())).toThrow(ForbiddenError);
-    expect(() => identity.listIdentityProviders(cfg, editor)).toThrow(ForbiddenError);
-    expect(() => identity.removeIdentityProvider(cfg, editor, PROVIDER_ID)).toThrow(ForbiddenError);
+    expect(() => identity.upsertProvider(cfg, editor, providerConfig())).toThrow(ForbiddenError);
+    expect(() => identity.listProviders(cfg, editor)).toThrow(ForbiddenError);
+    expect(() => identity.removeProvider(cfg, editor, PROVIDER_ID)).toThrow(ForbiddenError);
 
     // Admin upsert → stored + idp.upsert (security) audit.
-    const stored = identity.upsertIdentityProvider(cfg, MASTER, providerConfig());
+    const stored = identity.upsertProvider(cfg, MASTER, providerConfig());
     expect(stored.id).toBe(PROVIDER_ID);
-    expect(identity.listIdentityProviders(cfg, MASTER).map((p) => p.id)).toContain(PROVIDER_ID);
+    expect(identity.listProviders(cfg, MASTER).map((p) => p.id)).toContain(PROVIDER_ID);
     const upEvents = auditQuery(dataDir, { action: 'idp.upsert' });
     expect(upEvents).toHaveLength(1);
     expect(upEvents[0].level).toBe('security');
 
     // Admin remove → gone + idp.remove (security) audit.
-    identity.removeIdentityProvider(cfg, MASTER, PROVIDER_ID);
+    identity.removeProvider(cfg, MASTER, PROVIDER_ID);
     expect(listIdentityProviderRecords(dataDir)).toHaveLength(0);
     const rmEvents = auditQuery(dataDir, { action: 'idp.remove' });
     expect(rmEvents).toHaveLength(1);

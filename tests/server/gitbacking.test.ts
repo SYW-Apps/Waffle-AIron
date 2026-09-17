@@ -7,7 +7,7 @@ import {
   listBackingBindings,
   bindScope,
   unbindScope,
-  syncBackingScope,
+  syncScope,
   runPeriodicBackingSync,
   getBinding,
   backingCredentialKey,
@@ -121,7 +121,7 @@ describe('container-level git backing (sdd_host)', () => {
     const stored = bindScope(cfg, MASTER, bindingFor({ scopeKind: 'unit', scopeId: unitId, remote }));
     expect(stored.id).toBeTruthy();
 
-    const published = syncBackingScope(cfg, MASTER, stored.id);
+    const published = syncScope(cfg, MASTER, stored.id);
     expect(published).toBe(true);
     expect(getBinding(dataDir, stored.id)?.lastSyncAt).toBeTruthy();
 
@@ -130,7 +130,7 @@ describe('container-level git backing (sdd_host)', () => {
     expect(fs.existsSync(path.join(checkout, 'projects', 'proj-a', '.wai', 'specs', '.index.yaml'))).toBe(true);
 
     // A second sync with nothing changed publishes nothing (skip-if-clean).
-    expect(syncBackingScope(cfg, MASTER, stored.id)).toBe(false);
+    expect(syncScope(cfg, MASTER, stored.id)).toBe(false);
 
     // Audited: a security-level bind + an info-level sync.
     expect(queryAuditEvents(dataDir, { action: 'git.backing.bind' })).toHaveLength(1);
@@ -145,7 +145,7 @@ describe('container-level git backing (sdd_host)', () => {
     git(['init', '--bare', '-q', '.'], remote);
 
     const stored = bindScope(cfg, MASTER, bindingFor({ scopeKind: 'unit', scopeId: unitId, remote, branch: 'main' }));
-    expect(syncBackingScope(cfg, MASTER, stored.id)).toBe(true);
+    expect(syncScope(cfg, MASTER, stored.id)).toBe(true);
 
     // The branch now exists on the remote (clone --branch main would fail if not)
     // and carries the mirrored content.
@@ -164,7 +164,7 @@ describe('container-level git backing (sdd_host)', () => {
     const remote = seedBareRemote(base, 'instance-backup');
 
     const stored = bindScope(cfg, MASTER, bindingFor({ remote, includeCredentials: true }));
-    expect(syncBackingScope(cfg, MASTER, stored.id)).toBe(true);
+    expect(syncScope(cfg, MASTER, stored.id)).toBe(true);
 
     const checkout = inspect(base, remote);
     // The structure is there…
@@ -190,17 +190,17 @@ describe('container-level git backing (sdd_host)', () => {
 
     // Default (no includeCredentials): the credentials file is NOT mirrored.
     const stored = bindScope(cfg, MASTER, bindingFor({ remote }));
-    expect(syncBackingScope(cfg, MASTER, stored.id)).toBe(true);
+    expect(syncScope(cfg, MASTER, stored.id)).toBe(true);
     let checkout = inspect(base, remote);
     expect(fs.existsSync(path.join(checkout, 'instance', 'organization.json'))).toBe(true);
     expect(fs.existsSync(path.join(checkout, 'instance', 'auth', 'credentials.json'))).toBe(false);
 
     // Turning it ON then OFF again removes the file from the repo on re-sync.
     const withCreds = bindScope(cfg, MASTER, bindingFor({ remote, includeCredentials: true }));
-    syncBackingScope(cfg, MASTER, withCreds.id);
+    syncScope(cfg, MASTER, withCreds.id);
     expect(fs.existsSync(path.join(inspect(base, remote), 'instance', 'auth', 'credentials.json'))).toBe(true);
     const backOff = bindScope(cfg, MASTER, bindingFor({ remote, includeCredentials: false }));
-    syncBackingScope(cfg, MASTER, backOff.id);
+    syncScope(cfg, MASTER, backOff.id);
     checkout = inspect(base, remote);
     expect(fs.existsSync(path.join(checkout, 'instance', 'auth', 'credentials.json'))).toBe(false);
   }, 30_000);
@@ -252,7 +252,7 @@ describe('container-level git backing (sdd_host)', () => {
     // Unbinding a binding whose scope they do not administer is refused.
     const instanceBinding = listBackingBindings(cfg, MASTER).find((b) => b.scopeKind === 'instance')!;
     expect(() => unbindScope(cfg, admToken, instanceBinding.id)).toThrow(ForbiddenError);
-    expect(() => syncBackingScope(cfg, admToken, instanceBinding.id)).toThrow(ForbiddenError);
+    expect(() => syncScope(cfg, admToken, instanceBinding.id)).toThrow(ForbiddenError);
   });
 
   it('an inline PAT becomes the connection credential: stored write-only, recorded as credentialRef, never in the binding record', () => {
