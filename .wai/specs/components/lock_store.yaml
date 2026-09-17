@@ -1,5 +1,5 @@
-id: lock_registry
-name: Lock Registry
+id: lock_store
+name: Lock Store
 description: >-
   The project's commit-scoped lock record boundary (.wai/lock.json): read the current LockRecord or
   write a new one. A standalone read-through Store — the file is the persistence medium, this
@@ -20,4 +20,4 @@ lint:
         workflow-layer (core_orchestrator).
 status: complete
 createdAt: '2026-07-04T12:44:48.994Z'
-updatedAt: '2026-07-18T19:16:00.442Z'
+updatedAt: '2026-09-17T16:34:43.229Z'

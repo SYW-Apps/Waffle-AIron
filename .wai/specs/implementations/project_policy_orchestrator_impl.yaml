@@ -8,7 +8,7 @@ description: >-
   null active policy resolves to the documented permissive default (empty pack lists,
   requireProfileSelection false, enforcementMode 'warn'). The project configuration — pack
   registrations, projectType and the recorded profile selection — is read and written only through
-  the core adapter: the pack registry vendors pack files and returns what to register, and this
+  the core adapter: the pack store vendors pack files and returns what to register, and this
   orchestrator registers it. Audit appends are best-effort and never fail the primary action.
 contract: iproject_policy_orchestrator
 sourcePath: src/server/policy.ts
@@ -80,11 +80,11 @@ methods:
       - stepNumber: 12
         description: >-
           Resolve the policy's required/default declarative pack name set (requiredGlobalPacks then
-          defaultProjectPacks) to their content via the pack registry — across both server-global
-          tiers and both file- and directory-form packs — yielding the resolved packs (canonical
-          name + content) and any names the instance cannot resolve.
+          defaultProjectPacks) to their content via the pack store — across both server-global tiers
+          and both file- and directory-form packs — yielding the resolved packs (canonical name +
+          content) and any names the instance cannot resolve.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedResolveGlobalPacks
       - stepNumber: 13
         description: For each RESOLVED required/default declarative pack
@@ -98,7 +98,7 @@ methods:
           pre-authorized entry, yielding its descriptor, whose ref is the path reference to
           register.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedInstallProjectPack
       - stepNumber: 15
         description: >-
@@ -128,7 +128,7 @@ methods:
           built-ins, the packs just registered in it, and the server-global tiers — so the recorded
           selection can be applied by inspection rather than exception-driven probing.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedListProjectProfiles
       - stepNumber: 19
         description: >-
@@ -150,7 +150,7 @@ methods:
           vendoring its contributing pack into the project (reported as adoptedPackName with its
           vendored path reference adoptedPackRef) when it comes only from the server-global tiers.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedEnsureProfileInstalled
       - stepNumber: 22
         description: >-
@@ -164,8 +164,8 @@ methods:
       - stepNumber: 23
         description: >-
           Register the application's adoptedPackRef — the adopted pack's vendored path reference, as
-          the pack registry reported it — in the new project's configuration through the core
-          adapter, so the profile resolves at validation time.
+          the pack store reported it — in the new project's configuration through the core adapter,
+          so the profile resolves at validation time.
         type: call
         targetComponent: host_core_adapter
         targetMethod: registerPackRef
@@ -249,11 +249,11 @@ methods:
       - stepNumber: 8
         description: >-
           Resolve the policy's required/default declarative pack name set (requiredGlobalPacks then
-          defaultProjectPacks) to their content via the pack registry — across both server-global
-          tiers and both file- and directory-form packs — yielding the resolved packs (canonical
-          name + content) and any names the instance cannot resolve.
+          defaultProjectPacks) to their content via the pack store — across both server-global tiers
+          and both file- and directory-form packs — yielding the resolved packs (canonical name +
+          content) and any names the instance cannot resolve.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedResolveGlobalPacks
       - stepNumber: 9
         description: For each RESOLVED required/default declarative pack
@@ -267,7 +267,7 @@ methods:
           pre-authorized entry, yielding its descriptor, whose ref is the path reference to
           register.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedInstallProjectPack
       - stepNumber: 11
         description: >-
@@ -297,7 +297,7 @@ methods:
           built-ins, the packs just registered in it, and the server-global tiers — so the recorded
           selection can be applied by inspection rather than exception-driven probing.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedListProjectProfiles
       - stepNumber: 15
         description: >-
@@ -319,7 +319,7 @@ methods:
           vendoring its contributing pack into the project (reported as adoptedPackName with its
           vendored path reference adoptedPackRef) when it comes only from the server-global tiers.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedEnsureProfileInstalled
       - stepNumber: 18
         description: >-
@@ -333,8 +333,8 @@ methods:
       - stepNumber: 19
         description: >-
           Register the application's adoptedPackRef — the adopted pack's vendored path reference, as
-          the pack registry reported it — in the new project's configuration through the core
-          adapter, so the profile resolves at validation time.
+          the pack store reported it — in the new project's configuration through the core adapter,
+          so the profile resolves at validation time.
         type: call
         targetComponent: host_core_adapter
         targetMethod: registerPackRef
@@ -427,7 +427,7 @@ methods:
           Resolve and bind the target project's isolated root within the principal's authorized set
           (rejects cross-project access)
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: resolveRoot
       - stepNumber: 6
         description: Read the active instance pack/profile policy (or null when none has ever been configured)
@@ -453,15 +453,15 @@ methods:
           List the packs the loaded configuration registers via the pre-authorized entry (the
           caller's project:write was already resolved)
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedListProjectPacks
       - stepNumber: 10
         description: >-
           Resolve the policy's required/default pack name set (requiredGlobalPacks then
-          defaultProjectPacks) via the pack registry, to obtain each resolvable pack's canonical
-          name and the names the instance cannot resolve at all.
+          defaultProjectPacks) via the pack store, to obtain each resolvable pack's canonical name
+          and the names the instance cannot resolve at all.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedResolveGlobalPacks
       - stepNumber: 11
         description: >-
@@ -505,7 +505,7 @@ methods:
           Resolve and bind the target project's isolated root within the principal's authorized set
           (rejects cross-project access)
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: resolveRoot
       - stepNumber: 6
         description: Read the active instance pack/profile policy (or null when none has ever been configured)
@@ -529,7 +529,7 @@ methods:
           List the packs the loaded configuration registers via the pre-authorized entry (the
           caller's project:write was already resolved)
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedListProjectPacks
       - stepNumber: 10
         description: >-
@@ -538,11 +538,11 @@ methods:
         type: local
       - stepNumber: 11
         description: >-
-          Resolve the assembled required/default pack name set via the pack registry — across both
+          Resolve the assembled required/default pack name set via the pack store — across both
           server-global tiers and both file- and directory-form packs — yielding the resolved packs
           (canonical name + content) and the unresolved names the instance cannot satisfy.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedResolveGlobalPacks
       - stepNumber: 12
         description: >-
@@ -570,7 +570,7 @@ methods:
           Vendor each resolved pack into the project by its canonical name via the pre-authorized
           entry, yielding its descriptor, whose ref is the path reference to register.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedInstallProjectPack
       - stepNumber: 16
         description: >-
@@ -592,7 +592,7 @@ methods:
           its own registered packs, the server-global tiers) so the governing profile can be judged:
           whether the recorded projectType still resolves, and which candidates could repair it.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedListProjectProfiles
       - stepNumber: 19
         description: >-
@@ -617,7 +617,7 @@ methods:
           vendored path reference adoptedPackRef) when the profile comes only from the server-global
           tiers.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedEnsureProfileInstalled
       - stepNumber: 22
         description: >-
@@ -631,8 +631,8 @@ methods:
       - stepNumber: 23
         description: >-
           Register the application's adoptedPackRef — the adopted pack's vendored path reference, as
-          the pack registry reported it — in the project's configuration through the core adapter,
-          so the repaired profile resolves at validation time.
+          the pack store reported it — in the project's configuration through the core adapter, so
+          the repaired profile resolves at validation time.
         type: call
         targetComponent: host_core_adapter
         targetMethod: registerPackRef
@@ -673,7 +673,7 @@ methods:
           Re-list the packs the reloaded configuration registers via the pre-authorized entry, for
           the post-reconciliation report.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedListProjectPacks
       - stepNumber: 29
         description: >-
@@ -842,7 +842,7 @@ methods:
           Resolve and bind the target project's isolated root within the principal's authorized set
           (rejects cross-project access)
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: resolveRoot
       - stepNumber: 6
         description: >-
@@ -859,7 +859,7 @@ methods:
           server-global packs — so the recorded projectType can be classified rather than echoed
           back unexamined.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedListProjectProfiles
       - stepNumber: 8
         description: >-
@@ -932,7 +932,7 @@ methods:
           Resolve and bind the target project's isolated root within the principal's authorized set
           (rejects cross-project access)
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: resolveRoot
       - stepNumber: 6
         description: >-
@@ -953,7 +953,7 @@ methods:
           contributes throws here, so a profile that would silently disable the whole doctrine is
           never written.
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: executeApprovedEnsureProfileInstalled
       - stepNumber: 8
         description: >-
@@ -967,8 +967,8 @@ methods:
       - stepNumber: 9
         description: >-
           Register the application's adoptedPackRef — the adopted pack's vendored path reference, as
-          the pack registry reported it — in the project's configuration through the core adapter,
-          so the profile resolves at validation time.
+          the pack store reported it — in the project's configuration through the core adapter, so
+          the profile resolves at validation time.
         type: call
         targetComponent: host_core_adapter
         targetMethod: registerPackRef
@@ -1031,4 +1031,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-09-15T17:57:22.821Z'
+updatedAt: '2026-09-17T16:42:13.988Z'

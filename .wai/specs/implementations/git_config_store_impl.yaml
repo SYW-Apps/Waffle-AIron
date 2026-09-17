@@ -1,7 +1,7 @@
-id: git_config_registry_impl
-name: Git Config Registry Implementation
+id: git_config_store_impl
+name: Git Config Store Implementation
 description: File-backed I/O for a project's git-backing config (.wai/git.json).
-contract: igit_config_registry
+contract: igit_config_store
 sourcePath: src/git/config.ts
 methods:
   - name: read
@@ -22,4 +22,4 @@ methods:
     symbol: clearGitConfig
 status: complete
 createdAt: '2026-07-04T16:33:31.726Z'
-updatedAt: '2026-07-11T19:14:22.530Z'
+updatedAt: '2026-09-17T16:34:42.557Z'

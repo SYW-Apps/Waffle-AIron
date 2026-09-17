@@ -1,7 +1,7 @@
-id: iproducer_config_registry
-name: Producer Config Registry Interface
+id: iproducer_config_store
+name: Producer Config Store Interface
 description: Contract for reading/writing a project's producer configs.
-component: producer_config_registry
+component: producer_config_store
 methods:
   - name: read
     description: Read a target's config, or null.
@@ -24,4 +24,4 @@ methods:
     returns: ProducerConfig[]
 status: complete
 createdAt: '2026-07-04T17:37:47.379Z'
-updatedAt: '2026-07-18T19:16:00.630Z'
+updatedAt: '2026-09-17T16:34:48.046Z'

@@ -138,17 +138,17 @@ methods:
   - name: readLockRecord
     narrative:
       - stepNumber: 1
-        description: Read the lock record via the lock registry
+        description: Read the lock record via the lock store
         type: call
-        targetComponent: lock_registry
+        targetComponent: lock_store
         targetMethod: read
     conformance: 'off'
   - name: writeLockRecord
     narrative:
       - stepNumber: 1
-        description: Write the lock record via the lock registry
+        description: Write the lock record via the lock store
         type: call
-        targetComponent: lock_registry
+        targetComponent: lock_store
         targetMethod: write
     conformance: 'off'
   - name: renderDiagram
@@ -585,9 +585,9 @@ methods:
   - name: readLockState
     narrative:
       - stepNumber: 1
-        description: Read the persisted lock record through the lock registry
+        description: Read the persisted lock record through the lock store
         type: call
-        targetComponent: lock_registry
+        targetComponent: lock_store
         targetMethod: read
       - stepNumber: 2
         description: No record means the project was never locked, a normal state rather than a fault
@@ -947,4 +947,4 @@ methods:
         type: return
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T20:48:47.337Z'
+updatedAt: '2026-09-17T16:41:51.844Z'

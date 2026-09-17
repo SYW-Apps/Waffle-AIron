@@ -34,7 +34,7 @@ methods:
       - stepNumber: 4
         description: Revoke the credential record by token id
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: revoke
       - stepNumber: 5
         description: Append a redacted audit event without letting a failure fail the revoke
@@ -267,7 +267,7 @@ methods:
       - stepNumber: 21
         description: Persist only the hashed credential record
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: create
       - stepNumber: 22
         description: Append a redacted audit event without letting a failure fail the login
@@ -337,7 +337,7 @@ methods:
       - stepNumber: 8
         description: Persist the credential record (hashed token only — the plaintext is never stored)
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: create
       - stepNumber: 9
         description: Append the redacted token.mint.self (security) audit event best-effort
@@ -356,7 +356,7 @@ methods:
       carries NO grants — it acts as the caller's OWN live permission on that project, so permission
       rules gate read vs write at use time and the token can never exceed the caller's access
       (self-scoped, so key:manage is neither required nor consulted). The write flag is advisory
-      (token label only). Persist only the hashed record through the credential registry, append a
+      (token label only). Persist only the hashed record through the credential repository, append a
       best-effort redacted token.mint.self (security) audit event, and return the plaintext exactly
       once. Because the token is owned by the caller, a later deactivation of that user revokes it
       via revokeAllForOwner.
@@ -369,10 +369,10 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          Return the caller's OWN minted credential records through the credential registry,
+          Return the caller's OWN minted credential records through the credential repository,
           redacted — hashed token only, with id/project/label/createdAt/revokedAt
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: listByOwner
       - stepNumber: 3
         description: Return the redacted records — a read, not audited
@@ -381,7 +381,7 @@ methods:
     detail: intent
     intent: >-
       Authenticate the caller credential to the calling principal, list the principal's own
-      credential records through the credential registry (listByOwner on the principal's subject
+      credential records through the credential repository (listByOwner on the principal's subject
       user id), and return them redacted: each carries the hashed token (never plaintext) with its
       id, authorized project, label, createdAt and revokedAt, so the client can show a user their
       agent tokens and offer revoke. A read; not audited.
@@ -393,9 +393,9 @@ methods:
         targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: List the caller's OWN tokens through the credential registry
+        description: List the caller's OWN tokens through the credential repository
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: listByOwner
       - stepNumber: 3
         description: Only a token the caller owns may be revoked
@@ -410,9 +410,9 @@ methods:
         type: throw
         error: token not found
       - stepNumber: 5
-        description: Revoke the token through the credential registry
+        description: Revoke the token through the credential repository
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: revoke
       - stepNumber: 6
         description: Append the redacted token.revoke.self (security) audit event best-effort
@@ -428,7 +428,7 @@ methods:
       Authenticate the caller credential to the calling principal, fetch the principal's own tokens
       (listByOwner) and confirm tokenId is among them (a token the caller does not own is rejected
       as not found, so there is no cross-user revocation and no key:manage escalation), then revoke
-      it through the credential registry and append a best-effort redacted token.revoke.self
+      it through the credential repository and append a best-effort redacted token.revoke.self
       (security) audit event.
   - name: listUsers
     narrative:
@@ -542,7 +542,7 @@ methods:
           Revoke every non-revoked credential owned by the user so existing tokens can no longer
           authenticate, capturing the revoked count
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: revokeAllForOwner
       - stepNumber: 11
         description: >-
@@ -803,7 +803,7 @@ methods:
       - stepNumber: 10
         description: Persist only the hashed credential record
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: create
       - stepNumber: 11
         description: Append a redacted audit event without letting a failure fail the mint
@@ -1083,4 +1083,4 @@ methods:
     symbol: tryAppendAudit
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-09-15T21:03:25.108Z'
+updatedAt: '2026-09-17T16:41:56.583Z'

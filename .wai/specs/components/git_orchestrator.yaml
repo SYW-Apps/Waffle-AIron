@@ -11,7 +11,7 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - git_adapter
-  - git_config_registry
+  - git_config_store
 status: complete
 createdAt: '2026-07-04T16:31:15.201Z'
 updatedAt: '2026-09-11T23:40:36.268Z'

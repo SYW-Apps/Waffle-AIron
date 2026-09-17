@@ -68,7 +68,7 @@ fields:
       parent's review signal.
     optional: true
 methods: []
-componentClass: lock_registry
+componentClass: lock_store
 invariants:
   - id: single-record-per-project
     description: >-

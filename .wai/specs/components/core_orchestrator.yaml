@@ -11,7 +11,7 @@ owns: []
 dependsOn:
   - spec_loader
   - state_hash
-  - lock_registry
+  - lock_store
   - architecture_diagrams
   - project_config_repository
   - variant_registry_adapter

@@ -1,9 +1,9 @@
-id: iproject_registry
-name: Project Registry Interface
+id: iproject_repository
+name: Project Repository Interface
 description: >-
-  Contract for the hosted-project registry: id-to-root resolution for scoping, plus project
+  Contract for the hosted-project repository: id-to-root resolution for scoping, plus project
   lifecycle persistence.
-component: project_registry
+component: project_repository
 methods:
   - name: resolveRoot
     description: >-
@@ -36,4 +36,4 @@ methods:
     returns: ProjectBinding | null
 status: complete
 createdAt: '2026-07-04T12:49:59.044Z'
-updatedAt: '2026-07-24T20:50:25.515Z'
+updatedAt: '2026-09-17T16:42:26.308Z'

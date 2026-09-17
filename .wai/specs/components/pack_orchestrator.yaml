@@ -8,8 +8,8 @@ description: >-
   extension packs, binding the project's isolated root first for project scope. Enforces the surface
   policy that installs are declarative-only — profiles and language/platform tables, never
   executable rule code — delegating the pack-file I/O and the declarative-schema check to the pack
-  registry. Owns the project pack registration: it loads the project configuration and registers or
-  deregisters packs in it through the core adapter, since the pack registry stores pack files only.
+  store. Owns the project pack registration: it loads the project configuration and registers or
+  deregisters packs in it through the core adapter, since the pack store stores pack files only.
   Reached from the admin portal, the web portal (session as credential), and the MCP data plane
   (bearer as credential) through the project ops orchestrator.
 subsystem: sdd_host
@@ -18,9 +18,9 @@ owns: []
 dependsOn:
   - authentication
   - authorization
-  - pack_registry
-  - project_registry
+  - pack_store
+  - project_repository
   - host_core_adapter
 status: complete
 createdAt: '2026-07-04T18:46:35.024Z'
-updatedAt: '2026-09-15T21:04:04.025Z'
+updatedAt: '2026-09-17T16:42:00.950Z'

@@ -3,8 +3,8 @@ id: resolved_global_pack
 name: ResolvedGlobalPack
 description: >-
   A server-global declarative pack resolved to its content for vendoring into a project. Produced by
-  the pack registry's pre-authorized resolver across BOTH server-global tiers (immutable image-layer
-  + mutable instance) and BOTH file- and directory-form packs. Carries the pack's canonical identity
+  the pack store's pre-authorized resolver across BOTH server-global tiers (immutable image-layer +
+  mutable instance) and BOTH file- and directory-form packs. Carries the pack's canonical identity
   so a project's compliance is checked and reported on the SAME key the pack is installed under
   (closing the file-stem-vs-manifest-name drift that made reconciliation never converge).
 fields:
@@ -30,4 +30,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-22T17:27:36.292Z'
-updatedAt: '2026-07-22T17:27:36.308Z'
+updatedAt: '2026-09-17T16:42:15.475Z'

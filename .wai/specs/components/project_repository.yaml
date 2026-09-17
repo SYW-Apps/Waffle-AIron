@@ -1,5 +1,5 @@
-id: project_registry
-name: Project Registry
+id: project_repository
+name: Project Repository
 description: >-
   Facade for hosted-project records and their isolated roots — promoted to a real Repository under
   the option F registry-taxonomy ruling. Reads (list, authorization-narrowed resolveRoot) go to the
@@ -14,4 +14,4 @@ owns:
 dependsOn: []
 status: complete
 createdAt: '2026-07-04T12:33:43.673Z'
-updatedAt: '2026-07-19T09:00:24.801Z'
+updatedAt: '2026-09-17T16:34:38.404Z'

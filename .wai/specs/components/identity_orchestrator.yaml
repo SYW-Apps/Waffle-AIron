@@ -17,8 +17,8 @@ owns: []
 dependsOn:
   - authentication
   - user_repository
-  - credential_registry
-  - project_registry
+  - credential_repository
+  - project_repository
   - audit_repository
   - identity_provider_adapter
   - policy_repository

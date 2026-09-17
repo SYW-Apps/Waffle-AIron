@@ -189,7 +189,7 @@ methods:
       - stepNumber: 2
         description: Look up a credential record by token hash
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: findByToken
       - stepNumber: 3
         description: If no record matches, reject
@@ -376,7 +376,7 @@ methods:
       - stepNumber: 14
         description: Look up a credential record by token hash
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: findByToken
       - stepNumber: 15
         description: If no record matches, reject

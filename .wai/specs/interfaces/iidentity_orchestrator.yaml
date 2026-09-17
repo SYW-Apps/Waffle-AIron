@@ -105,7 +105,7 @@ methods:
       Authenticate the caller and require project:admin over the target user's home unit (an
       instance-admin passes via bypass). Then set the user's lifecycle status through the user
       repository. When the new status is not 'active' (deactivation), revoke ALL of the user's
-      credentials via credential_registry.revokeAllForOwner AND all of their web sessions, so
+      credentials via credential_repository.revokeAllForOwner AND all of their web sessions, so
       existing tokens and live sessions can no longer authenticate, and append a security-level
       'user.deactivate' audit event including the revoked counts; the user record is retained for
       audit provenance. Returning a user to 'active' does NOT auto-restore any revoked tokens. For a
@@ -240,8 +240,8 @@ methods:
   - name: listSelfTokens
     description: >-
       Authenticate the caller and return the caller's OWN minted credential records
-      (ownerSubject.userId = caller) through the credential registry, redacted (hashed token only).
-      A read; not audited.
+      (ownerSubject.userId = caller) through the credential repository, redacted (hashed token
+      only). A read; not audited.
     signature: 'listSelfTokens(credential: string): ApiKeyRecord[]'
     returns: ApiKeyRecord[]
     params:
@@ -278,4 +278,4 @@ methods:
     returns: void
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-09-15T21:02:48.476Z'
+updatedAt: '2026-09-17T16:41:57.705Z'

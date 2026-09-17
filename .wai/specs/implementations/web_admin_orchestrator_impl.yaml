@@ -189,9 +189,9 @@ methods:
         type: throw
         error: Forbidden — instance-admin required
       - stepNumber: 4
-        description: List the configured secret key names (never the values) through the secret registry
+        description: List the configured secret key names (never the values) through the secret repository
         type: call
-        targetComponent: secret_registry
+        targetComponent: secret_repository
         targetMethod: list
       - stepNumber: 5
         description: Return the secret ref names
@@ -561,4 +561,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T18:28:58.935Z'
-updatedAt: '2026-09-15T20:49:01.760Z'
+updatedAt: '2026-09-17T16:42:30.937Z'

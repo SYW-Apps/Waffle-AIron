@@ -1,7 +1,7 @@
-id: igit_config_registry
-name: Git Config Registry Interface
+id: igit_config_store
+name: Git Config Store Interface
 description: Contract for reading/writing a project's git-backing config.
-component: git_config_registry
+component: git_config_store
 methods:
   - name: read
     description: Read the project's GitConfig, or null when not git-backed.
@@ -17,4 +17,4 @@ methods:
     returns: void
 status: complete
 createdAt: '2026-07-04T16:32:01.932Z'
-updatedAt: '2026-07-04T16:37:37.254Z'
+updatedAt: '2026-09-17T16:34:41.766Z'

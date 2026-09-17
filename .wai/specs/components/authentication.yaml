@@ -18,9 +18,9 @@ subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - credential_registry
+  - credential_repository
   - web_session_repository
-  - secret_registry
+  - secret_repository
   - user_repository
   - instance_identity_repository
 dependencyClass: read

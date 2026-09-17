@@ -1,5 +1,5 @@
-id: ipack_registry
-name: Pack Registry Interface
+id: ipack_store
+name: Pack Store Interface
 description: >-
   Contract for the hosted extension-pack store: list, install (declarative-only), and remove packs
   at server-global scope and in a bound project's .wai/packs/. Server-global discovery merges two
@@ -13,7 +13,7 @@ description: >-
   deregistered. Installs validate the content as a declarative pack (profiles + language/platform
   tables) and refuse programmatic/code packs; probing never throws for a bad pack (the error rides
   on its descriptor).
-component: pack_registry
+component: pack_store
 methods:
   - name: listGlobalPacks
     description: >-
@@ -261,4 +261,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T18:42:41.273Z'
-updatedAt: '2026-09-15T21:03:07.791Z'
+updatedAt: '2026-09-17T16:34:45.870Z'

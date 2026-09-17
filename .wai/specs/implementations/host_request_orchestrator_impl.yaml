@@ -69,7 +69,7 @@ methods:
           mounted chained-child root for a subproject-qualified narrowing/selector), the TOP project
           id (permission + audit anchor), and the bound mount chain; cross-project access rejected
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: resolveBinding
       - stepNumber: 7
         description: If no authorized root resolved, reject cross-project access

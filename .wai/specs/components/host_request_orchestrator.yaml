@@ -11,7 +11,7 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - authentication
-  - project_registry
+  - project_repository
   - host_mcp_adapter
   - host_core_adapter
   - audit_repository

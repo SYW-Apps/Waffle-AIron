@@ -2,7 +2,7 @@ id: user_store_impl
 name: User Store Implementation
 description: >-
   Authoritative in-memory holder of the hosted-user set, file-backed under the server data root
-  (users.json), mirroring the credential registry's storage convention.
+  (users.json), mirroring the credential repository's storage convention.
 contract: iuser_store
 sourcePath: src/server/users.ts
 methods:
@@ -25,4 +25,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:29:51.432Z'
-updatedAt: '2026-07-11T19:14:22.993Z'
+updatedAt: '2026-09-17T16:42:33.115Z'

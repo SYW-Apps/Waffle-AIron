@@ -16,7 +16,7 @@ owns: []
 dependsOn:
   - authentication
   - organization_repository
-  - project_registry
+  - project_repository
   - project_relation_repository
   - public_surface_repository
   - landscape_graph

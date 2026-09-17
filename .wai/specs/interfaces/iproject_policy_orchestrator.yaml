@@ -16,7 +16,7 @@ methods:
       perform the same profile-aware initialization body as executeApprovedInit: validate the
       request against the active pack policy (throwing on violations under an enforcing policy),
       create the hosted project, apply the instance's required/default declarative packs via the
-      pack registry, record the resolved profile selection into the project's config, APPLY that
+      pack store, record the resolved profile selection into the project's config, APPLY that
       selection so it actually governs the new project (the first recorded id that resolves —
       project kind, built-in, or pack-contributed profile whose pack is vendored as part of the same
       step — is written as projectType; the remaining ids stay recorded but unapplied, since
@@ -66,8 +66,8 @@ methods:
       the governing profile, but only when it is broken or non-compliant: when instance policy
       requires profiles and none of the required ids is governing, or when the recorded projectType
       resolves to no loaded profile, apply the first resolvable id (required ids first, then the
-      recorded selection) through the pack registry's ensure seam — vendoring its contributing pack
-      — and write it as projectType. A resolvable, policy-compliant projectType is reported, never
+      recorded selection) through the pack store's ensure seam — vendoring its contributing pack —
+      and write it as projectType. A resolvable, policy-compliant projectType is reported, never
       overwritten, so a deliberate local choice survives reconciliation. Audit the reconciliation
       and return the post-reconciliation PolicyEvaluationResult, including governingProfileId and
       any unapplied selection remainder.
@@ -112,13 +112,13 @@ methods:
       exposed on any portal. Validates the request against the active pack policy (under an
       enforcing policy, throws on violations), creates the hosted project via
       admin_orchestrator.executeApprovedCreate, applies the instance's requiredGlobalPacks and
-      defaultProjectPacks as declarative packs via the pack registry, records the resolved
+      defaultProjectPacks as declarative packs via the pack store, records the resolved
       ProjectProfileSelection into the project's config, APPLIES that selection as the project's
       governing projectType (first resolvable id, contributing pack vendored through the pack
-      registry's ensure seam; remaining ids recorded but unapplied; an entirely unresolvable
-      selection leaves the default projectType and is reported in the audit rather than failing
-      creation), and audits 'project.init.policy'. This is the single initialization body shared by
-      the gated portal path (initializeProjectWithProfile) and approval execution.
+      store's ensure seam; remaining ids recorded but unapplied; an entirely unresolvable selection
+      leaves the default projectType and is reported in the audit rather than failing creation), and
+      audits 'project.init.policy'. This is the single initialization body shared by the gated
+      portal path (initializeProjectWithProfile) and approval execution.
     signature: 'executeApprovedInit(request: ProjectInitRequest): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
@@ -163,8 +163,8 @@ methods:
       target project through the authorization seam (must be yes; an instance-admin bypasses),
       resolve and bind the project's isolated root, then make the requested projectType actually
       GOVERN the project rather than merely recording a name: ensure the profile is resolvable
-      through the pack registry's ensure-profile-installed seam (a built-in profile or project kind
-      and an already-registered pack profile pass through unchanged; a profile contributed only by a
+      through the pack store's ensure-profile-installed seam (a built-in profile or project kind and
+      an already-registered pack profile pass through unchanged; a profile contributed only by a
       server-global pack has that pack vendored into the project and registered in extensions.packs;
       an id no tier contributes is REFUSED, because writing it would silently disable the whole
       profile doctrine), write the profile into the project's project.yaml, and fold the applied id
@@ -184,4 +184,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-07-24T23:31:48.662Z'
+updatedAt: '2026-09-17T16:42:25.444Z'

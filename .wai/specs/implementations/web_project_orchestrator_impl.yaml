@@ -43,7 +43,7 @@ methods:
       - stepNumber: 3
         description: List all hosted project records
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: list
       - stepNumber: 4
         description: >-

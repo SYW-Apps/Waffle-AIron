@@ -20,7 +20,7 @@ dependsOn:
   - permission_repository
   - user_repository
   - audit_repository
-  - secret_registry
+  - secret_repository
   - permission_admin_orchestrator
 status: complete
 createdAt: '2026-07-13T18:27:33.510Z'
