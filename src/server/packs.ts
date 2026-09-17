@@ -151,7 +151,7 @@ function stem(ref: string): string {
   return path.basename(ref).replace(PACK_EXT_RE, '');
 }
 
-// ── pack_registry: server-global store (two-tier: image + instance) ───────────
+// ── pack_store: server-global store (two-tier: image + instance) ───────────
 
 /**
  * The immutable image-layer packs directory (WAIRON_IMAGE_PACKS_DIR, default
@@ -432,7 +432,7 @@ function storeRemoveGlobalPack(name: string): void {
   fs.rmSync(match, { recursive: true, force: true });
 }
 
-// ── pack_registry: bound-project store (assumes a project root is bound) ───────
+// ── pack_store: bound-project store (assumes a project root is bound) ───────
 //
 // Pack FILES only. Every project-scoped read takes the configuration the caller
 // loaded, and every install returns the probe whose ref the caller registers: the

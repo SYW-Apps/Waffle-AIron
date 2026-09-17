@@ -543,8 +543,8 @@ const BLOCK_NOUNS: ReadonlySet<string> = new Set([
 /**
  * component_spec.headNoun — the last word of the component's id, which names
  * what the component IS: the head noun of "pack_store_adapter" is "adapter",
- * and of "lock_registry" is "registry". Qualifiers before it name what the
- * component works on, so only the head noun says what it IS.
+ * and of "credential_write_registry" is "registry". Qualifiers before it name
+ * what the component works on, so only the head noun says what it IS.
  */
 export function headNoun(component: Pick<ComponentSpec, 'id'>): string {
   const words = component.id.split(/[-_]/).filter(Boolean);
@@ -554,7 +554,7 @@ export function headNoun(component: Pick<ComponentSpec, 'id'>): string {
 /**
  * component_spec.conceptNoun — the last word of the id that does NOT name a
  * building block: what the component is about, rather than what it is.
- * "pack_registry" is about packs, "architecture_diagrams" about diagrams,
+ * "pack_store" is about packs, "architecture_diagrams" about diagrams,
  * "cli_packs_adapter" about packs. Empty when every word names a block.
  */
 export function conceptNoun(component: Pick<ComponentSpec, 'id'>): string {

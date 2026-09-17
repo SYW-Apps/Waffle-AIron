@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // ---------------------------------------------------------------------------
-// Integration secret resolution (secret_registry + resolveSecret)
+// Integration secret resolution (secret_write_registry + resolveSecret)
 //
 // Secrets (git token, Notion token, diagram signing key) resolve from the
 // data-dir store ($WAIRON_DATA_DIR/auth/secrets.json) first, then env. The store

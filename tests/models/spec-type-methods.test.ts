@@ -151,7 +151,7 @@ describe('subsystem_spec.isDraft', () => {
 
 describe('component_spec.headNoun', () => {
   it('is the last underscore-separated word of the id', () => {
-    expect(headNoun({ id: 'lock_registry' })).toBe('registry');
+    expect(headNoun({ id: 'credential_write_registry' })).toBe('registry');
     expect(headNoun({ id: 'pack_store_adapter' })).toBe('adapter');
   });
 
@@ -162,7 +162,7 @@ describe('component_spec.headNoun', () => {
 
 describe('component_spec.conceptNoun', () => {
   it('is the last word that does not name a building block', () => {
-    expect(conceptNoun({ id: 'pack_registry' })).toBe('pack');
+    expect(conceptNoun({ id: 'pack_store' })).toBe('pack');
     expect(conceptNoun({ id: 'cli_packs_adapter' })).toBe('packs');
     expect(conceptNoun({ id: 'architecture_diagrams' })).toBe('diagrams');
   });
