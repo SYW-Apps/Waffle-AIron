@@ -225,27 +225,42 @@ methods:
         targetComponent: heuristic_rules
         targetMethod: complexityAndMetadata
       - stepNumber: 44
+        description: Register narrative-complexity
+        type: register
+        targetComponent: heuristic_rules
+        targetMethod: narrativeComplexity
+      - stepNumber: 45
+        description: Register naming-discipline
+        type: register
+        targetComponent: heuristic_rules
+        targetMethod: namingDiscipline
+      - stepNumber: 46
+        description: Register method-cohesion
+        type: register
+        targetComponent: heuristic_rules
+        targetMethod: methodCohesion
+      - stepNumber: 47
         description: Register pack-resolution
         type: register
         targetComponent: extension_rules
         targetMethod: packResolution
-      - stepNumber: 45
+      - stepNumber: 48
         description: Register pack-reproducibility
         type: register
         targetComponent: extension_rules
         targetMethod: packReproducibility
-      - stepNumber: 46
+      - stepNumber: 49
         description: Register lint-allows (the rule index later moves it after any pack rules)
         type: register
         targetComponent: integrity_rules
         targetMethod: lintAllows
-      - stepNumber: 47
+      - stepNumber: 50
         description: For each registered built-in rule, in that order
         type: loop
         loopKind: forEach
         over: the registered built-in rules
-        endStep: 48
-      - stepNumber: 48
+        endStep: 51
+      - stepNumber: 51
         label: append-builtin
         description: Append the rule to the store
         type: call
@@ -270,4 +285,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-09-15T18:00:35.494Z'
+updatedAt: '2026-09-17T15:19:37.157Z'

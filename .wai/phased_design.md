@@ -374,12 +374,20 @@ Each reported behaviour is reproduced with a failing test first; a confirmed one
     - the rename tool's findings are friction F40–F46.
   - [ ] Gates, CHANGELOG, PR
 
-### Doctrine D2 — complexity, naming and cohesion checks (decided by Robbe 2026-09-15; after D1, on the final shapes)
-- [ ] A warning when an Orchestrator's methods form groups that call no common component
-- [ ] Complexity: a level from a cognitive score (linear, simple, moderate, complex, severe) and a step count, each with a warning and an optional max on separate codes; defaults warn above moderate and above 25 steps, with no max; precedence built-in, then pack profile, then project
-- [ ] Naming: stutter, generic words, a role word contradicting the component type, a one-method component named after its method; wairon's own mismatched names fixed (the seven role words, and any stutter left after D1's renames)
-- [ ] Narratives above the new complexity defaults are split (27 of the 44 rule narratives exceed the cognitive default)
+### Doctrine D2 — complexity, naming and cohesion checks (decided by Robbe 2026-09-15; scoped 2026-09-17 on measured evidence; D2a on feat/doctrine-checks)
+Measured on wairon own tree after D1 (1061 narratives): 777 linear, 211 simple, 40 moderate, 9 complex, 24 severe — 40 exceed the defaults (33 by cognitive score, 21 by step count). The two axes are independent: `rule_registry.registerBuiltinRules` is 48 steps scoring 1, `heuristic_rules.targetLanguage` scores 44 in 28 steps. Naming: 7 head-noun mismatches (exactly the Registry-to-Store/Repository promotions), 0 generic words, 66 stutter at the strictest definition (27 Adapter, 6 Portal), 6 one-method non-Adapter components. Cohesion: 5 Orchestrators with two or more groups of two or more methods.
+- [x] Decisions (2026-09-17):
+  - stutter exempts thin forwarders (Adapter, Portal), leaving 33 — a CLI adapter method mirrors a user-visible command name, so the repetition carries meaning;
+  - the 24 severe narratives are split; the 9 complex and the steps-only cases carry a reasoned allow;
+  - `cli_runner` and `core_orchestrator` are allowed as deliberate facades; `project_ops_orchestrator`, `web_admin_orchestrator` and `web_orchestrator` are split;
+  - ships as D2a (checks, config, precedence, the 7 registry renames, allows) then D2b (the cleanup, removing each allow).
+- [x] L2 approved (2026-09-17): no new components. Three methods on `heuristic_rules` — `narrativeComplexity`, `namingDiscipline`, `methodCohesion` — carrying nine codes; `cognitiveScore`/`complexityLevel` on `method_implementation` and `headNoun` on `component_spec` as pure type methods; four fields on `complexity_rule_config`
+- [x] L3, types written: the score and band, the head noun, and the four config fields (`maxNarrativeSteps` defaults to 25, `narrativeStepsHardMax`, `cognitiveWarnAbove` default moderate, `maxCognitiveLevel`)
+- [ ] L3, rules: the three methods with their findings; `EXCESSIVE_NARRATIVE_STEPS` moves from `complexityAndMetadata` to `narrativeComplexity`
+- [ ] Config precedence, open: config VALUES let a profile pack override the project (documented that way on `complexityConfigFor`, `documentationConfigFor` and `namingConfigFor`), while `sddRuleSeverity` lets the project win. One order, and the spec text with it
+- [ ] L4/L5, then code in waves
 - [ ] From the rule fixes: UNCONDITIONAL_CALL_CYCLE misses a call in a `doWhile` body or the first step of a `try` body; draft checks on interfaces and subsystems as type methods
+- [ ] D2b: 7 registry renames, 33 stutter renames, 6 one-method components reviewed, 24 severe narratives split, 3 Orchestrators split
 
 ### Data-model PR — entities as table schemas (decided by Robbe 2026-09-15; proposal E10)
 - [ ] One type per entity with persistence metadata (`database`, `table`, a per-field `column`, `transient`); relations stated on fields with derived foreign keys — other aggregates by id, value objects embedded, owned collections as child tables, many-to-many join tables derived; `linkedEntity`, `references` and `key: foreign` retired

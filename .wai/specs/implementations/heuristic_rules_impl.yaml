@@ -865,6 +865,211 @@ methods:
           DESCRIPTION_TOO_SHORT (warning) the same way.
         type: local
     symbol: check
+  - name: narrativeComplexity
+    sourcePath: src/core/rules/heuristic/narrative-complexity.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build entries: for each implementation in ctx.implementations, resolve its contract's
+          component through ctx.componentMap; skip the implementation when the component does not
+          resolve, and otherwise pair every method that has a narrative with its implementation,
+          component and subsystem.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Define the band order linear < simple < moderate < complex < severe, and bandIndex(band)
+          returning its position; a band is above another when its index is greater.
+        type: local
+      - stepNumber: 3
+        label: entryLoop
+        description: For each entry, judge its narrative on both axes.
+        type: loop
+        loopKind: forEach
+        over: entries
+        endStep: 12
+      - stepNumber: 4
+        description: >-
+          Read cfg = ctx.complexityConfigFor(entry.subsystem), isDraft =
+          ctx.isComponentDraft(entry.component.id), steps = entry.method.narrative.length, score =
+          entry.method.cognitiveScore() and band = entry.method.complexityLevel().
+        type: local
+      - stepNumber: 5
+        description: Is the narrative's band above the band configured to warn?
+        type: branch
+        condition: bandIndex(band) > bandIndex(cfg?.cognitiveWarnAbove ?? 'moderate')
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          ctx.addIssue('warning', 'NARRATIVE_COMPLEXITY', naming the implementation, the method, its
+          band and score, and the band configured to warn above, with the advice to split the
+          narrative into steps that call smaller methods), anchored on the implementation id and
+          carrying isDraft.
+        type: local
+      - stepNumber: 7
+        description: Is a maximum band configured, and is this narrative above it?
+        type: branch
+        condition: cfg?.maxCognitiveLevel is set and bandIndex(band) > bandIndex(cfg.maxCognitiveLevel)
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          ctx.addIssue('error', 'NARRATIVE_COMPLEXITY_OVER_MAX', naming the band, the score and the
+          configured maximum), anchored on the implementation id and carrying isDraft.
+        type: local
+      - stepNumber: 9
+        description: Does the narrative list more steps than the configured limit, defaulting to 25?
+        type: branch
+        condition: steps > (cfg?.maxNarrativeSteps ?? 25)
+        onTrueStep: 10
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          ctx.addIssue('warning', 'EXCESSIVE_NARRATIVE_STEPS', naming the method, its step count and
+          the limit in force), anchored on the implementation id and carrying isDraft.
+        type: local
+      - stepNumber: 11
+        description: >-
+          Is a hard step maximum configured, and is this narrative above it? When not, continue with
+          the next entry.
+        type: branch
+        condition: cfg?.narrativeStepsHardMax is set and steps > cfg.narrativeStepsHardMax
+        onTrueStep: 12
+        onFalseStep: 3
+      - stepNumber: 12
+        description: >-
+          ctx.addIssue('error', 'NARRATIVE_STEPS_OVER_MAX', naming the step count and the configured
+          hard maximum), anchored on the implementation id and carrying isDraft.
+        type: local
+  - name: namingDiscipline
+    sourcePath: src/core/rules/heuristic/naming-discipline.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Define BLOCK_WORDS, mapping portal, orchestrator, supervisor, actor, store, index, query,
+          registry, adapter, observer, repository and view to the componentType each names, and
+          GENERIC_WORDS: manager, helper, helpers, util, utils, handler, service, processor,
+          coordinator, engine, wrapper, common, misc, data, info.
+        type: local
+      - stepNumber: 2
+        label: compLoop
+        description: For each component, judge the name it carries.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 8
+      - stepNumber: 3
+        description: >-
+          Read head = component.headNoun(), isDraft = ctx.isComponentDraft(component.id), and
+          idWords = the component's id and name split on underscores, hyphens and camel-case
+          boundaries.
+        type: local
+      - stepNumber: 4
+        description: Does the head noun name a building block that this component is not?
+        type: branch
+        condition: BLOCK_WORDS holds head and BLOCK_WORDS[head] !== component.componentType
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          ctx.addIssue('warning', 'MISLEADING_BLOCK_WORD', naming the head noun, the block it claims
+          and the component's actual type, with the advice to rename the component for what it is),
+          anchored on the component id and carrying isDraft.
+        type: local
+      - stepNumber: 6
+        description: Does the name lean on a generic role word?
+        type: branch
+        condition: any word of idWords is in GENERIC_WORDS
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          ctx.addIssue('warning', 'GENERIC_COMPONENT_NAME', naming the generic words found and
+          asking for a name that states the component's responsibility), anchored on the component
+          id and carrying isDraft.
+        type: local
+      - stepNumber: 8
+        description: >-
+          When the component is not an Adapter and ctx.interfaceMethodsOf(component.id) holds
+          exactly one method whose camel-case words include the head noun in singular or plural,
+          ctx.addIssue('warning', 'COMPONENT_IS_ITS_ONLY_METHOD', naming the method and asking
+          either to fold it into its caller or to name the component for its responsibility),
+          anchored on the component id and carrying isDraft.
+        type: local
+      - stepNumber: 9
+        description: >-
+          Build methodPairs from ctx.interfaces: resolve each interface's component, keep those
+          whose component is neither an Adapter nor a Portal (a forwarder's method mirrors the
+          command or route it exposes) and whose component.conceptNoun() is at least four
+          characters, and pair the interface, the component and each of the interface's methods.
+        type: local
+      - stepNumber: 10
+        label: stutterLoop
+        description: For each contract method, judge whether its name repeats what its component is about.
+        type: loop
+        loopKind: forEach
+        over: methodPairs
+        endStep: 12
+      - stepNumber: 11
+        description: >-
+          Does the method repeat its component's concept right after the verb? A qualified compound
+          such as getPackPolicy on policy_repository does not, because the concept is qualified
+          rather than repeated.
+        type: branch
+        condition: >-
+          the method name's camel-case words hold component.conceptNoun(), singular or plural,
+          directly after the leading verb
+        onTrueStep: 12
+        onFalseStep: 10
+      - stepNumber: 12
+        description: >-
+          ctx.addIssue('warning', 'METHOD_REPEATS_COMPONENT', naming the method, the concept it
+          repeats and the shorter name that remains once the concept is dropped), anchored on the
+          interface that declares the method, as UNUSED_METHOD is, and carrying the component's
+          draft state.
+        type: local
+  - name: methodCohesion
+    sourcePath: src/core/rules/heuristic/method-cohesion.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each implementation whose contract's component is an Orchestrator, build calledBy: a
+          map from method name to the set of components its narrative reaches through call and
+          dispatch steps that name a targetComponent; keep only methods that reach at least one
+          component.
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: For each Orchestrator, judge whether its methods share collaborators.
+        type: loop
+        loopKind: forEach
+        over: those implementations
+        endStep: 6
+      - stepNumber: 3
+        description: >-
+          Skip the implementation when calledBy holds fewer than two methods; otherwise union every
+          pair of methods that share at least one called component, and read off the groups.
+        type: local
+      - stepNumber: 4
+        description: >-
+          Keep groups holding two or more methods, so one specialized method beside a cohesive set
+          is not a finding.
+        type: local
+      - stepNumber: 5
+        description: >-
+          Do the methods fall into two or more groups that share no collaborator? When not, continue
+          with the next Orchestrator.
+        type: branch
+        condition: two or more groups remain
+        onTrueStep: 6
+        onFalseStep: 2
+      - stepNumber: 6
+        description: >-
+          ctx.addIssue('warning', 'INCOHESIVE_METHODS', naming each group's methods and the
+          components each group calls, with the advice to split the component along those groups or
+          to acknowledge a deliberate facade with a reasoned lint.allow), anchored on the component
+          id and carrying ctx.isComponentDraft(component.id).
+        type: local
 status: draft
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-15T01:22:33.636Z'
+updatedAt: '2026-09-17T15:19:26.150Z'
