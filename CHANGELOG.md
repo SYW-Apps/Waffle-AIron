@@ -9,8 +9,9 @@ a project that has not declared them, existing lock records read as stale, a
 project referencing a global pack's profile can newly fail `validate --ci`, and so
 can a chained subproject whose gate was waving cross-tree findings through or whose
 nested mount reaches outside its own project, a tree that still has a Specialist or
-a Gateway or breaks the new Supervisor and Actor dependency rules, or a tree holding
-a case the fixed validator rules used to miss. Nothing here is purely additive, so
+a Gateway or breaks the new Supervisor and Actor dependency rules, a tree whose
+narratives or names the new readability checks judge, or a tree holding a case the
+fixed validator rules used to miss. Nothing here is purely additive, so
 `[minor]` would understate it.
 
 ### A chained subproject is judged through its parent — never waved through
@@ -402,6 +403,50 @@ shared. Findings a tree did not see before come first, because `validate --ci` c
   - `host_server` supervises a `backup_schedule` Actor and delegates boot seeding to `instance_bootstrap`.
 - **The standard:** §3, §7, §8, §10 and §12 teach the model above, the language bindings add the module-of-functions
   form, and a live auction is the worked example.
+
+### Complexity, naming and cohesion are checked
+
+Wairon judged a tree's structure but not its readability. A narrative could grow to sixty steps of nested guards, a
+component could be called a registry while being a Store, a method could repeat the name of the component it sits on,
+and an Orchestrator could quietly hold two unrelated jobs. Each check below ships with a default drawn from measuring
+wairon's own tree, and the rules that add them pass their own thresholds.
+
+- **Narrative complexity, on two independent axes.**
+  - `NARRATIVE_COMPLEXITY` (warning) reports a narrative whose cognitive band is above the configured one, `moderate`
+    by default. The band comes from shape, not length: a branch, switch, loop or parallel step counts one plus its
+    nesting depth, each catch clause of a try counts the same, and each jump counts one, flat — so a flat list of calls
+    scores zero however long it is.
+  - `EXCESSIVE_NARRATIVE_STEPS` (warning) now **defaults to 25 steps**. Until now it ran only where a project had
+    configured a limit.
+  - `NARRATIVE_COMPLEXITY_OVER_MAX` and `NARRATIVE_STEPS_OVER_MAX` (errors) report only where `maxCognitiveLevel` or
+    `narrativeStepsHardMax` is set; neither has a default.
+  - The step check moved from `complexity-and-metadata` to the new `narrative-complexity` rule, so both axes of the
+    same judgement live in one place.
+- **Naming discipline.**
+  - `MISLEADING_BLOCK_WORD` (warning): a component's head noun names a building block it is not, such as a Store still
+    called `..._registry`. Only the head noun counts, so `pack_store_adapter` is fine — its qualifiers name what it
+    adapts.
+  - `GENERIC_COMPONENT_NAME` (warning): manager, helper, utils, handler, service and the rest say nothing.
+  - `METHOD_REPEATS_COMPONENT` (warning): a method repeating its component's concept directly after the verb
+    (`architecture_diagrams.renderDiagram`). A qualified compound such as `policy_repository.getPackPolicy` is not
+    repetition. Adapters and Portals are exempt, because a forwarder's method mirrors the command or route it exposes.
+  - `COMPONENT_IS_ITS_ONLY_METHOD` (warning): a component with one method, named after that method — fold it into its
+    caller, or name it for its responsibility.
+- **Cohesion.** `INCOHESIVE_METHODS` (warning) reports an Orchestrator whose methods fall into two or more groups of two
+  or more that share no called component: the shape of a component holding two jobs. A deliberate facade acknowledges it
+  with a reasoned `lint.allow`.
+- **A project's own configuration wins.** The `complexity`, `documentation` and `naming` configs now resolve as the
+  profile pack's settings overlaid with the project's own, which is how `rules.sddRuleSeverity` already resolved.
+  Before this, an installed pack's profile overrode a project's explicit value.
+- **What `wairon rules list` prints is checked against the specs.** Nothing compared a rule's description with the spec
+  method it implements, and four had drifted apart. `hidden-state` was still described by its pre-doctrine wording,
+  `declarative-assertions` omitted why its codes are the packs' own, and `portal-fields` read two ways at once.
+- **New configuration:** `complexity.cognitiveWarnAbove`, `complexity.maxCognitiveLevel` and
+  `complexity.narrativeStepsHardMax`, beside the existing `complexity.maxNarrativeSteps`.
+- **Wairon's own tree.** The seven components retyped from Registry to Store or Repository in an earlier review are
+  renamed for what they are: `credential_repository`, `project_repository` and `secret_repository`, and
+  `git_config_store`, `lock_store`, `pack_store` and `producer_config_store`. Every remaining finding the new
+  checks report carries a reasoned `lint.allow` naming the cleanup that removes it.
 
 ### Execution budgets: the topology gains a resource axis
 
@@ -1198,6 +1243,20 @@ method's narrative. Two mechanisms close that honestly:
      that declares the method. An `UNCONDITIONAL_CALL_CYCLE` allow goes stale where
      its members' ids sort differently by locale than by code unit (`_` against
      `-`): move it to the implementation the finding now names.
+9. **Re-run `validate --ci`: readability is checked now.** New warnings appear on
+   trees that configured nothing, so read them before you silence them.
+   - `EXCESSIVE_NARRATIVE_STEPS` above 25 steps, and `NARRATIVE_COMPLEXITY` above the
+     `moderate` band. Split the narrative into steps that call smaller methods, set
+     `complexity.maxNarrativeSteps` or `complexity.cognitiveWarnAbove` in
+     `.wai/project.yaml`, or allow the finding with a reason.
+   - `MISLEADING_BLOCK_WORD`, `GENERIC_COMPONENT_NAME`, `METHOD_REPEATS_COMPONENT`,
+     `COMPONENT_IS_ITS_ONLY_METHOD` and `INCOHESIVE_METHODS`. Rename or split, or
+     acknowledge the shape with a reasoned `lint.allow` — a deliberate facade is a
+     legitimate answer to the cohesion finding.
+   - **A project's own `complexity`, `documentation` and `naming` config now overrides
+     its profile pack's**, as its severities already did. Where a pack profile was
+     deliberately overriding a project value, move that setting into the pack or drop
+     it from the project.
 
 ## v5.1.0 (from v5.0.1)
 
