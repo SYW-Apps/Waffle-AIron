@@ -200,7 +200,7 @@ methods:
         description: Resolve the session cookie and forward to the web project orchestrator
         type: call
         targetComponent: web_project_orchestrator
-        targetMethod: listProjects
+        targetMethod: list
     detail: calls-only
   - name: projectCreate
     narrative:
@@ -210,7 +210,7 @@ methods:
           web project orchestrator
         type: call
         targetComponent: web_project_orchestrator
-        targetMethod: createProject
+        targetMethod: create
     detail: calls-only
   - name: projectLock
     narrative:
@@ -220,7 +220,7 @@ methods:
           orchestrator
         type: call
         targetComponent: web_project_orchestrator
-        targetMethod: lockProject
+        targetMethod: lock
     detail: calls-only
   - name: projectDestroy
     narrative:
@@ -230,7 +230,7 @@ methods:
           orchestrator
         type: call
         targetComponent: web_project_orchestrator
-        targetMethod: destroyProject
+        targetMethod: destroy
     detail: calls-only
   - name: loginWithPassword
     narrative:

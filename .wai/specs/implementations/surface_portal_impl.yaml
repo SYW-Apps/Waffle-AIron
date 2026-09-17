@@ -10,14 +10,14 @@ methods:
         description: Forward exportSurface to the surface orchestrator
         type: call
         targetComponent: surface_orchestrator
-        targetMethod: exportSurface
+        targetMethod: export
   - name: importSurface
     narrative:
       - stepNumber: 1
         description: Forward importSurface to the surface orchestrator
         type: call
         targetComponent: surface_orchestrator
-        targetMethod: importSurface
+        targetMethod: import
   - name: listSnapshots
     narrative:
       - stepNumber: 1

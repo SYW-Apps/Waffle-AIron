@@ -47,8 +47,8 @@ methods:
         type: string
   - name: listIdentityProviders
     description: >-
-      Forward to identity_orchestrator.listIdentityProviders with the session as the credential;
-      returns the configured identity providers (instance-admin only upstream).
+      Forward to identity_orchestrator.listProviders with the session as the credential; returns the
+      configured identity providers (instance-admin only upstream).
     signature: 'listIdentityProviders(sessionId: string): IdentityProviderConfig[]'
     returns: IdentityProviderConfig[]
     params:
@@ -56,9 +56,9 @@ methods:
         type: string
   - name: upsertIdentityProvider
     description: >-
-      Forward to identity_orchestrator.upsertIdentityProvider with the session as the credential;
-      creates or updates one identity-provider (SSO) configuration. The config carries a
-      clientSecretRef, never a raw secret.
+      Forward to identity_orchestrator.upsertProvider with the session as the credential; creates or
+      updates one identity-provider (SSO) configuration. The config carries a clientSecretRef, never
+      a raw secret.
     signature: >-
       upsertIdentityProvider(sessionId: string, config: IdentityProviderConfig):
       IdentityProviderConfig
@@ -70,8 +70,8 @@ methods:
         type: IdentityProviderConfig
   - name: removeIdentityProvider
     description: >-
-      Forward to identity_orchestrator.removeIdentityProvider with the session as the credential;
-      removes one identity-provider configuration by id.
+      Forward to identity_orchestrator.removeProvider with the session as the credential; removes
+      one identity-provider configuration by id.
     signature: 'removeIdentityProvider(sessionId: string, id: string): void'
     returns: void
     params:
@@ -302,4 +302,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-09-17T16:42:32.297Z'
+updatedAt: '2026-09-17T20:35:25.759Z'

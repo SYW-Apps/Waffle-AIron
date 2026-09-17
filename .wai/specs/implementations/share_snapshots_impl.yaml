@@ -4,7 +4,7 @@ description: Freezes a project view into an immutable snapshot payload set via t
 contract: ishare_snapshots
 sourcePath: src/server/sharesnapshots.ts
 methods:
-  - name: captureSnapshot
+  - name: capture
     narrative:
       - stepNumber: 1
         description: Start an empty snapshot payload set stamped with the project id, view, and capture time.
@@ -42,6 +42,7 @@ methods:
         description: The immutable snapshot payload set, ready to persist.
         type: return
         outcome: snapshot
+    symbol: captureSnapshot
 status: complete
 createdAt: '2026-07-18T09:30:49.067Z'
-updatedAt: '2026-09-15T20:47:10.517Z'
+updatedAt: '2026-09-17T20:29:55.665Z'

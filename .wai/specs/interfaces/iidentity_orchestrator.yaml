@@ -163,26 +163,24 @@ methods:
         type: string
       - name: code
         type: string
-  - name: listIdentityProviders
+  - name: listProviders
     description: >-
       Authenticate the caller, require instance-wide project:admin (the env-anchored instance-admin
       passes via bypass; a delegated project:admin@instance also passes) for identity-provider
       administration, and return every configured identity provider by forwarding to the policy
       repository. Not audited (a read).
-    signature: 'listIdentityProviders(credential: string): IdentityProviderConfig[]'
+    signature: 'listProviders(credential: string): IdentityProviderConfig[]'
     returns: IdentityProviderConfig[]
     params:
       - name: credential
         type: string
-  - name: upsertIdentityProvider
+  - name: upsertProvider
     description: >-
       Authenticate the caller, require instance-wide project:admin for identity-provider
       administration, create or update one identity-provider configuration through the policy
       repository, append a redacted idp.upsert (security) audit event, and return the stored config.
       The config carries a clientSecretRef, never a raw secret.
-    signature: >-
-      upsertIdentityProvider(credential: string, config: IdentityProviderConfig):
-      IdentityProviderConfig
+    signature: 'upsertProvider(credential: string, config: IdentityProviderConfig): IdentityProviderConfig'
     returns: IdentityProviderConfig
     params:
       - name: credential
@@ -191,12 +189,12 @@ methods:
         type: IdentityProviderConfig
     guarantees:
       - atomic
-  - name: removeIdentityProvider
+  - name: removeProvider
     description: >-
       Authenticate the caller, require instance-wide project:admin for identity-provider
       administration, remove one identity-provider configuration by id through the policy repository
       (an unknown id is rejected), and append a redacted idp.remove (security) audit event.
-    signature: 'removeIdentityProvider(credential: string, id: string): void'
+    signature: 'removeProvider(credential: string, id: string): void'
     returns: void
     params:
       - name: credential
@@ -277,11 +275,7 @@ methods:
     signature: 'appendAuditBestEffort(event: AuditEvent): void'
     returns: void
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: >-
-        D2b renames listIdentityProviders, upsertIdentityProvider, and removeIdentityProvider to
-        drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-09-17T17:52:23.837Z'
+updatedAt: '2026-09-17T20:37:21.582Z'

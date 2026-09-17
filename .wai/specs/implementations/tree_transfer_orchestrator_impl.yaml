@@ -46,7 +46,7 @@ methods:
           reconciling a lock at the far end.
         type: call
         targetComponent: state_hash
-        targetMethod: hashSpecTree
+        targetMethod: compute
         assertsGuarantees:
           - idempotent
       - stepNumber: 7

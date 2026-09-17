@@ -265,7 +265,7 @@ methods:
         description: Append the rule to the store
         type: call
         targetComponent: rule_store
-        targetMethod: addRule
+        targetMethod: add
   - name: registerPackRules
     narrative:
       - stepNumber: 1
@@ -281,7 +281,7 @@ methods:
         description: Append the pack rule to the store, after the built-ins
         type: call
         targetComponent: rule_store
-        targetMethod: addRule
+        targetMethod: add
 detail: full
 lint:
   allow:

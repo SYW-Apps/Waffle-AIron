@@ -76,21 +76,21 @@ methods:
         description: Forward to the identity orchestrator
         type: call
         targetComponent: identity_orchestrator
-        targetMethod: listIdentityProviders
+        targetMethod: listProviders
   - name: upsertIdentityProvider
     narrative:
       - stepNumber: 1
         description: Forward to the identity orchestrator
         type: call
         targetComponent: identity_orchestrator
-        targetMethod: upsertIdentityProvider
+        targetMethod: upsertProvider
   - name: removeIdentityProvider
     narrative:
       - stepNumber: 1
         description: Forward to the identity orchestrator
         type: call
         targetComponent: identity_orchestrator
-        targetMethod: removeIdentityProvider
+        targetMethod: removeProvider
   - name: countAuditEvents
     narrative:
       - stepNumber: 1

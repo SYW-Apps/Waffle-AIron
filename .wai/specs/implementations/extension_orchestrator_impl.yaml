@@ -56,7 +56,7 @@ methods:
           configuration, or its configuration cannot be read.
         type: return
         outcome: success
-  - name: loadExtensions
+  - name: load
     narrative:
       - stepNumber: 1
         description: >-
@@ -76,6 +76,7 @@ methods:
         description: Return the LoadedExtensions built from the given refs.
         type: return
         outcome: success
+    symbol: loadExtensions
   - name: packEntryLabel
     narrative:
       - stepNumber: 1
@@ -323,4 +324,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-09-13T11:48:25.224Z'
+updatedAt: '2026-09-17T20:28:28.127Z'

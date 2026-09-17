@@ -7,7 +7,7 @@ description: >-
 contract: igit_backing_orchestrator
 sourcePath: src/server/gitbacking.ts
 methods:
-  - name: listBackingBindings
+  - name: listBindings
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
@@ -34,6 +34,7 @@ methods:
         description: Return the caller's bindings
         type: return
         outcome: scoped bindings
+    symbol: listBackingBindings
   - name: bindScope
     narrative:
       - stepNumber: 1
@@ -170,7 +171,7 @@ methods:
         description: Return once removed
         type: return
         outcome: binding removed
-  - name: syncBackingScope
+  - name: syncScope
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
@@ -274,6 +275,7 @@ methods:
         description: Return whether anything was published
         type: return
         outcome: published flag
+    symbol: syncBackingScope
   - name: runPeriodicBackingSync
     narrative:
       - stepNumber: 1
@@ -320,4 +322,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-16T15:40:54.973Z'
-updatedAt: '2026-09-15T21:03:09.344Z'
+updatedAt: '2026-09-17T20:28:35.065Z'

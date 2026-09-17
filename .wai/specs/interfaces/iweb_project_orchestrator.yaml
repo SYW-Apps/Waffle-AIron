@@ -1,23 +1,23 @@
 id: iweb_project_orchestrator
 name: Web Project Orchestrator Interface
 description: >-
-  Contract for the web UI's project-lifecycle workflows. Every method is session-authenticated.
-  listProjects is owned here (scoped read); create routes through the project policy orchestrator's
-  profile-aware initialization; lock/destroy forward to the admin orchestrator with the session as
-  the credential, so the permission-rules authorization applies unchanged.
+  Contract for the web UI's project-lifecycle workflows. Every method is session-authenticated. list
+  is owned here (scoped read); create routes through the project policy orchestrator's profile-aware
+  initialization; lock/destroy forward to the admin orchestrator with the session as the credential,
+  so the permission-rules authorization applies unchanged.
 component: web_project_orchestrator
 methods:
-  - name: listProjects
+  - name: list
     description: >-
       Resolve the session to a Principal, resolve the caller's project scope over the organization
       tree, and return the hosted project records within that scope (a super-admin sees all). A
       read; not audited.
-    signature: 'listProjects(sessionId: string): HostedProjectRecord[]'
+    signature: 'list(sessionId: string): HostedProjectRecord[]'
     returns: HostedProjectRecord[]
     params:
       - name: sessionId
         type: string
-  - name: createProject
+  - name: create
     description: >-
       Create a hosted project placed in the REQUIRED owner unit, optionally with a profile selection
       — builds a ProjectInitRequest and forwards to
@@ -26,7 +26,7 @@ methods:
       applies to a web create exactly as it does to the MCP init (project:create over the unit
       enforced there).
     signature: >-
-      createProject(sessionId: string, id: string, unitId: string, profileSelection:
+      create(sessionId: string, id: string, unitId: string, profileSelection:
       ProjectProfileSelection): HostedProjectRecord
     returns: HostedProjectRecord
     params:
@@ -43,23 +43,23 @@ methods:
           Optional profile selection recorded into the project's config; a policy with
           requireProfileSelection rejects a create without one.
         optional: true
-  - name: lockProject
+  - name: lock
     description: >-
       Lock a project (validate-as-complete then write the StateId-scoped lock); forwards to
       admin_orchestrator.lockProject with the session as the credential (project:write permission
       enforced there).
-    signature: 'lockProject(sessionId: string, projectId: string): LockRecord'
+    signature: 'lock(sessionId: string, projectId: string): LockRecord'
     returns: LockRecord
     params:
       - name: sessionId
         type: string
       - name: projectId
         type: string
-  - name: destroyProject
+  - name: destroy
     description: >-
       Deregister a project and its tree; forwards to admin_orchestrator.destroyProject with the
       session as the credential (project:admin permission enforced there).
-    signature: 'destroyProject(sessionId: string, id: string): void'
+    signature: 'destroy(sessionId: string, id: string): void'
     returns: void
     params:
       - name: sessionId
@@ -67,11 +67,7 @@ methods:
       - name: id
         type: string
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: >-
-        D2b renames listProjects, createProject, lockProject, and destroyProject to drop the
-        component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-09-17T17:52:37.114Z'
+updatedAt: '2026-09-17T20:37:46.090Z'

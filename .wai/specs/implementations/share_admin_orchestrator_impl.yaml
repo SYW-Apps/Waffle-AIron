@@ -31,7 +31,7 @@ methods:
         description: Capture the requested view + artifacts into an immutable snapshot.
         type: call
         targetComponent: share_snapshots
-        targetMethod: captureSnapshot
+        targetMethod: capture
       - stepNumber: 6
         description: Persist the snapshot.
         type: call
@@ -86,7 +86,7 @@ methods:
         description: Re-capture the view into a new immutable snapshot.
         type: call
         targetComponent: share_snapshots
-        targetMethod: captureSnapshot
+        targetMethod: capture
       - stepNumber: 7
         description: Persist the new snapshot.
         type: call

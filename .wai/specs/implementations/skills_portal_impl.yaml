@@ -10,21 +10,21 @@ methods:
         description: Forward exportSddSkills call to skills orchestrator
         type: call
         targetComponent: skills_orchestrator
-        targetMethod: exportSddSkills
+        targetMethod: export
   - name: listResources
     narrative:
       - stepNumber: 1
         description: Forward the resource list to the skills resource workflow.
         type: call
         targetComponent: skills_resource_orchestrator
-        targetMethod: listResources
+        targetMethod: list
   - name: readResource
     narrative:
       - stepNumber: 1
         description: Forward the resource read to the skills resource workflow.
         type: call
         targetComponent: skills_resource_orchestrator
-        targetMethod: readResource
+        targetMethod: read
   - name: buildServerInstructions
     narrative:
       - stepNumber: 1

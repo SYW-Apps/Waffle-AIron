@@ -21,9 +21,7 @@ dependsOn:
 dependencyClass: read
 variant: composer
 lint:
-  allow:
-    - code: COMPONENT_IS_ITS_ONLY_METHOD
-      reason: D2b either folds this component into its caller or names it for its responsibility.
+  allow: []
 status: complete
 createdAt: '2026-07-29T10:49:01.675Z'
-updatedAt: '2026-09-17T17:53:12.359Z'
+updatedAt: '2026-09-17T20:37:03.382Z'

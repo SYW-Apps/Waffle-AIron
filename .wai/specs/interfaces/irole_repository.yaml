@@ -5,42 +5,38 @@ description: >-
   the role index.
 component: role_repository
 methods:
-  - name: createRole
+  - name: create
     description: 'Facade: create one role through the registry.'
-    signature: 'createRole(role: Role): Role'
+    signature: 'create(role: Role): Role'
     returns: Role
     params:
       - name: role
         type: Role
     guarantees:
       - atomic
-  - name: updateRole
+  - name: update
     description: 'Facade: update one role through the registry.'
-    signature: 'updateRole(role: Role): Role'
+    signature: 'update(role: Role): Role'
     returns: Role
     params:
       - name: role
         type: Role
     guarantees:
       - atomic
-  - name: deleteRole
+  - name: delete
     description: 'Facade: delete one role through the registry.'
-    signature: 'deleteRole(roleId: string): void'
+    signature: 'delete(roleId: string): void'
     returns: void
     params:
       - name: roleId
         type: string
-  - name: listRoles
+  - name: list
     description: 'Facade: list roles through the index.'
-    signature: 'listRoles(): Role[]'
+    signature: 'list(): Role[]'
     returns: Role[]
     params: []
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: >-
-        D2b renames createRole, updateRole, deleteRole, and listRoles to drop the component's own
-        concept.
+  allow: []
 status: complete
 createdAt: '2026-07-15T20:27:40.646Z'
-updatedAt: '2026-09-17T17:52:31.161Z'
+updatedAt: '2026-09-17T20:37:33.827Z'

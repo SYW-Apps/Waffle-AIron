@@ -181,7 +181,7 @@ methods:
         description: Forward to the git backing orchestrator with the caller's credential
         type: call
         targetComponent: git_backing_orchestrator
-        targetMethod: listBackingBindings
+        targetMethod: listBindings
   - name: bindBackingScope
     narrative:
       - stepNumber: 1
@@ -202,7 +202,7 @@ methods:
         description: Forward to the git backing orchestrator with the caller's credential
         type: call
         targetComponent: git_backing_orchestrator
-        targetMethod: syncBackingScope
+        targetMethod: syncScope
   - name: installGlobalPackArchive
     narrative:
       - stepNumber: 1

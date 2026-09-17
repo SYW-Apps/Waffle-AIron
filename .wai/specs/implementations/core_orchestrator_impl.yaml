@@ -133,7 +133,7 @@ methods:
         description: Delegate to state_hash
         type: call
         targetComponent: state_hash
-        targetMethod: hashSpecTree
+        targetMethod: compute
     conformance: 'off'
   - name: readLockRecord
     narrative:
@@ -157,7 +157,7 @@ methods:
         description: Delegate to architecture_diagrams
         type: call
         targetComponent: architecture_diagrams
-        targetMethod: renderDiagram
+        targetMethod: render
     conformance: 'off'
   - name: createChainedSubsystem
     sourcePath: src/core/provision.ts
@@ -425,7 +425,7 @@ methods:
         description: Digest the bound tree into its deterministic StateId
         type: call
         targetComponent: state_hash
-        targetMethod: hashSpecTree
+        targetMethod: compute
       - stepNumber: 3
         description: Restore the previous root binding unconditionally (also on failure paths)
         type: local

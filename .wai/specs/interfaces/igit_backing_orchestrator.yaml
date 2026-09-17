@@ -7,11 +7,11 @@ description: >-
   The secret store is never mirrored.
 component: git_backing_orchestrator
 methods:
-  - name: listBackingBindings
+  - name: listBindings
     description: >-
       Authenticate and return the bindings whose scope the caller holds project:admin over (an
       instance admin sees all). A read; not audited.
-    signature: 'listBackingBindings(credential: string): GitBackingBinding[]'
+    signature: 'listBindings(credential: string): GitBackingBinding[]'
     returns: GitBackingBinding[]
     params:
       - name: credential
@@ -41,7 +41,7 @@ methods:
         type: string
       - name: bindingId
         type: string
-  - name: syncBackingScope
+  - name: syncScope
     description: >-
       Authenticate, require project:admin over the binding's scope, and run the mirror sync:
       clone-or-open the backing repo's working copy; for a 'unit' binding mirror every project
@@ -51,7 +51,7 @@ methods:
       <workdir>/instance/ — NEVER the secret store, credentials only as hashed records; then
       commit+push skip-if-clean, record lastSyncAt on a published sync, and audit at info level.
       Returns whether anything was published.
-    signature: 'syncBackingScope(credential: string, bindingId: string): boolean'
+    signature: 'syncScope(credential: string, bindingId: string): boolean'
     returns: boolean
     params:
       - name: credential
@@ -68,9 +68,7 @@ methods:
     returns: void
     params: []
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames listBackingBindings and syncBackingScope to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-16T15:39:32.918Z'
-updatedAt: '2026-09-17T17:52:21.872Z'
+updatedAt: '2026-09-17T20:37:17.198Z'

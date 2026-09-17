@@ -5,41 +5,39 @@ description: >-
   rejection; performs no authorization.
 component: role_registry
 methods:
-  - name: createRole
+  - name: create
     description: >-
       Create one role: stamp id (when absent) and createdAt, reject a duplicate id, persist the full
       role collection durably, and refresh the store.
-    signature: 'createRole(role: Role): Role'
+    signature: 'create(role: Role): Role'
     returns: Role
     params:
       - name: role
         type: Role
     guarantees:
       - atomic
-  - name: updateRole
+  - name: update
     description: >-
       Update one existing role by id (name, description, permissions), preserving
       createdAt/createdBy; validation error when absent. Persist durably and refresh the store.
-    signature: 'updateRole(role: Role): Role'
+    signature: 'update(role: Role): Role'
     returns: Role
     params:
       - name: role
         type: Role
     guarantees:
       - atomic
-  - name: deleteRole
+  - name: delete
     description: >-
       Delete one role by id, persist durably, and refresh the store; deleting an absent role is a
       no-op. Callers are responsible for clearing role bindings that reference it.
-    signature: 'deleteRole(roleId: string): void'
+    signature: 'delete(roleId: string): void'
     returns: void
     params:
       - name: roleId
         type: string
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames createRole, updateRole, and deleteRole to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-15T20:27:34.104Z'
-updatedAt: '2026-09-17T17:52:30.111Z'
+updatedAt: '2026-09-17T20:37:31.977Z'

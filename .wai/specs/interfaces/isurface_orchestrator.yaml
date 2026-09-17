@@ -3,7 +3,7 @@ name: Surface Orchestrator Interface
 description: Workflow contract behind the surface portal — same five operations, owning the control flow.
 component: surface_orchestrator
 methods:
-  - name: exportSurface
+  - name: export
     description: >-
       Own-surface projection workflow with optional codec rendering and file output. When format is
       openapi the result carries renderedSet — one OpenAPI 3.1 document per backing portal — and
@@ -13,7 +13,7 @@ methods:
       each portalId — rather than silently writing only the first; distinct portals are never merged
       into a combined document.
     signature: >-
-      exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string):
+      export(maxAudience: string, format: string, outPath?: string, portalId?: string):
       SurfaceSnapshot
     returns: SurfaceSnapshot
     params:
@@ -27,9 +27,9 @@ methods:
       - name: portalId
         type: string
         optional: true
-  - name: importSurface
+  - name: import
     description: 'Foreign-document import workflow: read, decode (native or OpenAPI), stamp origin, persist.'
-    signature: 'importSurface(sourcePath: string, origin: string): SurfaceSnapshot'
+    signature: 'import(sourcePath: string, origin: string): SurfaceSnapshot'
     returns: SurfaceSnapshot
     params:
       - name: sourcePath
@@ -92,9 +92,7 @@ methods:
     returns: string[] | null
     params: []
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames exportSurface and importSurface to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-09-17T17:52:35.157Z'
+updatedAt: '2026-09-17T20:37:42.152Z'

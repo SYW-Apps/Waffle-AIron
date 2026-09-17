@@ -9,7 +9,7 @@ description: >-
 contract: iserver_instructions
 sourcePath: src/core/instructions.ts
 methods:
-  - name: buildServerInstructions
+  - name: build
     narrative:
       - stepNumber: 1
         description: >-
@@ -68,6 +68,7 @@ methods:
         type: return
         outcome: the composed instructions
     detail: full
+    symbol: buildServerInstructions
 status: complete
 createdAt: '2026-07-29T10:50:20.337Z'
-updatedAt: '2026-09-15T20:47:14.688Z'
+updatedAt: '2026-09-17T20:30:39.055Z'

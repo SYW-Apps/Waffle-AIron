@@ -5,16 +5,16 @@ description: >-
   read by the rule index.
 component: rule_store
 methods:
-  - name: addRule
+  - name: add
     description: Append a rule to the held set (registration order preserved).
-    signature: 'addRule(rule: SddRule): void'
+    signature: 'add(rule: SddRule): void'
     returns: void
     params:
       - name: rule
         type: SddRule
-  - name: listRules
+  - name: list
     description: Return every held rule in registration order.
-    signature: 'listRules(): SddRule[]'
+    signature: 'list(): SddRule[]'
     returns: SddRule[]
     params: []
   - name: clear
@@ -24,9 +24,7 @@ methods:
     params: []
     effect: write
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames addRule and listRules to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-14T19:17:10.227Z'
-updatedAt: '2026-09-17T17:52:32.158Z'
+updatedAt: '2026-09-17T20:37:35.714Z'

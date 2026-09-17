@@ -38,7 +38,7 @@ methods:
         type: return
         outcome: canvas html response
     symbol: handleViewDiagram
-  - name: handleRequest
+  - name: handle
     narrative:
       - stepNumber: 1
         description: Extract the bearer token from the request Authorization header
@@ -423,9 +423,9 @@ methods:
 lint:
   allow:
     - code: NARRATIVE_COMPLEXITY
-      reason: D2b splits the narrative this reports (handleRequest) into steps that call smaller methods.
+      reason: D2b splits the narrative this reports (handle) into steps that call smaller methods.
     - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits handleRequest, which lists more than 25 steps.
+      reason: D2b splits handle, which lists more than 25 steps.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-17T19:55:58.164Z'
+updatedAt: '2026-09-17T20:36:33.957Z'

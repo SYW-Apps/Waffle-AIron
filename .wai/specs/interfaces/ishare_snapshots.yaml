@@ -5,7 +5,7 @@ description: >-
   a live view is frozen into what a link serves.
 component: share_snapshots
 methods:
-  - name: captureSnapshot
+  - name: capture
     description: >-
       For the caller's session and the target project + view, build exactly the requested artifact
       payloads (canvas model via the host core adapter; openapi / standalone html via the host
@@ -13,7 +13,7 @@ methods:
       canvas build applies the session's own read authority, so a snapshot can never capture more
       than its creator may see.
     signature: >-
-      captureSnapshot(sessionId: string, projectId: string, view: string, artifacts: string[]):
+      capture(sessionId: string, projectId: string, view: string, artifacts: string[]):
       ShareSnapshot
     returns: ShareSnapshot
     params:
@@ -26,9 +26,7 @@ methods:
       - name: artifacts
         type: string[]
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames captureSnapshot to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-17T22:30:09.552Z'
-updatedAt: '2026-09-17T17:52:33.168Z'
+updatedAt: '2026-09-17T20:37:37.653Z'

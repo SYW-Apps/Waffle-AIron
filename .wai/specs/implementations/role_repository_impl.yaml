@@ -6,35 +6,39 @@ description: >-
 contract: irole_repository
 sourcePath: src/server/roles.ts
 methods:
-  - name: createRole
+  - name: create
     narrative:
       - stepNumber: 1
         description: Forward to the role registry
         type: call
         targetComponent: role_registry
-        targetMethod: createRole
-  - name: updateRole
+        targetMethod: create
+    symbol: createRole
+  - name: update
     narrative:
       - stepNumber: 1
         description: Forward to the role registry
         type: call
         targetComponent: role_registry
-        targetMethod: updateRole
-  - name: deleteRole
+        targetMethod: update
+    symbol: updateRole
+  - name: delete
     narrative:
       - stepNumber: 1
         description: Forward to the role registry
         type: call
         targetComponent: role_registry
-        targetMethod: deleteRole
-  - name: listRoles
+        targetMethod: delete
+    symbol: deleteRole
+  - name: list
     narrative:
       - stepNumber: 1
         description: Forward to the role index
         type: call
         targetComponent: role_index
-        targetMethod: listRoles
+        targetMethod: list
+    symbol: listRoles
 detail: calls-only
 status: complete
 createdAt: '2026-07-15T20:28:47.319Z'
-updatedAt: '2026-07-16T15:03:23.876Z'
+updatedAt: '2026-09-17T20:29:35.623Z'
