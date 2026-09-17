@@ -15,14 +15,14 @@ subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - auth_specialist
+  - authentication
   - organization_repository
   - project_relation_repository
   - public_surface_repository
-  - visibility_specialist
+  - visibility_rules
   - host_surfaces_adapter
   - project_registry
-  - authorization_specialist
+  - authorization
 status: complete
 createdAt: '2026-07-11T12:02:27.573Z'
 updatedAt: '2026-07-15T21:41:23.988Z'

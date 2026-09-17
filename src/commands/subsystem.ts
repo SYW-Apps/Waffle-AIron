@@ -9,6 +9,7 @@ import {
   moveSubsystemProject,
   externalizeSubsystem,
   internalizeSubsystem,
+  retireSpecialists as coreRetireSpecialists,
   composeAgentBrief as coreComposeAgentBrief,
   exportSpecTree as coreExportSpecTree,
   importSpecTree as coreImportSpecTree,
@@ -21,7 +22,8 @@ import {
   listDirectChainedSubprojects as coreListDirectChainedSubprojects,
   defaultPackSelections as coreDefaultPackSelections,
 } from '../core/index.js';
-import type { TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
+import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
+import type { SpecialistRetirement, TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
 import type {
   AgentBrief,
   AgentRecord,
@@ -114,10 +116,25 @@ export function listDirectChainedSubprojects(projectRoot: string): { dir: string
   return coreListDirectChainedSubprojects(projectRoot);
 }
 
+// cli_core_adapter.retireSpecialists — 1:1 forward backing `wairon doctor`: the
+// migration off the retired Specialist stereotype, planned, and with apply
+// written — each Specialist retyped as an Orchestrator with the dependencyClass
+// its dependencies decide, and each Specialist-based project variant rebased.
+export function retireSpecialists(apply: boolean): SpecialistRetirement {
+  return coreRetireSpecialists(apply);
+}
+
 // cli_core_adapter.defaultPackSelections — 1:1 forward: the store packs that
 // apply by default, seeded into a configuration `wairon init` composes.
 export function defaultPackSelections(): PackSelection[] {
   return coreDefaultPackSelections();
+}
+
+// cli_core_adapter.readLockState — 1:1 forward: the lock verdict (unlocked,
+// locked or stale) against the gate identity the caller computed now through
+// the validator adapter.
+export function readLockState(current: StateId): LockStatus {
+  return coreReadLockState(current);
 }
 
 interface SubsystemAddOptions {

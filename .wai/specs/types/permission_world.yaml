@@ -2,9 +2,9 @@ kind: value-object
 id: permission_world
 name: PermissionWorld
 description: >-
-  The gathered, read-only data the pure permission resolver walks: all relevant assignments, role
+  The gathered, read-only data the pure permission rules walk: all relevant assignments, role
   definitions, the organization-unit tree, and project placements. The calling orchestrator gathers
-  it (I/O); the resolver performs none.
+  it (I/O); the permission rules perform none.
 subsystem: sdd_host
 fields:
   - name: assignments
@@ -25,4 +25,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-15T20:25:29.509Z'
-updatedAt: '2026-07-15T20:25:29.554Z'
+updatedAt: '2026-09-15T21:03:01.093Z'

@@ -13,6 +13,8 @@ import { narrativeAntipatternsRule } from './narrative/narrative-antipatterns.js
 import { narrativeDetailRule } from './narrative/narrative-detail.js';
 import { portalFieldsRule } from './intrinsic/portal-fields.js';
 import { durabilityDeclarationRule } from './intrinsic/durability-declaration.js';
+import { logicDeclarationRule } from './intrinsic/logic-declaration.js';
+import { retiredStereotypesRule } from './intrinsic/retired-stereotypes.js';
 import { portalsRule } from './doctrine/portal-endpoints.js';
 import { portalCallAuthRule } from './doctrine/portal-call-auth.js';
 import { stereotypeDepsRule } from './doctrine/stereotype-dependencies.js';
@@ -102,6 +104,10 @@ export const SDD_RULES: SddRule[] = [
   // The declaration (spec-scoped, refused at the write boundary) before the
   // round-trip consequences it enables.
   durabilityDeclarationRule,
+  // The other spec-scoped stereotype declarations ride with it: a
+  // dependencyClass only on an Orchestrator, and no retired stereotype.
+  logicDeclarationRule,
+  retiredStereotypesRule,
   durabilityRule,
   untypedSeamRule,
   proseClaimRule,

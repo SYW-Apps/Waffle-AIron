@@ -16,6 +16,7 @@ mainstream structured language expresses this:
 | Concept | Rust | Go | TypeScript / Java / C# / Kotlin | Python |
 |---|---|---|---|---|
 | "class" (component) | `struct` + `impl` | `struct` + methods | `class` | `class` |
+| module of functions (an Orchestrator) | closures capturing the collaborators, or a module of `fn`s taking a `&Deps` | a constructor func returning a struct of closures | TypeScript/Kotlin: a factory `createX(deps)` returning functions closed over `deps`; Java/C#: the class form | a factory returning closures over the collaborators |
 | interface (method contract) | `trait` | `interface` | `interface` | `Protocol` / ABC |
 | port + implementations | trait + impl structs | interface + structs | interface + classes | Protocol + classes |
 | dependency injection | constructor (`new`) | constructor func | constructor | `__init__` |
@@ -23,6 +24,16 @@ mainstream structured language expresses this:
 Interfaces are **method contracts only** (no fields). Languages whose interfaces
 can't declare fields (Rust traits, Go interfaces) lose nothing — fields are an
 implementation detail of the concrete type, never part of the L3 contract.
+
+**Two forms of an Orchestrator.** An Orchestrator holds only its collaborators, so
+it is realized either as a class whose constructor takes them, or as a **module of
+functions** closed over them: a factory takes the collaborators once and returns
+the component's methods as functions that share them. Functional languages use the
+second form natively — a function that takes the collaborators and returns a
+record or map of functions closed over them, or partial application. In both forms
+the collaborators are the component's `dependsOn` and the functions are its L3
+methods, and nothing at module level holds state between calls: domain state
+belongs in a Store, runtime state in an Actor.
 
 ---
 

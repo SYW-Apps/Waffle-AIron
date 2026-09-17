@@ -9,9 +9,9 @@ methods:
   - name: createProject
     description: >-
       Authenticate the caller (bootstrap master or a user token). Validate the REQUIRED target
-      unitId (every project is placed at creation so the permission resolver can always enumerate it
-      — a fresh instance must create its first organization unit before creating projects; wairon
-      dev provisions a synthetic local unit at boot). Resolve the caller's project:create permission
+      unitId (every project is placed at creation so permission rules can always enumerate it — a
+      fresh instance must create its first organization unit before creating projects; wairon dev
+      provisions a synthetic local unit at boot). Resolve the caller's project:create permission
       over the target unit via the authorization seam (must be yes; an approval-valued caller must
       use the execute-primary project-lifecycle path). Allocate the project, bootstrap its isolated
       spec tree, and place it in the target unit.
@@ -335,4 +335,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-11T23:36:27.897Z'
+updatedAt: '2026-09-15T21:02:32.729Z'

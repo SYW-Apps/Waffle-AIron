@@ -51,7 +51,7 @@ interface CyEle {
   classes?: string;
   position?: { x: number; y: number };
 }
-function runEngine(model: unknown, opts: { internals?: boolean; dom?: Map<string, any> } = {}): CyEle[] {
+function runEngine(model: unknown, opts: { internals?: boolean; dom?: Map<string, any>; initialRoute?: string } = {}): CyEle[] {
   const makeElement = () => ({
     addEventListener() {}, removeEventListener() {},
     querySelectorAll() { return []; }, querySelector() { return null; },
@@ -104,7 +104,9 @@ function runEngine(model: unknown, opts: { internals?: boolean; dom?: Map<string
     };
   };
   const run = new Function('MODEL', 'opts', 'window', 'document', 'localStorage', 'cytoscape', loadEngineBody());
-  run(model, undefined, undefined, documentStub, localStorageStub, cytoscapeStub);
+  // opts.initialRoute opens the engine on a scope (a subsystem or component id).
+  const engineOpts = opts.initialRoute ? { initialRoute: opts.initialRoute } : undefined;
+  run(model, engineOpts, undefined, documentStub, localStorageStub, cytoscapeStub);
   if (!captured.elements) throw new Error('engine never handed elements to cytoscape');
   return captured.elements;
 }
@@ -245,6 +247,20 @@ describe('interactive canvas generation', () => {
     expect(billing.trustedLinks).toEqual([{ subsystem: 'shipping', reason: 'latency fast lane' }]);
 
     expect(model.issues).toHaveLength(1);
+  });
+
+  it('records ownership only under a live pattern: a retired Gateway contains nothing', () => {
+    buildFixture();
+    const at = { description: 'd', subsystem: 'billing', dependsOn: [] as string[], createdAt: now, updatedAt: now };
+    saveComponentSpec({ ...at, id: 'edge-portal', name: 'Edge Portal', componentType: 'Portal', portalType: 'HTTP_API', owns: [] } as any);
+    saveComponentSpec({ ...at, id: 'edge-gateway', name: 'Edge Gateway', componentType: 'Gateway', owns: ['edge-portal'] } as any);
+    const model = buildCanvasModel();
+
+    // The Repository still nests its Store; the Gateway's Portal stands on its own.
+    expect(model.components.find(c => c.id === 'billing-store')!.owner).toBe('billing-repo');
+    expect(model.components.find(c => c.id === 'edge-portal')!.owner).toBeUndefined();
+    // The Gateway keeps listing what it owned, so its details stay truthful.
+    expect(model.components.find(c => c.id === 'edge-gateway')!.owns).toEqual(['edge-portal']);
   });
 
   it('derives ERD edge cardinality from field type shapes and the optional flag', () => {
@@ -511,6 +527,56 @@ describe('unit deep-expansion (executed engine)', () => {
     const org = eles.find(e => e.data.id === 's~unit:org');
     expect(org!.position).toBeDefined();
     expect(org!.data.label).toContain('Org');
+  });
+});
+
+/** An auction subsystem: a Repository owning a Store and a Query, plus one
+ *  component of each retired stereotype, as a tree not yet migrated holds. The
+ *  Gateway still lists the Portal it owned; buildCanvasModel records no owner
+ *  under a Gateway, so that Portal is a component of the subsystem. */
+function stereotypeModel(): Record<string, unknown> {
+  const comp = (id: string, componentType: string, over: Record<string, unknown> = {}) => ({
+    id, name: id, description: '', subsystem: 'auction', componentType,
+    public: false, owns: [], dependsOn: [], interfaces: [], narratives: [], intents: [], ...over,
+  });
+  return {
+    system: { name: 'AuctionSys' },
+    generatedAt: now,
+    subsystems: [{ id: 'auction', name: 'Auction', description: '', trustedLinks: [] }],
+    components: [
+      comp('lot_repository', 'Repository', { owns: ['lot_store', 'bid_history'] }),
+      comp('lot_store', 'Store', { owner: 'lot_repository' }),
+      comp('bid_history', 'Query', { owner: 'lot_repository' }),
+      comp('pricing_specialist', 'Specialist'),
+      comp('edge_gateway', 'Gateway', { owns: ['edge_portal'] }),
+      comp('edge_portal', 'Portal'),
+    ],
+    edges: [],
+    types: [], typeEdges: [], dataEdges: [], issues: [],
+  };
+}
+
+describe('stereotype styling (executed engine)', () => {
+  const classesOf = (eles: CyEle[], id: string) => (eles.find(e => e.data.id === id)?.classes ?? '').split(/\s+/);
+
+  it('styles a Query in its own class inside its Repository and lists Query in the legend', () => {
+    const dom = new Map<string, any>();
+    const eles = runEngine(stereotypeModel(), { dom, initialRoute: 'lot_repository' });
+    expect(classesOf(eles, 'c~bid_history')).toContain('query');
+    expect(classesOf(eles, 'c~lot_store')).toContain('data');
+    expect(String(dom.get('legend').innerHTML)).toContain('Query');
+  });
+
+  it('renders retired Specialists and Gateways as plain boxes marked retired, never as containers', () => {
+    const dom = new Map<string, any>();
+    const eles = runEngine(stereotypeModel(), { dom, initialRoute: 'auction' });
+    expect(classesOf(eles, 'c~pricing_specialist')).toContain('retired');
+    expect(classesOf(eles, 'c~edge_gateway')).toContain('retired');
+    // Not a pattern: nothing to drill into, and the Portal it listed stands beside it.
+    expect(classesOf(eles, 'c~edge_gateway')).not.toContain('drillable');
+    expect(classesOf(eles, 'c~edge_portal')).toContain('entry');
+    expect(eles.some(e => e.data.parent === 'c~edge_gateway')).toBe(false);
+    expect(String(dom.get('legend').innerHTML)).toMatch(/Specialist.*Gateway.*retired/);
   });
 });
 

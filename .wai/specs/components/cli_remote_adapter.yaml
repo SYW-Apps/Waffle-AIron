@@ -10,11 +10,11 @@ description: >-
   endpoint — the data plane resolves its project binding BEFORE dispatching any tool, so a project
   that does not exist yet can never be addressed there — and goes instead to the web plane's
   instance-scoped project route, which accepts the same bearer through its auth bridge and resolves
-  project:create over the owner unit through the same permission resolver. The adapter owns the
-  whole wire concern: composing the envelope, unwrapping the tool-result envelope (a tool-level
-  refusal arrives as a 200 carrying isError, and must surface as a clear CLI error rather than an
-  apparent success), decoding base64 archive payloads, and turning transport failures into
-  actionable messages. It holds no state and makes no policy decisions.
+  project:create over the owner unit through the same permission rules. The adapter owns the whole
+  wire concern: composing the envelope, unwrapping the tool-result envelope (a tool-level refusal
+  arrives as a 200 carrying isError, and must surface as a clear CLI error rather than an apparent
+  success), decoding base64 archive payloads, and turning transport failures into actionable
+  messages. It holds no state and makes no policy decisions.
 subsystem: sdd_cli
 componentType: Adapter
 owns: []
@@ -23,4 +23,4 @@ dependsOn:
   - web_portal
 status: complete
 createdAt: '2026-08-12T18:31:27.931Z'
-updatedAt: '2026-08-12T18:38:15.487Z'
+updatedAt: '2026-09-15T21:02:27.973Z'

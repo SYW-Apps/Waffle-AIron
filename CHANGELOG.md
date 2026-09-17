@@ -8,10 +8,10 @@ and each needs one (see *Upgrading* below): machine-wide packs no longer apply t
 a project that has not declared them, existing lock records read as stale, a
 project referencing a global pack's profile can newly fail `validate --ci`, and so
 can a chained subproject whose gate was waving cross-tree findings through or whose
-nested mount reaches outside its own project, a Specialist that depends on a
-Registry or an Actor, or a tree holding a case the fixed validator rules used to
-miss. Nothing here is purely additive, so `[minor]` would
-understate it.
+nested mount reaches outside its own project, a tree that still has a Specialist or
+a Gateway or breaks the new Supervisor and Actor dependency rules, or a tree holding
+a case the fixed validator rules used to miss. Nothing here is purely additive, so
+`[minor]` would understate it.
 
 ### A chained subproject is judged through its parent — never waved through
 
@@ -96,7 +96,8 @@ what it promised. Three more gaps sat close by, one of them in hosted confinemen
 - **Two August fixes are finally on `dev`.** Their pull request was merged into a
   branch that had already been merged, so neither landed: namespace shadowing
   detectable from disk with the `--ci` draft-subsystem waiver, and the closed
-  Specialist dependency matrix. Their entries follow below.
+  Specialist dependency matrix. Their entries follow below; the Specialist has
+  since retired (see *Logic is an Orchestrator*).
 
 ### Chained subprojects: correct on the current model before it changes
 
@@ -340,6 +341,67 @@ newly fail on them (see *Upgrading*).
 - **The skills say what the rules check.** The narrative skill documents a switch's `on` as optional, the two ways to
   continue a loop, and a closing step per nested loop; the guides and the architect and implement skills say
   `PORTAL_WRITE_SHORTCUT` covers dispatch-table bindings.
+
+### Logic is an Orchestrator; Specialist and the Gateway pattern retire
+
+Wairon's building blocks said what a component holds, but not what its logic may reach. A Specialist was "one focused
+capability" with its own list of forbidden edges, and nothing checked whether logic only computed, only read, or ran a
+workflow. A Gateway was a pattern that owned its interceptors, so logic that several front doors need could not be
+shared. Findings a tree did not see before come first, because `validate --ci` can newly fail on them (see
+*Upgrading*).
+
+- **Newly reported, as errors.**
+  - `STEREOTYPE_RETIRED` reports a component still typed `Specialist` or `Gateway`. The write tools no longer offer
+    either and refuse to save a component that keeps one, so a Specialist is retyped before its component is edited.
+  - `DEPENDENCY_CLASS_VIOLATION` reports logic depending on a component its `dependencyClass` does not allow, and
+    `DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR` a class declared on anything but an Orchestrator.
+  - `ARCHITECTURE_VIOLATION_SUPERVISOR_DEP` reports a Supervisor depending on anything but Actors, Orchestrators,
+    Adapters or other Supervisors: a Supervisor reaches data only through workflows.
+  - `ACTOR_REACHED_WITHOUT_SUPERVISOR` reports a component that depends on a live Actor it does not supervise without
+    also depending on a Supervisor that supervises it.
+  - `ARCHITECTURE_VIOLATION_QUERY_DEP` and `UNOWNED_QUERY` judge the new Query block.
+- **Logic is an Orchestrator with a dependency class.**
+  - `dependencyClass: pure | read` is a first-class component field, enforced as a Store's `durability` is.
+    `sdd_add_component` and `sdd_update_spec` express it. Unset means a workflow.
+  - `pure` logic depends only on pure logic, and every block may use it: a Store may call a codec.
+  - `read` logic may also depend on read logic, Repositories, Indexes and Adapters. That it calls only their read
+    methods is not judged yet; that check waits for facade methods to carry effect tags.
+- **Specialist and the Gateway pattern are retired.**
+  - `wairon doctor` lists each Specialist with the dependency class its dependencies give it, or none (a workflow) when
+    a dependency fits neither, and says why. `doctor --fix` retypes each to an Orchestrator and rebases project
+    variants built on Specialist.
+  - A Gateway migrates by hand, following the steps in its finding.
+  - `ARCHITECTURE_VIOLATION_SPECIALIST_DEP` and `GATEWAY_CONTAINMENT` are gone, facade forwarding checks Repositories
+    only, and the cross-subsystem rule no longer accepts a Gateway as a front door.
+- **A gateway is a Portal variant.** It authenticates, authorizes, validates or rate-limits before it dispatches, by
+  calling that logic and returning early on a rejection. Inbound auth stays in the Portal's `auth`.
+- **Variants are built in.**
+  - wairon ships `arbiter`, `projector`, `composer` and `codec` on Orchestrator, and `gateway` on Portal.
+  - They load before the global (`~/.wairon/variants`) and project (`.wai/variants`) directories, and a later layer
+    overrides a variant with the same id.
+  - Until now the shapes the standard describes existed only in wairon's own repository.
+- **Query joins the Repository members**, for computed reads over its Repository's Store. It depends only on that Store,
+  a backend Adapter or pure logic, and lives only inside a Repository.
+- **Hidden-state no longer flags Supervisor and Actor files**, which own runtime state by design.
+- **One finding per mistake.**
+  - A dependency on a Portal or an Observer reports once.
+  - A retired component reports once: the dependency, containment and class rules skip it, and its migration decides
+    what its edges become.
+  - A Repository still judges its other members while one is retired. A Feature or Router component is judged again
+    once its retired member is migrated, because that member changes the count the rule checks.
+  - A pattern owning a pattern no longer adds `VISIBILITY_VIOLATION` on the inner pattern's dependants.
+- **The validator computes the lock's gate identity.** Core no longer reads the validator's rule list: `sdd_validator`
+  computes the identity, and core compares a lock with the identity its caller passes. The marker is now
+  `sha256+content+doctrine+inputs`, so every existing lock reads stale once.
+- **`sdd_rename_component`** renames a component together with the interfaces and implementations named after it, and
+  rewrites every reference in the tree: ownership, published interfaces, an interface's component, an implementation's
+  contract, component classes and `auth` sources.
+- **Wairon's own tree:**
+  - its 27 Specialists are Orchestrators (18 pure, 9 read), and 14 are renamed for what they are responsible for;
+  - `mcp_server` is an Orchestrator;
+  - `host_server` supervises a `backup_schedule` Actor and delegates boot seeding to `instance_bootstrap`.
+- **The standard:** §3, §7, §8, §10 and §12 teach the model above, the language bindings add the module-of-functions
+  form, and a live auction is the worked example.
 
 ### Execution budgets: the topology gains a resource axis
 
@@ -630,6 +692,9 @@ fixed to match the documented intent.
   silently merging into the root subsystem's id space.
 
 ### Specialist dependency matrix closed: Registry and Actor edges now flag
+
+**Superseded before release.** The Specialist has retired, and this code with it: see *Logic is an Orchestrator;
+Specialist and the Gateway pattern retire*. This entry records the dev builds that carried it.
 
 The Specialist is the wildcard block and was historically misused as a god
 component (up to holding entity state in memory); the deliberate
@@ -1092,10 +1157,23 @@ method's narrative. Two mechanisms close that honestly:
      admin and web export routes) that would leave out a chained mount now
      refuses: fix the mount, or pass `--allow-partial` / `allowPartial` to export
      without it.
-6. **A Specialist that depends on a Registry or an Actor is now an error**
-   (`ARCHITECTURE_VIOLATION_SPECIALIST_DEP`). Route storage through a Repository or
-   a Store and runtime work through a Supervisor, or retune the code in
-   `rules.sddRuleSeverity` while you migrate.
+6. **Retype Specialists and migrate Gateways: run `wairon doctor`, then
+   `wairon doctor --fix`.** A tree with either now fails `validate --ci` with
+   `STEREOTYPE_RETIRED`, and the write tools refuse to save a component that keeps
+   one.
+   - `--fix` retypes each Specialist to an Orchestrator with the `dependencyClass`
+     its dependencies give it, or none (a workflow) when a dependency fits neither,
+     and rebases project variants built on Specialist.
+   - Migrate each Gateway by hand: (1) the Portal it owns becomes the front door,
+     with `variant: gateway`; (2) its other members become dependencies of that
+     Portal; (3) its consumers depend on that Portal; (4) delete the Gateway spec.
+     `sdd_rename_component` can then give the Portal the Gateway's id.
+   - Remove `lint.allow` entries naming `ARCHITECTURE_VIOLATION_SPECIALIST_DEP` or
+     `GATEWAY_CONTAINMENT`, now reported as `UNKNOWN_LINT_ALLOW_CODE`, and any
+     `rules.sddRuleSeverity` entry naming them, which no longer does anything.
+   - Also newly reported, as errors: a Supervisor depending on anything but Actors,
+     Orchestrators, Adapters or other Supervisors, and a component that depends on
+     a live Actor without also depending on a Supervisor that supervises it.
 7. **Embedding wairon as a library: `saveProjectConfig` is removed** from the
    package's main entry. It replaced the whole `.wai/project.yaml` without
    validation and dropped keys the schema does not know. Write through the

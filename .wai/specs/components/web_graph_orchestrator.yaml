@@ -12,7 +12,7 @@ subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - auth_specialist
+  - authentication
   - landscape_orchestrator
   - host_core_adapter
   - host_validator_adapter

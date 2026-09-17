@@ -45,7 +45,7 @@ function project(): string {
   } as SubsystemSpec);
   saveComponentSpec({
     id: 'worker', name: 'Worker', description: 'a worker component',
-    subsystem: 'dom', componentType: 'Specialist', dependsOn: [], owns: [],
+    subsystem: 'dom', componentType: 'Orchestrator', dependencyClass: 'pure', dependsOn: [], owns: [],
     status: 'draft', createdAt: now, updatedAt: now,
   } as ComponentSpec);
   return root;

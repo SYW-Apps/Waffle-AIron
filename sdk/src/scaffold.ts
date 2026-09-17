@@ -2,9 +2,9 @@ import type { PackFile, PackScaffoldRequest } from './types.js';
 import { SDK_VERSION } from './version.js';
 
 // ---------------------------------------------------------------------------
-// Pack Scaffold Specialist (pack_scaffold_specialist_impl) — PURE template
-// rendering for `wairon pack init`. Produces an in-memory file map; writes
-// nothing. Code packs pin @wairon/sdk to the running SDK version.
+// Pack Scaffold (pack_scaffold_impl) — PURE template rendering for
+// `wairon pack init`. Produces an in-memory file map; writes nothing. Code
+// packs pin @wairon/sdk to the running SDK version.
 // ---------------------------------------------------------------------------
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);

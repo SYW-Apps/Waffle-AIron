@@ -21,9 +21,9 @@ You must read, respect, and update `.wai/phased_design.md` (specifically Stage 5
 1. **Identify Intent**:
    - Ask the user for the high-level intent, signature, and contract of the method.
 2. **Choose the detail level FIRST** (the narrative detail dial):
-   - `full` — a step-by-step narrative, with flow structure where the logic branches. Default for Orchestrators, Supervisors, Actors, Specialists, and patterns.
+   - `full` — a step-by-step narrative, with flow structure where the logic branches. Default for Orchestrators, Supervisors, Actors, and patterns.
    - `calls-only` — only the cross-component `call` choreography. Default for Portals, Observers, and Adapters (boundary pass-throughs: real logic belongs in the Orchestrator they forward to — if a Portal method needs branching, that is a smell).
-   - `intent` — no steps; instead write an `intent` paragraph stating what the method does and how it fails. Default for Stores, Indexes, and Registries. The validator enforces an intent floor: placeholder-thin prose is rejected.
+   - `intent` — no steps; instead write an `intent` paragraph stating what the method does and how it fails. Default for Stores, Indexes, Queries, and Registries. The validator enforces an intent floor: placeholder-thin prose is rejected.
    - Omit `detail` when the stereotype default already matches; declare it (per method or spec-level) only to override. Levels are floors — extra detail is never penalized.
 3. **Draft Narrative Steps** (for `full` / `calls-only`):
    - Narratives are a FLAT ordered list; the order mimics the code lines. Flow structure jumps by step number — blocks are just skipped regions.

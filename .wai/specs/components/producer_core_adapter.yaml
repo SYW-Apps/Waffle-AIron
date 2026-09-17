@@ -2,7 +2,7 @@ id: producer_core_adapter
 name: Producer Core Client Adapter
 description: >-
   Local client adapter crossing the subsystem boundary to sdd_core via its published portal: loads
-  the spec tree and renders the Mermaid diagram for the projection specialist.
+  the spec tree and renders the Mermaid diagram for spec_doc_pages.
 subsystem: sdd_producers
 componentType: Adapter
 owns: []
@@ -10,4 +10,4 @@ dependsOn:
   - core_portal
 status: complete
 createdAt: '2026-07-04T17:29:03.500Z'
-updatedAt: '2026-07-04T17:42:03.958Z'
+updatedAt: '2026-09-15T20:46:26.500Z'

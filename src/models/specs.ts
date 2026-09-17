@@ -333,7 +333,7 @@ export type DispatchBinding = z.infer<typeof DispatchBindingSchema>;
  * - `ram-projection` — rebuilt, not restored; exempt from the round-trip.
  * - `cache`          — evictable memo state whose loss is behavior-preserving;
  *                      hydration exempt (the honest home for TTL caches that
- *                      would otherwise hide inside a Specialist).
+ *                      would otherwise hide inside an Orchestrator).
  */
 export const DurabilitySchema = z.enum(['ram-projection', 'durable', 'read-through', 'cache']);
 export type Durability = z.infer<typeof DurabilitySchema>;

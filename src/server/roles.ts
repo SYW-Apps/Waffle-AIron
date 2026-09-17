@@ -15,10 +15,10 @@ import type { Role } from './types.js';
 //   - index    (indexGetRole/…):         the read path — pure projection.
 // The exported functions are the role_repository facade: pure 1:1 forwarding.
 //
-// BUILT-IN ROLES are intrinsic code constants, NOT stored rows: the
-// authorization specialist merges them into every PermissionWorld, so a binding
-// to one always resolves without a seed step (no seeding to forget, no silent
-// admin lockout). Role CRUD refuses to create/edit/delete a reserved id.
+// BUILT-IN ROLES are intrinsic code constants, NOT stored rows: authorization
+// merges them into every PermissionWorld, so a binding to one always resolves
+// without a seed step (no seeding to forget, no silent admin lockout). Role
+// CRUD refuses to create/edit/delete a reserved id.
 // ---------------------------------------------------------------------------
 
 /**

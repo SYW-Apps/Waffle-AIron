@@ -6,9 +6,19 @@ import {
   loadSubsystemSpec,
   loadSubsystemSpecs,
   loadSystemSpec,
+  loadComponentSpec,
   loadComponentSpecs,
+  loadInterfaceSpec,
   loadInterfaceSpecs,
+  loadImplementationSpec,
+  loadImplementationSpecs,
   loadTypeSpecs,
+  saveComponentSpec,
+  saveInterfaceSpec,
+  saveImplementationSpec,
+  getComponentPath,
+  getInterfacePath,
+  getImplementationPath,
   invalidateSpecCache,
   assertContainedProjectPath,
   rebaseReference,
@@ -19,7 +29,7 @@ import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } fro
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
 import type { ProjectConfig } from '../models/project.js';
-import type { SubsystemSpec } from '../models/index.js';
+import { SpecIdSchema, type SubsystemSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Project provisioning (sdd_core, used by sdd_host)
@@ -520,8 +530,27 @@ function buildRenameMap(subsystemId: string, externalize: boolean): Map<string, 
   return map;
 }
 
-/** Where a reference field sits: a component id, or a type a method parameter or type field names. */
-type RefPosition = 'component' | 'type';
+/**
+ * Where a reference field sits, by what it names. A component: dependsOn, owns
+ * and dispatch entries, lifecycle entrypoints, a published interface's
+ * component, an interface's component and narrative targets, each qualified by
+ * the loader into the namespace its spec loads in. An entity's componentClass:
+ * a component matched by name within the entity's own namespace, never
+ * qualified. An auth source: the component a narrative step's `auth.from`
+ * names as `component:<id>`, matched by its exact id and never qualified. An
+ * interface: an implementation's contract or a published interface's. A type:
+ * what a method parameter or a type field names.
+ */
+type RefPosition = 'component' | 'entity-class' | 'auth-source' | 'interface' | 'type';
+
+/** The `auth.from` prefix that makes a credential source a component reference. */
+const COMPONENT_AUTH_SOURCE = 'component:';
+
+/** A spec a reference rewrite changed, by kind and id; the L0 system spec's id is "system". */
+interface RewrittenSpec {
+  kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
+  id: string;
+}
 
 /** Rewrite cross-subsystem reference fields in every spec under `specsDir`, skipping `excludeDir`. */
 function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excludeDir?: string): void {
@@ -540,6 +569,10 @@ function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excl
  * loaded type, whichever namespace the naming spec sits in — the loader never
  * qualifies a parameter or field type — so moving the spec cannot change what it
  * resolves to, and a super:: hop written into one would match no type at all.
+ * An entity's componentClass and a narrative step's component auth source are
+ * matched by exact id, never qualified, so they too stay as written. An
+ * interface reference — a contract, a published interface — names a contract of
+ * a component in the moved subtree, which travels with it.
  */
 function rebaseMovedRefs(movedDir: string, mount: string, direction: 'into' | 'outOf'): void {
   const declared = componentIdsUnder(movedDir);
@@ -564,18 +597,19 @@ function componentIdsUnder(dir: string): Set<string> {
 
 /**
  * Rewrite the reference fields of every spec under `specsDir` through `remap`,
- * skipping `excludeDir`: dependsOn, dispatch and lifecycle components and
- * narrative call targets (component positions), and method parameter and type
- * field types (type positions).
+ * skipping `excludeDir`, and return the specs it rewrote. The fields: a
+ * component's dependsOn, owns and dispatch components; a subsystem's lifecycle
+ * entrypoints and published interfaces; the system's published interfaces; an
+ * interface's component and method parameter types; an implementation's
+ * contract, narrative targets and narrative `component:` auth sources; an
+ * entity's componentClass and field types.
  */
 function rewriteRefFields(
   specsDir: string,
   remap: (ref: string, position: RefPosition) => string,
   excludeDir?: string,
-): void {
-  const at = (ref: unknown, position: RefPosition): unknown =>
-    (typeof ref === 'string' ? remap(ref, position) : ref);
-
+): RewrittenSpec[] {
+  const rewritten: RewrittenSpec[] = [];
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
     if (excludeDir && isWithinDir(excludeDir, file)) continue;
     let raw: any;
@@ -587,67 +621,83 @@ function rewriteRefFields(
     if (!raw || typeof raw !== 'object') continue;
     let changed = false;
 
-    if ('componentType' in raw && Array.isArray(raw.dependsOn)) {
-      const next = raw.dependsOn.map((d: unknown) => at(d, 'component'));
-      if (next.some((v: unknown, i: number) => v !== raw.dependsOn[i])) {
-        raw.dependsOn = next;
+    /** Rewrite `holder[key]` in place when it holds a reference. */
+    const rewrite = (holder: any, key: string | number, position: RefPosition): void => {
+      const ref = holder?.[key];
+      if (typeof ref !== 'string') return;
+      const next = remap(ref, position);
+      if (next !== ref) {
+        holder[key] = next;
         changed = true;
       }
+    };
+    /** The entries of a list field; none when the field holds no list. */
+    const entries = (list: unknown): any[] => (Array.isArray(list) ? list : []);
+    /** Rewrite each reference a list field holds. */
+    const rewriteEach = (list: unknown, position: RefPosition): void => {
+      entries(list).forEach((_, i) => rewrite(list, i, position));
+    };
+    /** A published interface names the component realizing it and, optionally, its contract. */
+    const rewritePublished = (list: unknown): void => {
+      for (const published of entries(list)) {
+        rewrite(published, 'component', 'component');
+        rewrite(published, 'interface', 'interface');
+      }
+    };
+
+    let kind: RewrittenSpec['kind'] | undefined;
+    if ('componentType' in raw) {
+      kind = 'component';
+      rewriteEach(raw.dependsOn, 'component');
+      rewriteEach(raw.owns, 'component');
       // A Portal's dispatch table carries component refs of its own.
-      if (Array.isArray(raw.dispatch)) {
-        for (const b of raw.dispatch) {
-          const nc = at(b.component, 'component');
-          if (nc !== b.component) {
-            b.component = nc;
-            changed = true;
-          }
-        }
-      }
-    } else if ('parentSystem' in raw && Array.isArray(raw.lifecycle)) {
-      // Subsystem index: lifecycle entrypoints name components (same-subsystem
-      // by rule, but rewrite defensively so a legacy/misdeclared tree can't
-      // silently dangle across a migration).
-      for (const le of raw.lifecycle) {
-        const nc = at(le.component, 'component');
-        if (nc !== le.component) {
-          le.component = nc;
-          changed = true;
-        }
-      }
+      for (const binding of entries(raw.dispatch)) rewrite(binding, 'component', 'component');
+    } else if ('parentSystem' in raw) {
+      kind = 'subsystem';
+      // Lifecycle entrypoints name components (same-subsystem by rule, but
+      // rewrite defensively so a legacy/misdeclared tree can't silently dangle
+      // across a migration).
+      for (const entrypoint of entries(raw.lifecycle)) rewrite(entrypoint, 'component', 'component');
+      rewritePublished(raw.publicInterfaces);
+    } else if ('vision' in raw) {
+      kind = 'system';
+      rewritePublished(raw.publicInterfaces);
     } else if ('component' in raw && Array.isArray(raw.methods)) {
-      for (const m of raw.methods) {
-        if (!Array.isArray(m.params)) continue;
-        for (const p of m.params) {
-          const nt = at(p.type, 'type');
-          if (nt !== p.type) {
-            p.type = nt;
-            changed = true;
-          }
-        }
+      kind = 'interface';
+      rewrite(raw, 'component', 'component');
+      for (const method of raw.methods) {
+        for (const param of entries(method?.params)) rewrite(param, 'type', 'type');
       }
     } else if ('contract' in raw && Array.isArray(raw.methods)) {
-      for (const m of raw.methods) {
-        if (!Array.isArray(m.narrative)) continue;
-        for (const step of m.narrative) {
-          const nt = at(step.targetComponent, 'component');
-          if (nt !== step.targetComponent) {
-            step.targetComponent = nt;
-            changed = true;
+      kind = 'implementation';
+      rewrite(raw, 'contract', 'interface');
+      for (const method of raw.methods) {
+        for (const step of entries(method?.narrative)) {
+          rewrite(step, 'targetComponent', 'component');
+          // A credential source names its component after the component: prefix.
+          const source = step?.auth?.from;
+          if (typeof source === 'string' && source.startsWith(COMPONENT_AUTH_SOURCE)) {
+            const id = source.slice(COMPONENT_AUTH_SOURCE.length);
+            const next = remap(id, 'auth-source');
+            if (next !== id) {
+              step.auth.from = `${COMPONENT_AUTH_SOURCE}${next}`;
+              changed = true;
+            }
           }
         }
       }
     } else if ('kind' in raw && Array.isArray(raw.fields)) {
-      for (const f of raw.fields) {
-        const nt = at(f.type, 'type');
-        if (nt !== f.type) {
-          f.type = nt;
-          changed = true;
-        }
-      }
+      kind = 'type';
+      rewrite(raw, 'componentClass', 'entity-class');
+      for (const field of raw.fields) rewrite(field, 'type', 'type');
     }
 
-    if (changed) writeYamlFile(file, raw);
+    if (changed && kind) {
+      writeYamlFile(file, raw);
+      rewritten.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
+    }
   }
+  return rewritten;
 }
 
 /**
@@ -693,4 +743,162 @@ function patchSubsystemIndex(indexPath: string, mutate: (spec: any) => void): vo
   mutate(raw);
   raw.updatedAt = new Date().toISOString();
   writeYamlFile(indexPath, raw);
+}
+
+// ---------------------------------------------------------------------------
+// Component rename
+//
+// Every other spec names a component by its id, so renaming one is a move and a
+// rewrite: the component, with the interface and implementation named after
+// it, moves to the new ids and files, and every reference in the bound tree
+// follows through the rewriter the subsystem migrations use. Display names are
+// the author's to change.
+// ---------------------------------------------------------------------------
+
+/** One spec a component rename moved to a new id (spec_rename). */
+export interface SpecRename {
+  kind: 'component' | 'interface' | 'implementation';
+  /** The id before the rename. */
+  from: string;
+  /** The id after the rename. */
+  to: string;
+}
+
+/** What renaming a component changed (component_rename). */
+export interface ComponentRename {
+  /** The component, and each interface and implementation named after it (i<id>, <id>_impl), with its old and new id. */
+  renamed: SpecRename[];
+  /** Ids of the other specs whose references to a renamed id were rewritten. */
+  rewritten: string[];
+}
+
+/**
+ * Rename a component and every reference to it in the bound tree. The interface
+ * named i<componentId> and the implementation named <componentId>_impl that
+ * realizes one of the component's contracts move with it; interfaces and
+ * implementations named otherwise keep their ids, and only their component and
+ * contract references change. Before writing anything it refuses a component
+ * that does not exist (component-missing), one inside a chained subproject
+ * (chained-component), a new id outside the id grammar (invalid-id), and a new
+ * id — or the interface or implementation id it implies — already in use
+ * (id-taken).
+ */
+export function renameComponent(componentId: string, newId: string): ComponentRename {
+  // Steps 1–3: the component must exist…
+  const component = loadComponentSpec(componentId);
+  if (!component) {
+    throw new WaironError(`component-missing: no component has the id "${componentId}".`);
+  }
+  // Steps 4–5: …and belong to the bound project itself.
+  if (componentId.includes('::')) {
+    throw new WaironError(
+      `chained-component: "${componentId}" lives in a chained subproject; rename it from that project's own root.`,
+    );
+  }
+  // Steps 6–7: the new id must be a plain lowercase identifier.
+  if (!SpecIdSchema.safeParse(newId).success) {
+    throw new WaironError(`invalid-id: "${newId}" is not a lowercase identifier with no namespace separator.`);
+  }
+
+  // Steps 8–10: every component, interface and implementation spec.
+  const components = loadComponentSpecs();
+  const interfaces = loadInterfaceSpecs();
+  const implementations = loadImplementationSpecs();
+
+  // Steps 11–12: nothing may already hold the new ids.
+  const interfaceId = `i${newId}`;
+  const implementationId = `${newId}_impl`;
+  const taken = [
+    components.some((c) => c.id === newId) ? `component "${newId}"` : null,
+    interfaces.some((i) => i.id === interfaceId) ? `interface "${interfaceId}"` : null,
+    implementations.some((impl) => impl.id === implementationId) ? `implementation "${implementationId}"` : null,
+  ].filter((holder): holder is string => holder !== null);
+  if (taken.length > 0) {
+    throw new WaironError(`id-taken: the new id, or an id it implies, is already in use: ${taken.join(', ')}.`);
+  }
+
+  // Step 13: what moves — the component's interface named after it, and the
+  // implementation named after it that realizes one of its contracts.
+  const contracts = interfaces.filter((i) => i.component === componentId);
+  const movingInterface = contracts.find((i) => i.id === `i${componentId}`);
+  const movingImplementation = implementations.find((impl) =>
+    impl.id === `${componentId}_impl` && contracts.some((i) => i.id === impl.contract));
+  const renamed: SpecRename[] = [
+    { kind: 'component', from: componentId, to: newId },
+    ...(movingInterface ? [{ kind: 'interface' as const, from: movingInterface.id, to: interfaceId }] : []),
+    ...(movingImplementation ? [{ kind: 'implementation' as const, from: movingImplementation.id, to: implementationId }] : []),
+  ];
+
+  // Step 14: every reference to a renamed id across the bound tree, the moved
+  // specs' own files included, before anything is saved: placement then finds a
+  // renamed member's owner through its rewritten owns. The moved specs report as
+  // renamed, not as rewritten.
+  const rewritten = rewriteRefFields(aiPathsAt(getProjectRoot()).specsDir(), (ref, position) => {
+    if (position === 'component' || position === 'entity-class' || position === 'auth-source') {
+      return ref === componentId ? newId : ref;
+    }
+    if (position === 'interface' && ref === movingInterface?.id) return interfaceId;
+    return ref;
+  })
+    .filter((spec) => !renamed.some((moved) => moved.kind === spec.kind && moved.from === spec.id))
+    .map((spec) => spec.id);
+
+  // Step 15: the rewrite changed files outside the save paths.
+  invalidateSpecCache();
+
+  // Step 16: the moved specs as the rewrite left them, their references to the
+  // component and its contract already following the rename.
+  const movedComponent = loadComponentSpec(componentId) ?? component;
+  const movedInterface = movingInterface ? loadInterfaceSpec(movingInterface.id) ?? movingInterface : null;
+  const movedImplementation = movingImplementation
+    ? loadImplementationSpec(movingImplementation.id) ?? movingImplementation
+    : null;
+
+  // Step 17: the component under its new id, where the loader places it — an
+  // owned member nested under its owner.
+  saveComponentSpec({ ...movedComponent, id: newId });
+  // Step 18: its own interface, when that moves, under i<newId>.
+  if (movedInterface) saveInterfaceSpec({ ...movedInterface, id: interfaceId, component: newId });
+  // Step 19: its own implementation, when that moves, under <newId>_impl.
+  if (movedImplementation) {
+    // The nested layout keeps an implementation's file beside its contract's, so
+    // one whose contract keeps its id is written to the very file it moves out
+    // of. That file is cleared first: the loader refuses to write over another id.
+    const oldFile = getImplementationPath(movedImplementation.id);
+    if (path.resolve(getImplementationPath(implementationId, movedImplementation.contract)) === path.resolve(oldFile)) {
+      fs.unlinkSync(oldFile);
+    }
+    saveImplementationSpec({ ...movedImplementation, id: implementationId });
+  }
+
+  // Step 20: remove each moved spec's old file, found by its old id — which the
+  // loader still indexes beside the new one, so a folder a save moved is followed.
+  removeSpecFile(getComponentPath(componentId), componentId);
+  if (movingInterface) removeSpecFile(getInterfacePath(movingInterface.id), movingInterface.id);
+  if (movingImplementation) removeSpecFile(getImplementationPath(movingImplementation.id), movingImplementation.id);
+
+  // Step 21: the removed files changed the tree outside the save paths.
+  invalidateSpecCache();
+  // Step 22: what moved, and what was rewritten.
+  return { renamed, rewritten };
+}
+
+/**
+ * Remove a spec file that still holds the spec with `id`, then each folder the
+ * removal leaves empty, up to the bound specs root. A file holding anything
+ * else — or nothing any more — is left alone.
+ */
+function removeSpecFile(file: string, id: string): void {
+  if (!fs.existsSync(file)) return;
+  try {
+    if ((readYamlFile(file) as { id?: unknown } | null)?.id !== id) return;
+  } catch {
+    return;
+  }
+  fs.unlinkSync(file);
+  const specsRoot = path.resolve(aiPathsAt(getProjectRoot()).specsDir());
+  for (let dir = path.dirname(path.resolve(file)); dir !== specsRoot && isWithinDir(specsRoot, dir); dir = path.dirname(dir)) {
+    if (fs.readdirSync(dir).length > 0) break;
+    fs.rmdirSync(dir);
+  }
 }

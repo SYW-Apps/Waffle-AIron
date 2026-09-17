@@ -7,13 +7,13 @@ description: >-
   the periodic skip-if-clean sweep), and per-project producer targets. Lock validates the tree
   as-complete via the validator adapter, then records a lock scoped to the exact validated state id.
   Never merges to production itself. Project/key/lifecycle methods authorize through the permission
-  resolver (project:create/write/admin over the relevant scope); git and producer administration
+  rules (project:create/write/admin over the relevant scope); git and producer administration
   require project:admin over the project (sync/commit require project:write).
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - auth_specialist
+  - authentication
   - project_registry
   - credential_registry
   - host_core_adapter
@@ -22,9 +22,9 @@ dependsOn:
   - host_producer_adapter
   - secret_registry
   - organization_repository
-  - authorization_specialist
+  - authorization
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:33:51.178Z'
-updatedAt: '2026-09-11T21:03:40.621Z'
+updatedAt: '2026-09-15T21:02:40.726Z'

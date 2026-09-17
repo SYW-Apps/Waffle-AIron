@@ -25,7 +25,7 @@ import type {
 //
 // create/lock/destroy are THIN forwards to the admin orchestrator,
 // passing the session id AS the credential. Those admin functions authorize
-// through the permission resolver (project:create / project:write /
+// through permission rules (project:create / project:write /
 // project:admin over the org tree) and re-validate, so a signed-in human manages
 // exactly the projects their permissions allow — no new authorization surface is
 // introduced here.
@@ -42,7 +42,7 @@ import type {
  * on. "Can act on" is the UNION of project:read, project:write, and
  * project:admin actionable scopes: a user who can WRITE (or admin) a project
  * must be able to SEE it and open its canvas even without an explicit
- * project:read grant — capabilities are independent atoms in the resolver, so
+ * project:read grant — capabilities are independent atoms in permission rules, so
  * this consumer-side union is where "any access → visible" is expressed (the
  * same pattern as the landscape readView's read ∪ admin). Breadcrumb (context)
  * scopes are excluded: an ancestor shown only for navigation is not a project

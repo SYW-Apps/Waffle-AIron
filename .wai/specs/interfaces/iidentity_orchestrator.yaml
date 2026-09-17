@@ -5,10 +5,11 @@ description: >-
   (unauthenticated start/complete with first-login user provisioning), plus credential-authenticated
   management of users, their role bindings, user-bound MCP/API tokens, identity-provider (SSO)
   configuration, and admin-only audit read/count. Authorization resolves through the permission
-  resolver (project:admin over the relevant scope, or the env-anchored instance-admin bypass) —
-  never stored grants. Follows the control-plane house pattern: every credential-bearing method
-  authenticates via the auth specialist before any effect. The SSO start/complete pair carries no
-  credential and derives trust entirely from the signed SSO state and the provider code exchange.
+  rules (project:admin over the relevant scope, or the env-anchored instance-admin bypass) — never
+  stored grants. Follows the control-plane house pattern: every credential-bearing method
+  authenticates via the authentication component before any effect. The SSO start/complete pair
+  carries no credential and derives trust entirely from the signed SSO state and the provider code
+  exchange.
 component: identity_orchestrator
 methods:
   - name: mintToken
@@ -22,7 +23,7 @@ methods:
       request.projects; a subproject-qualified entry ('projectId::subsystemId') is validated at mint
       time — the named subsystem must exist on that project and carry a projectPath (an unknown or
       non-chained mount is rejected with guidance, never stored broken). The token carries no grants
-      and the resolver gates per project at use time. Persist only the hashed credential record,
+      and permission rules gate per project at use time. Persist only the hashed credential record,
       append a redacted token.mint audit event, and return the plaintext exactly once.
     signature: 'mintToken(credential: string, request: TokenMintRequest): string'
     returns: string
@@ -84,11 +85,11 @@ methods:
     description: >-
       Authenticate the caller, require project:admin over the target user's home unit (both the
       incoming and, on update, the existing home unit), REJECT a record claiming a reserved built-in
-      subject id (the persisted boot-reserved UUIDs or the legacy 'builtin:*' literals, via the auth
-      specialist's reserved-subject guard — an admin-created user must never inherit the built-in
-      bypass), create or update the hosted user (subject, status, home unit, roleBindings) through
-      the user repository, and append a redacted audit event distinguishing creation from update.
-      User PERMISSIONS are managed via role bindings + the assignment grid
+      subject id (the persisted boot-reserved UUIDs or the legacy 'builtin:*' literals, via the
+      reserved-subject guard of the authentication component — an admin-created user must never
+      inherit the built-in bypass), create or update the hosted user (subject, status, home unit,
+      roleBindings) through the user repository, and append a redacted audit event distinguishing
+      creation from update. User PERMISSIONS are managed via role bindings + the assignment grid
       (permission_admin_orchestrator), never stored on the user record.
     signature: 'upsertUser(credential: string, record: HostedUserRecord): HostedUserRecord'
     returns: HostedUserRecord
@@ -124,8 +125,8 @@ methods:
     description: >-
       Begin a headless SSO login: resolve the enabled identity-provider configuration through the
       policy repository, generate a nonce, sign an SSO state binding providerId, nonce, and
-      redirectUri via the auth specialist, build the provider authorization URL through the identity
-      provider adapter, append a best-effort sso.start (info) audit event, and return the
+      redirectUri via the authentication component, build the provider authorization URL through the
+      identity provider adapter, append a best-effort sso.start (info) audit event, and return the
       authorization URL. Starting a login is unauthenticated by nature — no caller credential is
       required or accepted; the signed state is the only integrity anchor carried into the callback.
     signature: 'startSsoLogin(providerId: string, redirectUri: string): string'
@@ -137,18 +138,18 @@ methods:
         type: string
   - name: completeSsoLogin
     description: >-
-      Complete a headless SSO login: verify the signed SSO state via the auth specialist (a tampered
-      or expired state is rejected), resolve the bound identity-provider configuration, exchange the
-      authorization code and resolve the external subject through the provider adapter, and read the
-      verified id_token's groups claim through the adapter (resolveGroups — meaningful only after
-      resolveSubject verified the same summary). ADMIN GROUPS: when the verified groups intersect
-      the provider's adminGroupClaims, the hosted user is provisioned/refreshed with a binding to
-      the built-in 'sso-admin' role at instance scope (which grants project:admin + project:create
-      instance-wide — never the *:* / instance-admin bypass, which is env-reserved to the built-in
-      admin account and can never appear on a user record or minted token); a later login after
-      dropping out of the group removes the binding again. Look up the hosted user by issuer +
-      external subject, provision a first-login active user record when absent (with the sso-admin
-      binding when in the admin group, otherwise empty roleBindings — an admin assigns
+      Complete a headless SSO login: verify the signed SSO state via the authentication component (a
+      tampered or expired state is rejected), resolve the bound identity-provider configuration,
+      exchange the authorization code and resolve the external subject through the provider adapter,
+      and read the verified id_token's groups claim through the adapter (resolveGroups — meaningful
+      only after resolveSubject verified the same summary). ADMIN GROUPS: when the verified groups
+      intersect the provider's adminGroupClaims, the hosted user is provisioned/refreshed with a
+      binding to the built-in 'sso-admin' role at instance scope (which grants project:admin +
+      project:create instance-wide — never the *:* / instance-admin bypass, which is env-reserved to
+      the built-in admin account and can never appear on a user record or minted token); a later
+      login after dropping out of the group removes the binding again. Look up the hosted user by
+      issuer + external subject, provision a first-login active user record when absent (with the
+      sso-admin binding when in the admin group, otherwise empty roleBindings — an admin assigns
       roles/permissions afterwards), reject re-login for an existing deactivated user before
       minting, then mint a grant-free user-bound MCP/API token (projects '*', acting as the user's
       live permission), persisting only its hashed credential record. Append a best-effort sso.login
@@ -224,7 +225,7 @@ methods:
       optionally subproject-qualified ('projectId::subsystemId', validated at mint time: the named
       subsystem must exist and carry a projectPath), scoping the caller's own token into a chained
       subproject; the token carries no grants — it acts as the caller's OWN live permission on that
-      project (the resolver gates read vs write at use time; the write flag is advisory for the
+      project (permission rules gate read vs write at use time; the write flag is advisory for the
       token label). Persist only the hashed record, append a token.mint.self audit event, and return
       the plaintext once. Separate from the caller's login session.
     signature: 'mintSelfToken(credential: string, projectId: string, write: boolean): string'
@@ -277,4 +278,4 @@ methods:
     returns: void
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-07-24T18:21:05.649Z'
+updatedAt: '2026-09-15T21:02:48.476Z'

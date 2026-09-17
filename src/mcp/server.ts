@@ -20,11 +20,16 @@ import { ProjectNotInitializedError } from '../utils/errors.js';
 import { getStatusReport } from '../commands/status.js';
 import type { ProjectConfig } from '../models/project.js';
 // mcp_core_adapter's project configuration read (icore_portal loadProjectConfig,
-// null when the project has none). STATIC, not lazily required: same reasoning
-// as requireLoader below — a static binding stays correct per bound project,
-// and a lazy require of a relative path does not resolve under the test runner
-// or inside the bundled hosted server.
-import { loadProjectConfig as coreLoadProjectConfig } from '../core/index.js';
+// null when the project has none) and component rename (icore_portal
+// renameComponent). STATIC, not lazily required: same reasoning as
+// requireLoader below — a static binding stays correct per bound project, and a
+// lazy require of a relative path does not resolve under the test runner or
+// inside the bundled hosted server.
+import {
+  loadProjectConfig as coreLoadProjectConfig,
+  renameComponent as coreRenameComponent,
+  type ComponentRename,
+} from '../core/index.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
 import { resolveNarrativeLabels } from '../core/narrative-labels.js';
@@ -180,6 +185,30 @@ function loadProjectConfig(): ProjectConfig | null {
   return coreLoadProjectConfig();
 }
 
+// mcp_core_adapter.renameComponent — the same forward for a component rename:
+// core moves the component with the interface and implementation named after
+// it, rewrites every reference to it in the bound tree, and reports both.
+function renameComponent(componentId: string, newId: string): ComponentRename {
+  return coreRenameComponent(componentId, newId);
+}
+
+/**
+ * mcp_orchestrator.renameComponent step 1 — the component id a tool's id names
+ * in the bound tree: the id itself when a component holds it, a root-anchored
+ * `::id` as its bare id, and a bare id naming exactly one chained component as
+ * that component's qualified id, so core refuses it as a chained component
+ * rather than a missing one. Any other id is passed on as given, for core to
+ * refuse.
+ */
+function qualifiedComponentId(id: string): string {
+  const ids = loadComponentSpecs().map((c) => c.id);
+  if (ids.includes(id)) return id;
+  const bare = id.startsWith('::') ? id.slice(2) : id;
+  if (ids.includes(bare)) return bare;
+  const chained = ids.filter((known) => known.endsWith(`::${bare}`));
+  return chained.length === 1 ? chained[0] : id;
+}
+
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -275,6 +304,7 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_move_subsystem_project',
   'sdd_externalize_subsystem',
   'sdd_internalize_subsystem',
+  'sdd_rename_component',
   'sdd_add_component',
   'sdd_define_interface',
   'sdd_set_endpoints',
@@ -1050,6 +1080,26 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         const { internalizeSubsystem } = requireProvision();
         internalizeSubsystem(subsystem);
         return text(`Internalized subsystem "${subsystem}" back into this project (child .wai removed).`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ id: string; newId: string }>(server,
+    'sdd_rename_component',
+    {
+      description: 'Rename a component and rewrite every reference to it in the bound tree: dependsOn, owns and dispatch entries, lifecycle entrypoints, published interfaces at L1 and L0, narrative call/dispatch/register targets, an interface\'s component, an implementation\'s contract and an entity\'s componentClass. The interface named i<id> and the implementation named <id>_impl move to the new ids and files; interfaces and implementations named otherwise keep their ids. Display names are left as they are. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename it from that project\'s own root), a new id that is not a lowercase identifier without a namespace separator (invalid-id), and a new id — or i<newId> or <newId>_impl — already in use (id-taken). Returns the specs moved, each with its old and new id, and the ids of the other specs rewritten.',
+      inputSchema: {
+        id: z.string().describe('The component to rename (namespaced if needed)'),
+        newId: z.string().describe('Its new id: a lowercase identifier with no namespace separator'),
+      },
+    },
+    ({ id, newId }) => {
+      try {
+        // mcp_orchestrator.renameComponent: resolve the id in the bound tree,
+        // rename through the core adapter, and return the report as the result.
+        return json(renameComponent(qualifiedComponentId(id), newId));
       } catch (e) {
         return errText(String(e));
       }

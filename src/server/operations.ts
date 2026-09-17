@@ -33,17 +33,17 @@ import type {
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Operations Orchestrator + Diagnostics/Quota Specialists + Portal (sdd_host)
+// Operations Orchestrator + Diagnostics + Quota Rules + Portal (sdd_host)
 //
 // The slim read-only operations plane: instance health, resource usage, and
-// advisory (observe/warn) quota reporting. The two specialists are PURE — they
-// reason only over the inputs the orchestrator supplies (project records, pack
-// listings, relations + target snapshots for relation health) and do
-// no I/O of their own (per diagnostics_specialist / quota_specialist). The
+// advisory (observe/warn) quota reporting. Diagnostics and quota rules are
+// PURE — they reason only over the inputs the orchestrator supplies (project
+// records, pack listings, relations + target snapshots for relation health)
+// and do no I/O of their own (per diagnostics / quota_rules). The
 // orchestrator authenticates through the single auth authority and authorizes by
 // Principal grants (operations:read, or an instance-wide admin grant); it lists
 // project records through the project registry and delegates all derivation to
-// the specialists. It performs NO writes and NO audit (every method is a read).
+// diagnostics and quota rules. It performs NO writes and NO audit (every method is a read).
 // Exported as plain functions so both the HTTP operations portal
 // (handleOperationsRequest, below) and any in-process caller reach the same
 // logic — mirroring identity.ts / landscape.ts.
@@ -66,7 +66,7 @@ const DISABLED_QUOTA_POLICY: ResourceQuotaPolicy = { enabled: false, mode: 'obse
 // grant. A '*'/'*' bootstrap or an instance-wide ({projectId:'*'}) operations:read
 // grant resolves to `all` (unfiltered). A unit-scoped grant resolves to that
 // unit's subtree of projects: the per-project inputs are narrowed to that set
-// BEFORE the diagnostics/quota specialists run, so a scoped operator sees health
+// BEFORE diagnostics/quota rules run, so a scoped operator sees health
 // and usage only for their subtree's projects.
 
 /** Authenticate the caller credential or throw (401-mapping). */
@@ -105,7 +105,7 @@ function resolveQuotaPolicy(cfg: HostConfig): ResourceQuotaPolicy {
   return cfg.quotaPolicy ?? DISABLED_QUOTA_POLICY;
 }
 
-// ── Diagnostics Specialist (pure) ────────────────────────────────────────────
+// ── Diagnostics (pure) ────────────────────────────────────────────────────────
 //
 // No I/O, no authorization, no disk or private-spec access — every input is the
 // already-listed set of hosted project records supplied by the orchestrator.
@@ -142,7 +142,7 @@ export function runChecks(
   const checks: DiagnosticCheckResult[] = [];
 
   // Registry consistency: unique ids AND a resolvable (non-empty) root for every
-  // record. Derived purely from the records — the pure specialist never stats disk.
+  // record. Derived purely from the records — pure diagnostics never stats disk.
   const ids = scoped.map((p) => p.id);
   const duplicateIds = [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))];
   const unresolvedRoots = scoped.filter((p) => !p.rootPath || p.rootPath.trim() === '');
@@ -274,7 +274,7 @@ export function runChecks(
  * supplied hosted project records: always an instance-level snapshot capturing
  * the active project count, plus a project-scoped snapshot from the record's
  * available metadata when the scope selects a single project. Quota messages are
- * left empty; advisory quota evaluation is applied separately by the quota specialist.
+ * left empty; advisory quota evaluation is applied separately by quota rules.
  */
 export function collectUsage(
   projects: HostedProjectRecord[],
@@ -320,7 +320,7 @@ export function buildHealthReport(
   return report;
 }
 
-// ── Quota Specialist (pure, advisory) ────────────────────────────────────────
+// ── Quota Rules (pure, advisory) ─────────────────────────────────────────────
 
 /**
  * Evaluate resource usage snapshots against the advisory ResourceQuotaPolicy,
@@ -388,7 +388,7 @@ function declaredReferences(project: HostedProjectRecord): ProjectPackReference 
 /**
  * Authenticate the caller, authorize operations read, list hosted projects, and
  * assemble a redacted instance health report (diagnostic checks plus usage
- * snapshots) via the diagnostics specialist. Read-only; no writes, no audit.
+ * snapshots) via diagnostics. Read-only; no writes, no audit.
  */
 export function getHealthReport(
   cfg: HostConfig,

@@ -105,8 +105,8 @@ methods:
     description: >-
       Pre-authorized entry for the approval workflow and internal policy flows: bind the project's
       isolated root and probe the packs the given configuration registers, WITHOUT authentication —
-      the caller has already enforced approval-based or resolver authorization and loaded the
-      configuration. Never exposed on any portal.
+      the caller has already enforced approval-based or permission-rules authorization and loaded
+      the configuration. Never exposed on any portal.
     signature: 'executeApprovedListProjectPacks(project: string, config?: ProjectConfig): PackDescriptor[]'
     returns: PackDescriptor[]
     params:
@@ -121,8 +121,8 @@ methods:
     description: >-
       Pre-authorized entry for the approval workflow and internal policy flows: bind the project's
       isolated root and vendor one declarative pack into its .wai/packs/ WITHOUT authentication —
-      the caller has already enforced approval-based or resolver authorization. Returns its probe,
-      whose ref is the path reference the caller registers. Never exposed on any portal.
+      the caller has already enforced approval-based or permission-rules authorization. Returns its
+      probe, whose ref is the path reference the caller registers. Never exposed on any portal.
     signature: >-
       executeApprovedInstallProjectPack(project: string, name: string, content: string):
       PackDescriptor
@@ -261,4 +261,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T18:42:41.273Z'
-updatedAt: '2026-09-13T12:15:41.019Z'
+updatedAt: '2026-09-15T21:03:07.791Z'

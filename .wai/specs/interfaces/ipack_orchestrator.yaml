@@ -2,7 +2,7 @@ id: ipack_orchestrator
 name: Pack Orchestrator Interface
 description: >-
   Contract for the control-plane pack-management workflows: authenticate the caller credential and
-  authorize through the permission resolver — server-global pack management requires instance-level
+  authorize through the permission rules — server-global pack management requires instance-level
   project:admin; per-project install/remove require project:admin over the project, the per-project
   listing project:read over it — then list/install/remove packs at server-global or project scope.
   Installs are declarative-only (profiles + language/platform tables); code packs are refused on
@@ -175,4 +175,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-04T18:46:52.736Z'
-updatedAt: '2026-07-24T23:30:46.978Z'
+updatedAt: '2026-09-15T21:03:04.719Z'

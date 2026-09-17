@@ -25,12 +25,17 @@ const FLAG_VARIANTS_YAML = yaml.dump(
   { noRefs: true, lineWidth: 200 },
 );
 
-const flagsTree = (componentType: string, variant: string, withRegistry: boolean) => ({
+/** The flags component's stereotype: its componentType, plus its dependencyClass when it is logic. */
+const flagsTree = (
+  stereotype: { componentType: string; dependencyClass?: 'pure' | 'read' },
+  variant: string,
+  withRegistry: boolean,
+) => ({
   subsystems: [{ id: 'feature-flags', description: 'Feature flag evaluation and vendor sync.' }],
   components: [
     {
       id: 'launchpad-flags-adapter',
-      componentType,
+      ...stereotype,
       subsystem: 'feature-flags',
       description: 'Syncs flag definitions from the LaunchPad vendor into the local evaluator.',
       variant,
@@ -50,7 +55,7 @@ export default [
     expectFire: true,
     scenario:
       'The LaunchPad flags adapter declares a regional-cache-adapter variant that neither the project nor the global variant registry defines.',
-    tree: flagsTree('Adapter', 'regional-cache-adapter', true),
+    tree: flagsTree({ componentType: 'Adapter' }, 'regional-cache-adapter', true),
   }),
   defineRuleFixture({
     code: 'UNKNOWN_VARIANT',
@@ -58,7 +63,7 @@ export default [
     reason: 'The declared variant exists in the project variant registry under .wai/variants/.',
     scenario:
       'The LaunchPad flags adapter declares the external-config-adapter variant the project variant registry defines.',
-    tree: flagsTree('Adapter', 'external-config-adapter', true),
+    tree: flagsTree({ componentType: 'Adapter' }, 'external-config-adapter', true),
   }),
 
   // -------------------------------------------------------------------------
@@ -70,8 +75,8 @@ export default [
     anchoredTo: 'launchpad-flags-adapter',
     expectFire: true,
     scenario:
-      'A Specialist component wears the external-config-adapter variant even though that variant specializes the Adapter base stereotype.',
-    tree: flagsTree('Specialist', 'external-config-adapter', true),
+      'An Orchestrator component wears the external-config-adapter variant even though that variant specializes the Adapter base stereotype.',
+    tree: flagsTree({ componentType: 'Orchestrator', dependencyClass: 'pure' }, 'external-config-adapter', true),
   }),
   defineRuleFixture({
     code: 'VARIANT_BASE_MISMATCH',
@@ -79,6 +84,6 @@ export default [
     reason: 'The component\'s stereotype equals the variant\'s declared base (Adapter), the only legal pairing.',
     scenario:
       'An Adapter component wears the external-config-adapter variant whose declared base is Adapter.',
-    tree: flagsTree('Adapter', 'external-config-adapter', true),
+    tree: flagsTree({ componentType: 'Adapter' }, 'external-config-adapter', true),
   }),
 ];

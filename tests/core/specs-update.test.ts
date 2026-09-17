@@ -566,7 +566,7 @@ describe('array deltas upsert by identity and honour delete markers', () => {
     project();
     saveSubsystemSpec({ schemaVersion: '1.0.0', id: 'rules', name: 'Rules', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
     saveComponentSpec({
-      id: 'rule', name: 'Rule', description: 'd', subsystem: 'rules', componentType: 'Specialist',
+      id: 'rule', name: 'Rule', description: 'd', subsystem: 'rules', componentType: 'Orchestrator', dependencyClass: 'pure',
       owns: [], dependsOn: [], createdAt: now, updatedAt: now,
     } as never);
     saveInterfaceSpec({

@@ -8,7 +8,7 @@ import type {
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
-// Spec Projection Specialist (sdd_producers)
+// Spec Doc Pages (sdd_producers)
 //
 // Projects the bound project's spec tree into a target-agnostic DocPage tree:
 // a "wairon specs" root (system overview + Mermaid + optional canvas link), a

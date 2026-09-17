@@ -20,7 +20,7 @@ export default [
     anchoredTo: 'settlement-orchestrator',
     expectFire: true,
     scenario:
-      'Under ledger-platform doctrine, the settlement orchestrator depends directly on the Stripe payout adapter instead of going through the payout gateway.',
+      'Under ledger-platform doctrine, the settlement orchestrator depends directly on the Stripe payout adapter instead of going through the payout vendor supervisor.',
     tree: {
       system: { name: 'LedgerOS', vision: 'Double-entry settlement platform moving merchant payouts through audited ledgers.' },
       subsystems: [{ id: 'payments', description: 'Merchant payout settlement and vendor hand-off.' }],
@@ -46,9 +46,9 @@ export default [
     code: 'LEDGER_PLATFORM_DIRECT_VENDOR_CALL',
     expectFire: false,
     reason:
-      'The orchestrator reaches the vendor through the payout Gateway facade that privately owns the adapter — exactly the shape the pack doctrine mandates.',
+      'The orchestrator reaches the vendor through the payout vendor supervisor, which holds the vendor connections — exactly the shape the pack doctrine mandates.',
     scenario:
-      'Under ledger-platform doctrine, the settlement orchestrator reaches Stripe through the payout gateway, which privately owns the vendor adapter.',
+      'Under ledger-platform doctrine, the settlement orchestrator reaches Stripe through the payout vendor supervisor, which supervises the vendor adapter with failover and sandboxing.',
     tree: {
       system: { name: 'LedgerOS', vision: 'Double-entry settlement platform moving merchant payouts through audited ledgers.' },
       subsystems: [{ id: 'payments', description: 'Merchant payout settlement and vendor hand-off.' }],
@@ -58,14 +58,14 @@ export default [
           componentType: 'Orchestrator',
           subsystem: 'payments',
           description: 'Batches cleared balances into payout runs and drives their settlement.',
-          dependsOn: ['payout-gateway'],
+          dependsOn: ['payout-vendor-supervisor'],
         },
         {
-          id: 'payout-gateway',
-          componentType: 'Gateway',
+          id: 'payout-vendor-supervisor',
+          componentType: 'Supervisor',
           subsystem: 'payments',
-          description: 'Vendor-neutral payout facade owning the concrete payment-vendor adapters.',
-          owns: ['stripe-payout-adapter'],
+          description: 'Holds the payment-vendor connections, failing over between vendors and sandboxing each one.',
+          dependsOn: ['stripe-payout-adapter'],
         },
         {
           id: 'stripe-payout-adapter',
@@ -84,29 +84,30 @@ export default [
   defineRuleFixture({
     code: 'UNKNOWN_GUARANTEE',
     severity: 'warning',
-    anchoredTo: 'ijournal_poster',
+    anchoredTo: 'ijournal_balance_arbiter',
     expectFire: true,
     scenario:
-      'The journal poster contract promises a ledger-reconciled guarantee that neither wairon builtins nor the loaded ledger-platform pack declare, so no narrative can ever match it.',
+      'The journal balance arbiter contract promises a ledger-reconciled guarantee that neither wairon builtins nor the loaded ledger-platform pack declare, so no narrative can ever match it.',
     tree: {
       system: { name: 'LedgerOS', vision: 'Double-entry settlement platform moving merchant payouts through audited ledgers.' },
       subsystems: [{ id: 'payments', description: 'Merchant payout settlement and vendor hand-off.' }],
       components: [
         {
-          id: 'journal-poster',
-          componentType: 'Specialist',
+          id: 'journal-balance-arbiter',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'payments',
-          description: 'Validates and posts balanced journal entries for every settlement run.',
+          description: 'Decides whether a journal entry balances before any settlement run posts it.',
         },
       ],
       interfaces: [
         {
-          id: 'ijournal_poster',
-          component: 'journal-poster',
+          id: 'ijournal_balance_arbiter',
+          component: 'journal-balance-arbiter',
           methods: [
             {
-              name: 'postJournalEntry',
-              description: 'Post one balanced journal entry to the settlement ledger.',
+              name: 'checkJournalEntry',
+              description: 'Check that one journal entry balances before it reaches the settlement ledger.',
               guarantees: ['ledger-reconciled'],
             },
           ],
@@ -121,26 +122,27 @@ export default [
     reason:
       'ledger-balanced is declared in the loaded ledger-platform pack\'s guarantees list, so the token is part of the recognized vocabulary.',
     scenario:
-      'The journal poster contract promises the ledger-balanced guarantee that the loaded ledger-platform pack declares in its guarantee vocabulary.',
+      'The journal balance arbiter contract promises the ledger-balanced guarantee that the loaded ledger-platform pack declares in its guarantee vocabulary.',
     tree: {
       system: { name: 'LedgerOS', vision: 'Double-entry settlement platform moving merchant payouts through audited ledgers.' },
       subsystems: [{ id: 'payments', description: 'Merchant payout settlement and vendor hand-off.' }],
       components: [
         {
-          id: 'journal-poster',
-          componentType: 'Specialist',
+          id: 'journal-balance-arbiter',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'payments',
-          description: 'Validates and posts balanced journal entries for every settlement run.',
+          description: 'Decides whether a journal entry balances before any settlement run posts it.',
         },
       ],
       interfaces: [
         {
-          id: 'ijournal_poster',
-          component: 'journal-poster',
+          id: 'ijournal_balance_arbiter',
+          component: 'journal-balance-arbiter',
           methods: [
             {
-              name: 'postJournalEntry',
-              description: 'Post one balanced journal entry to the settlement ledger.',
+              name: 'checkJournalEntry',
+              description: 'Check that one journal entry balances before it reaches the settlement ledger.',
               guarantees: ['ledger-balanced'],
             },
           ],

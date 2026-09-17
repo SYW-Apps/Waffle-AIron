@@ -51,7 +51,8 @@ export default [
         },
         {
           id: 'metrics-flusher',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Compacts and flushes buffered metrics.',
         },
       ],
@@ -74,7 +75,7 @@ export default [
     expectFire: false,
     reason: 'The dispatch table sits on the telemetry Portal — the sanctioned home for capability routing.',
     scenario:
-      'The telemetry portal carries the metrics.flush capability binding, dispatching inward to the flusher specialist.',
+      'The telemetry portal carries the metrics.flush capability binding, dispatching inward to the metrics flusher.',
     tree: {
       subsystems: [{ id: 'telemetry', description: 'Metric collection and flushing for the fleet.' }],
       components: [
@@ -95,7 +96,8 @@ export default [
         },
         {
           id: 'metrics-flusher',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Compacts and flushes buffered metrics.',
         },
       ],
@@ -138,8 +140,8 @@ export default [
             { capability: 'device.read', component: 'state-projector', method: 'projectState', description: 'Project the device state.' },
           ],
         },
-        { id: 'shadow-reader', componentType: 'Specialist', description: 'Reads the persisted device shadow.' },
-        { id: 'state-projector', componentType: 'Specialist', description: 'Projects live device state.' },
+        { id: 'shadow-reader', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Reads the persisted device shadow.' },
+        { id: 'state-projector', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Projects live device state.' },
       ],
       interfaces: [
         {
@@ -175,8 +177,8 @@ export default [
             { capability: 'device.project', component: 'state-projector', method: 'projectState', description: 'Project the device state.' },
           ],
         },
-        { id: 'shadow-reader', componentType: 'Specialist', description: 'Reads the persisted device shadow.' },
-        { id: 'state-projector', componentType: 'Specialist', description: 'Projects live device state.' },
+        { id: 'shadow-reader', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Reads the persisted device shadow.' },
+        { id: 'state-projector', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Projects live device state.' },
       ],
       interfaces: [
         {
@@ -381,7 +383,8 @@ export default [
         },
         {
           id: 'fleet-report-builder',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'fleet-analytics',
           description: 'Builds fleet-wide utilization reports.',
         },
@@ -420,7 +423,8 @@ export default [
         },
         {
           id: 'fleet-report-builder',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           subsystem: 'device-gateway',
           description: 'Builds fleet-wide utilization reports.',
         },
@@ -444,7 +448,7 @@ export default [
     anchoredTo: 'support-portal',
     expectFire: true,
     scenario:
-      'The support portal binds ticket.reassign to the triage specialist but never lists it under dependsOn, hiding a real runtime dependency from the coupling rules.',
+      'The support portal binds ticket.reassign to the ticket classifier but never lists it under dependsOn, hiding a real runtime dependency from the coupling rules.',
     tree: {
       subsystems: [{ id: 'customer-support', description: 'Support ticket intake and triage.' }],
       components: [
@@ -455,15 +459,15 @@ export default [
           description: 'Generic support portal dispatching ticket capabilities inward.',
           dependsOn: [],
           dispatch: [
-            { capability: 'ticket.reassign', component: 'triage-specialist', method: 'reassign', description: 'Reassign a ticket to another queue.' },
+            { capability: 'ticket.reassign', component: 'ticket-classifier', method: 'reassign', description: 'Reassign a ticket to another queue.' },
           ],
         },
-        { id: 'triage-specialist', componentType: 'Specialist', description: 'Classifies and routes support tickets.' },
+        { id: 'ticket-classifier', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Classifies and routes support tickets.' },
       ],
       interfaces: [
         {
-          id: 'itriage_specialist',
-          component: 'triage-specialist',
+          id: 'iticket_classifier',
+          component: 'ticket-classifier',
           methods: [{ name: 'reassign', description: 'Reassign a ticket to another support queue.' }],
         },
       ],
@@ -472,9 +476,9 @@ export default [
   defineRuleFixture({
     code: 'UNDECLARED_DISPATCH_TARGET',
     expectFire: false,
-    reason: 'The portal declares the bound specialist under dependsOn, so the dispatch edge is a visible dependency.',
+    reason: 'The portal declares the bound ticket classifier under dependsOn, so the dispatch edge is a visible dependency.',
     scenario:
-      'The support portal lists the triage specialist as a dependency alongside its ticket.reassign table binding.',
+      'The support portal lists the ticket classifier as a dependency alongside its ticket.reassign table binding.',
     tree: {
       subsystems: [{ id: 'customer-support', description: 'Support ticket intake and triage.' }],
       components: [
@@ -483,17 +487,17 @@ export default [
           componentType: 'Portal',
           portalType: 'HTTP_API',
           description: 'Generic support portal dispatching ticket capabilities inward.',
-          dependsOn: ['triage-specialist'],
+          dependsOn: ['ticket-classifier'],
           dispatch: [
-            { capability: 'ticket.reassign', component: 'triage-specialist', method: 'reassign', description: 'Reassign a ticket to another queue.' },
+            { capability: 'ticket.reassign', component: 'ticket-classifier', method: 'reassign', description: 'Reassign a ticket to another queue.' },
           ],
         },
-        { id: 'triage-specialist', componentType: 'Specialist', description: 'Classifies and routes support tickets.' },
+        { id: 'ticket-classifier', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Classifies and routes support tickets.' },
       ],
       interfaces: [
         {
-          id: 'itriage_specialist',
-          component: 'triage-specialist',
+          id: 'iticket_classifier',
+          component: 'ticket-classifier',
           methods: [{ name: 'reassign', description: 'Reassign a ticket to another support queue.' }],
         },
       ],
@@ -523,7 +527,7 @@ export default [
             { capability: 'command.execute', component: 'command-executor', method: 'execute', description: 'Execute a parsed operator command.' },
           ],
         },
-        { id: 'command-executor', componentType: 'Specialist', description: 'Executes parsed operator commands.' },
+        { id: 'command-executor', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Executes parsed operator commands.' },
         {
           id: 'routing-orchestrator',
           componentType: 'Orchestrator',
@@ -583,7 +587,7 @@ export default [
             { capability: 'command.execute', component: 'command-executor', method: 'execute', description: 'Execute a parsed operator command.' },
           ],
         },
-        { id: 'command-executor', componentType: 'Specialist', description: 'Executes parsed operator commands.' },
+        { id: 'command-executor', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Executes parsed operator commands.' },
         {
           id: 'routing-orchestrator',
           componentType: 'Orchestrator',
@@ -649,7 +653,7 @@ export default [
             { capability: 'payment.capture', component: 'charge-executor', method: 'captureCharge', description: 'Capture an authorized charge.' },
           ],
         },
-        { id: 'charge-executor', componentType: 'Specialist', description: 'Executes charge captures against the gateway.' },
+        { id: 'charge-executor', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Executes charge captures against the gateway.' },
         {
           id: 'payment-orchestrator',
           componentType: 'Orchestrator',
@@ -712,7 +716,7 @@ export default [
             { capability: 'payment.capture', component: 'charge-executor', method: 'captureCharge', description: 'Capture an authorized charge.' },
           ],
         },
-        { id: 'charge-executor', componentType: 'Specialist', description: 'Executes charge authorizations against the gateway.' },
+        { id: 'charge-executor', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Executes charge authorizations against the gateway.' },
         {
           id: 'payment-orchestrator',
           componentType: 'Orchestrator',
@@ -774,7 +778,7 @@ export default [
             { capability: 'payment.capture', component: 'charge-executor', method: 'captureCharge', description: 'Capture an authorized charge.' },
           ],
         },
-        { id: 'charge-executor', componentType: 'Specialist', description: 'Executes charge captures against the gateway.' },
+        { id: 'charge-executor', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Executes charge captures against the gateway.' },
         {
           id: 'payment-orchestrator',
           componentType: 'Orchestrator',

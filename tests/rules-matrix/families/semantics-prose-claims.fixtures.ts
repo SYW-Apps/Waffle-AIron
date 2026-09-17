@@ -20,13 +20,14 @@ export default [
     anchoredTo: 'cart_merger_impl',
     expectFire: true,
     scenario:
-      'The cart merger\'s intent claims it owns the persistence of merged carts across devices, but the specialist neither depends on nor owns any data-layer component.',
+      'The cart merger\'s intent claims it owns the persistence of merged carts across devices, but the merger neither depends on nor owns any data-layer component.',
     tree: {
       subsystems: [{ id: 'shopping-cart', description: 'Shopper carts across devices.' }],
       components: [
         {
           id: 'cart-merger',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Merges a guest cart into the signed-in shopper\'s cart.',
         },
       ],
@@ -268,13 +269,14 @@ export default [
     anchoredTo: 'receipt_formatter_impl',
     expectFire: true,
     scenario:
-      'The receipt formatter\'s intent claims an archival copy is persisted for audit retention, but the specialist neither depends on nor owns any data-layer component.',
+      'The receipt formatter\'s intent claims an archival copy is persisted for audit retention, but the formatter neither depends on nor owns any data-layer component.',
     tree: {
       subsystems: [{ id: 'receipts', description: 'Printable receipt rendering and archival.' }],
       components: [
         {
           id: 'receipt-formatter',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
           description: 'Renders printable receipts from order data.',
         },
       ],
@@ -316,7 +318,7 @@ export default [
       components: [
         {
           id: 'receipt-formatter',
-          componentType: 'Specialist',
+          componentType: 'Orchestrator',
           description: 'Renders printable receipts from order data.',
           dependsOn: ['receipt-archive-store'],
         },

@@ -167,7 +167,7 @@ const LANDSCAPE_DISCOVERY_TOOLS = new Set<string>([
 /** The six hosted project-ops tools the data plane handles directly, routing
  *  them to the project ops orchestrator — ALWAYS bound to THE one authorized
  *  project (instance-level operations are deliberately absent from the data
- *  plane). Each is resolver-gated upstream by its owning orchestrator. */
+ *  plane). Each is permission-rules-gated upstream by its owning orchestrator. */
 const PROJECT_OPS_TOOLS = new Set<string>([
   'sdd_host_pack_list',
   'sdd_host_pack_install',
@@ -284,18 +284,24 @@ const READ_TOOL_NAMES = new Set<string>([
   'getProjectConfig',
 ]);
 
+/** Write tools whose names carry no write prefix, listed one by one: each
+ *  mutates the bound spec tree as a prefixed write does. */
+const WRITE_TOOL_NAMES = new Set<string>([
+  'sdd_rename_component',
+]);
+
 /**
  * The data-plane capability a tool requires: `project:read` for a read tool (a
  * name starting with sdd_get_ / sdd_validate_, or one of READ_TOOL_NAMES),
  * otherwise `project:write`.
  *
  * FAIL CLOSED: a read is ONLY an explicit read prefix or name. The known write
- * prefixes and any unrecognized or newly added tool name are all treated as
- * writes, so a novel tool can never slip past on read-level permission.
+ * prefixes and names and any unrecognized or newly added tool name are all
+ * treated as writes, so a novel tool can never slip past on read-level permission.
  */
 export function requiredDataPlaneCapability(toolName: string): 'project:read' | 'project:write' {
   if (READ_TOOL_NAMES.has(toolName) || READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:read';
-  if (WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:write';
+  if (WRITE_TOOL_NAMES.has(toolName) || WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:write';
   return 'project:write';
 }
 
@@ -315,10 +321,10 @@ const TREE_SCOPED_HOST_TOOLS = new Set<string>([
 /**
  * The scope a tool declares, or undefined when it declares none. Every ordinary
  * sdd_* tool the scoped server serves — each explicit read and each explicit
- * write prefix — acts on the bound tree; the hosted tools are declared one by
- * one. Confinement reads this and fails closed on undefined: a tool added
- * without a declared scope is refused under a narrowed credential until it
- * declares one.
+ * write, by prefix or by name — acts on the bound tree; the hosted tools are
+ * declared one by one. Confinement reads this and fails closed on undefined: a
+ * tool added without a declared scope is refused under a narrowed credential
+ * until it declares one.
  */
 export function toolScope(toolName: string): ToolScope | undefined {
   if (PROJECT_RECORD_TOOLS.has(toolName)) return 'record';
@@ -326,6 +332,7 @@ export function toolScope(toolName: string): ToolScope | undefined {
   if (
     READ_TOOL_NAMES.has(toolName) ||
     READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p)) ||
+    WRITE_TOOL_NAMES.has(toolName) ||
     WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))
   ) {
     return 'tree';
@@ -335,8 +342,8 @@ export function toolScope(toolName: string): ToolScope | undefined {
 
 /**
  * Whether a tool is classified on purpose — it declares its scope, which also
- * makes it an explicit read, an explicit write prefix, or a hosted tool the data
- * plane dispatches itself — rather than leaning on a fail-closed default. The
+ * makes it an explicit read, an explicit write, or a hosted tool the data plane
+ * dispatches itself — rather than leaning on a fail-closed default. The
  * defaults are safety nets, not classifications: a tool the server advertises
  * must never depend on them.
  */
@@ -382,7 +389,7 @@ export function mcpChangeChannels(body: unknown, projectId: string, response: un
  * the call proceed. A non-`tools/call` message (initialize, tools/list) or a call
  * with no tool name is never gated — those do not mutate project state.
  *
- * This resolves through the permission resolver over the bound project, so a
+ * This resolves through permission rules over the bound project, so a
  * token always acts as its owner's LIVE permission: the token's `projects`
  * narrowing (enforced separately at resolveProjectRoot) bounds WHICH projects it
  * may name, and this gate decides what it may DO there.
@@ -557,7 +564,7 @@ export async function dispatchProjectLifecycleTool(
         value = getProjectSurfaceForMcp(cfg, credential, projectId, String(args.projectId ?? ''));
         break;
       // ── Hosted project ops — always the BOUND project (no project argument
-      // exists on the data plane); resolver-gated by the owning orchestrators.
+      // exists on the data plane); permission-rules-gated by the owning orchestrators.
       case 'sdd_host_pack_list':
         value = projectops.listProjectPacks(cfg, credential, projectId);
         break;
@@ -669,7 +676,7 @@ export async function handleMcpRequest(
   } else {
     // Trusted-network mode (auth disabled): no credential required, but a project
     // must still be named. The anonymous principal is an instance-admin, so it
-    // holds the resolver bypass — satisfying the data-plane gate below exactly as
+    // holds the permission-rules bypass — satisfying the data-plane gate below exactly as
     // the master credential does.
     principal = {
       tokenId: 'anonymous',
@@ -756,8 +763,8 @@ export async function handleMcpRequest(
 
     // Steps 25–27: enforce the granular data-plane permission BEFORE dispatching
     // an ordinary sdd_* tool. A read tool needs project:read, every other tool
-    // project:write (fail closed), resolved LIVE through the hierarchical
-    // permission resolver over the TOP project (a subproject qualifier narrows
+    // project:write (fail closed), resolved LIVE through hierarchical
+    // permission rules over the TOP project (a subproject qualifier narrows
     // which tree is bound, never which grants apply). Capabilities match EXACTLY —
     // there is no wildcard capability, and the '*'@instance instance-admin
     // marker is reserved (setAssignment rejects it); only the env-anchored

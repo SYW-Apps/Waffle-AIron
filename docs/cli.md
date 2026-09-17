@@ -95,7 +95,7 @@ rather than magic. It also flags any agent an override has pinned to the
 |------|--------------|
 | `off` (default) | No budgets derived. Output is byte-identical to before this feature existed. |
 | `free` | Structural constraints only — tool class, MCP access, nested delegation. No model or effort selection, so no quality tradeoff at all. |
-| `default` | Adds capability-tier selection per role and turn ceilings. Mechanical work (Store, Index, Registry, Adapter) runs smaller; work carrying decisions (Orchestrator, Supervisor, Specialist) keeps the capable tier. |
+| `default` | Adds capability-tier selection per role and turn ceilings. Mechanical work (Store, Index, Registry, Adapter) runs smaller; work carrying decisions (Orchestrator, Supervisor) keeps the capable tier. |
 | `trade` | Adds effort reduction on mechanical work and steps standard work down a tier. Real but bounded quality cost. |
 | `aggressive` | Small tier for everything but deep reasoning, halved turn ceilings. Expect partial results and worse judgment. |
 

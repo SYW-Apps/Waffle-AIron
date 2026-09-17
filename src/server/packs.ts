@@ -29,7 +29,7 @@ import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 // (profiles + language/platform tables — pure data); programmatic rule/code packs
 // are refused here and must be installed via the trusted filesystem (a baked
 // image layer, a mounted packs volume, or `wairon packs add`). The orchestrator
-// layer adds resolver authorization (instance-level project:admin for the global
+// layer adds permission-rules authorization (instance-level project:admin for the global
 // tier; project:admin/project:read over the project for its tier), scope binding,
 // and — at project scope — the pack registration, read and written through the
 // host core adapter.
@@ -504,12 +504,12 @@ function storeRemoveProjectPack(name: string, ref?: string): void {
   }
 }
 
-// ── pack_orchestrator: resolver auth + project-scope binding ──────────────────
+// ── pack_orchestrator: permission-rules auth + project-scope binding ──────────
 //
 // Server-global pack management is instance configuration → INSTANCE-level
 // project:admin. Per-project install/remove require project:admin over that
 // project; the per-project listing requires project:read. The master credential
-// and the built-in admin pass via the resolver bypass. At project scope the
+// and the built-in admin pass via the permission-rules bypass. At project scope the
 // orchestrator also owns the pack registration: it loads the bound project's
 // configuration and registers or deregisters through the host core adapter.
 
@@ -760,7 +760,7 @@ export function removeProjectPack(cfg: HostConfig, credential: string | null, pr
 // ── pack_orchestrator: ZIP (.wpack) archive installs (declarative-only) ────────
 //
 // The ZIP-primary counterparts of installGlobalPack/installProjectPack. Same
-// resolver gates (instance-level project:admin for the global tier; project:admin
+// permission-rules gates (instance-level project:admin for the global tier; project:admin
 // over the project for its tier), same scope binding — the registry inspects the
 // envelope and rejects code packs, extracts under hosted-strict limits, and
 // re-checks the extracted pack is declarative; the orchestrator registers the

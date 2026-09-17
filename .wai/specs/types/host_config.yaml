@@ -67,9 +67,9 @@ fields:
     type: string
     description: >-
       Built-in super-admin web-login password, read from WAIRON_ADMIN_PASSWORD by the serve command.
-      Held in memory only — never persisted or logged; compared constant-time by the auth
-      specialist.
+      Held in memory only — never persisted or logged; compared constant-time by the authentication
+      component.
     optional: true
 methods: []
 createdAt: '2026-07-04T12:58:10.758Z'
-updatedAt: '2026-07-14T11:04:17.196Z'
+updatedAt: '2026-09-15T20:44:32.144Z'

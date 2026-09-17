@@ -2,18 +2,17 @@ id: skills_resource_orchestrator_impl
 name: Skills Resource Orchestrator Implementation
 description: >-
   The MCP-facing guidance workflow for the built-in SDD skills: lists them as MCP resource
-  descriptors, reads one skill's content (rejecting unknown resource ids) through the Skills
-  Resource Specialist, and composes the server initialize instructions through the Server
-  Instructions Specialist.
+  descriptors, reads one skill's content (rejecting unknown resource ids) through Skill Resources,
+  and composes the server initialize instructions through Server Instructions.
 contract: iskills_resource_orchestrator
 sourcePath: src/core/skills.ts
 methods:
   - name: listResources
     narrative:
       - stepNumber: 1
-        description: Resolve the built-in skill descriptors from the specialist.
+        description: Resolve the built-in skill descriptors from skill_resources.
         type: call
-        targetComponent: skills_resource_specialist
+        targetComponent: skill_resources
         targetMethod: listSkillResources
       - stepNumber: 2
         description: Return the descriptors shaped as MCP resources.
@@ -25,7 +24,7 @@ methods:
       - stepNumber: 1
         description: List the available skill resources to validate the requested id.
         type: call
-        targetComponent: skills_resource_specialist
+        targetComponent: skill_resources
         targetMethod: listSkillResources
       - stepNumber: 2
         description: Reject an unknown resource id; otherwise resolve its content.
@@ -38,9 +37,9 @@ methods:
         type: throw
         error: SkillResourceNotFoundError
       - stepNumber: 4
-        description: Read the resolved skill's markdown content from the specialist.
+        description: Read the resolved skill's markdown content from skill_resources.
         type: call
-        targetComponent: skills_resource_specialist
+        targetComponent: skill_resources
         targetMethod: readSkillResource
       - stepNumber: 5
         description: Return the skill content for the MCP resource read.
@@ -50,9 +49,9 @@ methods:
   - name: buildServerInstructions
     narrative:
       - stepNumber: 1
-        description: Compose the instructions text through the Server Instructions Specialist.
+        description: Compose the instructions text through server_instructions.
         type: call
-        targetComponent: instructions_specialist
+        targetComponent: server_instructions
         targetMethod: buildServerInstructions
       - stepNumber: 2
         description: Return the composed instructions for the MCP initialize handshake.
@@ -61,4 +60,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-10T12:21:20.703Z'
-updatedAt: '2026-07-29T10:53:16.279Z'
+updatedAt: '2026-09-15T20:48:58.822Z'

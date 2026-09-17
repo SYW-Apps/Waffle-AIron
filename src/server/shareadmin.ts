@@ -21,7 +21,7 @@ import type {
 
 // ---------------------------------------------------------------------------
 // Share Admin Orchestrator (sdd_host): the OWNER-side share-link workflows on
-// the authenticated web surface, resolver-gated on the share:create capability
+// the authenticated web surface, permission-rules-gated on the share:create capability
 // over the target's project scope. Mint / disable / permission changes are
 // audited at security level; the raw token is returned to the creator exactly
 // once and never stored (only its salted hash lives on the record).

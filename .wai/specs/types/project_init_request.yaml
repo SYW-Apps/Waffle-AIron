@@ -22,8 +22,8 @@ fields:
     type: string
     description: >-
       The organization unit that owns the project. REQUIRED — every project is placed at creation so
-      the permission resolver can always enumerate it; a fresh instance must create its first
-      organization unit before initializing projects.
+      permission rules can always enumerate it; a fresh instance must create its first organization
+      unit before initializing projects.
     optional: false
   - name: environment
     type: string
@@ -37,4 +37,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-08T21:58:47.944Z'
-updatedAt: '2026-07-16T00:18:37.663Z'
+updatedAt: '2026-09-15T21:03:02.657Z'

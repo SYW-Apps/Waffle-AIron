@@ -61,7 +61,7 @@ import type {
 import type { SurfaceSnapshot } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
-// Landscape Orchestrator + Surface Exchange Orchestrator + Diagram Specialist
+// Landscape Orchestrator + Surface Exchange Orchestrator + Landscape Graph
 // + Portal (sdd_host)
 //
 // TWO orchestrators realize in this module — two workflows, two components:
@@ -97,7 +97,7 @@ const PROJECT_ADMIN_CAPABILITY = 'project:admin';
 const PROJECT_READ_CAPABILITY = 'project:read';
 const PROJECT_WRITE_CAPABILITY = 'project:write';
 
-// ── authorization helpers (hierarchical resolver) ─────────────────────────────
+// ── authorization helpers (hierarchical permission rules) ────────────────────
 //
 // Every control-plane method resolves the caller's permission through the
 // authorization seam (project:admin for writes, project:read for reads). An
@@ -186,7 +186,7 @@ function requireLandscapeReach(
  * resolution in the consumer-facing exchange, so an unverified claim would let a
  * credential read the discovery neighbourhood of a project it is not scoped to.
  * A yes-valued project:read or project:write over the observer project passes;
- * an instance-admin passes for any project (the resolver bypass).
+ * an instance-admin passes for any project (the permission-rules bypass).
  */
 function requireObserverScope(cfg: HostConfig, principal: Principal, observerProjectId: string): void {
   const covered =
@@ -380,7 +380,7 @@ function stateIdToString(state: { algorithm: string; digest: string }): string {
   return `${state.algorithm}:${state.digest}`;
 }
 
-// ── Landscape Diagram Specialist (pure projection) ───────────────────────────
+// ── Landscape Graph (pure projection) ─────────────────────────────────────────
 //
 // No I/O, no authorization, no project-root or private-spec access — every input
 // is supplied already-authorized by the orchestrator. Node ids are namespaced by
@@ -583,7 +583,7 @@ export function placeProject(
   // could adopt any project into their unit and thereby pull it into their
   // reach (→ destroy/lock/audit it). The project's authority comes from
   // its CURRENT placements, so require project:admin over it as it stands; an
-  // instance-admin places anything anywhere (the resolver bypass).
+  // instance-admin places anything anywhere (the permission-rules bypass).
   if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'unit', placement.unitId)) {
     throw new ForbiddenError('placing a project requires project:admin over the target unit');
   }

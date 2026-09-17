@@ -20,7 +20,7 @@ owns: []
 dependsOn:
   - tree_archive_adapter
   - spec_loader
-  - state_hash_specialist
+  - state_hash
 status: complete
 createdAt: '2026-08-12T17:24:17.967Z'
 updatedAt: '2026-08-12T17:26:32.750Z'

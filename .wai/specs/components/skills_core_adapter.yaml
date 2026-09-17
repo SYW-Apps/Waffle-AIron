@@ -2,7 +2,7 @@ id: skills_core_adapter
 name: Skills Core Client Adapter
 description: >-
   Local client adapter in sdd_skills to cross the subsystem boundary to sdd_core — loads the
-  governing extension packs (LoadedExtensions) so the skills exporter and resource specialist can
+  governing extension packs (LoadedExtensions) so the skills exporter and skill_resources can
   discover pack-provided skills.
 subsystem: sdd_skills
 componentType: Adapter
@@ -11,4 +11,4 @@ dependsOn:
   - core_portal
 status: complete
 createdAt: '2026-07-14T20:13:58.361Z'
-updatedAt: '2026-07-14T20:16:14.339Z'
+updatedAt: '2026-09-15T20:46:35.435Z'

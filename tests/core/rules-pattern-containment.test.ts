@@ -176,31 +176,29 @@ describe('SHARED_OWNED_MEMBER — a block has exactly one owner', () => {
   });
 });
 
-describe('GATEWAY_CONTAINMENT — a Gateway owns only Portal/Orchestrator/Specialist members', () => {
-  it('flags a Gateway owning a Store (state belongs behind a Repository, not in the gateway)', () => {
+describe('REPOSITORY_CONTAINMENT — a Repository owns Store/Registry/Index/Query/Adapter members', () => {
+  it('accepts a Query member computing reads over its sibling Store', () => {
     const proj = createTempProject();
-    proj.component('edge-gateway', 'Gateway', 'owns: [edge-portal, edge-cache]');
-    proj.component('edge-portal', 'Portal', 'portalType: Custom');
-    proj.component('edge-cache', 'Store', 'durability: ram-projection');
+    proj.component('billing-repo', 'Repository', 'owns: [billing-store, overdue-invoice-query]');
+    proj.component('billing-store', 'Store', 'durability: ram-projection');
+    proj.component('overdue-invoice-query', 'Query', 'dependsOn: [billing-store]');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'GATEWAY_CONTAINMENT');
-      expect(found).toHaveLength(1);
-      expect(found[0].specId).toBe('edge-gateway');
-      expect(found[0].message).toContain('edge-cache');
-      expect(found[0].message).toContain('type Store');
+      expect(byCode(validateSddTree(), 'REPOSITORY_CONTAINMENT')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
-  it('stays silent for the sanctioned member set: Portal + Orchestrator + Specialist', () => {
+  it('flags a workflow Orchestrator member, naming it and its type', () => {
     const proj = createTempProject();
-    proj.component('edge-gateway', 'Gateway', 'owns: [edge-portal, edge-orch, edge-mapper]');
-    proj.component('edge-portal', 'Portal', 'portalType: Custom');
-    proj.component('edge-orch', 'Orchestrator');
-    proj.component('edge-mapper', 'Specialist');
+    proj.component('billing-repo', 'Repository', 'owns: [billing-store, dunning-flow]');
+    proj.component('billing-store', 'Store', 'durability: ram-projection');
+    proj.component('dunning-flow', 'Orchestrator');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'GATEWAY_CONTAINMENT')).toHaveLength(0);
+      const found = byCode(validateSddTree(), 'REPOSITORY_CONTAINMENT');
+      expect(found).toHaveLength(1);
+      expect(found[0].specId).toBe('billing-repo');
+      expect(found[0].message).toContain('"dunning-flow" of type Orchestrator');
     } finally { proj.cleanup(); }
   });
 });

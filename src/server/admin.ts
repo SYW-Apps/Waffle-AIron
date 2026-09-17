@@ -20,7 +20,7 @@ import {
   resolveSubprojectMounts,
   SUBPROJECT_SEPARATOR,
 } from './projects.js';
-import { hostCore, hostGit, hostProducer, validateProjectAsComplete } from './adapters.js';
+import { hostCore, hostGit, hostProducer, validateProjectAsComplete, computeGateStateId } from './adapters.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import { setSecret as storeSecret, listSecretKeys } from '../utils/secrets.js';
@@ -84,7 +84,7 @@ function principalSubject(principal: Principal): PrincipalSubject {
 
 /**
  * Authenticate the caller, validate the REQUIRED target unit (every project is
- * placed at creation so the permission resolver can always enumerate it — a
+ * placed at creation so permission rules can always enumerate it — a
  * fresh instance must create its first organization unit before creating
  * projects; `wairon dev` provisions a synthetic local unit at boot), resolve the
  * caller's project:create permission over that unit (must be yes; an
@@ -102,7 +102,7 @@ export function createProject(
   // Validate the REQUIRED target unit up front (missing or unknown rejects) and
   // resolve the caller's project:create permission over it — a creator must hold
   // project:create over THE unit the project is placed in (an instance-admin
-  // passes via the resolver bypass).
+  // passes via the permission-rules bypass).
   requireExistingUnit(cfg, unitId);
   if (authorize(cfg.dataDir, principal, 'project:create', 'unit', unitId).value !== 'yes') {
     throw new AdminAuthError(
@@ -288,9 +288,10 @@ export function executeApprovedLock(
     if (errors.length) {
       throw new LockValidationError(errors.map((e) => ({ code: e.code, message: e.message, specId: e.specId })));
     }
-    // The GATE identity: the lock certifies that these specs passed THIS gate,
-    // so the governing doctrine is part of the frozen state.
-    const stateId = hostCore.computeGateStateId();
+    // The GATE identity, computed by the validator: the lock certifies that
+    // these specs passed THIS gate, so the governing doctrine is part of the
+    // frozen state.
+    const stateId = computeGateStateId();
 
     // THE APPROVAL, recorded in the committed lock record below rather than
     // written across the spec tree. This used to ratchet every spec's `status`

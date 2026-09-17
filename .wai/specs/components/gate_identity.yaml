@@ -10,6 +10,7 @@ subsystem: sdd_validator
 componentType: Orchestrator
 owns: []
 dependsOn: []
+dependencyClass: pure
 status: draft
 createdAt: '2026-09-15T10:51:24.462Z'
-updatedAt: '2026-09-15T10:51:24.466Z'
+updatedAt: '2026-09-15T20:38:02.080Z'

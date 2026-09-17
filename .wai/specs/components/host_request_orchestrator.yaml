@@ -10,14 +10,14 @@ subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - auth_specialist
+  - authentication
   - project_registry
   - host_mcp_adapter
   - host_core_adapter
   - audit_repository
   - project_lifecycle_orchestrator
   - surface_exchange_orchestrator
-  - authorization_specialist
+  - authorization
   - project_ops_orchestrator
 status: complete
 createdAt: '2026-07-04T12:33:41.786Z'

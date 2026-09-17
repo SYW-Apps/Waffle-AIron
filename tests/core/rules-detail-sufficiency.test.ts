@@ -365,6 +365,19 @@ describe('DETAIL_BELOW_STEREOTYPE — explicit dial below a logic stereotype\'s 
     } finally { proj.cleanup(); }
   });
 
+  it.each(['Supervisor', 'Actor'])('fires on a %s method explicitly dialed to intent — the process layer is logic too', (stereotype) => {
+    const proj = createTempProject();
+    proj.component('process-a', stereotype);
+    proj.contract('process-a', ['runFlow']);
+    proj.impl('process-a', `methods:\n${INTENT('runFlow')}`);
+    proj.activate();
+    try {
+      const found = detailIssues(validateSddTree());
+      expect(found.map(i => i.code)).toEqual(['DETAIL_BELOW_STEREOTYPE']);
+      expect(found[0].message).toContain(stereotype);
+    } finally { proj.cleanup(); }
+  });
+
   it('accepts the same dial on a Store — its stereotype floor IS intent', () => {
     const proj = createTempProject();
     proj.component('store-a', 'Store');

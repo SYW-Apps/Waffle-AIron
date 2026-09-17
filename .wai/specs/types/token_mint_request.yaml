@@ -4,7 +4,7 @@ name: TokenMintRequest
 description: >-
   Authorized request to mint a user-bound MCP/API token that acts as the owner user, narrowed to a
   set of projects. The token carries no permissions of its own — it can never exceed the owner's
-  live permission (the resolver gates per project).
+  live permission (permission rules gate per project).
 fields:
   - name: ownerUserId
     type: string
@@ -26,4 +26,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-08T20:17:13.853Z'
-updatedAt: '2026-07-15T22:51:35.556Z'
+updatedAt: '2026-09-15T21:03:29.216Z'

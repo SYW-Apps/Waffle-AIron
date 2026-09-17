@@ -38,6 +38,13 @@ export { composeAgentBrief } from './agent_resolver.js';
 // anchored conformance check.
 export { exportSpecTree, importSpecTree } from './treetransfer.js';
 
+// Component rename and Specialist retirement (icore_portal renameComponent /
+// retireSpecialists) — pure 1:1 forwards to the core orchestrator, stated
+// explicitly for the same anchored conformance check.
+export { renameComponent } from './provision.js';
+export { retireSpecialists } from './stereotype-migration.js';
+export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migration.js';
+
 // The approval (icore_portal captureApprovedSpecs / currentChildPins) — the
 // per-spec digests a lock RECORDS instead of writing statuses into the tree.
 // Published on the portal because both the local lock and the hosted admin

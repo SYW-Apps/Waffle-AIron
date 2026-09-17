@@ -23,10 +23,11 @@ const SYSTEM = {
 
 const SCHEDULING_SUB = { id: 'scheduling', description: 'Appointment booking and slot management for the clinic and its satellite locations.' };
 
-const SPECIALISTS: FixtureSpecInput[] = [
-  { id: 'eligibility-specialist', componentType: 'Specialist', description: 'Checks a patient\'s insurance eligibility.' },
-  { id: 'triage-specialist', componentType: 'Specialist', description: 'Scores intake urgency for triage.' },
-  { id: 'consent-specialist', componentType: 'Specialist', description: 'Verifies the required consent forms are on file.' },
+/** The intake checks: pure logic with no dependencies of their own. */
+const INTAKE_CHECKS: FixtureSpecInput[] = [
+  { id: 'eligibility-checker', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Checks a patient\'s insurance eligibility.' },
+  { id: 'triage-scorer', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Scores intake urgency for triage.' },
+  { id: 'consent-verifier', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Verifies the required consent forms are on file.' },
 ];
 
 export default [
@@ -241,7 +242,7 @@ export default [
     anchoredTo: 'visit-intake-orchestrator',
     expectFire: true,
     scenario:
-      'With component dependencies capped at two, the visit intake orchestrator coordinates three specialists.',
+      'With component dependencies capped at two, the visit intake orchestrator coordinates three intake checks.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'patient-intake', description: 'Patient intake, eligibility, and consent handling.' }],
@@ -251,9 +252,9 @@ export default [
           id: 'visit-intake-orchestrator',
           componentType: 'Orchestrator',
           description: 'Coordinates the intake flow from eligibility to consent.',
-          dependsOn: SPECIALISTS.map(s => s.id),
+          dependsOn: INTAKE_CHECKS.map(s => s.id),
         },
-        ...SPECIALISTS.map(s => ({ ...s, subsystem: 'patient-intake' })),
+        ...INTAKE_CHECKS.map(s => ({ ...s, subsystem: 'patient-intake' })),
       ],
     },
   }),
@@ -262,7 +263,7 @@ export default [
     expectFire: false,
     reason: 'The component declares exactly the configured maximum (2 dependencies) — the cap fires only above the limit.',
     scenario:
-      'With component dependencies capped at two, the visit intake orchestrator coordinates the eligibility and triage specialists.',
+      'With component dependencies capped at two, the visit intake orchestrator coordinates the eligibility checker and the triage scorer.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'patient-intake', description: 'Patient intake, eligibility, and consent handling.' }],
@@ -272,9 +273,9 @@ export default [
           id: 'visit-intake-orchestrator',
           componentType: 'Orchestrator',
           description: 'Coordinates the intake flow from eligibility to consent.',
-          dependsOn: SPECIALISTS.slice(0, 2).map(s => s.id),
+          dependsOn: INTAKE_CHECKS.slice(0, 2).map(s => s.id),
         },
-        ...SPECIALISTS.slice(0, 2).map(s => ({ ...s, subsystem: 'patient-intake' })),
+        ...INTAKE_CHECKS.slice(0, 2).map(s => ({ ...s, subsystem: 'patient-intake' })),
       ],
     },
   }),
@@ -368,12 +369,12 @@ export default [
     anchoredTo: 'patient-intake',
     expectFire: true,
     scenario:
-      'With subsystems capped at two direct components, patient intake hosts three specialists.',
+      'With subsystems capped at two direct components, patient intake hosts three intake checks.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'patient-intake', description: 'Patient intake, eligibility, and consent handling.' }],
       rules: { complexity: { maxSubsystemComponents: 2 } },
-      components: SPECIALISTS.map(s => ({ ...s, subsystem: 'patient-intake' })),
+      components: INTAKE_CHECKS.map(s => ({ ...s, subsystem: 'patient-intake' })),
     },
   }),
   defineRuleFixture({
@@ -381,12 +382,12 @@ export default [
     expectFire: false,
     reason: 'The subsystem hosts exactly the configured maximum (2 components) — the cap fires only above the limit.',
     scenario:
-      'With subsystems capped at two direct components, patient intake hosts the eligibility and triage specialists.',
+      'With subsystems capped at two direct components, patient intake hosts the eligibility checker and the triage scorer.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'patient-intake', description: 'Patient intake, eligibility, and consent handling.' }],
       rules: { complexity: { maxSubsystemComponents: 2 } },
-      components: SPECIALISTS.slice(0, 2).map(s => ({ ...s, subsystem: 'patient-intake' })),
+      components: INTAKE_CHECKS.slice(0, 2).map(s => ({ ...s, subsystem: 'patient-intake' })),
     },
   }),
 ];

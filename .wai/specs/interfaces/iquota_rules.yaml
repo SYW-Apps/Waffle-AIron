@@ -1,0 +1,24 @@
+id: iquota_rules
+name: Quota Rules Interface
+description: >-
+  Contract for advisory evaluation of hosted resource usage against quota policy. Evaluation is
+  observational only.
+component: quota_rules
+methods:
+  - name: evaluateUsage
+    description: >-
+      Evaluate resource usage snapshots against the advisory ResourceQuotaPolicy and return them
+      annotated with observe/warn quota messages. Advisory only: even a policy 'block' mode yields
+      an observational message and never blocks or throttles.
+    signature: >-
+      evaluateUsage(snapshots: ResourceUsageSnapshot[], policy: ResourceQuotaPolicy):
+      ResourceUsageSnapshot[]
+    returns: ResourceUsageSnapshot[]
+    params:
+      - name: snapshots
+        type: ResourceUsageSnapshot[]
+      - name: policy
+        type: ResourceQuotaPolicy
+status: complete
+createdAt: '2026-07-09T09:09:54.317Z'
+updatedAt: '2026-09-15T20:46:52.498Z'

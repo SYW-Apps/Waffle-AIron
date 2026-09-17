@@ -14,16 +14,16 @@ subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - auth_specialist
+  - authentication
   - organization_repository
   - project_registry
   - project_relation_repository
   - public_surface_repository
-  - landscape_diagram_specialist
+  - landscape_graph
   - audit_repository
   - host_core_adapter
-  - authorization_specialist
-  - visibility_specialist
+  - authorization
+  - visibility_rules
 lint:
   allow: []
 status: complete

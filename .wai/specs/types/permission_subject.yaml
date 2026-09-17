@@ -2,9 +2,9 @@ kind: value-object
 id: permission_subject
 name: PermissionSubject
 description: >-
-  The resolved caller handed to the pure permission resolver: the principal's id, their role
-  bindings, and whether they are the env-anchored instance super-admin. An instance-admin resolves
-  to yes everywhere, bypassing the walk (non-overridable).
+  The resolved caller handed to the pure permission rules: the principal's id, their role bindings,
+  and whether they are the env-anchored instance super-admin. An instance-admin resolves to yes
+  everywhere, bypassing the walk (non-overridable).
 subsystem: sdd_host
 fields:
   - name: subjectId
@@ -21,7 +21,7 @@ fields:
       True ONLY for the built-in super-admin subject (issuer 'local', userId === the persisted
       boot-reserved super-admin UUID seeded at first boot), the master credential, or (devMode only)
       the synthetic local-developer subject (issuer 'local', userId === the persisted boot-reserved
-      local-developer UUID) — the resolver then bypasses to yes. A regular user is NEVER
+      local-developer UUID) — permission rules then bypass to yes. A regular user is NEVER
       instanceAdmin, even a delegated instance-wide project:admin (that resolves as a normal
       overridable permission). It is determined by subject identity compared against the persisted
       instance identity, never by an assignment and never by an account name.
@@ -30,10 +30,10 @@ fields:
     type: string[]
     description: >-
       Alternate ids this subject is also known by when a user record's id and its subject's userId
-      have diverged (legacy records). The resolver honors a per-user assignment keyed by any alias
-      exactly as one keyed by subjectId; write paths canonicalize new assignments onto the subject's
-      userId, so aliases only carry legacy rows.
+      have diverged (legacy records). Permission rules honor a per-user assignment keyed by any
+      alias exactly as one keyed by subjectId; write paths canonicalize new assignments onto the
+      subject's userId, so aliases only carry legacy rows.
     optional: true
 methods: []
 createdAt: '2026-07-15T20:25:25.002Z'
-updatedAt: '2026-07-19T14:59:59.471Z'
+updatedAt: '2026-09-15T21:02:55.103Z'

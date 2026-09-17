@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache, computeGateStateId, readLockState } from '../../src/core/specs.js';
+import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache, readLockState } from '../../src/core/specs.js';
+import { computeGateStateId } from '../../src/core/validation.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
 import { stateIdEquals } from '../../src/core/statehash.js';
 import { writeLockRecord, type LockRecord } from '../../src/core/lockfile.js';
@@ -16,10 +17,10 @@ import type { SubsystemSpec } from '../../src/models/index.js';
 // a pinned contract can flip a verdict without moving the spec-tree digest, so
 // without this coverage a lock keeps reading fresh under a changed contract.
 //
-// Item 6 of stage 1 (chained-subsystem correctness): computeGateStateId now
-// reads those stored snapshots (this root's own, plus every chained root's),
-// reduces each to a provenance-free content key, and hands them to
-// hashGateState as `inputs`.
+// Item 6 of stage 1 (chained-subsystem correctness): computeGateStateId reads
+// those stored snapshots (this root's own, plus every chained root's) through
+// core's consumedContractInputs, which reduces each to a provenance-free
+// content key, and hands them to the gate identity as `inputs`.
 // ---------------------------------------------------------------------------
 
 const now = '2026-09-12T10:00:00Z';
@@ -174,13 +175,13 @@ describe('the gate identity digests consumed surface snapshots', () => {
     expect(stateIdEquals(before, after)).toBe(true);
   });
 
-  it('the algorithm is sha256+doctrine+inputs', () => {
+  it('the algorithm is sha256+content+doctrine+inputs', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
     buildRoot(rootDir);
-    expect(computeGateStateId().algorithm).toBe('sha256+doctrine+inputs');
+    expect(computeGateStateId().algorithm).toBe('sha256+content+doctrine+inputs');
   });
 
-  it('a lock record carrying the retired sha256+doctrine identity reads STALE, never locked', () => {
+  it('a lock record carrying the retired sha256+doctrine+inputs identity reads STALE, never locked', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
     buildRoot(rootDir);
 
@@ -188,7 +189,7 @@ describe('the gate identity digests consumed surface snapshots', () => {
     // compute now, but under the retired algorithm marker.
     const current = computeGateStateId();
     const legacyRecord: LockRecord = {
-      stateId: { algorithm: 'sha256+doctrine', digest: current.digest },
+      stateId: { algorithm: 'sha256+doctrine+inputs', digest: current.digest },
       lockedAt: now,
       lockedBy: { id: 'tester <t@example.com>', source: 'git' },
       validatorVersion: 'test',
@@ -199,8 +200,8 @@ describe('the gate identity digests consumed surface snapshots', () => {
     };
     writeLockRecord(legacyRecord);
 
-    const { state, record } = readLockState();
+    const { state, record } = readLockState(computeGateStateId());
     expect(state).toBe('stale');
-    expect(record!.stateId.algorithm).toBe('sha256+doctrine');
+    expect(record!.stateId.algorithm).toBe('sha256+doctrine+inputs');
   });
 });

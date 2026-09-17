@@ -14,7 +14,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -39,7 +39,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -83,7 +83,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -108,7 +108,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -133,7 +133,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -161,7 +161,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -189,7 +189,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -203,7 +203,7 @@ methods:
       - stepNumber: 4
         description: Mint a signed view token for the project's canvas
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: signViewToken
       - stepNumber: 5
         description: Compose the /view/diagram URL carrying the token
@@ -217,7 +217,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -242,7 +242,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -395,7 +395,7 @@ methods:
           Authenticate the caller credential (bootstrap master resolves to an instance-admin, or a
           user-bound token)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
@@ -407,7 +407,7 @@ methods:
           Resolve the caller's project:create permission over the target scope (an instance-admin
           bypasses to yes)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 4
         description: >-
@@ -449,12 +449,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential (bootstrap master or a user-bound token)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -481,12 +481,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential (bootstrap master or a user-bound token)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:write permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -589,14 +589,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the target project (binding a
           repository is project administration)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -629,12 +629,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -663,12 +663,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:write permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -697,14 +697,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:write permission over the target project (a commit is a spec
           write's save, not administration)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -738,12 +738,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -772,14 +772,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the target project (the backup cadence
           is binding administration)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -853,14 +853,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the target project (a producer
           publishes the project's specs to an external target)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -889,12 +889,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -912,7 +912,7 @@ methods:
       - stepNumber: 6
         description: Mint a signed view token for the project's canvas
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: signViewToken
       - stepNumber: 7
         description: Compose the canvas link from the public base URL and token
@@ -931,12 +931,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -965,12 +965,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -999,12 +999,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential (bootstrap master or a user-bound token)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:read permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -1036,14 +1036,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential (bootstrap master or a user-bound token)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the target project — deliberately above
           project:write, because this replaces the whole design rather than editing one spec
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny

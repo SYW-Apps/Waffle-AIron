@@ -81,9 +81,9 @@ methods:
         type: string
   - name: listOrganizationUnits
     description: >-
-      Resolve the session to a Principal via the auth specialist, require an instance-wide admin
-      grant, and return every organization unit through the organization repository. Not audited (a
-      read).
+      Resolve the session to a Principal via the authentication component, require an instance-wide
+      admin grant, and return every organization unit through the organization repository. Not
+      audited (a read).
     signature: 'listOrganizationUnits(sessionId: string): OrganizationUnitRecord[]'
     returns: OrganizationUnitRecord[]
     params:
@@ -302,4 +302,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-07-15T22:49:34.435Z'
+updatedAt: '2026-09-15T20:49:39.031Z'

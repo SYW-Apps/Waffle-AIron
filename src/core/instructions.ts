@@ -19,12 +19,12 @@ import { listSkillResources, loadProjectConfig, loadProjectExtensions, type Skil
 // never restates what is below.
 //
 // Layering (folded into this module, as skills.ts folds its own):
-//   instructions_specialist → buildServerInstructions
+//   server_instructions → buildServerInstructions
 // ---------------------------------------------------------------------------
 
 // This module and skills.ts import each other: the guidance orchestrator in
 // skills.ts forwards HERE to compose, and the composition reads back through
-// skills.ts for the skill descriptors (skills_resource_specialist) and the pack
+// skills.ts for the skill descriptors (skill_resources) and the pack
 // load (skills_core_adapter). The cycle is safe in both the ESM and the bundled
 // CJS output because every access happens inside a function body at call time —
 // nothing here runs during module initialization.
@@ -79,9 +79,12 @@ developer's tool).
 - **L0 System** — vision, boundaries, global requirements, target language.
 - **L1 Subsystem** — an isolated service, its \`publicInterfaces\`, its trusted links.
 - **L2 Component** — ONE building block (\`Portal\`, \`Orchestrator\`, \`Supervisor\`,
-  \`Actor\`, \`Store\`, \`Index\`, \`Registry\`, \`Adapter\`, \`Observer\`, \`Specialist\`) or
-  pattern (\`Repository\`, \`Gateway\`), plus \`owns\` (a pattern's private members) and
-  \`dependsOn\` (collaborators).
+  \`Actor\`, \`Store\`, \`Index\`, \`Query\`, \`Registry\`, \`Adapter\`, \`Observer\`, and
+  \`View\` for UIs) or pattern (\`Repository\`, and \`FeatureComponent\` or
+  \`RouterComponent\` for UIs), plus \`owns\` (a pattern's private members) and
+  \`dependsOn\` (collaborators). Logic is an \`Orchestrator\` whose \`dependencyClass\`
+  (\`pure\` or \`read\`; unset, a workflow) bounds what it may depend on; a gateway is
+  a \`Portal\` with the \`gateway\` variant. \`Specialist\` and \`Gateway\` are retired.
 - **L3 Interface** — the contract: method signatures with structured \`params\`,
   plus wire \`endpoint\` bindings for a Portal's methods.
 - **L4 Implementation** — a concrete realization of one L3 contract: narrative

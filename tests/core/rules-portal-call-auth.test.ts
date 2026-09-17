@@ -101,7 +101,7 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
       saveInterfaceSpec({ id: `isvc${i}-portal`, name: `ISvc${i}`, description: 'd', component: `svc${i}-portal`, methods: [{ name: 'op', description: 'op', signature: 'op(): void', returns: 'void' }], createdAt: now, updatedAt: now });
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    saveComponentSpec({ id: 'gateway', name: 'Gateway', subsystem: 'sub', description: 'd', componentType: 'Gateway', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
+    saveComponentSpec({ id: 'gateway', name: 'Gateway', subsystem: 'sub', description: 'd', componentType: 'Portal', portalType: 'Custom', variant: 'gateway', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
     saveInterfaceSpec({ id: 'igateway', name: 'IGateway', description: 'd', component: 'gateway', methods: [{ name: 'route', description: 'route', signature: 'route(): void', returns: 'void' }], createdAt: now, updatedAt: now });
     saveImplementationSpec({
       id: 'gateway_impl', name: 'GatewayImpl', description: 'd', contract: 'igateway',

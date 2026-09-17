@@ -1,7 +1,7 @@
 import { listOrganizationUnits, listProjectPlacements } from './organization.js';
 import { listAssignments } from './permissions.js';
 import { listRoles, BUILTIN_ROLES, isBuiltinRoleId } from './roles.js';
-import { resolvePermission, resolveVisibleScopes } from './permission_resolver.js';
+import { resolvePermission, resolveVisibleScopes } from './permission-rules.js';
 import type {
   EffectivePermission,
   PermissionWorld,
@@ -11,11 +11,11 @@ import type {
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Authorization Specialist (sdd_host) — the single I/O-backed authorization seam.
+// Authorization (sdd_host) — the single I/O-backed authorization seam.
 //
 // The caller has already authenticated (it holds a Principal carrying its
 // permissionSubject); this gathers the permission world ONCE and delegates to
-// the pure permission resolver. It performs no authentication and no workflow
+// the pure permission rules. It performs no authentication and no workflow
 // routing, and holds no state.
 //
 // Consumers use exactly two calls:
@@ -24,7 +24,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
- * The role set the resolver walks: the intrinsic BUILT-IN roles merged over the
+ * The role set permission rules walk: the intrinsic BUILT-IN roles merged over the
  * stored admin-defined ones. Built-ins are code constants, never stored rows, so
  * a binding to one ALWAYS resolves — there is no seeding step to forget and no
  * silent admin lockout. A stray stored row carrying a reserved id can never
@@ -35,7 +35,7 @@ function mergeRoles(stored: Role[]): Role[] {
 }
 
 /**
- * Gather the read-only world the pure resolver walks: the organization tree,
+ * Gather the read-only world the pure permission rules walk: the organization tree,
  * project placements, the assignment grid, and the role definitions. This is the
  * only I/O in the authorization path.
  */
@@ -69,7 +69,7 @@ export function authorize(
   }
   // Steps 1-5: gather the permission world once.
   const world = gatherWorld(dataDir);
-  // Step 6: resolve the effective permission through the pure resolver.
+  // Step 6: resolve the effective permission through pure permission rules.
   return resolvePermission(principal.permissionSubject, capability, scopeKind, scopeId, world);
 }
 
@@ -95,7 +95,7 @@ export function visibleScopes(
 
 /**
  * True for the env-anchored instance super-admin (built-in admin / master /
- * devMode local developer) — the resolver bypass.
+ * devMode local developer) — the permission-rules bypass.
  *
  * Listings short-circuit on this. A visibility view enumerates the ORG TREE
  * (units and PLACED projects), so an unplaced project is in nobody's visible

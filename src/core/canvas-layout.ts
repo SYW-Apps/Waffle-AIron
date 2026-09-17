@@ -40,7 +40,8 @@ export function computeLayout(model: LayoutModel, collapsed: Record<string, bool
   const BOX_W = 190, BOX_H = 52, GAP_X = 90, GAP_Y = 26, SUB_PAD = 30, SUB_HEAD = 44;
   const MEMBER_W = 168, MEMBER_H = 44, PAT_PAD = 16, PAT_HEAD = 34;
   const MAX_ROW = 2100;
-  const PATTERN_TYPES: Record<string, number> = { Repository: 1, Gateway: 1, FeatureComponent: 1, RouterComponent: 1 };
+  // A retired Gateway is no pattern: it lays out as a plain box.
+  const PATTERN_TYPES: Record<string, number> = { Repository: 1, FeatureComponent: 1, RouterComponent: 1 };
 
   const compById: Record<string, LayoutModel['components'][number]> = {};
   model.components.forEach(function (c) { compById[c.id] = c; });

@@ -273,7 +273,7 @@ export function activeTargetTypes(): string[] {
 // descriptors and markdown content.
 //
 // Layering (folded into this module, mirroring exportSddSkills):
-//   skills_resource_specialist  → listSkillResources / readSkillResource (pure)
+//   skill_resources             → listSkillResources / readSkillResource (pure)
 //   skills_resource_orchestrator→ validation + dispatch (inside readResource)
 //   skills_portal               → listResources / readResource (adapter entry)
 // ---------------------------------------------------------------------------
@@ -317,7 +317,7 @@ function readSkillFrontmatter(name: string): { name: string; description: string
   return readFrontmatter(fs.readFileSync(skillTemplatePath(name), 'utf-8'), name);
 }
 
-// ── skills_resource_specialist ─────────────────────────────────────────────
+// ── skill_resources ─────────────────────────────────────────────────────────
 
 /** List the five built-in SDD skills as MCP-safe resource descriptors. */
 export function listSkillResources(): SkillResourceDescriptor[] {
@@ -375,7 +375,7 @@ export function listResources(): SkillResourceDescriptor[] {
 
 /**
  * Orchestrator + Portal: compose the `instructions` the MCP server returns on
- * the initialize handshake, through the instructions specialist. (That module
+ * the initialize handshake, through server_instructions. (That module
  * imports back into this one — see the note in core/instructions.ts.)
  */
 export function buildServerInstructions(): string {

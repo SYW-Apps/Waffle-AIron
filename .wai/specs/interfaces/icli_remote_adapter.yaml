@@ -36,8 +36,8 @@ methods:
       plane's project route rather than the data plane: /mcp binds one project and resolves that
       binding before dispatching, so a project that does not exist yet cannot be addressed there.
       Presents the same bearer credential and is gated on project:create over the owner unit by the
-      same resolver. Returns the instance's summary — an approval-gated instance may answer that a
-      request was created, which is not a completed project.
+      same permission rules. Returns the instance's summary — an approval-gated instance may answer
+      that a request was created, which is not a completed project.
     signature: 'initializeRemoteProject(target: RemoteTarget, ownerUnitId: string): string'
     returns: string
     params:
@@ -82,4 +82,4 @@ methods:
         type: remote_target
 status: complete
 createdAt: '2026-08-12T18:31:37.284Z'
-updatedAt: '2026-08-12T19:21:57.507Z'
+updatedAt: '2026-09-15T21:02:30.238Z'

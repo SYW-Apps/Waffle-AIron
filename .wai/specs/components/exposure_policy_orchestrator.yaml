@@ -9,8 +9,8 @@ subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - auth_specialist
-  - authorization_specialist
+  - authentication
+  - authorization
   - policy_repository
   - audit_repository
 status: complete

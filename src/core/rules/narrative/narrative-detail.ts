@@ -1,6 +1,7 @@
 import {
   defaultConformanceTier,
   effectiveDetail,
+  isLogic,
   methodSourceFile,
   passesIntentFloor,
   pathKey,
@@ -16,15 +17,6 @@ import { SddRule } from '../types.js';
 // the Orchestrator they forward to), and a Store's semantics are a contract
 // paragraph, not choreography.
 // ---------------------------------------------------------------------------
-
-/**
- * The unambiguous LOGIC blocks — where behavior genuinely lives. Deliberately
- * narrower than "everything defaulting to detail: full": pattern facades
- * (Repository, Gateway) and presenter/pattern components inherit the full
- * floor but forward to members, so an explicit dial-down there is a normal
- * choice, not a smell worth DETAIL_BELOW_STEREOTYPE.
- */
-const LOGIC_STEREOTYPES = new Set(['Orchestrator', 'Supervisor', 'Actor', 'Specialist']);
 
 // The detail-sufficiency floor: above this cyclomatic complexity a realized
 // function has enough real branching that leaving its method below detail:
@@ -120,13 +112,17 @@ export const narrativeDetailRule: SddRule = {
 
         // Detail sufficiency (spec side): explicitly dialing a logic
         // stereotype's method below its full floor is a visible design choice.
+        // Logic is where behavior genuinely lives — an Orchestrator, Supervisor
+        // or Actor (or a Specialist until it is migrated). Deliberately
+        // narrower than "everything defaulting to detail: full": pattern
+        // facades and presenter components inherit the full floor but forward
+        // to members, so an explicit dial-down there is a normal choice.
         // Skipped when the code-backed finding already fired for this method.
-        if (!complexityFired && eff.explicit
-          && component && LOGIC_STEREOTYPES.has(component.componentType)) {
+        if (!complexityFired && eff.explicit && component && isLogic(component)) {
           ctx.addIssue(
             'warning',
             'DETAIL_BELOW_STEREOTYPE',
-            `Method "${implMethod.name}" in implementation "${impl.id}" is explicitly dialed to detail: ${eff.level}, below the full narrative floor of its ${component?.componentType ?? 'logic'} stereotype, and has no narrative. Logic behavior belongs in a narrative — write one, or keep the dial with a lint.allow stating why.`,
+            `Method "${implMethod.name}" in implementation "${impl.id}" is explicitly dialed to detail: ${eff.level}, below the full narrative floor of its ${component.componentType} stereotype, and has no narrative. Logic behavior belongs in a narrative — write one, or keep the dial with a lint.allow stating why.`,
             impl.id,
             isDraftCtx,
           );
