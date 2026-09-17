@@ -13,7 +13,7 @@ export const dispatchStepRoutingRule: SddRule = {
   description:
     'A dispatch narrative step must name the capability it routes and route it through a Portal whose dispatch table actually serves that capability; a guarantee the step asserts must be declared by the contract method the capability resolves to.',
   codes: [
-    { code: 'MALFORMED_DISPATCH_STEP', defaultSeverity: 'error', summary: 'Dispatch step missing its capability (targetComponent presence is the contracts rule\'s finding)' },
+    { code: 'MALFORMED_DISPATCH_STEP', defaultSeverity: 'error', summary: 'Dispatch step missing its capability (targetComponent presence is narrative-target-references\' finding)' },
     { code: 'UNSERVED_CAPABILITY', defaultSeverity: 'error', summary: 'Capability has no existing server (bad table binding, or dispatch step routing a capability the target Portal does not serve)' },
     { code: 'NARRATIVE_SEMANTIC_UNBACKED', defaultSeverity: 'warning', summary: 'Dispatch step asserts a guarantee the bound capability method does not declare' },
   ],
@@ -36,7 +36,8 @@ export const dispatchStepRoutingRule: SddRule = {
             );
             continue;
           }
-          // Missing/dangling targetComponent is the contracts rule's finding.
+          // A missing targetComponent is narrative-target-references' finding,
+          // and a dangling one cross-tree-references'.
           if (!step.targetComponent) continue;
           const portal = ctx.componentMap.get(step.targetComponent);
           if (!portal) continue;

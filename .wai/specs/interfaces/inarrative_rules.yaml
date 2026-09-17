@@ -6,13 +6,12 @@ description: >-
   contracts and narratives agree and are sound.
 component: narrative_rules
 methods:
-  - name: contractSymmetryAndNarratives
+  - name: contractSymmetry
     description: >-
-      Rule contract-symmetry-and-narratives. Implementations mirror their contract
-      method-for-method. Narrative call steps (and register handoffs, which share the identical
-      target shape) must name an existing component and method, the caller must declare the
-      dependency, and asserted semantic guarantees must be backed by the target contract.
-    signature: 'contractSymmetryAndNarratives(ctx: RuleContext): void'
+      Rule contract-symmetry. Implementations mirror their contract method-for-method: every method
+      an implementation declares is defined on the contract it realizes, and every contract method
+      has an implementation.
+    signature: 'contractSymmetry(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -25,12 +24,49 @@ methods:
       - code: MISSING_IMPLEMENTATION_METHOD
         severity: error
         summary: Contract method missing from the implementation
+  - name: narrativeTargetReferences
+    description: >-
+      Rule narrative-target-references. A narrative call, dispatch or register step must name a
+      target component, and a target method unless it dispatches. A target this tree contains must
+      be a collaborator the calling component declares, must carry the named method on one of its
+      interfaces, and that method must declare every semantic guarantee the step asserts.
+    signature: 'narrativeTargetReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: MISSING_TARGET_COMPONENT
         severity: error
         summary: Call/register step missing targetComponent
       - code: MISSING_TARGET_METHOD
         severity: error
         summary: Call/register step missing targetMethod
+      - code: UNDECLARED_DEPENDENCY_CALL
+        severity: error
+        summary: Call step targets a component the caller does not depend on or own
+      - code: INVALID_TARGET_METHOD_REFERENCE
+        severity: error
+        summary: Call step targets a method not on any target interface
+      - code: NARRATIVE_SEMANTIC_UNBACKED
+        severity: warning
+        summary: Narrative asserts a guarantee the called contract does not declare
+  - name: crossTreeReferences
+    description: >-
+      Rule cross-tree-references. A narrative call, dispatch or register target that is not a
+      component of this tree must resolve against the stored surface snapshots to exactly one
+      declared contract. Snapshots that expose the name with disagreeing contracts leave the
+      reference ambiguous; no snapshot at all is a warning for a reference that points outside this
+      loading root (only the parent project can verify it) and the error a genuine local typo has
+      always got.
+    signature: 'crossTreeReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: INVALID_TARGET_COMPONENT_REFERENCE
         severity: error
         summary: Call/register step targets a non-existent component
@@ -39,22 +75,33 @@ methods:
         summary: >-
           Cross-tree reference (super::/:: form) with no surface snapshot covering it — only the
           parent project can verify it
-      - code: SURFACE_REF_NOT_EXPOSED
-        severity: error
-        summary: >-
-          Cross-tree reference resolves to a surface snapshot that does not expose the called
-          method/capability
       - code: SURFACE_REF_AMBIGUOUS
         severity: error
         summary: >-
           Cross-tree call/dispatch/register target matched by surface snapshots of several providers
           with different contracts
+  - name: surfaceReferenceBacking
+    description: >-
+      Rule surface-reference-backing. The surface snapshot a cross-tree narrative target resolves to
+      must back what the step asks of it: the calling component declares the collaborator, the
+      snapshot exposes the called method (or serves the dispatched capability), and it declares
+      every semantic guarantee the step asserts. A snapshot is the provider's declared contract, so
+      these are contract verdicts rather than resolution failures.
+    signature: 'surfaceReferenceBacking(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: SURFACE_REF_NOT_EXPOSED
+        severity: error
+        summary: >-
+          Cross-tree reference resolves to a surface snapshot that does not expose the called
+          method/capability
       - code: UNDECLARED_DEPENDENCY_CALL
         severity: error
         summary: Call step targets a component the caller does not depend on or own
-      - code: INVALID_TARGET_METHOD_REFERENCE
-        severity: error
-        summary: Call step targets a method not on any target interface
       - code: NARRATIVE_SEMANTIC_UNBACKED
         severity: warning
         summary: Narrative asserts a guarantee the called contract does not declare
@@ -217,4 +264,4 @@ methods:
           narrative
 status: draft
 createdAt: '2026-09-14T06:06:18.256Z'
-updatedAt: '2026-09-17T22:25:05.490Z'
+updatedAt: '2026-09-17T22:55:46.741Z'

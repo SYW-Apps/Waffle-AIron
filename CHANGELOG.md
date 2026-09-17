@@ -427,6 +427,7 @@ sides of a seam.
 | `architectural-profiles` | `profile-registration` + `profile-stereotype-fencing` + `pack-profile-stereotypes` | three questions with three owners: is the name real (the project's config), does the built-in family doctrine allow this stereotype (wairon), does the pack's own declared doctrine allow it (the pack) |
 | `structural-conformance` | `source-file-linkage` + `method-realization` + `finding-realization` | three questions about the same code model: does the spec name files that exist, does the file contain the method, does it report the codes the method declares |
 | `narrative-flow` | `narrative-step-config` + `narrative-reachability` + `narrative-jump-edges` | does each step carry the config its type requires, can every step be reached (and do the regions nest), and where do the jump edges land |
+| `contract-symmetry-and-narratives` | `contract-symmetry` + `narrative-target-references` + `cross-tree-references` + `surface-reference-backing` | four questions a user recognizes: does the implementation mirror its contract, does a target inside this tree resolve, does a target that leaves it pin to exactly one declared surface, and does that surface back what the step asks of it |
 
 `profile-registration` also checks the project's own `projectType` before each subsystem's profile rather than after —
 the project-wide question first. On wairon's own tree the split retires `wiring_rules_impl`'s
@@ -443,6 +444,21 @@ spec id, so it belongs to the one rule that builds the file index, or it would b
 On wairon's own tree the conformance split retires `conformance_rules_impl`'s `EXCESSIVE_NARRATIVE_STEPS` allow — the
 31-step narrative it named is gone and nothing left in that family lists more than 25 — and both families' remaining
 `NARRATIVE_COMPLEXITY` allows now name only the narratives that still report.
+
+`contract-symmetry-and-narratives` was the worst of them: 66 steps at cognitive score 99, because roughly half of it was
+the cross-tree surface-resolution sequence written twice — once for dispatch steps and once for call/register steps,
+which the code's own comment described as "IDENTICAL target validation". That duplication is unified first: one
+resolution path every entry kind feeds, where the kinds differ only in the verb the finding reads with
+(`dispatches through` / `registers callback` / `calls`) and in what the surface must expose (a served capability or an
+exposed method). The unification is behaviour-preserving to the letter — every message, anchor, severity, draft context
+and `surfaceResolved` flag is byte-identical, verified by diffing the full finding set of all 561 rule-matrix fixtures
+before and after. `SURFACE_REF_AMBIGUOUS` still names the reaching clause per kind, and the `surfaceResolved` flag still
+marks exactly the findings whose reference resolved against a snapshot, which is what keeps them at full strength in a
+chained subproject. The split is four rules rather than the three the shape suggests: the cross-tree half measured 21
+even unified, so resolving a reference (`cross-tree-references`: ambiguous, unresolved-outside-the-root, or the plain
+typo) is separated from judging the contract it resolved to (`surface-reference-backing`: the declared collaborator, the
+exposed method or served capability, the asserted guarantees). The four narratives measure 13, 19, 11 and 18. The family's
+`EXCESSIVE_NARRATIVE_STEPS` allow is retired — nothing in it lists more than 20 steps any more.
 
 ### Complexity, naming and cohesion are checked
 

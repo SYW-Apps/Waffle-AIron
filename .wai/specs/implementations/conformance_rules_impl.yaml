@@ -79,8 +79,9 @@ methods:
       - stepNumber: 12
         description: >-
           Only call steps count (dispatch steps route through runtime tables, so the bound name
-          never appears at the call site); dangling targets are the contracts rule's findings:
-          continue with the next step
+          never appears at the call site); a target this tree does not contain is
+          cross-tree-references' finding, and surface-reference-backing's once it resolves: continue
+          with the next step
         type: branch
         condition: >-
           step is a call step with targetComponent and targetMethod, and ctx.componentMap has
@@ -806,4 +807,4 @@ lint:
         integrationConformance); the doctrine's own rules are the worst offenders and go first.
 status: draft
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-17T22:26:01.195Z'
+updatedAt: '2026-09-17T23:00:09.579Z'

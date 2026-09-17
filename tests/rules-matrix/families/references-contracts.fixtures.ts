@@ -1,6 +1,7 @@
 /**
- * Contract ↔ implementation symmetry and narrative target resolution
- * (src/core/rules/narrative/contract-symmetry-and-narratives.ts).
+ * Contract ↔ implementation symmetry (contract-symmetry.ts) and narrative
+ * target resolution (narrative-target-references.ts, with the cross-tree
+ * half in cross-tree-references.ts), all under src/core/rules/narrative/.
  *
  * Documented intents pinned here:
  *  - UNEXPECTED_IMPLEMENTATION_METHOD (error): implementation declares a method
@@ -25,7 +26,7 @@
  *    (in-tree L3 contract) path and the cross-tree (surface snapshot) path.
  *
  * NOTE on scope: these codes pin method-NAME symmetry and target resolution.
- * The contracts rule deliberately does not compare signatures/params/returns —
+ * contract-symmetry deliberately does not compare signatures/params/returns —
  * its documented contract is "mirror the contract method-for-method" by name.
  */
 import * as yaml from 'js-yaml';

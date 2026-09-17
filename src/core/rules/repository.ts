@@ -8,7 +8,10 @@ import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
 import { signatureTypeReferencesRule } from './integrity/signature-type-references.js';
 import { publicSurfaceRule } from './integrity/public-surface.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
-import { contractsRule } from './narrative/contract-symmetry-and-narratives.js';
+import { contractSymmetryRule } from './narrative/contract-symmetry.js';
+import { narrativeTargetReferencesRule } from './narrative/narrative-target-references.js';
+import { crossTreeReferencesRule } from './narrative/cross-tree-references.js';
+import { surfaceReferenceBackingRule } from './narrative/surface-reference-backing.js';
 import { guaranteeTokensRule } from './narrative/guarantee-tokens.js';
 import { narrativeStepConfigRule } from './narrative/narrative-step-config.js';
 import { narrativeReachabilityRule } from './narrative/narrative-reachability.js';
@@ -83,7 +86,14 @@ export const SDD_RULES: SddRule[] = [
   typeDeclarationsRule,
   fieldTypeReferencesRule,
   signatureTypeReferencesRule,
-  contractsRule,
+  // Contracts and the targets narratives name, in four questions with one
+  // owner each: does the implementation mirror its contract, does a target
+  // inside this tree resolve, does a target that leaves it pin to exactly one
+  // declared surface, and does that surface back what the step asks of it.
+  contractSymmetryRule,
+  narrativeTargetReferencesRule,
+  crossTreeReferencesRule,
+  surfaceReferenceBackingRule,
   // Vocabulary check right after contracts: an unknown token explains why the
   // consistency findings around it are absent, so surface them together.
   guaranteeTokensRule,

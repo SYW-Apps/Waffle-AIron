@@ -6,413 +6,6 @@ description: >-
 contract: inarrative_rules
 simPath: tests/core/validation.test.ts
 methods:
-  - name: contractSymmetryAndNarratives
-    sourcePath: src/core/rules/narrative/contract-symmetry-and-narratives.ts
-    narrative:
-      - stepNumber: 1
-        label: impls
-        description: For each implementation spec
-        type: loop
-        over: ctx.implementations
-        endStep: 66
-      - stepNumber: 2
-        description: Skip an implementation whose contract interface does not resolve
-        type: branch
-        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
-        onFalseStep: 1
-      - stepNumber: 3
-        description: >-
-          Compute isDraftCtx = ctx.isImplementationDraft(impl), the draft context of the findings on
-          this implementation, and collect the contract's method names and the implementation's
-          method names
-        type: local
-      - stepNumber: 4
-        label: extraMethods
-        description: Check each implementation method against the contract
-        type: loop
-        over: impl.methods
-        endStep: 6
-      - stepNumber: 5
-        description: Is the method absent from the contract?
-        type: branch
-        condition: the method's name is not among the contract's method names
-        onFalseStep: 4
-      - stepNumber: 6
-        label: reportUnexpected
-        description: >-
-          Report UNEXPECTED_IMPLEMENTATION_METHOD (error; draft context isDraftCtx) on the
-          implementation, naming the method and the contract it is not defined on
-        type: local
-      - stepNumber: 7
-        label: missingMethods
-        description: Check each contract method against the implementation
-        type: loop
-        over: contract.methods
-        endStep: 9
-      - stepNumber: 8
-        description: Is the contract method left unimplemented?
-        type: branch
-        condition: the contract method's name is not among the implementation's method names
-        onFalseStep: 7
-      - stepNumber: 9
-        label: reportMissing
-        description: >-
-          Report MISSING_IMPLEMENTATION_METHOD (error; draft context isDraftCtx) on the
-          implementation, naming the contract method and its interface
-        type: local
-      - stepNumber: 10
-        label: targetSteps
-        description: Resolve the target of every narrative step of the implementation
-        type: loop
-        over: each narrative step of each method in impl.methods
-        endStep: 66
-      - stepNumber: 11
-        description: Only call, dispatch and register steps name a target; skip every other step
-        type: branch
-        condition: step.type is call, dispatch or register
-        onFalseStep: 10
-      - stepNumber: 12
-        description: Does the step lack its target component?
-        type: branch
-        condition: step.targetComponent is missing
-        onFalseStep: 15
-      - stepNumber: 13
-        description: >-
-          Report MISSING_TARGET_COMPONENT (error; draft context isDraftCtx) naming the method, the
-          step type and the step number
-        type: local
-      - stepNumber: 14
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 15
-        label: classifyRef
-        description: >-
-          Classify the target reference: isCrossTreeForm =
-          ctx.isExternalNamespaceRef(step.targetComponent); fromSubsystem = the subsystem of the
-          calling component ctx.componentMap.get(contract.component), when it resolves;
-          isCollapsedForm = not isCrossTreeForm, fromSubsystem known, and
-          ctx.isCollapsedCrossTreeRef(step.targetComponent, fromSubsystem)
-        type: local
-      - stepNumber: 16
-        description: >-
-          A dispatch step is checked for component existence and the declared dependency only;
-          resolving its capability against the portal's table is another rule's
-        type: branch
-        condition: step.type is dispatch
-        onFalseStep: 36
-      - stepNumber: 17
-        description: Does the dispatch target fail to resolve in this tree?
-        type: branch
-        condition: ctx.componentMap.get(step.targetComponent) finds no component
-        onFalseStep: 33
-      - stepNumber: 18
-        description: Only a cross-tree or collapsed reference is judged against the surface snapshots
-        type: branch
-        condition: isCrossTreeForm or isCollapsedForm
-        onFalseStep: 28
-      - stepNumber: 19
-        description: resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem)
-        type: local
-      - stepNumber: 20
-        description: >-
-          Act on how the snapshots judged the reference; an unresolved one falls back to the
-          unresolved-target findings
-        type: switch
-        'on': resolved.kind
-        cases:
-          - value: ambiguous
-            step: 21
-          - value: resolved
-            step: 23
-        defaultStep: 28
-      - stepNumber: 21
-        label: dispatchAmbiguous
-        description: >-
-          Report SURFACE_REF_AMBIGUOUS (error; draft context isDraftCtx; not surface-resolved) with
-          the message resolved.ambiguityMessage('Method <method> in implementation <impl> dispatches
-          (step <n>) through', step.targetComponent)
-        type: local
-      - stepNumber: 22
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 23
-        label: dispatchSurfaceDeps
-        description: >-
-          A dispatch target resolved through a surface is a collaborator like a local one: is it
-          undeclared?
-        type: branch
-        condition: >-
-          the calling component ctx.componentMap.get(contract.component) resolves,
-          step.targetComponent is not the caller itself, and the caller neither dependsOn nor owns
-          it (the loader qualifies a cross-tree dependsOn entry exactly as it qualifies the step's
-          target)
-        onFalseStep: 25
-      - stepNumber: 24
-        description: >-
-          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
-          ctx.isComponentDraft(caller.id); surface-resolved) naming the caller and the cross-tree
-          component it dispatches through without declaring it
-        type: local
-      - stepNumber: 25
-        label: dispatchSurface
-        description: Validate the dispatched capability against the declared surface
-        type: branch
-        condition: >-
-          step.capability is set and resolved.entry.dispatch (none when absent) has no binding for
-          that capability
-        onFalseStep: 10
-      - stepNumber: 26
-        description: >-
-          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; surface-resolved) naming
-          the capability, the cross-tree portal, the snapshot's projectName and the entry id that
-          does not serve it
-        type: local
-      - stepNumber: 27
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 28
-        label: dispatchUnresolved
-        description: >-
-          An unresolved cross-tree reference is only verifiable from the parent project; any other
-          unresolved reference is broken
-        type: branch
-        condition: isCrossTreeForm
-        onFalseStep: 31
-      - stepNumber: 29
-        description: >-
-          Report CROSS_TREE_REF_UNRESOLVED (warning; draft context isDraftCtx) naming the method,
-          the cross-tree component it dispatches through and the step, with the remedies: validate
-          from the parent project, pin the family surfaces (wairon surface pin), or import the
-          producing project's surface
-        type: local
-      - stepNumber: 30
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 31
-        label: dispatchInvalid
-        description: >-
-          Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
-          dispatches through a component that does not exist, naming it and the step
-        type: local
-      - stepNumber: 32
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 33
-        label: dispatchDeps
-        description: Is the dispatch target an undeclared collaborator?
-        type: branch
-        condition: >-
-          the calling component ctx.componentMap.get(contract.component) resolves,
-          step.targetComponent is not the caller itself, and the caller neither dependsOn nor owns
-          it
-        onFalseStep: 10
-      - stepNumber: 34
-        description: >-
-          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
-          ctx.isComponentDraft(caller.id)) naming the caller and the component it dispatches through
-          without declaring it
-        type: local
-      - stepNumber: 35
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 36
-        label: callPath
-        description: >-
-          Call and register steps share the target resolution from here, their messages saying
-          'calls' or 'registers callback'. Does the step lack its target method?
-        type: branch
-        condition: step.targetMethod is missing
-        onFalseStep: 39
-      - stepNumber: 37
-        description: >-
-          Report MISSING_TARGET_METHOD (error; draft context isDraftCtx) naming the method, the step
-          type and the step number
-        type: local
-      - stepNumber: 38
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 39
-        label: callTarget
-        description: Does the call target fail to resolve in this tree?
-        type: branch
-        condition: ctx.componentMap.get(step.targetComponent) finds no component
-        onFalseStep: 59
-      - stepNumber: 40
-        description: Only a cross-tree or collapsed reference is judged against the surface snapshots
-        type: branch
-        condition: isCrossTreeForm or isCollapsedForm
-        onFalseStep: 54
-      - stepNumber: 41
-        description: resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem)
-        type: local
-      - stepNumber: 42
-        description: >-
-          Act on how the snapshots judged the reference; an unresolved one falls back to the
-          unresolved-target findings
-        type: switch
-        'on': resolved.kind
-        cases:
-          - value: ambiguous
-            step: 43
-          - value: resolved
-            step: 45
-        defaultStep: 54
-      - stepNumber: 43
-        label: callAmbiguous
-        description: >-
-          Report SURFACE_REF_AMBIGUOUS (error; draft context isDraftCtx; not surface-resolved) with
-          the message resolved.ambiguityMessage('Method <method> in implementation <impl>
-          calls|registers callback "<targetMethod>" (step <n>) on', step.targetComponent)
-        type: local
-      - stepNumber: 44
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 45
-        label: callSurfaceDeps
-        description: >-
-          A call or register target resolved through a surface is a collaborator like a local one:
-          is it undeclared?
-        type: branch
-        condition: >-
-          the calling component ctx.componentMap.get(contract.component) resolves,
-          step.targetComponent is not the caller itself, and the caller neither dependsOn nor owns
-          it (the loader qualifies a cross-tree dependsOn entry exactly as it qualifies the step's
-          target)
-        onFalseStep: 47
-      - stepNumber: 46
-        description: >-
-          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
-          ctx.isComponentDraft(caller.id); surface-resolved) naming the caller and the cross-tree
-          component it calls or registers a callback on without declaring it
-        type: local
-      - stepNumber: 47
-        label: callSurface
-        description: Validate the called method against the declared surface
-        type: branch
-        condition: resolved.entry.methods has no method named step.targetMethod
-        onFalseStep: 50
-      - stepNumber: 48
-        description: >-
-          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; surface-resolved) naming
-          the method, the cross-tree component, the snapshot's projectName and the entry id that
-          does not expose it
-        type: local
-      - stepNumber: 49
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 50
-        label: surfaceGuarantees
-        description: Check each guarantee the step asserts against the surface method
-        type: loop
-        over: step.assertsGuarantees (none when absent)
-        endStep: 52
-      - stepNumber: 51
-        description: Is the asserted guarantee undeclared on the surface?
-        type: branch
-        condition: the surface method's guarantees (none when absent) do not include the asserted guarantee
-        onFalseStep: 50
-      - stepNumber: 52
-        label: surfaceUnbacked
-        description: >-
-          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx; surface-resolved)
-          naming the step, the method, the guarantee, the snapshot's projectName and the entry
-          method that does not declare it
-        type: local
-      - stepNumber: 53
-        description: Continue with the next step once every asserted guarantee is checked
-        type: jump
-        toStep: 10
-      - stepNumber: 54
-        label: callUnresolved
-        description: >-
-          An unresolved cross-tree reference is only verifiable from the parent project; any other
-          unresolved reference is broken
-        type: branch
-        condition: isCrossTreeForm
-        onFalseStep: 57
-      - stepNumber: 55
-        description: >-
-          Report CROSS_TREE_REF_UNRESOLVED (warning; draft context isDraftCtx) naming the method,
-          the cross-tree component it calls or registers a callback on and the step, with the
-          remedies: validate from the parent project, pin the family surfaces (wairon surface pin),
-          or import the producing project's surface
-        type: local
-      - stepNumber: 56
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 57
-        label: callInvalid
-        description: >-
-          Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
-          calls or registers a callback on a component that does not exist, naming it and the step
-        type: local
-      - stepNumber: 58
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 59
-        label: callDeps
-        description: Is the call target an undeclared collaborator?
-        type: branch
-        condition: >-
-          the calling component ctx.componentMap.get(contract.component) resolves,
-          step.targetComponent is not the caller itself, and the caller neither dependsOn nor owns
-          it
-        onFalseStep: 61
-      - stepNumber: 60
-        description: >-
-          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
-          ctx.isComponentDraft(caller.id)) naming the caller and the component it calls or registers
-          a callback on without declaring it
-        type: local
-      - stepNumber: 61
-        label: resolveTargetMethod
-        description: Does the target component's contract lack the called method?
-        type: branch
-        condition: >-
-          no interface in ctx.interfacesByComponent.get(step.targetComponent) (none when absent) has
-          a method named step.targetMethod; the first interface that has one supplies the target
-          method
-        onFalseStep: 64
-      - stepNumber: 62
-        description: >-
-          Report INVALID_TARGET_METHOD_REFERENCE (error; draft context isDraftCtx or
-          ctx.isComponentDraft(step.targetComponent)) naming the method, the target component and
-          the step
-        type: local
-      - stepNumber: 63
-        description: Continue with the next step
-        type: jump
-        toStep: 10
-      - stepNumber: 64
-        label: callGuarantees
-        description: Check each guarantee the step asserts against the target method's contract
-        type: loop
-        over: step.assertsGuarantees (none when absent)
-        endStep: 66
-      - stepNumber: 65
-        description: Is the asserted guarantee undeclared on the called contract?
-        type: branch
-        condition: the target method's L3 guarantees (none when absent) do not include the asserted guarantee
-        onFalseStep: 64
-      - stepNumber: 66
-        label: callUnbacked
-        description: >-
-          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx or
-          ctx.isComponentDraft(step.targetComponent)) naming the step, the guarantee and the called
-          method, with the remedy: declare it on that method, or revise the narrative
-        type: local
-    symbol: check
   - name: guaranteeTokens
     sourcePath: src/core/rules/narrative/guarantee-tokens.ts
     narrative:
@@ -910,14 +503,418 @@ methods:
           step and the handler step it falls into: end the body with a jump, return or throw
         type: local
     symbol: check
+  - name: contractSymmetry
+    sourcePath: src/core/rules/narrative/contract-symmetry.ts
+    narrative:
+      - stepNumber: 1
+        label: impls
+        description: For each implementation spec
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 9
+      - stepNumber: 2
+        description: Skip an implementation whose contract interface does not resolve
+        type: branch
+        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          Compute isDraftCtx = ctx.isImplementationDraft(impl), the draft context of the findings on
+          this implementation, and collect the contract's method names and the implementation's
+          method names
+        type: local
+      - stepNumber: 4
+        label: extraMethods
+        description: Check each implementation method against the contract
+        type: loop
+        loopKind: forEach
+        over: impl.methods
+        endStep: 6
+      - stepNumber: 5
+        description: Is the method absent from the contract?
+        type: branch
+        condition: the method's name is not among the contract's method names
+        onFalseStep: 4
+      - stepNumber: 6
+        label: reportUnexpected
+        description: >-
+          Report UNEXPECTED_IMPLEMENTATION_METHOD (error; draft context isDraftCtx) on the
+          implementation, naming the method and the contract it is not defined on
+        type: local
+      - stepNumber: 7
+        label: missingMethods
+        description: Check each contract method against the implementation
+        type: loop
+        loopKind: forEach
+        over: contract.methods
+        endStep: 9
+      - stepNumber: 8
+        description: Is the contract method left unimplemented?
+        type: branch
+        condition: the contract method's name is not among the implementation's method names
+        onFalseStep: 7
+      - stepNumber: 9
+        label: reportMissing
+        description: >-
+          Report MISSING_IMPLEMENTATION_METHOD (error; draft context isDraftCtx) on the
+          implementation, naming the contract method and its interface
+        type: local
+    symbol: check
+  - name: narrativeTargetReferences
+    sourcePath: src/core/rules/narrative/narrative-target-references.ts
+    narrative:
+      - stepNumber: 1
+        label: targetSteps
+        description: >-
+          Resolve the target every narrative step names, whatever its kind: call, dispatch and
+          register steps all name one. Register steps (runtime-callback handoffs) name a target
+          exactly like call steps do and get IDENTICAL validation — the handoff must point at a real
+          dependency's real method even though it never invokes
+        type: loop
+        loopKind: forEach
+        over: >-
+          the call, dispatch and register steps of every method narrative of every implementation
+          impl in ctx.implementations whose contract ctx.interfaceMap.get(impl.contract) resolves
+        endStep: 17
+      - stepNumber: 2
+        description: >-
+          Compute isDraftCtx = ctx.isImplementationDraft(impl); caller =
+          ctx.componentMap.get(contract.component), the calling component; and the verb every
+          finding reads with, which is all the step kinds differ by: 'dispatches through' for a
+          dispatch step, 'registers callback' for a register step, 'calls' otherwise
+        type: local
+      - stepNumber: 3
+        label: requiredTargets
+        description: >-
+          Which of the two required targets the step leaves unset decides what is reported; a step
+          missing its component is never judged on its method as well
+        type: switch
+        'on': >-
+          the required target the step leaves unset: its target component when step.targetComponent
+          is missing, else its target method when a call or register step has no step.targetMethod,
+          and neither otherwise
+        cases:
+          - value: targetComponent
+            step: 4
+          - value: targetMethod
+            step: 6
+        defaultStep: 8
+      - stepNumber: 4
+        description: >-
+          Report MISSING_TARGET_COMPONENT (error; draft context isDraftCtx) naming the method, the
+          step type and the step number
+        type: local
+      - stepNumber: 5
+        description: Continue with the next step
+        type: jump
+        toStep: 1
+      - stepNumber: 6
+        description: >-
+          Report MISSING_TARGET_METHOD (error; draft context isDraftCtx) naming the method, the step
+          type and the step number
+        type: local
+      - stepNumber: 7
+        description: Continue with the next step
+        type: jump
+        toStep: 1
+      - stepNumber: 8
+        label: inTree
+        description: >-
+          Only a target this tree contains is judged here; whether one it does not resolves against
+          the stored surface snapshots is cross-tree-references', and what such a surface exposes is
+          surface-reference-backing's
+        type: branch
+        condition: ctx.componentMap.get(step.targetComponent) resolves a component of this tree
+        onFalseStep: 1
+      - stepNumber: 9
+        label: declaredDependency
+        description: The caller must declare every collaborator a step reaches
+        type: branch
+        condition: >-
+          caller resolves, step.targetComponent is not the caller itself, and the caller neither
+          dependsOn nor owns it
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
+          ctx.isComponentDraft(caller.id)) naming the caller, the verb and the component it reaches
+          without declaring it
+        type: local
+      - stepNumber: 11
+        label: namedMethod
+        description: >-
+          A dispatch step names a capability rather than a method; resolving it against the target
+          Portal's dispatch table is dispatch-step-routing's
+        type: branch
+        condition: the step is a call or register step
+        onFalseStep: 1
+      - stepNumber: 12
+        label: resolveTargetMethod
+        description: Does the target component's contract carry the called method?
+        type: branch
+        condition: >-
+          some interface in ctx.interfacesByComponent.get(step.targetComponent) (none when absent)
+          has a method named step.targetMethod; the first that does supplies the target method
+        onFalseStep: 17
+      - stepNumber: 13
+        label: guarantees
+        description: >-
+          Semantic cross-check (consistency, not truth): the gate cannot read prose, but it can
+          catch a step that asserts a guarantee the contract it calls does not declare. Whether the
+          method truly delivers it is implementation correctness, not this
+        type: loop
+        loopKind: forEach
+        over: step.assertsGuarantees (none when the step asserts no guarantee)
+        endStep: 15
+      - stepNumber: 14
+        description: Is the asserted guarantee undeclared on the called contract?
+        type: branch
+        condition: the target method's L3 guarantees (none when absent) do not include the asserted guarantee
+        onFalseStep: 13
+      - stepNumber: 15
+        label: callUnbacked
+        description: >-
+          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx or
+          ctx.isComponentDraft(step.targetComponent)) naming the step, the guarantee and the called
+          method, with the remedy: declare it on that method, or revise the narrative
+        type: local
+      - stepNumber: 16
+        description: Continue with the next step once every asserted guarantee is checked
+        type: jump
+        toStep: 1
+      - stepNumber: 17
+        label: invalidMethod
+        description: >-
+          Report INVALID_TARGET_METHOD_REFERENCE (error; draft context isDraftCtx or
+          ctx.isComponentDraft(step.targetComponent)) naming the method, the verb, the target
+          component and the step
+        type: local
+    symbol: check
+  - name: crossTreeReferences
+    sourcePath: src/core/rules/narrative/cross-tree-references.ts
+    narrative:
+      - stepNumber: 1
+        label: targetSteps
+        description: >-
+          One resolution path for every entry kind: call, dispatch and register steps name a target
+          the same way and differ only in the verb their finding reads with
+        type: loop
+        loopKind: forEach
+        over: >-
+          the call, dispatch and register steps of every method narrative of every implementation
+          impl in ctx.implementations whose contract ctx.interfaceMap.get(impl.contract) resolves
+        endStep: 12
+      - stepNumber: 2
+        label: outsideTree
+        description: >-
+          Only a target this tree does not contain is resolved here; a step that names no target, or
+          no target method where its kind needs one, and a target the tree does contain are all
+          narrative-target-references'
+        type: branch
+        condition: >-
+          step.targetComponent is set, step.targetMethod is set unless the step dispatches, and
+          ctx.componentMap.get(step.targetComponent) resolves nothing in this tree
+        onFalseStep: 1
+      - stepNumber: 3
+        label: classifyRef
+        description: >-
+          Compute isDraftCtx = ctx.isImplementationDraft(impl); fromSubsystem = the subsystem of the
+          calling component ctx.componentMap.get(contract.component), when it resolves;
+          isCrossTreeForm = ctx.isExternalNamespaceRef(step.targetComponent), which covers the
+          explicit relative forms (super::/::) and a qualified reference whose leading namespace
+          segment is not a subsystem in THIS tree; isCollapsedForm = not isCrossTreeForm,
+          fromSubsystem known, and ctx.isCollapsedCrossTreeRef(step.targetComponent, fromSubsystem),
+          a reference made from inside a chained mount that the loader collapsed at this root; and
+          the verb: 'dispatches through', 'registers callback' or 'calls'
+        type: local
+      - stepNumber: 4
+        description: Only a cross-tree or collapsed reference is judged against the surface snapshots
+        type: branch
+        condition: isCrossTreeForm or isCollapsedForm
+        onFalseStep: 7
+      - stepNumber: 5
+        description: resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem)
+        type: local
+      - stepNumber: 6
+        label: surfaceVerdict
+        description: >-
+          Act on how the snapshots judged the reference: one that resolved names a single declared
+          contract and is left to surface-reference-backing, which judges what that contract
+          exposes; one they do not cover falls back to the unresolved-target findings
+        type: switch
+        'on': resolved.kind
+        cases:
+          - value: ambiguous
+            step: 12
+          - value: resolved
+            step: 1
+        defaultStep: 7
+      - stepNumber: 7
+        label: unresolved
+        description: >-
+          An unresolved reference that points OUTSIDE this loading root is only verifiable from the
+          parent project — a chained subproject opened standalone physically does not contain its
+          parent's specs, which is a known-honest state rather than a spec defect. Any other
+          unresolved reference is the typo it always was
+        type: branch
+        condition: isCrossTreeForm
+        onFalseStep: 10
+      - stepNumber: 8
+        description: >-
+          Report CROSS_TREE_REF_UNRESOLVED (warning; draft context isDraftCtx) naming the method,
+          the verb, the cross-tree component and the step, with the remedies: validate from the
+          parent project, pin the family surfaces (wairon surface pin), or import the producing
+          project's surface
+        type: local
+      - stepNumber: 9
+        description: Continue with the next step
+        type: jump
+        toStep: 1
+      - stepNumber: 10
+        label: invalidRef
+        description: >-
+          Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
+          reaches a component that does not exist, naming the verb, the component and the step
+        type: local
+      - stepNumber: 11
+        description: Continue with the next step
+        type: jump
+        toStep: 1
+      - stepNumber: 12
+        label: ambiguousRef
+        description: >-
+          Report SURFACE_REF_AMBIGUOUS (error; draft context isDraftCtx; not surface-resolved) with
+          the message resolved.ambiguityMessage(subject, step.targetComponent), where subject names
+          the reaching clause: 'Method <method> in implementation <impl> dispatches (step <n>)
+          through' for a dispatch step, and 'Method <method> in implementation <impl>
+          calls|registers callback "<targetMethod>" (step <n>) on' otherwise
+        type: local
+    symbol: check
+  - name: surfaceReferenceBacking
+    sourcePath: src/core/rules/narrative/surface-reference-backing.ts
+    narrative:
+      - stepNumber: 1
+        label: targetSteps
+        description: >-
+          One path for every entry kind: call, dispatch and register steps reach a surface the same
+          way and differ only in what the surface must expose
+        type: loop
+        loopKind: forEach
+        over: >-
+          the call, dispatch and register steps of every method narrative of every implementation
+          impl in ctx.implementations whose contract ctx.interfaceMap.get(impl.contract) resolves
+        endStep: 15
+      - stepNumber: 2
+        label: surfaceResolvedTarget
+        description: >-
+          Only a target that left this tree AND resolved to a single declared contract is judged
+          here, which is five conditions: a malformed step and a target this tree contains are
+          narrative-target-references', and a reference that is not a cross-tree form, or that the
+          snapshots leave ambiguous or do not cover at all, is cross-tree-references'
+        type: branch
+        condition: >-
+          step.targetComponent is set; step.targetMethod is set unless the step dispatches;
+          ctx.componentMap.get(step.targetComponent) resolves nothing in this tree; the reference is
+          a cross-tree form (ctx.isExternalNamespaceRef) or a collapsed one
+          (ctx.isCollapsedCrossTreeRef from the calling component's subsystem, fromSubsystem); and
+          resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem) has kind resolved
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          Compute isDraftCtx = ctx.isImplementationDraft(impl); caller =
+          ctx.componentMap.get(contract.component); and the verb every finding reads with:
+          'dispatches through', 'registers callback' or 'calls'. Every finding below is a contract
+          verdict rather than a resolution failure, so each is reported surface-resolved, which is
+          what keeps it at full strength in a chained subproject
+        type: local
+      - stepNumber: 4
+        label: declaredDependency
+        description: >-
+          A target resolved through a surface is a collaborator like a local one. The loader
+          qualifies a cross-tree dependsOn entry exactly as it qualifies the step's target, so a
+          declared edge names the same reference
+        type: branch
+        condition: >-
+          caller resolves, step.targetComponent is not the caller itself, and the caller neither
+          dependsOn nor owns it
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
+          ctx.isComponentDraft(caller.id); surface-resolved) naming the caller, the verb and the
+          cross-tree component it reaches without declaring it
+        type: local
+      - stepNumber: 6
+        label: whatMustBeExposed
+        description: A dispatch step routes a capability; a call or register step names a method
+        type: branch
+        condition: the step is a dispatch step
+        onFalseStep: 10
+      - stepNumber: 7
+        label: servedCapability
+        description: Validate the dispatched capability against the DECLARED surface
+        type: branch
+        condition: >-
+          step.capability is set and resolved.entry.dispatch (none when absent) has no binding for
+          that capability
+        onFalseStep: 1
+      - stepNumber: 8
+        description: >-
+          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; surface-resolved) naming
+          the capability, the cross-tree portal, the snapshot's projectName and the entry id that
+          does not serve it
+        type: local
+      - stepNumber: 9
+        description: Continue with the next step
+        type: jump
+        toStep: 1
+      - stepNumber: 10
+        label: exposedMethod
+        description: Validate the called method against the DECLARED surface
+        type: branch
+        condition: resolved.entry.methods has a method named step.targetMethod, the surface method
+        onFalseStep: 15
+      - stepNumber: 11
+        label: surfaceGuarantees
+        description: >-
+          Check each guarantee the step asserts against the surface method, the same consistency
+          check a local contract gets
+        type: loop
+        loopKind: forEach
+        over: step.assertsGuarantees (none when the step asserts no guarantee)
+        endStep: 13
+      - stepNumber: 12
+        description: Is the asserted guarantee undeclared on the surface?
+        type: branch
+        condition: the surface method's guarantees (none when absent) do not include the asserted guarantee
+        onFalseStep: 11
+      - stepNumber: 13
+        label: surfaceUnbacked
+        description: >-
+          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx; surface-resolved)
+          naming the step, the method, the guarantee, the snapshot's projectName and the entry
+          method that does not declare it
+        type: local
+      - stepNumber: 14
+        description: Continue with the next step once every asserted guarantee is checked
+        type: jump
+        toStep: 1
+      - stepNumber: 15
+        label: methodNotExposed
+        description: >-
+          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; surface-resolved) naming
+          the method, the verb, the cross-tree component, the snapshot's projectName and the entry
+          id that does not expose it
+        type: local
+    symbol: check
 lint:
   allow:
     - code: NARRATIVE_COMPLEXITY
       reason: >-
-        D2b splits the narratives this reports (contractSymmetryAndNarratives, narrativeAntipatterns
-        and narrativeDetail); the doctrine's own rules are the worst offenders and go first.
-    - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits contractSymmetryAndNarratives, which lists more than 25 steps.
+        D2b splits the narratives this still reports (narrativeAntipatterns and narrativeDetail);
+        contractSymmetryAndNarratives has already been split into contract-symmetry,
+        narrative-target-references, cross-tree-references and surface-reference-backing.
 status: draft
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-17T22:26:33.738Z'
+updatedAt: '2026-09-17T23:00:18.682Z'

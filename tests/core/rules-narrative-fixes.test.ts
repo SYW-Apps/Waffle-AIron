@@ -3,7 +3,7 @@ import * as yaml from 'js-yaml';
 import { defineRuleFixture, runRuleFixture, type FixtureRun } from '../rules-matrix/harness.js';
 
 // ---------------------------------------------------------------------------
-// contract-symmetry-and-narratives: a narrative target that resolves against a
+// surface-reference-backing: a narrative target that resolves against a
 // surface snapshot is a collaborator like a local one, so the calling component
 // must declare it (UNDECLARED_DEPENDENCY_CALL). The loader qualifies a
 // cross-tree dependsOn entry exactly as it qualifies the step's target, so the

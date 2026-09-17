@@ -66,8 +66,8 @@ methods:
       - code: MALFORMED_DISPATCH_STEP
         severity: error
         summary: >-
-          Dispatch step missing its capability (targetComponent presence is the contracts rule's
-          finding)
+          Dispatch step missing its capability (targetComponent presence is
+          narrative-target-references' finding)
       - code: UNSERVED_CAPABILITY
         severity: error
         summary: >-
@@ -240,4 +240,4 @@ methods:
         summary: Topic is subscribed to but nothing in the tree emits it
 status: draft
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-09-17T21:55:11.251Z'
+updatedAt: '2026-09-17T23:00:03.814Z'

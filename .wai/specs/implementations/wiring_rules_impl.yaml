@@ -721,8 +721,8 @@ methods:
       - stepNumber: 5
         label: resolvePortal
         description: >-
-          Look the target portal up; a missing or dangling targetComponent is the contracts rule's
-          finding, so such a step is skipped
+          Look the target portal up; a missing targetComponent is narrative-target-references'
+          finding and a dangling one cross-tree-references', so such a step is skipped
         type: branch
         condition: step.targetComponent is set and resolves in ctx.componentMap
         onFalseStep: 1
@@ -796,4 +796,4 @@ lint:
         dispatch-step-routing.
 status: draft
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-17T22:00:18.030Z'
+updatedAt: '2026-09-17T23:00:06.650Z'
