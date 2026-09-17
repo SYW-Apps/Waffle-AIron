@@ -653,7 +653,7 @@ function rewriteRefFields(
         changed = true;
       }
     };
-    /** Rewrite the method `holder[key]` names on the component `owner` holds. */
+    /** Rewrite the method name at `holder[key]`, read against the component `owner` names. */
     const rewriteMethod = (holder: any, key: string, owner: unknown): void => {
       const name = holder?.[key];
       if (typeof name !== 'string' || typeof owner !== 'string') return;
