@@ -255,7 +255,9 @@ function toolErrorResult(err: unknown): McpToolResult {
 // principal's grant FOR THE BOUND PROJECT to carry the matching data-plane
 // permission before it reaches the scoped MCP server.
 
-/** Write tools mutate the spec tree; their names carry one of these prefixes. */
+/** Write tools mutate the spec tree; their names carry one of these prefixes.
+ *  A rename tool added later is a write by this prefix, not by a hand-kept
+ *  name list — see step 48 of handleRequest. */
 const WRITE_TOOL_PREFIXES = [
   'sdd_add_',
   'sdd_update_',
@@ -267,6 +269,7 @@ const WRITE_TOOL_PREFIXES = [
   'sdd_externalize_',
   'sdd_internalize_',
   'sdd_move_',
+  'sdd_rename_',
 ];
 
 /** Read tools only inspect the tree; their names carry one of these prefixes
@@ -284,25 +287,19 @@ const READ_TOOL_NAMES = new Set<string>([
   'getProjectConfig',
 ]);
 
-/** Write tools whose names carry no write prefix, listed one by one: each
- *  mutates the bound spec tree as a prefixed write does. */
-const WRITE_TOOL_NAMES = new Set<string>([
-  'sdd_rename_component',
-  'sdd_rename_method',
-]);
-
 /**
  * The data-plane capability a tool requires: `project:read` for a read tool (a
  * name starting with sdd_get_ / sdd_validate_, or one of READ_TOOL_NAMES),
  * otherwise `project:write`.
  *
- * FAIL CLOSED: a read is ONLY an explicit read prefix or name. The known write
- * prefixes and names and any unrecognized or newly added tool name are all
- * treated as writes, so a novel tool can never slip past on read-level permission.
+ * FAIL CLOSED: a read is ONLY an explicit read prefix or name. Every write —
+ * whether it carries one of the known write prefixes or is unrecognized or
+ * newly added — is treated as a write, so a novel tool (including a future
+ * rename tool, covered by the sdd_rename_ prefix) can never slip past on
+ * read-level permission by name alone.
  */
 export function requiredDataPlaneCapability(toolName: string): 'project:read' | 'project:write' {
   if (READ_TOOL_NAMES.has(toolName) || READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:read';
-  if (WRITE_TOOL_NAMES.has(toolName) || WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:write';
   return 'project:write';
 }
 
@@ -321,11 +318,12 @@ const TREE_SCOPED_HOST_TOOLS = new Set<string>([
 
 /**
  * The scope a tool declares, or undefined when it declares none. Every ordinary
- * sdd_* tool the scoped server serves — each explicit read and each explicit
- * write, by prefix or by name — acts on the bound tree; the hosted tools are
- * declared one by one. Confinement reads this and fails closed on undefined: a
- * tool added without a declared scope is refused under a narrowed credential
- * until it declares one.
+ * sdd_* tool the scoped server serves — each explicit read (by prefix or by
+ * name) and each explicit write (by prefix — the sdd_rename_ tools among
+ * them, see step 10) — acts on the bound tree; the hosted tools are declared
+ * one by one. Confinement reads this and fails closed on undefined: a tool
+ * added without a declared scope is refused under a narrowed credential until
+ * it declares one.
  */
 export function toolScope(toolName: string): ToolScope | undefined {
   if (PROJECT_RECORD_TOOLS.has(toolName)) return 'record';
@@ -333,7 +331,6 @@ export function toolScope(toolName: string): ToolScope | undefined {
   if (
     READ_TOOL_NAMES.has(toolName) ||
     READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p)) ||
-    WRITE_TOOL_NAMES.has(toolName) ||
     WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))
   ) {
     return 'tree';
