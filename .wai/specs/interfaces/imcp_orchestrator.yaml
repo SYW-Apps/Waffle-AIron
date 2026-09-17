@@ -99,6 +99,28 @@ methods:
       - name: newId
         type: string
         description: Its new id
+  - name: renameMethod
+    description: >-
+      Resolve the namespaced component id against the bound tree, then rename its contract method
+      through the core adapter
+    signature: 'renameMethod(id: string, method: string, newName: string, pinSymbol?: boolean): MethodRename'
+    returns: MethodRename
+    params:
+      - name: id
+        type: string
+        description: The component whose method is renamed (namespaced if needed)
+      - name: method
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: Its new name, a camel-case identifier
+      - name: pinSymbol
+        type: boolean
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name; true when
+          omitted
+        optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-15T10:52:13.009Z'
+updatedAt: '2026-09-17T19:22:27.469Z'
