@@ -29,7 +29,7 @@ import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } fro
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
 import type { ProjectConfig } from '../models/project.js';
-import { SpecIdSchema, type SubsystemSpec } from '../models/index.js';
+import { SpecIdSchema, type InterfaceSpec, type SubsystemSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Project provisioning (sdd_core, used by sdd_host)
@@ -539,9 +539,12 @@ function buildRenameMap(subsystemId: string, externalize: boolean): Map<string, 
  * qualified. An auth source: the component a narrative step's `auth.from`
  * names as `component:<id>`, matched by its exact id and never qualified. An
  * interface: an implementation's contract or a published interface's. A type:
- * what a method parameter or a type field names.
+ * what a method parameter or a type field names. A method: the contract method
+ * a dispatch-table binding, a lifecycle entrypoint or a narrative call,
+ * register or dispatch step names on a component — so a method reference is
+ * only ever read together with the component holding it.
  */
-type RefPosition = 'component' | 'entity-class' | 'auth-source' | 'interface' | 'type';
+type RefPosition = 'component' | 'entity-class' | 'auth-source' | 'interface' | 'type' | 'method';
 
 /** The `auth.from` prefix that makes a credential source a component reference. */
 const COMPONENT_AUTH_SOURCE = 'component:';
@@ -596,17 +599,36 @@ function componentIdsUnder(dir: string): Set<string> {
 }
 
 /**
+ * What a spec file holds, read from its shape as the loader reads it;
+ * undefined for a file holding no spec at all. The order is the loader's: a
+ * component and a subsystem are recognized before an interface, whose
+ * `component` field a component spec would otherwise answer to.
+ */
+function specKind(raw: any): RewrittenSpec['kind'] | undefined {
+  if ('componentType' in raw) return 'component';
+  if ('parentSystem' in raw) return 'subsystem';
+  if ('vision' in raw) return 'system';
+  if ('component' in raw && Array.isArray(raw.methods)) return 'interface';
+  if ('contract' in raw && Array.isArray(raw.methods)) return 'implementation';
+  if ('kind' in raw && Array.isArray(raw.fields)) return 'type';
+  return undefined;
+}
+
+/**
  * Rewrite the reference fields of every spec under `specsDir` through `remap`,
  * skipping `excludeDir`, and return the specs it rewrote. The fields: a
  * component's dependsOn, owns and dispatch components; a subsystem's lifecycle
  * entrypoints and published interfaces; the system's published interfaces; an
  * interface's component and method parameter types; an implementation's
  * contract, narrative targets and narrative `component:` auth sources; an
- * entity's componentClass and field types.
+ * entity's componentClass and field types. A method position is read with the
+ * component it hangs off — a dispatch binding's and a lifecycle entrypoint's
+ * method, and a narrative step's targetMethod — so a remap can retarget the
+ * method of ONE component.
  */
 function rewriteRefFields(
   specsDir: string,
-  remap: (ref: string, position: RefPosition) => string,
+  remap: (ref: string, position: RefPosition, owner?: string) => string,
   excludeDir?: string,
 ): RewrittenSpec[] {
   const rewritten: RewrittenSpec[] = [];
@@ -631,6 +653,16 @@ function rewriteRefFields(
         changed = true;
       }
     };
+    /** Rewrite the method `holder[key]` names on the component `owner` holds. */
+    const rewriteMethod = (holder: any, key: string, owner: unknown): void => {
+      const name = holder?.[key];
+      if (typeof name !== 'string' || typeof owner !== 'string') return;
+      const next = remap(name, 'method', owner);
+      if (next !== name) {
+        holder[key] = next;
+        changed = true;
+      }
+    };
     /** The entries of a list field; none when the field holds no list. */
     const entries = (list: unknown): any[] => (Array.isArray(list) ? list : []);
     /** Rewrite each reference a list field holds. */
@@ -645,34 +677,39 @@ function rewriteRefFields(
       }
     };
 
-    let kind: RewrittenSpec['kind'] | undefined;
-    if ('componentType' in raw) {
-      kind = 'component';
+    const kind = specKind(raw);
+    if (kind === 'component') {
       rewriteEach(raw.dependsOn, 'component');
       rewriteEach(raw.owns, 'component');
-      // A Portal's dispatch table carries component refs of its own.
-      for (const binding of entries(raw.dispatch)) rewrite(binding, 'component', 'component');
-    } else if ('parentSystem' in raw) {
-      kind = 'subsystem';
+      // A Portal's dispatch table carries component refs of its own, each with
+      // the method that component serves the capability with. The method is read
+      // against the component as written, before the component itself moves.
+      for (const binding of entries(raw.dispatch)) {
+        rewriteMethod(binding, 'method', binding?.component);
+        rewrite(binding, 'component', 'component');
+      }
+    } else if (kind === 'subsystem') {
       // Lifecycle entrypoints name components (same-subsystem by rule, but
       // rewrite defensively so a legacy/misdeclared tree can't silently dangle
-      // across a migration).
-      for (const entrypoint of entries(raw.lifecycle)) rewrite(entrypoint, 'component', 'component');
+      // across a migration) and the method the runtime invokes at that phase.
+      for (const entrypoint of entries(raw.lifecycle)) {
+        rewriteMethod(entrypoint, 'method', entrypoint?.component);
+        rewrite(entrypoint, 'component', 'component');
+      }
       rewritePublished(raw.publicInterfaces);
-    } else if ('vision' in raw) {
-      kind = 'system';
+    } else if (kind === 'system') {
       rewritePublished(raw.publicInterfaces);
-    } else if ('component' in raw && Array.isArray(raw.methods)) {
-      kind = 'interface';
+    } else if (kind === 'interface') {
       rewrite(raw, 'component', 'component');
       for (const method of raw.methods) {
         for (const param of entries(method?.params)) rewrite(param, 'type', 'type');
       }
-    } else if ('contract' in raw && Array.isArray(raw.methods)) {
-      kind = 'implementation';
+    } else if (kind === 'implementation') {
       rewrite(raw, 'contract', 'interface');
       for (const method of raw.methods) {
         for (const step of entries(method?.narrative)) {
+          // A call, register or dispatch step names the method on its target.
+          rewriteMethod(step, 'targetMethod', step?.targetComponent);
           rewrite(step, 'targetComponent', 'component');
           // A credential source names its component after the component: prefix.
           const source = step?.auth?.from;
@@ -686,8 +723,7 @@ function rewriteRefFields(
           }
         }
       }
-    } else if ('kind' in raw && Array.isArray(raw.fields)) {
-      kind = 'type';
+    } else if (kind === 'type') {
       rewrite(raw, 'componentClass', 'entity-class');
       for (const field of raw.fields) rewrite(field, 'type', 'type');
     }
@@ -901,4 +937,216 @@ function removeSpecFile(file: string, id: string): void {
     if (fs.readdirSync(dir).length > 0) break;
     fs.rmdirSync(dir);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Contract-method rename
+//
+// A method name is a reference too: every interface of a component may declare
+// it, the implementations of those contracts realize it, and dispatch tables,
+// lifecycle entrypoints and narrative steps name it beside the component that
+// serves it. Renaming one moves the declaration and retargets those references
+// through the same rewriter a component rename uses. What it deliberately does
+// NOT touch: prose, and a published wire name — renaming a contract method must
+// never silently rename an RPC — so both are reported instead.
+// ---------------------------------------------------------------------------
+
+/** The grammar a renamed method is written in: a camel-case identifier, which no namespace separator passes. */
+const METHOD_NAME = /^[a-z][a-zA-Z0-9]*$/;
+
+/**
+ * The fields a mention is read from — a spec's prose, wherever it nests: every
+ * description, a method's intent, a finding's summary, and a narrative step's
+ * own text (its condition, iteration source, outcome, raised error, credential
+ * note and acknowledged caller). A signature, a symbol and a capability are not
+ * prose: the rename either carries them or leaves them by design.
+ */
+const PROSE_FIELDS = new Set([
+  'description', 'intent', 'summary', 'condition', 'over', 'outcome', 'error', 'note', 'caller',
+]);
+
+/** What renaming a contract method changed (method_rename). */
+export interface MethodRename {
+  /** The component whose method was renamed. */
+  component: string;
+  /** The method name before the rename. */
+  from: string;
+  /** The method name after it. */
+  to: string;
+  /** Ids of the specs the method moved in: the contracts that declared it, and the implementations of those contracts that realized it. */
+  renamed: string[];
+  /** Ids of the specs whose references were retargeted: narrative call, register and dispatch steps, dispatch-table bindings, and lifecycle entrypoints. */
+  rewritten: string[];
+  /** Ids of the specs whose prose still names the old method, and of the contracts whose gRPC binding keeps it as a wire method. Nothing here was rewritten. */
+  mentions: string[];
+  /** The code symbol an implementation now declares, when the rename pinned the old name so the existing function still binds. */
+  pinnedSymbol?: string;
+}
+
+/**
+ * Rename a contract method and every reference to it in the bound tree. The
+ * method moves on every interface of the component that declares it — its name,
+ * and the name inside its signature — and on the implementations of those
+ * contracts, carrying narrative, sourcePath, symbol, detail, intent and
+ * findings unchanged; an implementation that declared no symbol is pinned to
+ * the old name unless `pinSymbol` is false, so the function it already binds to
+ * keeps binding. Before writing anything it refuses a component that does not
+ * exist (component-missing), one inside a chained subproject
+ * (chained-component), a new name outside the identifier grammar
+ * (invalid-name), a method the component does not declare (method-missing), and
+ * a new name a moving contract already declares (name-taken).
+ */
+export function renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean): MethodRename {
+  // Steps 1–3: the component must exist…
+  const component = loadComponentSpec(componentId);
+  if (!component) {
+    throw new WaironError(`component-missing: no component has the id "${componentId}".`);
+  }
+  // Steps 4–5: …and belong to the bound project itself.
+  if (componentId.includes('::')) {
+    throw new WaironError(
+      `chained-component: "${componentId}" lives in a chained subproject; rename its method from that project's own root.`,
+    );
+  }
+  // Steps 6–7: the new name must be a camel-case identifier.
+  if (!METHOD_NAME.test(newName)) {
+    throw new WaironError(`invalid-name: "${newName}" is not a camel-case identifier.`);
+  }
+
+  // Steps 8–9: the component's own contracts, and the ones declaring the method.
+  const contracts = loadInterfaceSpecs().filter((i) => i.component === componentId);
+  const moving = contracts.filter((i) => i.methods.some((m) => m.name === methodName));
+  // Steps 10–11: the component must declare the method…
+  if (moving.length === 0) {
+    throw new WaironError(`method-missing: no contract of "${componentId}" declares the method "${methodName}".`);
+  }
+  // Steps 12–13: …and the new name must be free on every contract that moves.
+  const taken = moving.filter((i) => i.methods.some((m) => m.name === newName)).map((i) => `"${i.id}"`);
+  if (taken.length > 0) {
+    throw new WaironError(`name-taken: ${taken.join(', ')} already declares a method under the name "${newName}".`);
+  }
+
+  // Step 14: every implementation, for the realizations of those contracts.
+  const implementations = loadImplementationSpecs();
+  const movingContracts = new Set(moving.map((i) => i.id));
+  const renamed: string[] = [];
+
+  // Steps 15–16: the method moves on each of those contracts — its name, and
+  // the name inside its signature. Params, returns, description, guarantees,
+  // endpoint and findings stay exactly as they are.
+  for (const contract of moving) {
+    saveInterfaceSpec({
+      ...contract,
+      methods: contract.methods.map((m) => (m.name === methodName
+        ? { ...m, name: newName, signature: renameInSignature(m.signature, methodName, newName) }
+        : m)),
+    });
+    renamed.push(contract.id);
+  }
+
+  // Steps 17–20: and on the implementations of those contracts that realize it,
+  // carrying narrative, sourcePath, symbol, detail and intent unchanged.
+  let pinnedSymbol: string | undefined;
+  for (const implementation of implementations) {
+    if (!movingContracts.has(implementation.contract)) continue;
+    const realization = implementation.methods.find((m) => m.name === methodName);
+    if (!realization) continue;
+    // Steps 18–19: an implementation that named no symbol needs one now — the
+    // function it binds to still carries the old name — unless the caller
+    // declined the pin.
+    const pin = realization.symbol === undefined && pinSymbol !== false;
+    if (pin) pinnedSymbol = methodName;
+    saveImplementationSpec({
+      ...implementation,
+      methods: implementation.methods.map((m) => (m.name === methodName
+        ? { ...m, name: newName, ...(pin ? { symbol: methodName } : {}) }
+        : m)),
+    });
+    renamed.push(implementation.id);
+  }
+
+  // Step 21: the saves moved names the retargeting below must read.
+  invalidateSpecCache();
+
+  // Step 22: every reference to the method on THIS component, retargeted where
+  // it is named: a narrative call, register or dispatch step, a dispatch-table
+  // binding, and a lifecycle entrypoint. The rewriter persists what it changes.
+  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const rewritten = rewriteRefFields(specsDir, (ref, position, owner) =>
+    (position === 'method' && owner === componentId && ref === methodName ? newName : ref))
+    .map((spec) => spec.id);
+
+  // Step 23: what names the method and is left alone.
+  const mentions = collectMentions(specsDir, methodName, moving);
+
+  // Step 24: the report.
+  return {
+    component: componentId,
+    from: methodName,
+    to: newName,
+    renamed,
+    rewritten,
+    mentions,
+    ...(pinnedSymbol ? { pinnedSymbol } : {}),
+  };
+}
+
+/**
+ * A method's signature with the method's own name rewritten: the first
+ * occurrence of `from` as a whole identifier, which is the name the signature
+ * opens with. A signature that names it nowhere is left as it is — the method's
+ * `name` is what the contract is read by.
+ */
+function renameInSignature(signature: string, from: string, to: string): string {
+  return signature.replace(identifierPattern(from), to);
+}
+
+/**
+ * The specs that still name `methodName` once the rename is written, every one
+ * of them left exactly as it was: the specs whose prose carries the name (see
+ * PROSE_FIELDS), and the moved contracts whose method keeps it as a gRPC wire
+ * method — a rename never edits prose, and never changes a published wire name.
+ */
+function collectMentions(specsDir: string, methodName: string, moved: InterfaceSpec[]): string[] {
+  const mentions = new Set<string>();
+  for (const contract of moved) {
+    const wireBound = contract.methods.some((m) => {
+      const endpoint = m.endpoint;
+      return endpoint?.transport === 'gRPC' && endpoint.method === methodName;
+    });
+    if (wireBound) mentions.add(contract.id);
+  }
+
+  const named = identifierPattern(methodName);
+  /** Whether any prose field this value nests names the method. */
+  const namesMethod = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some(namesMethod);
+    if (!value || typeof value !== 'object') return false;
+    return Object.entries(value as Record<string, unknown>).some(([key, nested]) => (typeof nested === 'string'
+      ? PROSE_FIELDS.has(key) && named.test(nested)
+      : namesMethod(nested)));
+  };
+
+  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    if (!raw || typeof raw !== 'object') continue;
+    const kind = specKind(raw);
+    if (!kind || !namesMethod(raw)) continue;
+    mentions.add(kind === 'system' ? 'system' : String(raw.id));
+  }
+  return [...mentions];
+}
+
+/**
+ * A method name matched as a whole identifier, so a name a longer word merely
+ * contains is not a use of it. No escaping: a method name is alphanumeric by
+ * schema, so nothing in one is a regular-expression operator.
+ */
+function identifierPattern(methodName: string): RegExp {
+  return new RegExp(`(?<![A-Za-z0-9_])${methodName}(?![A-Za-z0-9_])`);
 }
