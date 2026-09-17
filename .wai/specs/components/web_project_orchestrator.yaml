@@ -18,7 +18,7 @@ dependsOn:
   - project_policy_orchestrator
   - authentication
   - authorization
-  - project_registry
+  - project_repository
   - organization_repository
 status: complete
 createdAt: '2026-07-13T20:36:24.912Z'

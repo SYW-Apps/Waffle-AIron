@@ -530,6 +530,41 @@ export function isRetired(component: Pick<ComponentSpec, 'componentType'>): bool
   return RETIRED_STEREOTYPES.has(component.componentType);
 }
 
+/**
+ * Building-block words a component id's head noun names WHAT the component is
+ * (a Store, an Adapter, …), as opposed to what it is about. Used by both
+ * headNoun and conceptNoun; kept lowercase since ids are.
+ */
+const BLOCK_NOUNS: ReadonlySet<string> = new Set([
+  'portal', 'orchestrator', 'supervisor', 'actor', 'store', 'index', 'query',
+  'registry', 'adapter', 'observer', 'repository', 'view',
+]);
+
+/**
+ * component_spec.headNoun — the last word of the component's id, which names
+ * what the component IS: the head noun of "pack_store_adapter" is "adapter",
+ * and of "credential_write_registry" is "registry". Qualifiers before it name
+ * what the component works on, so only the head noun says what it IS.
+ */
+export function headNoun(component: Pick<ComponentSpec, 'id'>): string {
+  const words = component.id.split(/[-_]/).filter(Boolean);
+  return words[words.length - 1] ?? '';
+}
+
+/**
+ * component_spec.conceptNoun — the last word of the id that does NOT name a
+ * building block: what the component is about, rather than what it is.
+ * "pack_store" is about packs, "architecture_diagrams" about diagrams,
+ * "cli_packs_adapter" about packs. Empty when every word names a block.
+ */
+export function conceptNoun(component: Pick<ComponentSpec, 'id'>): string {
+  const words = component.id.split(/[-_]/).filter(Boolean);
+  for (let i = words.length - 1; i >= 0; i--) {
+    if (!BLOCK_NOUNS.has(words[i])) return words[i];
+  }
+  return '';
+}
+
 // ---------------------------------------------------------------------------
 // Level 3: Interface / Contract Spec (interfaces/*.yaml)
 // ---------------------------------------------------------------------------
@@ -953,6 +988,61 @@ export function effectiveDetail(
   if (method.detail) return { level: method.detail, explicit: true };
   if (implementation.detail) return { level: implementation.detail, explicit: true };
   return { level: defaultNarrativeDetail(component), explicit: false };
+}
+
+/**
+ * method_implementation.cognitiveScore — the cognitive weight of this
+ * method's narrative: a branch, switch, loop or parallel step counts one plus
+ * its nesting depth; each catch clause of a try counts the same (the try step
+ * itself scores nothing on its own); each jump counts one, flat, regardless
+ * of nesting. Nesting depth is the number of loop/try/parallel regions
+ * (header step through its endStep) that STRICTLY contain the step — a step
+ * at n is inside a region [a, b] when n > a and n <= b — so a flat sequence
+ * of call and local steps scores zero however long it is.
+ */
+export function cognitiveScore(method: Pick<MethodImplementation, 'narrative'>): number {
+  const steps = method.narrative ?? [];
+  const regions = steps
+    .filter((s) => (s.type === 'loop' || s.type === 'try' || s.type === 'parallel') && s.endStep !== undefined)
+    .map((s) => ({ start: s.stepNumber, end: s.endStep as number }));
+  const nestingDepthAt = (stepNumber: number): number =>
+    regions.filter((r) => stepNumber > r.start && stepNumber <= r.end).length;
+
+  let score = 0;
+  for (const s of steps) {
+    switch (s.type) {
+      case 'branch':
+      case 'switch':
+      case 'loop':
+      case 'parallel':
+        score += 1 + nestingDepthAt(s.stepNumber);
+        break;
+      case 'try':
+        for (const c of s.catches ?? []) score += 1 + nestingDepthAt(c.step);
+        break;
+      case 'jump':
+        score += 1;
+        break;
+      default:
+        break;
+    }
+  }
+  return score;
+}
+
+/**
+ * method_implementation.complexityLevel — the band its cognitiveScore falls
+ * in: linear (0), simple (1-4), moderate (5-9), complex (10-19) or severe (20
+ * and above). The band, not the raw score, is what a threshold is configured
+ * against.
+ */
+export function complexityLevel(method: Pick<MethodImplementation, 'narrative'>): string {
+  const score = cognitiveScore(method);
+  if (score >= 20) return 'severe';
+  if (score >= 10) return 'complex';
+  if (score >= 5) return 'moderate';
+  if (score >= 1) return 'simple';
+  return 'linear';
 }
 
 /**

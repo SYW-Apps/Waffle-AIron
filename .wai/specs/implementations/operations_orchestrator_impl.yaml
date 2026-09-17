@@ -33,7 +33,7 @@ methods:
       - stepNumber: 5
         description: List all hosted project records
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: list
       - stepNumber: 6
         description: >-
@@ -45,7 +45,7 @@ methods:
           Count the server-global packs via the pre-authorized store-layer read (the caller was
           already authorized upstream)
         type: call
-        targetComponent: pack_registry
+        targetComponent: pack_store
         targetMethod: storeListGlobalPacks
       - stepNumber: 8
         description: >-
@@ -155,7 +155,7 @@ methods:
       - stepNumber: 5
         description: List all hosted project records
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: list
       - stepNumber: 6
         description: >-
@@ -197,7 +197,7 @@ methods:
       - stepNumber: 5
         description: List all hosted project records
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: list
       - stepNumber: 6
         description: >-

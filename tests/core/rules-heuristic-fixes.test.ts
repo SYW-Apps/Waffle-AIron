@@ -118,7 +118,7 @@ describe('heuristic draft context — naming-conventions', () => {
 describe('heuristic draft context — complexity-and-metadata', () => {
   const issues = () => run(complexityRule, {
     rules: RulesConfigSchema.parse({
-      complexity: { maxNarrativeSteps: 1, maxSubsystemComponents: 0 },
+      complexity: { maxSubsystemComponents: 0 },
       documentation: { requireDescriptions: true },
     }),
     subsystems: [sub('ledger', { status: 'draft', description: '' })],
@@ -127,9 +127,8 @@ describe('heuristic draft context — complexity-and-metadata', () => {
     implementations: [impl('ledger_orchestrator_impl', 'iledger_orchestrator', [{ name: 'postEntry', narrative: [step(1), step(2)] }])],
   });
 
-  it('an implementation finding under a draft subsystem is in draft context', () => {
-    expect(found(issues(), 'EXCESSIVE_NARRATIVE_STEPS', 'ledger_orchestrator_impl')?.draftContext).toBe(true);
-  });
+  // EXCESSIVE_NARRATIVE_STEPS moved to narrative-complexity, which judges both
+  // narrative axes; its draft context is asserted beside that rule's own tests.
 
   it("a draft subsystem's missing description is in draft context", () => {
     expect(found(issues(), 'MISSING_DESCRIPTION', 'ledger')?.draftContext).toBe(true);

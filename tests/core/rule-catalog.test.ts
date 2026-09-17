@@ -30,7 +30,7 @@ const FAMILY_FOLDERS: Record<string, string> = {
 };
 
 interface Finding { code: string; severity: string; summary: string }
-interface CatalogEntry { family: string; folder: string; method: string; findings: Finding[]; sourcePath?: string; symbol?: string }
+interface CatalogEntry { family: string; folder: string; method: string; description: string; findings: Finding[]; sourcePath?: string; symbol?: string }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SpecDocument = any;
@@ -42,12 +42,13 @@ const byCode = (a: Finding, b: Finding) => (a.code < b.code ? -1 : a.code > b.co
 const catalog: CatalogEntry[] = Object.entries(FAMILY_FOLDERS).flatMap(([family, folder]) => {
   const contract = readSpec('interfaces', `i${family}.yaml`);
   const implementation = readSpec('implementations', `${family}_impl.yaml`);
-  return contract.methods.map((m: { name: string; findings?: Finding[] }) => {
+  return contract.methods.map((m: { name: string; description: string; findings?: Finding[] }) => {
     const realized = implementation.methods.find((im: { name: string }) => im.name === m.name);
     return {
       family,
       folder,
       method: m.name,
+      description: m.description,
       findings: (m.findings ?? []).map(({ code, severity, summary }) => ({ code, severity, summary })),
       sourcePath: realized?.sourcePath,
       symbol: realized?.symbol,
@@ -65,6 +66,10 @@ describe('rule catalog', () => {
   it.each(SDD_RULES.map((r) => [r.name, r] as const))('%s declares the same codes as its spec method', (_name, rule) => {
     const fromCode = rule.codes.map((c) => ({ code: c.code, severity: c.defaultSeverity, summary: c.summary })).sort(byCode);
     expect(entryFor(rule.name)?.findings.slice().sort(byCode)).toEqual(fromCode);
+  });
+
+  it.each(SDD_RULES.map((r) => [r.name, r] as const))('%s\'s description matches its spec method\'s description', (_name, rule) => {
+    expect(entryFor(rule.name)?.description).toBe(`Rule ${rule.name}. ${rule.description}`);
   });
 
   it('makes the spec-scoped built-ins exactly the intrinsic family', () => {

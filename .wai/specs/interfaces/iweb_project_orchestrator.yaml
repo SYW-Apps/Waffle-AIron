@@ -66,6 +66,12 @@ methods:
         type: string
       - name: id
         type: string
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: >-
+        D2b renames listProjects, createProject, lockProject, and destroyProject to drop the
+        component's own concept.
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-09-15T21:03:45.098Z'
+updatedAt: '2026-09-17T17:52:37.114Z'

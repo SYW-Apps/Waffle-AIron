@@ -56,10 +56,10 @@ methods:
       - stepNumber: 6
         description: >-
           Project tier: resolve and bind the requested project's isolated root within the
-          principal's authorized set through the project registry (rejects cross-project access, so
-          an out-of-scope project is Forbidden)
+          principal's authorized set through the project repository (rejects cross-project access,
+          so an out-of-scope project is Forbidden)
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: resolveRoot
       - stepNumber: 7
         description: Bind the resolved target project root for the host-core reads that follow
@@ -105,10 +105,10 @@ methods:
       - stepNumber: 2
         description: >-
           Resolve and bind the requested project's isolated root within the principal's authorized
-          set through the project registry (rejects cross-project access, so an out-of-scope or
+          set through the project repository (rejects cross-project access, so an out-of-scope or
           unknown project is Forbidden)
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: resolveRoot
       - stepNumber: 3
         description: Bind the resolved target project root for the canvas render that follows
@@ -128,4 +128,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-07-24T10:35:03.381Z'
+updatedAt: '2026-09-17T16:42:29.843Z'

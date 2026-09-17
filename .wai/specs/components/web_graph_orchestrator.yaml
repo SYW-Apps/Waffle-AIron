@@ -5,7 +5,7 @@ description: >-
   Principal through the single auth authority, then either reshapes the existing scoped hosted
   landscape (delegating to the landscape orchestrator, which applies its own landscape:read scoping)
   or projects one authorized project's spec tree at the requested detail level (binding the project
-  via the project registry within the principal's authorized set, projecting through the host core
+  via the project repository within the principal's authorized set, projecting through the host core
   adapter, and overlaying validator issues as node issue counts). Split out of web_orchestrator so
   neither orchestrator exceeds the god-component dependency threshold.
 subsystem: sdd_host
@@ -16,7 +16,7 @@ dependsOn:
   - landscape_orchestrator
   - host_core_adapter
   - host_validator_adapter
-  - project_registry
+  - project_repository
 status: complete
 createdAt: '2026-07-11T11:31:43.700Z'
-updatedAt: '2026-07-11T11:44:27.641Z'
+updatedAt: '2026-09-17T16:42:28.070Z'

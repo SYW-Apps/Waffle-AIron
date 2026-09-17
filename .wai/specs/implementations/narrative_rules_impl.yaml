@@ -1037,6 +1037,15 @@ methods:
           naming the method and its level: its behavioural prose is missing or placeholder-thin
         type: local
     symbol: check
+lint:
+  allow:
+    - code: NARRATIVE_COMPLEXITY
+      reason: >-
+        D2b splits the narratives this reports (contractSymmetryAndNarratives, narrativeFlow,
+        narrativeAntipatterns, and narrativeDetail); the doctrine's own rules are the worst
+        offenders and go first.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits contractSymmetryAndNarratives and narrativeFlow, which list more than 25 steps.
 status: draft
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-15T17:58:04.681Z'
+updatedAt: '2026-09-17T17:52:59.004Z'

@@ -4,10 +4,10 @@ name: ProfileApplication
 description: >-
   The outcome of making an architectural profile actually able to GOVERN a hosted project: the
   profile id, where it comes from, and the pack that had to be adopted into the project (if any) for
-  the profile to resolve at validation time. Returned by the pack registry's
-  ensure-profile-installed seam, which throws rather than returning a result for a profile id the
-  instance cannot resolve at all — a projectType naming an unresolvable profile silently disables
-  its whole doctrine, so it is never written.
+  the profile to resolve at validation time. Returned by the pack store's ensure-profile-installed
+  seam, which throws rather than returning a result for a profile id the instance cannot resolve at
+  all — a projectType naming an unresolvable profile silently disables its whole doctrine, so it is
+  never written.
 fields:
   - name: profileId
     type: string
@@ -33,8 +33,8 @@ fields:
     description: >-
       Set together with adoptedPackName: the project-relative path reference of the adopted pack's
       vendored copy, which the calling orchestrator registers in the project configuration. The pack
-      registry owns that layout, so callers never compose the path themselves.
+      store owns that layout, so callers never compose the path themselves.
     optional: true
 methods: []
 createdAt: '2026-07-24T23:29:57.106Z'
-updatedAt: '2026-09-13T11:58:40.646Z'
+updatedAt: '2026-09-17T16:42:04.796Z'

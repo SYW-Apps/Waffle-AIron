@@ -1423,6 +1423,8 @@ lint:
         and active targets (skills.ts), the approver text (lockfile.ts), and pack diagnosis and
         pinning (extensions.ts). Track D designs those areas and routes doctor through modelled
         adapters. The validation import goes when D1's code routes it through cli_validator_adapter.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits runPack, which lists more than 25 steps.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-15T18:14:28.716Z'
+updatedAt: '2026-09-17T17:52:39.568Z'

@@ -439,6 +439,10 @@ methods:
         description: Return the gate identity
         type: return
         outcome: StateId (the gate identity)
+lint:
+  allow:
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits validateSddTree, which lists more than 25 steps.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-15T17:56:56.805Z'
+updatedAt: '2026-09-17T17:53:02.324Z'

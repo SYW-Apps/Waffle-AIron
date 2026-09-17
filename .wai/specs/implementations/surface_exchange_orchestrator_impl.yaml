@@ -254,7 +254,7 @@ methods:
       - stepNumber: 5
         description: Resolve and bind the target project's isolated root within the principal's authorized set
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: resolveRoot
       - stepNumber: 6
         description: >-

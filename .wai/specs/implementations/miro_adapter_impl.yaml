@@ -27,8 +27,8 @@ lint:
     - code: UNDECLARED_DEPENDENCY
       reason: >-
         Uses the shared secrets utility (utils/secrets.ts) which is spec-homed under sdd_host's
-        secret_registry — placement debt: shared infrastructure candidate, not a sanctioned
+        secret_repository — placement debt: shared infrastructure candidate, not a sanctioned
         cross-subsystem reach.
 status: complete
 createdAt: '2026-07-04T18:04:20.025Z'
-updatedAt: '2026-07-11T20:30:07.610Z'
+updatedAt: '2026-09-17T16:37:04.686Z'

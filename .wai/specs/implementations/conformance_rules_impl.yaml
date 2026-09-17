@@ -725,6 +725,15 @@ methods:
           component's sim: anchors to withdraw the claim
         type: local
     symbol: check
+lint:
+  allow:
+    - code: NARRATIVE_COMPLEXITY
+      reason: >-
+        D2b splits the narratives this reports (structuralConformance, callConformance,
+        dependencyConformance, and integrationConformance); the doctrine's own rules are the worst
+        offenders and go first.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits structuralConformance, which lists more than 25 steps.
 status: draft
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-15T17:58:02.934Z'
+updatedAt: '2026-09-17T17:52:41.115Z'

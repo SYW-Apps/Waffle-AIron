@@ -667,6 +667,14 @@ methods:
         description: This selection is processed.
         type: local
     symbol: check
+lint:
+  allow:
+    - code: NARRATIVE_COMPLEXITY
+      reason: >-
+        D2b splits the narratives this reports (architecturalProfiles, patternReferences, and
+        declarativeAssertions); the doctrine's own rules are the worst offenders and go first.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits architecturalProfiles and declarativeAssertions, which list more than 25 steps.
 status: draft
 createdAt: '2026-09-14T23:15:33.948Z'
-updatedAt: '2026-09-14T23:17:52.188Z'
+updatedAt: '2026-09-17T17:52:45.797Z'

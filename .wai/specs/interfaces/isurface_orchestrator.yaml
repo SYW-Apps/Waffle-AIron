@@ -91,6 +91,10 @@ methods:
     signature: 'pinFamilySurfaces(): string[] | null'
     returns: string[] | null
     params: []
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames exportSurface and importSurface to drop the component's own concept.
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-09-12T17:36:24.278Z'
+updatedAt: '2026-09-17T17:52:35.157Z'

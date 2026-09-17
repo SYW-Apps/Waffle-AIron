@@ -25,7 +25,7 @@ fields:
     optional: true
   - name: clientSecretRef
     type: string
-    description: Secret registry key holding the client secret; never the raw secret.
+    description: Secret repository key holding the client secret; never the raw secret.
     optional: true
   - name: allowedDomains
     type: string[]
@@ -87,4 +87,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-08T22:00:13.587Z'
-updatedAt: '2026-07-14T12:53:32.520Z'
+updatedAt: '2026-09-17T16:41:58.575Z'

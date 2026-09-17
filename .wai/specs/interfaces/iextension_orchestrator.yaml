@@ -44,8 +44,8 @@ methods:
       kind: sibling-subsystem
       caller: >-
         sdd_cli pack commands (cli_packs_adapter) and sdd_host's pack plane (host_core_adapter
-        forwarder into pack_registry/pack_orchestrator) label pack entries for listings and
-        messages, crossing over sdd_core's published barrel surface.
+        forwarder into pack_store/pack_orchestrator) label pack entries for listings and messages,
+        crossing over sdd_core's published barrel surface.
   - name: packEntryRef
     description: >-
       The loadable ref for one configured pack entry: a legacy path/module ref passes through
@@ -125,6 +125,10 @@ methods:
     signature: 'defaultPackSelections(): PackSelection[]'
     returns: PackSelection[]
     params: []
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames loadExtensions to drop the component's own concept.
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-09-13T22:58:44.463Z'
+updatedAt: '2026-09-17T17:52:20.337Z'

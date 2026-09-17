@@ -153,5 +153,19 @@ methods:
       Whether its componentType is a retired stereotype (Specialist or Gateway). The rules that
       judge a stereotype's shape skip it, and retired-stereotypes reports it once, until it is
       migrated
+  - name: headNoun
+    signature: 'headNoun(): string'
+    returns: string
+    description: >-
+      The last word of the component's id, which names what the component is: the head noun of
+      "pack_store_adapter" is "adapter", and of "credential_write_registry" is "registry".
+      Qualifiers before it name what the component works on, so only the head noun says what it IS.
+  - name: conceptNoun
+    signature: 'conceptNoun(): string'
+    returns: string
+    description: >-
+      The last word of the component's id that does not name a building block: what the component is
+      about, rather than what it is. "pack_store" is about packs, "architecture_diagrams" about
+      diagrams, "cli_packs_adapter" about packs. Empty when every word names a block.
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-15T17:45:25.107Z'
+updatedAt: '2026-09-17T16:37:11.141Z'

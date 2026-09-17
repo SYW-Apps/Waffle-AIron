@@ -1,9 +1,9 @@
-id: project_registry_impl
+id: project_repository_impl
 name: Project Repository Facade Implementation
 description: >-
   Pure 1:1 forwarding facade over the owned project record store, write registry, and index. The
   facade adds no logic.
-contract: iproject_registry
+contract: iproject_repository
 sourcePath: src/server/projects.ts
 methods:
   - name: resolveRoot
@@ -53,4 +53,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:36.287Z'
-updatedAt: '2026-07-24T20:50:35.517Z'
+updatedAt: '2026-09-17T16:33:58.837Z'

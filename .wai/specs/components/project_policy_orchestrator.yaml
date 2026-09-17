@@ -6,7 +6,7 @@ description: >-
   seam; it requires or records profile selection according to policy, applies required/default
   declarative packs, evaluates project compliance, and audits policy decisions. It reads and writes
   the project configuration — pack registrations, projectType, the recorded profile selection — only
-  through the core adapter; the pack registry vendors pack files and returns what to register. Two
+  through the core adapter; the pack store vendors pack files and returns what to register. Two
   pre-authorized entries (executeApprovedInit, evaluateInitRequest) serve the project-lifecycle
   chain and are never portal-exposed. Identity-provider (SSO) configuration is deferred to Phase 5.
 subsystem: sdd_host
@@ -15,8 +15,8 @@ owns: []
 dependsOn:
   - authentication
   - authorization
-  - project_registry
-  - pack_registry
+  - project_repository
+  - pack_store
   - policy_repository
   - admin_orchestrator
   - audit_repository
@@ -24,4 +24,4 @@ dependsOn:
   - host_validator_adapter
 status: complete
 createdAt: '2026-07-08T21:59:23.605Z'
-updatedAt: '2026-09-15T17:56:12.525Z'
+updatedAt: '2026-09-17T16:42:06.856Z'

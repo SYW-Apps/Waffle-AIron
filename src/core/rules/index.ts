@@ -438,12 +438,15 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     return extensions.profiles[profile];
   };
 
+  // The pack profile supplies the base and the project's own explicit config
+  // is applied LAST, so a project's setting wins over an installed pack's —
+  // the same precedence sddRuleSeverity resolves a few lines below.
   const complexityConfigFor = (subsystemId?: string): ComplexityRuleConfig | undefined => {
     const projectComp = rules?.complexity;
     const packDef = profileDefFor(subsystemId);
 
     if (packDef?.rules?.complexity) {
-      return { ...projectComp, ...packDef.rules.complexity };
+      return { ...packDef.rules.complexity, ...projectComp };
     }
     return projectComp;
   };
@@ -453,7 +456,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     const packDef = profileDefFor(subsystemId);
 
     if (packDef?.rules?.documentation) {
-      return { ...projectDoc, ...packDef.rules.documentation };
+      return { ...packDef.rules.documentation, ...projectDoc };
     }
     return projectDoc;
   };
@@ -464,11 +467,11 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
 
     if (packDef?.rules?.naming) {
       return {
-        ...projectNaming,
         ...packDef.rules.naming,
+        ...projectNaming,
         stereotypes: {
-          ...(projectNaming?.stereotypes ?? {}),
           ...(packDef.rules.naming.stereotypes ?? {}),
+          ...(projectNaming?.stereotypes ?? {}),
         },
       };
     }

@@ -15,7 +15,9 @@ fields:
     optional: true
   - name: maxNarrativeSteps
     type: i32
-    description: Non-negative integer maximum number of narrative steps per method
+    description: >-
+      Non-negative integer maximum number of narrative steps per method, reported as a warning.
+      Defaults to 25 when unset.
     optional: true
   - name: maxComponentDependencies
     type: i32
@@ -25,6 +27,24 @@ fields:
     type: i32
     description: Non-negative integer maximum number of components per subsystem
     optional: true
+  - name: narrativeStepsHardMax
+    type: i32
+    description: >-
+      Non-negative integer step count above which a narrative is an error rather than a warning. No
+      default: unset means the step count only ever warns.
+    optional: true
+  - name: cognitiveWarnAbove
+    type: string
+    description: >-
+      The complexity band a narrative may reach before it warns: linear, simple, moderate, complex
+      or severe. Defaults to moderate, so complex and severe warn.
+    optional: true
+  - name: maxCognitiveLevel
+    type: string
+    description: >-
+      The band above which a narrative is an error rather than a warning. No default: unset means
+      the cognitive band only ever warns.
+    optional: true
 methods: []
 createdAt: '2026-07-06T20:47:08.558Z'
-updatedAt: '2026-07-06T21:48:41.354Z'
+updatedAt: '2026-09-17T15:11:26.492Z'

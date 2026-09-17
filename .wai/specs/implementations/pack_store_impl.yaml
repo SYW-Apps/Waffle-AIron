@@ -1,5 +1,5 @@
-id: pack_registry_impl
-name: Pack Registry Implementation
+id: pack_store_impl
+name: Pack Store Implementation
 description: >-
   File-backed I/O for the container's extension-pack store: the server-global packs directory
   (WAIRON_PACKS_DIR, defaulted onto the data volume) and a bound project's vendored packs under
@@ -8,7 +8,7 @@ description: >-
   orchestrator registers, and a project removal deletes only the vendored files of a registration
   the orchestrator has matched and deregistered. Reuses the core extension loader to probe and to
   enforce the declarative-pack schema. Installs are declarative-only; code packs are refused here.
-contract: ipack_registry
+contract: ipack_store
 sourcePath: src/server/packs.ts
 methods:
   - name: listGlobalPacks
@@ -186,4 +186,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-09-15T21:03:38.860Z'
+updatedAt: '2026-09-17T16:34:46.733Z'

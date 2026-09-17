@@ -12,7 +12,7 @@ methods:
       - stepNumber: 2
         description: Persist the producer config
         type: call
-        targetComponent: producer_config_registry
+        targetComponent: producer_config_store
         targetMethod: write
       - stepNumber: 3
         description: Return once configured
@@ -23,7 +23,7 @@ methods:
       - stepNumber: 1
         description: Read the target's config
         type: call
-        targetComponent: producer_config_registry
+        targetComponent: producer_config_store
         targetMethod: read
       - stepNumber: 2
         description: If the target is not configured, reject
@@ -81,7 +81,7 @@ methods:
       - stepNumber: 1
         description: Clear the target's config
         type: call
-        targetComponent: producer_config_registry
+        targetComponent: producer_config_store
         targetMethod: clear
       - stepNumber: 2
         description: Return once removed
@@ -92,7 +92,7 @@ methods:
       - stepNumber: 1
         description: List the configured producers
         type: call
-        targetComponent: producer_config_registry
+        targetComponent: producer_config_store
         targetMethod: list
 status: complete
 createdAt: '2026-07-04T17:40:06.027Z'

@@ -28,6 +28,10 @@ methods:
     signature: 'buildServerInstructions(): string'
     returns: string
     params: []
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames listResources and readResource to drop the component's own concept.
 status: complete
 createdAt: '2026-07-08T22:02:40.411Z'
-updatedAt: '2026-07-29T10:50:32.770Z'
+updatedAt: '2026-09-17T17:52:34.160Z'

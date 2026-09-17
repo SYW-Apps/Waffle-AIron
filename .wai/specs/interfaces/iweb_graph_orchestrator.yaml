@@ -49,6 +49,10 @@ methods:
         type: string
       - name: projectId
         type: string
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames getGraph to drop the component's own concept.
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-07-15T23:27:55.709Z'
+updatedAt: '2026-09-17T17:52:36.162Z'

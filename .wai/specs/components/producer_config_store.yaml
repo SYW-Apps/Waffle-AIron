@@ -1,5 +1,5 @@
-id: producer_config_registry
-name: Producer Config Registry
+id: producer_config_store
+name: Producer Config Store
 description: >-
   The project's producer-config boundary (.wai/producers.json): per-target settings such as Notion's
   parent page id. A standalone read-through Store — the file is the persistence medium, this
@@ -18,4 +18,4 @@ lint:
         Repository around it would be ceremony. Consumer is workflow-layer (producer_orchestrator).
 status: complete
 createdAt: '2026-07-04T17:29:08.079Z'
-updatedAt: '2026-07-18T19:16:00.520Z'
+updatedAt: '2026-09-17T16:34:47.264Z'

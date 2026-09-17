@@ -72,5 +72,21 @@ methods:
     signature: 'stepGraph(): StepGraph'
     returns: StepGraph
     description: The step graph of its narrative
+  - name: cognitiveScore
+    signature: 'cognitiveScore(): i32'
+    returns: i32
+    description: >-
+      The cognitive weight of this method's narrative, counting how much nesting and branching a
+      reader must hold. A branch, switch, loop or parallel step counts one plus its nesting depth;
+      each catch clause of a try counts the same; each jump counts one, flat. Nesting depth comes
+      from the regions that carry an endStep (loop, try, parallel), so a flat sequence of calls
+      scores zero however long it is.
+  - name: complexityLevel
+    signature: 'complexityLevel(): string'
+    returns: string
+    description: >-
+      The band its cognitiveScore falls in: linear (0), simple (1-4), moderate (5-9), complex
+      (10-19) or severe (20 and above). The band, not the raw score, is what a threshold is
+      configured against.
 createdAt: '2026-09-13T16:59:08.774Z'
-updatedAt: '2026-09-14T06:04:00.804Z'
+updatedAt: '2026-09-17T15:11:20.506Z'

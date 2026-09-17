@@ -10,8 +10,8 @@ methods:
   - name: portalFields
     description: >-
       Rule portal-fields. A Portal declares its portalType. Non-Portal components carry no
-      portalType, basePath, or auth (auth is the Portal's inbound transport authentication).
-      Intrinsic to one component: no tree required.
+      portalType, basePath, or auth (auth is inbound transport auth — it belongs on the Portal that
+      exposes the surface). Intrinsic to one component: no tree required.
     signature: 'portalFields(ctx: RuleContext): void'
     returns: void
     params:
@@ -88,4 +88,4 @@ methods:
           dependencyClass, a Gateway is a Portal with the gateway variant
 status: draft
 createdAt: '2026-09-14T06:06:25.571Z'
-updatedAt: '2026-09-15T17:42:30.484Z'
+updatedAt: '2026-09-17T17:47:42.436Z'

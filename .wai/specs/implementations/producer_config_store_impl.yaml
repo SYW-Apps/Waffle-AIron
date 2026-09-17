@@ -1,7 +1,7 @@
-id: producer_config_registry_impl
-name: Producer Config Registry Implementation
+id: producer_config_store_impl
+name: Producer Config Store Implementation
 description: File-backed I/O for per-project producer configs (.wai/producers.json).
-contract: iproducer_config_registry
+contract: iproducer_config_store
 sourcePath: src/producers/config.ts
 methods:
   - name: read
@@ -24,4 +24,4 @@ methods:
     symbol: listProducerConfigs
 status: complete
 createdAt: '2026-07-04T17:39:10.593Z'
-updatedAt: '2026-07-11T19:14:22.773Z'
+updatedAt: '2026-09-17T16:34:48.747Z'

@@ -20,8 +20,12 @@ dependsOn:
   - permission_repository
   - user_repository
   - audit_repository
-  - secret_registry
+  - secret_repository
   - permission_admin_orchestrator
+lint:
+  allow:
+    - code: INCOHESIVE_METHODS
+      reason: D2b splits this component along the method groups the finding names.
 status: complete
 createdAt: '2026-07-13T18:27:33.510Z'
-updatedAt: '2026-07-15T22:02:17.796Z'
+updatedAt: '2026-09-17T17:53:20.987Z'

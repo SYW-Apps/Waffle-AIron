@@ -28,7 +28,7 @@ methods:
       - stepNumber: 4
         description: List hosted projects
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: list
       - stepNumber: 5
         description: Return the project list
@@ -72,7 +72,7 @@ methods:
       - stepNumber: 7
         description: Persist the credential
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: create
       - stepNumber: 8
         description: Return the plaintext key (shown once)
@@ -97,7 +97,7 @@ methods:
       - stepNumber: 4
         description: Revoke the credential by id
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: revoke
       - stepNumber: 5
         description: Return once revoked
@@ -122,7 +122,7 @@ methods:
       - stepNumber: 4
         description: List the project's credentials
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: list
       - stepNumber: 5
         description: Return the key list
@@ -231,7 +231,7 @@ methods:
       - stepNumber: 4
         description: Store the secret at runtime
         type: call
-        targetComponent: secret_registry
+        targetComponent: secret_repository
         targetMethod: write
       - stepNumber: 5
         description: Return once set
@@ -256,7 +256,7 @@ methods:
       - stepNumber: 4
         description: List configured secret keys (names only)
         type: call
-        targetComponent: secret_registry
+        targetComponent: secret_repository
         targetMethod: list
       - stepNumber: 5
         description: Return the secret key names
@@ -267,7 +267,7 @@ methods:
       - stepNumber: 1
         description: Allocate and register the project
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: create
       - stepNumber: 2
         description: Bind the new project's isolated root
@@ -293,9 +293,9 @@ methods:
       - stepNumber: 1
         description: >-
           Bind the root this lock concerns: the project's isolated root, or — when a subproject
-          qualifier was supplied — the chained CHILD's tree, resolved through the project registry's
-          containment-checked qualified resolution so a qualifier can never resolve outside the
-          project root. Every step below therefore operates on the bound tree.
+          qualifier was supplied — the chained CHILD's tree, resolved through the project
+          repository's containment-checked qualified resolution so a qualifier can never resolve
+          outside the project root. Every step below therefore operates on the bound tree.
         type: local
       - stepNumber: 2
         description: >-
@@ -424,7 +424,7 @@ methods:
       - stepNumber: 6
         description: Allocate and register the project
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: create
       - stepNumber: 7
         description: Bind the new project's isolated root
@@ -469,7 +469,7 @@ methods:
       - stepNumber: 5
         description: Deregister the project and remove its tree
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: remove
       - stepNumber: 6
         description: Return once destroyed
@@ -810,7 +810,7 @@ methods:
           List the hosted project records (pre-authorized internal sweep — the host supervisor's
           timer is the only caller; never exposed on a portal)
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: list
       - stepNumber: 2
         description: For each hosted project
@@ -1073,4 +1073,4 @@ methods:
         outcome: imported tree
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-15T17:56:05.532Z'
+updatedAt: '2026-09-17T16:41:50.297Z'

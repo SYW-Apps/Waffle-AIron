@@ -84,7 +84,7 @@ export const hostCore = {
   declaredPackNames,
   declaredProfileIds,
   // Extension-pack loading forwarded to sdd_core — used by the hosted pack store
-  // (pack_registry) and the policy plane's required/default-pack application.
+  // (pack_store) and the policy plane's required/default-pack application.
   globalPacksDir,
   discoverPacks,
   loadExtensionPacks,

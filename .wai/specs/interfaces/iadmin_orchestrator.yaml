@@ -198,7 +198,7 @@ methods:
       lockProject but WITHOUT credential authentication — the caller
       (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
       exposed on any portal. An optional subproject qualifier binds the CHAINED CHILD's tree instead
-      of the project's own, resolved through the project registry's containment-checked qualified
+      of the project's own, resolved through the project repository's containment-checked qualified
       resolution (the same seam the data plane binds through, so a qualifier can never resolve
       outside the project root). Because the git binding is read from the BOUND root, a
       subproject-scoped lock finds no repository binding there and therefore performs no sync and no
@@ -335,4 +335,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-15T21:02:32.729Z'
+updatedAt: '2026-09-17T16:41:48.808Z'

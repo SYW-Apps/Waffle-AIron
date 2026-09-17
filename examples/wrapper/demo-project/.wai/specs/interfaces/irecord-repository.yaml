@@ -4,16 +4,16 @@ name: IRecordRepository
 description: Intent-language persistence contract for scenario records.
 component: record-repository
 methods:
-  - name: getRecord
+  - name: get
     description: Loads a stored scenario record by its id.
-    signature: "getRecord(id: string): scenario_record"
+    signature: "get(id: string): scenario_record"
     returns: "scenario_record"
     params:
       - name: id
         type: string
-  - name: saveRecord
+  - name: save
     description: Persists a scenario record.
-    signature: "saveRecord(record: scenario_record): void"
+    signature: "save(record: scenario_record): void"
     returns: "void"
     params:
       - name: record

@@ -23,6 +23,10 @@ methods:
     returns: void
     params: []
     effect: write
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames addRule and listRules to drop the component's own concept.
 status: complete
 createdAt: '2026-07-14T19:17:10.227Z'
-updatedAt: '2026-09-14T23:07:24.048Z'
+updatedAt: '2026-09-17T17:52:32.158Z'

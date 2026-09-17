@@ -207,14 +207,15 @@ methods:
     signature: 'complexityConfigFor(subsystemId?: string): ComplexityRuleConfig | undefined'
     returns: ComplexityRuleConfig | undefined
     description: >-
-      The complexity rule config in force for a subsystem: the project's, overlaid with its profile
-      pack's when the pack sets one
+      The complexity rule config in force for a subsystem: its profile pack's settings, overlaid
+      with the project's own, so a project's explicit value wins over the pack's and the rule's
+      default applies only where neither sets one
   - name: documentationConfigFor
     signature: 'documentationConfigFor(subsystemId?: string): DocumentationRuleConfig | undefined'
     returns: DocumentationRuleConfig | undefined
     description: >-
-      The documentation rule config in force for a subsystem: the project's, overlaid with its
-      profile pack's when the pack sets one
+      The documentation rule config in force for a subsystem: its profile pack's settings, overlaid
+      with the project's own, so a project's explicit value wins over the pack's
   - name: isBuiltinType
     signature: 'isBuiltinType(ref: string): boolean'
     returns: boolean
@@ -225,7 +226,7 @@ methods:
     signature: 'namingConfigFor(subsystemId?: string): NamingRuleConfig | undefined'
     returns: NamingRuleConfig | undefined
     description: >-
-      The naming rule config in force for a subsystem: the project's, overlaid with its profile
-      pack's when the pack sets one, stereotype patterns merged key by key
+      The naming rule config in force for a subsystem: its profile pack's settings, overlaid with
+      the project's own, stereotype patterns merged key by key with the project's key winning
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-14T23:26:20.942Z'
+updatedAt: '2026-09-17T15:16:03.295Z'

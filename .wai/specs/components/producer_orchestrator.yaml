@@ -8,7 +8,7 @@ subsystem: sdd_producers
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - producer_config_registry
+  - producer_config_store
   - spec_doc_pages
   - notion_adapter
   - miro_adapter

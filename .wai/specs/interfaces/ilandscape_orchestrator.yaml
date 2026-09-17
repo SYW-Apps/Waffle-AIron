@@ -113,6 +113,10 @@ methods:
         type: string
       - name: id
         type: string
+lint:
+  allow:
+    - code: METHOD_REPEATS_COMPONENT
+      reason: D2b renames generateLandscape to drop the component's own concept.
 status: complete
 createdAt: '2026-07-08T21:13:44.021Z'
-updatedAt: '2026-09-15T21:02:50.852Z'
+updatedAt: '2026-09-17T17:52:26.019Z'

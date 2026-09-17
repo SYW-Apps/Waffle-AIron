@@ -679,6 +679,15 @@ methods:
         description: Continue with the next lint allow.
         type: local
     symbol: check
+lint:
+  allow:
+    - code: NARRATIVE_COMPLEXITY
+      reason: >-
+        D2b splits the narratives this reports (hierarchyIntegrity, namespaceHygiene,
+        typeReferences, and publicSurface); the doctrine's own rules are the worst offenders and go
+        first.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: D2b splits namespaceHygiene and publicSurface, which list more than 25 steps.
 status: draft
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-15T01:27:34.831Z'
+updatedAt: '2026-09-17T17:52:51.387Z'

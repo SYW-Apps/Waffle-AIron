@@ -15,10 +15,10 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - authentication
-  - project_registry
+  - project_repository
   - diagnostics
   - quota_rules
-  - pack_registry
+  - pack_store
   - authorization
   - project_relation_repository
   - public_surface_repository

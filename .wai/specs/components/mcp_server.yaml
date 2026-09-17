@@ -12,6 +12,12 @@ dependsOn:
   - mcp_core_adapter
   - mcp_validator_adapter
   - mcp_skills_adapter
+lint:
+  allow:
+    - code: COMPONENT_IS_ITS_ONLY_METHOD
+      reason: D2b either folds this component into its caller or names it for its responsibility.
+    - code: GENERIC_COMPONENT_NAME
+      reason: D2b renames this component; 'Manager' in its name says nothing about what it does.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-15T10:51:26.328Z'
+updatedAt: '2026-09-17T17:53:09.358Z'
