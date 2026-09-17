@@ -1094,12 +1094,8 @@ methods:
         outcome: renamed
 lint:
   allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: >-
-        D2b splits the narrative this reports (retireSpecialists) into steps that call smaller
-        methods.
     - code: EXCESSIVE_NARRATIVE_STEPS
       reason: D2b splits renameComponent, which lists more than 25 steps.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T19:27:48.156Z'
+updatedAt: '2026-09-17T21:41:18.335Z'
