@@ -421,7 +421,7 @@ Measured on wairon own tree after D1 (1061 narratives): 777 linear, 211 simple, 
   - A10 `sdd_get_spec` methods filter
   - A11 nested tool input strict
   - A12 `UNUSED_TYPE` counts type method signatures — a spec change to `wiring_rules.unusedDetection` first
-  - A4 likewise starts as a spec change to `narrative_rules.narrativeFlow`
+  - A4 likewise starts as a spec change to `narrative_rules.narrativeStepConfig`
   - structured JSON results
 
 ### PR B — conformance that never goes quiet (NEXT)

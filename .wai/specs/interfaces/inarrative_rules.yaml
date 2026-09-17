@@ -74,15 +74,14 @@ methods:
       - code: UNKNOWN_GUARANTEE
         severity: warning
         summary: Guarantee token is neither builtin nor pack-declared
-  - name: narrativeFlow
+  - name: narrativeStepConfig
     description: >-
-      Rule narrative-flow. Control-flow soundness of L5 narratives: flow steps (branch, switch,
-      loop, try, parallel, jump) must carry their required config, every jump field must target an
-      existing step number in the same narrative, and every step must be reachable from the first
-      step following fall-through and jumps. A parallel body is covered by contiguous, ordered arms
-      (>= 2) whose last steps continue at the join after endStep; "detach" (fire-and-forget) is
-      legal on call/dispatch steps only.
-    signature: 'narrativeFlow(ctx: RuleContext): void'
+      Rule narrative-step-config. The step configuration of L5 narratives: every flow step (branch,
+      switch, loop, try, parallel, jump) carries the config its type requires and no simple step
+      carries flow config, "detach" (fire-and-forget) is legal on call/dispatch steps only, a
+      parallel body is covered by contiguous, ordered arms (>= 2), no two steps share a step number
+      or a label, and every jump field targets an existing step number in the same narrative.
+    signature: 'narrativeStepConfig(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -95,28 +94,57 @@ methods:
       - code: INVALID_STEP_JUMP
         severity: error
         summary: Jump field targets a step number that does not exist in the narrative
+      - code: DUPLICATE_STEP_LABEL
+        severity: error
+        summary: Two steps in one narrative share a label — the symbolic anchor later deltas address by
+  - name: narrativeReachability
+    description: >-
+      Rule narrative-reachability. Every step of an L5 narrative must be reachable from the first
+      step following fall-through and jumps, and the loop/try/parallel regions it declares must nest
+      or stay disjoint — interleaved regions map onto no structured code. Judged over the step
+      graph, and only for a narrative whose step configuration is sound (narrative-step-config
+      reports the rest).
+    signature: 'narrativeReachability(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: UNREACHABLE_STEP
         severity: warning
         summary: Step not reachable from the first step following fall-through and jumps
       - code: REGION_OVERLAP
         severity: error
         summary: loop/try regions interleave — regions must nest or be disjoint to map onto structured code
+  - name: narrativeJumpEdges
+    description: >-
+      Rule narrative-jump-edges. Where an L5 narrative's jump edges land: a loop/try/parallel region
+      is entered through its header, never into the middle of its body; a backward jump is only
+      idiomatic as a continue to an enclosing loop header, and otherwise models repetition that
+      belongs in a loop step; and a try body must not fall through into its own catch/finally region
+      on the success path. Judged only for a narrative whose step configuration is sound
+      (narrative-step-config reports the rest).
+    signature: 'narrativeJumpEdges(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: JUMP_INTO_REGION
         severity: warning
         summary: >-
           Jump lands in the middle of a loop/try body from outside — regions are entered through
           their header
-      - code: FALLTHROUGH_INTO_HANDLER
-        severity: warning
-        summary: try body falls through into its own catch/finally region on the success path
       - code: BACKWARD_JUMP
         severity: warning
         summary: >-
           Backward jump that is not a continue to an enclosing loop header — model repetition with a
           loop step
-      - code: DUPLICATE_STEP_LABEL
-        severity: error
-        summary: Two steps in one narrative share a label — the symbolic anchor later deltas address by
+      - code: FALLTHROUGH_INTO_HANDLER
+        severity: warning
+        summary: try body falls through into its own catch/finally region on the success path
   - name: narrativeAntipatterns
     description: >-
       Rule narrative-antipatterns. Provable narrative bugs, caught at spec level before
@@ -189,4 +217,4 @@ methods:
           narrative
 status: draft
 createdAt: '2026-09-14T06:06:18.256Z'
-updatedAt: '2026-09-14T06:06:18.259Z'
+updatedAt: '2026-09-17T22:25:05.490Z'

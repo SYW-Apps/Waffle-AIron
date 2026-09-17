@@ -67,8 +67,8 @@ methods:
           Build the source code model via the source analysis adapter — every distinct source path
           (each implementation's sourcePath, each method's own sourcePath, each simPath) resolved
           and containment-checked within the project root, analyzed at the best available grade
-          (exact | pattern | generic); the structural-conformance rules consume it purely from the
-          rule context (the surface-snapshots injection pattern)
+          (exact | pattern | generic); the Level 1 conformance rules consume it purely from the rule
+          context (the surface-snapshots injection pattern)
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: buildCodeModel
@@ -445,4 +445,4 @@ lint:
       reason: D2b splits validateSddTree, which lists more than 25 steps.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-17T17:53:02.324Z'
+updatedAt: '2026-09-17T22:31:22.782Z'

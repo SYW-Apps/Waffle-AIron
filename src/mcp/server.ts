@@ -1458,7 +1458,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     simPath: z.string().optional().describe('Optional: the committed integration-sim harness file (project-relative; N:1 sharing allowed). The validator proves it exists and its import graph wires the REAL modules (this component + each direct dependency; technology adapters may stay faked) — running it is CI\'s job. Declaring the first simPath in a subsystem activates MISSING_INTEGRATION_SIM for its other complete non-leaf implementations'),
     technologies: z.array(z.string()).optional().describe('External technologies this implementation binds to (e.g. ["mysql"]) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components.'),
     detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
-    conformance: conformanceEnum.optional().describe('Spec-level structural-conformance tier default: declared | anchored | off (omitted = stereotype default: Portal → anchored, else declared)'),
+    conformance: conformanceEnum.optional().describe('Spec-level conformance tier default: declared | anchored | off (omitted = stereotype default: Portal → anchored, else declared)'),
     methods: z.array(z.object(implMethodShape)).optional().describe('Method implementations containing L5 narratives'),
   };
   const implInputFields = Object.keys(implInput);

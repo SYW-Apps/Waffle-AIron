@@ -1,5 +1,6 @@
 /**
- * Narrative-flow family (src/core/rules/narrative/narrative-flow.ts): structural
+ * Narrative control-flow family (src/core/rules/narrative/narrative-step-config.ts,
+ * narrative-reachability.ts and narrative-jump-edges.ts): structural
  * soundness of L5 control flow. Flow steps carry their required config, every
  * jump lands on a real step, every step is reachable, loop/try/parallel
  * regions nest or stay disjoint and are entered through their header, try

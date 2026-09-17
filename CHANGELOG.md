@@ -425,10 +425,24 @@ sides of a seam.
 | `dispatch-tables` | `dispatch-table-bindings` + `dispatch-step-routing` | the table a Portal declares, and the narrative step that routes through it — `UNSERVED_CAPABILITY` means "this capability has no server" on both sides |
 | `type-references` | `type-declarations` + `field-type-references` + `signature-type-references` | what a type declares about itself, and the two places a reference to a missing type actually bites |
 | `architectural-profiles` | `profile-registration` + `profile-stereotype-fencing` + `pack-profile-stereotypes` | three questions with three owners: is the name real (the project's config), does the built-in family doctrine allow this stereotype (wairon), does the pack's own declared doctrine allow it (the pack) |
+| `structural-conformance` | `source-file-linkage` + `method-realization` + `finding-realization` | three questions about the same code model: does the spec name files that exist, does the file contain the method, does it report the codes the method declares |
+| `narrative-flow` | `narrative-step-config` + `narrative-reachability` + `narrative-jump-edges` | does each step carry the config its type requires, can every step be reached (and do the regions nest), and where do the jump edges land |
 
 `profile-registration` also checks the project's own `projectType` before each subsystem's profile rather than after —
 the project-wide question first. On wairon's own tree the split retires `wiring_rules_impl`'s
 `EXCESSIVE_NARRATIVE_STEPS` allow outright — no narrative in that family lists more than 25 steps any more.
+
+`narrative-flow` needed a derivation moved first. Its later phases ran only over a narrative it had already found
+structurally sound, and splitting that flag away would have had the reachability walk call sound steps dead whenever a
+jump target did not exist — wrong findings, not merely noisier ones. So `MethodImplementation.stepConfigVerdict()` is
+now a pure derivation beside `stepGraph()`, returning the step-config problems (`StepConfigProblem`: the step, the code
+it maps to, the detail) and the `sound` verdict; `narrative-step-config` reports what it returns, and the other two gate
+on it. `CONFORMANCE_DEGRADED` stays with `source-file-linkage` for the same kind of reason: it is run-wide and carries no
+spec id, so it belongs to the one rule that builds the file index, or it would be reported once per rule that rebuilt it.
+
+On wairon's own tree the conformance split retires `conformance_rules_impl`'s `EXCESSIVE_NARRATIVE_STEPS` allow — the
+31-step narrative it named is gone and nothing left in that family lists more than 25 — and both families' remaining
+`NARRATIVE_COMPLEXITY` allows now name only the narratives that still report.
 
 ### Complexity, naming and cohesion are checked
 

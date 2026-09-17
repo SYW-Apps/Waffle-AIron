@@ -10,7 +10,9 @@ import { publicSurfaceRule } from './integrity/public-surface.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { contractsRule } from './narrative/contract-symmetry-and-narratives.js';
 import { guaranteeTokensRule } from './narrative/guarantee-tokens.js';
-import { narrativeFlowRule } from './narrative/narrative-flow.js';
+import { narrativeStepConfigRule } from './narrative/narrative-step-config.js';
+import { narrativeReachabilityRule } from './narrative/narrative-reachability.js';
+import { narrativeJumpEdgesRule } from './narrative/narrative-jump-edges.js';
 import { narrativeAntipatternsRule } from './narrative/narrative-antipatterns.js';
 import { narrativeDetailRule } from './narrative/narrative-detail.js';
 import { portalFieldsRule } from './intrinsic/portal-fields.js';
@@ -40,7 +42,9 @@ import { untypedSeamRule } from './wiring/untyped-seams.js';
 import { proseClaimRule } from './wiring/prose-claims.js';
 import { invariantBackingRule } from './wiring/invariant-backing.js';
 import { eventTopologyRule } from './wiring/event-topology.js';
-import { structuralConformanceRule } from './conformance/structural-conformance.js';
+import { sourceFileLinkageRule } from './conformance/source-file-linkage.js';
+import { methodRealizationRule } from './conformance/method-realization.js';
+import { findingRealizationRule } from './conformance/finding-realization.js';
 import { callConformanceRule } from './conformance/call-conformance.js';
 import { hiddenStateRule } from './conformance/hidden-state.js';
 import { dependencyConformanceRule } from './conformance/dependency-conformance.js';
@@ -83,7 +87,13 @@ export const SDD_RULES: SddRule[] = [
   // Vocabulary check right after contracts: an unknown token explains why the
   // consistency findings around it are absent, so surface them together.
   guaranteeTokensRule,
-  narrativeFlowRule,
+  // Narrative control flow in three questions: does each step carry the
+  // config its type requires, can every step be reached (and do the regions
+  // nest), and where do the jump edges land. The last two run behind the
+  // first's soundness verdict.
+  narrativeStepConfigRule,
+  narrativeReachabilityRule,
+  narrativeJumpEdgesRule,
   // Antipatterns right after flow soundness: they analyze the same step
   // graphs and only make sense once the graphs are structurally valid.
   narrativeAntipatternsRule,
@@ -136,9 +146,14 @@ export const SDD_RULES: SddRule[] = [
   // Pub/sub completeness: emitted topics need subscribers and vice versa.
   eventTopologyRule,
   // Code↔spec: structural conformance consumes the injected CodeModel (built
-  // by the source analysis adapter next to the surface snapshots); dependency
-  // conformance lifts its import edges onto the declared dependsOn/owns graph.
-  structuralConformanceRule,
+  // by the source analysis adapter next to the surface snapshots) and asks it
+  // three questions — does the spec name files that exist, does the file
+  // contain the method, does it report the codes the method declares;
+  // dependency conformance lifts its import edges onto the declared
+  // dependsOn/owns graph.
+  sourceFileLinkageRule,
+  methodRealizationRule,
+  findingRealizationRule,
   // Level 3 opener: narrative call steps must be realized as callees of the
   // realized function (set membership, exact grade).
   callConformanceRule,

@@ -7,7 +7,7 @@ import { buildCodeModel } from '../../src/core/source-analysis.js';
 import { buildRuleContext } from '../../src/core/rules/index.js';
 import { knownIssueCodes, registerBuiltinRules, registerPackRules } from '../../src/core/rules/repository.js';
 import { emptyExtensions, type LoadedExtensions } from '../../src/core/extensions.js';
-import { structuralConformanceRule } from '../../src/core/rules/conformance/structural-conformance.js';
+import { sourceFileLinkageRule } from '../../src/core/rules/conformance/source-file-linkage.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 /** The known issue codes a rule context carries, gathered as the validator gathers them. */
@@ -693,7 +693,7 @@ describe('conformance degradation visibility', () => {
       knownIssueCodes: gatherKnownIssueCodes(),
       issues,
     });
-    structuralConformanceRule.check(ctx);
+    sourceFileLinkageRule.check(ctx);
     const degraded = issues.filter(i => i.code === 'CONFORMANCE_DEGRADED');
     expect(degraded).toHaveLength(1);
     expect(degraded[0].message).toContain('below exact grade');

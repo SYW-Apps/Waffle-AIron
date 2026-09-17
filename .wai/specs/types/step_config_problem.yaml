@@ -1,0 +1,26 @@
+kind: value-object
+id: step_config_problem
+name: StepConfigProblem
+description: >-
+  One thing wrong with a narrative's step configuration: the step it sits on, the finding code it
+  maps to, and the detail a rule appends to its own "Method X in implementation Y" prefix. Duplicate
+  labels, missing or misplaced flow config, and jumps that land nowhere all arrive in this one
+  shape, so the rule that reports them chooses neither wording nor severity.
+fields:
+  - name: stepNumber
+    type: number
+    description: The step the problem sits on; a duplicate label names the earlier step in its detail.
+    optional: false
+  - name: code
+    type: string
+    description: >-
+      The finding code this problem maps to: DUPLICATE_STEP_LABEL, MALFORMED_FLOW_STEP or
+      INVALID_STEP_JUMP.
+    optional: false
+  - name: detail
+    type: string
+    description: The problem stated in full, ready to follow a rule's own location prefix.
+    optional: false
+methods: []
+createdAt: '2026-09-17T22:21:25.211Z'
+updatedAt: '2026-09-17T22:21:25.228Z'

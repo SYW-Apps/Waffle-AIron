@@ -6,209 +6,6 @@ description: >-
 contract: iconformance_rules
 simPath: tests/core/validation.test.ts
 methods:
-  - name: structuralConformance
-    sourcePath: src/core/rules/conformance/structural-conformance.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Index ctx.codeModel.files into lookups keyed by ctx.codeModel.pathKey(facts.path):
-          declared = declaredNames plus exportedNames, anchored = declared plus anchoredNames,
-          findingAnchors = anchoredNames alone (string literals and property-access names at exact
-          grade; the pattern grade adds every identifier outside comments, the generic grade every
-          word), each kept with its facts
-        type: local
-      - stepNumber: 2
-        description: >-
-          Collect degradedTsFiles: the analyzed files whose language is typescript or javascript and
-          whose analysisGrade is not exact
-        type: local
-      - stepNumber: 3
-        description: 'A silently degraded gate is worse than a degraded gate: surface it once per run'
-        type: branch
-        condition: degradedTsFiles is non-empty
-        onFalseStep: 5
-      - stepNumber: 4
-        description: >-
-          Report CONFORMANCE_DEGRADED (warning; run-wide: no spec id, no draft context) with the
-          count of degradedTsFiles: structural findings carry their grade, but dependency
-          conformance skips these files; install typescript in the analyzed project
-        type: local
-      - stepNumber: 5
-        label: implLoop
-        description: Check each implementation
-        type: loop
-        over: ctx.implementations
-        endStep: 31
-      - stepNumber: 6
-        description: >-
-          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
-          ctx.componentMap.get(contract.component)
-        type: local
-      - stepNumber: 7
-        description: >-
-          Unresolvable implementations are skipped, and so are chained-subproject implementations
-          (their sourcePaths are relative to the child root and the child validates them in its own
-          run): continue with the next implementation
-        type: branch
-        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
-        onFalseStep: 5
-      - stepNumber: 8
-        description: >-
-          draft = ctx.isImplementationDraft(impl). unlinked = the names of contract.methods whose
-          source file is none: the entry of impl.methods with the same name gives
-          methodImpl.sourceFile(impl.sourcePath), and a contract method with no entry falls back to
-          impl.sourcePath. noFileAtAll = impl.sourceFiles() is empty
-        type: local
-      - stepNumber: 9
-        description: >-
-          An implementation-type external link is the external source-of-record wairon cannot
-          analyze, so it suppresses the missing-path finding
-        type: branch
-        condition: >-
-          (unlinked is non-empty or noFileAtAll) and no entry of component.externalLinks has type
-          implementation
-        onFalseStep: 11
-      - stepNumber: 10
-        description: >-
-          Report MISSING_SOURCE_PATH (warning; spec impl.id; draft context from draft): when
-          unlinked is non-empty, naming those contract methods of impl.contract as naming no source
-          file of their own while the implementation declares no sourcePath; otherwise stating that
-          the implementation names no source file at all
-        type: local
-      - stepNumber: 11
-        label: fileLoop
-        description: >-
-          Check the status of each distinct file the implementation names; the existence check
-          applies at every tier
-        type: loop
-        over: impl.sourceFiles() (its own sourcePath, then each method's)
-        endStep: 20
-      - stepNumber: 12
-        description: key = ctx.codeModel.pathKey(file); facts = lookups.get(key)?.facts
-        type: local
-      - stepNumber: 13
-        description: >-
-          Each distinct file is reported once, and only when the code model marks it escaped,
-          missing or unreadable (no facts means no code model for the path): otherwise continue with
-          the next file
-        type: branch
-        condition: >-
-          key is not yet in reported (record it there now) and facts exist with a status other than
-          analyzed
-        onFalseStep: 11
-      - stepNumber: 14
-        description: >-
-          owner = the implementation itself when impl.sourcePath normalizes to key; otherwise the
-          names of impl.methods whose sourcePath normalizes to key, or the implementation itself
-          when none does
-        type: local
-      - stepNumber: 15
-        description: Dispatch on the file's status
-        type: switch
-        'on': facts.status
-        cases:
-          - value: escaped
-            step: 16
-          - value: missing
-            step: 18
-        defaultStep: 20
-      - stepNumber: 16
-        label: escapedReport
-        description: >-
-          Report SOURCE_PATH_ESCAPES_ROOT (error; spec impl.id; draft context from draft) naming
-          owner and file: the sourcePath is absolute or escapes the project root
-        type: local
-      - stepNumber: 17
-        description: Continue with the next file
-        type: jump
-        toStep: 11
-      - stepNumber: 18
-        label: missingReport
-        description: >-
-          Report MISSING_SOURCE_FILE (error; spec impl.id; draft context from draft) naming owner
-          and file: the sourcePath does not resolve to a file
-        type: local
-      - stepNumber: 19
-        description: Continue with the next file
-        type: jump
-        toStep: 11
-      - stepNumber: 20
-        label: skippedReport
-        description: >-
-          Report CONFORMANCE_ANALYSIS_SKIPPED (warning; spec impl.id; draft context from draft)
-          naming owner and file: it could not be analyzed (binary or unreadable), so the methods in
-          it were not checked
-        type: local
-      - stepNumber: 21
-        description: specTier = impl.conformance ?? component.defaultConformanceTier()
-        type: local
-      - stepNumber: 22
-        label: methodLoop
-        description: Check that each contract method is realized in its own source file
-        type: loop
-        over: contract.methods
-        endStep: 26
-      - stepNumber: 23
-        description: >-
-          checked = the private checkedFile(method.name): tier = methodImpl.conformance ?? specTier;
-          none when tier is off, when the method's source file
-          (methodImpl.sourceFile(impl.sourcePath), else impl.sourcePath) is none, or when lookups
-          holds no analyzed facts for ctx.codeModel.pathKey(file); otherwise {file, tier, lookup}
-        type: local
-      - stepNumber: 24
-        description: >-
-          Tier off, no file (MISSING_SOURCE_PATH covers it) or a file that is not analyzed (its own
-          finding covers it): continue with the next method
-        type: branch
-        condition: checked is present
-        onFalseStep: 22
-      - stepNumber: 25
-        description: A realized method continues with the next method
-        type: branch
-        condition: >-
-          symbol = methodImpl.symbol ?? method.name is not realized: tier declared needs
-          lookup.declared to hold symbol, any other tier accepts lookup.declared or lookup.anchored
-        onFalseStep: 22
-      - stepNumber: 26
-        label: methodReport
-        description: >-
-          Report UNREALIZED_METHOD (warning; spec impl.id; draft context from draft) naming the
-          method (with its symbol when one is mapped), impl.contract, file, tier and
-          lookup.facts.analysisGrade; adds the weak-anchor hint when the tier is declared and only
-          lookup.anchored holds symbol
-        type: local
-      - stepNumber: 27
-        label: findingMethodLoop
-        description: Check the finding codes each contract method declares
-        type: loop
-        over: contract.methods
-        endStep: 31
-      - stepNumber: 28
-        description: A method with no declared findings or no checked file continues with the next method
-        type: branch
-        condition: method.findings is non-empty and the private checkedFile(method.name) is present
-        onFalseStep: 27
-      - stepNumber: 29
-        label: findingLoop
-        description: Check each declared finding code
-        type: loop
-        over: method.findings
-        endStep: 31
-      - stepNumber: 30
-        description: >-
-          A code among the file's finding anchors (a string literal, or a property-access name at
-          exact grade) continues with the next finding
-        type: branch
-        condition: checked.lookup.findingAnchors lacks finding.code
-        onFalseStep: 29
-      - stepNumber: 31
-        label: findingReport
-        description: >-
-          Report UNREALIZED_FINDING (warning; spec impl.id; draft context from draft) naming the
-          method, impl.contract, finding.code, file and analysis grade: report the finding under its
-          declared code, or remove the declaration
-        type: local
-    symbol: check
   - name: callConformance
     sourcePath: src/core/rules/conformance/call-conformance.ts
     narrative:
@@ -725,15 +522,288 @@ methods:
           component's sim: anchors to withdraw the claim
         type: local
     symbol: check
+  - name: sourceFileLinkage
+    sourcePath: src/core/rules/conformance/source-file-linkage.ts
+    narrative:
+      - stepNumber: 1
+        description: Index ctx.codeModel.files into factsByPath, keyed by ctx.codeModel.pathKey(facts.path)
+        type: local
+      - stepNumber: 2
+        description: >-
+          Collect degradedTsFiles: the analyzed files whose language is typescript or javascript and
+          whose analysisGrade is not exact
+        type: local
+      - stepNumber: 3
+        description: 'A silently degraded gate is worse than a degraded gate: surface it once per run'
+        type: branch
+        condition: degradedTsFiles is non-empty
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report CONFORMANCE_DEGRADED (warning; run-wide: no spec id, no draft context) with the
+          count of degradedTsFiles: structural findings carry their grade, but dependency
+          conformance skips these files; install typescript in the analyzed project
+        type: local
+      - stepNumber: 5
+        label: implLoop
+        description: Check each implementation
+        type: loop
+        over: ctx.implementations
+        endStep: 20
+      - stepNumber: 6
+        description: >-
+          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
+          ctx.componentMap.get(contract.component)
+        type: local
+      - stepNumber: 7
+        description: >-
+          Unresolvable implementations are skipped, and so are chained-subproject implementations
+          (their sourcePaths are relative to the child root and the child validates them in its own
+          run): continue with the next implementation
+        type: branch
+        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
+        onFalseStep: 5
+      - stepNumber: 8
+        description: >-
+          draft = ctx.isImplementationDraft(impl). unlinked = the names of contract.methods whose
+          source file is none: the entry of impl.methods with the same name gives
+          methodImpl.sourceFile(impl.sourcePath), and a contract method with no entry falls back to
+          impl.sourcePath. noFileAtAll = impl.sourceFiles() is empty
+        type: local
+      - stepNumber: 9
+        description: >-
+          An implementation-type external link is the external source-of-record wairon cannot
+          analyze, so it suppresses the missing-path finding
+        type: branch
+        condition: >-
+          (unlinked is non-empty or noFileAtAll) and no entry of component.externalLinks has type
+          implementation
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report MISSING_SOURCE_PATH (warning; spec impl.id; draft context from draft): when
+          unlinked is non-empty, naming those contract methods of impl.contract as naming no source
+          file of their own while the implementation declares no sourcePath; otherwise stating that
+          the implementation names no source file at all
+        type: local
+      - stepNumber: 11
+        label: fileLoop
+        description: >-
+          Check the status of each distinct file the implementation names; the existence check
+          applies at every conformance tier
+        type: loop
+        over: impl.sourceFiles() (its own sourcePath, then each method's)
+        endStep: 20
+      - stepNumber: 12
+        description: key = ctx.codeModel.pathKey(file); facts = factsByPath.get(key)
+        type: local
+      - stepNumber: 13
+        description: >-
+          Each distinct file is reported once, and only when the code model marks it escaped,
+          missing or unreadable (no facts means no code model for the path): otherwise continue with
+          the next file
+        type: branch
+        condition: >-
+          key is not yet in reported (record it there now) and facts exist with a status other than
+          analyzed
+        onFalseStep: 11
+      - stepNumber: 14
+        description: >-
+          owner = the implementation itself when impl.sourcePath normalizes to key; otherwise the
+          names of impl.methods whose sourcePath normalizes to key, or the implementation itself
+          when none does
+        type: local
+      - stepNumber: 15
+        description: Dispatch on the file's status
+        type: switch
+        'on': facts.status
+        cases:
+          - value: escaped
+            step: 16
+          - value: missing
+            step: 18
+        defaultStep: 20
+      - stepNumber: 16
+        label: escapedReport
+        description: >-
+          Report SOURCE_PATH_ESCAPES_ROOT (error; spec impl.id; draft context from draft) naming
+          owner and file: the sourcePath is absolute or escapes the project root
+        type: local
+      - stepNumber: 17
+        description: Continue with the next file
+        type: jump
+        toStep: 11
+      - stepNumber: 18
+        label: missingReport
+        description: >-
+          Report MISSING_SOURCE_FILE (error; spec impl.id; draft context from draft) naming owner
+          and file: the sourcePath does not resolve to a file
+        type: local
+      - stepNumber: 19
+        description: Continue with the next file
+        type: jump
+        toStep: 11
+      - stepNumber: 20
+        label: skippedReport
+        description: >-
+          Report CONFORMANCE_ANALYSIS_SKIPPED (warning; spec impl.id; draft context from draft)
+          naming owner and file: it could not be analyzed (binary or unreadable), so the methods in
+          it were not checked
+        type: local
+    symbol: check
+  - name: methodRealization
+    sourcePath: src/core/rules/conformance/method-realization.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Index ctx.codeModel.files into lookups keyed by ctx.codeModel.pathKey(facts.path):
+          declared = declaredNames plus exportedNames, anchored = declared plus anchoredNames, each
+          kept with its facts
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Check each implementation
+        type: loop
+        over: ctx.implementations
+        endStep: 11
+      - stepNumber: 3
+        description: >-
+          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
+          ctx.componentMap.get(contract.component)
+        type: local
+      - stepNumber: 4
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
+        onFalseStep: 2
+      - stepNumber: 5
+        description: >-
+          draft = ctx.isImplementationDraft(impl); specTier = impl.conformance ??
+          component.defaultConformanceTier()
+        type: local
+      - stepNumber: 6
+        label: methodLoop
+        description: Check that each contract method is realized in its own source file
+        type: loop
+        over: contract.methods
+        endStep: 11
+      - stepNumber: 7
+        description: >-
+          methodImpl = the entry of impl.methods carrying the method's name; tier =
+          methodImpl.conformance ?? specTier; file = methodImpl.sourceFile(impl.sourcePath), else
+          impl.sourcePath; lookup = lookups.get(ctx.codeModel.pathKey(file))
+        type: local
+      - stepNumber: 8
+        description: >-
+          Tier off, no file (source-file-linkage's MISSING_SOURCE_PATH covers it) or a file that is
+          not analyzed (source-file-linkage's own finding covers it, and only the methods realized
+          in it are blocked): continue with the next method
+        type: branch
+        condition: tier is not off, file is named, and lookup holds facts with status analyzed
+        onFalseStep: 6
+      - stepNumber: 9
+        description: >-
+          symbol = methodImpl.symbol ?? method.name; realized = lookup.declared holds symbol at tier
+          declared, and lookup.declared or lookup.anchored holds it at any other tier
+        type: local
+      - stepNumber: 10
+        description: A realized method continues with the next method
+        type: branch
+        condition: realized is false
+        onFalseStep: 6
+      - stepNumber: 11
+        label: methodReport
+        description: >-
+          Report UNREALIZED_METHOD (warning; spec impl.id; draft context from draft) naming the
+          method (with its symbol when one is mapped), impl.contract, file, tier and
+          lookup.facts.analysisGrade; adds the weak-anchor hint when the tier is declared and only
+          lookup.anchored holds symbol
+        type: local
+    symbol: check
+  - name: findingRealization
+    sourcePath: src/core/rules/conformance/finding-realization.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Index ctx.codeModel.files into lookups keyed by ctx.codeModel.pathKey(facts.path):
+          findingAnchors = anchoredNames alone (string literals and property-access names at exact
+          grade; the pattern grade adds every identifier outside comments, the generic grade every
+          word), each kept with its facts
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Check each implementation
+        type: loop
+        over: ctx.implementations
+        endStep: 11
+      - stepNumber: 3
+        description: >-
+          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
+          ctx.componentMap.get(contract.component)
+        type: local
+      - stepNumber: 4
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
+        onFalseStep: 2
+      - stepNumber: 5
+        description: >-
+          draft = ctx.isImplementationDraft(impl); specTier = impl.conformance ??
+          component.defaultConformanceTier()
+        type: local
+      - stepNumber: 6
+        label: methodLoop
+        description: Check the finding codes each contract method declares
+        type: loop
+        over: contract.methods
+        endStep: 11
+      - stepNumber: 7
+        description: >-
+          methodImpl = the entry of impl.methods carrying the method's name; tier =
+          methodImpl.conformance ?? specTier; file = methodImpl.sourceFile(impl.sourcePath), else
+          impl.sourcePath; lookup = lookups.get(ctx.codeModel.pathKey(file))
+        type: local
+      - stepNumber: 8
+        description: >-
+          A method declaring no findings is skipped, and so is one the dial turns off, one with no
+          file, and one whose file is not analyzed (source-file-linkage reports that file once):
+          continue with the next method
+        type: branch
+        condition: >-
+          method.findings is non-empty, tier is not off, file is named, and lookup holds facts with
+          status analyzed
+        onFalseStep: 6
+      - stepNumber: 9
+        label: findingLoop
+        description: Check each declared finding code
+        type: loop
+        over: method.findings
+        endStep: 11
+      - stepNumber: 10
+        description: >-
+          A code among the file's finding anchors (a string literal, or a property-access name at
+          exact grade) continues with the next finding
+        type: branch
+        condition: lookup.findingAnchors lacks finding.code
+        onFalseStep: 9
+      - stepNumber: 11
+        label: findingReport
+        description: >-
+          Report UNREALIZED_FINDING (warning; spec impl.id; draft context from draft) naming the
+          method, impl.contract, finding.code, file and lookup.facts.analysisGrade: report the
+          finding under its declared code, or remove the declaration
+        type: local
+    symbol: check
 lint:
   allow:
     - code: NARRATIVE_COMPLEXITY
       reason: >-
-        D2b splits the narratives this reports (structuralConformance, callConformance,
-        dependencyConformance, and integrationConformance); the doctrine's own rules are the worst
-        offenders and go first.
-    - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits structuralConformance, which lists more than 25 steps.
+        D2b splits the narratives this reports (callConformance, dependencyConformance and
+        integrationConformance); the doctrine's own rules are the worst offenders and go first.
 status: draft
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-17T17:52:41.115Z'
+updatedAt: '2026-09-17T22:26:01.195Z'

@@ -15,7 +15,7 @@ import {
 // Resolves every distinct source path the implementations name (each L4
 // sourcePath, each method's own sourcePath, each simPath) inside the project
 // root, reads the files, and produces the pure CodeModel the
-// structural-conformance rule family consumes. Analysis is tiered so wairon carries ZERO mandatory parser
+// Level 1 conformance rules consume. Analysis is tiered so wairon carries ZERO mandatory parser
 // dependencies:
 //   exact    — full AST via the TypeScript compiler, resolved dynamically from
 //              the analyzed project's node_modules first and wairon's own

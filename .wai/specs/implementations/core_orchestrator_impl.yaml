@@ -6,7 +6,7 @@ description: >-
   sourcePath: the provisioning, chained-subsystem and rename workflows in provision.ts, and the
   Specialist retirement in stereotype-migration.ts. The lock, state-hash and diagram forwards
   realized in lockfile.ts, statehash.ts and diagram.ts, republished by the core portal barrel, keep
-  their structural-conformance checks dialed off.
+  their method-realization checks dialed off.
 contract: icore_orchestrator
 sourcePath: src/core/specs.ts
 methods:
@@ -1098,4 +1098,4 @@ lint:
       reason: D2b splits renameComponent, which lists more than 25 steps.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T21:41:18.335Z'
+updatedAt: '2026-09-17T22:31:19.338Z'

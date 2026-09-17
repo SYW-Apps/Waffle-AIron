@@ -464,305 +464,6 @@ methods:
           followed by fixHint
         type: local
     symbol: check
-  - name: narrativeFlow
-    sourcePath: src/core/rules/narrative/narrative-flow.ts
-    narrative:
-      - stepNumber: 1
-        label: methods
-        description: >-
-          For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl) as the
-          draft context of its findings
-        type: loop
-        over: each method of each implementation in ctx.implementations
-        endStep: 47
-      - stepNumber: 2
-        description: Skip a method without a narrative
-        type: branch
-        condition: implMethod.narrative has steps
-        onFalseStep: 1
-      - stepNumber: 3
-        label: labelSteps
-        description: >-
-          Scan the steps for duplicate labels, recording each label against the first step that
-          holds it
-        type: loop
-        over: implMethod.narrative
-        endStep: 7
-      - stepNumber: 4
-        description: Is the label a duplicate?
-        type: branch
-        condition: the step carries a label an earlier step already holds
-        onFalseStep: 7
-      - stepNumber: 5
-        description: >-
-          Report DUPLICATE_STEP_LABEL (error; draft context isDraftCtx) naming both step numbers and
-          the shared label: every symbolic reference becomes ambiguous and further edits to the
-          implementation are blocked
-        type: local
-      - stepNumber: 6
-        description: Continue with the next step
-        type: jump
-        toStep: 3
-      - stepNumber: 7
-        label: recordLabel
-        description: Record the step's label, when it carries one, against its step number
-        type: local
-      - stepNumber: 8
-        label: numberSteps
-        description: >-
-          Index the steps by number into byNum. The narrative starts sound; the private
-          malformed(message) helper marks it unsound and reports MALFORMED_FLOW_STEP (error; draft
-          context isDraftCtx), and serves every config finding below
-        type: loop
-        over: implMethod.narrative
-        endStep: 11
-      - stepNumber: 9
-        description: Is the step number a duplicate?
-        type: branch
-        condition: byNum already holds the step's stepNumber
-        onFalseStep: 11
-      - stepNumber: 10
-        description: >-
-          Report MALFORMED_FLOW_STEP through malformed(): duplicate stepNumber, so jump targets
-          would be ambiguous
-        type: local
-      - stepNumber: 11
-        label: indexStep
-        description: byNum.set(step.stepNumber, step)
-        type: local
-      - stepNumber: 12
-        label: configSteps
-        description: Check each step's flow config and jump targets
-        type: loop
-        over: implMethod.narrative
-        endStep: 31
-      - stepNumber: 13
-        description: Is fire-and-forget misapplied?
-        type: branch
-        condition: step.detach is set and the step is neither a call nor a dispatch step
-        onFalseStep: 15
-      - stepNumber: 14
-        description: >-
-          Report MALFORMED_FLOW_STEP through malformed(): detach applies to call and dispatch steps
-          only
-        type: local
-      - stepNumber: 15
-        label: typeConfig
-        description: Check the config the step's type requires; return and throw need none
-        type: switch
-        'on': step.type
-        cases:
-          - value: local
-            step: 16
-          - value: call
-            step: 16
-          - value: register
-            step: 16
-          - value: dispatch
-            step: 16
-          - value: branch
-            step: 18
-          - value: switch
-            step: 20
-          - value: loop
-            step: 22
-          - value: try
-            step: 24
-          - value: parallel
-            step: 26
-          - value: jump
-            step: 28
-        defaultStep: 29
-      - stepNumber: 16
-        label: simpleConfig
-        description: >-
-          Report MALFORMED_FLOW_STEP through malformed() when the private flowConfigOn(step) finds
-          flow fields on a local, call, register or dispatch step: any of condition, onTrueStep,
-          onFalseStep, on, cases, defaultStep, loopKind, over, endStep, catches, finallyStep,
-          branches, toStep that is defined and not an empty list
-        type: local
-      - stepNumber: 17
-        description: Go on to the step's jump targets
-        type: jump
-        toStep: 29
-      - stepNumber: 18
-        label: branchConfig
-        description: >-
-          Report MALFORMED_FLOW_STEP through malformed() for a branch without condition, and again
-          for a branch without onFalseStep
-        type: local
-      - stepNumber: 19
-        description: Go on to the step's jump targets
-        type: jump
-        toStep: 29
-      - stepNumber: 20
-        label: switchConfig
-        description: >-
-          Report MALFORMED_FLOW_STEP through malformed() for a switch whose cases are missing or
-          empty
-        type: local
-      - stepNumber: 21
-        description: Go on to the step's jump targets
-        type: jump
-        toStep: 29
-      - stepNumber: 22
-        label: loopConfig
-        description: >-
-          Report MALFORMED_FLOW_STEP through malformed() for a loop without endStep, or else one
-          whose endStep is not beyond the header; then, taking the loop kind as loopKind, else
-          forEach when over is set, else while, for a while or doWhile loop without condition and
-          for a forEach or for loop without over
-        type: local
-      - stepNumber: 23
-        description: Go on to the step's jump targets
-        type: jump
-        toStep: 29
-      - stepNumber: 24
-        label: tryConfig
-        description: >-
-          Report MALFORMED_FLOW_STEP through malformed() for a try without endStep, or else one
-          whose endStep is not beyond the header, and for a try with neither catches nor finallyStep
-        type: local
-      - stepNumber: 25
-        description: Go on to the step's jump targets
-        type: jump
-        toStep: 29
-      - stepNumber: 26
-        label: parallelConfig
-        description: >-
-          Report MALFORMED_FLOW_STEP through malformed() for a parallel without endStep, or else one
-          whose endStep is not beyond the header; for fewer than two branches; otherwise for arm
-          entries not listed in ascending order, for an entry listed twice, for a first entry that
-          is not the body's first step (the step number following the header in byNum's ascending
-          order, when there is one), and for an entry beyond endStep
-        type: local
-      - stepNumber: 27
-        description: Go on to the step's jump targets
-        type: jump
-        toStep: 29
-      - stepNumber: 28
-        label: jumpConfig
-        description: Report MALFORMED_FLOW_STEP through malformed() for a jump without toStep
-        type: local
-      - stepNumber: 29
-        label: jumpFields
-        description: Check that every jump field lands on a step of this narrative
-        type: loop
-        over: >-
-          the step's set jump fields: onTrueStep, onFalseStep, defaultStep, endStep, finallyStep,
-          toStep, and every cases[i].step, catches[i].step and branches[i].step
-        endStep: 31
-      - stepNumber: 30
-        description: Does the jump field target a missing step?
-        type: branch
-        condition: byNum holds no step numbered as the field's target
-        onFalseStep: 29
-      - stepNumber: 31
-        label: reportBadJump
-        description: >-
-          Mark the narrative unsound and report INVALID_STEP_JUMP (error; draft context isDraftCtx)
-          naming the step, the field and the target step that does not exist
-        type: local
-      - stepNumber: 32
-        description: Reachability and region structure are only judged over a structurally sound narrative
-        type: branch
-        condition: the narrative is still sound
-        onFalseStep: 1
-      - stepNumber: 33
-        description: >-
-          graph = implMethod.stepGraph(); walk depth-first from its first step number following
-          graph.successorsOf, collecting the visited step numbers
-        type: local
-      - stepNumber: 34
-        description: Is any step dead?
-        type: branch
-        condition: some of the narrative's step numbers were not visited
-        onFalseStep: 36
-      - stepNumber: 35
-        description: >-
-          Report UNREACHABLE_STEP (warning; draft context isDraftCtx) once, listing every unvisited
-          step number and the first step they cannot be reached from
-        type: local
-      - stepNumber: 36
-        label: regionPairs
-        description: Check that regions nest or are disjoint
-        type: loop
-        over: >-
-          each ordered pair (a, b) of the narrative's regions: every loop, try and parallel step
-          with an endStep, spanning its header to its endStep
-        endStep: 38
-      - stepNumber: 37
-        description: Do the two regions interleave?
-        type: branch
-        condition: b's header lies in a's body (after a's header, up to a's end) and b ends beyond a's end
-        onFalseStep: 36
-      - stepNumber: 38
-        label: reportOverlap
-        description: >-
-          Report REGION_OVERLAP (error; draft context isDraftCtx) naming both regions' kinds and
-          spans: regions must be nested or disjoint
-        type: local
-      - stepNumber: 39
-        label: jumpEdges
-        description: Judge each jump edge against the regions
-        type: loop
-        over: >-
-          each jump edge: every step's set onTrueStep, onFalseStep, defaultStep, toStep and
-          finallyStep, and every cases[i].step and catches[i].step, as (from step, to step, field,
-          the step's type)
-        endStep: 44
-      - stepNumber: 40
-        label: edgeRegions
-        description: Check the edge against each region
-        type: loop
-        over: the narrative's regions
-        endStep: 42
-      - stepNumber: 41
-        description: Does the edge enter the region other than through its header?
-        type: branch
-        condition: >-
-          the edge lands in the region's body from a step that is neither the region's header nor in
-          its body
-        onFalseStep: 40
-      - stepNumber: 42
-        label: reportJumpInto
-        description: >-
-          Report JUMP_INTO_REGION (warning; draft context isDraftCtx) naming the step, the field,
-          the region and the landing step: regions are entered through their header
-        type: local
-      - stepNumber: 43
-        description: Is the edge an unstructured backward jump?
-        type: branch
-        condition: >-
-          the edge leaves a branch, switch or jump step for an earlier step, and it is not a
-          continue: no loop region has its header at the target with the source in its body
-        onFalseStep: 39
-      - stepNumber: 44
-        label: reportBackward
-        description: >-
-          Report BACKWARD_JUMP (warning; draft context isDraftCtx) naming the step, the field and
-          the target: model repetition with a loop step
-        type: local
-      - stepNumber: 45
-        label: tryBodies
-        description: Check that no try body falls through into its handlers
-        type: loop
-        over: each try step with an endStep
-        endStep: 47
-      - stepNumber: 46
-        description: Does the body's success path run into a handler?
-        type: branch
-        condition: >-
-          the body's last step (byNum at endStep) is a local, call, register or dispatch step, and
-          the step number following endStep is one of the try's catch steps or its finallyStep
-        onFalseStep: 45
-      - stepNumber: 47
-        label: reportFallthrough
-        description: >-
-          Report FALLTHROUGH_INTO_HANDLER (warning; draft context isDraftCtx) naming the body's last
-          step and the handler step it falls into: end the body with a jump, return or throw
-        type: local
-    symbol: check
   - name: narrativeAntipatterns
     sourcePath: src/core/rules/narrative/narrative-antipatterns.ts
     narrative:
@@ -1037,15 +738,186 @@ methods:
           naming the method and its level: its behavioural prose is missing or placeholder-thin
         type: local
     symbol: check
+  - name: narrativeStepConfig
+    sourcePath: src/core/rules/narrative/narrative-step-config.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: >-
+          For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl) as the
+          draft context of its findings
+        type: loop
+        over: each method of each implementation in ctx.implementations
+        endStep: 4
+      - stepNumber: 2
+        description: Skip a method without a narrative
+        type: branch
+        condition: implMethod.narrative has steps
+        onFalseStep: 1
+      - stepNumber: 3
+        label: problems
+        description: >-
+          Report every step-config problem the narrative carries, in the order the derivation
+          returns them: duplicate labels first, then duplicate step numbers, then each step's own
+          config and jump targets
+        type: loop
+        over: implMethod.stepConfigVerdict().problems
+        endStep: 4
+      - stepNumber: 4
+        label: reportProblem
+        description: >-
+          Report problem.code — DUPLICATE_STEP_LABEL, MALFORMED_FLOW_STEP or INVALID_STEP_JUMP, each
+          an error; draft context isDraftCtx — with problem.detail following the
+          method-and-implementation prefix
+        type: local
+    symbol: check
+  - name: narrativeReachability
+    sourcePath: src/core/rules/narrative/narrative-reachability.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: >-
+          For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl) as the
+          draft context of its findings
+        type: loop
+        over: each method of each implementation in ctx.implementations
+        endStep: 8
+      - stepNumber: 2
+        description: >-
+          Reachability and region nesting are only judged over a narrative with steps whose step
+          config is sound: a graph built over jumps that land nowhere calls sound steps dead, and
+          narrative-step-config already says why it is unsound
+        type: branch
+        condition: implMethod.narrative has steps and implMethod.stepConfigVerdict().sound
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          graph = implMethod.stepGraph(); walk depth-first from its first step number following
+          graph.successorsOf, collecting the visited step numbers
+        type: local
+      - stepNumber: 4
+        description: Is any step dead?
+        type: branch
+        condition: some of the narrative's step numbers were not visited
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report UNREACHABLE_STEP (warning; draft context isDraftCtx) once, listing every unvisited
+          step number and the first step they cannot be reached from
+        type: local
+      - stepNumber: 6
+        label: regionPairs
+        description: Check that regions nest or are disjoint
+        type: loop
+        over: >-
+          each ordered pair (a, b) of the narrative's regions: every loop, try and parallel step
+          with an endStep, spanning its header to its endStep
+        endStep: 8
+      - stepNumber: 7
+        description: Do the two regions interleave?
+        type: branch
+        condition: b's header lies in a's body (after a's header, up to a's end) and b ends beyond a's end
+        onFalseStep: 6
+      - stepNumber: 8
+        label: reportOverlap
+        description: >-
+          Report REGION_OVERLAP (error; draft context isDraftCtx) naming both regions' kinds and
+          spans: regions must be nested or disjoint
+        type: local
+    symbol: check
+  - name: narrativeJumpEdges
+    sourcePath: src/core/rules/narrative/narrative-jump-edges.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: >-
+          For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl) as the
+          draft context of its findings
+        type: loop
+        over: each method of each implementation in ctx.implementations
+        endStep: 12
+      - stepNumber: 2
+        description: >-
+          Jump edges are only judged over a narrative with steps whose step config is sound: an edge
+          to a step the narrative does not have is narrative-step-config's finding, and judging it
+          here would blame the region instead
+        type: branch
+        condition: implMethod.narrative has steps and implMethod.stepConfigVerdict().sound
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          regions = every loop, try and parallel step with an endStep, spanning its header to its
+          endStep; edges = every step's set onTrueStep, onFalseStep, defaultStep, toStep and
+          finallyStep, and every cases[i].step and catches[i].step, as (from step, to step, field,
+          the step's type)
+        type: local
+      - stepNumber: 4
+        label: edgeRegions
+        description: Judge each jump edge against each region
+        type: loop
+        over: each pair of a jump edge and a region
+        endStep: 6
+      - stepNumber: 5
+        description: Does the edge enter the region other than through its header?
+        type: branch
+        condition: >-
+          the edge lands in the region's body from a step that is neither the region's header nor in
+          its body
+        onFalseStep: 4
+      - stepNumber: 6
+        label: reportJumpInto
+        description: >-
+          Report JUMP_INTO_REGION (warning; draft context isDraftCtx) naming the step, the field,
+          the region and the landing step: regions are entered through their header
+        type: local
+      - stepNumber: 7
+        label: backwardEdges
+        description: Judge each jump edge on its own direction
+        type: loop
+        over: the jump edges
+        endStep: 9
+      - stepNumber: 8
+        description: Is the edge an unstructured backward jump?
+        type: branch
+        condition: >-
+          the edge leaves a branch, switch or jump step for an earlier step, and it is not a
+          continue: no loop region has its header at the target with the source in its body
+        onFalseStep: 7
+      - stepNumber: 9
+        label: reportBackward
+        description: >-
+          Report BACKWARD_JUMP (warning; draft context isDraftCtx) naming the step, the field and
+          the target: model repetition with a loop step
+        type: local
+      - stepNumber: 10
+        label: tryBodies
+        description: Check that no try body falls through into its handlers
+        type: loop
+        over: each try step with an endStep
+        endStep: 12
+      - stepNumber: 11
+        description: Does the body's success path run into a handler?
+        type: branch
+        condition: >-
+          the body's last step (the narrative's step numbered endStep) is a local, call, register or
+          dispatch step, and the step number following endStep is one of the try's catch steps or
+          its finallyStep
+        onFalseStep: 10
+      - stepNumber: 12
+        label: reportFallthrough
+        description: >-
+          Report FALLTHROUGH_INTO_HANDLER (warning; draft context isDraftCtx) naming the body's last
+          step and the handler step it falls into: end the body with a jump, return or throw
+        type: local
+    symbol: check
 lint:
   allow:
     - code: NARRATIVE_COMPLEXITY
       reason: >-
-        D2b splits the narratives this reports (contractSymmetryAndNarratives, narrativeFlow,
-        narrativeAntipatterns, and narrativeDetail); the doctrine's own rules are the worst
-        offenders and go first.
+        D2b splits the narratives this reports (contractSymmetryAndNarratives, narrativeAntipatterns
+        and narrativeDetail); the doctrine's own rules are the worst offenders and go first.
     - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits contractSymmetryAndNarratives and narrativeFlow, which list more than 25 steps.
+      reason: D2b splits contractSymmetryAndNarratives, which lists more than 25 steps.
 status: draft
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-17T17:52:59.004Z'
+updatedAt: '2026-09-17T22:26:33.738Z'

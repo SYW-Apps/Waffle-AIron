@@ -1,0 +1,32 @@
+kind: value-object
+id: step_config_verdict
+name: StepConfigVerdict
+description: >-
+  What a narrative's step configuration says about itself: the problems it carries, in step order,
+  and whether its control flow is sound — no duplicate step number, no missing or misplaced flow
+  config, and no jump that lands outside the narrative. A duplicate label is a problem but not an
+  unsoundness: labels name steps, they do not route flow. Soundness is the gate every later phase
+  runs behind, because a graph built over jumps that target nothing reports sound steps as dead.
+fields:
+  - name: problems
+    type: StepConfigProblem[]
+    description: >-
+      The step-config problems, in step order: labels first, then numbering, then each step's own
+      config and jump targets.
+    optional: false
+  - name: sound
+    type: boolean
+    description: >-
+      True when nothing found makes the control flow unreadable — the precondition for judging
+      structure.
+    optional: false
+methods: []
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Named only by the return of method_implementation.stepConfigVerdict, and unused-detection
+        does not yet count type-method signatures as references. Remove this allow once it does; the
+        stale-allow audit will flag it.
+createdAt: '2026-09-17T22:21:29.573Z'
+updatedAt: '2026-09-17T22:27:43.215Z'

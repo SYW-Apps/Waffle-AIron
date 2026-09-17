@@ -744,7 +744,7 @@ export type InterfaceSpec = z.infer<typeof InterfaceSpecSchema>;
 // Syntax variants are config on one type (all four loop forms are `loop` +
 // `loopKind`), so renderers/validators handle one shape per concept.
 // Structural soundness (jump targets exist, regions well-formed) is enforced
-// by the narrative-flow validation rule, not the schema.
+// by the narrative-step-config validation rule, not the schema.
 // ---------------------------------------------------------------------------
 export const NarrativeStepTypeSchema = z.enum([
   'local',    // in-component work
@@ -827,7 +827,7 @@ export const NarrativeStepSchema = z.object({
    */
   assertsInvariants: z.array(z.string()).optional(),
 
-  // --- flow config (per type; validated by the narrative-flow rule) ---------
+  // --- flow config (per type; validated by narrative-step-config) -----------
   condition: z.string().optional(),        // branch; loop (while/doWhile)
   onTrueStep: z.number().int().positive().optional(),  // branch (default: next step)
   onFalseStep: z.number().int().positive().optional(), // branch (required)
@@ -867,7 +867,7 @@ export const NarrativeDetailSchema = z.enum(['full', 'calls-only', 'intent']);
 export type NarrativeDetail = z.infer<typeof NarrativeDetailSchema>;
 
 /**
- * The structural-conformance dial — declared per method (or per spec as a
+ * The conformance dial — declared per method (or per spec as a
  * default), mirroring the narrative detail dial. Absent = the component
  * stereotype's default (Portal → anchored, everything else → declared).
  * `declared` requires a declaration-tier anchor for each contract method in
@@ -938,7 +938,7 @@ export const ImplementationSpecSchema = z.object({
   methods: z.array(MethodImplementationSchema).default([]),
   /** Spec-level narrative detail default for all methods (each may override). */
   detail: NarrativeDetailSchema.optional(),
-  /** Spec-level structural-conformance tier default (each method may override). */
+  /** Spec-level conformance tier default (each method may override). */
   conformance: ConformanceTierSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
