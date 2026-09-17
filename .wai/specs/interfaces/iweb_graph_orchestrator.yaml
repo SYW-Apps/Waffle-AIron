@@ -7,7 +7,7 @@ description: >-
   tree, level-filtered, with validator issues overlaid).
 component: web_graph_orchestrator
 methods:
-  - name: getGraph
+  - name: get
     description: >-
       Resolve the session to a Principal (rejecting an expired/absent session as unauthenticated).
       For tier 'landscape', delegate to the landscape orchestrator's already permission-filtered
@@ -21,7 +21,7 @@ methods:
       registry (rejecting cross-project access), project its spec tree at the requested level via
       the host core adapter, overlay validator issues as per-node issue counts, and return it. An
       unknown tier is rejected.
-    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: number): WebGraphModel'
+    signature: 'get(sessionId: string, tier: string, projectId: string, level: number): WebGraphModel'
     returns: WebGraphModel
     params:
       - name: sessionId
@@ -50,9 +50,7 @@ methods:
       - name: projectId
         type: string
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames getGraph to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-09-17T17:52:36.162Z'
+updatedAt: '2026-09-17T20:37:44.130Z'

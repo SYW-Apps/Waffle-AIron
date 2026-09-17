@@ -840,7 +840,7 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
  * configured identity provider by forwarding to the policy repository. Not audited
  * (a read).
  */
-export function listIdentityProviders(
+export function listProviders(
   cfg: HostConfig,
   credential: string | null,
 ): IdentityProviderConfig[] {
@@ -855,7 +855,7 @@ export function listIdentityProviders(
  * carries a clientSecretRef, never a raw secret), append a redacted idp.upsert
  * (security) audit event, and return the stored config.
  */
-export function upsertIdentityProvider(
+export function upsertProvider(
   cfg: HostConfig,
   credential: string | null,
   config: IdentityProviderConfig,
@@ -875,7 +875,7 @@ export function upsertIdentityProvider(
  * identity-provider configuration by id through the policy repository (an unknown
  * id is rejected), and append a redacted idp.remove (security) audit event.
  */
-export function removeIdentityProvider(cfg: HostConfig, credential: string | null, id: string): void {
+export function removeProvider(cfg: HostConfig, credential: string | null, id: string): void {
   const principal = requirePrincipal(cfg, credential);
   requireInstanceProjectAdmin(cfg, principal, 'identity-provider administration');
 
@@ -981,16 +981,16 @@ export async function handleIdentityRequest(
     // ── identity-provider (SSO) administration (instance-admin only) ─────────
     // GET /identity/providers
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'providers') {
-      return sendJson(res, 200, listIdentityProviders(cfg, credential));
+      return sendJson(res, 200, listProviders(cfg, credential));
     }
     // PUT /identity/providers/{id}
     if (req.method === 'PUT' && parts.length === 3 && parts[1] === 'providers') {
       const config = { ...(body as IdentityProviderConfig), id: parts[2] };
-      return sendJson(res, 200, upsertIdentityProvider(cfg, credential, config));
+      return sendJson(res, 200, upsertProvider(cfg, credential, config));
     }
     // DELETE /identity/providers/{id}
     if (req.method === 'DELETE' && parts.length === 3 && parts[1] === 'providers') {
-      removeIdentityProvider(cfg, credential, parts[2]);
+      removeProvider(cfg, credential, parts[2]);
       return sendJson(res, 200, { ok: true });
     }
     // GET /identity/audit/count

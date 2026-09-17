@@ -985,8 +985,8 @@ methods:
           block word, such as skills_orchestrator, is named after its single method just as plainly.
           A method named exactly the concept, singular or plural, is the component's one verb rather
           than a restatement of it — secret_write_registry.write and state_hash.hash stay silent,
-          while landscape_graph.buildGraph, mcp_server.createMcpServer and role_index.listRoles do
-          not.
+          while the retired landscape_graph.buildGraph, mcp_server.createMcpServer and
+          role_index.listRoles do not.
         type: local
       - stepNumber: 9
         description: >-
@@ -1075,4 +1075,4 @@ lint:
       reason: D2b splits targetLanguage and technologyBoundaries, which list more than 25 steps.
 status: draft
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-17T17:52:47.511Z'
+updatedAt: '2026-09-17T20:36:31.343Z'

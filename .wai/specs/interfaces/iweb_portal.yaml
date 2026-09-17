@@ -289,7 +289,7 @@ methods:
       method: GET
       path: /web/tokens
   - name: projectList
-    description: List the projects the caller can manage; forwards to web_project_orchestrator.listProjects.
+    description: List the projects the caller can manage; forwards to web_project_orchestrator.list.
     signature: 'projectList(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -302,8 +302,8 @@ methods:
   - name: projectCreate
     description: >-
       Create a hosted project from { id, unitId, profileSelection? } — the REQUIRED owner unit plus
-      an optional profile selection; forwards to web_project_orchestrator.createProject, which
-      routes through the policy-aware initialization.
+      an optional profile selection; forwards to web_project_orchestrator.create, which routes
+      through the policy-aware initialization.
     signature: 'projectCreate(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -314,7 +314,7 @@ methods:
       method: POST
       path: /web/projects
   - name: projectLock
-    description: Lock a project; forwards to web_project_orchestrator.lockProject.
+    description: Lock a project; forwards to web_project_orchestrator.lock.
     signature: 'projectLock(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -325,7 +325,7 @@ methods:
       method: POST
       path: /web/projects/lock
   - name: projectDestroy
-    description: Destroy a project; forwards to web_project_orchestrator.destroyProject.
+    description: Destroy a project; forwards to web_project_orchestrator.destroy.
     signature: 'projectDestroy(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -1050,4 +1050,4 @@ methods:
       path: /web/projects/tree/import
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-09-11T23:01:56.594Z'
+updatedAt: '2026-09-17T20:35:29.211Z'

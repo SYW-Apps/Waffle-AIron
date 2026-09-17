@@ -11,7 +11,7 @@ description: >-
 contract: ilandscape_orchestrator
 sourcePath: src/server/landscape.ts
 methods:
-  - name: generateLandscape
+  - name: generate
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
@@ -85,11 +85,12 @@ methods:
           LandscapeGraphModel
         type: call
         targetComponent: landscape_graph
-        targetMethod: buildGraph
+        targetMethod: build
       - stepNumber: 14
         description: Return the landscape graph model scoped to the caller
         type: return
         outcome: the landscape graph model
+    symbol: generateLandscape
   - name: placeProject
     narrative:
       - stepNumber: 1
@@ -546,4 +547,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-09T22:10:36.787Z'
-updatedAt: '2026-09-15T21:03:27.885Z'
+updatedAt: '2026-09-17T20:28:59.261Z'

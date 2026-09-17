@@ -393,7 +393,7 @@ describe('auth specialist (sdd_host)', () => {
     // End-to-end: the binding CONFERS live authority — the built-in sso-admin
     // role resolves instance-level project:admin, so the token reaches an
     // instance-admin-gated read surface.
-    expect(Array.isArray(identity.listIdentityProviders(cfg, token))).toBe(true);
+    expect(Array.isArray(identity.listProviders(cfg, token))).toBe(true);
 
     // The session bridge resolves the identical live permissionSubject.
     const s = createWebSession(dataDir, {

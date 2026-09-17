@@ -73,24 +73,24 @@ export function setUserStatus(cfg: HostConfig, sessionId: string, userId: string
 
 // ── identity-provider (SSO) administration (forward to identity_orchestrator) ─
 
-/** Forward to identity_orchestrator.listIdentityProviders (instance-admin only upstream). */
+/** Forward to identity_orchestrator.listProviders (instance-admin only upstream). */
 export function listIdentityProviders(cfg: HostConfig, sessionId: string): IdentityProviderConfig[] {
-  return identity.listIdentityProviders(cfg, sessionId);
+  return identity.listProviders(cfg, sessionId);
 }
 
-/** Forward to identity_orchestrator.upsertIdentityProvider with the session as the
+/** Forward to identity_orchestrator.upsertProvider with the session as the
  *  credential (the config carries a clientSecretRef, never a raw secret). */
 export function upsertIdentityProvider(
   cfg: HostConfig,
   sessionId: string,
   config: IdentityProviderConfig,
 ): IdentityProviderConfig {
-  return identity.upsertIdentityProvider(cfg, sessionId, config);
+  return identity.upsertProvider(cfg, sessionId, config);
 }
 
-/** Forward to identity_orchestrator.removeIdentityProvider with the session as the credential. */
+/** Forward to identity_orchestrator.removeProvider with the session as the credential. */
 export function removeIdentityProvider(cfg: HostConfig, sessionId: string, id: string): void {
-  identity.removeIdentityProvider(cfg, sessionId, id);
+  identity.removeProvider(cfg, sessionId, id);
 }
 
 // ── agent-token self-service (forward to identity_orchestrator) ──────────────

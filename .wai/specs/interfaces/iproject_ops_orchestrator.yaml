@@ -280,8 +280,8 @@ methods:
         type: HostExposurePolicy
   - name: listBackingBindings
     description: >-
-      Forward to git_backing_orchestrator.listBackingBindings (filtered to the caller's
-      project:admin reach upstream).
+      Forward to git_backing_orchestrator.listBindings (filtered to the caller's project:admin reach
+      upstream).
     signature: 'listBackingBindings(credential: string): GitBackingBinding[]'
     returns: GitBackingBinding[]
     params:
@@ -311,8 +311,8 @@ methods:
         type: string
   - name: syncBackingScope
     description: >-
-      Forward to git_backing_orchestrator.syncBackingScope (project:admin over the binding's own
-      scope upstream).
+      Forward to git_backing_orchestrator.syncScope (project:admin over the binding's own scope
+      upstream).
     signature: 'syncBackingScope(credential: string, bindingId: string): boolean'
     returns: boolean
     params:
@@ -455,4 +455,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-09-15T21:03:16.476Z'
+updatedAt: '2026-09-17T20:35:19.653Z'

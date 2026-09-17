@@ -1,16 +1,17 @@
-schemaVersion: "1.0.0"
-id: "skills_orchestrator_impl"
-name: "Skills Orchestrator Implementation"
-description: "Concrete implementation delegating to skills exporter adapter."
-contract: "iskills_orchestrator"
-sourcePath: "src/core/skills.ts"
+id: skills_orchestrator_impl
+name: Skills Orchestrator Implementation
+description: Concrete implementation delegating to skills exporter adapter.
+contract: iskills_orchestrator
+sourcePath: src/core/skills.ts
 methods:
-  - name: "exportSddSkills"
+  - name: export
     narrative:
       - stepNumber: 1
-        description: "Call exportSddSkills on skills exporter adapter"
-        type: "call"
-        targetComponent: "skills_exporter"
-        targetMethod: "exportSddSkills"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+        description: Call exportSddSkills on skills exporter adapter
+        type: call
+        targetComponent: skills_exporter
+        targetMethod: exportSddSkills
+    symbol: exportSddSkills
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-09-17T20:30:42.201Z'

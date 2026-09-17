@@ -7,7 +7,7 @@ description: >-
 contract: iremote_binding_store
 sourcePath: src/commands/remotebinding.ts
 methods:
-  - name: readBinding
+  - name: read
     narrative: []
     intent: >-
       Read <root>/.wai/remote.json and parse it into a RemoteBinding carrying source 'binding-file'.
@@ -15,18 +15,21 @@ methods:
       null: an unattached checkout is the normal state and must never surface as an error
       mid-command. Reads from disk on every call, so a re-attach in another process (or an edited
       file) is picked up immediately.
-  - name: writeBinding
+    symbol: readBinding
+  - name: write
     narrative: []
     intent: >-
       Write { url, projectId, attachedAt } to <root>/.wai/remote.json, creating .wai/ if needed,
       replacing any previous record. The credential is deliberately absent from what is written —
       this file lives in the project and may be committed. Written atomically (temp file + rename)
       so a concurrent read never observes a half-written record.
-  - name: clearBinding
+    symbol: writeBinding
+  - name: clear
     narrative: []
     intent: >-
       Delete <root>/.wai/remote.json. Idempotent and silent when it does not exist — detaching an
       unattached checkout is a success, not an error.
+    symbol: clearBinding
   - name: readCredential
     narrative: []
     intent: >-
@@ -54,4 +57,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-08-12T18:43:31.843Z'
-updatedAt: '2026-08-12T19:21:57.891Z'
+updatedAt: '2026-09-17T20:29:09.776Z'

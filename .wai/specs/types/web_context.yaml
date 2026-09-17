@@ -4,8 +4,9 @@ name: WebContext
 description: >-
   The session principal's identity and coarse admin/local flags returned to the unified web UI so
   the client renders role-appropriately. Purely a projection of the resolved Principal; the client
-  gets its permission-filtered project list from listProjects and relies on per-endpoint enforcement
-  for finer affordances. Asserts no authority the server does not already enforce.
+  gets its permission-filtered project list from web_project_orchestrator.list and relies on
+  per-endpoint enforcement for finer affordances. Asserts no authority the server does not already
+  enforce.
 fields:
   - name: subject
     type: PrincipalSubject
@@ -24,4 +25,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-11T11:31:20.576Z'
-updatedAt: '2026-07-15T22:57:10.390Z'
+updatedAt: '2026-09-17T20:35:56.640Z'

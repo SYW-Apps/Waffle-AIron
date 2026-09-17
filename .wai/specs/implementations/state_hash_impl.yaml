@@ -4,7 +4,7 @@ description: Deterministic content hash of the spec tree.
 contract: istate_hash
 sourcePath: src/core/statehash.ts
 methods:
-  - name: hashSpecTree
+  - name: compute
     narrative:
       - stepNumber: 1
         description: Load the system spec
@@ -49,4 +49,4 @@ methods:
     symbol: computeStateId
 status: complete
 createdAt: '2026-07-04T12:54:31.981Z'
-updatedAt: '2026-09-15T20:47:04.399Z'
+updatedAt: '2026-09-17T20:30:32.256Z'

@@ -6,11 +6,11 @@ description: >-
   tolerates a missing or malformed file as "nothing stored".
 component: remote_binding_store
 methods:
-  - name: readBinding
+  - name: read
     description: >-
       The binding recorded for a project root, or null when the checkout is not attached (including
       when the file is absent or unreadable — unattached is a normal state, not an error).
-    signature: 'readBinding(root: string): RemoteBinding | null'
+    signature: 'read(root: string): RemoteBinding | null'
     returns: RemoteBinding | null
     params:
       - name: root
@@ -18,12 +18,12 @@ methods:
     guarantees:
       - idempotent
     effect: read
-  - name: writeBinding
+  - name: write
     description: >-
       Record the binding for a project root, replacing any previous one. Writes the instance URL and
       project id only — never a credential, because this file lives in the project and may be
       committed.
-    signature: 'writeBinding(root: string, binding: RemoteBinding): void'
+    signature: 'write(root: string, binding: RemoteBinding): void'
     returns: void
     params:
       - name: root
@@ -31,11 +31,11 @@ methods:
       - name: binding
         type: remote_binding
     effect: write
-  - name: clearBinding
+  - name: clear
     description: >-
       Detach a project root by removing its binding. Idempotent: detaching an unattached checkout
       succeeds silently.
-    signature: 'clearBinding(root: string): void'
+    signature: 'clear(root: string): void'
     returns: void
     params:
       - name: root
@@ -91,9 +91,7 @@ methods:
       - idempotent
     effect: read
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames readBinding, writeBinding, and clearBinding to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-08-12T18:41:53.798Z'
-updatedAt: '2026-09-17T17:52:27.154Z'
+updatedAt: '2026-09-17T20:37:27.413Z'

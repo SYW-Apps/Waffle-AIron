@@ -14,11 +14,11 @@ methods:
     signature: 'loadProjectExtensions(): LoadedExtensions'
     returns: LoadedExtensions
     params: []
-  - name: loadExtensions
+  - name: load
     description: >-
       Load extension packs from explicit refs (all project-scoped) resolved against the given
       project root — the programmatic entry used when a caller injects its own pack set.
-    signature: 'loadExtensions(packRefs: string[], projectRoot: string): LoadedExtensions'
+    signature: 'load(packRefs: string[], projectRoot: string): LoadedExtensions'
     returns: LoadedExtensions
     params:
       - name: packRefs
@@ -28,8 +28,8 @@ methods:
     invokedBy:
       kind: external
       caller: >-
-        Wrapper products embedding wairon as a library call loadExtensions directly as the public
-        library entry point (docs/extending-wairon.md); no internal call chain exists by design.
+        Wrapper products embedding wairon as a library call load directly as the public library
+        entry point (docs/extending-wairon.md); no internal call chain exists by design.
   - name: packEntryLabel
     description: >-
       A stable human label for one configured pack entry — the path for a legacy ref, or
@@ -126,9 +126,7 @@ methods:
     returns: PackSelection[]
     params: []
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames loadExtensions to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-09-17T17:52:20.337Z'
+updatedAt: '2026-09-17T20:37:15.068Z'

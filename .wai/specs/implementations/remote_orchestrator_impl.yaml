@@ -109,11 +109,11 @@ methods:
         description: Read this checkout's recorded binding.
         type: call
         targetComponent: remote_binding_store
-        targetMethod: readBinding
+        targetMethod: read
       - stepNumber: 4
         description: Was a binding recorded?
         type: branch
-        condition: readBinding returned a binding
+        condition: read returned a binding
         onTrueStep: 7
         onFalseStep: 5
       - stepNumber: 5
@@ -175,7 +175,7 @@ methods:
         description: Record the binding (instance + project only) with the project.
         type: call
         targetComponent: remote_binding_store
-        targetMethod: writeBinding
+        targetMethod: write
       - stepNumber: 4
         description: Return the recorded binding.
         type: return
@@ -189,14 +189,14 @@ methods:
           be using it.
         type: call
         targetComponent: remote_binding_store
-        targetMethod: clearBinding
+        targetMethod: clear
   - name: describeAttachment
     narrative:
       - stepNumber: 1
         description: Read the recorded binding for this checkout.
         type: call
         targetComponent: remote_binding_store
-        targetMethod: readBinding
+        targetMethod: read
       - stepNumber: 2
         description: Was one recorded?
         type: branch
@@ -289,4 +289,4 @@ methods:
         targetMethod: readCredential
 status: complete
 createdAt: '2026-08-12T18:32:48.928Z'
-updatedAt: '2026-08-12T19:21:57.961Z'
+updatedAt: '2026-09-17T20:35:31.292Z'

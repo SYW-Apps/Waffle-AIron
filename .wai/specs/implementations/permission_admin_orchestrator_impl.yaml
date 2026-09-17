@@ -36,7 +36,7 @@ methods:
         description: List all defined roles through the role repository
         type: call
         targetComponent: role_repository
-        targetMethod: listRoles
+        targetMethod: list
       - stepNumber: 6
         description: Return the roles
         type: return
@@ -386,7 +386,7 @@ methods:
         description: Create the role through the role repository
         type: call
         targetComponent: role_repository
-        targetMethod: createRole
+        targetMethod: create
       - stepNumber: 8
         description: Append a redacted audit event without letting a failure fail the write
         type: try
@@ -446,7 +446,7 @@ methods:
         description: Update the role through the role repository
         type: call
         targetComponent: role_repository
-        targetMethod: updateRole
+        targetMethod: update
       - stepNumber: 8
         description: Append a redacted audit event without letting a failure fail the write
         type: try
@@ -506,7 +506,7 @@ methods:
         description: Delete the role through the role repository (bindings to it become inert)
         type: call
         targetComponent: role_repository
-        targetMethod: deleteRole
+        targetMethod: delete
       - stepNumber: 8
         description: Append a redacted audit event without letting a failure fail the delete
         type: try

@@ -3,15 +3,13 @@ name: Role Index Interface
 description: 'Private read-path contract over the role collection: single-role lookup and full listing.'
 component: role_index
 methods:
-  - name: listRoles
+  - name: list
     description: Return every defined role.
-    signature: 'listRoles(): Role[]'
+    signature: 'list(): Role[]'
     returns: Role[]
     params: []
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames listRoles to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-15T20:27:36.106Z'
-updatedAt: '2026-09-17T17:52:27.930Z'
+updatedAt: '2026-09-17T20:37:29.474Z'

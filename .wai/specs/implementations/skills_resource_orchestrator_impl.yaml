@@ -7,7 +7,7 @@ description: >-
 contract: iskills_resource_orchestrator
 sourcePath: src/core/skills.ts
 methods:
-  - name: listResources
+  - name: list
     narrative:
       - stepNumber: 1
         description: Resolve the built-in skill descriptors from skill_resources.
@@ -19,7 +19,8 @@ methods:
         type: return
         outcome: resource descriptors
     detail: full
-  - name: readResource
+    symbol: listResources
+  - name: read
     narrative:
       - stepNumber: 1
         description: List the available skill resources to validate the requested id.
@@ -46,13 +47,14 @@ methods:
         type: return
         outcome: skill markdown content
     detail: full
+    symbol: readResource
   - name: buildServerInstructions
     narrative:
       - stepNumber: 1
         description: Compose the instructions text through server_instructions.
         type: call
         targetComponent: server_instructions
-        targetMethod: buildServerInstructions
+        targetMethod: build
       - stepNumber: 2
         description: Return the composed instructions for the MCP initialize handshake.
         type: return
@@ -60,4 +62,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-10T12:21:20.703Z'
-updatedAt: '2026-09-15T20:48:58.822Z'
+updatedAt: '2026-09-17T20:30:02.392Z'

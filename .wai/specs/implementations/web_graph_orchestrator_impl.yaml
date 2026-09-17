@@ -7,7 +7,7 @@ description: >-
 contract: iweb_graph_orchestrator
 sourcePath: src/server/web.ts
 methods:
-  - name: getGraph
+  - name: get
     narrative:
       - stepNumber: 1
         description: >-
@@ -35,7 +35,7 @@ methods:
           units and projects
         type: call
         targetComponent: landscape_orchestrator
-        targetMethod: generateLandscape
+        targetMethod: generate
       - stepNumber: 4
         description: >-
           Reshape the returned LandscapeGraphModel into a WebGraphModel: tier 'landscape', map each
@@ -93,6 +93,7 @@ methods:
         type: throw
         error: unsupported graph tier
     detail: full
+    symbol: getGraph
   - name: getProjectCanvas
     narrative:
       - stepNumber: 1
@@ -128,4 +129,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-09-17T16:42:29.843Z'
+updatedAt: '2026-09-17T20:30:12.343Z'

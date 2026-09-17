@@ -6,22 +6,24 @@ description: >-
 contract: irule_store
 sourcePath: src/core/rules/repository.ts
 methods:
-  - name: addRule
+  - name: add
     narrative: []
     intent: >-
       Append the given rule to the in-memory rule set, preserving registration order. A pure
       in-memory mutation; the set is authoritative for this validation run and rebuilt on the next.
-  - name: listRules
+    symbol: addRule
+  - name: list
     narrative: []
     intent: >-
       Return the current rule set by shared reference, in registration order. Read-only; an empty
       set before seeding is normal, never an error.
+    symbol: listRules
   - name: clear
     narrative: []
     intent: >-
       Replace the held rule set with an empty one, so a repeated validation run in the same process
-      never holds a rule twice; registration order restarts with the next addRule.
+      never holds a rule twice; registration order restarts with the next add.
 detail: intent
 status: complete
 createdAt: '2026-07-14T19:17:41.361Z'
-updatedAt: '2026-09-15T00:29:34.337Z'
+updatedAt: '2026-09-17T20:35:33.455Z'

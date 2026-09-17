@@ -451,8 +451,13 @@ wairon's own tree, and the rules that add them pass their own thresholds.
   `complexity.narrativeStepsHardMax`, beside the existing `complexity.maxNarrativeSteps`.
 - **Wairon's own tree.** The seven components retyped from Registry to Store or Repository in an earlier review are
   renamed for what they are: `credential_repository`, `project_repository` and `secret_repository`, and
-  `git_config_store`, `lock_store`, `pack_store` and `producer_config_store`. Every remaining finding the new
-  checks report carries a reasoned `lint.allow` naming the cleanup that removes it.
+  `git_config_store`, `lock_store`, `pack_store` and `producer_config_store`.
+- **The naming findings are fixed rather than suppressed.** 37 contract methods stop repeating the component they sit
+  on — `architecture_diagrams.renderDiagram` reads `render`, `web_project_orchestrator.listProjects` reads `list` —
+  and `mcp_server` drops "Manager" from its name. Where the clean name would be a bare verb exported from a module, or
+  a reserved word like `export`, the implementation pins the existing function with `symbol:`, the seam every
+  validator rule already uses for `check`. What the complexity and cohesion checks report still carries a reasoned
+  `lint.allow` naming the cleanup that removes it.
 
 ### Execution budgets: the topology gains a resource axis
 

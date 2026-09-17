@@ -42,21 +42,21 @@ methods:
           (instance-admin only upstream)
         type: call
         targetComponent: identity_orchestrator
-        targetMethod: listIdentityProviders
+        targetMethod: listProviders
   - name: upsertIdentityProvider
     narrative:
       - stepNumber: 1
         description: Forward to the identity orchestrator, passing the sessionId as the credential
         type: call
         targetComponent: identity_orchestrator
-        targetMethod: upsertIdentityProvider
+        targetMethod: upsertProvider
   - name: removeIdentityProvider
     narrative:
       - stepNumber: 1
         description: Forward to the identity orchestrator, passing the sessionId as the credential
         type: call
         targetComponent: identity_orchestrator
-        targetMethod: removeIdentityProvider
+        targetMethod: removeProvider
   - name: listOrganizationUnits
     narrative:
       - stepNumber: 1

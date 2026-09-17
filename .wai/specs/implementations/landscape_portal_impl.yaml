@@ -47,7 +47,7 @@ methods:
         description: Forward to the landscape orchestrator
         type: call
         targetComponent: landscape_orchestrator
-        targetMethod: generateLandscape
+        targetMethod: generate
   - name: removeRelation
     narrative:
       - stepNumber: 1

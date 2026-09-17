@@ -490,7 +490,7 @@ function runMirrorSync(cfg: HostConfig, binding: GitBackingBinding): boolean {
  * mirror sync now (commit+push skip-if-clean). Audited at info level. Returns
  * whether anything was published.
  */
-export function syncBackingScope(cfg: HostConfig, credential: string | null, bindingId: string): boolean {
+export function syncScope(cfg: HostConfig, credential: string | null, bindingId: string): boolean {
   const principal = requirePrincipal(cfg, credential);
   const binding = getBinding(cfg.dataDir, bindingId);
   if (!binding) throw new Error(`Backing binding "${bindingId}" not found.`);

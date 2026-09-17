@@ -7,9 +7,7 @@ owns: []
 dependsOn:
   - role_store
 lint:
-  allow:
-    - code: COMPONENT_IS_ITS_ONLY_METHOD
-      reason: D2b either folds this component into its caller or names it for its responsibility.
+  allow: []
 status: complete
 createdAt: '2026-07-15T20:26:55.347Z'
-updatedAt: '2026-09-17T17:53:10.332Z'
+updatedAt: '2026-09-17T20:37:01.115Z'

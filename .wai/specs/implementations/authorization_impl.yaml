@@ -27,7 +27,7 @@ methods:
         description: Gather the role definitions the principal's bindings reference
         type: call
         targetComponent: role_repository
-        targetMethod: listRoles
+        targetMethod: list
       - stepNumber: 5
         description: >-
           Assemble the PermissionWorld from the gathered assignments, units, and placements, and a
@@ -67,7 +67,7 @@ methods:
         description: Gather the role definitions
         type: call
         targetComponent: role_repository
-        targetMethod: listRoles
+        targetMethod: list
       - stepNumber: 5
         description: >-
           Assemble the PermissionWorld (stored roles MERGED with the intrinsic built-in reserved

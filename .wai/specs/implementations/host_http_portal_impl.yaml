@@ -10,7 +10,7 @@ methods:
         description: Delegate the MCP request to the host request orchestrator
         type: call
         targetComponent: host_request_orchestrator
-        targetMethod: handleRequest
+        targetMethod: handle
   - name: healthz
     narrative:
       - stepNumber: 1

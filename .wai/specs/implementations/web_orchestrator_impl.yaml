@@ -85,7 +85,7 @@ methods:
           scoped level-of-detail graph
         type: call
         targetComponent: web_graph_orchestrator
-        targetMethod: getGraph
+        targetMethod: get
     detail: calls-only
   - name: completeSignIn
     narrative:
@@ -439,7 +439,8 @@ methods:
           Assemble the WebContext from the resolved principal: subject, isAdmin from
           principal.permissionSubject.instanceAdmin, and local from cfg.devMode (signals the client
           to hide the tenancy/login chrome). The client fetches its permission-filtered project list
-          from listProjects and relies on per-endpoint enforcement for write affordances — no grants
+          from web_project_orchestrator.list and relies on per-endpoint enforcement for write
+          affordances — no grants
         type: local
       - stepNumber: 4
         description: Return the session-principal context
@@ -455,4 +456,4 @@ lint:
         declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-09-15T20:49:07.964Z'
+updatedAt: '2026-09-17T20:35:52.917Z'

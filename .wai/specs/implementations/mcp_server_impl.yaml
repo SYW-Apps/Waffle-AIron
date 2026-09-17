@@ -4,7 +4,7 @@ description: Concrete implementation of the MCP Server Interface using the @mode
 contract: imcp_server
 sourcePath: src/mcp/server.ts
 methods:
-  - name: createMcpServer
+  - name: create
     narrative:
       - stepNumber: 1
         description: >-
@@ -70,6 +70,7 @@ methods:
       - stepNumber: 10
         description: Return configured McpServer instance
         type: local
+    symbol: createMcpServer
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-29T20:45:51.694Z'
+updatedAt: '2026-09-17T20:30:35.750Z'

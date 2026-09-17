@@ -6,7 +6,7 @@ description: >-
 contract: isurface_orchestrator
 sourcePath: src/core/surfaces.ts
 methods:
-  - name: exportSurface
+  - name: export
     narrative:
       - stepNumber: 1
         description: Project the own gateway surface at the requested audience ceiling
@@ -51,7 +51,8 @@ methods:
         description: Return the projected snapshot
         type: return
         outcome: SurfaceSnapshot
-  - name: importSurface
+    symbol: exportSurface
+  - name: import
     narrative:
       - stepNumber: 1
         description: Read the foreign document from the source path
@@ -84,6 +85,7 @@ methods:
         description: Return the imported snapshot
         type: return
         outcome: SurfaceSnapshot
+    symbol: importSurface
   - name: listSnapshots
     narrative:
       - stepNumber: 1
@@ -241,4 +243,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-09-12T17:36:28.213Z'
+updatedAt: '2026-09-17T20:30:09.275Z'

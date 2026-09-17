@@ -5,12 +5,12 @@ description: >-
   landscape graph.
 component: landscape_graph
 methods:
-  - name: buildGraph
+  - name: build
     description: >-
       Build a hosted-instance landscape graph from authorized organization units, projects,
       placements, snapshots, and relations.
     signature: >-
-      buildGraph(units: OrganizationUnitRecord[], projects: HostedProjectRecord[], placements:
+      build(units: OrganizationUnitRecord[], projects: HostedProjectRecord[], placements:
       ProjectPlacement[], snapshots: ProjectPublicSurfaceSnapshot[], relations:
       ProjectRelationRecord[]): LandscapeGraphModel
     returns: LandscapeGraphModel
@@ -26,9 +26,7 @@ methods:
       - name: relations
         type: ProjectRelationRecord[]
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames buildGraph to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-08T21:13:30.746Z'
-updatedAt: '2026-09-17T17:52:24.928Z'
+updatedAt: '2026-09-17T20:37:23.553Z'

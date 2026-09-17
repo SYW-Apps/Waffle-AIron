@@ -1,5 +1,5 @@
 id: mcp_server
-name: MCP Server Manager
+name: MCP Server
 description: >-
   Assembles an MCP server for the bound project: composes the server instructions, instantiates the
   server, registers its tools, prompts and skill resources, and announces a chained subproject's
@@ -13,11 +13,7 @@ dependsOn:
   - mcp_validator_adapter
   - mcp_skills_adapter
 lint:
-  allow:
-    - code: COMPONENT_IS_ITS_ONLY_METHOD
-      reason: D2b either folds this component into its caller or names it for its responsibility.
-    - code: GENERIC_COMPONENT_NAME
-      reason: D2b renames this component; 'Manager' in its name says nothing about what it does.
+  allow: []
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-17T17:53:09.358Z'
+updatedAt: '2026-09-17T20:36:56.728Z'

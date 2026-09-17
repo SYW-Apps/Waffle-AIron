@@ -4,7 +4,7 @@ description: Renders the spec tree into the requested diagram format as a string
 contract: iarchitecture_diagrams
 sourcePath: src/core/diagram.ts
 methods:
-  - name: renderDiagram
+  - name: render
     narrative:
       - stepNumber: 1
         description: Load system spec
@@ -88,6 +88,7 @@ methods:
         description: Reject an unsupported format
         type: throw
         error: unsupported diagram format
+    symbol: renderDiagram
   - name: buildGraphModel
     narrative:
       - stepNumber: 1
@@ -159,4 +160,4 @@ lint:
         Reconcile with the canvas engine epic's renderer extraction.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-09-15T20:48:45.141Z'
+updatedAt: '2026-09-17T20:28:15.226Z'

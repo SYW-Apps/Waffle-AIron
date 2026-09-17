@@ -889,7 +889,7 @@ methods:
         type: return
         outcome: removed count
     detail: full
-  - name: listIdentityProviders
+  - name: listProviders
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
@@ -921,7 +921,8 @@ methods:
         type: return
         outcome: identity-provider configurations
     detail: full
-  - name: upsertIdentityProvider
+    symbol: listProviders
+  - name: upsertProvider
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
@@ -976,7 +977,8 @@ methods:
         type: return
         outcome: stored identity-provider configuration
     detail: full
-  - name: removeIdentityProvider
+    symbol: upsertProvider
+  - name: removeProvider
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
@@ -1031,6 +1033,7 @@ methods:
         type: return
         outcome: identity provider removed
     detail: full
+    symbol: removeProvider
   - name: resolveEnabledProvider
     narrative:
       - stepNumber: 1
@@ -1087,4 +1090,4 @@ lint:
       reason: D2b splits completeSsoLogin, which lists more than 25 steps.
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-09-17T17:52:49.933Z'
+updatedAt: '2026-09-17T20:56:09.680Z'

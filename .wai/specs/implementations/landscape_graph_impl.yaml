@@ -8,7 +8,7 @@ description: >-
 contract: ilandscape_graph
 sourcePath: src/server/landscape.ts
 methods:
-  - name: buildGraph
+  - name: build
     narrative:
       - stepNumber: 1
         description: >-
@@ -86,4 +86,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T22:08:53.561Z'
-updatedAt: '2026-09-15T20:47:07.436Z'
+updatedAt: '2026-09-17T20:28:53.692Z'

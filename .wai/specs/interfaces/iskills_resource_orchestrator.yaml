@@ -6,16 +6,16 @@ description: >-
   instructions returned on the MCP initialize handshake.
 component: skills_resource_orchestrator
 methods:
-  - name: listResources
+  - name: list
     description: >-
       List the built-in SDD skills as MCP resource descriptors for advertisement to connected
       agents.
-    signature: 'listResources(): SkillResourceDescriptor[]'
+    signature: 'list(): SkillResourceDescriptor[]'
     returns: SkillResourceDescriptor[]
     params: []
-  - name: readResource
+  - name: read
     description: Read one built-in SDD skill's content by MCP resource id, rejecting an unknown id.
-    signature: 'readResource(resourceId: string): string'
+    signature: 'read(resourceId: string): string'
     returns: string
     params:
       - name: resourceId
@@ -29,9 +29,7 @@ methods:
     returns: string
     params: []
 lint:
-  allow:
-    - code: METHOD_REPEATS_COMPONENT
-      reason: D2b renames listResources and readResource to drop the component's own concept.
+  allow: []
 status: complete
 createdAt: '2026-07-08T22:02:40.411Z'
-updatedAt: '2026-09-17T17:52:34.160Z'
+updatedAt: '2026-09-17T20:37:39.672Z'

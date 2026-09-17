@@ -13,7 +13,7 @@ methods:
         description: Forward createMcpServer call to the MCP server supervisor
         type: call
         targetComponent: mcp_server
-        targetMethod: createMcpServer
+        targetMethod: create
   - name: sdd_initialize_system
     narrative:
       - stepNumber: 1
