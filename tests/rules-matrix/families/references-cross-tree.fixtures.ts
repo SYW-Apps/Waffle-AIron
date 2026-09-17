@@ -1,5 +1,6 @@
 /**
- * Cross-tree reference resolution (src/core/rules/narrative/contract-symmetry-and-narratives.ts +
+ * Cross-tree reference resolution (src/core/rules/narrative/cross-tree-references.ts,
+ * and surface-reference-backing.ts for what a resolved surface must back +
  * isExternalNamespaceRef/resolveSurfaceRef, queries built onto the rule
  * context in src/core/rules/index.ts and declared in src/core/rules/types.ts).
  *

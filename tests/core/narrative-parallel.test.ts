@@ -60,7 +60,7 @@ describe('stepGraph parallel successor semantics', () => {
   });
 });
 
-describe('narrative-flow parallel/detach soundness (via validateSddTree)', () => {
+describe('narrative control-flow parallel/detach soundness (via validateSddTree)', () => {
   let proj: string | undefined;
   afterEach(() => {
     invalidateSpecCache();

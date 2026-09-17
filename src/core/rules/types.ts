@@ -99,7 +99,7 @@ export interface RuleContext {
   /**
    * The pure source-code model (per-sourcePath declaration/export/import/
    * anchor facts) built by the source analysis adapter — what the
-   * structural-conformance family checks realization against. Empty when the
+   * Level 1 conformance rules check realization against. Empty when the
    * context was built without one (the family then only reports missing
    * sourcePaths, never file-level findings).
    */

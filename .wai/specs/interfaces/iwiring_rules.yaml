@@ -21,13 +21,13 @@ methods:
       - code: CIRCULAR_DEPENDENCY
         severity: error
         summary: Circular dependency between components
-  - name: dispatchTables
+  - name: dispatchTableBindings
     description: >-
-      Rule dispatch-tables. Portal dispatch tables must bind every capability to an existing
-      component.method inside the portal's own subsystem (the portal dispatches inward), with no
-      duplicate capabilities; dispatch narrative steps must route a declared capability through a
-      Portal that actually serves it.
-    signature: 'dispatchTables(ctx: RuleContext): void'
+      Rule dispatch-table-bindings. A dispatch table belongs to a Portal, binds each capability
+      once, and binds it to an existing component.method inside the portal's own subsystem (the
+      portal dispatches inward) that the portal declares under dependsOn or owns — the table is a
+      real runtime invocation path.
+    signature: 'dispatchTableBindings(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -51,11 +51,28 @@ methods:
       - code: UNDECLARED_DISPATCH_TARGET
         severity: error
         summary: Dispatch binding targets a component the portal does not depend on or own
+  - name: dispatchStepRouting
+    description: >-
+      Rule dispatch-step-routing. A dispatch narrative step must name the capability it routes and
+      route it through a Portal whose dispatch table actually serves that capability; a guarantee
+      the step asserts must be declared by the contract method the capability resolves to.
+    signature: 'dispatchStepRouting(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: MALFORMED_DISPATCH_STEP
         severity: error
         summary: >-
-          Dispatch step missing its capability (targetComponent presence is the contracts rule's
-          finding)
+          Dispatch step missing its capability (targetComponent presence is
+          narrative-target-references' finding)
+      - code: UNSERVED_CAPABILITY
+        severity: error
+        summary: >-
+          Capability has no existing server (bad table binding, or dispatch step routing a
+          capability the target Portal does not serve)
       - code: NARRATIVE_SEMANTIC_UNBACKED
         severity: warning
         summary: Dispatch step asserts a guarantee the bound capability method does not declare
@@ -223,4 +240,4 @@ methods:
         summary: Topic is subscribed to but nothing in the tree emits it
 status: draft
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-09-15T01:23:35.857Z'
+updatedAt: '2026-09-17T23:00:03.814Z'

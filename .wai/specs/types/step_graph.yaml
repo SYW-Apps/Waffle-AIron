@@ -6,7 +6,7 @@ description: >-
   through; a branch continues at its true and false steps, a switch at its cases and default; a loop
   at its body and the step after its region; a try at its body, catch steps, finally step and the
   step after its region; a parallel fans out to its arms, whose last steps continue at the join; a
-  jump at its target; return and throw end the path. The narrative-flow reachability check and the
+  jump at its target; return and throw end the path. The narrative-reachability check and the
   antipattern analysis both read it, so they never disagree about what comes next.
 fields:
   - name: stepNumbers
@@ -34,4 +34,4 @@ lint:
         yet count type-method signatures as references. Remove this allow once it does; the
         stale-allow audit will flag it.
 createdAt: '2026-09-14T06:03:35.169Z'
-updatedAt: '2026-09-14T06:10:12.777Z'
+updatedAt: '2026-09-17T22:21:40.373Z'

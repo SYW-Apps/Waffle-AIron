@@ -2,10 +2,10 @@ kind: value-object
 id: code_model
 name: CodeModel
 description: >-
-  The pure source-code model the structural-conformance rule family consumes — built once per
-  validation run by the source analysis adapter and injected into the rule context (the
-  surface-snapshots pattern). Keyed by resolved source path, so implementations and methods
-  legitimately sharing one file (N:1 realization) read the same facts.
+  The pure source-code model the Level 1 conformance rules consume — built once per validation run
+  by the source analysis adapter and injected into the rule context (the surface-snapshots pattern).
+  Keyed by resolved source path, so implementations and methods legitimately sharing one file (N:1
+  realization) read the same facts.
 subsystem: sdd_validator
 fields:
   - name: files
@@ -32,4 +32,4 @@ methods:
       The facts entry for a source path, looked up by its canonical key; undefined when the run
       analyzed no such path
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-09-14T23:22:43.602Z'
+updatedAt: '2026-09-17T22:31:15.848Z'

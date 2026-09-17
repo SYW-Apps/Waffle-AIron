@@ -6,20 +6,17 @@ description: >-
   code matches the spec, from the source-code model the validator gathers.
 component: conformance_rules
 methods:
-  - name: structuralConformance
+  - name: sourceFileLinkage
     description: >-
-      Rule structural-conformance. Code↔spec Level 1: every source file an implementation names —
-      its own sourcePath and each method's — must resolve to a real file inside the project root,
-      and every L3 contract method must be realized in its own source file (the method's sourcePath,
-      else the implementation's) at its conformance tier (declared | anchored | off; Portals default
-      to anchored, everything else to declared; per-method `symbol` maps intent-language names to
-      code names), and every finding code a contract method declares must be anchored in that file —
-      as a string literal or, at exact grade, a property-access name (UNREALIZED_FINDING). A file
-      that escapes the root, is missing or cannot be read is reported once and blocks only the
-      methods realized in it. Findings carry the analysis grade (exact AST | pattern table | generic
-      scan) so weaker analysis is visible. Implementations under chained subsystems (projectPath)
+      Rule source-file-linkage. Code↔spec Level 1: every source file an implementation names — its
+      own sourcePath and each method's — must resolve to a real, readable file inside the project
+      root, and an implementation that names no file at all, or leaves a contract method without
+      one, is linked to no code. A file that escapes the root, is missing or cannot be analyzed is
+      reported once and blocks only the methods realized in it. A run in which TypeScript/JavaScript
+      files were analyzed below exact grade reports that once (CONFORMANCE_DEGRADED), since
+      dependency conformance then skips them. Implementations under chained subsystems (projectPath)
       validate standalone in their own project run and are skipped here.
-    signature: 'structuralConformance(ctx: RuleContext): void'
+    signature: 'sourceFileLinkage(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -41,16 +38,6 @@ methods:
         summary: >-
           A source file an implementation or one of its methods names is absolute or escapes the
           project root (containment refusal)
-      - code: UNREALIZED_METHOD
-        severity: warning
-        summary: >-
-          An L3 contract method has no anchor in its own source file (the method's sourcePath, else
-          the implementation's) at the required conformance tier
-      - code: UNREALIZED_FINDING
-        severity: warning
-        summary: >-
-          A finding code a contract method declares appears in the method's source file neither as a
-          string literal nor as a property-access name (below exact grade, any identifier counts)
       - code: CONFORMANCE_ANALYSIS_SKIPPED
         severity: warning
         summary: >-
@@ -61,6 +48,49 @@ methods:
         summary: >-
           TypeScript/JavaScript files were analyzed below exact grade (compiler not resolvable) —
           dependency conformance skips them
+  - name: methodRealization
+    description: >-
+      Rule method-realization. Code↔spec Level 1: every L3 contract method must be realized in its
+      own source file (the method's sourcePath, else the implementation's) at its conformance tier —
+      declared | anchored | off; Portals default to anchored, everything else to declared, and a
+      per-method `symbol` maps an intent-language name onto the code name. Findings carry the
+      analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible.
+      Methods whose file escapes the root, is missing or could not be analyzed are left to
+      source-file-linkage, and implementations under chained subsystems (projectPath) validate
+      standalone in their own project run.
+    signature: 'methodRealization(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNREALIZED_METHOD
+        severity: warning
+        summary: >-
+          An L3 contract method has no anchor in its own source file (the method's sourcePath, else
+          the implementation's) at the required conformance tier
+  - name: findingRealization
+    description: >-
+      Rule finding-realization. Code↔spec Level 1: every finding code an L3 contract method declares
+      must be anchored in the method's own source file (the method's sourcePath, else the
+      implementation's) — as a string literal or, at exact grade, a property-access name, so a code
+      reported through a constants object counts. Below exact grade any identifier or word counts,
+      and the grade rides on the finding. Respects the conformance dial (off skips), leaves
+      unresolvable files to source-file-linkage, and skips implementations under chained subsystems
+      (projectPath), which validate standalone in their own project run.
+    signature: 'findingRealization(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNREALIZED_FINDING
+        severity: warning
+        summary: >-
+          A finding code a contract method declares appears in the method's source file neither as a
+          string literal nor as a property-access name (below exact grade, any identifier counts)
   - name: callConformance
     description: >-
       Rule call-conformance. Code↔spec Level 3 (opener): every narrative `call` step of an
@@ -168,4 +198,4 @@ methods:
           coverage-opted harness
 status: draft
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-15T18:59:46.162Z'
+updatedAt: '2026-09-17T22:24:19.370Z'

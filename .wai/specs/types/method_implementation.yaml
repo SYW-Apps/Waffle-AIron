@@ -88,5 +88,14 @@ methods:
       The band its cognitiveScore falls in: linear (0), simple (1-4), moderate (5-9), complex
       (10-19) or severe (20 and above). The band, not the raw score, is what a threshold is
       configured against.
+  - name: stepConfigVerdict
+    signature: 'stepConfigVerdict(): StepConfigVerdict'
+    returns: StepConfigVerdict
+    description: >-
+      The step-config problems of this method's narrative and whether its control flow is sound. The
+      schema keeps every flow field optional, so this derivation is what holds each step type to the
+      config it needs, each label and each step number to one step, and every jump field to a step
+      number the narrative actually has. Reachability, region nesting and jump-edge judgement all
+      read the step graph, so each of them runs behind the soundness it reports.
 createdAt: '2026-09-13T16:59:08.774Z'
-updatedAt: '2026-09-17T15:11:20.506Z'
+updatedAt: '2026-09-17T22:21:33.174Z'

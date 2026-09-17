@@ -6,14 +6,14 @@ import * as yaml from 'js-yaml';
 import { validateSddTree, type ValidationIssue } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { structuralConformanceRule } from '../../src/core/rules/conformance/structural-conformance.js';
+import { findingRealizationRule } from '../../src/core/rules/conformance/finding-realization.js';
 
 // ---------------------------------------------------------------------------
 // Reported misbehaviour in the conformance family, each pinned where it was
 // reproduced: integration-conformance counting files that do not exist and
 // chained subprojects' child-relative paths, dependency-conformance reporting
 // one edge twice, hidden-state ignoring the method-level conformance dial, and
-// structural-conformance's UNREALIZED_FINDING summary.
+// finding-realization's UNREALIZED_FINDING summary.
 // ---------------------------------------------------------------------------
 
 const TS = '2026-09-15T10:00:00.000Z';
@@ -288,7 +288,7 @@ describe('hidden-state — the method-level conformance dial', () => {
   });
 });
 
-describe('structural-conformance — what a declared finding code must be among', () => {
+describe('finding-realization — what a declared finding code must be among', () => {
   it('at exact grade a property-access name realizes the declared code', () => {
     const issues = validate(tree([
       unit('ledger-auditor', {
@@ -309,7 +309,7 @@ describe('structural-conformance — what a declared finding code must be among'
   });
 
   it('the UNREALIZED_FINDING summary names every anchor the check accepts', () => {
-    const summary = structuralConformanceRule.codes.find(c => c.code === 'UNREALIZED_FINDING')!.summary;
+    const summary = findingRealizationRule.codes.find(c => c.code === 'UNREALIZED_FINDING')!.summary;
     expect(summary).toContain('string literal');
     expect(summary).toContain('property-access name');
   });

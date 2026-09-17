@@ -8,7 +8,7 @@
  *    "Subsystem does not reference the L0 system" — parentSystem is missing
  *    or names something other than the system's name (namespaced subproject
  *    subsystems are exempt).
- *  - MISSING_TARGET_COMPONENT (narrative/contract-symmetry-and-narratives.ts,
+ *  - MISSING_TARGET_COMPONENT (narrative/narrative-target-references.ts,
  *    error): a narrative call / dispatch / register step carries no
  *    `targetComponent`.
  */

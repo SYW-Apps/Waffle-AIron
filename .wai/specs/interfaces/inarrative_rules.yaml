@@ -6,13 +6,12 @@ description: >-
   contracts and narratives agree and are sound.
 component: narrative_rules
 methods:
-  - name: contractSymmetryAndNarratives
+  - name: contractSymmetry
     description: >-
-      Rule contract-symmetry-and-narratives. Implementations mirror their contract
-      method-for-method. Narrative call steps (and register handoffs, which share the identical
-      target shape) must name an existing component and method, the caller must declare the
-      dependency, and asserted semantic guarantees must be backed by the target contract.
-    signature: 'contractSymmetryAndNarratives(ctx: RuleContext): void'
+      Rule contract-symmetry. Implementations mirror their contract method-for-method: every method
+      an implementation declares is defined on the contract it realizes, and every contract method
+      has an implementation.
+    signature: 'contractSymmetry(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -25,12 +24,49 @@ methods:
       - code: MISSING_IMPLEMENTATION_METHOD
         severity: error
         summary: Contract method missing from the implementation
+  - name: narrativeTargetReferences
+    description: >-
+      Rule narrative-target-references. A narrative call, dispatch or register step must name a
+      target component, and a target method unless it dispatches. A target this tree contains must
+      be a collaborator the calling component declares, must carry the named method on one of its
+      interfaces, and that method must declare every semantic guarantee the step asserts.
+    signature: 'narrativeTargetReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: MISSING_TARGET_COMPONENT
         severity: error
         summary: Call/register step missing targetComponent
       - code: MISSING_TARGET_METHOD
         severity: error
         summary: Call/register step missing targetMethod
+      - code: UNDECLARED_DEPENDENCY_CALL
+        severity: error
+        summary: Call step targets a component the caller does not depend on or own
+      - code: INVALID_TARGET_METHOD_REFERENCE
+        severity: error
+        summary: Call step targets a method not on any target interface
+      - code: NARRATIVE_SEMANTIC_UNBACKED
+        severity: warning
+        summary: Narrative asserts a guarantee the called contract does not declare
+  - name: crossTreeReferences
+    description: >-
+      Rule cross-tree-references. A narrative call, dispatch or register target that is not a
+      component of this tree must resolve against the stored surface snapshots to exactly one
+      declared contract. Snapshots that expose the name with disagreeing contracts leave the
+      reference ambiguous; no snapshot at all is a warning for a reference that points outside this
+      loading root (only the parent project can verify it) and the error a genuine local typo has
+      always got.
+    signature: 'crossTreeReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: INVALID_TARGET_COMPONENT_REFERENCE
         severity: error
         summary: Call/register step targets a non-existent component
@@ -39,22 +75,33 @@ methods:
         summary: >-
           Cross-tree reference (super::/:: form) with no surface snapshot covering it — only the
           parent project can verify it
-      - code: SURFACE_REF_NOT_EXPOSED
-        severity: error
-        summary: >-
-          Cross-tree reference resolves to a surface snapshot that does not expose the called
-          method/capability
       - code: SURFACE_REF_AMBIGUOUS
         severity: error
         summary: >-
           Cross-tree call/dispatch/register target matched by surface snapshots of several providers
           with different contracts
+  - name: surfaceReferenceBacking
+    description: >-
+      Rule surface-reference-backing. The surface snapshot a cross-tree narrative target resolves to
+      must back what the step asks of it: the calling component declares the collaborator, the
+      snapshot exposes the called method (or serves the dispatched capability), and it declares
+      every semantic guarantee the step asserts. A snapshot is the provider's declared contract, so
+      these are contract verdicts rather than resolution failures.
+    signature: 'surfaceReferenceBacking(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: SURFACE_REF_NOT_EXPOSED
+        severity: error
+        summary: >-
+          Cross-tree reference resolves to a surface snapshot that does not expose the called
+          method/capability
       - code: UNDECLARED_DEPENDENCY_CALL
         severity: error
         summary: Call step targets a component the caller does not depend on or own
-      - code: INVALID_TARGET_METHOD_REFERENCE
-        severity: error
-        summary: Call step targets a method not on any target interface
       - code: NARRATIVE_SEMANTIC_UNBACKED
         severity: warning
         summary: Narrative asserts a guarantee the called contract does not declare
@@ -74,15 +121,14 @@ methods:
       - code: UNKNOWN_GUARANTEE
         severity: warning
         summary: Guarantee token is neither builtin nor pack-declared
-  - name: narrativeFlow
+  - name: narrativeStepConfig
     description: >-
-      Rule narrative-flow. Control-flow soundness of L5 narratives: flow steps (branch, switch,
-      loop, try, parallel, jump) must carry their required config, every jump field must target an
-      existing step number in the same narrative, and every step must be reachable from the first
-      step following fall-through and jumps. A parallel body is covered by contiguous, ordered arms
-      (>= 2) whose last steps continue at the join after endStep; "detach" (fire-and-forget) is
-      legal on call/dispatch steps only.
-    signature: 'narrativeFlow(ctx: RuleContext): void'
+      Rule narrative-step-config. The step configuration of L5 narratives: every flow step (branch,
+      switch, loop, try, parallel, jump) carries the config its type requires and no simple step
+      carries flow config, "detach" (fire-and-forget) is legal on call/dispatch steps only, a
+      parallel body is covered by contiguous, ordered arms (>= 2), no two steps share a step number
+      or a label, and every jump field targets an existing step number in the same narrative.
+    signature: 'narrativeStepConfig(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -95,28 +141,57 @@ methods:
       - code: INVALID_STEP_JUMP
         severity: error
         summary: Jump field targets a step number that does not exist in the narrative
+      - code: DUPLICATE_STEP_LABEL
+        severity: error
+        summary: Two steps in one narrative share a label — the symbolic anchor later deltas address by
+  - name: narrativeReachability
+    description: >-
+      Rule narrative-reachability. Every step of an L5 narrative must be reachable from the first
+      step following fall-through and jumps, and the loop/try/parallel regions it declares must nest
+      or stay disjoint — interleaved regions map onto no structured code. Judged over the step
+      graph, and only for a narrative whose step configuration is sound (narrative-step-config
+      reports the rest).
+    signature: 'narrativeReachability(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: UNREACHABLE_STEP
         severity: warning
         summary: Step not reachable from the first step following fall-through and jumps
       - code: REGION_OVERLAP
         severity: error
         summary: loop/try regions interleave — regions must nest or be disjoint to map onto structured code
+  - name: narrativeJumpEdges
+    description: >-
+      Rule narrative-jump-edges. Where an L5 narrative's jump edges land: a loop/try/parallel region
+      is entered through its header, never into the middle of its body; a backward jump is only
+      idiomatic as a continue to an enclosing loop header, and otherwise models repetition that
+      belongs in a loop step; and a try body must not fall through into its own catch/finally region
+      on the success path. Judged only for a narrative whose step configuration is sound
+      (narrative-step-config reports the rest).
+    signature: 'narrativeJumpEdges(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: JUMP_INTO_REGION
         severity: warning
         summary: >-
           Jump lands in the middle of a loop/try body from outside — regions are entered through
           their header
-      - code: FALLTHROUGH_INTO_HANDLER
-        severity: warning
-        summary: try body falls through into its own catch/finally region on the success path
       - code: BACKWARD_JUMP
         severity: warning
         summary: >-
           Backward jump that is not a continue to an enclosing loop header — model repetition with a
           loop step
-      - code: DUPLICATE_STEP_LABEL
-        severity: error
-        summary: Two steps in one narrative share a label — the symbolic anchor later deltas address by
+      - code: FALLTHROUGH_INTO_HANDLER
+        severity: warning
+        summary: try body falls through into its own catch/finally region on the success path
   - name: narrativeAntipatterns
     description: >-
       Rule narrative-antipatterns. Provable narrative bugs, caught at spec level before
@@ -189,4 +264,4 @@ methods:
           narrative
 status: draft
 createdAt: '2026-09-14T06:06:18.256Z'
-updatedAt: '2026-09-14T06:06:18.259Z'
+updatedAt: '2026-09-17T22:55:46.741Z'

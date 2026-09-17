@@ -91,7 +91,8 @@ export const callConformanceRule: SddRule = {
         const missing: { step: number; target: string; accepted: string[] }[] = [];
         for (const step of implMethod.narrative) {
           if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
-          // Dangling targets are the contracts rule's findings.
+          // A target this tree does not contain is cross-tree-references'
+          // finding (and surface-reference-backing's once it resolves).
           if (!ctx.componentMap.has(step.targetComponent)) continue;
 
           // Accept the contract name or any symbol override a target-side

@@ -37,6 +37,15 @@ rules:
     # per-spec lint.allow silences — governs both the GOD_COMPONENT and
     # EXCESSIVE_DEPENDENCIES rules. Genuinely bloated components still warn.
     maxComponentDependencies: 10
+    # This project IS a linter: sdd_validator's rules are dispatch ladders over
+    # a closed vocabulary, where the branch count is the subject matter, not
+    # tangled control flow. Judged against the shipped default (warn above
+    # moderate) the rule family would warn forever, so wairon holds its own
+    # tree to the next band up. The default is unchanged for everyone else,
+    # and it is not the problem: of this tree's 1061 narratives, 777 are
+    # linear and only 33 exceed the shipped default. A narrative that reaches
+    # severe still warns here.
+    cognitiveWarnAbove: complex
   # wairon's code realizes several spec-level roles inside shared modules
   # (e.g. portal+orchestrator+adapters folded into src/mcp/server.ts), so
   # per-component implementer agents would claim overlapping paths. Subsystem

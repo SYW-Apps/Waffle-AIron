@@ -1,5 +1,7 @@
 /**
- * Architectural-profile fixtures (src/core/rules/extension/architectural-profiles.ts).
+ * Architectural-profile fixtures (src/core/rules/extension/
+ * profile-registration.ts, profile-stereotype-fencing.ts and
+ * pack-profile-stereotypes.ts).
  *
  * Documented intents pinned here:
  *  - FRONTEND_STEREOTYPE_IN_BACKEND (error): View/FeatureComponent/

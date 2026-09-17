@@ -3,12 +3,19 @@ import { SddRule, RuleCode } from './types.js';
 import { hierarchyRule } from './integrity/hierarchy-integrity.js';
 import { namespaceHygieneRule } from './integrity/namespace-hygiene.js';
 import { roundtripRule } from './integrity/roundtrip-serialization.js';
-import { typeReferencesRule } from './integrity/type-references.js';
+import { typeDeclarationsRule } from './integrity/type-declarations.js';
+import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
+import { signatureTypeReferencesRule } from './integrity/signature-type-references.js';
 import { publicSurfaceRule } from './integrity/public-surface.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
-import { contractsRule } from './narrative/contract-symmetry-and-narratives.js';
+import { contractSymmetryRule } from './narrative/contract-symmetry.js';
+import { narrativeTargetReferencesRule } from './narrative/narrative-target-references.js';
+import { crossTreeReferencesRule } from './narrative/cross-tree-references.js';
+import { surfaceReferenceBackingRule } from './narrative/surface-reference-backing.js';
 import { guaranteeTokensRule } from './narrative/guarantee-tokens.js';
-import { narrativeFlowRule } from './narrative/narrative-flow.js';
+import { narrativeStepConfigRule } from './narrative/narrative-step-config.js';
+import { narrativeReachabilityRule } from './narrative/narrative-reachability.js';
+import { narrativeJumpEdgesRule } from './narrative/narrative-jump-edges.js';
 import { narrativeAntipatternsRule } from './narrative/narrative-antipatterns.js';
 import { narrativeDetailRule } from './narrative/narrative-detail.js';
 import { portalFieldsRule } from './intrinsic/portal-fields.js';
@@ -20,14 +27,17 @@ import { portalCallAuthRule } from './doctrine/portal-call-auth.js';
 import { stereotypeDepsRule } from './doctrine/stereotype-dependencies.js';
 import { patternsRule } from './doctrine/pattern-ownership.js';
 import { facadeForwardingRule } from './doctrine/facade-forwarding.js';
-import { profilesRule } from './extension/architectural-profiles.js';
+import { profileRegistrationRule } from './extension/profile-registration.js';
+import { profileStereotypeFencingRule } from './extension/profile-stereotype-fencing.js';
+import { packProfileStereotypesRule } from './extension/pack-profile-stereotypes.js';
 import { patternReferencesRule } from './extension/pattern-references.js';
 import { variantReferencesRule } from './extension/component-variants.js';
 import { declarativeAssertionsRule } from './extension/declarative-assertions.js';
 import { packResolutionRule } from './extension/pack-resolution.js';
 import { reproducibilityRule } from './extension/pack-reproducibility.js';
 import { cyclesRule } from './wiring/dependency-cycles.js';
-import { dispatchRule } from './wiring/dispatch-tables.js';
+import { dispatchTableBindingsRule } from './wiring/dispatch-table-bindings.js';
+import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
 import { lifecycleRule } from './wiring/lifecycle-entrypoints.js';
 import { reachabilityRule } from './wiring/unused-detection.js';
 import { durabilityRule } from './wiring/durability-round-trip.js';
@@ -35,7 +45,9 @@ import { untypedSeamRule } from './wiring/untyped-seams.js';
 import { proseClaimRule } from './wiring/prose-claims.js';
 import { invariantBackingRule } from './wiring/invariant-backing.js';
 import { eventTopologyRule } from './wiring/event-topology.js';
-import { structuralConformanceRule } from './conformance/structural-conformance.js';
+import { sourceFileLinkageRule } from './conformance/source-file-linkage.js';
+import { methodRealizationRule } from './conformance/method-realization.js';
+import { findingRealizationRule } from './conformance/finding-realization.js';
 import { callConformanceRule } from './conformance/call-conformance.js';
 import { hiddenStateRule } from './conformance/hidden-state.js';
 import { dependencyConformanceRule } from './conformance/dependency-conformance.js';
@@ -68,12 +80,30 @@ export const SDD_RULES: SddRule[] = [
   // explain many downstream findings, so surface them early in the list.
   namespaceHygieneRule,
   roundtripRule,
-  typeReferencesRule,
-  contractsRule,
+  // The type vocabulary in three questions: what a type declares about
+  // itself, then the identifiers its fields name, then the ones its
+  // contracts' signatures name.
+  typeDeclarationsRule,
+  fieldTypeReferencesRule,
+  signatureTypeReferencesRule,
+  // Contracts and the targets narratives name, in four questions with one
+  // owner each: does the implementation mirror its contract, does a target
+  // inside this tree resolve, does a target that leaves it pin to exactly one
+  // declared surface, and does that surface back what the step asks of it.
+  contractSymmetryRule,
+  narrativeTargetReferencesRule,
+  crossTreeReferencesRule,
+  surfaceReferenceBackingRule,
   // Vocabulary check right after contracts: an unknown token explains why the
   // consistency findings around it are absent, so surface them together.
   guaranteeTokensRule,
-  narrativeFlowRule,
+  // Narrative control flow in three questions: does each step carry the
+  // config its type requires, can every step be reached (and do the regions
+  // nest), and where do the jump edges land. The last two run behind the
+  // first's soundness verdict.
+  narrativeStepConfigRule,
+  narrativeReachabilityRule,
+  narrativeJumpEdgesRule,
   // Antipatterns right after flow soundness: they analyze the same step
   // graphs and only make sense once the graphs are structurally valid.
   narrativeAntipatternsRule,
@@ -90,7 +120,12 @@ export const SDD_RULES: SddRule[] = [
   patternsRule,
   // Facade shape rides with pattern ownership: same §7 doctrine, narrative side.
   facadeForwardingRule,
-  profilesRule,
+  // Profiles in three questions, three owners: is the name real (the
+  // project's config), does the built-in family doctrine allow this
+  // stereotype (wairon), does the pack's declared doctrine allow it (the pack).
+  profileRegistrationRule,
+  profileStereotypeFencingRule,
+  packProfileStereotypesRule,
   patternReferencesRule,
   variantReferencesRule,
   // Pack-instantiated declarative doctrine rides with the pack-reference
@@ -101,7 +136,8 @@ export const SDD_RULES: SddRule[] = [
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
   // reader sees the broken edge finding next to the unused-detection fallout
   // it explains.
-  dispatchRule,
+  dispatchTableBindingsRule,
+  dispatchStepRoutingRule,
   lifecycleRule,
   reachabilityRule,
   // The declaration (spec-scoped, refused at the write boundary) before the
@@ -120,9 +156,14 @@ export const SDD_RULES: SddRule[] = [
   // Pub/sub completeness: emitted topics need subscribers and vice versa.
   eventTopologyRule,
   // Code↔spec: structural conformance consumes the injected CodeModel (built
-  // by the source analysis adapter next to the surface snapshots); dependency
-  // conformance lifts its import edges onto the declared dependsOn/owns graph.
-  structuralConformanceRule,
+  // by the source analysis adapter next to the surface snapshots) and asks it
+  // three questions — does the spec name files that exist, does the file
+  // contain the method, does it report the codes the method declares;
+  // dependency conformance lifts its import edges onto the declared
+  // dependsOn/owns graph.
+  sourceFileLinkageRule,
+  methodRealizationRule,
+  findingRealizationRule,
   // Level 3 opener: narrative call steps must be realized as callees of the
   // realized function (set membership, exact grade).
   callConformanceRule,

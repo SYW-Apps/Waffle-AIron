@@ -4,7 +4,7 @@ import type { MethodImplementation, NarrativeStep } from './specs.js';
  * The step graph of one narrative (step_graph): the SINGLE source of truth for
  * successor semantics (fall-through + jumps; loop and try headers carry both
  * their body edge and their after-region exit edge; return/throw terminate).
- * The narrative-flow reachability check and the antipattern analysis both read
+ * The narrative-reachability check and the antipattern analysis both read
  * it, so the two never disagree about what "next" means.
  */
 export interface StepGraph {

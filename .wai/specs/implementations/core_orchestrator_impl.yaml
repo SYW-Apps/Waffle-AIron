@@ -6,7 +6,7 @@ description: >-
   sourcePath: the provisioning, chained-subsystem and rename workflows in provision.ts, and the
   Specialist retirement in stereotype-migration.ts. The lock, state-hash and diagram forwards
   realized in lockfile.ts, statehash.ts and diagram.ts, republished by the core portal barrel, keep
-  their structural-conformance checks dialed off.
+  their method-realization checks dialed off.
 contract: icore_orchestrator
 sourcePath: src/core/specs.ts
 methods:
@@ -1094,12 +1094,8 @@ methods:
         outcome: renamed
 lint:
   allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: >-
-        D2b splits the narrative this reports (retireSpecialists) into steps that call smaller
-        methods.
     - code: EXCESSIVE_NARRATIVE_STEPS
       reason: D2b splits renameComponent, which lists more than 25 steps.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T19:27:48.156Z'
+updatedAt: '2026-09-17T22:31:19.338Z'
