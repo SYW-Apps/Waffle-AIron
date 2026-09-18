@@ -42,6 +42,15 @@ export function completedStepGraph(steps: NarrativeStep[]): StepGraph {
  * parallel header completes only when EVERY arm entry does — all arms always
  * run — and any other step completes when SOME successor does. The target is
  * unavoidable when the entry is not in that set.
+ *
+ * Two headers carry an obligation their successor edges do not express. A
+ * `doWhile` runs its body BEFORE it tests, so whatever the body cannot avoid,
+ * the loop cannot avoid; and a `try` is always ENTERED at its body's first
+ * step, which executes before any handler can catch anything. Without that,
+ * both headers "complete" around their own body — the loop through its exit
+ * edge, the try through a catch — and a call that genuinely always happens
+ * reads as guarded. A try guarantees only its FIRST body step: anything deeper
+ * may be diverted to a handler by a throw before it.
  */
 export function isUnavoidable(steps: NarrativeStep[], target: number): boolean {
   if (steps.length === 0) return false;
@@ -54,6 +63,15 @@ export function isUnavoidable(steps: NarrativeStep[], target: number): boolean {
       ? (s.branches ?? []).map(b => b.step).filter(e => graph.stepAt(e) !== undefined)
       : [];
     if (arms.length) return arms.every(e => completes.has(e));
+    const guaranteed = s.endStep !== undefined
+      && (s.type === 'try' || (s.type === 'loop' && s.loopKind === 'doWhile'));
+    if (guaranteed) {
+      const bodyEntry = graph.nextOf(n);
+      if (bodyEntry !== undefined && bodyEntry <= s.endStep!) {
+        if (s.type === 'loop') return completes.has(bodyEntry);
+        if (bodyEntry === target) return false;
+      }
+    }
     return graph.successorsOf(n).some(t => completes.has(t));
   };
   // Iterated to a fixed point, last step first: flow mostly runs forward, so

@@ -299,6 +299,12 @@ newly fail on them (see *Upgrading*).
     command passes.
   - `UNREALIZED_CLAIM` recognises "persisting" and "persistence".
   - `UNCONDITIONAL_CALL_CYCLE` treats a call inside a parallel arm as unavoidable, because every arm runs.
+  - `UNCONDITIONAL_CALL_CYCLE` treats a call inside a `doWhile` body, and one in the FIRST step of a `try` body, as
+    unavoidable too. A `doWhile` runs its body before it tests, so what the body cannot avoid the loop cannot avoid; a
+    `try` is always entered at its body's first step, which executes before any handler can catch anything. Both headers
+    used to "complete" around their own body — the loop through its exit edge, the try through a catch — so a call that
+    genuinely always happens read as guarded and a real unbounded recursion went unreported. Anything DEEPER in a try
+    body is still avoidable: a throw before it diverts to the handler.
 - **No longer reported wrongly or twice.**
   - `MEANINGLESS_BRANCH` reads fall-through from the step graph: a branch or switch ending a parallel arm falls through
     to the join, not into the next arm, and a switch whose unmatched values end the method decides something.

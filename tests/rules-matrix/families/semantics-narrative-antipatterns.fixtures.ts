@@ -293,6 +293,264 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
+  // Unavoidability: the two headers that carry an obligation their successor
+  // edges do not express — a doWhile runs its body before it tests, and a try
+  // is always entered at its body's first step.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNCONDITIONAL_CALL_CYCLE',
+    severity: 'warning',
+    anchoredTo: 'balance_recalculator_impl',
+    expectFire: true,
+    scenario:
+      'The recalculator posts its correcting entry from inside a doWhile body, so the posting happens at least once however the drift test answers — the cycle back into the poster has no guard.',
+    tree: {
+      subsystems: [{ id: 'ledger', description: 'Double-entry ledger posting and balance upkeep.' }],
+      components: [
+        {
+          id: 'ledger-poster',
+          componentType: 'Orchestrator',
+          description: 'Posts entries into the ledger.',
+          dependsOn: ['balance-recalculator'],
+        },
+        {
+          id: 'balance-recalculator',
+          componentType: 'Orchestrator',
+          description: 'Recalculates running balances after postings.',
+          dependsOn: ['ledger-poster'],
+        },
+      ],
+      interfaces: [
+        {
+          id: 'iledger_poster',
+          component: 'ledger-poster',
+          methods: [{ name: 'postEntry', description: 'Post one entry into the ledger.' }],
+        },
+        {
+          id: 'ibalance_recalculator',
+          component: 'balance-recalculator',
+          methods: [{ name: 'recalculate', description: 'Recalculate the running balance after a posting.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'ledger_poster_impl',
+          contract: 'iledger_poster',
+          methods: [
+            {
+              name: 'postEntry',
+              narrative: [
+                {
+                  stepNumber: 1,
+                  type: 'call',
+                  description: 'Recalculate the running balance after the posting.',
+                  targetComponent: 'balance-recalculator',
+                  targetMethod: 'recalculate',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'balance_recalculator_impl',
+          contract: 'ibalance_recalculator',
+          methods: [
+            {
+              name: 'recalculate',
+              narrative: [
+                {
+                  stepNumber: 1,
+                  type: 'loop',
+                  loopKind: 'doWhile',
+                  description: 'Correct the balance, then keep correcting while the drift still exceeds tolerance.',
+                  condition: 'the drift still exceeds tolerance',
+                  endStep: 2,
+                },
+                {
+                  stepNumber: 2,
+                  type: 'call',
+                  description: 'Post a correcting entry for the recalculated balance.',
+                  targetComponent: 'ledger-poster',
+                  targetMethod: 'postEntry',
+                },
+                { stepNumber: 3, type: 'return', description: 'Report the balance converged.', outcome: 'converged' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNCONDITIONAL_CALL_CYCLE',
+    severity: 'warning',
+    anchoredTo: 'balance_recalculator_impl',
+    expectFire: true,
+    scenario:
+      'The recalculator posts its correcting entry as the first step of a guarded try body, which executes before any handler can catch anything — the cycle back into the poster has no guard.',
+    tree: {
+      subsystems: [{ id: 'ledger', description: 'Double-entry ledger posting and balance upkeep.' }],
+      components: [
+        {
+          id: 'ledger-poster',
+          componentType: 'Orchestrator',
+          description: 'Posts entries into the ledger.',
+          dependsOn: ['balance-recalculator'],
+        },
+        {
+          id: 'balance-recalculator',
+          componentType: 'Orchestrator',
+          description: 'Recalculates running balances after postings.',
+          dependsOn: ['ledger-poster'],
+        },
+      ],
+      interfaces: [
+        {
+          id: 'iledger_poster',
+          component: 'ledger-poster',
+          methods: [{ name: 'postEntry', description: 'Post one entry into the ledger.' }],
+        },
+        {
+          id: 'ibalance_recalculator',
+          component: 'balance-recalculator',
+          methods: [{ name: 'recalculate', description: 'Recalculate the running balance after a posting.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'ledger_poster_impl',
+          contract: 'iledger_poster',
+          methods: [
+            {
+              name: 'postEntry',
+              narrative: [
+                {
+                  stepNumber: 1,
+                  type: 'call',
+                  description: 'Recalculate the running balance after the posting.',
+                  targetComponent: 'balance-recalculator',
+                  targetMethod: 'recalculate',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'balance_recalculator_impl',
+          contract: 'ibalance_recalculator',
+          methods: [
+            {
+              name: 'recalculate',
+              narrative: [
+                {
+                  stepNumber: 1,
+                  type: 'try',
+                  description: 'Guard the correcting posting against a rejection by the ledger.',
+                  endStep: 2,
+                  catches: [{ error: 'PostingRejected', step: 4 }],
+                },
+                {
+                  stepNumber: 2,
+                  type: 'call',
+                  description: 'Post a correcting entry for the recalculated balance.',
+                  targetComponent: 'ledger-poster',
+                  targetMethod: 'postEntry',
+                },
+                { stepNumber: 3, type: 'return', description: 'Report the correcting entry posted.', outcome: 'posted' },
+                { stepNumber: 4, type: 'local', description: 'Record the rejected correcting entry for the operator.' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNCONDITIONAL_CALL_CYCLE',
+    expectFire: false,
+    reason:
+      'A while loop tests before it runs, so its body may never execute: the correcting posting is guarded by the drift test, and a prose condition is never judged.',
+    scenario:
+      'The recalculator posts its correcting entry from inside a while loop, which tests the drift before it runs the body at all.',
+    tree: {
+      subsystems: [{ id: 'ledger', description: 'Double-entry ledger posting and balance upkeep.' }],
+      components: [
+        {
+          id: 'ledger-poster',
+          componentType: 'Orchestrator',
+          description: 'Posts entries into the ledger.',
+          dependsOn: ['balance-recalculator'],
+        },
+        {
+          id: 'balance-recalculator',
+          componentType: 'Orchestrator',
+          description: 'Recalculates running balances after postings.',
+          dependsOn: ['ledger-poster'],
+        },
+      ],
+      interfaces: [
+        {
+          id: 'iledger_poster',
+          component: 'ledger-poster',
+          methods: [{ name: 'postEntry', description: 'Post one entry into the ledger.' }],
+        },
+        {
+          id: 'ibalance_recalculator',
+          component: 'balance-recalculator',
+          methods: [{ name: 'recalculate', description: 'Recalculate the running balance after a posting.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'ledger_poster_impl',
+          contract: 'iledger_poster',
+          methods: [
+            {
+              name: 'postEntry',
+              narrative: [
+                {
+                  stepNumber: 1,
+                  type: 'call',
+                  description: 'Recalculate the running balance after the posting.',
+                  targetComponent: 'balance-recalculator',
+                  targetMethod: 'recalculate',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'balance_recalculator_impl',
+          contract: 'ibalance_recalculator',
+          methods: [
+            {
+              name: 'recalculate',
+              narrative: [
+                {
+                  stepNumber: 1,
+                  type: 'loop',
+                  loopKind: 'while',
+                  description: 'Keep correcting while the drift exceeds tolerance.',
+                  condition: 'the drift exceeds tolerance',
+                  endStep: 2,
+                },
+                {
+                  stepNumber: 2,
+                  type: 'call',
+                  description: 'Post a correcting entry for the recalculated balance.',
+                  targetComponent: 'ledger-poster',
+                  targetMethod: 'postEntry',
+                },
+                { stepNumber: 3, type: 'return', description: 'Report the balance converged.', outcome: 'converged' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
   // Step-graph successor semantics: a parallel arm's last step continues at
   // the join, and every arm always runs
   // -------------------------------------------------------------------------

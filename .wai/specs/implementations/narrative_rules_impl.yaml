@@ -789,8 +789,12 @@ methods:
           isUnavoidable helper finds the step on every path to completion: over the completed step
           graph with the step removed, the first step cannot complete, where the steps that can
           complete are the least set in which a return or throw step completes, a parallel header
-          completes when every arm entry does (all arms run), and any other step completes when some
-          successor does
+          completes when every arm entry does (all arms run), a doWhile header completes only when
+          its body entry does (the body runs before the test, so what the body cannot avoid the loop
+          cannot avoid), a try header never completes around the step its body begins at (it
+          executes before any handler can catch anything; anything deeper in the body stays
+          avoidable, since a throw before it diverts to the handler), and any other step completes
+          when some successor does
         type: local
       - stepNumber: 7
         description: >-
@@ -1014,4 +1018,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-18T13:41:26.598Z'
+updatedAt: '2026-09-18T13:52:00.368Z'
