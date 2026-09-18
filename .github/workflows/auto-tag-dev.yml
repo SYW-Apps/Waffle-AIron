@@ -78,11 +78,30 @@ jobs:
 
       - name: Commit and tag
         if: steps.exists.outputs.skip == 'false'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          BASE="$(git rev-parse HEAD)"
           git add src/config/defaults.ts
-          git commit -m "chore: release ${{ steps.version.outputs.tag }}" || echo "defaults.ts already current"
-          git tag ${{ steps.version.outputs.tag }}
-          git push origin dev
-          git push origin ${{ steps.version.outputs.tag }}
+          git commit -m "chore: release ${TAG}" || echo "defaults.ts already current"
+          git tag "${TAG}"
+          if git push origin dev; then
+            git push origin "${TAG}"
+            exit 0
+          fi
+          # dev moved between "Pull latest dev" and this push: a merge landed
+          # while the bump was being computed, so the ref this run expected to
+          # fast-forward is stale. That push starts its own auto-tag run — the
+          # concurrency group above has it queued already — and the tag that run
+          # creates covers these commits too, because they are its ancestors.
+          # So a lost race is superseded work, not a broken release: leave dev
+          # and the tag alone and say which push won.
+          git fetch -q origin dev
+          if [ "$(git rev-parse origin/dev)" != "${BASE}" ]; then
+            echo "::notice::dev moved to $(git rev-parse --short origin/dev) while ${TAG} was being prepared — the queued run for that push tags these commits. Nothing pushed."
+            exit 0
+          fi
+          echo "::error::Pushing dev failed while dev was still at ${BASE} — this is not a lost race."
+          exit 1
