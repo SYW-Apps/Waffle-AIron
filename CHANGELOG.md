@@ -462,7 +462,8 @@ spec id, so it belongs to the one rule that builds the file index, or it would b
 
 On wairon's own tree the conformance split retires `conformance_rules_impl`'s `EXCESSIVE_NARRATIVE_STEPS` allow — the
 31-step narrative it named is gone and nothing left in that family lists more than 25 — and both families' remaining
-`NARRATIVE_COMPLEXITY` allows now name only the narratives that still report.
+`NARRATIVE_COMPLEXITY` allows were rewritten to name only the narratives that still reported at that point — the
+waves below retire them, and every other one, outright.
 
 `contract-symmetry-and-narratives` was the worst of them: 66 steps at cognitive score 99, because roughly half of it was
 the cross-tree surface-resolution sequence written twice — once for dispatch steps and once for call/register steps,
