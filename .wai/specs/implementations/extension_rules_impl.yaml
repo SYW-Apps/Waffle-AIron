@@ -145,271 +145,6 @@ methods:
         description: This component is processed.
         type: local
     symbol: check
-  - name: declarativeAssertions
-    sourcePath: src/core/rules/extension/declarative-assertions.ts
-    narrative:
-      - stepNumber: 1
-        description: Read ctx.ext.assertions — the declarative rule assertions loaded packs declare.
-        type: local
-      - stepNumber: 2
-        description: No assertion means nothing to evaluate.
-        type: branch
-        condition: assertions is empty
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return with nothing evaluated.
-        type: return
-        outcome: nothing to check (no loaded pack declares an assertion)
-      - stepNumber: 4
-        label: assertion_loop
-        description: Evaluate every loaded assertion in turn.
-        type: loop
-        loopKind: forEach
-        over: assertions
-        endStep: 48
-      - stepNumber: 5
-        description: Dispatch on the assertion's closed kind.
-        type: switch
-        'on': a.kind
-        cases:
-          - value: forbid-edge
-            step: 6
-          - value: require-field
-            step: 19
-          - value: endpoint-shape
-            step: 31
-        defaultStep: 48
-      - stepNumber: 6
-        label: fe_comp_loop
-        description: Consider every component as a candidate edge source.
-        type: loop
-        loopKind: forEach
-        over: ctx.components
-        endStep: 17
-      - stepNumber: 7
-        description: >-
-          matches(a.from, comp, ctx) — does this component match the assertion's from-selector
-          (componentType/profile via ctx.getComponentProfile/id glob)?
-        type: branch
-        condition: the component does not match a.from
-        onFalseStep: 9
-      - stepNumber: 8
-        description: >-
-          Non-matching source component — move on to the next component (skip its relations
-          entirely).
-        type: jump
-        toStep: 17
-      - stepNumber: 9
-        label: fe_draft
-        description: >-
-          ctx.isComponentDraft(comp.id) — capture isDraftCtx for this source component, used by
-          every finding emitted below.
-        type: local
-      - stepNumber: 10
-        description: Check every relation kind the assertion forbids (owns and/or dependsOn).
-        type: loop
-        loopKind: forEach
-        over: a.relation
-        endStep: 16
-      - stepNumber: 11
-        description: Check every id the component holds under this relation.
-        type: loop
-        loopKind: forEach
-        over: comp[relation]
-        endStep: 16
-      - stepNumber: 12
-        description: Look up target = ctx.componentMap.get(targetId).
-        type: local
-      - stepNumber: 13
-        description: >-
-          matches(a.to, target, ctx) — does the resolved target match the assertion's to-selector?
-          An unresolved targetId never matches.
-        type: branch
-        condition: target is undefined, or target does not match a.to
-        onFalseStep: 15
-      - stepNumber: 14
-        description: Target does not close the forbidden edge — move on.
-        type: jump
-        toStep: 16
-      - stepNumber: 15
-        label: fe_report
-        description: >-
-          Report the assertion's pack code (<PACK>_<CODE>) at its declared severity (downgraded to
-          warning when isDraftCtx and the pack declared error), naming the forbidden owns/dependsOn
-          edge from comp to target and the assertion's stated reason; specId = comp.id.
-        type: local
-      - stepNumber: 16
-        label: fe_target_done
-        description: This relation kind and target id pairing is processed.
-        type: local
-      - stepNumber: 17
-        label: fe_comp_done
-        description: This candidate source component is processed.
-        type: local
-      - stepNumber: 18
-        description: Forbid-edge handled — skip the other two kinds.
-        type: jump
-        toStep: 48
-      - stepNumber: 19
-        label: rf_build_holders
-        description: >-
-          Build the holder list this level inspects: for level 'component', every component
-          (specId=c.id, draft=ctx.isComponentDraft(c.id)); for 'interface', every interface whose
-          owning component resolves (specId=i.id, draft = ctx.isComponentDraft(comp.id) or the
-          interface's own draft/design status); otherwise every implementation whose contract's
-          component resolves (specId=impl.id, draft=ctx.isImplementationDraft(impl)).
-        type: local
-      - stepNumber: 20
-        description: Inspect every holder at this level.
-        type: loop
-        loopKind: forEach
-        over: the holders
-        endStep: 29
-      - stepNumber: 21
-        description: >-
-          matches(a.on, holder.comp, ctx) — does the holder's owning component match the assertion's
-          on-selector?
-        type: branch
-        condition: the holder's component does not match a.on
-        onFalseStep: 23
-      - stepNumber: 22
-        description: Non-matching holder — move on.
-        type: jump
-        toStep: 29
-      - stepNumber: 23
-        label: rf_field
-        description: >-
-          fieldValue(holder.spec, a.field) — read the required field: one top-level spec field, or
-          an ext.* path.
-        type: local
-      - stepNumber: 24
-        description: The field is entirely absent.
-        type: branch
-        condition: the read value is undefined or null
-        onFalseStep: 27
-      - stepNumber: 25
-        description: >-
-          Report the assertion's pack code (<PACK>_<CODE>) at its declared severity (downgraded to
-          warning when draft and pack severity is error), naming the level, holder specId and the
-          required field a.field; specId = holder.specId.
-        type: local
-      - stepNumber: 26
-        description: Field reported as missing — skip the allowed-values check.
-        type: jump
-        toStep: 29
-      - stepNumber: 27
-        label: rf_values
-        description: >-
-          The field is present but the assertion restricts it to an allowed value set (a.values)
-          that does not include it.
-        type: branch
-        condition: a.values is declared and does not include String(the read value)
-        onFalseStep: 29
-      - stepNumber: 28
-        description: >-
-          Report the assertion's pack code (<PACK>_<CODE>) at its declared severity, naming the
-          holder's field value and the allowed set a.values; specId = holder.specId.
-        type: local
-      - stepNumber: 29
-        label: rf_end
-        description: This holder is processed.
-        type: local
-      - stepNumber: 30
-        description: Require-field handled — skip endpoint-shape.
-        type: jump
-        toStep: 48
-      - stepNumber: 31
-        label: es_compile
-        description: >-
-          pattern = a.pathPattern ? new RegExp(a.pathPattern) : undefined — compile the required
-          path pattern when the assertion declares one.
-        type: local
-      - stepNumber: 32
-        description: Consider every interface as a candidate endpoint owner.
-        type: loop
-        loopKind: forEach
-        over: ctx.interfaces
-        endStep: 47
-      - stepNumber: 33
-        description: comp = ctx.componentMap.get(intf.component); matches(a.on, comp, ctx) against it.
-        type: local
-      - stepNumber: 34
-        description: The owning component is missing, or does not match a.on.
-        type: branch
-        condition: comp is undefined, or comp does not match a.on
-        onFalseStep: 36
-      - stepNumber: 35
-        description: Non-matching interface — move on to the next interface (skip its methods entirely).
-        type: jump
-        toStep: 47
-      - stepNumber: 36
-        label: es_draft
-        description: isDraftCtx = ctx.isComponentDraft(comp.id) or intf.status is draft/design.
-        type: local
-      - stepNumber: 37
-        description: Check every declared method for an endpoint binding.
-        type: loop
-        loopKind: forEach
-        over: intf.methods
-        endStep: 46
-      - stepNumber: 38
-        description: A method with no endpoint binds no transport to shape.
-        type: branch
-        condition: method.endpoint is not set
-        onFalseStep: 40
-      - stepNumber: 39
-        description: No endpoint on this method — move on.
-        type: jump
-        toStep: 46
-      - stepNumber: 40
-        label: es_transport
-        description: >-
-          The assertion restricts transport (a.transport) and this endpoint's transport is outside
-          it.
-        type: branch
-        condition: a.transport is declared and non-empty and does not include method.endpoint.transport
-        onFalseStep: 43
-      - stepNumber: 41
-        description: >-
-          Report the assertion's pack code (<PACK>_<CODE>) at its declared severity, naming the
-          endpoint's transport and the allowed a.transport list; specId = intf.id.
-        type: local
-      - stepNumber: 42
-        description: >-
-          Transport already reported as out of shape — the real code continues past the path check
-          for this method.
-        type: jump
-        toStep: 46
-      - stepNumber: 43
-        label: es_address
-        description: >-
-          endpointAddress(method.endpoint) — read the transport's one address field (HTTP path, gRPC
-          service/method, GraphQL field, MessageBus topic, NamedPipe pipe, IPC channel, CLI command,
-          or Custom address).
-        type: local
-      - stepNumber: 44
-        description: A declared path pattern exists and the address does not match it.
-        type: branch
-        condition: pattern is set and does not match the address
-        onFalseStep: 46
-      - stepNumber: 45
-        description: >-
-          Report the assertion's pack code (<PACK>_<CODE>) at its declared severity, naming the
-          endpoint's bound address and the required a.pathPattern; specId = intf.id.
-        type: local
-      - stepNumber: 46
-        label: es_method_done
-        description: This method is processed.
-        type: local
-      - stepNumber: 47
-        label: es_intf_done
-        description: This candidate interface is processed.
-        type: local
-      - stepNumber: 48
-        label: assertion_done
-        description: This assertion is fully evaluated.
-        type: local
-    symbol: check
   - name: packResolution
     sourcePath: src/core/rules/extension/pack-resolution.ts
     narrative:
@@ -680,15 +415,261 @@ methods:
           component's stereotype, the governing profile and the pack rule's stated reason.
         type: local
     symbol: check
-lint:
-  allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: >-
-        D2b splits the narrative this still reports (declarativeAssertions); architecturalProfiles
-        has already been split into profile-registration, profile-stereotype-fencing and
-        pack-profile-stereotypes.
-    - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits declarativeAssertions, which lists more than 25 steps.
+  - name: assertionForbiddenEdges
+    sourcePath: src/core/rules/extension/assertion-forbidden-edges.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          assertionsOfKind(ctx, 'forbid-edge') — the loaded forbid-edge assertions among
+          ctx.ext.assertions, in pack-load order.
+        type: local
+      - stepNumber: 2
+        label: assertion_loop
+        description: Evaluate every forbid-edge assertion in turn.
+        type: loop
+        loopKind: forEach
+        over: the forbid-edge assertions
+        endStep: 13
+      - stepNumber: 3
+        label: comp_loop
+        description: Consider every component as a candidate edge source.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 12
+      - stepNumber: 4
+        description: >-
+          matchesSelector(a.from, comp, ctx) — does this component match the assertion's
+          from-selector (componentType / profile via ctx.getComponentProfile / id glob)?
+        type: branch
+        condition: the component does not match a.from
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Non-matching source component — move on to the next component (skip its relations
+          entirely).
+        type: jump
+        toStep: 12
+      - stepNumber: 6
+        label: draft_ctx
+        description: >-
+          ctx.isComponentDraft(comp.id) — capture isDraftCtx for this source component, used by
+          every finding emitted below.
+        type: local
+      - stepNumber: 7
+        label: edge_loop
+        description: >-
+          Walk every id this component holds under a relation the assertion forbids: each (relation,
+          target id) pairing of a.relation against comp[relation].
+        type: loop
+        loopKind: forEach
+        over: the (relation, target id) pairings
+        endStep: 11
+      - stepNumber: 8
+        description: Look up target = ctx.componentMap.get(targetId).
+        type: local
+      - stepNumber: 9
+        description: >-
+          matchesSelector(a.to, target, ctx) — does the resolved target match the assertion's
+          to-selector? An unresolved targetId never matches.
+        type: branch
+        condition: target resolves and matches a.to — the forbidden edge is closed
+        onFalseStep: 11
+      - stepNumber: 10
+        label: report
+        description: >-
+          reportAssertion — report the assertion's pack code (<PACK>_<CODE>) at its declared
+          severity (downgraded to warning when isDraftCtx and the pack declared error), naming the
+          forbidden owns/dependsOn edge from comp to target and the assertion's stated reason;
+          specId = comp.id.
+        type: local
+      - stepNumber: 11
+        label: edge_done
+        description: This relation and target id pairing is processed.
+        type: local
+      - stepNumber: 12
+        label: comp_done
+        description: This candidate source component is processed.
+        type: local
+      - stepNumber: 13
+        label: assertion_done
+        description: This assertion is fully evaluated.
+        type: local
+    symbol: check
+  - name: assertionRequiredFields
+    sourcePath: src/core/rules/extension/assertion-required-fields.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          assertionsOfKind(ctx, 'require-field') — the loaded require-field assertions among
+          ctx.ext.assertions, in pack-load order.
+        type: local
+      - stepNumber: 2
+        label: assertion_loop
+        description: Evaluate every require-field assertion in turn.
+        type: loop
+        loopKind: forEach
+        over: the require-field assertions
+        endStep: 14
+      - stepNumber: 3
+        label: build_holders
+        description: >-
+          holdersAt(ctx, a.level) — the specs this level puts in scope: for 'component', every
+          component (specId=c.id, draft=ctx.isComponentDraft(c.id)); for 'interface', every
+          interface whose owning component resolves (specId=i.id, draft =
+          ctx.isComponentDraft(comp.id) or the interface's own draft/design status); otherwise every
+          implementation whose contract's component resolves (specId=impl.id,
+          draft=ctx.isImplementationDraft(impl)).
+        type: local
+      - stepNumber: 4
+        label: holder_loop
+        description: Inspect every holder at this level.
+        type: loop
+        loopKind: forEach
+        over: the holders
+        endStep: 13
+      - stepNumber: 5
+        description: >-
+          matchesSelector(a.on, holder.comp, ctx) — does the holder's owning component match the
+          assertion's on-selector?
+        type: branch
+        condition: the holder's component does not match a.on
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Non-matching holder — move on.
+        type: jump
+        toStep: 13
+      - stepNumber: 7
+        label: read_field
+        description: >-
+          fieldValue(holder.spec, a.field) — read the required field: one top-level spec field, or
+          an ext.* path.
+        type: local
+      - stepNumber: 8
+        description: The field is entirely absent.
+        type: branch
+        condition: the read value is undefined or null
+        onFalseStep: 11
+      - stepNumber: 9
+        label: report_missing
+        description: >-
+          reportAssertion — report the assertion's pack code (<PACK>_<CODE>) at its declared
+          severity (downgraded to warning when draft and the pack declared error), naming the level,
+          holder specId and the required field a.field; specId = holder.specId.
+        type: local
+      - stepNumber: 10
+        description: Field reported as missing — skip the allowed-values check.
+        type: jump
+        toStep: 13
+      - stepNumber: 11
+        label: check_values
+        description: >-
+          The field is present but the assertion restricts it to an allowed value set (a.values)
+          that does not include it.
+        type: branch
+        condition: a.values is declared and does not include String(the read value)
+        onFalseStep: 13
+      - stepNumber: 12
+        label: report_outside_set
+        description: >-
+          reportAssertion — report the assertion's pack code (<PACK>_<CODE>) at its declared
+          severity, naming the holder's field value and the allowed set a.values; specId =
+          holder.specId.
+        type: local
+      - stepNumber: 13
+        label: holder_done
+        description: This holder is processed.
+        type: local
+      - stepNumber: 14
+        label: assertion_done
+        description: This assertion is fully evaluated.
+        type: local
+    symbol: check
+  - name: assertionEndpointShapes
+    sourcePath: src/core/rules/extension/assertion-endpoint-shapes.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          assertionsOfKind(ctx, 'endpoint-shape') — the loaded endpoint-shape assertions among
+          ctx.ext.assertions, in pack-load order.
+        type: local
+      - stepNumber: 2
+        label: assertion_loop
+        description: Evaluate every endpoint-shape assertion in turn.
+        type: loop
+        loopKind: forEach
+        over: the endpoint-shape assertions
+        endStep: 13
+      - stepNumber: 3
+        label: compile_pattern
+        description: >-
+          pattern = a.pathPattern ? new RegExp(a.pathPattern) : undefined — compile the required
+          address pattern when the assertion declares one.
+        type: local
+      - stepNumber: 4
+        label: bound_endpoints
+        description: >-
+          boundEndpoints(ctx, a.on) — every endpoint this assertion puts in scope: for each
+          interface whose component resolves and matches the on-selector, each method that binds an
+          endpoint, carrying the draft context ctx.isComponentDraft(comp.id) or the interface's own
+          draft/design status.
+        type: local
+      - stepNumber: 5
+        label: endpoint_loop
+        description: Check every endpoint in scope against the shape the assertion requires.
+        type: loop
+        loopKind: forEach
+        over: the bound endpoints
+        endStep: 12
+      - stepNumber: 6
+        label: check_transport
+        description: >-
+          The assertion restricts transport (a.transport) and this endpoint's transport is outside
+          it.
+        type: branch
+        condition: a.transport is declared and non-empty and does not include the endpoint's transport
+        onFalseStep: 9
+      - stepNumber: 7
+        label: report_transport
+        description: >-
+          reportAssertion — report the assertion's pack code (<PACK>_<CODE>) at its declared
+          severity (downgraded to warning when draft and the pack declared error), naming the
+          endpoint's transport and the allowed a.transport list; specId = intf.id.
+        type: local
+      - stepNumber: 8
+        description: >-
+          Transport already reported as out of shape — this endpoint's address is not checked as
+          well.
+        type: jump
+        toStep: 12
+      - stepNumber: 9
+        label: read_address
+        description: >-
+          endpointAddress(endpoint) — read the transport's one address field (HTTP path, gRPC
+          service/method, GraphQL field, MessageBus topic, NamedPipe pipe, IPC channel, CLI command,
+          or Custom address).
+        type: local
+      - stepNumber: 10
+        description: A declared address pattern exists and the address does not match it.
+        type: branch
+        condition: pattern is set and does not match the address
+        onFalseStep: 12
+      - stepNumber: 11
+        label: report_address
+        description: >-
+          reportAssertion — report the assertion's pack code (<PACK>_<CODE>) at its declared
+          severity, naming the endpoint's bound address and the required a.pathPattern; specId =
+          intf.id.
+        type: local
+      - stepNumber: 12
+        label: endpoint_done
+        description: This bound endpoint is processed.
+        type: local
+      - stepNumber: 13
+        label: assertion_done
+        description: This assertion is fully evaluated.
+        type: local
+    symbol: check
 status: draft
 createdAt: '2026-09-14T23:15:33.948Z'
-updatedAt: '2026-09-17T22:00:23.806Z'
+updatedAt: '2026-09-18T12:27:57.566Z'

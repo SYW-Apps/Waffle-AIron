@@ -339,7 +339,7 @@ export interface RuleContext {
     patterns: LoadedPattern[];
     /** Pack-declared semantic guarantee tokens — unioned with SEMANTIC_GUARANTEES by the guarantee-token rule. */
     guarantees: string[];
-    /** Declarative rule assertions (closed kinds, pack-instantiated) evaluated by the declarative-assertions rule. */
+    /** Declarative rule assertions (closed kinds, pack-instantiated), evaluated by one assertion-* rule per kind. */
     assertions: LoadedAssertion[];
     /**
      * The project's by-name pack SELECTIONS (legacy path refs excluded). The

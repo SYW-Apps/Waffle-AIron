@@ -1,5 +1,5 @@
 import { SddRule } from '../types.js';
-import { implementationSourceFiles, isDraftSubsystem, type MethodSignature } from '../../../models/index.js';
+import { implementationSourceFiles, isDraftSubsystem, type ComponentSpec, type ImplementationSpec, type MethodSignature } from '../../../models/index.js';
 
 /**
  * Technology-boundary rules: an L4 that declares `technologies` (e.g.
@@ -7,11 +7,9 @@ import { implementationSourceFiles, isDraftSubsystem, type MethodSignature } fro
  * The rest of the system may only know the boundary's intent interface —
  * that is what makes the implementation swappable (mysql → postgresql)
  * without contract change. No hardcoded vendor lists: only declared tokens
- * are policed, so the rule never fires on a tree that doesn't opt in.
+ * are policed, so the rule never fires on a tree that doesn't opt in. WHICH
+ * stereotype may bind one at all is technology-binding's question.
  */
-
-/** Stereotypes that may legitimately bind a technology directly. */
-const DATA_LAYER = new Set(['Adapter', 'Store', 'Registry', 'Index']);
 
 /**
  * Identifier-aware matcher for one technology token. The token normalizes to
@@ -48,17 +46,35 @@ function contractIdentifiers(m: MethodSignature): string {
   return parts.join(' ');
 }
 
+/** One technology token an implementation declares, with the component that declares it. */
+interface TechDeclaration {
+  comp: ComponentSpec;
+  tech: string;
+}
+
+/** The scope one technology token is at home in, and who declared it. */
+interface TechHome {
+  label: string;
+  match: (text: string | undefined | null) => boolean;
+  ownerComponents: Set<string>;
+  scope: Set<string>;
+}
+
 export const technologyRule: SddRule = {
   name: 'technology-boundaries',
   description:
-    'Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component\'s ownership tree the technology\'s home. References outside that tree are leakage, L3 contract identifiers must stay intent-language (the contract is the swap seam), and only data-layer stereotypes (Adapter/Store/Registry/Index) should bind a technology directly.',
+    'Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component\'s ownership tree the technology\'s home. References outside that tree are leakage, and L3 contract identifiers must stay intent-language — the contract is the swap seam, so the vendor name is wrong even on the owning component\'s own interface.',
   codes: [
     { code: 'TECH_LEAKAGE', defaultSeverity: 'warning', summary: 'Technology referenced outside its owning boundary' },
     { code: 'VENDOR_NAME_IN_CONTRACT', defaultSeverity: 'warning', summary: 'Technology name in L3 contract identifiers' },
-    { code: 'TECH_ON_LOGIC_COMPONENT', defaultSeverity: 'warning', summary: 'Technology bound by a non-data-layer stereotype' },
   ],
   check(ctx) {
     // -- ownership helpers ----------------------------------------------------
+    // A PLAIN owner map: every `owns` claim, last claimant winning, including
+    // the ones pattern-membership reports as illegal. ctx.ownershipIndex()
+    // reads only LEGAL claims, and swapping this for it would widen a home's
+    // scope on a tree that already carries an ownership error — turning one
+    // finding into two. That is a doctrine decision, not a refactor.
     const ownerOf = new Map<string, string>();
     for (const c of ctx.components) for (const m of c.owns) ownerOf.set(m, c.id);
 
@@ -85,33 +101,25 @@ export const technologyRule: SddRule = {
     };
 
     // -- collect declarations → per-token owning scopes ------------------------
-    interface TechHome {
-      label: string;
-      match: (text: string | undefined | null) => boolean;
-      ownerComponents: Set<string>;
-      scope: Set<string>;
-    }
-    const homes = new Map<string, TechHome>();
-
+    // Every declared token, paired with the component that declares it: a
+    // dangling contract declares nothing (the hierarchy rule reports it).
+    const declarations: TechDeclaration[] = [];
     for (const impl of ctx.implementations) {
       if (!impl.technologies?.length) continue;
       const intf = ctx.interfaceMap.get(impl.contract);
       const comp = intf ? ctx.componentMap.get(intf.component) : undefined;
-      if (!comp) continue; // dangling contract — the hierarchy rule reports it
+      if (!comp) continue;
+      for (const tech of impl.technologies) declarations.push({ comp, tech });
+    }
 
-      if (!DATA_LAYER.has(comp.componentType)) {
-        ctx.addIssue(
-          'warning',
-          'TECH_ON_LOGIC_COMPONENT',
-          `Implementation "${impl.id}" binds technology (${impl.technologies.join(', ')}) on component "${comp.id}" (${comp.componentType}). Technology belongs behind a data-layer seam — extract an Adapter (or Store/Registry/Index) behind an intent interface and let this component depend on that.`,
-          impl.id,
-          ctx.isImplementationDraft(impl),
-        );
-      }
-
-      // The owning scope: the whole ownership tree containing the declaring
-      // component (pattern root + members), those components' contracts and
-      // implementations, and the ancestor subsystem chain.
+    // The owning scope of a declaring component: the whole ownership tree
+    // containing it (pattern root + members), those components' contracts and
+    // implementations, and the ancestor subsystem chain. Memoized, because a
+    // component that declares several tokens has one scope.
+    const scopes = new Map<string, Set<string>>();
+    const scopeOf = (comp: ComponentSpec): Set<string> => {
+      const cached = scopes.get(comp.id);
+      if (cached) return cached;
       const compSet = ownsClosure(ownershipRoot(comp.id));
       const scope = new Set<string>(compSet);
       for (const i of ctx.interfaces) if (compSet.has(i.component)) scope.add(i.id);
@@ -126,16 +134,19 @@ export const technologyRule: SddRule = {
           if (subId === s.id || subId.startsWith(`${s.id}::`)) scope.add(s.id);
         }
       }
+      scopes.set(comp.id, scope);
+      return scope;
+    };
 
-      for (const tech of impl.technologies) {
-        const match = makeMatcher(tech);
-        if (!match) continue; // unpoliceable without drowning in noise
-        const key = tech.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('');
-        const home = homes.get(key) ?? { label: tech, match, ownerComponents: new Set<string>(), scope: new Set<string>() };
-        home.ownerComponents.add(comp.id);
-        for (const id of scope) home.scope.add(id);
-        homes.set(key, home);
-      }
+    const homes = new Map<string, TechHome>();
+    for (const { comp, tech } of declarations) {
+      const match = makeMatcher(tech);
+      if (!match) continue; // unpoliceable without drowning in noise
+      const key = tech.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('');
+      const home = homes.get(key) ?? { label: tech, match, ownerComponents: new Set<string>(), scope: new Set<string>() };
+      home.ownerComponents.add(comp.id);
+      for (const id of scopeOf(comp)) home.scope.add(id);
+      homes.set(key, home);
     }
     if (homes.size === 0) return;
 
@@ -210,16 +221,7 @@ export const technologyRule: SddRule = {
 
       for (const impl of ctx.implementations) {
         if (home.scope.has(impl.id)) continue;
-        const parts: (string | undefined)[] = [impl.description, ...implementationSourceFiles(impl)];
-        for (const m of impl.methods) {
-          parts.push(m.intent);
-          for (const s of m.narrative ?? []) {
-            parts.push(s.description, s.targetComponent, s.targetMethod, s.condition, s.over, s.on, s.outcome, s.error);
-            for (const c of s.cases ?? []) parts.push(c.value);
-            for (const c of s.catches ?? []) parts.push(c.error);
-          }
-        }
-        if (home.match(parts.filter(Boolean).join(' '))) {
+        if (home.match(implementationText(impl))) {
           ctx.addIssue(
             'warning',
             'TECH_LEAKAGE',
@@ -248,3 +250,17 @@ export const technologyRule: SddRule = {
     }
   },
 };
+
+/** Every text surface of an implementation: its own prose and files, its methods' intents, and every narrative step's fields. */
+function implementationText(impl: ImplementationSpec): string {
+  const parts: (string | undefined)[] = [impl.description, ...implementationSourceFiles(impl)];
+  for (const m of impl.methods) {
+    parts.push(m.intent);
+    for (const s of m.narrative ?? []) {
+      parts.push(s.description, s.targetComponent, s.targetMethod, s.condition, s.over, s.on, s.outcome, s.error);
+      for (const c of s.cases ?? []) parts.push(c.value);
+      for (const c of s.catches ?? []) parts.push(c.error);
+    }
+  }
+  return parts.filter(Boolean).join(' ');
+}

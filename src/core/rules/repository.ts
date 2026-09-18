@@ -39,7 +39,9 @@ import { profileStereotypeFencingRule } from './extension/profile-stereotype-fen
 import { packProfileStereotypesRule } from './extension/pack-profile-stereotypes.js';
 import { patternReferencesRule } from './extension/pattern-references.js';
 import { variantReferencesRule } from './extension/component-variants.js';
-import { declarativeAssertionsRule } from './extension/declarative-assertions.js';
+import { assertionForbiddenEdgesRule } from './extension/assertion-forbidden-edges.js';
+import { assertionRequiredFieldsRule } from './extension/assertion-required-fields.js';
+import { assertionEndpointShapesRule } from './extension/assertion-endpoint-shapes.js';
 import { packResolutionRule } from './extension/pack-resolution.js';
 import { reproducibilityRule } from './extension/pack-reproducibility.js';
 import { cyclesRule } from './wiring/dependency-cycles.js';
@@ -60,7 +62,9 @@ import { hiddenStateRule } from './conformance/hidden-state.js';
 import { dependencyConformanceRule } from './conformance/dependency-conformance.js';
 import { integrationConformanceRule } from './conformance/integration-conformance.js';
 import { couplingRule } from './heuristic/coupling-health.js';
-import { languageRule } from './heuristic/target-language.js';
+import { signatureLanguageBuiltinsRule } from './heuristic/signature-language-builtins.js';
+import { narrativeLanguageConstructsRule } from './heuristic/narrative-language-constructs.js';
+import { technologyBindingRule } from './heuristic/technology-binding.js';
 import { technologyRule } from './heuristic/technology-boundaries.js';
 import { namingRule } from './heuristic/naming-conventions.js';
 import { complexityRule } from './heuristic/complexity-and-metadata.js';
@@ -152,8 +156,12 @@ export const SDD_RULES: SddRule[] = [
   patternReferencesRule,
   variantReferencesRule,
   // Pack-instantiated declarative doctrine rides with the pack-reference
-  // family: same data source, same provenance-bearing findings.
-  declarativeAssertionsRule,
+  // family: same data source, same provenance-bearing findings. One rule per
+  // assertion kind — the kind is what a pack author writes, and each kind
+  // asks its own question of its own collection.
+  assertionForbiddenEdgesRule,
+  assertionRequiredFieldsRule,
+  assertionEndpointShapesRule,
   publicSurfaceRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
@@ -197,7 +205,13 @@ export const SDD_RULES: SddRule[] = [
   // the same code model and speaks about the same sourcePath modules.
   integrationConformanceRule,
   couplingRule,
-  languageRule,
+  // Target-language fit in two questions: what a CONTRACT may name, and what
+  // a NARRATIVE may describe.
+  signatureLanguageBuiltinsRule,
+  narrativeLanguageConstructsRule,
+  // The declaration before the consequences: which stereotype may bind a
+  // technology at all, then where its name may appear.
+  technologyBindingRule,
   technologyRule,
   namingRule,
   complexityRule,

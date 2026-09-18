@@ -430,6 +430,9 @@ sides of a seam.
 | `contract-symmetry-and-narratives` | `contract-symmetry` + `narrative-target-references` + `cross-tree-references` + `surface-reference-backing` | four questions a user recognizes: does the implementation mirror its contract, does a target inside this tree resolve, does a target that leaves it pin to exactly one declared surface, and does that surface back what the step asks of it |
 | `stereotype-dependencies` | `subsystem-boundary-dependencies` + `logic-dependency-class` + `data-block-dependencies` + `entrypoint-dependencies` + `portal-write-shortcut` | where an edge is allowed to LAND, and then the intra-subsystem matrix by the layer that answers for it — an Orchestrator's declared class, the data blocks, the entry points and the process layer — with the Portal read-face guard last, the one that reads narratives and dispatch tables rather than `dependsOn` |
 | `pattern-ownership` | `pattern-membership` + `pattern-containment` + `unowned-blocks` + `member-visibility` | who may own and what a claim must name, what each pattern must contain, which data blocks are left standing alone, and who may see a private member |
+| `declarative-assertions` | `assertion-forbidden-edges` + `assertion-required-fields` + `assertion-endpoint-shapes` | the assertion KIND is what a pack author writes, and each kind asks its own question of its own collection: an edge in the dependency graph, a field on a spec at one level, or the transport and address an endpoint binds |
+| `target-language` | `signature-language-builtins` + `narrative-language-constructs` | what a CONTRACT may name in the declared language, and what a NARRATIVE may describe in it — two codes over two collections that only ever shared the `targetLanguage` opt-in |
+| `technology-boundaries` | `technology-binding` + `technology-boundaries` | which stereotype may bind a technology at all, separated from where that technology's NAME may then appear |
 
 `profile-registration` also checks the project's own `projectType` before each subsystem's profile rather than after —
 the project-wide question first. On wairon's own tree the split retires `wiring_rules_impl`'s
@@ -490,6 +493,31 @@ resolution, reach and licensing decide nothing there. Behaviour is preserved to 
 561 rule-matrix fixtures (2069 findings) is byte-identical before and after. `doctrine_rules_impl`'s
 `EXCESSIVE_NARRATIVE_STEPS` allow is retired and its `NARRATIVE_COMPLEXITY` allow now names only `portalEndpoints` and
 `portalCallAuth`, the two the family still owes.
+
+`declarative-assertions` was the last of the 48-step narratives, at cognitive score 61, and its shape was a ladder over
+the three assertion kinds: one loop, one `switch`, and three arms that shared nothing but a selector and a message
+suffix. The kinds are not implementation detail — a pack author writes `kind: forbid-edge` by hand — so each is now a
+rule a user can find in `wairon rules list` under the word they typed, and the shared reading of one assertion (which
+components a selector picks, how a violation is reported at the pack's severity with its stated reason) is
+`declared-assertion.ts`, imported by all three. The alternative, keeping one rule and hiding the kind dispatch in a
+derivation, would have moved the bulk of the logic into three unnarrated functions and left the registry claiming one
+rule where a user sees three doctrines. The three narratives measure 14, 14 and 10.
+
+`technology-boundaries` was reshaped rather than split in half: `TECH_ON_LOGIC_COMPONENT` reads an implementation's own
+`technologies` and its component's stereotype and nothing else, so it lifts out whole as `technology-binding` (score 3),
+but `TECH_LEAKAGE` and `VENDOR_NAME_IN_CONTRACT` share the technology-HOME index — the ownership closure, its contracts,
+its implementations and its subsystem chain, per declared token — and separating them would build that index twice. They
+stay one rule, at 15 rather than 23, because the collection phase now walks every declared token of every declaring
+implementation once instead of nesting a token loop inside an implementation loop, with each declaring component's scope
+computed once and reused. That map is deliberately still the PLAIN owner map (every `owns` claim, last claimant winning)
+and not `ctx.ownershipIndex()`: it feeds a scope-widening step, so narrowing it would turn one finding into two on a tree
+that already carries an ownership error. `target-language` needed neither trick — its two codes never shared a loop, only
+the `targetLanguage` opt-in — and its halves measure 6 and 6 once each collects the specs it judges before judging them.
+
+Behaviour is preserved to the letter: the full finding set of all 561 rule-matrix fixtures (2069 findings) is
+byte-identical before and after. Both families' `NARRATIVE_COMPLEXITY` and `EXCESSIVE_NARRATIVE_STEPS` allows are
+retired outright — nothing in `extension_rules_impl` or `heuristic_rules_impl` reaches the severe band or lists more
+than 25 steps any more, and the worst narrative left in either family measures 15.
 
 ### The rules share one derived read model
 

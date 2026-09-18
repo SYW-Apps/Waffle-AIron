@@ -6,7 +6,8 @@ import type { ValidationIssue } from '../../src/core/validation.js';
 import { couplingRule } from '../../src/core/rules/heuristic/coupling-health.js';
 import { complexityRule } from '../../src/core/rules/heuristic/complexity-and-metadata.js';
 import { namingRule } from '../../src/core/rules/heuristic/naming-conventions.js';
-import { languageRule } from '../../src/core/rules/heuristic/target-language.js';
+import { narrativeLanguageConstructsRule } from '../../src/core/rules/heuristic/narrative-language-constructs.js';
+import { technologyBindingRule } from '../../src/core/rules/heuristic/technology-binding.js';
 import { technologyRule } from '../../src/core/rules/heuristic/technology-boundaries.js';
 
 // ---------------------------------------------------------------------------
@@ -139,9 +140,9 @@ describe('heuristic draft context — complexity-and-metadata', () => {
   });
 });
 
-describe('heuristic draft context — target-language', () => {
+describe('heuristic draft context — narrative-language-constructs', () => {
   it('an implementation whose contract is draft is in draft context (the shared recipe, unchanged)', () => {
-    const issues = run(languageRule, {
+    const issues = run(narrativeLanguageConstructsRule, {
       system: { schemaVersion: '1.0.0', name: 'Marketplace', vision: 'v', targetLanguage: 'rust', ...stamp } as never,
       subsystems: [sub('ledger')],
       components: [comp('ledger-orchestrator', 'ledger')],
@@ -152,8 +153,8 @@ describe('heuristic draft context — target-language', () => {
   });
 });
 
-describe('heuristic draft context — technology-boundaries', () => {
-  const issues = () => run(technologyRule, {
+describe('heuristic draft context — technology-binding and technology-boundaries', () => {
+  const tree: Partial<BuildContextOptions> = {
     subsystems: [
       sub('crm'),
       sub('analytics', { status: 'draft', description: 'Nightly MySQL exports for the finance team.' }),
@@ -176,7 +177,9 @@ describe('heuristic draft context — technology-boundaries', () => {
       impl('insight_orchestrator_impl', 'iinsight_orchestrator', [{ name: 'summarize' }], { status: 'draft', description: 'Reads the mysql replica directly.' }),
       impl('session_orchestrator_impl', 'isession_orchestrator', [{ name: 'resumeSession' }], { status: 'draft', technologies: ['redis'] }),
     ],
-  });
+  };
+  const issues = () => run(technologyRule, tree);
+  const bindingIssues = () => run(technologyBindingRule, tree);
 
   it('a draft subsystem leaking the technology is in draft context', () => {
     expect(found(issues(), 'TECH_LEAKAGE', 'analytics')?.draftContext).toBe(true);
@@ -187,7 +190,7 @@ describe('heuristic draft context — technology-boundaries', () => {
   });
 
   it('a draft implementation binding a technology on a logic component is in draft context', () => {
-    expect(found(issues(), 'TECH_ON_LOGIC_COMPONENT', 'session_orchestrator_impl')?.draftContext).toBe(true);
+    expect(found(bindingIssues(), 'TECH_ON_LOGIC_COMPONENT', 'session_orchestrator_impl')?.draftContext).toBe(true);
   });
 
   it('a draft interface naming the vendor in its identifiers is in draft context', () => {

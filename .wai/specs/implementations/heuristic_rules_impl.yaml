@@ -1,8 +1,9 @@
 id: heuristic_rules_impl
 name: Heuristic Rules Implementation
 description: >-
-  The heuristic rule family - coupling health, target language, technology boundaries, naming
-  conventions, and complexity/metadata - implemented under src/core/rules/heuristic/.
+  The heuristic rule family - coupling health, target-language fit in contracts and in narratives,
+  technology binding and boundaries, naming conventions, and complexity/metadata - implemented under
+  src/core/rules/heuristic/.
 contract: iheuristic_rules
 simPath: tests/core/validation.test.ts
 methods:
@@ -146,392 +147,6 @@ methods:
           When comp.dependsOn.length exceeds threshold(comp), report GOD_COMPONENT (warning; draft
           context ctx.isComponentDraft(comp.id)) naming comp.id, its dependency count and
           threshold(comp).
-        type: local
-    symbol: check
-  - name: targetLanguage
-    sourcePath: src/core/rules/heuristic/target-language.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Define markersFor(family): LANGUAGE_MARKERS[family] merged with
-          ctx.ext.languages[family]?.foreignBuiltins (lowercased) when present; families = the union
-          of LANGUAGE_MARKERS's keys and ctx.ext.languages's keys.
-        type: local
-      - stepNumber: 2
-        label: intfLoop
-        description: >-
-          For each interface, check its methods' type references against the target language's
-          builtin vocabulary.
-        type: loop
-        loopKind: forEach
-        over: ctx.interfaces
-        endStep: 16
-      - stepNumber: 3
-        description: >-
-          Resolve comp = ctx.componentMap.get(intf.component) and lang =
-          ctx.targetLanguageFor(comp?.subsystem), already normalized to the language-table key; when
-          lang is defined, ownMarkers = markersFor(lang).
-        type: local
-      - stepNumber: 4
-        label: intfGuard
-        description: Branch on whether this interface's subsystem has a checkable target language.
-        type: branch
-        condition: >-
-          lang is undefined, or ownMarkers is undefined or empty (no target language declared, or
-          the language has no builtin vocabulary of its own to check against)
-        onFalseStep: 6
-      - stepNumber: 5
-        description: Continue to the next interface - nothing to check without a target language.
-        type: jump
-        toStep: 2
-      - stepNumber: 6
-        label: computeIntfDraft
-        description: >-
-          Compute isDraftCtx = ctx.isComponentDraft(intf.component), or intf.status being 'draft' or
-          'design'.
-        type: local
-      - stepNumber: 7
-        label: methodLoop
-        description: For each method on the interface, scan its type references.
-        type: loop
-        loopKind: forEach
-        over: intf.methods
-        endStep: 16
-      - stepNumber: 8
-        label: refLoop
-        description: >-
-          For each type reference the method's signature uses, check whether it belongs to a foreign
-          language family.
-        type: loop
-        loopKind: forEach
-        over: m.typeRefs()
-        endStep: 16
-      - stepNumber: 9
-        description: refLower = ref.toLowerCase().
-        type: local
-      - stepNumber: 10
-        label: refGuard
-        description: Branch on whether the reference already belongs to the target language's own vocabulary.
-        type: branch
-        condition: ownMarkers has refLower (the reference is native to this target language)
-        onFalseStep: 12
-      - stepNumber: 11
-        description: Continue to the next reference - it's already native.
-        type: jump
-        toStep: 8
-      - stepNumber: 12
-        label: familyLoopStart
-        description: >-
-          For each other known language family, check whether this reference is one of its
-          unambiguous builtins.
-        type: loop
-        loopKind: forEach
-        over: families
-        endStep: 16
-      - stepNumber: 13
-        label: familyGuard
-        description: Branch on whether this family is a genuine foreign match for the reference.
-        type: branch
-        condition: family equals lang, or markersFor(family) lacks refLower
-        onFalseStep: 15
-      - stepNumber: 14
-        description: Continue to the next family - no match here.
-        type: jump
-        toStep: 12
-      - stepNumber: 15
-        label: reportBuiltin
-        description: >-
-          Report LANGUAGE_FOREIGN_BUILTIN (warning; draft context isDraftCtx) naming m.name,
-          intf.id, ref, the matched family and lang.
-        type: local
-      - stepNumber: 16
-        label: breakFamily
-        description: >-
-          Stop checking further families for this reference (break) and continue to the next type
-          reference.
-        type: jump
-        toStep: 8
-      - stepNumber: 17
-        label: implLoop
-        description: >-
-          For each implementation, check its narrative flow steps against the target language's
-          construct gaps.
-        type: loop
-        loopKind: forEach
-        over: ctx.implementations
-        endStep: 28
-      - stepNumber: 18
-        description: >-
-          Resolve contract = ctx.interfaceMap.get(impl.contract); when present, comp =
-          ctx.componentMap.get(contract.component) and lang =
-          ctx.targetLanguageFor(comp?.subsystem), already normalized; when lang is defined, gaps =
-          gapsFor(lang).
-        type: local
-      - stepNumber: 19
-        label: implGuard
-        description: Branch on whether this implementation has anything checkable.
-        type: branch
-        condition: >-
-          contract is undefined, or lang is undefined, or gaps has no keys (dangling contract, no
-          target language, or the language documents no flow gaps)
-        onFalseStep: 21
-      - stepNumber: 20
-        description: Continue to the next implementation - nothing to check.
-        type: jump
-        toStep: 17
-      - stepNumber: 21
-        label: computeImplDraft
-        description: Compute isDraftCtx = ctx.isImplementationDraft(impl).
-        type: local
-      - stepNumber: 22
-        label: implMethodLoop
-        description: For each implementation method, scan its narrative steps.
-        type: loop
-        loopKind: forEach
-        over: impl.methods
-        endStep: 28
-      - stepNumber: 23
-        label: stepLoop
-        description: >-
-          For each narrative step, derive the flow constructs it uses and check them against the
-          language's gaps.
-        type: loop
-        loopKind: forEach
-        over: implMethod.narrative
-        endStep: 28
-      - stepNumber: 24
-        description: >-
-          Derive the construct keyspace for this step: a loop step maps to its loopKind (default
-          'forEach' when 'over' is set, else 'while'); every other step type maps to its own type
-          name; a detach:true call/dispatch step additionally adds 'detach' to the set.
-        type: local
-      - stepNumber: 25
-        label: constructLoop
-        description: >-
-          For each construct this step uses, check whether the target language documents a gap for
-          it.
-        type: loop
-        loopKind: forEach
-        over: constructs
-        endStep: 28
-      - stepNumber: 26
-        label: constructGuard
-        description: Branch on whether this construct is a documented gap for the language.
-        type: branch
-        condition: gaps[construct] is undefined (the language documents no gap for this construct)
-        onFalseStep: 28
-      - stepNumber: 27
-        description: Continue to the next construct - nothing to report.
-        type: jump
-        toStep: 25
-      - stepNumber: 28
-        label: reportFlow
-        description: >-
-          Compute the human label for the construct (e.g. 'a do-while loop', 'a detached
-          (fire-and-forget) call', or 'a <construct> step'), then report LANGUAGE_FOREIGN_FLOW
-          (warning; draft context isDraftCtx) naming step.stepNumber, implMethod.name, impl.id, the
-          construct label, lang and the gap guidance.
-        type: local
-    symbol: check
-  - name: technologyBoundaries
-    sourcePath: src/core/rules/heuristic/technology-boundaries.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Define ownerOf (a Map from an owned component id to its owning component id, built from
-          every component's owns list), ownershipRoot(id) (walk ownerOf to the top of the chain,
-          cycle-safe), and ownsClosure(rootId) (BFS over owns to collect the root and every
-          transitive member).
-        type: local
-      - stepNumber: 2
-        description: >-
-          Initialize homes (a Map from a normalized technology key to {label, match,
-          ownerComponents, scope}) to collect technology declarations.
-        type: local
-      - stepNumber: 3
-        label: implLoop1
-        description: For each implementation, collect any technology it declares into the homes index.
-        type: loop
-        loopKind: forEach
-        over: ctx.implementations
-        endStep: 12
-      - stepNumber: 4
-        label: techsGuard
-        description: Branch on whether this implementation declares any technology at all.
-        type: branch
-        condition: impl.technologies is empty or unset
-        onFalseStep: 6
-      - stepNumber: 5
-        description: Continue to the next implementation - nothing declared.
-        type: jump
-        toStep: 3
-      - stepNumber: 6
-        label: resolveOwner
-        description: >-
-          Resolve intf = ctx.interfaceMap.get(impl.contract); comp = intf ?
-          ctx.componentMap.get(intf.component) : undefined.
-        type: local
-      - stepNumber: 7
-        label: compGuard
-        description: Branch on whether the declaring component actually resolves.
-        type: branch
-        condition: >-
-          comp is undefined (a dangling contract reference, reported elsewhere by the hierarchy
-          rule)
-        onFalseStep: 9
-      - stepNumber: 8
-        description: Continue to the next implementation - nothing to attribute this technology to.
-        type: jump
-        toStep: 3
-      - stepNumber: 9
-        label: checkDataLayer
-        description: >-
-          When comp.componentType is not one of the data-layer stereotypes (Adapter, Store,
-          Registry, Index), report TECH_ON_LOGIC_COMPONENT (warning; draft context
-          ctx.isImplementationDraft(impl)) naming impl.id, impl.technologies, comp.id and
-          comp.componentType.
-        type: local
-      - stepNumber: 10
-        description: >-
-          Compute the owning scope: compSet = ownsClosure(ownershipRoot(comp.id)); scope = compSet
-          plus every interface whose component is in compSet, every implementation whose contract's
-          component is in compSet, and every ancestor subsystem (by id or namespace prefix) housing
-          a component in compSet.
-        type: local
-      - stepNumber: 11
-        label: techLoop
-        description: For each declared technology token, register it in the homes index.
-        type: loop
-        loopKind: forEach
-        over: impl.technologies
-        endStep: 12
-      - stepNumber: 12
-        label: recordHome
-        description: >-
-          match = makeMatcher(tech); when match is non-null (the token normalizes to 3+ significant
-          characters and is policeable), key = its normalized fused form; fetch or create
-          homes.get(key) as {label: tech, match, ownerComponents: [], scope: []}, add comp.id to its
-          ownerComponents and merge scope into its scope, and homes.set(key, home).
-        type: local
-      - stepNumber: 13
-        label: homesEmptyGuard
-        description: Branch on whether there is anything to police at all.
-        type: branch
-        condition: homes is empty (no implementation declared a policeable technology)
-        onFalseStep: 15
-      - stepNumber: 14
-        description: >-
-          Return early: no implementation declared a policeable technology, so there is nothing
-          further to check.
-        type: return
-        outcome: no technologies declared - nothing to police
-      - stepNumber: 15
-        label: defineOwnersDesc
-        description: 'Define ownersDesc(home): the quoted, comma-joined list of home.ownerComponents.'
-        type: local
-      - stepNumber: 16
-        label: homeLoop
-        description: >-
-          For each registered technology home, scan the whole spec tree for contract exposure and
-          boundary leakage.
-        type: loop
-        loopKind: forEach
-        over: homes.values()
-        endStep: 28
-      - stepNumber: 17
-        label: vendorIntfLoop
-        description: For every interface, check whether its contract identifiers name this technology.
-        type: loop
-        loopKind: forEach
-        over: ctx.interfaces
-        endStep: 18
-      - stepNumber: 18
-        label: vendorCheck
-        description: >-
-          offending = the names of intf.methods whose contract identifiers (name, signature,
-          returns, each param's name/type, and any endpoint values) match home; when offending is
-          non-empty, report VENDOR_NAME_IN_CONTRACT (warning; draft context
-          ctx.isComponentDraft(intf.component) or intf.status being 'draft' or 'design') naming
-          intf.id, home.label, offending and ownersDesc(home).
-        type: local
-      - stepNumber: 19
-        label: leakCompLoop
-        description: For every component outside the owning scope, scan its surfaces for the technology's name.
-        type: loop
-        loopKind: forEach
-        over: ctx.components
-        endStep: 20
-      - stepNumber: 20
-        label: compLeakCheck
-        description: >-
-          When comp.id is outside home.scope, check its surfaces (id/name, description, dependsOn,
-          owns, basePath) for a match against home; when any surface matches, report TECH_LEAKAGE
-          (warning; draft context ctx.isComponentDraft(comp.id)) naming comp.id, home.label, the
-          matched surfaces and ownersDesc(home).
-        type: local
-      - stepNumber: 21
-        label: leakSubLoop
-        description: For every subsystem outside the owning scope, scan its identity and description.
-        type: loop
-        loopKind: forEach
-        over: ctx.subsystems
-        endStep: 22
-      - stepNumber: 22
-        label: subLeakCheck
-        description: >-
-          When sub.id is outside home.scope and home matches '${sub.id} ${sub.name}
-          ${sub.description}', report TECH_LEAKAGE (warning; draft context sub.status being 'draft'
-          or 'design') naming sub.id, home.label and ownersDesc(home).
-        type: local
-      - stepNumber: 23
-        label: leakIntfLoop
-        description: For every interface outside the owning scope, scan its prose descriptions.
-        type: loop
-        loopKind: forEach
-        over: ctx.interfaces
-        endStep: 24
-      - stepNumber: 24
-        label: intfLeakCheck
-        description: >-
-          When intf.id is outside home.scope and home matches the joined prose of intf.description
-          and every method's description, report TECH_LEAKAGE (warning; draft context
-          ctx.isComponentDraft(intf.component) or intf.status being 'draft' or 'design') naming
-          intf.id, home.label and ownersDesc(home).
-        type: local
-      - stepNumber: 25
-        label: leakImplLoop
-        description: >-
-          For every implementation outside the owning scope, scan its description, source files and
-          narrative.
-        type: loop
-        loopKind: forEach
-        over: ctx.implementations
-        endStep: 26
-      - stepNumber: 26
-        label: implLeakCheck
-        description: >-
-          When this implementation's id is outside home.scope, gather parts = its description and
-          its sourceFiles(), plus for every method its intent and, for every narrative step, its
-          description/targetComponent/targetMethod/condition/over/on/outcome/error and every case
-          value / catch error; when home matches the joined parts, report TECH_LEAKAGE (warning;
-          draft context ctx.isImplementationDraft(impl)) naming the implementation's id, home.label
-          and ownersDesc(home).
-        type: local
-      - stepNumber: 27
-        label: leakTypeLoop
-        description: >-
-          For every type - no owning exemption applies to shared type space - scan its shape for the
-          technology's name.
-        type: loop
-        loopKind: forEach
-        over: ctx.types
-        endStep: 28
-      - stepNumber: 28
-        label: typeLeakCheck
-        description: >-
-          Gather parts = t.id, t.name, t.description, every field's name/type, every method's
-          name/signature/returns; when home matches the joined parts, report TECH_LEAKAGE (warning)
-          naming t.id, home.label and ownersDesc(home).
         type: local
     symbol: check
   - name: namingConventions
@@ -1064,15 +679,344 @@ methods:
           id and carrying ctx.isComponentDraft(component.id).
         type: local
     symbol: check
-lint:
-  allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: >-
-        D2b splits the narratives this reports (couplingHealth, targetLanguage,
-        technologyBoundaries, namingConventions, and complexityAndMetadata); the doctrine's own
-        rules are the worst offenders and go first.
-    - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits targetLanguage and technologyBoundaries, which list more than 25 steps.
+  - name: signatureLanguageBuiltins
+    sourcePath: src/core/rules/heuristic/signature-language-builtins.ts
+    narrative:
+      - stepNumber: 1
+        label: language_tables
+        description: >-
+          Define markersFor(family): LANGUAGE_MARKERS[family] merged with
+          ctx.ext.languages[family]?.foreignBuiltins (lowercased) when present; families = the union
+          of LANGUAGE_MARKERS's keys and ctx.ext.languages's keys.
+        type: local
+      - stepNumber: 2
+        label: scan_set
+        description: >-
+          Gather the references a declared target language can judge: for every interface, comp =
+          ctx.componentMap.get(intf.component) and lang = ctx.targetLanguageFor(comp?.subsystem),
+          already normalized to the language-table key; when lang is defined and ownMarkers =
+          markersFor(lang) is non-empty, every type reference of every method (m.typeRefs()) becomes
+          one entry carrying intf, method, ref, lang, ownMarkers and isDraftCtx =
+          ctx.isComponentDraft(intf.component) or intf.status being 'draft' or 'design'. An
+          interface with no target language, or one whose language has no builtin vocabulary of its
+          own (unknown, or a pack platform that declared none), could legitimately share any builtin
+          and contributes nothing.
+        type: local
+      - stepNumber: 3
+        label: scan_loop
+        description: Check every gathered type reference against the foreign language families.
+        type: loop
+        loopKind: forEach
+        over: the scan entries
+        endStep: 9
+      - stepNumber: 4
+        label: native_guard
+        description: Branch on whether the reference already belongs to the target language's own vocabulary.
+        type: branch
+        condition: ownMarkers has ref.toLowerCase() (the reference is native to this target language)
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Continue to the next reference - it's already native.
+        type: jump
+        toStep: 9
+      - stepNumber: 6
+        label: find_family
+        description: >-
+          foreign = the first family in families, other than lang, whose markersFor(family) contains
+          the lowercased reference (the search stops at that first match).
+        type: local
+      - stepNumber: 7
+        label: foreign_guard
+        description: Branch on whether any other family claims this reference.
+        type: branch
+        condition: foreign is defined - another language family claims the reference as its own builtin
+        onFalseStep: 9
+      - stepNumber: 8
+        label: report_builtin
+        description: >-
+          Report LANGUAGE_FOREIGN_BUILTIN (warning; draft context isDraftCtx) naming the method's
+          name, intf.id, the reference, the matched family and lang.
+        type: local
+      - stepNumber: 9
+        label: scan_done
+        description: This type reference is processed.
+        type: local
+    symbol: check
+  - name: narrativeLanguageConstructs
+    sourcePath: src/core/rules/heuristic/narrative-language-constructs.ts
+    narrative:
+      - stepNumber: 1
+        label: gap_table
+        description: >-
+          Define gapsFor(lang): UNSUPPORTED_FLOW[lang] merged with
+          ctx.ext.languages[lang]?.unsupportedFlow, so a pack may add a whole platform or extend a
+          built-in language's table.
+        type: local
+      - stepNumber: 2
+        label: scan_set
+        description: >-
+          Gather the narrative steps a declared target language can judge: for every implementation
+          whose contract resolves, comp = ctx.componentMap.get(contract.component) and lang =
+          ctx.targetLanguageFor(comp?.subsystem), already normalized; when lang is defined and gaps
+          = gapsFor(lang) has at least one key, every step of every method becomes one entry
+          carrying the implementation, method, step, lang, gaps and isDraftCtx =
+          ctx.isImplementationDraft(impl). A dangling contract, no target language, or a language
+          that documents no flow gap contributes nothing.
+        type: local
+      - stepNumber: 3
+        label: scan_loop
+        description: Check every gathered narrative step against the language's construct gaps.
+        type: loop
+        loopKind: forEach
+        over: the scan entries
+        endStep: 8
+      - stepNumber: 4
+        label: constructs_of
+        description: >-
+          constructsOf(step) - the construct keyspace this step uses: a loop step maps to its
+          loopKind (default 'forEach' when 'over' is set, else 'while'); every other step type maps
+          to its own type name; a detach:true call/dispatch step additionally adds 'detach' to the
+          set.
+        type: local
+      - stepNumber: 5
+        label: construct_loop
+        description: >-
+          For each construct this step uses, check whether the target language documents a gap for
+          it.
+        type: loop
+        loopKind: forEach
+        over: the constructs
+        endStep: 8
+      - stepNumber: 6
+        label: gap_guard
+        description: Branch on whether this construct is a documented gap for the language.
+        type: branch
+        condition: gaps[construct] is defined (the language documents a gap for this construct)
+        onFalseStep: 8
+      - stepNumber: 7
+        label: report_flow
+        description: >-
+          constructLabel(construct) - the human label for the construct (e.g. 'a do-while loop', 'a
+          detached (fire-and-forget) call', or 'a <construct> step') - then report
+          LANGUAGE_FOREIGN_FLOW (warning; draft context isDraftCtx) naming step.stepNumber, the
+          method's name, the implementation's id, the construct label, lang and the gap guidance.
+        type: local
+      - stepNumber: 8
+        label: construct_done
+        description: This construct is processed.
+        type: local
+    symbol: check
+  - name: technologyBinding
+    sourcePath: src/core/rules/heuristic/technology-binding.ts
+    narrative:
+      - stepNumber: 1
+        label: impl_loop
+        description: For each implementation, judge the stereotype that binds whatever technology it declares.
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 5
+      - stepNumber: 2
+        label: resolve_owner
+        description: >-
+          Resolve intf = ctx.interfaceMap.get(impl.contract); comp = intf ?
+          ctx.componentMap.get(intf.component) : undefined.
+        type: local
+      - stepNumber: 3
+        label: binding_guard
+        description: >-
+          Branch on whether this implementation binds a technology on a component that may not hold
+          one. A dangling contract is the hierarchy rule's finding, not this one's.
+        type: branch
+        condition: >-
+          impl.technologies is non-empty, comp resolves, and comp.componentType is not one of the
+          data-layer stereotypes (Adapter, Store, Registry, Index)
+        onFalseStep: 5
+      - stepNumber: 4
+        label: report_binding
+        description: >-
+          Report TECH_ON_LOGIC_COMPONENT (warning; draft context ctx.isImplementationDraft(impl))
+          naming impl.id, impl.technologies, comp.id and comp.componentType, and pointing at the
+          data-layer seam to extract.
+        type: local
+      - stepNumber: 5
+        label: impl_done
+        description: This implementation is processed.
+        type: local
+    symbol: check
+  - name: technologyBoundaries
+    sourcePath: src/core/rules/heuristic/technology-boundaries.ts
+    narrative:
+      - stepNumber: 1
+        label: ownership_helpers
+        description: >-
+          Define ownerOf (a Map from an owned component id to its owning component id, built from
+          every component's owns list - a PLAIN map, last claimant winning, including claims
+          pattern-membership reports as illegal), ownershipRoot(id) (walk ownerOf to the top of the
+          chain, cycle-safe), and ownsClosure(rootId) (BFS over owns to collect the root and every
+          transitive member).
+        type: local
+      - stepNumber: 2
+        label: declarations
+        description: >-
+          Gather the declarations: for every implementation that declares at least one technology
+          and whose contract's component resolves (a dangling contract declares nothing - the
+          hierarchy rule reports it), one entry per declared token, carrying that component and the
+          token.
+        type: local
+      - stepNumber: 3
+        label: scope_of
+        description: >-
+          Define scopeOf(comp), memoized per declaring component: compSet =
+          ownsClosure(ownershipRoot(comp.id)); the scope is compSet plus every interface whose
+          component is in compSet, every implementation whose contract's component is in compSet,
+          and every ancestor subsystem (by id or namespace prefix) housing a component in compSet.
+        type: local
+      - stepNumber: 4
+        label: homes_init
+        description: >-
+          Initialize homes (a Map from a normalized technology key to {label, match,
+          ownerComponents, scope}).
+        type: local
+      - stepNumber: 5
+        label: declaration_loop
+        description: Register every declared token in the homes index.
+        type: loop
+        loopKind: forEach
+        over: the declarations
+        endStep: 6
+      - stepNumber: 6
+        label: record_home
+        description: >-
+          match = makeMatcher(tech); when match is non-null (the token normalizes to 3+ significant
+          characters and is policeable), key = its normalized fused form; fetch or create
+          homes.get(key) as {label: tech, match, ownerComponents: [], scope: []}, add comp.id to its
+          ownerComponents and merge scopeOf(comp) into its scope, and homes.set(key, home).
+        type: local
+      - stepNumber: 7
+        label: homes_empty_guard
+        description: Branch on whether there is anything to police at all.
+        type: branch
+        condition: homes is empty (no implementation declared a policeable technology)
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Return early: no implementation declared a policeable technology, so there is nothing
+          further to check.
+        type: return
+        outcome: no technologies declared - nothing to police
+      - stepNumber: 9
+        label: define_owners_desc
+        description: 'Define ownersDesc(home): the quoted, comma-joined list of home.ownerComponents.'
+        type: local
+      - stepNumber: 10
+        label: home_loop
+        description: >-
+          For each registered technology home, scan the whole spec tree for contract exposure and
+          boundary leakage.
+        type: loop
+        loopKind: forEach
+        over: homes.values()
+        endStep: 22
+      - stepNumber: 11
+        label: vendor_intf_loop
+        description: For every interface, check whether its contract identifiers name this technology.
+        type: loop
+        loopKind: forEach
+        over: ctx.interfaces
+        endStep: 12
+      - stepNumber: 12
+        label: vendor_check
+        description: >-
+          offending = the names of intf.methods whose contractIdentifiers (name, signature, returns,
+          each param's name/type, and any endpoint values) match home; when offending is non-empty,
+          report VENDOR_NAME_IN_CONTRACT (warning; draft context
+          ctx.isComponentDraft(intf.component) or intf.status being 'draft' or 'design') naming
+          intf.id, home.label, offending and ownersDesc(home). ALL interfaces are scanned, including
+          the owning component's own: the contract is the swap seam.
+        type: local
+      - stepNumber: 13
+        label: leak_comp_loop
+        description: For every component outside the owning scope, scan its surfaces for the technology's name.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 14
+      - stepNumber: 14
+        label: comp_leak_check
+        description: >-
+          When comp.id is outside home.scope, check its surfaces (id/name, description, dependsOn,
+          owns, basePath) for a match against home; when any surface matches, report TECH_LEAKAGE
+          (warning; draft context ctx.isComponentDraft(comp.id)) naming comp.id, home.label, the
+          matched surfaces and ownersDesc(home).
+        type: local
+      - stepNumber: 15
+        label: leak_sub_loop
+        description: For every subsystem outside the owning scope, scan its identity and description.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 16
+      - stepNumber: 16
+        label: sub_leak_check
+        description: >-
+          When sub.id is outside home.scope and home matches '${sub.id} ${sub.name}
+          ${sub.description}', report TECH_LEAKAGE (warning; draft context sub.status being 'draft'
+          or 'design') naming sub.id, home.label and ownersDesc(home).
+        type: local
+      - stepNumber: 17
+        label: leak_intf_loop
+        description: For every interface outside the owning scope, scan its prose descriptions.
+        type: loop
+        loopKind: forEach
+        over: ctx.interfaces
+        endStep: 18
+      - stepNumber: 18
+        label: intf_leak_check
+        description: >-
+          When intf.id is outside home.scope and home matches the joined prose of intf.description
+          and every method's description, report TECH_LEAKAGE (warning; draft context
+          ctx.isComponentDraft(intf.component) or intf.status being 'draft' or 'design') naming
+          intf.id, home.label and ownersDesc(home). Prose INSIDE the owning scope may name the tech
+          - that is honest documentation, not coupling.
+        type: local
+      - stepNumber: 19
+        label: leak_impl_loop
+        description: >-
+          For every implementation outside the owning scope, scan its description, source files and
+          narrative.
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 20
+      - stepNumber: 20
+        label: impl_leak_check
+        description: >-
+          When this implementation's id is outside home.scope, match home against
+          implementationText(impl): its description and its sourceFiles(), plus for every method its
+          intent and, for every narrative step, its
+          description/targetComponent/targetMethod/condition/over/on/outcome/error and every case
+          value / catch error. On a match, report TECH_LEAKAGE (warning; draft context
+          ctx.isImplementationDraft(impl)) naming the implementation's id, home.label and
+          ownersDesc(home).
+        type: local
+      - stepNumber: 21
+        label: leak_type_loop
+        description: >-
+          For every type - no owning exemption applies to shared type space - scan its shape for the
+          technology's name.
+        type: loop
+        loopKind: forEach
+        over: ctx.types
+        endStep: 22
+      - stepNumber: 22
+        label: type_leak_check
+        description: >-
+          Gather parts = t.id, t.name, t.description, every field's name/type, every method's
+          name/signature/returns; when home matches the joined parts, report TECH_LEAKAGE (warning)
+          naming t.id, home.label and ownersDesc(home).
+        type: local
+    symbol: check
 status: draft
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-17T20:36:31.343Z'
+updatedAt: '2026-09-18T12:28:58.894Z'

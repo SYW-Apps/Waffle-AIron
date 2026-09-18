@@ -1,5 +1,6 @@
 /**
- * Technology-boundary fixtures (src/core/rules/heuristic/technology-boundaries.ts).
+ * Technology-boundary fixtures (src/core/rules/heuristic/technology-binding.ts
+ * and technology-boundaries.ts).
  *
  * Documented intents pinned here (all warnings):
  *  - TECH_ON_LOGIC_COMPONENT: only data-layer stereotypes (Adapter/Store/
