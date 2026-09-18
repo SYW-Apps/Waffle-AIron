@@ -2,9 +2,10 @@ id: web_portal_impl
 name: Web Portal Implementation
 description: >-
   Browser-facing HTTP boundary for the unified web UI: serves the client app shell/static assets at
-  the root and forwards the thin session/SSO/context/graph routes to the web orchestrator.
-  Session-cookie authenticated; the served app reuses every existing scoped endpoint with the
-  session as its credential, so there are no per-page server endpoints here.
+  the root, forwards the thin session/SSO/context routes to the web session orchestrator, and the
+  graph/canvas routes to the web graph orchestrator that owns them. Session-cookie authenticated;
+  the served app reuses every existing scoped endpoint with the session as its credential, so there
+  are no per-page server endpoints here.
 contract: iweb_portal
 sourcePath: src/server/web.ts
 methods:
@@ -20,7 +21,7 @@ methods:
       - stepNumber: 1
         description: Forward to the web orchestrator
         type: call
-        targetComponent: web_orchestrator
+        targetComponent: web_session_orchestrator
         targetMethod: startSignIn
   - name: completeSignIn
     narrative:
@@ -29,30 +30,32 @@ methods:
           Forward to the web orchestrator to create the session; the portal then sets the session
           cookie from the returned session id
         type: call
-        targetComponent: web_orchestrator
+        targetComponent: web_session_orchestrator
         targetMethod: completeSignIn
   - name: signOut
     narrative:
       - stepNumber: 1
         description: Forward to the web orchestrator; the portal then clears the session cookie
         type: call
-        targetComponent: web_orchestrator
+        targetComponent: web_session_orchestrator
         targetMethod: signOut
   - name: getContext
     narrative:
       - stepNumber: 1
         description: Forward to the web orchestrator's getCurrentContext
         type: call
-        targetComponent: web_orchestrator
+        targetComponent: web_session_orchestrator
         targetMethod: getCurrentContext
     symbol: getCurrentContext
   - name: getGraph
     narrative:
       - stepNumber: 1
-        description: Forward to the web orchestrator's getGraph
+        description: >-
+          Forward to the web graph orchestrator, which authenticates the session and returns the
+          scoped level-of-detail graph
         type: call
-        targetComponent: web_orchestrator
-        targetMethod: getGraph
+        targetComponent: web_graph_orchestrator
+        targetMethod: get
   - name: signOutEverywhere
     narrative:
       - stepNumber: 1
@@ -60,7 +63,7 @@ methods:
           Forward to the web orchestrator to revoke all of the caller's sessions, then clear the
           current session cookie in the response.
         type: call
-        targetComponent: web_orchestrator
+        targetComponent: web_session_orchestrator
         targetMethod: signOutEverywhere
   - name: devLogin
     narrative:
@@ -69,17 +72,17 @@ methods:
           Forward to the web orchestrator to mint or reuse the local-developer session; the portal
           then sets the session cookie from the returned id and redirects to the app root
         type: call
-        targetComponent: web_orchestrator
+        targetComponent: web_session_orchestrator
         targetMethod: startDevSession
     symbol: startDevSession
   - name: serveProjectCanvas
     narrative:
       - stepNumber: 1
         description: >-
-          Forward to the web orchestrator's getProjectCanvas and return the canvas HTML with an HTML
-          content type
+          Forward to the web graph orchestrator's project canvas and return the canvas HTML with an
+          HTML content type
         type: call
-        targetComponent: web_orchestrator
+        targetComponent: web_graph_orchestrator
         targetMethod: getProjectCanvas
     symbol: getProjectCanvas
   - name: adminListUsers
@@ -141,19 +144,19 @@ methods:
   - name: adminListOrgUnits
     narrative:
       - stepNumber: 1
-        description: Resolve the session cookie and forward to the web admin orchestrator
+        description: Resolve the session cookie and forward to the web instance admin orchestrator
         type: call
-        targetComponent: web_admin_orchestrator
+        targetComponent: web_instance_admin_orchestrator
         targetMethod: listOrganizationUnits
     detail: calls-only
   - name: adminUpsertOrgUnit
     narrative:
       - stepNumber: 1
         description: >-
-          Parse the organization-unit record from the body, resolve the session cookie, and forward
-          to the web admin orchestrator
+          Parse the unit record from the body, resolve the session cookie, and forward to the web
+          instance admin orchestrator
         type: call
-        targetComponent: web_admin_orchestrator
+        targetComponent: web_instance_admin_orchestrator
         targetMethod: upsertOrganizationUnit
     detail: calls-only
   - name: adminPlaceProject
@@ -161,9 +164,9 @@ methods:
       - stepNumber: 1
         description: >-
           Parse projectId + unitId from the body, resolve the session cookie, and forward to the web
-          admin orchestrator
+          instance admin orchestrator
         type: call
-        targetComponent: web_admin_orchestrator
+        targetComponent: web_instance_admin_orchestrator
         targetMethod: placeProject
     detail: calls-only
   - name: mintAgentToken
@@ -241,15 +244,15 @@ methods:
           requireTls) and answer ok. Establishes a session (no prior cookie), so the route is NOT in
           the cookie-mutation CSRF set.
         type: call
-        targetComponent: web_orchestrator
+        targetComponent: web_session_orchestrator
         targetMethod: signInWithPassword
     detail: calls-only
   - name: adminListSecretRefs
     narrative:
       - stepNumber: 1
-        description: Resolve the session cookie and forward to the web admin orchestrator
+        description: Resolve the session cookie and forward to the web instance admin orchestrator
         type: call
-        targetComponent: web_admin_orchestrator
+        targetComponent: web_instance_admin_orchestrator
         targetMethod: listSecretRefs
     detail: calls-only
   - name: getLoginOptions
@@ -260,16 +263,16 @@ methods:
           unauthenticated pre-auth read — no session and no CSRF gate; 404-gated with every /web
           route on exposure.webUiEnabled)
         type: call
-        targetComponent: web_orchestrator
+        targetComponent: web_session_orchestrator
         targetMethod: getLoginOptions
   - name: adminRemoveUnit
     narrative:
       - stepNumber: 1
         description: >-
           Parse unitId + disposition from the body, resolve the session cookie, and forward to the
-          web admin orchestrator
+          web instance admin orchestrator
         type: call
-        targetComponent: web_admin_orchestrator
+        targetComponent: web_instance_admin_orchestrator
         targetMethod: removeUnit
     detail: calls-only
   - name: adminListRoles
@@ -763,4 +766,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-09-11T23:02:05.477Z'
+updatedAt: '2026-09-18T16:58:05.080Z'

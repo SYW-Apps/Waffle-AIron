@@ -64,16 +64,17 @@ import type {
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Web Orchestrator + Web Graph Orchestrator + Web Portal (sdd_host)
+// Web Session Orchestrator + Web Graph Orchestrator + Web Portal (sdd_host)
 //
 // THREE components realize in this module (all sharing sourcePath src/server/web.ts):
 //
-// 1. web_orchestrator — the unified web UI's server-side shell: SSO sign-in
+// 1. web_session_orchestrator — the unified web UI's browser-session lifecycle: SSO sign-in
 //    start/complete (unauthenticated, trust anchored by the signed SSO state and
 //    the provider code exchange), browser-session lifecycle (create on sign-in,
 //    remove on sign-out, opportunistic expired-session GC), the session-principal
-//    context projection, and the graph entry point delegated to the graph
-//    orchestrator. MULTI-DEVICE: prior sessions are left intact on sign-in, so one
+//    context projection, and the pre-auth login-options read. The live graph and
+//    the project canvas belong to the graph orchestrator, which the portal reaches
+//    directly. MULTI-DEVICE: prior sessions are left intact on sign-in, so one
 //    principal may hold concurrent sessions; each is independently revocable, and
 //    signOutEverywhere revokes them all. Audit appends are best-effort.
 //
@@ -2776,7 +2777,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
 type Body = any;
 
 /** Sign the built-in super-admin in with a username + password posted as JSON
- *  ({user, password}); forwards to web_orchestrator.signInWithPassword and sets the
+ *  ({user, password}); forwards to web_session_orchestrator.signInWithPassword and sets the
  *  session cookie exactly like the SSO callback (Secure follows requireTls). It
  *  ESTABLISHES a session (no prior cookie exists to ride), so it is intentionally
  *  NOT in the cookie-mutation CSRF set. An invalid credential (or disabled password

@@ -1,12 +1,13 @@
 id: iweb_admin_orchestrator
 name: Web Admin Orchestrator Interface
 description: >-
-  Contract for the web UI's admin-settings workflows. Every method is session-authenticated (the
-  browser sessionId, a first-class data-plane credential). User, identity-provider, and API-key
-  methods forward to the identity/admin orchestrators passing the session as the credential, so
-  those orchestrators' scope authorization and auditing apply unchanged. Organization-unit methods
-  are owned here: they resolve the session to a Principal, require an instance-wide admin grant, and
-  mutate through the organization repository with best-effort auditing.
+  Contract for the web UI's admin control-bridge on the PUBLIC data plane: user,
+  identity-provider/SSO, role and permission-assignment administration, plus the user's own
+  single-project MCP token self-service. Every method takes the browser sessionId as its credential
+  and hands it straight to the control-plane orchestrator that owns the capability, whose scope
+  authorization and auditing apply unchanged. The instance-structure surfaces this bridge does not
+  forward — organization units, project placements and the secret key names — are the web instance
+  admin orchestrator's own contract.
 component: web_admin_orchestrator
 methods:
   - name: listUsers
@@ -79,48 +80,6 @@ methods:
         type: string
       - name: id
         type: string
-  - name: listOrganizationUnits
-    description: >-
-      Resolve the session to a Principal via the authentication component, require an instance-wide
-      admin grant, and return every organization unit through the organization repository. Not
-      audited (a read).
-    signature: 'listOrganizationUnits(sessionId: string): OrganizationUnitRecord[]'
-    returns: OrganizationUnitRecord[]
-    params:
-      - name: sessionId
-        type: string
-  - name: upsertOrganizationUnit
-    description: >-
-      Resolve the session to a Principal, require an instance-wide admin grant, create or update an
-      organization unit through the organization repository, and append a best-effort
-      org.unit.upsert (security) audit event.
-    signature: >-
-      upsertOrganizationUnit(sessionId: string, record: OrganizationUnitRecord):
-      OrganizationUnitRecord
-    returns: OrganizationUnitRecord
-    params:
-      - name: sessionId
-        type: string
-      - name: record
-        type: OrganizationUnitRecord
-    guarantees:
-      - atomic
-  - name: placeProject
-    description: >-
-      Resolve the session to a Principal, require an instance-wide admin grant, place a project into
-      an organization unit through the organization repository, and append a best-effort
-      org.placement.set (security) audit event.
-    signature: 'placeProject(sessionId: string, projectId: string, unitId: string): void'
-    returns: void
-    params:
-      - name: sessionId
-        type: string
-      - name: projectId
-        type: string
-      - name: unitId
-        type: string
-    guarantees:
-      - atomic
   - name: mintProjectToken
     description: >-
       Mint a single-project MCP token for an AI agent. Forwards to identity_orchestrator.mintToken
@@ -157,34 +116,6 @@ methods:
     params:
       - name: sessionId
         type: string
-  - name: listSecretRefs
-    description: >-
-      Resolve the session to a Principal, require an instance-wide admin grant, and return the
-      configured secret KEY NAMES (never the values) through the secret repository — so the
-      identity-provider form can offer existing clientSecretRefs to pick from. Names are not
-      sensitive; raw secrets never leave the store. A read; not audited.
-    signature: 'listSecretRefs(sessionId: string): string[]'
-    returns: string[]
-    params:
-      - name: sessionId
-        type: string
-  - name: removeUnit
-    description: >-
-      Resolve the session to a Principal, require an instance-wide admin grant, then dispose of the
-      organization unit per the UnitDisposition: migrate/absorb/alternative reparent its child units
-      and re-point its project placements onto the destination (an existing target unit, the parent,
-      or a freshly created replacement sibling), applying the returned id remap to placement and
-      exposeTo references, then delete the emptied unit; cascade deletes the whole subtree and its
-      placements. Appends a best-effort org.unit.remove (security) audit event.
-    signature: 'removeUnit(sessionId: string, unitId: string, disposition: UnitDisposition): void'
-    returns: void
-    params:
-      - name: sessionId
-        type: string
-      - name: unitId
-        type: string
-      - name: disposition
-        type: UnitDisposition
   - name: listRoles
     description: >-
       Forward to permission_admin_orchestrator.listRoles with the session as the credential
@@ -302,4 +233,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-09-17T20:35:25.759Z'
+updatedAt: '2026-09-18T16:57:45.238Z'

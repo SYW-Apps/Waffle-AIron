@@ -1,31 +1,25 @@
 id: web_admin_orchestrator
 name: Web Admin Orchestrator
 description: >-
-  Server-side control-bridge for the unified web UI on the PUBLIC data plane. ADMIN capabilities
-  (user, identity-provider/SSO, and organization-unit management) forward to the identity
-  orchestrator passing the ws_ session AS the credential, so their scope authorization applies
-  unchanged; org-unit writes are owned here (authenticateSession -> instance-admin -> organization
-  repository -> best-effort audit). It ALSO handles user-scoped SELF-SERVICE: minting a
-  single-project MCP token for an AI agent via the identity orchestrator (mintToken authorizes
-  strictly against the caller's own project access). Web-UI login (human, session/SSO) and MCP
-  tokens (agent, one project) are deliberately separate concerns — no mixing.
+  Server-side control-bridge for the unified web UI on the PUBLIC data plane. It is a switchboard
+  and nothing else: every method hands the browser ws_ session to the control-plane orchestrator
+  that owns the capability, so that orchestrator's scope authorization and auditing apply unchanged.
+  ADMIN capabilities (user and identity-provider/SSO management) forward to the identity
+  orchestrator; roles and permission assignments to the permission admin orchestrator. It ALSO
+  carries user-scoped SELF-SERVICE: minting a single-project MCP token for an AI agent via the
+  identity orchestrator (mintSelfToken authorizes strictly against the caller's own project access).
+  Web-UI login (human, session/SSO) and MCP tokens (agent, one project) are deliberately separate
+  concerns — no mixing. The instance-structure workflows this bridge once owned — organization
+  units, project placements, the secret key names — moved to the web instance admin orchestrator, so
+  nothing here authorizes, mutates or audits on its own.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
   - identity_orchestrator
-  - authentication
-  - authorization
-  - organization_repository
-  - permission_repository
-  - user_repository
-  - audit_repository
-  - secret_repository
   - permission_admin_orchestrator
 lint:
-  allow:
-    - code: INCOHESIVE_METHODS
-      reason: D2b splits this component along the method groups the finding names.
+  allow: []
 status: complete
 createdAt: '2026-07-13T18:27:33.510Z'
-updatedAt: '2026-09-17T17:53:20.987Z'
+updatedAt: '2026-09-18T16:57:58.477Z'

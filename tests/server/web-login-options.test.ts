@@ -12,7 +12,7 @@ import type { HostConfig, IdentityProviderConfig } from '../../src/server/types.
 // ---------------------------------------------------------------------------
 // Dynamic login screen (sdd_host): the pre-auth GET /web/login-options read.
 //
-// web_orchestrator.getLoginOptions projects WHICH sign-in methods exist —
+// web_session_orchestrator.getLoginOptions projects WHICH sign-in methods exist —
 // passwordLogin (the env-anchored built-in admin configured on the host config)
 // plus one { id, displayName } entry per ENABLED identity provider — and NOTHING
 // else: no secrets, clientIds, issuer URLs, or endpoints ever cross the pre-auth
