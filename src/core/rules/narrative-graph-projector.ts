@@ -1,4 +1,5 @@
 import { effectiveDetail } from '../../models/index.js';
+import type { NarrativeStep } from '../../models/index.js';
 import type { RuleContext } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -53,9 +54,52 @@ export interface NarrativeReach {
   reachesMethod(compId: string, methodName: string): boolean;
 }
 
+/** One reachability edge a narrative step contributes (narrative_edge): the component
+ *  to reach and, when the step names one, the method to enqueue on it. */
+export interface NarrativeEdge {
+  compId: string;
+  methodName?: string;
+}
+
 // Key with '#': component ids may themselves contain '::' (namespaced subprojects),
 // so '::' cannot separate component from method.
 const methodKey = (compId: string, methodName: string): string => `${compId}#${methodName}`;
+
+/**
+ * Which reachability edges ONE narrative step contributes. `call` steps and
+ * `register` handoffs name their target directly; a `dispatch` step reaches the
+ * routed Portal and then, through that Portal's dispatch table, the component
+ * bound to the step's capability. Every other step type carries no edge.
+ *
+ * A register step is a handoff, not an invocation — but the callback IS reached
+ * wherever its registering narrative is (the runtime will call it), so the edge
+ * is taken only when the walk asked for it.
+ *
+ * Pure: it reads the step, the tree's components and the one option, and
+ * returns edges. Applying them — reaching and enqueueing — is the walk's job.
+ */
+export function stepEdges(
+  step: NarrativeStep,
+  ctx: RuleContext,
+  followRegisterEdges: boolean,
+): NarrativeEdge[] {
+  if (step.type === 'call' && step.targetComponent && step.targetMethod) {
+    return [{ compId: step.targetComponent, methodName: step.targetMethod }];
+  }
+  if (followRegisterEdges && step.type === 'register' && step.targetComponent && step.targetMethod) {
+    return [{ compId: step.targetComponent, methodName: step.targetMethod }];
+  }
+  if (step.type === 'dispatch' && step.targetComponent) {
+    const edges: NarrativeEdge[] = [{ compId: step.targetComponent }];
+    const portal = ctx.componentMap.get(step.targetComponent);
+    const binding = portal?.dispatch?.find(b => b.capability === step.capability);
+    if (binding && ctx.componentMap.has(binding.component)) {
+      edges.push({ compId: binding.component, methodName: binding.method });
+    }
+    return edges;
+  }
+  return [];
+}
 
 /**
  * Breadth-first walk over the L5 execution edges from the seeds. Edges are
@@ -131,24 +175,9 @@ export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions =
     if (!impl || !methodImpl) continue;
 
     for (const step of methodImpl.narrative) {
-      if (step.type === 'call' && step.targetComponent && step.targetMethod) {
-        reachComponent(step.targetComponent);
-        enqueueMethod(step.targetComponent, step.targetMethod);
-      }
-      // A register step is a handoff, not an invocation — but the callback IS
-      // reached wherever its registering narrative is (the runtime will call it).
-      if (followRegisterEdges && step.type === 'register' && step.targetComponent && step.targetMethod) {
-        reachComponent(step.targetComponent);
-        enqueueMethod(step.targetComponent, step.targetMethod);
-      }
-      if (step.type === 'dispatch' && step.targetComponent) {
-        reachComponent(step.targetComponent);
-        const portal = ctx.componentMap.get(step.targetComponent);
-        const binding = portal?.dispatch?.find(b => b.capability === step.capability);
-        if (binding && ctx.componentMap.has(binding.component)) {
-          reachComponent(binding.component);
-          enqueueMethod(binding.component, binding.method);
-        }
+      for (const edge of stepEdges(step, ctx, followRegisterEdges)) {
+        reachComponent(edge.compId);
+        if (edge.methodName) enqueueMethod(edge.compId, edge.methodName);
       }
     }
 

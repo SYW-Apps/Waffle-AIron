@@ -29,6 +29,35 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: stepEdges
+    description: >-
+      Which reachability edges ONE narrative step contributes. A call step, and a register handoff
+      when the walk asked for those, name their target directly and contribute one edge each; a
+      dispatch step contributes the routed Portal with no method, plus the component that Portal's
+      dispatch table binds to the step's capability. Every other step type contributes none. Pure:
+      it reads the step, the tree's components and the one option, and returns edges — reaching and
+      enqueueing them is the walk's job, so the same step, context and option always give the same
+      edges.
+    signature: >-
+      stepEdges(step: NarrativeStep, ctx: RuleContext, followRegisterEdges: boolean):
+      NarrativeEdge[]
+    returns: NarrativeEdge[]
+    params:
+      - name: step
+        type: NarrativeStep
+        description: The one narrative step to read
+      - name: ctx
+        type: RuleContext
+        description: >-
+          The validation run's shared read model, for routing a dispatch step through the target
+          Portal's dispatch table
+      - name: followRegisterEdges
+        type: boolean
+        description: >-
+          Whether a register handoff contributes its edge — the walk's doctrine, not a property of
+          the step
+    guarantees:
+      - idempotent
 status: draft
 createdAt: '2026-09-14T06:07:00.382Z'
-updatedAt: '2026-09-14T06:07:00.387Z'
+updatedAt: '2026-09-18T19:36:30.828Z'

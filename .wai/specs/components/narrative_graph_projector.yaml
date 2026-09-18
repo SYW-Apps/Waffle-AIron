@@ -13,7 +13,10 @@ description: >-
   are served surfaces, the detail-dial fallback) that needs an L5 narrative, which a type method
   cannot carry; it is recomputed per call rather than maintained over a Store, so it is not an
   Index; and it is a derivation rather than a verdict, so it does not sit on a rule family's arbiter
-  contract.
+  contract. stepEdges — which edges one narrative step contributes — stays here for the same reason
+  and not on the narrative_step type: it is the register-handoff doctrine itself, it needs the whole
+  tree's components to route a dispatch step through a Portal's dispatch table, and the option it
+  takes is the walk's policy, not a property of the step.
 subsystem: sdd_validator
 componentType: Orchestrator
 owns: []
@@ -22,4 +25,4 @@ dependencyClass: pure
 variant: projector
 status: draft
 createdAt: '2026-09-14T05:42:27.585Z'
-updatedAt: '2026-09-15T20:40:56.928Z'
+updatedAt: '2026-09-18T19:37:20.399Z'

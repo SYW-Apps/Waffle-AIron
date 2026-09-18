@@ -38,6 +38,283 @@ methods:
         type: return
         outcome: canvas html response
     symbol: handleViewDiagram
+  - name: dispatchProjectLifecycleTool
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the single JSON-RPC message from the request body, together with the called tool
+          name, its decoded arguments, and the request id the response must echo
+        type: local
+      - stepNumber: 2
+        description: >-
+          Only the execute-primary project-lifecycle tools, the hosted landscape tools and the
+          hosted project-ops tools (packs/policy/producer/commit) are served here; every other tool
+          belongs to the scoped MCP server
+        type: branch
+        condition: >-
+          the message is not a tools/call, or the called tool is not one of the sdd_host_*
+          project-lifecycle or project-ops tools or the hosted landscape tools
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer with nothing, so the caller falls through to the scoped sdd_* MCP server
+        type: return
+        outcome: not a tool this dispatch serves
+      - stepNumber: 4
+        description: Dispatch by tool name to the matching orchestrator method
+        type: switch
+        'on': the called tool name
+        cases:
+          - value: sdd_host_initialize_project
+            step: 5
+          - value: sdd_host_lock_project
+            step: 7
+          - value: sdd_host_get_approval_status
+            step: 9
+          - value: sdd_host_await_approval
+            step: 11
+          - value: sdd_landscape_list_reachable_projects
+            step: 13
+          - value: sdd_landscape_list_reachable_project_interfaces
+            step: 15
+          - value: sdd_landscape_list_visible_surfaces
+            step: 17
+          - value: sdd_landscape_get_project_surface
+            step: 19
+          - value: sdd_host_pack_list
+            step: 21
+          - value: sdd_host_pack_install
+            step: 23
+          - value: sdd_host_policy_evaluate
+            step: 25
+          - value: sdd_host_policy_reconcile
+            step: 27
+          - value: sdd_host_produce
+            step: 29
+          - value: sdd_host_commit_project
+            step: 31
+          - value: sdd_host_export_tree
+            step: 33
+          - value: sdd_host_import_tree
+            step: 35
+        defaultStep: 5
+      - stepNumber: 5
+        description: >-
+          Execute-or-request project initialization, passing the credential and decoded tool
+          arguments; returns a ProjectActionOutcome
+        type: call
+        targetComponent: project_lifecycle_orchestrator
+        targetMethod: initializeProject
+      - stepNumber: 6
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 7
+        description: >-
+          Execute-or-request a project lock, passing the credential, the TOP project id, AND the
+          bound subproject qualifier when the binding carries one — so a qualified credential
+          freezes exactly the child tree it is scoped to, while permission resolution and audit stay
+          anchored at the top project.
+        type: call
+        targetComponent: project_lifecycle_orchestrator
+        targetMethod: lockProject
+      - stepNumber: 8
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 9
+        description: Get the approval-request status, passing the credential and request id
+        type: call
+        targetComponent: project_lifecycle_orchestrator
+        targetMethod: getApprovalStatus
+      - stepNumber: 10
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 11
+        description: >-
+          Long-poll for a decision on the caller's approval request, passing the credential, request
+          id, and timeout
+        type: call
+        targetComponent: project_lifecycle_orchestrator
+        targetMethod: awaitApproval
+      - stepNumber: 12
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 13
+        description: Dispatch the reachable-projects discovery with currentProjectId = the bound project
+        type: call
+        targetComponent: surface_exchange_orchestrator
+        targetMethod: listReachableProjectsForMcp
+      - stepNumber: 14
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 15
+        description: >-
+          Dispatch the reachable-target interface discovery (currentProjectId = bound project,
+          target from arguments)
+        type: call
+        targetComponent: surface_exchange_orchestrator
+        targetMethod: listReachableProjectInterfacesForMcp
+      - stepNumber: 16
+        description: Continue to shape the response (reachable-interfaces path)
+        type: jump
+        toStep: 37
+      - stepNumber: 17
+        description: >-
+          Dispatch the visibility-resolved discovery catalog (currentProjectId = the BOUND project;
+          never from arguments)
+        type: call
+        targetComponent: surface_exchange_orchestrator
+        targetMethod: listVisibleSurfaces
+      - stepNumber: 18
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 19
+        description: >-
+          Dispatch the contract-grade surface fetch (currentProjectId = the BOUND project;
+          targetProjectId from arguments)
+        type: call
+        targetComponent: surface_exchange_orchestrator
+        targetMethod: getProjectSurfaceForMcp
+      - stepNumber: 20
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 21
+        description: >-
+          Dispatch the per-project pack listing (project = the BOUND project) — project:read gated
+          upstream
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: listProjectPacks
+      - stepNumber: 22
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 23
+        description: >-
+          Dispatch the per-project declarative pack install (project = the BOUND project,
+          name/content from arguments) — project:admin gated upstream
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: installProjectPack
+      - stepNumber: 24
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 25
+        description: >-
+          Dispatch the pack/profile compliance evaluation (projectId = the BOUND project) —
+          project:write gated upstream
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: evaluateProjectPolicy
+      - stepNumber: 26
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 27
+        description: >-
+          Dispatch the pack/profile policy reconciliation (projectId = the BOUND project) —
+          project:write gated upstream
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: reconcileProjectPolicy
+      - stepNumber: 28
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 29
+        description: >-
+          Dispatch the producer projection run (project = the BOUND project, target from arguments)
+          — project:admin gated upstream
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: produceProducer
+      - stepNumber: 30
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 31
+        description: >-
+          Dispatch the deliberate .wai/-scoped commit+push (project = the BOUND project — the data
+          plane binds ONE project so no project argument exists; optional subsystem + message from
+          arguments) — project:write gated upstream
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: commitProject
+      - stepNumber: 32
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 33
+        description: >-
+          Export the BOUND tree as a .waitree archive, forwarding the bound subproject qualifier so
+          a credential narrowed to a chained child exports exactly that child — project:read gated
+          upstream. The bytes are base64-encoded into the tool result, bounded by the same body cap
+          every data-plane response is.
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: exportProjectTree
+      - stepNumber: 34
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 35
+        description: >-
+          Import a base64-decoded .waitree archive into the BOUND tree, forwarding the bound
+          subproject qualifier — project:admin gated upstream, executable entries always refused,
+          and the replaced tree backed up.
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: importProjectTree
+      - stepNumber: 36
+        description: Continue to shape the response
+        type: jump
+        toStep: 37
+      - stepNumber: 37
+        description: Shape the project-lifecycle or landscape result into the JSON-RPC tool response envelope
+        type: local
+      - stepNumber: 38
+        description: Return the JSON-RPC tool response envelope the caller sends
+        type: return
+        outcome: the JSON-RPC tool response envelope
+    symbol: dispatchProjectLifecycleTool
+  - name: auditToolCall
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the redacted AuditEvent (action mcp.tool.call, actor and tokenId from the principal,
+          project id, tool name as target, outcome)
+        type: local
+      - stepNumber: 2
+        description: Append the audit event without letting a failure fail the request
+        type: try
+        endStep: 3
+        catches:
+          - error: audit append failure
+            step: 5
+      - stepNumber: 3
+        description: Append the redacted mcp.tool.call audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 4
+        description: On a successful append, return without entering the audit-failure handler below
+        type: return
+        outcome: audit event appended
+      - stepNumber: 5
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 6
+        description: The append failure was recorded as a server diagnostic; the request is unaffected
+        type: return
+        outcome: audit append failure recorded, request unaffected
+    symbol: auditToolCall
   - name: handle
     narrative:
       - stepNumber: 1
@@ -115,241 +392,21 @@ methods:
         outcome: refused a tool outside the bound child on a subproject-qualified binding
       - stepNumber: 12
         description: >-
-          If the called tool is an execute-primary project-lifecycle tool, a hosted landscape tool,
-          or a hosted project-ops tool (packs/policy/producer/commit), dispatch it to the matching
-          orchestrator instead of the scoped MCP server
-        type: branch
-        condition: >-
-          the called tool is one of the sdd_host_* project-lifecycle or project-ops tools or the
-          hosted landscape tools
-        onTrueStep: 13
-        onFalseStep: 48
+          Offer the call to the project-lifecycle, landscape and project-ops dispatch, which serves
+          it from the matching orchestrator instead of the scoped MCP server
+        type: call
+        targetComponent: host_request_orchestrator
+        targetMethod: dispatchProjectLifecycleTool
       - stepNumber: 13
-        description: Dispatch by tool name to the matching orchestrator method
-        type: switch
-        'on': the called tool name
-        cases:
-          - value: sdd_host_initialize_project
-            step: 14
-          - value: sdd_host_lock_project
-            step: 16
-          - value: sdd_host_get_approval_status
-            step: 18
-          - value: sdd_host_await_approval
-            step: 20
-          - value: sdd_landscape_list_reachable_projects
-            step: 22
-          - value: sdd_landscape_list_reachable_project_interfaces
-            step: 24
-          - value: sdd_landscape_list_visible_surfaces
-            step: 26
-          - value: sdd_landscape_get_project_surface
-            step: 28
-          - value: sdd_host_pack_list
-            step: 30
-          - value: sdd_host_pack_install
-            step: 32
-          - value: sdd_host_policy_evaluate
-            step: 34
-          - value: sdd_host_policy_reconcile
-            step: 36
-          - value: sdd_host_produce
-            step: 38
-          - value: sdd_host_commit_project
-            step: 40
-          - value: sdd_host_export_tree
-            step: 42
-          - value: sdd_host_import_tree
-            step: 44
-        defaultStep: 14
+        description: >-
+          A tool the dispatch serves answers with a response envelope: continue to the shared
+          audit-event step, skipping the ordinary permission gate and scoped MCP server dispatch. A
+          tool it does not serve answers with nothing and falls through to both.
+        type: branch
+        condition: the dispatch answered with a response envelope
+        onTrueStep: 20
+        onFalseStep: 14
       - stepNumber: 14
-        description: >-
-          Execute-or-request project initialization, passing the credential and decoded tool
-          arguments; returns a ProjectActionOutcome
-        type: call
-        targetComponent: project_lifecycle_orchestrator
-        targetMethod: initializeProject
-      - stepNumber: 15
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 16
-        description: >-
-          Execute-or-request a project lock, passing the credential, the TOP project id, AND the
-          bound subproject qualifier when the binding carries one — so a qualified credential
-          freezes exactly the child tree it is scoped to, while permission resolution and audit stay
-          anchored at the top project.
-        type: call
-        targetComponent: project_lifecycle_orchestrator
-        targetMethod: lockProject
-      - stepNumber: 17
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 18
-        description: Get the approval-request status, passing the credential and request id
-        type: call
-        targetComponent: project_lifecycle_orchestrator
-        targetMethod: getApprovalStatus
-      - stepNumber: 19
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 20
-        description: >-
-          Long-poll for a decision on the caller's approval request, passing the credential, request
-          id, and timeout
-        type: call
-        targetComponent: project_lifecycle_orchestrator
-        targetMethod: awaitApproval
-      - stepNumber: 21
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 22
-        description: Dispatch the reachable-projects discovery with currentProjectId = the bound project
-        type: call
-        targetComponent: surface_exchange_orchestrator
-        targetMethod: listReachableProjectsForMcp
-      - stepNumber: 23
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 24
-        description: >-
-          Dispatch the reachable-target interface discovery (currentProjectId = bound project,
-          target from arguments)
-        type: call
-        targetComponent: surface_exchange_orchestrator
-        targetMethod: listReachableProjectInterfacesForMcp
-      - stepNumber: 25
-        description: Continue to shape the response (reachable-interfaces path)
-        type: jump
-        toStep: 46
-      - stepNumber: 26
-        description: >-
-          Dispatch the visibility-resolved discovery catalog (currentProjectId = the BOUND project;
-          never from arguments)
-        type: call
-        targetComponent: surface_exchange_orchestrator
-        targetMethod: listVisibleSurfaces
-      - stepNumber: 27
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 28
-        description: >-
-          Dispatch the contract-grade surface fetch (currentProjectId = the BOUND project;
-          targetProjectId from arguments)
-        type: call
-        targetComponent: surface_exchange_orchestrator
-        targetMethod: getProjectSurfaceForMcp
-      - stepNumber: 29
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 30
-        description: >-
-          Dispatch the per-project pack listing (project = the BOUND project) — project:read gated
-          upstream
-        type: call
-        targetComponent: project_ops_orchestrator
-        targetMethod: listProjectPacks
-      - stepNumber: 31
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 32
-        description: >-
-          Dispatch the per-project declarative pack install (project = the BOUND project,
-          name/content from arguments) — project:admin gated upstream
-        type: call
-        targetComponent: project_ops_orchestrator
-        targetMethod: installProjectPack
-      - stepNumber: 33
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 34
-        description: >-
-          Dispatch the pack/profile compliance evaluation (projectId = the BOUND project) —
-          project:write gated upstream
-        type: call
-        targetComponent: project_ops_orchestrator
-        targetMethod: evaluateProjectPolicy
-      - stepNumber: 35
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 36
-        description: >-
-          Dispatch the pack/profile policy reconciliation (projectId = the BOUND project) —
-          project:write gated upstream
-        type: call
-        targetComponent: project_ops_orchestrator
-        targetMethod: reconcileProjectPolicy
-      - stepNumber: 37
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 38
-        description: >-
-          Dispatch the producer projection run (project = the BOUND project, target from arguments)
-          — project:admin gated upstream
-        type: call
-        targetComponent: project_ops_orchestrator
-        targetMethod: produceProducer
-      - stepNumber: 39
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 40
-        description: >-
-          Dispatch the deliberate .wai/-scoped commit+push (project = the BOUND project — the data
-          plane binds ONE project so no project argument exists; optional subsystem + message from
-          arguments) — project:write gated upstream
-        type: call
-        targetComponent: project_ops_orchestrator
-        targetMethod: commitProject
-      - stepNumber: 41
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 42
-        description: >-
-          Export the BOUND tree as a .waitree archive, forwarding the bound subproject qualifier so
-          a credential narrowed to a chained child exports exactly that child — project:read gated
-          upstream. The bytes are base64-encoded into the tool result, bounded by the same body cap
-          every data-plane response is.
-        type: call
-        targetComponent: project_ops_orchestrator
-        targetMethod: exportProjectTree
-      - stepNumber: 43
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 44
-        description: >-
-          Import a base64-decoded .waitree archive into the BOUND tree, forwarding the bound
-          subproject qualifier — project:admin gated upstream, executable entries always refused,
-          and the replaced tree backed up.
-        type: call
-        targetComponent: project_ops_orchestrator
-        targetMethod: importProjectTree
-      - stepNumber: 45
-        description: Continue to shape the response
-        type: jump
-        toStep: 46
-      - stepNumber: 46
-        description: Shape the project-lifecycle or landscape result into the JSON-RPC tool response envelope
-        type: local
-      - stepNumber: 47
-        description: >-
-          Continue to the shared audit-event build step, skipping the ordinary permission gate and
-          scoped MCP server dispatch
-        type: jump
-        toStep: 54
-      - stepNumber: 48
         description: >-
           Classify the called tool: a read when its name starts with sdd_get_ or sdd_validate_, or
           when it is one of the explicitly listed read tools — sdd_list_external_interfaces and the
@@ -360,22 +417,22 @@ methods:
           (fail closed: an unknown tool never falls through to read-level gating, and a rename tool
           added later is a write by its prefix rather than by a hand-kept list)
         type: local
-      - stepNumber: 49
+      - stepNumber: 15
         description: >-
           Resolve the caller's required capability (project:read or project:write) over the bound
           project through the authorization component
         type: call
         targetComponent: authorization
         targetMethod: authorize
-      - stepNumber: 50
+      - stepNumber: 16
         description: >-
           If the effective value is not yes, reject with a clear MCP error that the required
           data-plane permission is missing for the bound project
         type: branch
         condition: the effective value is not yes
-        onTrueStep: 51
-        onFalseStep: 52
-      - stepNumber: 51
+        onTrueStep: 17
+        onFalseStep: 18
+      - stepNumber: 17
         description: >-
           Reject with a clear MCP error that the required data-plane permission is missing for the
           bound project
@@ -383,49 +440,38 @@ methods:
         error: >-
           Forbidden — the caller lacks the required data-plane permission (project:read or
           project:write) for this project
-      - stepNumber: 52
+      - stepNumber: 18
         description: Instantiate the scoped sdd_* MCP server
         type: call
         targetComponent: host_mcp_adapter
         targetMethod: createScopedServer
-      - stepNumber: 53
+      - stepNumber: 19
         description: Connect the scoped server to the request transport and process the JSON-RPC message
         type: local
-      - stepNumber: 54
-        description: >-
-          Build the redacted AuditEvent (action mcp.tool.call, actor and tokenId from the principal,
-          project id, tool name as target, outcome)
-        type: local
-      - stepNumber: 55
-        description: Append the audit event without letting a failure fail the request
-        type: try
-        endStep: 57
-        catches:
-          - error: audit append failure
-            step: 58
-      - stepNumber: 56
-        description: Append the redacted mcp.tool.call audit event under the active retention policy
+      - stepNumber: 20
+        description: Audit the handled data-plane tool call on the shared best-effort path
         type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 57
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 59
-      - stepNumber: 58
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 59
+        targetComponent: host_request_orchestrator
+        targetMethod: auditToolCall
+      - stepNumber: 21
         description: Return the MCP response
         type: return
         outcome: MCP response
     symbol: handleMcpRequest
 lint:
   allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: D2b splits the narrative this reports (handle) into steps that call smaller methods.
     - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits handle, which lists more than 25 steps.
+      reason: >-
+        dispatchProjectLifecycleTool lists 38 steps because it IS the hosted data plane's tool
+        table: one guard, one switch, and sixteen arms of two steps each — a call to the
+        orchestrator that owns the tool, then the jump back to the one envelope-shaping step. Its
+        cognitive score is 18 and every arm is flat. The count is the length of a closed list of
+        tool names, not the size of a job: splitting it by owning orchestrator would invent three
+        sub-dispatchers where src/server/request.ts has one switch, and would have to invent a
+        default arm for each of them — today the single default IS sdd_host_get_approval_status, so
+        two of the three new defaults would be unreachable code deciding what an impossible tool
+        name does. Same shape and same reasoning as cli_runner.runPack and
+        rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-17T20:36:33.957Z'
+updatedAt: '2026-09-18T19:33:41.262Z'

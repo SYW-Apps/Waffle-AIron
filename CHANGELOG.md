@@ -796,6 +796,52 @@ the size of a job.
   unrelated `UNDECLARED_DEPENDENCY` allow untouched. Two value objects are new for the extracted returns:
   `ParentResolution` and `ProfileRepair`. Tree: 0 findings before and after.
 
+### The last two severe narratives: one names the functions it already called, one names the derivation inside it
+
+The two narratives still in the severe cognitive band — the only ones left in the tree — carried the last
+`NARRATIVE_COMPLEXITY` allows. Neither turned out to be complicated logic. One was three phases of a request narrated as
+one method although the code had split them years ago; the other was a pure derivation inlined into a graph walk.
+
+- **`host_request_orchestrator.handle` (59 steps / score 25 → 21 / 5) was inlining two functions the code already had.**
+  `src/server/request.ts` exports `dispatchProjectLifecycleTool` and `auditToolCall`, and `handleMcpRequest` calls both —
+  but `ihost_request_orchestrator` declared only `handle` and `viewDiagram`, so the spec spelled both out longhand. Both
+  are contract methods now, each bound by `symbol:` to the function that was already sitting there. Steps 13–46 (the
+  sixteen-arm hosted tool table and the envelope it shapes) move into `dispatchProjectLifecycleTool`; steps 54–58 (build
+  the redacted event, append it, diagnose a failure) move into `auditToolCall` (6 steps, score 1), which is what the
+  confinement refusal, the permission refusal and both dispatch paths have always shared. Spec-only — not a line of code
+  changed — and one new value object, `McpToolResponse`, for the envelope the dispatch returns. No dependency was added:
+  a method calling its own component adds no edge, so the component stays at 9 against its cap of 10.
+- **The tool table keeps a step allow, reworded, because its length is a list and not a job.**
+  `dispatchProjectLifecycleTool` lists 38 steps and scores 18: one guard, one switch, and sixteen arms of two steps each
+  — a call to the orchestrator that owns the tool, then the jump back to the single envelope-shaping step. Splitting it
+  by owning orchestrator would invent three sub-dispatchers where `request.ts` has one switch, and each would need a
+  `default` arm invented for it: today the single default IS `sdd_host_get_approval_status`, so two of the three new
+  defaults would be unreachable code deciding what an impossible tool name does. Same shape and same reasoning as
+  `cli_runner.runPack` (26) and `rule_registry.registerBuiltinRules` (89).
+- **`narrative_graph_projector.walk` (25 steps / score 21 → 20 / 15) hands its per-step edge derivation to `stepEdges`
+  (8 steps, score 1).** Unlike `handle`, this one is a genuine extraction: the file held exactly one exported function
+  and a `methodKey` helper, so nothing was waiting to be modelled. The switch inside the narrative loop — which edges a
+  `call`, `register` or `dispatch` step contributes — is a pure derivation over one step, so it is now a pure function
+  returning `NarrativeEdge[]`, and the walk applies each edge by reaching its component and enqueueing its method. The
+  three per-arm jumps disappear with it.
+- **The derivation stayed on the component and did NOT become a `narrative_step` type method.**
+  `method_implementation.cognitiveScore()` and `stepGraph()` are the precedent for pure arithmetic belonging on the type,
+  and it was measured against them. Refused for three reasons, now written into the component's own description: the
+  derivation needs the whole tree's components to route a `dispatch` step through a Portal's dispatch table, so it is not
+  intrinsic to one step; it takes `followRegisterEdges`, which is the walk's policy rather than a property of the step;
+  and what the switch encodes IS the doctrine the component exists to carry in an L5 narrative (a `register` step is a
+  handoff, a dispatch table is a served surface) — and a type method carries no narrative.
+- **Allows: two `NARRATIVE_COMPLEXITY` deleted** (`host_request_orchestrator_impl`, `narrative_graph_projector_impl`)
+  **and one `EXCESSIVE_NARRATIVE_STEPS` reworded** (`host_request_orchestrator_impl`, which named `handle` and now names
+  the tool table it moved to). No narrative anywhere in the tree is severe any more, and every step allow that remains
+  says why it is permanent.
+- **Proof.** 56 of `handle`'s 59 steps and 18 of `walk`'s 25 are byte-identical in their new homes, diffed field by field
+  with jump targets relocated for the shift; the three that are not are the seam itself — the branch that blended the
+  callee's classification with the caller's dispatch, and the two jumps the method boundary replaced — partitioned clause
+  by clause with no clause dropped. The projector's extraction was checked against the pre-extraction inner loop over all
+  384 shapes of narrative step (every type × target × method × capability × option) and agrees on every one. 3316 unit
+  tests, 21 e2e; the tree validates at 0 findings before and after.
+
 ### Execution budgets: the topology gains a resource axis
 
 The derived topology said who owns what, and nothing about what their work costs

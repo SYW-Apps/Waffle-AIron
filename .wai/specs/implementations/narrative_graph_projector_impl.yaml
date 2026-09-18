@@ -62,7 +62,7 @@ methods:
         type: loop
         condition: the queue is non-empty
         loopKind: while
-        endStep: 24
+        endStep: 19
       - stepNumber: 9
         description: Dequeue the next {compId, methodName} from the front of the queue.
         type: local
@@ -91,61 +91,25 @@ methods:
         type: loop
         loopKind: forEach
         over: methodImpl.narrative
-        endStep: 20
+        endStep: 15
       - stepNumber: 14
         description: >-
-          Only call, register and dispatch narrative steps carry reachability edges; branch on the
-          step's type — any other type contributes nothing and moves to the next narrative step.
-        type: switch
-        'on': the narrative step's type
-        cases:
-          - value: call
-            step: 15
-          - value: register
-            step: 17
-          - value: dispatch
-            step: 19
-        defaultStep: 13
+          Derive which reachability edges this narrative step contributes, from the step itself, the
+          tree's components and whether register handoffs count; a step type that carries no edge
+          contributes nothing and the walk moves to the next narrative step.
+        type: call
+        targetComponent: narrative_graph_projector
+        targetMethod: stepEdges
       - stepNumber: 15
-        label: callEdge
+        label: applyEdges
         description: >-
-          Call step: when it also declares targetComponent and targetMethod, reach targetComponent
-          (the shared reach-a-component behavior above) and, if reach.reachesMethod(targetComponent,
-          targetMethod) is false, add methodKey(targetComponent, targetMethod) to reachedMethods and
-          push {compId: targetComponent, methodName: targetMethod} onto the queue; otherwise this
-          step contributes no edge.
+          Apply each derived edge: reach its component (the shared reach-a-component behavior above)
+          and, when the edge names a method, if reach.reachesMethod(component, method) is false, add
+          methodKey(component, method) to reachedMethods and push {compId, methodName} onto the
+          queue. Then continue to the next narrative step; this is also the narrative loop's last
+          body step.
         type: local
       - stepNumber: 16
-        description: Continue to the next narrative step.
-        type: jump
-        toStep: 13
-      - stepNumber: 17
-        label: registerEdge
-        description: >-
-          Register step: only when followRegisterEdges is true and the step also declares
-          targetComponent and targetMethod, reach targetComponent and enqueue targetMethod exactly
-          as a call step does — the callback is reached wherever its registering narrative is, but
-          the edge is skipped entirely when the option is off.
-        type: local
-      - stepNumber: 18
-        description: Continue to the next narrative step.
-        type: jump
-        toStep: 13
-      - stepNumber: 19
-        label: dispatchEdge
-        description: >-
-          Dispatch step: when it declares targetComponent, reach targetComponent (the routed
-          Portal), then look up its dispatch table for the binding whose capability matches the
-          step's capability; when a binding exists and ctx.componentMap has its bound component,
-          reach that bound component and, if reach.reachesMethod on it and the bound method is
-          false, add it to reachedMethods and enqueue it.
-        type: local
-      - stepNumber: 20
-        label: dispatchEdgeContinue
-        description: Continue to the next narrative step (also the narrative loop's last body step).
-        type: jump
-        toStep: 13
-      - stepNumber: 21
         description: >-
           An empty narrative below full detail falls back to component-level reachability; a
           full-detail method's empty narrative is a real gap with no fallback, and an unresolvable
@@ -154,33 +118,87 @@ methods:
         condition: >-
           methodImpl.narrative is empty, compId resolves to a component in ctx.componentMap, and
           methodImpl.effectiveDetail(impl, component).level is not 'full'
-        onFalseStep: 24
-      - stepNumber: 22
+        onFalseStep: 19
+      - stepNumber: 17
         label: fallbackLoop
         description: 'For each id in the component''s dependsOn and owns:'
         type: loop
         loopKind: forEach
         over: '[...component.dependsOn, ...component.owns]'
-        endStep: 23
-      - stepNumber: 23
+        endStep: 18
+      - stepNumber: 18
         label: fallbackApply
         description: >-
           When ctx.componentMap has this id, reach it (the shared reach-a-component behavior above)
           and enqueue every one of its contract methods, exactly as a methodless seed does.
         type: local
-      - stepNumber: 24
+      - stepNumber: 19
         label: bfsContinue
         description: Continue to the next queued entry.
         type: jump
         toStep: 8
-      - stepNumber: 25
+      - stepNumber: 20
         description: 'The queue is empty: return the walk''s reach.'
         type: return
         outcome: the accumulated NarrativeReach (reachedComponents, reachedMethods)
+  - name: stepEdges
+    sourcePath: src/core/rules/narrative-graph-projector.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Only call, register and dispatch narrative steps carry reachability edges; branch on the
+          step's type — any other type contributes nothing.
+        type: switch
+        'on': the narrative step's type
+        cases:
+          - value: call
+            step: 2
+          - value: register
+            step: 4
+          - value: dispatch
+            step: 6
+        defaultStep: 8
+      - stepNumber: 2
+        label: callEdge
+        description: >-
+          Call step: when it also declares targetComponent and targetMethod, contribute one edge
+          naming targetComponent and targetMethod; otherwise this step contributes no edge.
+        type: local
+      - stepNumber: 3
+        description: Return the call step's edge
+        type: return
+        outcome: one edge to targetComponent.targetMethod, or none
+      - stepNumber: 4
+        label: registerEdge
+        description: >-
+          Register step: only when followRegisterEdges is true and the step also declares
+          targetComponent and targetMethod, contribute one edge naming targetComponent and
+          targetMethod exactly as a call step does — the callback is reached wherever its
+          registering narrative is, but the edge is skipped entirely when the option is off.
+        type: local
+      - stepNumber: 5
+        description: Return the register step's edge
+        type: return
+        outcome: one edge to targetComponent.targetMethod, or none when the option is off
+      - stepNumber: 6
+        label: dispatchEdge
+        description: >-
+          Dispatch step: when it declares targetComponent, contribute an edge naming targetComponent
+          (the routed Portal) and no method, then look up its dispatch table for the binding whose
+          capability matches the step's capability; when a binding exists and ctx.componentMap has
+          its bound component, contribute a second edge naming that bound component and its bound
+          method.
+        type: local
+      - stepNumber: 7
+        description: Return the dispatch step's edges
+        type: return
+        outcome: the routed Portal's edge, plus the bound capability server's edge when the table binds it
+      - stepNumber: 8
+        description: Any other step type carries no reachability edge
+        type: return
+        outcome: no edges
 lint:
-  allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: D2b splits the narrative this reports (walk) into steps that call smaller methods.
+  allow: []
 status: draft
 createdAt: '2026-09-14T23:13:09.851Z'
-updatedAt: '2026-09-17T17:55:06.204Z'
+updatedAt: '2026-09-18T19:36:58.990Z'
