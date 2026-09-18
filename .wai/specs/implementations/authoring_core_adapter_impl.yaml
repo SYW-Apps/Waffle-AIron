@@ -1,12 +1,11 @@
 id: authoring_core_adapter_impl
 name: Authoring Core Adapter Implementation
 description: >-
-  The outward hop into sdd_core, as the import seam inside src/core/authoring.ts. The writes forward
-  straight to the core's published surface; the configuration read is the module's own
-  `candidateOptions`, which reaches sdd_core's project-configuration Repository in process — the
-  declared edge names the published portal, which is the sanctioned shape for an in-process import
-  that lands in a peer's concrete module. Swappable for a remote spec store without changing the
-  workflow that calls it.
+  The outward hop into sdd_core, as the import seam inside src/core/authoring.ts. All three methods
+  forward straight to the core's published surface: the two writes, and the configuration read the
+  module's own `candidateOptions` wraps — deliberately defensively, because an uninitialized or
+  unreadable project must yield the default severities rather than fail a write closed. Swappable
+  for a remote spec store without changing the workflow that calls it.
 contract: iauthoring_core_adapter
 sourcePath: src/core/authoring.ts
 methods:
@@ -28,16 +27,16 @@ methods:
         targetComponent: core_portal
         targetMethod: updateSpec
   - name: loadProjectConfig
-    narrative: []
-    intent: >-
-      Resolve the settings a candidate is judged with: the bound project's rule severities and
-      project type, read from sdd_core's project configuration. The read is deliberately defensive —
-      an uninitialized or unreadable project yields the default severities instead of throwing,
-      because a configuration read must never be the thing that fails a write closed. It reaches the
-      peer's configuration Repository in process rather than calling the published read, which is
-      why this method chooses prose over a call step: the declared edge to the core portal is the
-      sanctioned hop, and its barrel is cosmetic at runtime.
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core subsystem's published read,
+          answering with nothing when the project has none or cannot be read — a configuration read
+          must never be the thing that fails a write closed
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadProjectConfig
     symbol: candidateOptions
 status: complete
 createdAt: '2026-09-18T21:43:38.007Z'
-updatedAt: '2026-09-18T21:51:09.810Z'
+updatedAt: '2026-09-18T22:47:57.482Z'

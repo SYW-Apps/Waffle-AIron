@@ -421,9 +421,13 @@ methods:
       exactly what changed. Refuses a spec that does not exist, a mis-selected kind on the singleton
       L0, and a delta key the level's canonical schema does not know — an unknown key is dropped on
       write, so the edit would otherwise report success and change nothing. Merges identity-keyed
-      arrays element by element, relocates every narrative jump around inserted and deleted steps,
-      honours `unset` and `[]` at each level, and resolves symbolic label references against the
-      merged numbering. Compares the result with what is stored and writes NOTHING when they match.
+      arrays element by element at every depth, applies narrative step deltas in ascending order
+      with every jump relocating around the inserted and deleted steps, rebuilds a step whose type
+      changes for its new type, refuses a delete that addresses no step, that a jump still targets,
+      that a restated label or description does not match, or that would leave a region body
+      standing without its header, honours `unset` and `[]` at each level, and resolves symbolic
+      label references against the merged numbering, a label in the delta replacing the stored
+      number it twins. Compares the result with what is stored and writes NOTHING when they match.
       The caller's hooks, when given, judge the merged spec at the last point before anything
       reaches disk.
     signature: >-
@@ -436,4 +440,4 @@ methods:
         description: The partial change to merge, shaped like the spec, carrying the delta's own verbs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T21:42:19.286Z'
+updatedAt: '2026-09-18T22:48:41.987Z'
