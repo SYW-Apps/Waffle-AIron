@@ -19,8 +19,11 @@ lint:
   allow:
     - code: INCOHESIVE_METHODS
       reason: >-
-        This is a deliberate facade and keeps this allow permanently: it is the library's single
-        entry facade, so splitting would add a hop without separating a responsibility.
+        NOT the pure forwarder the rule now exempts, and this allow no longer claims to be one: 13
+        of its 45 narrated methods hold flow of their own, so it is a facade with workflows in it
+        rather than a switchboard. The allow stands on different ground, and stands permanently:
+        this is the library's ONE entry point for embedders, and splitting it along the call groups
+        would publish several entry points where the package deliberately has one.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T17:53:19.072Z'
+updatedAt: '2026-09-18T16:58:49.417Z'

@@ -6,7 +6,9 @@
  *    more groups of two or more that call no component in common, which is the
  *    "and" in a responsibility made visible. Judged from the narratives' own
  *    call/dispatch edges, and deliberately conservative — one specialized
- *    method beside a cohesive set is never a finding.
+ *    method beside a cohesive set is never a finding, and a PURE FORWARDER
+ *    (every narrated method a single hand-off) is exempt outright, because the
+ *    responsibility lives in whatever it forwards to.
  */
 import { defineRuleFixture } from '../harness.js';
 
@@ -57,6 +59,28 @@ function drives(name: string, targets: string[]) {
 
 const BOOKING = [drives('reserveSlot', ['slot-availability', 'booking-ledger']), drives('releaseSlot', ['slot-availability'])];
 const BILLING = [drives('issueInvoice', ['invoice-ledger', 'tax-rate-table']), drives('voidInvoice', ['invoice-ledger'])];
+
+/** A console method that hands the call straight to the workflow that owns it. */
+function handsOff(name: string, targetComponent: string) {
+  return {
+    name,
+    narrative: [
+      {
+        stepNumber: 1,
+        type: 'call',
+        description: `Hand ${name} to ${targetComponent} with the dispatcher's credential unchanged.`,
+        targetComponent,
+        targetMethod: name,
+      },
+      { stepNumber: 2, type: 'return', description: `Return what ${targetComponent} answered.`, outcome: `${name} result` },
+    ],
+  };
+}
+
+const CONSOLE_METHODS = [
+  ...BOOKING.map(m => handsOff(m.name, 'dispatch-orchestrator')),
+  ...BILLING.map(m => handsOff(m.name, 'billing-orchestrator')),
+];
 
 export default [
   defineRuleFixture({
@@ -129,6 +153,62 @@ export default [
         ...checkInterfaces,
       ],
       implementations: [
+        { id: 'dispatch_orchestrator_impl', contract: 'idispatch_orchestrator', methods: BOOKING },
+        { id: 'billing_orchestrator_impl', contract: 'ibilling_orchestrator', methods: BILLING },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'INCOHESIVE_METHODS',
+    expectFire: false,
+    reason:
+      'The console is a pure forwarder: every method is one hand-off and nothing else, so it holds no responsibility of its own to be split — the booking and billing workflows each hold theirs. Its methods reach different components BECAUSE it is a switchboard, which is exactly the shape the exemption spares; without it the two halves would read as the "and" in a responsibility.',
+    scenario:
+      'A dispatch console forwards each terminal command to the workflow that owns it — slot commands to the dispatch orchestrator, invoice commands to the billing orchestrator — and does nothing else in any method.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [DISPATCH_SUB],
+      components: [
+        {
+          id: 'dispatch-console',
+          componentType: 'Orchestrator',
+          description: 'Single entry point for the dispatcher terminal: hands each command to the workflow that owns it.',
+          dependsOn: ['dispatch-orchestrator', 'billing-orchestrator'],
+        },
+        {
+          id: 'dispatch-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Reserves and releases dock slots for booked loads.',
+          dependsOn: ['slot-availability', 'booking-ledger'],
+        },
+        {
+          id: 'billing-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Issues and voids the invoices a settled load produces.',
+          dependsOn: ['invoice-ledger', 'tax-rate-table'],
+        },
+        ...checkComponents,
+      ],
+      interfaces: [
+        {
+          id: 'idispatch_console',
+          component: 'dispatch-console',
+          methods: CONSOLE_METHODS.map(m => ({ name: m.name, description: `Hand the ${m.name} command to the workflow that owns it.` })),
+        },
+        {
+          id: 'idispatch_orchestrator',
+          component: 'dispatch-orchestrator',
+          methods: BOOKING.map(m => ({ name: m.name, description: `Run the ${m.name} step of the dispatch workflow.` })),
+        },
+        {
+          id: 'ibilling_orchestrator',
+          component: 'billing-orchestrator',
+          methods: BILLING.map(m => ({ name: m.name, description: `Run the ${m.name} step of the billing workflow.` })),
+        },
+        ...checkInterfaces,
+      ],
+      implementations: [
+        { id: 'dispatch_console_impl', contract: 'idispatch_console', methods: CONSOLE_METHODS },
         { id: 'dispatch_orchestrator_impl', contract: 'idispatch_orchestrator', methods: BOOKING },
         { id: 'billing_orchestrator_impl', contract: 'ibilling_orchestrator', methods: BILLING },
       ],

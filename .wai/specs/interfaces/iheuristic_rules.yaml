@@ -218,7 +218,8 @@ methods:
       Rule method-cohesion. An Orchestrator's methods share collaborators; when they split into
       groups that call no component in common, the component holds more than one responsibility.
       Reported only where two or more groups each hold two or more methods, so a single specialized
-      method is not a finding.
+      method is not a finding — and never on a pure forwarder, whose every narrated method is a
+      single hand-off and whose responsibility therefore lives in what it forwards to.
     signature: 'methodCohesion(ctx: RuleContext): void'
     returns: void
     params:
@@ -233,4 +234,4 @@ methods:
           component
 status: draft
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-09-18T12:26:24.738Z'
+updatedAt: '2026-09-18T16:59:19.126Z'

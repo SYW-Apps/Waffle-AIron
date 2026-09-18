@@ -647,36 +647,45 @@ methods:
           component.
         type: local
       - stepNumber: 2
+        description: >-
+          Drop the pure forwarders before judging anything: an implementation whose every narrated
+          method holds exactly one call or dispatch step and nothing beside it but a return hands
+          off and holds no responsibility of its own, so its methods reach different components
+          because it is a switchboard, not because it hides an "and". A local step or a flow step in
+          any narrated method is work of its own and the implementation is judged.
+        type: local
+      - stepNumber: 3
         label: implLoop
         description: For each Orchestrator, judge whether its methods share collaborators.
         type: loop
         loopKind: forEach
         over: those implementations
-        endStep: 6
-      - stepNumber: 3
+        endStep: 7
+      - stepNumber: 4
         description: >-
           Skip the implementation when calledBy holds fewer than two methods; otherwise union every
           pair of methods that share at least one called component, and read off the groups.
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Keep groups holding two or more methods, so one specialized method beside a cohesive set
           is not a finding.
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Do the methods fall into two or more groups that share no collaborator? When not, continue
           with the next Orchestrator.
         type: branch
         condition: two or more groups remain
-        onTrueStep: 6
-        onFalseStep: 2
-      - stepNumber: 6
+        onTrueStep: 7
+        onFalseStep: 3
+      - stepNumber: 7
         description: >-
           ctx.addIssue('warning', 'INCOHESIVE_METHODS', naming each group's methods and the
-          components each group calls, with the advice to split the component along those groups or
-          to acknowledge a deliberate facade with a reasoned lint.allow), anchored on the component
-          id and carrying ctx.isComponentDraft(component.id).
+          components each group calls, with the advice to split the component along those groups, to
+          move the logic out until every method is a single hand-off, or to acknowledge a deliberate
+          facade with a reasoned lint.allow), anchored on the component id and carrying
+          ctx.isComponentDraft(component.id).
         type: local
     symbol: check
   - name: signatureLanguageBuiltins
@@ -1019,4 +1028,4 @@ methods:
     symbol: check
 status: draft
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-18T12:28:58.894Z'
+updatedAt: '2026-09-18T16:59:09.576Z'

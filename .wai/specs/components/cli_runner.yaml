@@ -32,9 +32,12 @@ lint:
         from the one CLI entry orchestrator.
     - code: INCOHESIVE_METHODS
       reason: >-
-        This is a deliberate facade and keeps this allow permanently: it is the terminal dispatch
-        hub whose dependencies are thin per-concern adapters, so splitting would add a hop without
-        separating a responsibility.
+        NOT the pure forwarder the rule now exempts, and this allow no longer claims to be one: 27
+        of the runner's 32 narrated methods hold flow of their own (flag branching, argument
+        shaping, output formatting), so only 5 are single hand-offs. The allow stands on different
+        ground, and stands permanently: the runner IS the terminal's one entry point, and its
+        dependencies are thin per-concern command adapters. Splitting it along the call groups would
+        mint one dispatcher per command family and separate no responsibility.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-17T17:53:17.960Z'
+updatedAt: '2026-09-18T16:58:46.139Z'

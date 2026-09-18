@@ -37,6 +37,19 @@ const calls = (name: string, targets: string[], type: 'call' | 'dispatch' | 'reg
   })),
 });
 
+/** A method whose narrative is spelled out step by step (type + optional target). */
+const steps = (name: string, spec: [string, string?][]) => ({
+  name,
+  narrative: spec.map(([type, targetComponent], i) => ({
+    stepNumber: i + 1,
+    description: `Step ${i + 1} of ${name}.`,
+    type,
+    ...(targetComponent ? { targetComponent, targetMethod: 'handle' } : {}),
+    ...(type === 'return' ? { outcome: 'done' } : {}),
+    ...(type === 'branch' ? { condition: 'the request is empty', onFalseStep: i + 3 } : {}),
+  })),
+});
+
 const impl = (id: string, contract: string, methods: Record<string, unknown>[]) =>
   ({ id, name: id, description: `The ${id} realization.`, contract, methods, status: 'complete', ...stamp }) as never;
 
@@ -103,6 +116,61 @@ describe('method-cohesion — INCOHESIVE_METHODS', () => {
       calls('releaseSlot', ['slot-index'], 'dispatch'),
       ...billing,
     ])).toHaveLength(1);
+  });
+
+  it('exempts a pure forwarder: every method a single hand-off, so the responsibility is the callee\'s', () => {
+    expect(run([
+      steps('reserveSlot', [['call', 'slot-index']]),
+      steps('releaseSlot', [['call', 'slot-index']]),
+      steps('issueInvoice', [['call', 'invoice-repository']]),
+      steps('voidInvoice', [['call', 'invoice-repository']]),
+    ])).toEqual([]);
+  });
+
+  it('exempts a forwarder that names its outcome: one call plus a return is still a hand-off', () => {
+    expect(run([
+      steps('reserveSlot', [['call', 'slot-index'], ['return']]),
+      steps('releaseSlot', [['call', 'slot-index'], ['return']]),
+      steps('issueInvoice', [['call', 'invoice-repository'], ['return']]),
+      steps('voidInvoice', [['call', 'invoice-repository'], ['return']]),
+    ])).toHaveLength(0);
+  });
+
+  it('judges a switchboard again as soon as ONE method does in-component work', () => {
+    expect(run([
+      steps('reserveSlot', [['call', 'slot-index']]),
+      steps('releaseSlot', [['call', 'slot-index']]),
+      steps('issueInvoice', [['local'], ['call', 'invoice-repository'], ['return']]),
+      steps('voidInvoice', [['call', 'invoice-repository']]),
+    ])).toHaveLength(1);
+  });
+
+  it('judges a method that drives two collaborators — that is a workflow, not a hand-off', () => {
+    expect(run([
+      steps('reserveSlot', [['call', 'slot-index'], ['call', 'booking-repository']]),
+      steps('releaseSlot', [['call', 'slot-index']]),
+      steps('issueInvoice', [['call', 'invoice-repository']]),
+      steps('voidInvoice', [['call', 'invoice-repository']]),
+    ])).toHaveLength(1);
+  });
+
+  it('judges a method that decides before it forwards — a branch is logic of its own', () => {
+    expect(run([
+      steps('reserveSlot', [['call', 'slot-index']]),
+      steps('releaseSlot', [['call', 'slot-index']]),
+      steps('issueInvoice', [['branch'], ['call', 'invoice-repository'], ['return']]),
+      steps('voidInvoice', [['call', 'invoice-repository']]),
+    ])).toHaveLength(1);
+  });
+
+  it('does not treat an unnarrated method as a hand-off — only authored narratives are judged', () => {
+    expect(run([
+      steps('reserveSlot', [['call', 'slot-index']]),
+      steps('releaseSlot', [['call', 'slot-index']]),
+      steps('issueInvoice', [['call', 'invoice-repository']]),
+      steps('voidInvoice', [['call', 'invoice-repository']]),
+      { name: 'describe', narrative: [] },
+    ])).toEqual([]);
   });
 
   it('says nothing when fewer than two methods reach anybody', () => {
