@@ -1,4 +1,4 @@
-import type { ComponentSpec, ImplementationSpec } from '../../../models/index.js';
+import type { ComponentSpec, ImplementationSpec, NarrativeStep } from '../../../models/index.js';
 import { SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -9,8 +9,15 @@ import { SddRule } from '../types.js';
 // and dispatch edges, so it measures what the flows actually do rather than
 // what the dependsOn list permits.
 //
-// Deliberately conservative: a group of one is a single specialized method
-// beside a cohesive set, which is normal, so only groups of two or more count.
+// Deliberately conservative in two ways:
+//   - a group of one is a single specialized method beside a cohesive set,
+//     which is normal, so only groups of two or more count;
+//   - a PURE FORWARDER is exempt. A component whose every narrated method is
+//     a single hand-off holds no responsibility of its own — the one it
+//     forwards to does — so there is no cohesion to judge, and its methods
+//     reach different components precisely because it is a switchboard. Same
+//     reasoning as the stutter check's Adapter/Portal exemption, and the same
+//     shape §7 already calls pure 1:1 forwarding on a Repository facade.
 // ---------------------------------------------------------------------------
 
 /** One Orchestrator's methods, each with the components its narrative reaches. */
@@ -50,10 +57,25 @@ function groupsSharingCollaborators(calledBy: Map<string, Set<string>>): string[
   return [...groups.values()];
 }
 
+/**
+ * Whether a method does nothing but hand off: exactly one `call`/`dispatch`
+ * step, and no step beside it but the `return` that names the outcome. A
+ * `local` step is in-component work, and a flow step is a decision — either
+ * means the method does something of its own, so it is not a forwarder.
+ */
+function isForwardingMethod(narrative: NarrativeStep[]): boolean {
+  let handoffs = 0;
+  for (const step of narrative) {
+    if (step.type === 'call' || step.type === 'dispatch') handoffs++;
+    else if (step.type !== 'return') return false;
+  }
+  return handoffs === 1;
+}
+
 export const methodCohesionRule: SddRule = {
   name: 'method-cohesion',
   description:
-    'An Orchestrator\'s methods share collaborators; when they split into groups that call no component in common, the component holds more than one responsibility. Reported only where two or more groups each hold two or more methods, so a single specialized method is not a finding.',
+    'An Orchestrator\'s methods share collaborators; when they split into groups that call no component in common, the component holds more than one responsibility. Reported only where two or more groups each hold two or more methods, so a single specialized method is not a finding — and never on a pure forwarder, whose every narrated method is a single hand-off and whose responsibility therefore lives in what it forwards to.',
   codes: [
     { code: 'INCOHESIVE_METHODS', defaultSeverity: 'warning', summary: 'Orchestrator\'s methods form two or more groups of two or more that share no called component' },
   ],
@@ -67,6 +89,14 @@ export const methodCohesionRule: SddRule = {
       const intf = ctx.interfaceMap.get(impl.contract);
       const comp = intf ? ctx.componentMap.get(intf.component) : undefined;
       if (!comp || comp.componentType !== 'Orchestrator') continue;
+
+      // A pure forwarder answers for no cohesion of its own. Judged over the
+      // methods that carry an authored narrative — an unnarrated method is the
+      // detail dial's business, not this rule's — so a switchboard whose every
+      // hand-off is a single call is never accused of holding two
+      // responsibilities, and one method of real logic is enough to be judged.
+      const narrated = impl.methods.filter(m => (m.narrative ?? []).length > 0);
+      if (narrated.length > 0 && narrated.every(m => isForwardingMethod(m.narrative ?? []))) continue;
 
       const calledBy = new Map<string, Set<string>>();
       for (const method of impl.methods) {
@@ -95,7 +125,7 @@ export const methodCohesionRule: SddRule = {
       ctx.addIssue(
         'warning',
         'INCOHESIVE_METHODS',
-        `Orchestrator "${component.id}" holds ${groups.length} groups of methods that share no called component: ${described}. Split it along those groups, or acknowledge a deliberate facade with a reasoned lint.allow for INCOHESIVE_METHODS.`,
+        `Orchestrator "${component.id}" holds ${groups.length} groups of methods that share no called component: ${described}. Split it along those groups, move the logic out until every method is a single hand-off (a pure forwarder is exempt), or acknowledge a deliberate facade with a reasoned lint.allow for INCOHESIVE_METHODS.`,
         component.id,
         ctx.isComponentDraft(component.id),
       );

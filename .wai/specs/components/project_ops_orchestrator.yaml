@@ -20,9 +20,7 @@ dependsOn:
   - exposure_policy_orchestrator
   - git_backing_orchestrator
 lint:
-  allow:
-    - code: INCOHESIVE_METHODS
-      reason: D2b splits this component along the method groups the finding names.
+  allow: []
 status: complete
 createdAt: '2026-07-16T15:29:55.392Z'
-updatedAt: '2026-09-17T17:53:20.133Z'
+updatedAt: '2026-09-18T16:55:38.063Z'

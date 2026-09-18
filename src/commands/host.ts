@@ -242,7 +242,7 @@ export async function runServe(options: HostOptions = {}): Promise<void> {
 // The local single-project developer server: serves the SAME hosted web UI
 // (src/server/web.ts serveApp) pointed at the CURRENT project (the cwd's .wai/),
 // auto-signed-in, single-project, with no login screen and no tenancy chrome. It
-// REUSES the whole hosted web pipeline (web_orchestrator, web_graph_orchestrator,
+// REUSES the whole hosted web pipeline (web_session_orchestrator, web_graph_orchestrator,
 // the auth bridge, serveApp) — this is NOT a forked/second UI. Loopback ONLY, auth
 // off, dev-only. The developer keeps this open while an agent edits specs and
 // refreshes to see the live graph (validator issues overlay as ⚠ badges).

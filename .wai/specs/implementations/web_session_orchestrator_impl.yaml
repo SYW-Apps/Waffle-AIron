@@ -1,12 +1,13 @@
-id: web_orchestrator_impl
-name: Web Orchestrator Implementation
+id: web_session_orchestrator_impl
+name: Web Session Orchestrator Implementation
 description: >-
-  Server-side shell workflows for the unified web UI: SSO sign-in start/complete, browser-session
-  lifecycle with hygiene (activity touch, expired-session GC, single-active-session-per-principal),
-  the session-principal context projection, and the graph entry point delegated to the web graph
-  orchestrator. Sign-in start/complete are unauthenticated (trust anchored by the signed SSO state
-  and provider code exchange); audit appends are best-effort and never fail the primary action.
-contract: iweb_orchestrator
+  Browser-session lifecycle for the unified web UI: SSO sign-in start/complete, the built-in
+  super-admin password sign-in, sign-out on one device or all of them, the local-developer session,
+  the pre-auth login-options projection, and the session-principal context projection, with session
+  hygiene (activity touch, expired-session GC) on the way. Sign-in start/complete are
+  unauthenticated (trust anchored by the signed SSO state and provider code exchange); audit appends
+  are best-effort and never fail the primary action.
+contract: iweb_session_orchestrator
 sourcePath: src/server/web.ts
 methods:
   - name: startSignIn
@@ -77,16 +78,6 @@ methods:
         description: Return once the session has been removed
         type: return
         outcome: signed out
-  - name: getGraph
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Delegate to the web graph orchestrator, which authenticates the session and returns the
-          scoped level-of-detail graph
-        type: call
-        targetComponent: web_graph_orchestrator
-        targetMethod: get
-    detail: calls-only
   - name: completeSignIn
     narrative:
       - stepNumber: 1
@@ -321,16 +312,6 @@ methods:
         type: return
         outcome: new dev session id
     detail: full
-  - name: getProjectCanvas
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Delegate to the web graph orchestrator, which authenticates the session, scopes the
-          project, and renders the interactive canvas
-        type: call
-        targetComponent: web_graph_orchestrator
-        targetMethod: getProjectCanvas
-    detail: calls-only
   - name: signInWithPassword
     narrative:
       - stepNumber: 1
@@ -456,4 +437,4 @@ lint:
         declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-09-17T20:35:52.917Z'
+updatedAt: '2026-09-18T16:54:33.073Z'

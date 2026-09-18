@@ -676,8 +676,14 @@ wairon's own tree, and the rules that add them pass their own thresholds.
   - `COMPONENT_IS_ITS_ONLY_METHOD` (warning): a component with one method, named after that method — fold it into its
     caller, or name it for its responsibility.
 - **Cohesion.** `INCOHESIVE_METHODS` (warning) reports an Orchestrator whose methods fall into two or more groups of two
-  or more that share no called component: the shape of a component holding two jobs. A deliberate facade acknowledges it
-  with a reasoned `lint.allow`.
+  or more that share no called component: the shape of a component holding two jobs. A **pure forwarder is exempt** — a
+  component whose every narrated method holds exactly one `call` or `dispatch` step and nothing beside it but a `return`
+  hands off and answers for no responsibility of its own, so its methods reach different components precisely because it
+  is a switchboard. That is the same reasoning that exempts Adapters and Portals from the stutter check above, and the
+  same shape §7 already calls pure 1:1 forwarding on a Repository facade. One `local` step — in-component work — or one
+  flow step in any narrated method is enough to be judged again, and a method carrying no narrative is the detail dial's
+  business, not this rule's. A deliberate facade that is not a pure forwarder still acknowledges the finding with a
+  reasoned `lint.allow`.
 - **A project's own configuration wins.** The `complexity`, `documentation` and `naming` configs now resolve as the
   profile pack's settings overlaid with the project's own, which is how `rules.sddRuleSeverity` already resolved.
   Before this, an installed pack's profile overrode a project's explicit value.
@@ -695,6 +701,45 @@ wairon's own tree, and the rules that add them pass their own thresholds.
   a reserved word like `export`, the implementation pins the existing function with `symbol:`, the seam every
   validator rule already uses for `check`. What the complexity and cohesion checks report still carries a reasoned
   `lint.allow` naming the cleanup that removes it.
+
+### Two web orchestrators stop holding two jobs
+
+The cohesion check above named three components on wairon's own tree, and each carried a `lint.allow` promising a split.
+The pure-forwarder exemption answers one of them outright (`project_ops_orchestrator`: 38 methods, every one a single
+hand-off). The other two are answered by moving the logic — spec-only moves: every method stays the function it already
+was, in the file it already lived in.
+
+- **`web_orchestrator` is now `web_session_orchestrator`** and holds only the browser-session lifecycle: SSO sign-in
+  start/complete, the built-in admin password sign-in, sign-out on one device and on all of them, the local-developer
+  session, the pre-auth login options, and the session-principal context. Its other half was two methods that forwarded
+  `getGraph` and `getProjectCanvas` to `web_graph_orchestrator` and did nothing else — the hop left behind when that
+  component was split out, for this same dependency reason, and never removed. The hop is gone rather than renamed: a
+  third component holding two forwards would be the synthetic facade the doctrine refuses. `web_portal` reaches the
+  graph orchestrator directly (6 → 7 dependencies, both already realized in `src/server/web.ts`), and the session
+  orchestrator falls from 10 dependencies to 9 and from 10 methods to 8. Its `INCOHESIVE_METHODS` allow is deleted.
+- **`web_admin_orchestrator` is now only a switchboard.** Of its 23 methods, 18 already forwarded the browser session
+  straight to the identity or permission-admin orchestrator; five did not. Those five — listing organization units,
+  upserting one, placing a project into one, disposing of one, and listing the configured secret key names — are the
+  instance-structure surfaces the loopback control plane never exposes to a browser, and `src/server/webadmin.ts`
+  already gathers exactly them behind one gate (`requireInstanceAdminSession`, whose own comment calls them that). They
+  move to a new **`web_instance_admin_orchestrator`** (5 methods, 7 dependencies), which the portal reaches directly.
+  What remains forwards and nothing else, so the exemption covers it: its `INCOHESIVE_METHODS` allow is deleted too,
+  and the bridge falls from 9 dependencies to 2.
+- **Nothing was absorbed over the cap.** The natural homes were already full: `landscape_orchestrator` owns the
+  credential-anchored `upsertUnit` and `placeProject`, and `identity_orchestrator` owns the provider configuration the
+  secret refs exist to serve. Both sit exactly at the configured `maxComponentDependencies: 10`, and the moved
+  workflows need `permission_repository` and `user_repository` (landscape) or `secret_repository` (identity) that
+  neither declares. A new component is what the cap leaves.
+- **`removeUnit` keeps a step-count allow, reworded, in its new home.** Its 37 steps are the workflow: a gate, an
+  existence check, four dispositions to validate and resolve, then either the whole re-homing path (reparent the
+  children, re-point the placements, remap the permission and user scopes, delete the emptied unit) or the cascade that
+  deletes the subtree, and the best-effort audit. It is one function in `src/server/webadmin.ts`, so narrating it
+  shorter would mean naming a component the code does not have.
+- **The two allows that stay were rewritten to say what is true.** `cli_runner` and `core_orchestrator` both claimed to
+  be deliberate facades. They are not — 27 of the runner's 32 narrated methods and 13 of core's 45 hold flow of their
+  own, which is precisely why the new exemption does not reach them. Each allow now rests on the ground that actually
+  holds: being the one entry point of the terminal and of the library, which splitting along the call groups would
+  multiply.
 
 ### Execution budgets: the topology gains a resource axis
 
@@ -1500,7 +1545,9 @@ method's narrative. Two mechanisms close that honestly:
    - `MISLEADING_BLOCK_WORD`, `GENERIC_COMPONENT_NAME`, `METHOD_REPEATS_COMPONENT`,
      `COMPONENT_IS_ITS_ONLY_METHOD` and `INCOHESIVE_METHODS`. Rename or split, or
      acknowledge the shape with a reasoned `lint.allow` — a deliberate facade is a
-     legitimate answer to the cohesion finding.
+     legitimate answer to the cohesion finding. A switchboard that already forwards
+     and nothing else needs no allow: the cohesion rule exempts a pure forwarder, so
+     the way out is often to move the one method that does more.
    - **A project's own `complexity`, `documentation` and `naming` config now overrides
      its profile pack's**, as its severities already did. Where a pack profile was
      deliberately overriding a project value, move that setting into the pack or drop

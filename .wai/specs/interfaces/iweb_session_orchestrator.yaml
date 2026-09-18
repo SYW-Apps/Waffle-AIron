@@ -1,12 +1,14 @@
-id: iweb_orchestrator
-name: Web Orchestrator Interface
+id: iweb_session_orchestrator
+name: Web Session Orchestrator Interface
 description: >-
-  Contract for the unified web UI's server-side shell: SSO sign-in (unauthenticated start/complete,
-  trust anchored by the signed SSO state and the provider code exchange), browser-session lifecycle,
-  the session-principal context projection, and the live graph entry point. Creating and resolving
-  sessions is the auth bridge that lets the served client app reuse every existing scoped endpoint
-  with the session cookie as its credential.
-component: web_orchestrator
+  Contract for the unified web UI's browser-session lifecycle: SSO sign-in (unauthenticated
+  start/complete, trust anchored by the signed SSO state and the provider code exchange), the
+  built-in super-admin password sign-in, sign-out on one device or all of them, the local-developer
+  session, the pre-auth login-options projection, and the session-principal context projection.
+  Creating and resolving sessions is the auth bridge that lets the served client app reuse every
+  existing scoped endpoint with the session cookie as its credential; the live graph and canvas are
+  the web graph orchestrator's own contract, which the portal reaches directly.
+component: web_session_orchestrator
 methods:
   - name: startSignIn
     description: >-
@@ -68,23 +70,6 @@ methods:
     params:
       - name: sessionId
         type: string
-  - name: getGraph
-    description: >-
-      Return the live level-of-detail graph for the requested tier (landscape or project) and detail
-      level by delegating to the web graph orchestrator, which authenticates the session and scopes
-      the result.
-    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: number): WebGraphModel'
-    returns: WebGraphModel
-    params:
-      - name: sessionId
-        type: string
-      - name: tier
-        type: string
-      - name: projectId
-        type: string
-        optional: true
-      - name: level
-        type: number
   - name: signOutEverywhere
     description: >-
       Revoke every browser session belonging to the caller's principal (sign out on all
@@ -106,18 +91,6 @@ methods:
     signature: 'startDevSession(): string'
     returns: string
     params: []
-  - name: getProjectCanvas
-    description: >-
-      Return the interactive architecture canvas HTML for the requested project by delegating to the
-      web graph orchestrator, which authenticates the session and scopes the result to the
-      principal's authorized projects.
-    signature: 'getProjectCanvas(sessionId: string, projectId: string): string'
-    returns: string
-    params:
-      - name: sessionId
-        type: string
-      - name: projectId
-        type: string
   - name: signInWithPassword
     description: >-
       Sign the built-in super-admin in with the env-configured username + password. Consult a
@@ -154,4 +127,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-11T11:33:17.127Z'
-updatedAt: '2026-09-15T20:49:37.460Z'
+updatedAt: '2026-09-18T16:54:29.179Z'

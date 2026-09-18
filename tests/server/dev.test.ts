@@ -23,7 +23,7 @@ import type { HostConfig, Principal } from '../../src/server/types.js';
 // ---------------------------------------------------------------------------
 // wairon dev — local single-project developer server (sdd_host).
 //
-// The dev server REUSES the whole hosted web pipeline (web_orchestrator,
+// The dev server REUSES the whole hosted web pipeline (web_session_orchestrator,
 // web_graph_orchestrator, the auth bridge, serveApp) pointed at the local cwd,
 // auto-signed-in, single-project, with no login/tenancy chrome. These tests pin
 // the security-critical gating: startDevSession refuses outside devMode and mints

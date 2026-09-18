@@ -1,0 +1,31 @@
+id: web_instance_admin_orchestrator
+name: Web Instance Admin Orchestrator
+description: >-
+  Owns the workflows the hosted instance's own configuration needs when it is administered from a
+  BROWSER, on the public data plane: the organization tree (list units, create/update a unit, place
+  a project into one, and dispose of a unit — reparenting its children and re-pointing its
+  placements, permission assignments and user home/role scopes onto the destination, or cascading
+  the whole subtree away) and the integration-secret key NAMES the identity-provider form offers
+  (never the values). These are the instance-structure surfaces the loopback control plane never
+  exposes to a remote browser: the admin orchestrator's own secret listing and the landscape
+  orchestrator's unit/placement workflows are anchored on a master or bearer credential and stay on
+  the admin listener, so the browser path needs its own workflows rather than a forward. Every
+  method resolves the browser session to a Principal through the single auth authority and requires
+  INSTANCE-level project:admin through the permission rules (a unit-scoped admin, however broad, is
+  refused); writes append a redacted security-level audit event best-effort, which never fails the
+  primary action. The web admin orchestrator forwards nothing here — the portal reaches these routes
+  directly, because a hop that only forwards separates no responsibility.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - authentication
+  - authorization
+  - organization_repository
+  - permission_repository
+  - user_repository
+  - audit_repository
+  - secret_repository
+status: complete
+createdAt: '2026-09-18T16:56:18.390Z'
+updatedAt: '2026-09-18T16:58:20.102Z'

@@ -1,0 +1,82 @@
+id: iweb_instance_admin_orchestrator
+name: Web Instance Admin Orchestrator Interface
+description: >-
+  Contract for the browser-administered instance-structure surfaces: the organization tree (units
+  and project placements, including the disposition a removal runs) and the configured secret key
+  names. Every method takes the browser sessionId as its credential and is refused without
+  INSTANCE-level project:admin.
+component: web_instance_admin_orchestrator
+methods:
+  - name: listOrganizationUnits
+    description: >-
+      Resolve the session to a Principal via the authentication component, require an instance-wide
+      admin grant, and return every organization unit through the organization repository. Not
+      audited (a read).
+    signature: 'listOrganizationUnits(sessionId: string): OrganizationUnitRecord[]'
+    returns: OrganizationUnitRecord[]
+    params:
+      - name: sessionId
+        type: string
+  - name: upsertOrganizationUnit
+    description: >-
+      Resolve the session to a Principal, require an instance-wide admin grant, create or update an
+      organization unit through the organization repository, and append a best-effort
+      org.unit.upsert (security) audit event.
+    signature: >-
+      upsertOrganizationUnit(sessionId: string, record: OrganizationUnitRecord):
+      OrganizationUnitRecord
+    returns: OrganizationUnitRecord
+    params:
+      - name: sessionId
+        type: string
+      - name: record
+        type: OrganizationUnitRecord
+    guarantees:
+      - atomic
+  - name: placeProject
+    description: >-
+      Resolve the session to a Principal, require an instance-wide admin grant, place a project into
+      an organization unit through the organization repository, and append a best-effort
+      org.placement.set (security) audit event.
+    signature: 'placeProject(sessionId: string, projectId: string, unitId: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+      - name: unitId
+        type: string
+    guarantees:
+      - atomic
+  - name: listSecretRefs
+    description: >-
+      Resolve the session to a Principal, require an instance-wide admin grant, and return the
+      configured secret KEY NAMES (never the values) through the secret repository — so the
+      identity-provider form can offer existing clientSecretRefs to pick from. Names are not
+      sensitive; raw secrets never leave the store. A read; not audited.
+    signature: 'listSecretRefs(sessionId: string): string[]'
+    returns: string[]
+    params:
+      - name: sessionId
+        type: string
+  - name: removeUnit
+    description: >-
+      Resolve the session to a Principal, require an instance-wide admin grant, then dispose of the
+      organization unit per the UnitDisposition: migrate/absorb/alternative reparent its child units
+      and re-point its project placements onto the destination (an existing target unit, the parent,
+      or a freshly created replacement sibling), applying the returned id remap to placement and
+      exposeTo references, then delete the emptied unit; cascade deletes the whole subtree and its
+      placements. Appends a best-effort org.unit.remove (security) audit event.
+    signature: 'removeUnit(sessionId: string, unitId: string, disposition: UnitDisposition): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: unitId
+        type: string
+      - name: disposition
+        type: UnitDisposition
+status: complete
+createdAt: '2026-09-18T16:56:30.596Z'
+updatedAt: '2026-09-18T16:58:21.908Z'
