@@ -23,7 +23,18 @@ import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
 import type { PackSelection } from '../../models/project.js';
-import { ArchProfile, BUILTIN_PROFILES, RuleContext, SddRule, Severity } from './types.js';
+import {
+  ArchProfile,
+  BUILTIN_PROFILES,
+  RuleContext,
+  SddRule,
+  Severity,
+  type CodeIndex,
+  type ImportGraph,
+  type OwnershipIndex,
+  type RealizationIndex,
+} from './types.js';
+import { buildCodeIndex, buildImportGraph, buildOwnershipIndex, buildRealizationIndex } from './read-model.js';
 import { SDD_RULES } from './repository.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { emptyCodeModel } from '../source-analysis.js';
@@ -423,11 +434,18 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
 
   // ---- contract methods, rule configs and the type vocabulary ---------------
 
+  // Memoized: eight rules ask for this per dispatch binding or per narrative
+  // step, and rebuilding the array each time was pure waste. The answer is a
+  // read-only view every caller treats as one.
+  const contractMethods = new Map<string, MethodSignature[]>();
   const interfaceMethodsOf = (compId: string): MethodSignature[] => {
+    const cached = contractMethods.get(compId);
+    if (cached) return cached;
     const out: MethodSignature[] = [];
     for (const intf of interfacesByComponent.get(compId) ?? []) {
       out.push(...intf.methods);
     }
+    contractMethods.set(compId, out);
     return out;
   };
 
@@ -570,7 +588,32 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     });
   };
 
-  return {
+  // ---- the shared derived read model ---------------------------------------
+  // Four indexes rules used to rebuild for themselves, each derived once on
+  // first ask (read-model.ts holds the semantics). The import graph is keyed
+  // by its closed path set, because resolution is string matching AGAINST that
+  // set: the graph dependency conformance accuses from (component-mapped exact
+  // files only) is a different graph from the one an integration harness is
+  // walked over (every analyzed path), and they must not be confused.
+  let codeIndexMemo: CodeIndex | undefined;
+  const codeIndex = (): CodeIndex => (codeIndexMemo ??= buildCodeIndex(ctx.codeModel));
+  let realizationMemo: RealizationIndex | undefined;
+  const realizationIndex = (): RealizationIndex => (realizationMemo ??= buildRealizationIndex(ctx));
+  const importGraphs = new Map<string, ImportGraph>();
+  const importGraph = (paths?: Set<string>): ImportGraph => {
+    const universe = paths ?? codeIndex().paths;
+    const key = `${universe.size}\u0000${[...universe].join('\u0000')}`;
+    let graph = importGraphs.get(key);
+    if (!graph) {
+      graph = buildImportGraph(codeIndex(), universe);
+      importGraphs.set(key, graph);
+    }
+    return graph;
+  };
+  let ownershipMemo: OwnershipIndex | undefined;
+  const ownershipIndex = (): OwnershipIndex => (ownershipMemo ??= buildOwnershipIndex(ctx));
+
+  const ctx: RuleContext = {
     system,
     subsystems,
     components,
@@ -599,6 +642,10 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isCollapsedCrossTreeRef,
     resolveSurfaceRef,
     interfaceMethodsOf,
+    codeIndex,
+    realizationIndex,
+    importGraph,
+    ownershipIndex,
     complexityConfigFor,
     documentationConfigFor,
     namingConfigFor,
@@ -613,4 +660,5 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     knownIssueCodes: opts.knownIssueCodes,
     addIssue,
   };
+  return ctx;
 }
