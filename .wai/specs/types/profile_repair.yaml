@@ -1,0 +1,32 @@
+kind: value-object
+id: profile_repair
+name: ProfileRepair
+description: >-
+  What repairing a hosted project's governing profile left in force: the projectType governing
+  afterwards, the one that governed before (for the audit), the repaired id when a repair was
+  actually written, and the project's recorded selection ids as the repair left them. A resolvable,
+  policy-compliant projectType is reported here unchanged — reconciliation never overwrites a
+  deliberate local choice.
+subsystem: sdd_host
+fields:
+  - name: governingProfileId
+    type: string
+    description: The projectType governing the project afterwards — the previous one when nothing was repaired.
+    optional: false
+  - name: previousProfileId
+    type: string
+    description: The projectType that governed before the repair, reported in the audit beside the repaired id.
+    optional: false
+  - name: repairedProfileId
+    type: string
+    description: 'Set only when a repair was actually written: the profile id now governing.'
+    optional: true
+  - name: selectedProfileIds
+    type: string[]
+    description: >-
+      The project's recorded profile-selection ids as the repair left them — the repaired id folded
+      to the front when one was written.
+    optional: false
+methods: []
+createdAt: '2026-09-18T17:55:20.633Z'
+updatedAt: '2026-09-18T17:55:20.645Z'

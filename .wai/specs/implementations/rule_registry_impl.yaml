@@ -476,7 +476,17 @@ detail: full
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits registerBuiltinRules, which lists more than 25 steps.
+      reason: >-
+        registerBuiltinRules is three statements — empty the set, walk SDD_RULES, append each — and
+        its narrative says exactly that in steps 1, 88 and 89 (cognitive score 1). The other 86
+        steps are one `register` seed per built-in rule: not flow, but the catalog that makes each
+        rule family's contract method reachable, and the list tests/core/rule-catalog.test.ts pins
+        in order to SDD_RULES so the registry and the rule set cannot drift. The count is the size
+        of the rule catalog, not what the method does. Splitting the seeds per family would split no
+        code and would break that invariant: the eight families occur in THIRTEEN non-contiguous
+        blocks of SDD_RULES (integrity_rules alone in three, at positions 1-7, 59-61 and 86), so
+        per-family registration would reorder the run sequence the registry preserves and
+        ruleSequence reads. A new rule adds one step here, which is the point.
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-09-18T13:41:01.543Z'
+updatedAt: '2026-09-18T18:01:42.026Z'

@@ -142,23 +142,14 @@ methods:
         description: Parse the verified state payload into providerId, nonce, and redirectUri
         type: local
       - stepNumber: 3
-        description: Resolve the configured identity providers through the policy repository
+        description: >-
+          Resolve the ENABLED identity provider the verified state is bound to through the shared
+          pre-auth resolution — an unknown id and a disabled provider reject identically (no
+          existence leak)
         type: call
-        targetComponent: policy_repository
-        targetMethod: listIdentityProviders
+        targetComponent: identity_orchestrator
+        targetMethod: resolveEnabledProvider
       - stepNumber: 4
-        description: Select the identity-provider configuration whose id is the state's providerId
-        type: local
-      - stepNumber: 5
-        description: If the selected provider is unknown or not enabled, reject
-        type: branch
-        condition: the selected provider is unknown or not enabled
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject the callback for an unknown or disabled provider
-        type: throw
-        error: unknown or disabled identity provider
-      - stepNumber: 7
         description: >-
           Resolve the provider's concrete OIDC endpoints through the identity provider adapter
           (front-channel authorize plus back-channel token/jwks, honoring any split-horizon
@@ -166,46 +157,46 @@ methods:
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveEndpoints
-      - stepNumber: 8
+      - stepNumber: 5
         description: >-
           Exchange the authorization code for provider tokens using the config and the state's
           redirectUri, receiving a redacted provider response summary
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: exchangeCode
-      - stepNumber: 9
+      - stepNumber: 6
         description: >-
           Verify the provider metadata and resolve it to a Wairon PrincipalSubject (issuer +
           external subject), without leaking raw provider tokens
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveSubject
-      - stepNumber: 10
+      - stepNumber: 7
         description: >-
           Read the verified id_token's groups claim from the redacted provider summary (meaningful
           only now — after resolveSubject verified the same summary)
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveGroups
-      - stepNumber: 11
+      - stepNumber: 8
         description: >-
           Decide the SSO-admin membership: in the admin group exactly when the verified groups
           intersect the provider's configured adminGroupClaims (an unset or empty adminGroupClaims
           never matches)
         type: local
-      - stepNumber: 12
+      - stepNumber: 9
         description: Look up the hosted user by the resolved subject's issuer and external subject id
         type: call
         targetComponent: user_repository
         targetMethod: findByExternalSubject
-      - stepNumber: 13
+      - stepNumber: 10
         description: >-
           If no hosted user matched the resolved external subject, provision one; otherwise skip to
           minting
         type: branch
         condition: no hosted user matched the resolved external subject
-        onFalseStep: 16
-      - stepNumber: 14
+        onFalseStep: 13
+      - stepNumber: 11
         description: >-
           Build a new active HostedUserRecord for the resolved subject — first-login provisioning:
           status active, createdAt now, displayName + email read from the verified id_token claims
@@ -214,24 +205,24 @@ methods:
           admin assigns roles/permissions afterwards). The sso-admin role grants project:admin +
           project:create instance-wide, never *:*.
         type: local
-      - stepNumber: 15
+      - stepNumber: 12
         description: Persist the newly provisioned first-login user record through the user repository
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 16
+      - stepNumber: 13
         description: >-
           Reject re-login for a deactivated user before minting: if the hosted user resolved for
           this login is not 'active', deny (a freshly provisioned first-login record is always
           active, so only an existing deactivated user is rejected here)
         type: branch
         condition: the resolved hosted user's status is not 'active'
-        onFalseStep: 18
-      - stepNumber: 17
+        onFalseStep: 15
+      - stepNumber: 14
         description: Reject the re-login of a deactivated user
         type: throw
         error: deactivated user may not re-login
-      - stepNumber: 18
+      - stepNumber: 15
         description: >-
           If the user's stored profile or bindings are stale, refresh them; otherwise skip the
           refresh. Stale when the roleBindings disagree with the SSO-admin membership decided from
@@ -242,9 +233,9 @@ methods:
         condition: >-
           the user's stored profile or bindings are stale (roleBindings disagree with the SSO-admin
           membership, or the verified displayName/email differ from the stored record)
-        onTrueStep: 19
-        onFalseStep: 20
-      - stepNumber: 19
+        onTrueStep: 16
+        onFalseStep: 17
+      - stepNumber: 16
         description: >-
           Persist the refreshed record through the user repository: add the built-in sso-admin role
           binding on entry into the admin group and drop it on exit, and update displayName/email to
@@ -253,7 +244,7 @@ methods:
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 20
+      - stepNumber: 17
         description: >-
           Resolve the effective user record (the freshly provisioned record on first login,
           otherwise the existing match with the binding refresh applied) and mint a user-bound
@@ -264,33 +255,17 @@ methods:
           carries NO grants — the authentication component resolves the owner's permissionSubject
           live from roleBindings + assignments.
         type: local
-      - stepNumber: 21
+      - stepNumber: 18
         description: Persist only the hashed credential record
         type: call
         targetComponent: credential_repository
         targetMethod: create
-      - stepNumber: 22
-        description: Append a redacted audit event without letting a failure fail the login
-        type: try
-        endStep: 24
-        catches:
-          - error: audit append failure
-            step: 25
-      - stepNumber: 23
-        description: >-
-          Append the redacted sso.login audit event (security level) under the active retention
-          policy
+      - stepNumber: 19
+        description: Append the redacted sso.login (security) audit event best-effort
         type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 24
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 26
-      - stepNumber: 25
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 26
+        targetComponent: identity_orchestrator
+        targetMethod: appendAuditBestEffort
+      - stepNumber: 20
         description: Return the plaintext user-bound token (shown exactly once)
         type: return
         outcome: plaintext token returned once
@@ -1084,10 +1059,6 @@ methods:
         type: return
         outcome: void
     symbol: tryAppendAudit
-lint:
-  allow:
-    - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits completeSsoLogin, which lists more than 25 steps.
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-09-17T20:56:09.680Z'
+updatedAt: '2026-09-18T17:48:56.736Z'

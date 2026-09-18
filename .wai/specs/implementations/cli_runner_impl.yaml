@@ -1424,7 +1424,16 @@ lint:
         pinning (extensions.ts). Track D designs those areas and routes doctor through modelled
         adapters. The validation import goes when D1's code routes it through cli_validator_adapter.
     - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits runPack, which lists more than 25 steps.
+      reason: >-
+        runPack is the `wairon pack` family's action dispatcher: a flat twelve-arm if-chain in
+        src/cli/index.ts, one adapter call per subcommand, cognitive score 1. Its 26 steps are two
+        per subcommand (the call and its return) plus the switch and the unknown-action refusal, so
+        the count tracks how many subcommands `pack` has, not what the method does — the same shape
+        sits at every size in this runner: runPacks (8), runAgent (9), runSurface (12), runRemote
+        (14). There is no seam to split on: all twelve arms call one module (src/commands/packs.ts),
+        and every `pack` subcommand's action calls runPack directly, so scope-based sub-dispatchers
+        would be invented here rather than named in the code. Adding a pack subcommand adds two
+        steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-17T17:52:39.568Z'
+updatedAt: '2026-09-18T18:01:46.724Z'

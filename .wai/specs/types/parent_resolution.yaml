@@ -1,0 +1,26 @@
+kind: value-object
+id: parent_resolution
+name: ParentResolution
+description: >-
+  A chained subproject's verdict as its parent judged it: the top root that was validated, the mount
+  chain that run was scoped to, and the parent's findings renamed into the child's own ids. Absent
+  when no usable parent is reachable — its L0 missing, the mount unknown, or reach denied — and the
+  caller then keeps the standalone verdict.
+fields:
+  - name: root
+    type: string
+    description: The top project root the parent's run was computed at.
+    optional: false
+  - name: scope
+    type: string
+    description: The mount chain that run was scoped to (e.g. `kid`, `par::kid2`).
+    optional: false
+  - name: issues
+    type: ValidationIssue[]
+    description: >-
+      The parent's findings, renamed into the child's own ids (the mount prefix stripped from spec
+      ids and messages).
+    optional: false
+methods: []
+createdAt: '2026-09-18T17:50:42.282Z'
+updatedAt: '2026-09-18T17:50:42.293Z'

@@ -159,43 +159,25 @@ methods:
           reference, or a dependency, call-target, type, subsystem or trusted-link reference that
           does not resolve in this tree — detect the parent through the reach-gated
           resolveChainingParent, so a request whose credential is narrowed to the child reads
-          nothing above its root, not even to discover the parent; then walk up to the TOP root
-          collecting the mount chain (never above the bound request's top project root). A verdict
-          on an edge this root can already see — a boundary crossing between its own subsystems, an
-          undeclared dependency call — never triggers the walk.
-        type: local
+          nothing above its root, not even to discover the parent, and resolve this tree's verdict
+          through it. A verdict on an edge this root can already see — a boundary crossing between
+          its own subsystems, an undeclared dependency call — never triggers the walk.
+        type: call
+        targetComponent: spec_validator
+        targetMethod: resolveThroughParent
       - stepNumber: 24
         description: >-
-          When the walk reached a top root: with that root bound — the call runs as the parent
-          project, so it returns the parent's configuration rather than this project's — read the
-          parent's rule severities and projectType, whose doctrine and profile decide what is
-          judged. A parent with no readable configuration judges at the defaults, tightened by this
-          project's severities.
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadProjectConfig
-      - stepNumber: 25
-        description: >-
-          Validate the top root scoped to that chain with the parent's own doctrine, for each rule
-          the stricter of the parent's and this project's severity, the same as-complete strictness,
-          and without resolving again. The parent's findings are renamed into the child's ids (the
-          mount prefix stripped from spec ids and messages) and merged with the child's own: a child
-          finding gives way only where the parent reported the same code on the same spec at least
-          as severely, or where it is a resolution failure the parent's run did not repeat (the
-          reference resolved from the parent); every other child finding stands, and a parent
-          finding that a stricter child finding already covers is dropped — so the child is never
-          judged more leniently than alone or than its parent. Known limitation until composed
-          validation replaces this step: once the walk runs, the parent's verdicts are merged in for
-          edges a pin also covered, so which evidence judges a pinned edge depends on whether some
-          resolution failure triggered the walk. Code↔spec conformance findings keep full strength:
-          a chained child's source paths are relative to its own root. The result records the root
-          and scope it was resolved through. When no usable parent is reachable (its L0 missing, the
-          mount unknown, or reach denied), every reference keeps its raw verdict — a cross-tree form
-          stays an unwaived CROSS_TREE_REF_UNRESOLVED warning and a typo stays an error — so a child
-          that cannot be judged through its parent pins its family surfaces or fails its gate;
-          nothing is rewritten and no notice is prepended
+          Merge what the parent judged with this run's own findings: a child finding gives way only
+          where the parent reported the same code on the same spec at least as severely, or where it
+          is a resolution failure the parent's run did not repeat (the reference resolved from the
+          parent); every other child finding stands, and a parent finding that a stricter child
+          finding already covers is dropped — so the child is never judged more leniently than alone
+          or than its parent. Known limitation until composed validation replaces this step: once
+          the walk runs, the parent's verdicts are merged in for edges a pin also covered, so which
+          evidence judges a pinned edge depends on whether some resolution failure triggered the
+          walk. The result records the root and scope it was resolved through.
         type: local
-      - stepNumber: 26
+      - stepNumber: 25
         description: Return the aggregated validation result
         type: return
         outcome: ValidationResult
@@ -439,10 +421,42 @@ methods:
         description: Return the gate identity
         type: return
         outcome: StateId (the gate identity)
-lint:
-  allow:
-    - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits validateSddTree, which lists more than 25 steps.
+  - name: resolveThroughParent
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk up to the TOP root collecting the mount chain (never above the bound request's top
+          project root). With no hop reachable there is nothing to resolve through.
+        type: local
+      - stepNumber: 2
+        description: >-
+          When the walk reached a top root: with that root bound — the call runs as the parent
+          project, so it returns the parent's configuration rather than this project's — read the
+          parent's rule severities and projectType, whose doctrine and profile decide what is
+          judged. A parent with no readable configuration judges at the defaults, tightened by this
+          project's severities.
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: >-
+          Validate the top root scoped to that chain with the parent's own doctrine, for each rule
+          the stricter of the parent's and this project's severity, the same as-complete strictness,
+          and without resolving again. The parent's findings are renamed into the child's ids (the
+          mount prefix stripped from spec ids and messages). Code↔spec conformance findings keep
+          full strength: a chained child's source paths are relative to its own root. When no usable
+          parent is reachable (its L0 missing, the mount unknown, or reach denied), every reference
+          keeps its raw verdict — a cross-tree form stays an unwaived CROSS_TREE_REF_UNRESOLVED
+          warning and a typo stays an error — so a child that cannot be judged through its parent
+          pins its family surfaces or fails its gate; nothing is rewritten and no notice is
+          prepended
+        type: local
+      - stepNumber: 4
+        description: >-
+          Return the top root, the mount chain it was scoped to and the renamed findings — or
+          nothing when no usable parent was reachable
+        type: return
+        outcome: ParentResolution
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-17T22:31:22.782Z'
+updatedAt: '2026-09-18T17:52:36.131Z'

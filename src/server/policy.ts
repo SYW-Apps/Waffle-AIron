@@ -547,6 +547,75 @@ function foldAppliedProfile(
   return folded;
 }
 
+/** What repairing a project's governing profile left in force (project_policy_orchestrator). */
+interface ProfileRepair {
+  /** The projectType governing the project afterwards — the previous one when nothing was repaired. */
+  governingProfileId: string;
+  /** The projectType that governed before the repair, for the audit. */
+  previousProfileId: string;
+  /** Set only when a repair was actually written: the profile id now governing. */
+  repairedProfileId?: string;
+  /** The project's recorded selection ids as the repair left them. */
+  selectedProfileIds: string[];
+}
+
+/**
+ * Repair a project's governing profile, but ONLY when it is broken or
+ * non-compliant: (a) the instance policy requires profiles and none of them
+ * governs, or (b) the recorded projectType resolves to no loaded profile at all.
+ * A resolvable, policy-compliant projectType is reported and left exactly as it
+ * is — a deliberate local choice survives reconciliation.
+ *
+ * A repair takes the first resolvable candidate (the policy's required ids before
+ * the recorded selection ids: reconciliation serves the instance policy first),
+ * vendors its contributing pack through the ensure seam and registers the
+ * reference, writes it as the project's projectType, and folds it into the
+ * recorded selection so compliance — which reads the record — agrees with the
+ * governing reality.
+ */
+function repairGoverningProfile(
+  cfg: HostConfig,
+  projectId: string,
+  root: string,
+  policy: InstancePackPolicy,
+  config: ProjectConfig | null,
+  catalog: AvailableProfile[],
+  principal: Principal,
+): ProfileRepair {
+  const selection = config?.profileSelection;
+  const previousProfileId = governingProjectType(config);
+  let governingProfileId = previousProfileId;
+  const requiredProfileIds = policy.requiredProfileIds ?? [];
+
+  const policyUnsatisfied = requiredProfileIds.length > 0 && !requiredProfileIds.includes(governingProfileId);
+  const governingUnresolvable = !classifyProfile(governingProfileId, catalog).resolvable;
+  let repairedProfileId: string | undefined;
+  let selectedProfileIds = selection?.profileIds ?? [];
+  if (policyUnsatisfied || governingUnresolvable) {
+    // The policy's required ids come BEFORE the recorded selection ids: a
+    // reconciliation serves the instance policy first.
+    const target = firstApplicableProfileId(
+      [...requiredProfileIds, ...(selection?.profileIds ?? [])],
+      catalog,
+    );
+    if (target) {
+      const application = packs.executeApprovedEnsureProfileInstalled(cfg, projectId, target, config);
+      if (application.adoptedPackRef) registerPackRefAt(root, application.adoptedPackRef);
+      setProjectTypeAt(root, application.profileId);
+      governingProfileId = application.profileId;
+      repairedProfileId = application.profileId;
+      // Fold the repair into the recorded selection, exactly as an explicit
+      // profile write does: compliance reads the RECORD, so a repair that only
+      // wrote projectType would keep reporting the policy's required profile as
+      // unselected and reconciliation would never converge.
+      const folded = foldAppliedProfile(selection, application.profileId, principalSubject(principal));
+      recordProfileSelectionAt(root, folded);
+      selectedProfileIds = folded.profileIds;
+    }
+  }
+  return { governingProfileId, previousProfileId, repairedProfileId, selectedProfileIds };
+}
+
 /** The ids of the project's subsystems declaring a profile of their OWN, which
  *  therefore takes precedence over the project-level profile for their components.
  *  Bound-root read of the L1 specs. */
@@ -949,40 +1018,7 @@ export function reconcileProjectPolicy(
   const reloaded = loadConfigAt(root);
   const catalog = packs.executeApprovedListProjectProfiles(cfg, projectId, reloaded);
   const selection = reloaded?.profileSelection;
-  const previousProfileId = governingProjectType(reloaded);
-  let governingProfileId = previousProfileId;
-  const requiredProfileIds = policy.requiredProfileIds ?? [];
-
-  // Repair ONLY a governing profile that is broken or non-compliant: (a) the policy
-  // requires profiles and none of them governs, or (b) the recorded projectType
-  // resolves to no loaded profile at all. A resolvable, policy-compliant projectType
-  // is reported and left exactly as it is — a deliberate local choice survives.
-  const policyUnsatisfied = requiredProfileIds.length > 0 && !requiredProfileIds.includes(governingProfileId);
-  const governingUnresolvable = !classifyProfile(governingProfileId, catalog).resolvable;
-  let repairedProfileId: string | undefined;
-  let selectedProfileIds = selection?.profileIds ?? [];
-  if (policyUnsatisfied || governingUnresolvable) {
-    // The policy's required ids come BEFORE the recorded selection ids: a
-    // reconciliation serves the instance policy first.
-    const target = firstApplicableProfileId(
-      [...requiredProfileIds, ...(selection?.profileIds ?? [])],
-      catalog,
-    );
-    if (target) {
-      const application = packs.executeApprovedEnsureProfileInstalled(cfg, projectId, target, reloaded);
-      if (application.adoptedPackRef) registerPackRefAt(root, application.adoptedPackRef);
-      setProjectTypeAt(root, application.profileId);
-      governingProfileId = application.profileId;
-      repairedProfileId = application.profileId;
-      // Fold the repair into the recorded selection, exactly as an explicit
-      // profile write does: compliance reads the RECORD, so a repair that only
-      // wrote projectType would keep reporting the policy's required profile as
-      // unselected and reconciliation would never converge.
-      const folded = foldAppliedProfile(selection, application.profileId, principalSubject(principal));
-      recordProfileSelectionAt(root, folded);
-      selectedProfileIds = folded.profileIds;
-    }
-  }
+  const repair = repairGoverningProfile(cfg, projectId, root, policy, reloaded, catalog, principal);
 
   // Reload the configuration as reconciliation left it and re-list the packs it
   // registers for the post-reconciliation report — a profile repair can itself have
@@ -991,11 +1027,11 @@ export function reconcileProjectPolicy(
   const result = buildEvaluation({
     policy,
     presentPackNames: installedPackNames(cfg, projectId, reconciled),
-    selectedProfileIds,
+    selectedProfileIds: repair.selectedProfileIds,
     hasSelection: !!selection,
     countMissingPacksAsViolation: true,
     requiredDefaultResolution: resolution,
-    governingProfileId,
+    governingProfileId: repair.governingProfileId,
   });
 
   tryAppendAudit(
@@ -1010,7 +1046,9 @@ export function reconcileProjectPolicy(
         projectId,
         metadata: JSON.stringify({
           ...(appliedPackNames.length > 0 ? { appliedPackNames } : {}),
-          ...(repairedProfileId ? { repairedProfileId, previousProfileId } : {}),
+          ...(repair.repairedProfileId
+            ? { repairedProfileId: repair.repairedProfileId, previousProfileId: repair.previousProfileId }
+            : {}),
           ...(resolution.unresolved.length > 0 ? { unresolvedPacks: resolution.unresolved } : {}),
         }),
       },
