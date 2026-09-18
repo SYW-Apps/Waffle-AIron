@@ -1,0 +1,49 @@
+kind: value-object
+id: resolved_method
+name: ResolvedMethod
+description: >-
+  One implementation method with its descent already resolved, gathered once per run behind
+  rule_context.implementationMethods: the component it realizes, the source file that realizes it
+  and the draft context a finding on it takes. The descent is the same six hops in rule after rule —
+  implementation, contract, component, chained-subproject skip, method, source file — and it is
+  plumbing in all of them: an implementation whose contract or component does not resolve is a
+  hierarchy finding, and a chained child's sourcePaths are relative to its own root, so the child
+  validates them in its own run. What a rule does with the file it is handed stays the rule's: the
+  conformance dial and the exact-grade test are the honesty stance each rule owes its reader, and
+  are never applied here.
+subsystem: sdd_validator
+fields:
+  - name: implementation
+    type: ImplementationSpec
+    description: The implementation declaring the method — the spec a finding anchors to
+    optional: false
+  - name: method
+    type: MethodImplementation
+    description: The method itself, narrative and all
+    optional: false
+  - name: component
+    type: ComponentSpec
+    description: The component the method's implementation realizes
+    optional: false
+  - name: sourceFile
+    type: string
+    description: >-
+      The file that realizes it — the method's sourcePath, else the implementation's; absent when
+      neither names one, and handed over raw because that is the string a finding quotes
+    optional: true
+  - name: draftContext
+    type: boolean
+    description: >-
+      The draft context a finding on this method takes (ctx.isImplementationDraft), read once per
+      implementation rather than once per method
+    optional: false
+methods: []
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Named only by the return of rule_context.implementationMethods, and unused-detection does
+        not yet count type-method signatures as references. Remove this allow once it does; the
+        stale-allow audit will flag it.
+createdAt: '2026-09-18T13:02:39.452Z'
+updatedAt: '2026-09-18T13:03:04.158Z'

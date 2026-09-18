@@ -37,13 +37,12 @@ methods:
       - code: INVALID_INTERFACE_REFERENCE
         severity: error
         summary: Implementation references a non-existent interface contract
-  - name: namespaceHygiene
+  - name: reservedIdSegments
     description: >-
-      Rule namespace-hygiene. Ids must stay resolvable in the :: namespace grammar: no id segment
-      may be the reserved keyword "super", and a subproject-local name must not shadow a root-level
-      subsystem id — a bare reference to a shadowed name silently anchors to the ROOT subsystem, so
-      the local spec becomes unaddressable.
-    signature: 'namespaceHygiene(ctx: RuleContext): void'
+      Rule reserved-id-segments. No segment of a spec id may be the reserved namespace keyword
+      "super" — the :: grammar consumes it as a namespace hop, so a stored reference to such an id
+      resolves to a different spec.
+    signature: 'reservedIdSegments(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -53,6 +52,18 @@ methods:
       - code: RESERVED_ID_SEGMENT
         severity: error
         summary: Id uses the reserved namespace keyword "super"
+  - name: namespaceShadowing
+    description: >-
+      Rule namespace-shadowing. A subproject-local name must not shadow a root-level subsystem id —
+      inside its subproject a bare reference to the shadowed name anchors to the ROOT subsystem, so
+      the local spec cannot be addressed reliably.
+    signature: 'namespaceShadowing(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: NAMESPACE_SHADOWING
         severity: error
         summary: Subproject-local id shadows a root subsystem id (bare references anchor to the root)
@@ -121,12 +132,11 @@ methods:
       - code: UNDEFINED_TYPE_REFERENCE
         severity: error
         summary: Reference to a type that is not defined anywhere
-  - name: publicSurface
+  - name: publicSurfaceBinding
     description: >-
-      Rule public-surface. Every declared publicInterface is bound to an existing component of this
-      subsystem whose stereotype can realize the declared interface type; Custom entries whose prose
-      implies eventing must be backed by an event-capable component.
-    signature: 'publicSurface(ctx: RuleContext): void'
+      Rule public-surface-binding. Every declared publicInterface names a backing component, that
+      component exists, and the subsystem owns it — a subsystem may only publish its own components.
+    signature: 'publicSurfaceBinding(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -142,15 +152,38 @@ methods:
       - code: PUBLIC_INTERFACE_FOREIGN_COMPONENT
         severity: error
         summary: Subsystem publishing a component it does not own
+  - name: publicSurfaceDeclaredType
+    description: >-
+      Rule public-surface-declared-type. A publicInterface entry's declared type must be realizable
+      by the stereotype of its backing component; Custom entries whose prose implies eventing must
+      be backed by an event-capable component.
+    signature: 'publicSurfaceDeclaredType(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: PUBLIC_INTERFACE_TYPE_MISMATCH
         severity: error
         summary: Backing component cannot realize the declared interface type
-      - code: PUBLIC_INTERFACE_INVALID_INTERFACE
-        severity: error
-        summary: Bound L3 interface missing or belonging to another component
       - code: PUBLIC_INTERFACE_EVENT_MISTYPED
         severity: warning
         summary: Custom interface describing eventing backed by a non-event component
+  - name: publicSurfaceBoundContract
+    description: >-
+      Rule public-surface-bound-contract. A publicInterface entry that binds an L3 interface must
+      bind one that exists and that belongs to the component the entry publishes.
+    signature: 'publicSurfaceBoundContract(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PUBLIC_INTERFACE_INVALID_INTERFACE
+        severity: error
+        summary: Bound L3 interface missing or belonging to another component
   - name: lintAllows
     description: >-
       Rule lint-allows. Per-spec lint suppressions (lint.allow) must name real issue codes and
@@ -171,4 +204,4 @@ methods:
         summary: lint.allow entry matched no finding this run — remove the stale allow
 status: draft
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-17T21:53:57.507Z'
+updatedAt: '2026-09-18T12:55:51.391Z'

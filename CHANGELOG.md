@@ -433,6 +433,9 @@ sides of a seam.
 | `declarative-assertions` | `assertion-forbidden-edges` + `assertion-required-fields` + `assertion-endpoint-shapes` | the assertion KIND is what a pack author writes, and each kind asks its own question of its own collection: an edge in the dependency graph, a field on a spec at one level, or the transport and address an endpoint binds |
 | `target-language` | `signature-language-builtins` + `narrative-language-constructs` | what a CONTRACT may name in the declared language, and what a NARRATIVE may describe in it — two codes over two collections that only ever shared the `targetLanguage` opt-in |
 | `technology-boundaries` | `technology-binding` + `technology-boundaries` | which stereotype may bind a technology at all, separated from where that technology's NAME may then appear |
+| `public-surface` | `public-surface-binding` + `public-surface-declared-type` + `public-surface-bound-contract` | what BACKS the entry, whether that component's stereotype can realize the type it declares, and whether the contract it binds is that component's own |
+| `namespace-hygiene` | `reserved-id-segments` + `namespace-shadowing` | two questions of the same ids: the one segment the `::` grammar reserves, and the local name that would anchor a bare reference to the root instead |
+| `integration-conformance` | `integration-sim-declaration` + `integration-sim-file` + `integration-sim-wiring` + `integration-sim-coverage` | one rule per finding about one harness: is a harness expected here, does the declared one exist, does it wire the real modules, does it name every narrated path |
 
 `profile-registration` also checks the project's own `projectType` before each subsystem's profile rather than after —
 the project-wide question first. On wairon's own tree the split retires `wiring_rules_impl`'s
@@ -518,6 +521,44 @@ Behaviour is preserved to the letter: the full finding set of all 561 rule-matri
 byte-identical before and after. Both families' `NARRATIVE_COMPLEXITY` and `EXCESSIVE_NARRATIVE_STEPS` allows are
 retired outright — nothing in `extension_rules_impl` or `heuristic_rules_impl` reaches the severe band or lists more
 than 25 steps any more, and the worst narrative left in either family measures 15.
+
+`public-surface` (33) and `integration-conformance` (29) split along seams their codes already drew, and both splits
+cost a precondition the single loop used to inherit by falling through. `public-surface`'s two `continue`s ARE its
+precedence: an entry that names no component, or one that names a component that does not exist, says nothing reliable
+about a type or a contract, so both siblings restate that guard rather than accuse on top of a binding finding.
+`public-surface-bound-contract` needs it most — `intf.component !== pi.component` is trivially true for EVERY interface
+when `pi.component` names nothing, so without the guard one mistyped component id would accuse a perfectly good
+contract of belonging elsewhere. Its three narratives measure 14, 15 and 16. `integration-conformance`'s precedence was
+two `continue`s and an exact-grade gate; `integration-sim-wiring` and `integration-sim-coverage` each restate
+`integration-sim-file`'s verdict, so a harness that does not exist is still reported once rather than three times, and
+the four measure 7, 7, 14 and 16. Neither split invents a shared "is this judgeable" helper: a precondition one rule
+inherits from another is doctrine it owes its own reader, and it is written out where the accusation is.
+
+`namespace-hygiene` (25) is two codes, and was not 25 because of either of them. Its private `checkId` closure has no
+spec representation, so the same two checks were unrolled across five id kinds, and splitting alone would have left two
+halves of 15 with the five-fold copy intact. The walk moves into the shared read model instead, as `ctx.specIds()` —
+every spec id in the tree with the kind label its findings already name it by (`Subsystem`, `Component`, `Interface`,
+`Implementation`, `Type`) — and `reserved-id-segments` and `namespace-shadowing` become one loop and one branch each, at
+3. It returns every id, in scope or not, and each rule keeps its own `ctx.isSpecInScope` test: which specs a rule may
+accuse is doctrine the rule states for itself, not plumbing to be folded away.
+
+`call-conformance` is NOT split and keeps its single code. It asks one question — is every narrative call step realized
+as a real call — and two rules for one question is what this section exists to prevent. Its 25 was the DESCENT:
+implementation, contract, component, chained-subproject skip, method, source file, facts, exact grade — six of its nine
+branches before a single call step was examined. So the descent becomes the read model's second new member,
+`ctx.implementationMethods()`: each implementation method with the component it realizes, the file that realizes it (the
+method's `sourcePath`, else the implementation's, absent when neither names one) and its draft context, with
+implementations whose contract or component does not resolve and those inside a chained subproject already left out.
+Plumbing only — the conformance dial and the exact-grade test stay written in `call-conformance`, because "only exact
+grade may accuse" is the honesty stance a rule owes its reader and belongs where the accusation is read. The narrative
+drops from 25 to 15. `narrative-detail` walks the same descent and will be its second consumer when it splits.
+
+Behaviour is preserved to the letter here too: the full finding set of all 561 rule-matrix fixtures (2069 findings) is
+byte-identical before and after. `integrity_rules_impl`'s two allows (`NARRATIVE_COMPLEXITY` and
+`EXCESSIVE_NARRATIVE_STEPS`) and `conformance_rules_impl`'s `NARRATIVE_COMPLEXITY` allow are retired outright — nothing
+in either family reaches the severe band or lists more than 25 steps any more. That last allow had named
+`dependencyConformance` among the narratives it covered, which stopped being true one wave earlier, when the shared read
+model below dropped that narrative from 28 to 14.
 
 ### The rules share one derived read model
 

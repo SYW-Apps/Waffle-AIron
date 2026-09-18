@@ -165,17 +165,14 @@ methods:
         summary: >-
           A declared dependsOn/owns edge between components in different files is realized by no
           import between any of their files
-  - name: integrationConformance
+  - name: integrationSimDeclaration
     description: >-
-      Rule integration-conformance. A component cannot honestly claim completeness until a committed
-      integration harness wires it to its REAL dependencies (L4 simPath). Statically checked: the
-      harness file exists inside the project root, and its import graph — closed transitively over
-      the analyzed module set, exact grade only — reaches at least one of the component's own source
-      modules (its implementation's or a method's) and at least one source module of each direct
-      dependsOn/owns component (technology-boundary dependencies exempt: their fakes are
-      sanctioned). Execution is CI's job — these findings prove wiring, never that the sim passes.
-      MISSING_INTEGRATION_SIM activates per subsystem once its first simPath is declared.
-    signature: 'integrationConformance(ctx: RuleContext): void'
+      Rule integration-sim-declaration. Once a subsystem has adopted integration sims (its first
+      declared L4 simPath), every OTHER complete, non-leaf implementation of that subsystem must
+      declare one too: its unit suite proves contract shape against mocks, not that the wired
+      components run together. A leaf component's unit suite IS its sim, and a subsystem that has
+      adopted nothing is never flooded.
+    signature: 'integrationSimDeclaration(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -185,12 +182,53 @@ methods:
       - code: MISSING_INTEGRATION_SIM
         severity: warning
         summary: Complete non-leaf implementation in a sim-adopting subsystem declares no simPath
+  - name: integrationSimFile
+    description: >-
+      Rule integration-sim-file. A declared L4 simPath must resolve to a readable, committed file
+      inside the project root — the integration harness is a re-runnable file, not a claim.
+      Execution stays CI's job.
+    signature: 'integrationSimFile(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: SIM_FILE_MISSING
         severity: warning
         summary: Declared simPath resolves to no file inside the project root
+  - name: integrationSimWiring
+    description: >-
+      Rule integration-sim-wiring. A committed integration harness's import graph — closed
+      transitively over the analyzed module set, exact grade only — must reach at least one of the
+      component's own source modules (its implementation's or a method's) and at least one source
+      module of each direct dependsOn/owns component (technology-boundary dependencies exempt: their
+      contract-faithful fakes are sanctioned). Execution is CI's job — this proves wiring, never
+      that the sim passes.
+    signature: 'integrationSimWiring(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: UNWIRED_INTEGRATION_SIM
         severity: warning
         summary: Sim file does not import the real modules it claims to wire
+  - name: integrationSimCoverage
+    description: >-
+      Rule integration-sim-coverage. Once a committed integration harness carries
+      sim:<component-id>. anchors, that component claims path coverage: every narrated method's
+      happy path and every labeled throw step needs its exact sim:<component>.<method>[:<label>]
+      string-literal anchor. Anchors prove the path is NAMED — assertion quality and execution stay
+      CI's job.
+    signature: 'integrationSimCoverage(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: SIM_PATH_UNCOVERED
         severity: warning
         summary: >-
@@ -198,4 +236,4 @@ methods:
           coverage-opted harness
 status: draft
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-17T22:24:19.370Z'
+updatedAt: '2026-09-18T12:56:44.263Z'

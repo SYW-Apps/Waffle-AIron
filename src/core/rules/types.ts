@@ -8,6 +8,7 @@ import {
   RulesConfig,
   SurfaceSnapshot,
   MethodSignature,
+  MethodImplementation,
   ComplexityRuleConfig,
   DocumentationRuleConfig,
   NamingRuleConfig,
@@ -209,6 +210,51 @@ export interface OwnershipIndex {
   ownerOf(memberId: string): string | undefined;
 }
 
+/**
+ * spec_id — one spec id in the tree, carrying the kind label its findings name
+ * it by. The id hygiene rules judge ids and nothing else, so walking five
+ * typed collections is plumbing they should not each unroll: gathered once, a
+ * check over every id is one loop.
+ *
+ * Every id is here, in scope or not, and at every grade: WHICH specs a rule
+ * may accuse is doctrine the rule states for itself (ctx.isSpecInScope), never
+ * a property of the walk.
+ */
+export interface SpecId {
+  /** The qualified spec id, exactly as the tree holds it. */
+  id: string;
+  /** The kind label a finding names it by: Subsystem, Component, Interface, Implementation or Type. */
+  kind: 'Subsystem' | 'Component' | 'Interface' | 'Implementation' | 'Type';
+}
+
+/**
+ * resolved_method — one implementation method with its descent already
+ * resolved: the component it realizes, the source file that realizes it and
+ * the draft context a finding on it takes.
+ *
+ * The descent is long and identical everywhere it is paid — implementation,
+ * contract, component, chained-subproject skip, method, source file — and it
+ * is pure plumbing: an implementation whose contract or component does not
+ * resolve is another rule's finding, and a chained child's sourcePaths are
+ * relative to its own root, so the child validates them in its own run.
+ *
+ * What a rule does with the file it is handed stays the rule's: the
+ * conformance dial and the exact-grade test are the honesty stance each rule
+ * owes its reader, and are never applied here.
+ */
+export interface ResolvedMethod {
+  /** The implementation declaring the method — the spec a finding anchors to. */
+  implementation: ImplementationSpec;
+  /** The method itself, narrative and all. */
+  method: MethodImplementation;
+  /** The component the method's implementation realizes. */
+  component: ComponentSpec;
+  /** The file that realizes it: the method's sourcePath, else the implementation's; absent when neither names one. */
+  sourceFile?: string;
+  /** The draft context a finding on this method takes (ctx.isImplementationDraft), read once per implementation. */
+  draftContext: boolean;
+}
+
 export interface RuleContext {
   system: SystemSpec;
   subsystems: SubsystemSpec[];
@@ -318,6 +364,10 @@ export interface RuleContext {
   ownershipIndex(): OwnershipIndex;
   /** Every dependsOn edge in the tree, resolved (memoized). */
   dependencyEdges(): DependencyEdges;
+  /** Every spec id in the tree with the kind label its findings name it by, in subsystem, component, interface, implementation, type order (memoized). */
+  specIds(): SpecId[];
+  /** Every implementation method whose descent resolves, with its component, source file and draft context (memoized). */
+  implementationMethods(): ResolvedMethod[];
   /** The complexity rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one. */
   complexityConfigFor(subsystemId?: string): ComplexityRuleConfig | undefined;
   /** The documentation rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one. */

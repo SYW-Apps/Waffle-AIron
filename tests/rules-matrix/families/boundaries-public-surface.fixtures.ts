@@ -1,5 +1,9 @@
 /**
- * Public-surface binding fixtures (src/core/rules/integrity/public-surface.ts).
+ * Public-surface fixtures — the family's three rules under
+ * src/core/rules/integrity/: public-surface-binding.ts (UNBOUND,
+ * INVALID_COMPONENT, FOREIGN_COMPONENT), public-surface-declared-type.ts
+ * (TYPE_MISMATCH, EVENT_MISTYPED) and public-surface-bound-contract.ts
+ * (INVALID_INTERFACE).
  *
  * Documented intents pinned here:
  *  - PUBLIC_INTERFACE_UNBOUND (error): every declared publicInterface names a

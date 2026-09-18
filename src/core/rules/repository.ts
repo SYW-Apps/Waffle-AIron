@@ -1,12 +1,15 @@
 import { SddRule, RuleCode } from './types.js';
 
 import { hierarchyRule } from './integrity/hierarchy-integrity.js';
-import { namespaceHygieneRule } from './integrity/namespace-hygiene.js';
+import { reservedIdSegmentsRule } from './integrity/reserved-id-segments.js';
+import { namespaceShadowingRule } from './integrity/namespace-shadowing.js';
 import { roundtripRule } from './integrity/roundtrip-serialization.js';
 import { typeDeclarationsRule } from './integrity/type-declarations.js';
 import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
 import { signatureTypeReferencesRule } from './integrity/signature-type-references.js';
-import { publicSurfaceRule } from './integrity/public-surface.js';
+import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
+import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
+import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { contractSymmetryRule } from './narrative/contract-symmetry.js';
 import { narrativeTargetReferencesRule } from './narrative/narrative-target-references.js';
@@ -60,7 +63,10 @@ import { findingRealizationRule } from './conformance/finding-realization.js';
 import { callConformanceRule } from './conformance/call-conformance.js';
 import { hiddenStateRule } from './conformance/hidden-state.js';
 import { dependencyConformanceRule } from './conformance/dependency-conformance.js';
-import { integrationConformanceRule } from './conformance/integration-conformance.js';
+import { integrationSimDeclarationRule } from './conformance/integration-sim-declaration.js';
+import { integrationSimFileRule } from './conformance/integration-sim-file.js';
+import { integrationSimWiringRule } from './conformance/integration-sim-wiring.js';
+import { integrationSimCoverageRule } from './conformance/integration-sim-coverage.js';
 import { couplingRule } from './heuristic/coupling-health.js';
 import { signatureLanguageBuiltinsRule } from './heuristic/signature-language-builtins.js';
 import { narrativeLanguageConstructsRule } from './heuristic/narrative-language-constructs.js';
@@ -88,8 +94,11 @@ import { methodCohesionRule } from './heuristic/method-cohesion.js';
 export const SDD_RULES: SddRule[] = [
   hierarchyRule,
   // Namespace integrity right after hierarchy: unresolvable/unwritable ids
-  // explain many downstream findings, so surface them early in the list.
-  namespaceHygieneRule,
+  // explain many downstream findings, so surface them early in the list. Two
+  // questions of the same ids: the segment no id may spend, and the local name
+  // that would anchor a bare reference to the root instead.
+  reservedIdSegmentsRule,
+  namespaceShadowingRule,
   roundtripRule,
   // The type vocabulary in three questions: what a type declares about
   // itself, then the identifiers its fields name, then the ones its
@@ -162,7 +171,12 @@ export const SDD_RULES: SddRule[] = [
   assertionForbiddenEdgesRule,
   assertionRequiredFieldsRule,
   assertionEndpointShapesRule,
-  publicSurfaceRule,
+  // The published surface in three questions: what backs the entry, whether
+  // that component's stereotype can realize the type it declares, and whether
+  // the contract it binds is that component's own.
+  publicSurfaceBindingRule,
+  publicSurfaceDeclaredTypeRule,
+  publicSurfaceBoundContractRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
   // reader sees the broken edge finding next to the unused-detection fallout
@@ -202,8 +216,14 @@ export const SDD_RULES: SddRule[] = [
   hiddenStateRule,
   dependencyConformanceRule,
   // Integration wiring proof rides after the code↔spec family: it consumes
-  // the same code model and speaks about the same sourcePath modules.
-  integrationConformanceRule,
+  // the same code model and speaks about the same sourcePath modules. Four
+  // questions about one harness, in the order a reader meets them: is one
+  // expected here, does the declared one exist, does it wire the real
+  // modules, does it name every narrated path.
+  integrationSimDeclarationRule,
+  integrationSimFileRule,
+  integrationSimWiringRule,
+  integrationSimCoverageRule,
   couplingRule,
   // Target-language fit in two questions: what a CONTRACT may name, and what
   // a NARRATIVE may describe.

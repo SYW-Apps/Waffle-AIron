@@ -30,50 +30,38 @@ const expectedFor = (t: string): string => {
 };
 
 /**
- * Public interface binding: each declared publicInterface must be backed by a
- * real component in the SAME subsystem whose type can realize the declared
- * interface. This is what makes "which components are public"
- * machine-checkable (and catches a declared interface no component implements).
+ * Public surface, question two: CAN THE BACKING COMPONENT REALIZE WHAT THE
+ * ENTRY DECLARES. The declared type (REST, GraphQL, RPC, MessageBus, Custom)
+ * is matched against the backing component's stereotype and portalType — and
+ * `Custom`, the escape hatch that carries no backing obligation, is held to
+ * its prose.
+ *
+ * The type matrix lives here and nowhere else: pubTypeMatches, expectedFor and
+ * EVENT_VOCAB are read by this rule alone. Whether the entry is BOUND at all
+ * stays public-surface-binding's question, whose two preconditions (a named
+ * component that resolves) are restated here — a broken binding says nothing
+ * about a type, and accusing on top of it would be a second finding for one
+ * fault.
  */
-export const publicSurfaceRule: SddRule = {
-  name: 'public-surface',
+export const publicSurfaceDeclaredTypeRule: SddRule = {
+  name: 'public-surface-declared-type',
   description:
-    'Every declared publicInterface is bound to an existing component of this subsystem whose stereotype can realize the declared interface type; Custom entries whose prose implies eventing must be backed by an event-capable component.',
+    'A publicInterface entry\'s declared type must be realizable by the stereotype of its backing component; Custom entries whose prose implies eventing must be backed by an event-capable component.',
   codes: [
-    { code: 'PUBLIC_INTERFACE_UNBOUND', defaultSeverity: 'error', summary: 'Public interface with no backing component' },
-    { code: 'PUBLIC_INTERFACE_INVALID_COMPONENT', defaultSeverity: 'error', summary: 'Public interface references a non-existent component' },
-    { code: 'PUBLIC_INTERFACE_FOREIGN_COMPONENT', defaultSeverity: 'error', summary: 'Subsystem publishing a component it does not own' },
     { code: 'PUBLIC_INTERFACE_TYPE_MISMATCH', defaultSeverity: 'error', summary: 'Backing component cannot realize the declared interface type' },
-    { code: 'PUBLIC_INTERFACE_INVALID_INTERFACE', defaultSeverity: 'error', summary: 'Bound L3 interface missing or belonging to another component' },
     { code: 'PUBLIC_INTERFACE_EVENT_MISTYPED', defaultSeverity: 'warning', summary: 'Custom interface describing eventing backed by a non-event component' },
   ],
   check(ctx) {
     for (const sub of ctx.subsystems) {
       const isDraftCtx = isDraftSubsystem(sub);
       for (const pi of sub.publicInterfaces) {
-        if (!pi.component) {
-          ctx.addIssue('error', 'PUBLIC_INTERFACE_UNBOUND', `Subsystem "${sub.id}" declares a ${pi.type} public interface with no backing component. Bind it to the component that realizes it (publicInterfaces[].component).`, sub.id, isDraftCtx);
-          continue;
-        }
-        const backing = ctx.componentMap.get(pi.component);
-        if (!backing) {
-          ctx.addIssue('error', 'PUBLIC_INTERFACE_INVALID_COMPONENT', `Subsystem "${sub.id}" public interface references component "${pi.component}" which does not exist.`, sub.id, isDraftCtx);
-          continue;
-        }
-        const isSubsystemOwner = backing.subsystem === sub.id || backing.subsystem.startsWith(sub.id + '::');
-        if (!isSubsystemOwner) {
-          ctx.addIssue('error', 'PUBLIC_INTERFACE_FOREIGN_COMPONENT', `Subsystem "${sub.id}" publishes component "${pi.component}", but it belongs to subsystem "${backing.subsystem}". A subsystem may only publish its own components.`, sub.id, isDraftCtx);
-        }
+        // public-surface-binding's preconditions, restated: an unbound or
+        // unresolvable entry is its finding, and has no stereotype to judge.
+        const backing = pi.component ? ctx.componentMap.get(pi.component) : undefined;
+        if (!backing) continue;
+
         if (!pubTypeMatches(pi.type, backing.componentType, backing.portalType)) {
           ctx.addIssue('error', 'PUBLIC_INTERFACE_TYPE_MISMATCH', `Subsystem "${sub.id}" declares a ${pi.type} public interface backed by "${pi.component}" (${backing.componentType}${backing.portalType ? `/${backing.portalType}` : ''}), which cannot realize ${pi.type}. Expected ${expectedFor(pi.type)}.`, sub.id, isDraftCtx);
-        }
-        if (pi.interface) {
-          const intf = ctx.interfaceMap.get(pi.interface);
-          if (!intf) {
-            ctx.addIssue('error', 'PUBLIC_INTERFACE_INVALID_INTERFACE', `Subsystem "${sub.id}" public interface references interface "${pi.interface}" which does not exist.`, sub.id, isDraftCtx);
-          } else if (intf.component !== pi.component) {
-            ctx.addIssue('error', 'PUBLIC_INTERFACE_INVALID_INTERFACE', `Subsystem "${sub.id}" binds interface "${pi.interface}" to component "${pi.component}", but that interface belongs to component "${intf.component}".`, sub.id, isDraftCtx);
-          }
         }
         // Heuristic — closes the "escape to Custom" hole. `Custom` is the only public
         // interface type that carries no backing obligation, so an unrealized event
