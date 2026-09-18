@@ -1807,8 +1807,8 @@ method's narrative. Two mechanisms close that honestly:
      its profile pack's**, as its severities already did. Where a pack profile was
      deliberately overriding a project value, move that setting into the pack or drop
      it from the project.
-10. **Scripted `sdd_update_spec` deltas: four previously-accepted deltas now behave
-    differently.** All four were silently wrong before, so a script that relies on
+10. **Scripted `sdd_update_spec` deltas: six previously-accepted deltas now behave
+    differently.** All six were silently wrong before, so a script that relies on
     them was already producing a spec nobody intended — but they change without
     warning, so check any generator you have.
     - **A delta naming ONE element of an array INSIDE an element now MERGES instead
