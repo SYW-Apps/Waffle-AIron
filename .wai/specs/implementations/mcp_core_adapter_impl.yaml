@@ -54,9 +54,11 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Forward to sdd_core's gated authoring entry (addComponent): intrinsic candidate rules
-          judge the spec before anything reaches disk, then it performs the saveComponentSpec write
-          on the core portal
+          Forward to sdd_core's write gate (addComponent), which judges the candidate against the
+          intrinsic rules before anything reaches disk and then performs the component write. The
+          declared edge names the core portal because a cross-subsystem hop may only enter through a
+          published Portal, and the gate deliberately sits above it — the portal serves the ungated
+          mechanical writes.
         type: call
         targetComponent: core_portal
         targetMethod: saveComponentSpec
@@ -179,4 +181,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T19:27:21.504Z'
+updatedAt: '2026-09-18T21:17:11.846Z'

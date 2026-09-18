@@ -415,6 +415,35 @@ methods:
           The implementation named <componentId>_impl realizing one of the component's contracts,
           when one moves
         optional: true
+  - name: updateSpec
+    description: >-
+      Apply a partial delta to one stored spec of any level and persist the result, answering with
+      exactly what changed. Refuses a spec that does not exist, a mis-selected kind on the singleton
+      L0, and a delta key the level's canonical schema does not know — an unknown key is dropped on
+      write, so the edit would otherwise report success and change nothing. Merges identity-keyed
+      arrays element by element, relocates every narrative jump around inserted and deleted steps,
+      honours `unset` and `[]` at each level, and resolves symbolic label references against the
+      merged numbering. Compares the result with what is stored and writes NOTHING when they match.
+      The caller's hooks, when given, judge the merged spec at the last point before anything
+      reaches disk.
+    signature: 'updateSpec(kind: string, id: string, delta: object, hooks?: SpecWriteHooks): SpecChangeReport'
+    returns: SpecChangeReport
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The stored spec's id; informational for the singleton L0
+      - name: delta
+        type: object
+        description: The partial change to merge, shaped like the spec, carrying the delta's own verbs
+      - name: hooks
+        type: SpecWriteHooks
+        description: >-
+          The authoring caller's write-boundary judgement; a mechanical write passes none and stays
+          ungated
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T18:00:26.376Z'
+updatedAt: '2026-09-18T21:14:29.183Z'

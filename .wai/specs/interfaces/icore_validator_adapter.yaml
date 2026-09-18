@@ -1,0 +1,29 @@
+id: icore_validator_adapter
+name: Core Validator Client Adapter Interface
+description: >-
+  Client adapter to sdd_validator: the component candidate gate, forwarded 1:1 to the validator
+  portal. Nothing else of the validator's surface is needed on this side of the boundary — sdd_core
+  runs no tree validation of its own.
+component: core_validator_adapter
+methods:
+  - name: validateComponentCandidate
+    description: >-
+      Judge one component that is not yet written against the spec-scoped rules, and return the
+      verdict split by severity. Forwarded to the validator portal.
+    signature: >-
+      validateComponentCandidate(candidate: ComponentSpec, opts?: CandidateOptions):
+      CandidateVerdict
+    returns: CandidateVerdict
+    params:
+      - name: candidate
+        type: ComponentSpec
+        description: The component as it would be written
+      - name: opts
+        type: CandidateOptions
+        description: The project's rule severities and project type to judge with
+        optional: true
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-18T21:11:59.866Z'
+updatedAt: '2026-09-18T21:16:03.145Z'
