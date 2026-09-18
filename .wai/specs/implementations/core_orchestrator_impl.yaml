@@ -1107,6 +1107,97 @@ methods:
         description: Return — every renamed spec now sits under its new id and the file it left is gone
         type: return
         outcome: void
+  - name: updateSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load the stored spec the delta addresses, through the loader entry for its level — this
+          component load and its five siblings; the L0 is a singleton whose load ignores the id
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: 'Guard: the addressed spec must exist'
+        type: branch
+        condition: no spec of that kind holds that id
+        onFalseStep: 4
+      - stepNumber: 3
+        label: spec-missing
+        description: Refuse an update to a spec that has not been defined
+        type: throw
+        error: 'spec-missing: no spec of that kind holds that id'
+      - stepNumber: 4
+        description: 'Guard: a system-kind update must actually address the singleton L0'
+        type: branch
+        condition: the kind is system and the id names neither the singleton nor the system's own name
+        onFalseStep: 6
+      - stepNumber: 5
+        label: mis-selected-kind
+        description: >-
+          Refuse a mis-selected kind rather than silently rewriting the L0, and name the kind the
+          caller probably meant
+        type: throw
+        error: 'mis-selected-kind: kind system targets the singleton L0'
+      - stepNumber: 6
+        description: 'Guard: every delta key must be a field of the level, or one of the delta''s own verbs'
+        type: branch
+        condition: the delta names a key the level's canonical schema does not know
+        onFalseStep: 8
+      - stepNumber: 7
+        label: unknown-key
+        description: >-
+          Refuse the whole delta, naming each unknown key and its nearest known field — an unknown
+          key is dropped on write, so the edit would report success and change nothing
+        type: throw
+        error: 'unknown-key: the delta names a field the level does not have'
+      - stepNumber: 8
+        description: >-
+          Merge the delta onto the stored spec: references qualify against the spec's namespace
+          first, identity-keyed arrays upsert element by element and honour their delete markers,
+          narrative steps insert and delete with every jump field relocating around them, `unset`
+          removes the fields it names at the level it sits in, and `[]` clears the list it names
+        type: local
+      - stepNumber: 9
+        description: >-
+          Resolve the narratives' symbolic label references against the merged numbering; an
+          unresolved reference aborts the whole update, because a dropped reference would silently
+          become a dangling numeric jump
+        type: local
+      - stepNumber: 10
+        description: >-
+          Collect every difference between the stored spec and the merged one as an addressed
+          change, both read through the level's canonical schema so a key the writer would drop
+          cannot count as a change
+        type: local
+      - stepNumber: 11
+        description: Decide whether there is anything to write
+        type: branch
+        condition: the merged spec matches what is stored
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Write nothing, leave the stored updatedAt untouched, and report that the delta matched
+          what is stored
+        type: return
+        outcome: unchanged
+      - stepNumber: 13
+        description: >-
+          Stamp updatedAt and run the caller's injected judgement on the merged spec — the last
+          point before anything reaches disk, so a refusal leaves "nothing was saved" literally true
+        type: local
+      - stepNumber: 14
+        description: >-
+          Persist the merged spec through the saver for its level, allowing a deliberate status
+          demotion when the delta carried an explicit status
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 15
+        description: >-
+          Report what was written: every change it made, the store's placement notices and the
+          judgement's warnings
+        type: return
+        outcome: written
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T18:00:52.791Z'
+updatedAt: '2026-09-18T21:14:43.400Z'

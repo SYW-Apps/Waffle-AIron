@@ -1,0 +1,18 @@
+id: authoring_portal
+name: Authoring Portal
+description: >-
+  The published write surface of the authoring seam: the two gated writes every access path reaches
+  — authoring a new L2 component, and patching any stored spec through the same judgement. It
+  terminates the in-process call and routes both to the gated workflow, because a Portal never
+  performs the write itself. It exists so the hop into this subsystem is a drawn edge: a
+  cross-subsystem dependency may only enter through a published Portal, and without one the MCP
+  server's real call could only be recorded as prose.
+subsystem: sdd_authoring
+componentType: Portal
+owns: []
+dependsOn:
+  - authoring_orchestrator
+portalType: Custom
+status: complete
+createdAt: '2026-09-18T21:40:40.325Z'
+updatedAt: '2026-09-18T21:50:56.991Z'

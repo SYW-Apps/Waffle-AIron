@@ -1361,6 +1361,56 @@ the agent.
   component returns the resolved guidance and its same-variant siblings as a derived,
   read-only field. Previously it only reached generated agent files.
 
+### The gated write seam is its own subsystem
+
+`src/core/authoring.ts` is the boundary every spec write passes: it judges a
+component against the intrinsic rules and only then persists it, and it injects
+that same judgement into the store's delta update as a hook. No spec named it, so
+the one place that decides what may be written was the one place the tree could
+not see — and the interface it calls said so out loud (`validateComponentCandidate`
+carried "no sdd_core narrative models that call yet, because no spec names
+authoring.ts").
+
+The file's own header states the layering: *access paths → authoring → specs +
+rules*. It is a layer **above** both `sdd_core` and `sdd_validator`, and a layer
+above two peers cannot live inside one of them without inverting an edge.
+Modelling it inside `sdd_core` first made that concrete, and cost three things —
+the same mistake in three shapes: a second component that existed only to make the
+hop into `sdd_validator` legal, a new `sdd_core → sdd_validator` trusted link
+declaring a mutual coupling that did not exist, and a gate nothing depended on,
+whose real caller could only be written down as prose. So the seam is
+**`sdd_authoring`**, a subsystem of its own.
+
+- **`authoring_portal`** (Portal) is the published surface: `addComponent` and
+  `updateSpecGated`, the two exports `src/mcp/server.ts` imports. It exists so the
+  inbound hop is a drawn edge — a cross-subsystem dependency may only enter through
+  a published Portal.
+- **`authoring_orchestrator`** (Orchestrator) is the gated workflow: `addComponent`
+  judges a candidate and refuses it before anything touches disk; `updateSpecGated`
+  builds the judgement as a write hook and hands the delta outward. A Portal never
+  performs the write itself, so both writes route through here — the layer the
+  doctrine has always required a Portal's writes to reach.
+- **`authoring_core_adapter`** and **`authoring_validator_adapter`** (Adapters) name
+  the two outward hops: to `sdd_core` for the writes and for the project's own rule
+  severities, and to `sdd_validator` for the candidate judgement. Only a local client
+  Adapter may cross a subsystem boundary, and both hops run outward.
+- **`mcp_authoring_adapter`** (Adapter, `sdd_mcp`) makes the seam's inbound edge real.
+  `sdd_add_component` now reaches `authoring_portal.addComponent` instead of claiming
+  a `core_portal.saveComponentSpec` call the code never made — the spec had recorded
+  the truth only as a `symbol: addComponent` footnote.
+- **`core_orchestrator.updateSpec`** is on the contract at last — the delta applier
+  the authoring tools have written through for months, with the guards, the merge,
+  the no-op comparison and the injected gate in its narrative — and
+  **`core_portal.updateSpec`** publishes it, because the caller now stands outside
+  `sdd_core`.
+- **The `sdd_core → sdd_validator` trusted link is gone.** It was needed only while
+  the gate lived inside `sdd_core`. With the gate outside, both of its hops run
+  outward and `sdd_validator` reads the spec tree through `sdd_core` exactly as it
+  always did: no dependency is mutual, nothing needs acknowledging, and the tree now
+  declares no `trustedLinks` anywhere.
+- **No method carries an `invokedBy` any more.** Every edge the seam needs is drawn,
+  including the one from the MCP server that used only to be described.
+
 ### Spec authoring: array deltas upsert, and an optional field can be removed
 
 `sdd_update_spec` documented that arrays are "matched by name (or id) and
@@ -1542,6 +1592,25 @@ method's narrative. Two mechanisms close that honestly:
 
 ### Fixes
 
+- **A write that changed nothing reported "Successfully updated".** `sdd_update_spec`
+  answered with the same sentence whether a delta rewrote a narrative or landed
+  nowhere at all, and re-stamped `updatedAt` on the way, so an edit that never
+  happened was indistinguishable from one that did — and left a diff behind to prove
+  it had. An update now compares the merged spec with what is stored, read through
+  the same level schema the writer uses, and **writes nothing when they match**: the
+  answer says so, and the file is untouched. When something did change, the answer
+  names every change by path — `methods.runJourney.narrative.step 7.type`,
+  `dependsOn`, `description` — with what it was and what it is. `updateSpec` and
+  `updateSpecGated` return that report instead of a bare notice list.
+- **A method-level `unset` silently did nothing.** `unset` was a verb at the top
+  level only. One level down — on a method, a param, a field, a narrative step, a
+  dispatch binding — it was neither a field nor a verb: it merged onto the element
+  as data, the writer schema stripped it, and the tool answered "Successfully
+  updated implementation spec" over a spec it had left exactly as it found it. A
+  method's `symbol`, a step's `label`, could be set and never cleared. `unset` is
+  now honoured at every level, and `[]` clears a method's `narrative` the way it
+  clears every other list it names (fed to the step merge, `[]` used to mean "upsert
+  no steps" and left the narrative in place).
 - **A stale lock reported itself as locked.** The hosted project config view judged
   "locked" from the mere EXISTENCE of a lock record while the promote gate compared
   state identities — so a project whose specs changed after locking still claimed a

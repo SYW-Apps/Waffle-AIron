@@ -1,0 +1,28 @@
+id: sdd_authoring
+name: SDD Spec Authoring
+description: >-
+  The gated spec-write seam: the one place that decides what may be written and then writes it.
+  wairon is one backend behind several doors — the local CLI, the stdio MCP server, the hosted web
+  interface and the hosted MCP — and which door a caller came through decides authentication and
+  transport, never what a spec may contain. So the rule lives here, in a layer ABOVE both the spec
+  store and the rule engine, where every door reuses it. That layering is why this is its own
+  subsystem and not a component inside sdd_core: the seam calls sdd_core to persist and
+  sdd_validator to judge, and a component that sits above two peers cannot live inside one of them
+  without inverting an edge and declaring a coupling that does not exist. It holds no state: specs
+  are loaded and saved through sdd_core, candidates are judged through sdd_validator. Mechanical
+  writes — status promotion at lock, layout normalization, migrations, doctor repairs — stay on
+  sdd_core directly, ungated by construction, which is what lets a spec authored before a rule
+  existed still load and still be repaired.
+parentSystem: Waffle-AIron
+publicInterfaces:
+  - type: Custom
+    details: >-
+      In-process gated spec authoring: author a new L2 component, or patch any stored spec through
+      the same judgement. Each answers with a structured report of exactly what changed, or that
+      nothing did and nothing was written.
+    component: authoring_portal
+    interface: iauthoring_portal
+trustedLinks: []
+status: complete
+createdAt: '2026-09-18T21:40:20.265Z'
+updatedAt: '2026-09-18T21:50:55.457Z'

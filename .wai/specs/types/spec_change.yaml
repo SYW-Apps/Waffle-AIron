@@ -1,0 +1,29 @@
+kind: value-object
+id: spec_change
+name: SpecChange
+description: >-
+  One change an authoring write made to a stored spec, addressed by a dotted path with names and
+  step numbers rather than array indexes — `methods.runJourney.narrative.step 7.type`, `dependsOn`,
+  `description` — so a reader can see where the edit landed without diffing the file.
+fields:
+  - name: path
+    type: string
+    description: >-
+      Where the change landed, in dotted form: field names, element identities and `step N` for a
+      narrative step.
+    optional: false
+  - name: change
+    type: string
+    description: 'What happened there: `set`, `added`, `removed` or `cleared`.'
+    optional: false
+  - name: before
+    type: string
+    description: The previous value, summarized; absent when there was none.
+    optional: true
+  - name: after
+    type: string
+    description: The new value, summarized; absent when there is none.
+    optional: true
+methods: []
+createdAt: '2026-09-18T21:11:36.917Z'
+updatedAt: '2026-09-18T21:11:37.096Z'

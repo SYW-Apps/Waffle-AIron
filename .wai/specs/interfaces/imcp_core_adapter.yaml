@@ -29,13 +29,6 @@ methods:
     description: Calls loadSubsystemSpecs on core portal
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
     returns: SubsystemSpec[]
-  - name: saveComponentSpec
-    description: >-
-      Persists a component spec through sdd_core's gated authoring seam: intrinsic candidate rules
-      refuse a misplaced field before it reaches disk, then the write goes through saveComponentSpec
-      on the core portal.
-    signature: 'saveComponentSpec(spec: ComponentSpec): void'
-    returns: void
   - name: loadComponentSpec
     description: Calls loadComponentSpec on core portal
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
@@ -148,4 +141,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T19:22:24.766Z'
+updatedAt: '2026-09-18T21:42:07.836Z'

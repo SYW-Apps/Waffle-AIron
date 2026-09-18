@@ -440,6 +440,36 @@ methods:
           Whether an implementation that declares no symbol is pinned to the old name; true when
           omitted
         optional: true
+  - name: updateSpec
+    description: >-
+      Published write: apply a partial delta to one stored spec of any level and persist the result,
+      answering with exactly what changed. Refuses a spec that does not exist, a mis-selected kind
+      on the singleton L0, and a delta key the level's canonical schema does not know. Compares the
+      result with what is stored and writes NOTHING when they match. The caller's hooks, when given,
+      judge the merged spec at the last point before anything reaches disk — which is how the
+      authoring seam gates a write from above without the store ever calling the rule engine that
+      reads it. A mechanical write passes no hooks and stays ungated. Routed through the core
+      orchestrator.
+    signature: >-
+      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks):
+      SpecChangeReport
+    returns: SpecChangeReport
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The stored spec's id; informational for the singleton L0
+      - name: delta
+        type: SpecDelta
+        description: The partial change to merge, shaped like the spec, carrying the delta's own verbs
+      - name: hooks
+        type: SpecWriteHooks
+        description: >-
+          The authoring caller's write-boundary judgement; a mechanical write passes none and stays
+          ungated
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T19:22:21.991Z'
+updatedAt: '2026-09-18T21:42:16.531Z'

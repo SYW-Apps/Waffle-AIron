@@ -260,7 +260,9 @@ describe('hosted data-plane spec-content round-trip (end-to-end)', () => {
   const write = async (project: 'proj-a' | 'proj-b', name: string, args: Record<string, unknown>): Promise<void> => {
     const r = await call(project, name, args);
     expect(r.isError, `${name} on ${project} failed: ${r.text}`).toBe(false);
-    expect(r.text).toContain('Successfully');
+    // A write that reported NO CHANGE is as bad as an error here: every later
+    // read-back would assert against content the tool never actually wrote.
+    expect(r.text, `${name} on ${project} wrote nothing`).toMatch(/^(Successfully|Updated )/);
   };
 
   /** Read a spec back THROUGH THE DATA PLANE and parse the JSON payload. */

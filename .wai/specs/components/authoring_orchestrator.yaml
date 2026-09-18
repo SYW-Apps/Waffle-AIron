@@ -1,0 +1,23 @@
+id: authoring_orchestrator
+name: Authoring Orchestrator
+description: >-
+  The gated write workflow: it decides what may be written and then has it written. On a create it
+  judges the candidate against the intrinsic rules with the project's own severities and refuses on
+  an error before anything reaches disk; on an update it injects that same judgement into the
+  store's delta write as a hook, so the MERGED spec is judged at the last point before it is
+  persisted — a delta on its own cannot tell you the resulting componentType, and it is the
+  resulting componentType that decides whether a field belongs. The hook is an inversion rather than
+  a direct call because the rule engine already reads the spec store, so a store that called the
+  rule engine back would close the cycle. Mechanical writes stay outside this workflow by
+  construction — status promotion at lock, layout normalization, migrations and doctor repairs go
+  straight to sdd_core — which is what keeps a spec authored before a rule existed loadable and
+  repairable.
+subsystem: sdd_authoring
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - authoring_core_adapter
+  - authoring_validator_adapter
+status: complete
+createdAt: '2026-09-18T21:11:54.227Z'
+updatedAt: '2026-09-18T21:40:50.970Z'

@@ -1,0 +1,19 @@
+kind: value-object
+id: spec_write_hooks
+name: SpecWriteHooks
+description: >-
+  The hooks an authoring caller injects into a spec write. Inversion rather than a direct call: the
+  rule engine already reads the spec store, so a store that called the rule engine back would close
+  the cycle. It also keeps mechanical re-saves ungated by construction — status promotion, layout
+  normalization and migrations pass no hooks and behave exactly as before, which is what lets a spec
+  authored before a rule existed still load and still be repaired.
+fields: []
+methods:
+  - name: gate
+    signature: 'gate(kind: string, merged: object): string[]'
+    returns: string[]
+    description: >-
+      Judge the fully merged spec immediately before it is persisted, and throw to refuse the write.
+      Returns any notices to surface alongside the write's own.
+createdAt: '2026-09-18T21:13:19.876Z'
+updatedAt: '2026-09-18T21:13:19.886Z'

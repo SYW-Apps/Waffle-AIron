@@ -1,0 +1,31 @@
+id: authoring_portal_impl
+name: Authoring Portal Implementation
+description: >-
+  The two exported entry points of src/core/authoring.ts that callers outside this subsystem reach.
+  They terminate the in-process call and hand the work to the gated workflow in the same module; the
+  file is one seam, so portal and workflow collapse onto the same functions, which is the N:1
+  sharing the model blesses rather than an indirection the code pretends to have.
+contract: iauthoring_portal
+sourcePath: src/core/authoring.ts
+methods:
+  - name: addComponent
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the candidate to the gated create workflow, which judges it before anything reaches
+          disk and answers with the notices
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: addComponent
+  - name: updateSpecGated
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the delta to the gated update workflow, which injects the same judgement into the
+          store's write and answers with the change report
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: updateSpecGated
+status: complete
+createdAt: '2026-09-18T21:43:28.738Z'
+updatedAt: '2026-09-18T21:51:08.039Z'

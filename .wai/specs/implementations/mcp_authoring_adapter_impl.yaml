@@ -1,0 +1,21 @@
+id: mcp_authoring_adapter_impl
+name: MCP Authoring Adapter Implementation
+description: >-
+  Pure 1:1 forwarding into sdd_authoring's front door. An in-process import seam inside
+  src/mcp/server.ts — the one import that made the seam's inbound edge real instead of a sentence on
+  its contract; swappable for a remote transport without changing the tool handler that calls it.
+contract: imcp_authoring_adapter
+sourcePath: src/mcp/server.ts
+methods:
+  - name: addComponent
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Call addComponent on the authoring portal: the gate judges the candidate and refuses it
+          before anything reaches disk, and performs the write only if it passes
+        type: call
+        targetComponent: authoring_portal
+        targetMethod: addComponent
+status: complete
+createdAt: '2026-09-18T21:43:42.731Z'
+updatedAt: '2026-09-18T21:51:11.435Z'

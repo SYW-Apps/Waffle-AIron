@@ -1,0 +1,25 @@
+kind: value-object
+id: spec_delta
+name: SpecDelta
+description: >-
+  A partial change to one stored spec, as an update receives it. Keys are the spec's own fields,
+  shaped like the spec, plus the delta's own markers: `action` (`insert` or `delete`; `remove: true`
+  also deletes) on a narrative step or an identified array element; `unset`, the fields to remove
+  from the element it sits in, honoured at every level; `captureJumps` on an inserted step, which
+  takes over the jumps aimed at its number; and the `*Label` twin of every jump field
+  (`onFalseLabel`, `toLabel`, …), resolved against step labels after the merge. `[]` clears the
+  array it names. A key that is neither a field nor a marker at its depth has no effect at all, and
+  refuses the write rather than reporting a success it did not perform.
+fields:
+  - name: patch
+    type: object
+    description: >-
+      The fields to change, shaped like the spec. Identity-keyed arrays merge element by element —
+      methods, params and fields by name, switch cases by value, try catches by error, narrative
+      steps by stepNumber; arrays of plain strings replace wholesale. Steps apply in ascending
+      stepNumber order, each against the numbering earlier entries of the same delta left behind,
+      which is why labels are the reliable way to name a jump target.
+    optional: false
+methods: []
+createdAt: '2026-09-18T21:41:16.851Z'
+updatedAt: '2026-09-18T21:41:16.866Z'

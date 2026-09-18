@@ -50,17 +50,6 @@ methods:
         targetComponent: core_portal
         targetMethod: loadSubsystemSpecs
     symbol: loadSubsystemSpec
-  - name: saveComponentSpec
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Forward to sdd_core's gated authoring entry (addComponent): intrinsic candidate rules
-          judge the spec before anything reaches disk, then it performs the saveComponentSpec write
-          on the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: saveComponentSpec
-    symbol: addComponent
   - name: loadComponentSpec
     narrative:
       - stepNumber: 1
@@ -179,4 +168,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T19:27:21.504Z'
+updatedAt: '2026-09-18T21:44:05.780Z'

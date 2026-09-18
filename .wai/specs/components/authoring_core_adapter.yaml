@@ -1,0 +1,16 @@
+id: authoring_core_adapter
+name: Authoring Core Client Adapter
+description: >-
+  Local client adapter in sdd_authoring for the outward hop into sdd_core: persists a judged
+  component, and applies an update delta with the gate injected as a write hook. In-process import
+  seam inside src/core/authoring.ts today, swappable for a remote spec store without changing the
+  workflow that calls it. It exists because only a client Adapter may cross a subsystem boundary —
+  the gated workflow is an Orchestrator and may not name another subsystem's portal itself.
+subsystem: sdd_authoring
+componentType: Adapter
+owns: []
+dependsOn:
+  - core_portal
+status: complete
+createdAt: '2026-09-18T21:40:35.546Z'
+updatedAt: '2026-09-18T21:50:58.763Z'

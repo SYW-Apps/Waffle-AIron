@@ -1,0 +1,22 @@
+id: imcp_authoring_adapter
+name: MCP Authoring Client Adapter Interface
+description: >-
+  Client adapter contract for the MCP subsystem's hop into sdd_authoring: the gated component write,
+  reached through the authoring portal instead of the spec store (in-process today; swappable for a
+  remote transport).
+component: mcp_authoring_adapter
+methods:
+  - name: addComponent
+    description: >-
+      Forward the sdd_add_component write to the authoring portal's gate: the intrinsic rules judge
+      the candidate and refuse a misplaced field before anything reaches disk, and the write is
+      performed only if it passes.
+    signature: 'addComponent(candidate: ComponentSpec): string[]'
+    returns: string[]
+    params:
+      - name: candidate
+        type: ComponentSpec
+        description: The component as the tool's arguments describe it
+status: complete
+createdAt: '2026-09-18T21:42:03.998Z'
+updatedAt: '2026-09-18T21:51:06.048Z'

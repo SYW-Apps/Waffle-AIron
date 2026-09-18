@@ -32,10 +32,10 @@ methods:
     description: >-
       Judge one component before it is written: run the spec-scoped rules against it and return the
       verdict split by severity. The write-boundary half of the rule set, with the same rules, codes
-      and messages as validate, for the verdicts that need no tree. sdd_core's gated authoring calls
-      it before any component spec reaches disk (authoring.ts: addComponent, and the component gate
-      sdd_update_spec writes through) and refuses the write when the verdict holds an error; no
-      sdd_core narrative models that call yet, because no spec names authoring.ts.
+      and messages as validate, for the verdicts that need no tree. sdd_authoring's gated workflow
+      calls it through its own client adapter before any component spec reaches disk — on a create
+      directly, and on an update as the hook injected into the delta write — and refuses the write
+      when the verdict holds an error.
     signature: >-
       validateComponentCandidate(candidate: ComponentSpec, opts?: CandidateOptions):
       CandidateVerdict
@@ -58,4 +58,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T10:51:45.761Z'
+updatedAt: '2026-09-18T21:44:13.584Z'

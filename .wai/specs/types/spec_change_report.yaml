@@ -1,0 +1,35 @@
+kind: value-object
+id: spec_change_report
+name: SpecChangeReport
+description: >-
+  The answer to an authoring write: exactly what changed, or that nothing did. A write that changes
+  nothing writes nothing — `written` is false and the stored `updatedAt` is untouched. One sentence
+  for both outcomes is what let a delta that landed nowhere read as a completed edit.
+fields:
+  - name: kind
+    type: string
+    description: 'The spec kind written: system, subsystem, component, interface, implementation or type.'
+    optional: false
+  - name: id
+    type: string
+    description: The stored spec's id.
+    optional: false
+  - name: written
+    type: boolean
+    description: 'False when the merged spec equals what is stored: nothing reached disk.'
+    optional: false
+  - name: changes
+    type: SpecChange[]
+    description: Every change the write made; empty exactly when `written` is false.
+    optional: false
+  - name: notices
+    type: string[]
+    description: Store placement notices, component gate warnings and delta notices.
+    optional: false
+  - name: summary
+    type: string
+    description: One line for people, naming the spec and either the change count or that nothing was written.
+    optional: false
+methods: []
+createdAt: '2026-09-18T21:11:43.565Z'
+updatedAt: '2026-09-18T21:11:43.574Z'

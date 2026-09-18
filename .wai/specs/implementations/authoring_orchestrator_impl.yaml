@@ -1,0 +1,71 @@
+id: authoring_orchestrator_impl
+name: Authoring Orchestrator Implementation
+description: >-
+  The gated write composition in src/core/authoring.ts. It holds no state and owns no merge logic:
+  it resolves the settings to judge with, runs the candidate judgement, and hands the write outward
+  to sdd_core — as a direct call for a create, and as an injected hook for a delta update, because
+  the store must not import the rule engine that already reads it. Both collaborators are peers of
+  this subsystem, not members of it, which is why each hop is named by its own client adapter.
+contract: iauthoring_orchestrator
+sourcePath: src/core/authoring.ts
+methods:
+  - name: addComponent
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration for the rule severities and project type to judge
+          the candidate with; a project that has none, or whose configuration cannot be read, is
+          judged on the default severities
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: Judge the candidate against the spec-scoped rules with those settings
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateComponentCandidate
+      - stepNumber: 3
+        description: Decide on the verdict
+        type: branch
+        condition: the verdict holds at least one error
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse the write with the formatted refusal, naming every rule code the candidate broke —
+          nothing has reached disk, so the remedy is to fix the arguments and call again
+        type: throw
+        error: intrinsic rule violation
+      - stepNumber: 5
+        description: Persist the candidate through the core client adapter
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: saveComponentSpec
+      - stepNumber: 6
+        description: Return the verdict's warnings as notices, followed by the store's placement notices
+        type: return
+        outcome: written
+  - name: updateSpecGated
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the component candidate judgement as a write hook over those same settings. It
+          judges the MERGED spec, because a delta on its own cannot tell you the resulting
+          componentType, and it is the resulting componentType that decides whether a field belongs
+        type: local
+      - stepNumber: 2
+        description: >-
+          Apply the delta through the core client adapter's update with that hook injected, so the
+          judgement runs on the merged spec at the last point before anything reaches disk
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: updateSpec
+      - stepNumber: 3
+        description: >-
+          Return the update's change report unchanged: what changed, or that nothing did and nothing
+          was written
+        type: return
+        outcome: reported
+status: complete
+createdAt: '2026-09-18T21:13:15.300Z'
+updatedAt: '2026-09-18T21:43:53.068Z'

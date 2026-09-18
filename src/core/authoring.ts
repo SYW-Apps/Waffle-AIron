@@ -1,6 +1,9 @@
 import type { ComponentSpec } from '../models/specs.js';
 import type { RulesConfig } from '../models/project.js';
-import { saveComponentSpec, updateSpec, type SpecWriteHooks } from './specs.js';
+import {
+  saveComponentSpec, updateSpec,
+  type SpecChangeReport, type SpecWriteHooks, type WritableSpecKind,
+} from './specs.js';
 import { validateComponentCandidate } from './validation.js';
 import { formatCandidateRefusal, type CandidateVerdict } from './rules/candidate.js';
 import { projectConfigRepository } from '../config/project-config.js';
@@ -82,11 +85,15 @@ export function addComponent(candidate: ComponentSpec): string[] {
  * Patch an existing spec through the same gate. An update can introduce a
  * misplaced field just as easily as a create can — and unlike a create, it can
  * also change the componentType out from under fields that were legal before.
+ *
+ * Answers with a SpecChangeReport: exactly what changed, or that nothing did
+ * and nothing was written. A caller that cannot tell those apart eventually
+ * ships an edit it never made.
  */
 export function updateSpecGated(
-  kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+  kind: WritableSpecKind,
   id: string,
   delta: Record<string, any>,
-): string[] {
+): SpecChangeReport {
   return updateSpec(kind, id, delta, componentCandidateGate());
 }
