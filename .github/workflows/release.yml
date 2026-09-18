@@ -225,15 +225,25 @@ jobs:
         run: |
           VERSION="${{ needs.publish-npm.outputs.version }}"
           echo "Verifying @wairon/cli@${VERSION}"
-          # Registry propagation can lag the publish by a few seconds — retry.
-          for i in 1 2 3 4 5; do
-            if npm install -g "@wairon/cli@${VERSION}"; then
+          # npm processes a publish asynchronously — the publish step itself
+          # prints "Your package is being processed and may take a few minutes
+          # to become available" — so the version is routinely absent from the
+          # registry for minutes after that step reports success. Two things
+          # make the wait honest: a budget measured in minutes, and
+          # --prefer-online, which forces a staleness check so a cached 404
+          # packument from an earlier attempt is not what the next one reads.
+          ATTEMPTS=30
+          for i in $(seq 1 "${ATTEMPTS}"); do
+            if npm install -g --prefer-online "@wairon/cli@${VERSION}"; then
+              echo "installed on attempt ${i}"
               exit 0
             fi
-            echo "install attempt ${i} failed — retrying in 20s"
-            sleep 20
+            if [ "${i}" -lt "${ATTEMPTS}" ]; then
+              echo "install attempt ${i} failed — the registry may still be processing the publish; retrying in 20s"
+              sleep 20
+            fi
           done
-          echo "::error::@wairon/cli@${VERSION} not installable from the registry after 5 attempts"
+          echo "::error::@wairon/cli@${VERSION} not installable from the registry after ${ATTEMPTS} attempts (10 minutes)"
           exit 1
 
       - name: Binary reports the published version
