@@ -460,6 +460,36 @@ typo) is separated from judging the contract it resolved to (`surface-reference-
 exposed method or served capability, the asserted guarantees). The four narratives measure 13, 19, 11 and 18. The family's
 `EXCESSIVE_NARRATIVE_STEPS` allow is retired — nothing in it lists more than 20 steps any more.
 
+### The rules share one derived read model
+
+Four indexes were rebuilt inside individual rules — the same walk, in file after file, with subtly different shapes.
+That is duplicated work and duplicated semantics, and it is why several rules could not be split honestly: a seam that
+forces an index to be rebuilt twice is a bad seam. They are now memoized `RuleContext` methods over named value objects,
+so a pack-authored rule reads them too:
+
+| method | what it holds | who rebuilt it before |
+| --- | --- | --- |
+| `codeIndex()` | every analyzed path's facts, and its three anchor tiers: what the file declares, what is anchored in it, and its finding anchors | the seven code↔spec conformance rules and the narrative detail dial — eight files |
+| `realizationIndex()` | which files realize which components, both ways, plus the implementations behind each — one walk of the implementations whose contract and component resolve and that are not inside a chained subproject | `dependency-conformance` and `integration-conformance`, half-built in `source-file-linkage` |
+| `importGraph(paths?)` | resolved import edges, the re-export pass, the file-set connectivity test and the reachability closure — over a CLOSED path set, which is part of the graph's identity because resolution is string matching against it | `dependency-conformance` (mapped exact-grade files) and `integration-conformance` (every analyzed path) walked their own |
+| `ownershipIndex()` | which pattern privately owns each member block | `pattern-ownership`, which built it inside the loop that reports on it |
+
+`interfaceMethodsOf` is memoized too: eight rules ask it per dispatch binding or per narrative step, and it rebuilt its
+array on every call.
+
+The ownership map is the one whose shape decides findings rather than only speed, so it keeps `pattern-ownership`'s
+semantics exactly: a retired or building-block claimant records nothing, so do an unresolved member and an inner
+pattern, and where two patterns claim one block the first claimant stays the owner. `dependency-conformance` and
+`technology-boundaries` keep their own PLAIN owner maps — every `owns` claim, last claimant winning — because the two
+readings differ on trees that already carry an ownership error, where narrowing the map would turn one finding into two.
+Switching them is a doctrine decision, not a refactor, and each map now says so where it is built.
+
+Behaviour is preserved to the letter: the full finding set of all 561 rule-matrix fixtures (2069 findings, each dumped
+as severity, code, spec id, draft context, surface-resolved flag and message) is byte-identical before and after. On
+wairon's own tree `dependencyConformance` drops from cognitive score 28 to 14 — its file map, its edge pass and two
+near-identical trace branches are gone — and `hiddenState` from 8 to 6, now that the index's own exact-grade set is the
+loop. `patternOwnership` loses the step that recorded the map it reports on.
+
 ### Complexity, naming and cohesion are checked
 
 Wairon judged a tree's structure but not its readability. A narrative could grow to sixty steps of nested guards, a
