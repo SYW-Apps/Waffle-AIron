@@ -7,19 +7,25 @@ description: >-
   also deletes) on a narrative step or an identified array element; `unset`, the fields to remove
   from the element it sits in, honoured at every level; `captureJumps` on an inserted step, which
   takes over the jumps aimed at its number; and the `*Label` twin of every jump field
-  (`onFalseLabel`, `toLabel`, …), resolved against step labels after the merge. `[]` clears the
-  array it names. A key that is neither a field nor a marker at its depth has no effect at all, and
-  refuses the write rather than reporting a success it did not perform.
+  (`onFalseLabel`, `toLabel`, …), resolved against step labels after the merge, where a label
+  REPLACES the stored number it twins rather than contradicting it. `[]` clears the array it names.
+  A key that is neither a field nor a marker at its depth has no effect at all, and refuses the
+  write rather than reporting a success it did not perform.
 fields:
   - name: patch
     type: object
     description: >-
-      The fields to change, shaped like the spec. Identity-keyed arrays merge element by element —
-      methods, params and fields by name, switch cases by value, try catches by error, narrative
-      steps by stepNumber; arrays of plain strings replace wholesale. Steps apply in ascending
-      stepNumber order, each against the numbering earlier entries of the same delta left behind,
-      which is why labels are the reliable way to name a jump target.
+      The fields to change, shaped like the spec. Identity-keyed arrays merge element by element at
+      EVERY depth — methods, params and fields by name, switch cases by value, try catches by error,
+      narrative steps by stepNumber; arrays of plain strings and parallel arms that name none
+      replace wholesale. Steps apply in ascending stepNumber order, each against the numbering
+      earlier entries of the same delta left behind, which is why labels are the reliable way to
+      name a jump target and why a delete may restate the step's label or description as a guard. A
+      step whose type changes is rebuilt for its new type, keeping its description and label and
+      dropping what the new type cannot carry. A delete is refused when it addresses no step, when a
+      jump still targets the step, or when the step is a region header whose body would be left
+      standing.
     optional: false
 methods: []
 createdAt: '2026-09-18T21:41:16.851Z'
-updatedAt: '2026-09-18T21:41:16.866Z'
+updatedAt: '2026-09-18T22:48:35.497Z'

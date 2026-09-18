@@ -11,8 +11,9 @@ can a chained subproject whose gate was waving cross-tree findings through or wh
 nested mount reaches outside its own project, a tree that still has a Specialist or
 a Gateway or breaks the new Supervisor and Actor dependency rules, a tree whose
 narratives or names the new readability checks judge, or a tree holding a case the
-fixed validator rules used to miss. Nothing here is purely additive, so
-`[minor]` would understate it.
+fixed validator rules used to miss. A scripted `sdd_update_spec` delta can also
+behave differently, where it was relying on a merge rule that was silently wrong
+(item 10). Nothing here is purely additive, so `[minor]` would understate it.
 
 ### A chained subproject is judged through its parent — never waved through
 
@@ -1611,6 +1612,57 @@ method's narrative. Two mechanisms close that honestly:
   now honoured at every level, and `[]` clears a method's `narrative` the way it
   clears every other list it names (fed to the step merge, `[]` used to mean "upsert
   no steps" and left the narrative in place).
+- **Changing a step's `type` left the old type's fields standing.** A retype merged
+  the new type's fields over the step and kept everything else, so a `branch` that
+  became a `call` still carried its `condition` and `onFalseStep`: a step the schema
+  accepts, a write that reports success, and a `MALFORMED_FLOW_STEP` at the next
+  validate, blamed on the narrative rather than on the edit that made it. A step
+  whose `type` changes is now **rebuilt for its new type** — every field the new type
+  cannot carry is dropped and named in a NOTICE, while the human's own content (the
+  `description`, and the `label` other steps address it by) is kept. A delta that
+  retypes AND sets a field the new type cannot carry is refused rather than quietly
+  stripped: dropping a stored leftover is cleaning up after the old type, dropping
+  what the caller just wrote is ignoring them. Dissolving a region is now an
+  explicit, reported act — retype a `loop`/`try`/`parallel` header and its `endStep`,
+  `catches` and `finallyStep` go with it.
+- **A label could not retarget a jump that already had a number.** Symbolic labels
+  resolved only where no number was stored: a delta repointing an existing jump with
+  `onFalseLabel` merged the label onto the OLD number, and resolution then saw both
+  and refused the write as a contradiction ("sets both `onFalseStep=2` and
+  `onFalseLabel="cleanup"` — they disagree"), leaving hand-counted numbers as the only
+  way to move a jump. In a DELTA the number is what is stored and the label is the new
+  intent, so **the stored twin gives way** — for every `*Label` field, and for a
+  `cases`/`catches` entry's `label`. A delta that sets the number and its label
+  together is still a genuine contradiction and still refused.
+- **Three step deletes that broke a narrative silently.** `action: "delete"` refused
+  exactly one thing: a step another step jumps to. It now also refuses **a delete that
+  addresses no step** (a marker the writer stripped while reporting success), **a
+  delete whose restated `label` or `description` does not match the step it landed
+  on**, and **a delete of a loop/try/parallel header whose body is still there** —
+  which used to leave that body standing with nothing looping, guarding or forking it:
+  a narrative that still validates and no longer means what it says. The second guard
+  exists because step deltas apply in ascending order against the numbering the
+  earlier entries of the SAME delta left behind — delete step 3 and step 7 becomes
+  step 6, so a second delete written as 7 addresses what used to be step 8. Restating
+  what is being deleted is the only way that is ever noticed. That order is now
+  written down: in the tool description, on the `SpecDelta` type, and above
+  `updateSpec` itself alongside the rest of the application pipeline.
+- **The identity promise stopped one level below the spec's own fields.** "Arrays
+  upsert, they do not replace" was true of a spec's top-level arrays and of nothing
+  inside them: a delta naming ONE of a method's `params` replaced the whole list and
+  silently deleted the rest, and a delta retargeting ONE of a `try` step's `catches`
+  dropped every other clause — the same data loss the top level was fixed for, one
+  level down, with the tool still promising otherwise. Nested arrays now merge by
+  identity at **every** depth, with the same delete markers and the same
+  phantom-delete refusal. Switch cases are addressed by `value` and try catches by
+  `error`, never by their `step`, which is a relocatable number and not an identity.
+  Parallel arms follow the general rule: named, they merge by name; unnamed, they
+  carry no identity at all and the list still replaces wholesale.
+- **The authoring seam's configuration read reached past the portal it declares.**
+  `candidateOptions` called `projectConfigRepository.load()` directly, so the spec had
+  to carry intent prose where a call step belonged. It calls the core portal's
+  `loadProjectConfig` now — the identical one-line read — and the spec says so with a
+  call step, like its two siblings.
 - **A stale lock reported itself as locked.** The hosted project config view judged
   "locked" from the mere EXISTENCE of a lock record while the promote gate compared
   state identities — so a project whose specs changed after locking still claimed a
@@ -1747,6 +1799,29 @@ method's narrative. Two mechanisms close that honestly:
      its profile pack's**, as its severities already did. Where a pack profile was
      deliberately overriding a project value, move that setting into the pack or drop
      it from the project.
+10. **Scripted `sdd_update_spec` deltas: four previously-accepted deltas now behave
+    differently.** All four were silently wrong before, so a script that relies on
+    them was already producing a spec nobody intended — but they change without
+    warning, so check any generator you have.
+    - **A delta naming ONE element of an array INSIDE an element now MERGES instead
+      of replacing.** `methods: [{ name, params: [one param] }]` used to leave that
+      method with one param; it now leaves the others in place. To drop the others,
+      mark each with `action: "delete"`, or clear the list with `[]` and write the
+      new one in a second call. The same applies to a step's `catches` and `cases`.
+    - **A nested delete that addresses nothing is refused**, where the marker used to
+      be stripped while the write reported success.
+    - **A delete of a narrative step the narrative does not have is refused**, where
+      it used to be a silent no-op. A delta that deleted several steps by their
+      ORIGINAL numbers was relying on this: step deltas apply in ascending order
+      against the numbering earlier entries left behind, so the later numbers were
+      already addressing the wrong steps. Renumber them, or restate each step's
+      `label` or `description` on the delete and have them checked.
+    - **A delete of a loop/try/parallel header whose body remains is refused.**
+      Retype the header first — which drops its region fields and reports them —
+      then delete it.
+    - **A delta that retypes a step and also sets a field the new type cannot carry
+      is refused**, where the field used to merge through and surface later as
+      `MALFORMED_FLOW_STEP`. Drop the field from the delta.
 
 ## v5.1.0 (from v5.0.1)
 

@@ -1153,15 +1153,20 @@ methods:
       - stepNumber: 8
         description: >-
           Merge the delta onto the stored spec: references qualify against the spec's namespace
-          first, identity-keyed arrays upsert element by element and honour their delete markers,
-          narrative steps insert and delete with every jump field relocating around them, `unset`
-          removes the fields it names at the level it sits in, and `[]` clears the list it names
+          first, identity-keyed arrays upsert element by element and honour their delete markers at
+          every depth, narrative steps insert and delete in ascending order with every jump field
+          relocating around them, a step whose type changes is rebuilt for its new type keeping its
+          description and label, and `unset` removes the fields it names at the level it sits in
+          while `[]` clears the list it names. A step delete is refused outright when it addresses
+          no step, when a jump still targets it, when a restated label or description does not match
+          it, or when it is a region header whose body would be left standing
         type: local
       - stepNumber: 9
         description: >-
-          Resolve the narratives' symbolic label references against the merged numbering; an
-          unresolved reference aborts the whole update, because a dropped reference would silently
-          become a dangling numeric jump
+          Resolve the narratives' symbolic label references against the merged numbering, a label
+          supplied by the delta replacing the stored number it twins; an unresolved reference aborts
+          the whole update, because a dropped reference would silently become a dangling numeric
+          jump
         type: local
       - stepNumber: 10
         description: >-
@@ -1200,4 +1205,4 @@ methods:
         outcome: written
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T21:14:43.400Z'
+updatedAt: '2026-09-18T22:48:47.382Z'

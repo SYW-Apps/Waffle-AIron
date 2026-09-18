@@ -861,8 +861,70 @@ function identityKeyOf(field: string, item: unknown): string | null {
     case 'boundaries':         return str(o.name);
     case 'globalRequirements': return str(o.description);
     case 'databases':          return str(o.id) ?? str(o.name);
+    // A flow step's own arrays, addressed by the thing the author named them
+    // for. Their `step` is a RELOCATABLE number, never an identity — a switch
+    // case is the value it matches and a catch clause is the error it catches,
+    // and both survive the renumbering that moves their target. (A parallel
+    // arm falls to the default: named, it merges by name; unnamed, it carries
+    // no identity at all and the list replaces wholesale, which is the same
+    // rule everywhere else.)
+    case 'cases':              return str(o.value);
+    case 'catches':            return str(o.error);
     default:                   return str(o.name) ?? str(o.id);
   }
+}
+
+/**
+ * The flow configuration each narrative step TYPE may carry, beyond what every
+ * step carries. This is the field set a retype rebuilds against.
+ *
+ * Changing a step's `type` used to merge the new type's fields over the old
+ * step's and leave the rest standing, so a `branch` that became a `call` kept
+ * its `condition` and `onFalseStep`: a step the schema accepts, a write that
+ * reports success, and a MALFORMED_FLOW_STEP at the next validate, blamed on
+ * the narrative rather than on the edit that made it. Mirrors the per-type
+ * requirements in models/step-config.ts, which is what judges the result.
+ */
+const STEP_TYPE_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  local:    [],
+  call:     ['targetComponent', 'targetMethod', 'auth', 'detach'],
+  register: ['targetComponent', 'targetMethod'],
+  dispatch: ['targetComponent', 'capability', 'auth', 'detach'],
+  branch:   ['condition', 'onTrueStep', 'onFalseStep'],
+  switch:   ['on', 'cases', 'defaultStep'],
+  loop:     ['loopKind', 'over', 'condition', 'endStep'],
+  try:      ['endStep', 'catches', 'finallyStep'],
+  parallel: ['endStep', 'branches'],
+  jump:     ['toStep'],
+  return:   ['outcome'],
+  throw:    ['error'],
+};
+
+/**
+ * What a step carries whatever its type — the human's own content. A retype
+ * keeps these: the author is changing HOW the step works, not what it is for,
+ * and re-typing a step should never cost them the sentence they wrote or the
+ * anchor other steps address it by.
+ */
+const STEP_COMMON_FIELDS: readonly string[] = [
+  'stepNumber', 'label', 'description', 'type', 'assertsGuarantees', 'assertsInvariants',
+];
+
+/** The transient `*Label` twin of each jump-by-number field, resolved and dropped at write time. */
+const STEP_LABEL_TWINS: Readonly<Record<string, string>> = {
+  onTrueStep: 'onTrueLabel', onFalseStep: 'onFalseLabel', defaultStep: 'defaultLabel',
+  endStep: 'endLabel', finallyStep: 'finallyLabel', toStep: 'toLabel',
+};
+
+/** Every field a step of this type may carry, including the transient label twins. */
+function stepFieldsFor(type: string): Set<string> {
+  const own = STEP_TYPE_FIELDS[type] ?? [];
+  const allowed = new Set<string>([...STEP_COMMON_FIELDS, ...own]);
+  for (const field of own) {
+    const twin = STEP_LABEL_TWINS[field];
+    if (twin) allowed.add(twin);
+  }
+  return allowed;
 }
 
 /**
@@ -2418,9 +2480,39 @@ export class SpecWorkspace {
   // -------------------------------------------------------------------------
 
   /**
-   * Returns non-fatal notices about the merge (e.g. an insert whose position
-   * was a jump target, so the relocated jumps now bypass the inserted step) —
-   * empty when the merge had nothing to warn about.
+   * Apply a delta to one stored spec, in this ORDER — the order is the contract,
+   * because every stage below can see what the stage above left:
+   *
+   *  1. LOAD the stored spec for the addressed kind and id; a spec that does
+   *     not exist refuses, and a mis-selected `system` kind refuses by name.
+   *  2. REFUSE unknown delta keys, whole. A key the level's schema does not
+   *     know is dropped on write, so the edit would report a success it never
+   *     performed.
+   *  3. QUALIFY the delta's id-bearing references against the spec's namespace,
+   *     BEFORE the merge — post-merge a bare id is ambiguous.
+   *  4. MERGE. Identity-keyed arrays upsert element by element and honour their
+   *     delete markers, at every depth. Narrative step deltas apply in ASCENDING
+   *     stepNumber order, each against the numbering the earlier entries of the
+   *     same delta left behind — delete step 3 and step 7 becomes step 6, so a
+   *     second delete written as 7 addresses what used to be step 8. That is why
+   *     a delete may restate the step's `label` or `description` as a guard, and
+   *     why labels are the reliable way to name a jump target. Inserts and
+   *     deletes relocate every jump field in the same narrative around them; a
+   *     step whose `type` changes is REBUILT for its new type, keeping its
+   *     description and label.
+   *  5. UNSET the fields the delta names, at the level each `unset` sits in.
+   *  6. RESOLVE symbolic `*Label` references against the MERGED numbering — after
+   *     the merge, so a delta may anchor on a label that only pre-existing steps
+   *     carry, and a label in the delta retargets the stored numeric jump it
+   *     twins. An unresolved reference aborts the whole update.
+   *  7. COMPARE with what is stored, both read through the level's canonical
+   *     schema. Equal means nothing is written and `written` is false.
+   *  8. GATE the merged spec through the caller's hook, then SAVE.
+   *
+   * Returns the change report, whose `notices` carry the non-fatal effects (an
+   * insert whose position was a jump target, so the relocated jumps now bypass
+   * the inserted step; the fields a retype dropped) — empty when the merge had
+   * nothing to say.
    */
   updateSpec(
     kind: WritableSpecKind,
@@ -2613,7 +2705,116 @@ export class SpecWorkspace {
       }
     };
 
-    const mergeNarrative = (existingSteps: any[], deltaSteps: any[]): any[] => {
+    /** Keys whose merge the enclosing level performs itself, so the generic one must not. */
+    const NO_NESTED_MERGE: ReadonlySet<string> = new Set(['ext', 'narrative', 'unset']);
+
+    /**
+     * One element merged over its stored counterpart, with the identity promise
+     * held one level DOWN.
+     *
+     * Arrays upsert by identity — that is the documented contract, and it was
+     * true only of a spec's own top-level fields. An array INSIDE an element
+     * fell to the shallow spread: a delta naming ONE of a method's `params`
+     * replaced the whole list and silently deleted the rest, and a delta
+     * retargeting ONE of a try step's `catches` dropped every other clause.
+     * The same data loss the top level was fixed for, one level down, with the
+     * tool still promising otherwise.
+     */
+    const mergeElement = (existing: any, deltaItem: any): any => {
+      const out: Record<string, any> = { ...existing, ...deltaItem };
+      if (!existing || typeof existing !== 'object' || !deltaItem || typeof deltaItem !== 'object') return out;
+      for (const [key, value] of Object.entries(deltaItem as Record<string, unknown>)) {
+        if (NO_NESTED_MERGE.has(key) || !Array.isArray(value) || value.length === 0) continue;
+        const before = (existing as Record<string, unknown>)[key];
+        if (before !== undefined && !Array.isArray(before)) continue;
+        // An absent stored array still merges, into nothing: that is what keeps
+        // a delete marker addressed at an empty collection a refusal rather than
+        // a marker the writer strips while reporting success.
+        const stored = Array.isArray(before) ? before : [];
+        if (!isIdentifiedArray(key, stored, value)) continue;
+        out[key] = mergeIdentifiedArray(key, stored, value);
+      }
+      return out;
+    };
+
+    /**
+     * A `*Label` in a step delta RETARGETS the numeric jump it twins.
+     *
+     * The stored narrative keeps plain numbers, so a delta that repointed a
+     * jump symbolically merged its label onto the OLD number and label
+     * resolution then saw both and refused the write as a contradiction
+     * ("sets both onFalseStep=2 and onFalseLabel=... — they disagree"). In a
+     * delta the number is what is stored and the label is the new intent, so
+     * the stored twin gives way. A delta that sets BOTH itself is a genuine
+     * contradiction and is still refused.
+     */
+    const retargetByLabel = (merged: any, deltaStep: any): any => {
+      const out = { ...merged };
+      for (const [stepField, labelField] of Object.entries(STEP_LABEL_TWINS)) {
+        if (deltaStep?.[labelField] !== undefined && deltaStep?.[stepField] === undefined) delete out[stepField];
+      }
+      for (const key of ['cases', 'catches'] as const) {
+        const deltaEntries = deltaStep?.[key];
+        if (!Array.isArray(deltaEntries) || !Array.isArray(out[key])) continue;
+        const retargeted = new Set(
+          deltaEntries
+            .filter((e: any) => e?.label !== undefined && e?.step === undefined)
+            .map((e: any) => identityKeyOf(key, e))
+            .filter((k): k is string => k !== null),
+        );
+        if (!retargeted.size) continue;
+        out[key] = out[key].map((e: any) => {
+          const k = identityKeyOf(key, e);
+          if (k === null || !retargeted.has(k)) return e;
+          const { step, ...rest } = e;
+          return rest;
+        });
+      }
+      return out;
+    };
+
+    /**
+     * A step whose `type` changed is REBUILT for its new type: every field the
+     * new type cannot carry is dropped, and the human's own content — the
+     * description, the label other steps address it by — is kept.
+     *
+     * A delta that retypes AND sets a field the new type cannot carry is
+     * refused rather than quietly stripped: dropping a stored leftover is
+     * cleaning up after the old type, dropping what the caller just wrote is
+     * ignoring them.
+     */
+    const rebuildOnRetype = (stored: any, deltaStep: any, merged: any, methodName: string): any => {
+      const newType = merged?.type;
+      if (typeof newType !== 'string' || stored?.type === newType) return merged;
+      if (!Object.prototype.hasOwnProperty.call(STEP_TYPE_FIELDS, newType)) return merged; // unknown type: the schema names it
+      const allowed = stepFieldsFor(newType);
+      const stated = Object.keys(deltaStep).filter(
+        (k) => k !== 'type' && deltaStep[k] !== undefined && !allowed.has(k),
+      );
+      if (stated.length) {
+        throw new Error(
+          `Refusing to retype narrative step ${stored.stepNumber} of "${methodName}" from "${stored.type}" to `
+          + `"${newType}": the same delta sets ${stated.map((f) => `"${f}"`).join(', ')}, which a ${newType} step `
+          + 'cannot carry. Drop those keys, or retype to a step type that carries them.',
+        );
+      }
+      const out: Record<string, any> = {};
+      const dropped: string[] = [];
+      for (const [key, value] of Object.entries(merged as Record<string, unknown>)) {
+        if (allowed.has(key)) out[key] = value;
+        else dropped.push(key);
+      }
+      if (dropped.length) {
+        notices.push(
+          `Narrative step ${stored.stepNumber} of "${methodName}" was retyped ${stored.type} -> ${newType}: `
+          + `${dropped.join(', ')} dropped — a ${newType} step cannot carry `
+          + `${dropped.length === 1 ? 'it' : 'them'}. Its description and label are kept.`,
+        );
+      }
+      return out;
+    };
+
+    const mergeNarrative = (methodName: string, existingSteps: any[], deltaSteps: any[]): any[] => {
       let steps = [...existingSteps];
       const sortedDeltas = [...deltaSteps].sort((a, b) => a.stepNumber - b.stepNumber);
       for (const deltaStep of sortedDeltas) {
@@ -2621,6 +2822,48 @@ export class SpecWorkspace {
         if (deltaStep.action === 'delete' || deltaStep.remove === true) {
           const idx = steps.findIndex(s => s.stepNumber === stepNum);
           if (idx !== -1) {
+            const victim = steps[idx];
+
+            // IDENTITY guard. Step deltas apply in ascending order against the
+            // numbering earlier entries of the same delta left behind, so a
+            // delete written for step 7 after a delete of step 3 addresses what
+            // used to be step 8. A delete may restate the step's label or
+            // description; restated, it must match, which is the only way that
+            // slip is ever noticed. Both were ignored outright before.
+            for (const field of ['label', 'description'] as const) {
+              if (deltaStep[field] === undefined) continue;
+              if (victim[field] !== deltaStep[field]) {
+                throw new Error(
+                  `Refusing to delete narrative step ${stepNum}: the delta states ${field} `
+                  + `${JSON.stringify(deltaStep[field])}, but step ${stepNum} holds `
+                  + `${JSON.stringify(victim[field] ?? null)}. Step deltas apply in ascending order against the `
+                  + 'numbering earlier entries of the same delta left behind, so a later delete can address a '
+                  + 'step that has already moved.',
+                );
+              }
+            }
+
+            // REGION guard. A loop, try or parallel header owns the steps
+            // between it and its endStep. Deleting the header alone left that
+            // body standing with nothing looping, guarding or forking it — a
+            // narrative that still validates and no longer means what it says,
+            // reported as a clean one-step delete.
+            if (typeof victim.endStep === 'number') {
+              const body = steps.filter(s => s.stepNumber > stepNum && s.stepNumber <= victim.endStep);
+              if (body.length) {
+                const span = body.length === 1
+                  ? `step ${body[0].stepNumber}`
+                  : `steps ${body[0].stepNumber}-${body[body.length - 1].stepNumber}`;
+                throw new Error(
+                  `Cannot delete narrative step ${stepNum}: it is a ${victim.type} header and ${span} `
+                  + `${body.length === 1 ? 'is' : 'are'} still its body. Deleting it would leave them in place `
+                  + `with no ${victim.type} around them — a change of meaning nothing later reports. Dissolve the `
+                  + `region first: retype step ${stepNum} to a type that carries no region (the region fields are `
+                  + 'dropped and reported), then delete it.',
+                );
+              }
+            }
+
             const referrers = steps
               .filter(s => s.stepNumber !== stepNum)
               .map(s => ({ n: s.stepNumber, refs: jumpRefsTo(s, stepNum) }))
@@ -2638,6 +2881,20 @@ export class SpecWorkspace {
               stepNum,
               -1,
             ));
+          } else {
+            // A delete that addressed nothing was a silent no-op: the marker is
+            // stripped on write and the caller is told the update succeeded. A
+            // keyed array has refused this since the intent guards went in; a
+            // narrative step, which is the collection whose numbering MOVES
+            // under the delta, did not.
+            const present = steps.length
+              ? ` — it has steps ${steps[0].stepNumber}-${steps[steps.length - 1].stepNumber}`
+              : ' — it has no steps';
+            throw new Error(
+              `Refusing to delete narrative step ${stepNum}: this narrative has no step ${stepNum}${present}. `
+              + 'Step deltas apply in ascending order against the numbering earlier entries of the same delta '
+              + 'left behind, so a later delete can address a step that has already moved.',
+            );
           }
         } else if (deltaStep.action === 'insert') {
           // The inserted step's own jump fields are taken as-is: they refer
@@ -2671,10 +2928,9 @@ export class SpecWorkspace {
           const idx = steps.findIndex(s => s.stepNumber === stepNum);
           if (idx !== -1) {
             const { action, remove, ...cleanStep } = deltaStep;
-            steps[idx] = withUnset({
-              ...steps[idx],
-              ...cleanStep,
-            }, deltaStep);
+            const stored = steps[idx];
+            const merged = withUnset(retargetByLabel(mergeElement(stored, cleanStep), cleanStep), deltaStep);
+            steps[idx] = rebuildOnRetype(stored, cleanStep, merged, methodName);
           } else {
             const { action, remove, ...cleanStep } = deltaStep;
             steps.push(withUnset(cleanStep, deltaStep));
@@ -2722,12 +2978,11 @@ export class SpecWorkspace {
               // in place and reported success for a write that did nothing.
               narrative = deltaMethod.narrative.length === 0
                 ? []
-                : mergeNarrative(narrative, deltaMethod.narrative);
+                : mergeNarrative(String(deltaMethod.name), narrative, deltaMethod.narrative);
             }
             const { narrative: _, ...cleanMethod } = deltaMethod;
             merged[idx] = withUnset({
-              ...existingMethod,
-              ...cleanMethod,
+              ...mergeElement(existingMethod, cleanMethod),
               ...(deltaMethod.ext !== undefined ? { ext: mergeExt(existingMethod.ext, deltaMethod.ext) } : {}),
               narrative,
             }, deltaMethod);
@@ -2749,15 +3004,12 @@ export class SpecWorkspace {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
             merged.splice(idx, 1);
           } else {
+            // Nested identity-keyed arrays upsert through mergeElement: an
+            // interface method's findings by code and its params by name, like
+            // lint.allow one level up. An empty list still clears outright.
             merged[idx] = withUnset({
-              ...merged[idx],
-              ...deltaItem,
+              ...mergeElement(merged[idx], deltaItem),
               ...(deltaItem.ext !== undefined ? { ext: mergeExt(merged[idx].ext, deltaItem.ext) } : {}),
-              // An interface method's findings upsert and delete by code, like
-              // lint.allow; an empty list still clears them outright.
-              ...(Array.isArray(deltaItem.findings) && deltaItem.findings.length > 0
-                ? { findings: mergeIdentifiedArray('findings', merged[idx].findings ?? [], deltaItem.findings) }
-                : {}),
             }, deltaItem);
           }
         } else {
@@ -2781,7 +3033,7 @@ export class SpecWorkspace {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
             merged.splice(idx, 1);
           } else {
-            merged[idx] = withUnset({ ...merged[idx], ...deltaItem }, deltaItem);
+            merged[idx] = withUnset(mergeElement(merged[idx], deltaItem), deltaItem);
           }
         } else {
           assertUnmatchedIsAnAddition(deltaItem, keyOf(deltaItem), merged.map(keyOf), 'entry');
@@ -2801,10 +3053,7 @@ export class SpecWorkspace {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
             merged.splice(idx, 1);
           } else {
-            merged[idx] = withUnset({
-              ...merged[idx],
-              ...deltaItem,
-            }, deltaItem);
+            merged[idx] = withUnset(mergeElement(merged[idx], deltaItem), deltaItem);
           }
         } else {
           assertUnmatchedIsAnAddition(deltaItem, piKey(deltaItem), merged.map(piKey), 'publicInterface');
@@ -2828,7 +3077,7 @@ export class SpecWorkspace {
         const isDelete = deltaItem?.remove === true || deltaItem?.action === 'delete';
         if (idx !== -1) {
           if (isDelete) merged.splice(idx, 1);
-          else merged[idx] = withUnset({ ...merged[idx], ...deltaItem }, deltaItem);
+          else merged[idx] = withUnset(mergeElement(merged[idx], deltaItem), deltaItem);
         } else {
           // An element with no resolvable identity cannot near-miss anything;
           // only the phantom-delete guard is meaningful for it.
