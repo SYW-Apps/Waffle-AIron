@@ -1,0 +1,33 @@
+kind: value-object
+id: mcp_tool_response
+name: McpToolResponse
+description: >-
+  The JSON-RPC response envelope the hosted data plane sends for a tool it serves from its own
+  orchestrators instead of handing the call to the scoped sdd_* MCP server: the echoed request id
+  and the tool result — a single text block carrying the dispatched value as JSON. A tool that
+  throws answers in the same envelope with isError set, over HTTP 200, never as a transport failure.
+subsystem: sdd_host
+fields:
+  - name: jsonrpc
+    type: string
+    description: The JSON-RPC version, always "2.0".
+    optional: false
+  - name: id
+    type: string
+    description: The id of the request being answered, echoed back; null when the message carried none.
+    optional: true
+  - name: content
+    type: string
+    description: >-
+      The single text content block of the tool result: the dispatched value encoded as JSON, or the
+      error message when isError is set.
+    optional: false
+  - name: isError
+    type: boolean
+    description: >-
+      Set when the dispatched tool threw; the envelope still travels as a successful HTTP 200
+      response so the MCP client sees a tool error rather than a transport failure.
+    optional: true
+methods: []
+createdAt: '2026-09-18T19:30:34.884Z'
+updatedAt: '2026-09-18T19:30:35.032Z'

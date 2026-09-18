@@ -1,0 +1,23 @@
+kind: value-object
+id: narrative_edge
+name: NarrativeEdge
+description: >-
+  One reachability edge a single L5 narrative step contributes to a narrative graph walk: the
+  component to reach and, when the step names one, the method to enqueue on it. A call or register
+  step contributes one edge; a dispatch step contributes the routed Portal with no method, plus the
+  component its dispatch table binds to the step's capability; every other step type contributes
+  none.
+fields:
+  - name: compId
+    type: string
+    description: The component this edge reaches
+    optional: false
+  - name: methodName
+    type: string
+    description: >-
+      The method to enqueue on that component; when omitted the component is reached without
+      enqueueing any of its methods
+    optional: true
+methods: []
+createdAt: '2026-09-18T19:36:24.495Z'
+updatedAt: '2026-09-18T19:36:24.504Z'
