@@ -842,6 +842,31 @@ one method although the code had split them years ago; the other was a pure deri
   384 shapes of narrative step (every type × target × method × capability × option) and agrees on every one. 3316 unit
   tests, 21 e2e; the tree validates at 0 findings before and after.
 
+### The twelve draft components are complete — nothing in the tree is draft any more
+
+D2b's last item. Ten `sdd_validator` components (`conformance_rules`, `doctrine_rules`, `extension_rules`,
+`heuristic_rules`, `integrity_rules`, `intrinsic_rules`, `narrative_rules`, `wiring_rules`, `gate_identity`,
+`narrative_graph_projector`) and two on `sdd_host` (`backup_schedule`, `instance_bootstrap`) were still `draft`, each
+with its interface and its implementation — 36 specs. They are `complete`. Every spec in the tree now says `complete`,
+so the draft machinery has nothing left to apply to.
+
+- **What it turns on.** A finding carrying draft context had two escapes. `getRuleSeverity` downgraded the 23
+  completeness codes from error to warning — `MISSING_IMPLEMENTATION_METHOD`, `MISSING_NARRATIVE`, `INTENT_FLOOR`,
+  `MISSING_ENDPOINT`, the structural-conformance family (`MISSING_SOURCE_PATH`, `MISSING_SOURCE_FILE`,
+  `UNREALIZED_METHOD`, `UNDECLARED_DEPENDENCY`, …), `UNNARRATED_COMPLEXITY`, `UNASSERTED_INVARIANT`,
+  `CALL_STEP_UNREALIZED` and the integration-sim gate — and `--ci` waived `DRAFT_COMPONENT_WARNING` outright plus any
+  `UNUSED_COMPONENT` raised against a draft component. `MISSING_INTEGRATION_SIM` skipped a draft implementation before
+  it was ever asked. None of that applies to the rule families any more: if one of them drifts from the code that
+  realizes it, or loses a narrative, the gate fails with an error instead of printing a warning that `--ci` forgives.
+- **It cost nothing, because the tree was already complete-clean.** `validate` and `validate --ci` were at 0 findings
+  before the promotion and at 0 findings after it. No `lint.allow` was added, and none was made stale: no allow in the
+  tree rests on draft or design status, and the 36 specs carried no allows at all. `status` — with `updatedAt` — is the
+  only field that moved on any of them: 36 files, 72 insertions, 72 deletions, two lines each. 3316 unit tests, 21 e2e.
+- **One exemption is now the subsystem's, not the component's.** `backup_schedule` and `instance_bootstrap` each declare
+  two dependencies and no `simPath`, so `MISSING_INTEGRATION_SIM` is live for them and silent only because `sdd_host`
+  has adopted no integration sims (the rule asks per subsystem; `sdd_validator` has 16). The first sim `sdd_host`
+  declares will put the question to both of them — as an error now, where a draft would have been asked nothing.
+
 ### Execution budgets: the topology gains a resource axis
 
 The derived topology said who owns what, and nothing about what their work costs

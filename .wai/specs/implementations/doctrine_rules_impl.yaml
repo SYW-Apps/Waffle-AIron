@@ -1126,6 +1126,6 @@ methods:
           wiring is real
         type: local
     symbol: check
-status: draft
+status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-18T13:41:28.564Z'
+updatedAt: '2026-09-18T20:21:26.559Z'

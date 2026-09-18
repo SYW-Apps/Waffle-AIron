@@ -202,6 +202,6 @@ methods:
       - code: UNUSED_LINT_ALLOW
         severity: warning
         summary: lint.allow entry matched no finding this run — remove the stale allow
-status: draft
+status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-18T12:55:51.391Z'
+updatedAt: '2026-09-18T20:21:19.091Z'

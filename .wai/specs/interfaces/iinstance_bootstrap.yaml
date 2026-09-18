@@ -15,6 +15,6 @@ methods:
         description: The instance's configuration
     guarantees:
       - idempotent
-status: draft
+status: complete
 createdAt: '2026-09-15T10:52:56.292Z'
-updatedAt: '2026-09-15T10:52:56.295Z'
+updatedAt: '2026-09-18T20:21:18.209Z'

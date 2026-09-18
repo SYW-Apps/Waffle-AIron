@@ -199,6 +199,6 @@ methods:
         outcome: no edges
 lint:
   allow: []
-status: draft
+status: complete
 createdAt: '2026-09-14T23:13:09.851Z'
-updatedAt: '2026-09-18T19:36:58.990Z'
+updatedAt: '2026-09-18T20:21:32.825Z'

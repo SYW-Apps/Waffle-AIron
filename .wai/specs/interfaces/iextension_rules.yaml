@@ -202,6 +202,6 @@ methods:
       - code: PACK_SOURCE_UNFETCHABLE
         severity: warning
         summary: Pack selection is neither bundled nor obtainable from a recorded source
-status: draft
+status: complete
 createdAt: '2026-09-14T06:07:43.654Z'
-updatedAt: '2026-09-18T12:25:32.983Z'
+updatedAt: '2026-09-18T20:21:15.616Z'

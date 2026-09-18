@@ -1026,6 +1026,6 @@ methods:
           naming t.id, home.label and ownersDesc(home).
         type: local
     symbol: check
-status: draft
+status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-18T16:59:09.576Z'
+updatedAt: '2026-09-18T20:21:29.296Z'

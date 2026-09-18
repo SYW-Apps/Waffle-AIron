@@ -23,6 +23,6 @@ owns: []
 dependsOn: []
 dependencyClass: pure
 variant: projector
-status: draft
+status: complete
 createdAt: '2026-09-14T05:42:27.585Z'
-updatedAt: '2026-09-18T19:37:20.399Z'
+updatedAt: '2026-09-18T20:21:09.539Z'

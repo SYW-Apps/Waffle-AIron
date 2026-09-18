@@ -15,6 +15,6 @@ owns: []
 dependsOn: []
 dependencyClass: pure
 variant: arbiter
-status: draft
+status: complete
 createdAt: '2026-09-14T05:42:38.786Z'
-updatedAt: '2026-09-15T20:40:45.747Z'
+updatedAt: '2026-09-18T20:21:07.774Z'

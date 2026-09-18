@@ -33,6 +33,6 @@ methods:
         description: The project's type and rule tuning
     guarantees:
       - idempotent
-status: draft
+status: complete
 createdAt: '2026-09-15T10:53:01.174Z'
-updatedAt: '2026-09-15T10:53:01.177Z'
+updatedAt: '2026-09-18T20:21:16.547Z'

@@ -612,6 +612,6 @@ methods:
           actually belongs to (intf.component).
         type: local
     symbol: check
-status: draft
+status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-18T13:01:22.801Z'
+updatedAt: '2026-09-18T20:21:30.958Z'
