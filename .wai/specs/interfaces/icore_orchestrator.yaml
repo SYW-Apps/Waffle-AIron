@@ -380,6 +380,41 @@ methods:
           Whether an implementation that declares no symbol is pinned to the old name so its
           function still binds; true when omitted
         optional: true
+  - name: moveRenamedSpecs
+    description: >-
+      Move each spec a component rename renames to its new id: reload it as the reference rewrite
+      left it, write it under the new id where the loader places it (an owned member nested under
+      its owner; an implementation whose new path is the file it already occupies has that file
+      cleared first, because the loader refuses to write a spec over a file holding another id),
+      then remove the file it left behind, prune the folders that leaves empty, and drop the cached
+      spec index. The reload is the point: the rewrite already edited the moved specs' own files, so
+      writing the copies loaded before it would undo their references; a spec the reload cannot find
+      falls back to the copy the rename planned from. The rename decides WHAT moves — this writes
+      the move.
+    signature: >-
+      moveRenamedSpecs(componentId: string, newId: string, component: ComponentSpec,
+      movingInterface?: InterfaceSpec, movingImplementation?: ImplementationSpec): void
+    returns: void
+    params:
+      - name: componentId
+        type: string
+        description: The component's id before the rename — how each moved spec's old file is found
+      - name: newId
+        type: string
+        description: The component's new id, which implies i<newId> and <newId>_impl
+      - name: component
+        type: ComponentSpec
+        description: The component as the rename planned from it, the fallback when the reload finds nothing
+      - name: movingInterface
+        type: InterfaceSpec
+        description: The component's own interface named i<componentId>, when one moves
+        optional: true
+      - name: movingImplementation
+        type: ImplementationSpec
+        description: >-
+          The implementation named <componentId>_impl realizing one of the component's contracts,
+          when one moves
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T19:22:19.157Z'
+updatedAt: '2026-09-18T18:00:26.376Z'

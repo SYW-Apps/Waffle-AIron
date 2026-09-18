@@ -75,6 +75,32 @@ methods:
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
+  - name: resolveThroughParent
+    description: >-
+      Resolve this tree's verdict THROUGH its chained parent: walk up to the top root collecting the
+      mount chain, validate there scoped to that chain with the parent's own doctrine — for each
+      rule the stricter of the parent's and this project's severity, the same as-complete
+      strictness, and without resolving again — and rename the findings into this project's own ids
+      for the caller to merge. Null when no usable parent is reachable (its L0 missing, the mount
+      unknown, or reach denied), and the caller then keeps the standalone verdict. Reach-gated: the
+      walk never climbs above the bound request's top project root.
+    signature: >-
+      resolveThroughParent(boundRoot: string, treatAllAsComplete: boolean, childRules?:
+      RulesConfig): ParentResolution
+    returns: ParentResolution
+    params:
+      - name: boundRoot
+        type: string
+        description: The root this tree was validated at — where the walk up starts
+      - name: treatAllAsComplete
+        type: boolean
+        description: Judge the parent's run at the same as-complete strictness as this one
+      - name: childRules
+        type: RulesConfig
+        description: >-
+          This project's own rule severities; each rule is judged at the stricter of the parent's
+          and these
+        optional: true
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-15T10:51:47.510Z'
+updatedAt: '2026-09-18T17:50:48.296Z'

@@ -867,80 +867,14 @@ methods:
         targetComponent: spec_loader
         targetMethod: invalidateCache
       - stepNumber: 16
-        description: Reload the component as the rewrite left it
+        description: >-
+          Move each renamed spec to its new id: reload it as the rewrite left it, write it under the
+          new id where the loader places it, remove the file it left behind and drop the cached
+          index again
         type: call
-        targetComponent: spec_loader
-        targetMethod: loadComponentSpec
+        targetComponent: core_orchestrator
+        targetMethod: moveRenamedSpecs
       - stepNumber: 17
-        description: Does the component's own interface move?
-        type: branch
-        condition: the component's interface named i<componentId> moves
-        onFalseStep: 19
-      - stepNumber: 18
-        description: Reload the interface as the rewrite left it
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadInterfaceSpec
-      - stepNumber: 19
-        description: Does the component's own implementation move?
-        type: branch
-        condition: the implementation named <componentId>_impl moves
-        onFalseStep: 21
-      - stepNumber: 20
-        description: Reload the implementation as the rewrite left it
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadImplementationSpec
-      - stepNumber: 21
-        description: >-
-          Write the component under newId, its own id rewritten; the loader nests a member of a
-          pattern under its owner
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveComponentSpec
-      - stepNumber: 22
-        description: Save the moved interface?
-        type: branch
-        condition: the component's interface moves
-        onFalseStep: 24
-      - stepNumber: 23
-        description: Write the interface under i<newId>, its id and component rewritten
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveInterfaceSpec
-      - stepNumber: 24
-        description: Save the moved implementation?
-        type: branch
-        condition: the component's implementation moves
-        onFalseStep: 28
-      - stepNumber: 25
-        description: Does the new path collide with the implementation's current file?
-        type: branch
-        condition: >-
-          the implementation's new path is the file it already occupies (the nested layout, with a
-          contract that keeps its id)
-        onFalseStep: 27
-      - stepNumber: 26
-        description: 'Delete that file first: the loader refuses to write a spec over a file holding another id'
-        type: local
-      - stepNumber: 27
-        description: >-
-          Write the implementation under <newId>_impl, its id rewritten and its contract following a
-          renamed interface
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveImplementationSpec
-      - stepNumber: 28
-        description: Remove each moved spec's old file, found by its old id, and prune the folders left empty
-        type: local
-      - stepNumber: 29
-        description: >-
-          Drop the cached spec index again: the removed files changed the tree outside the save
-          paths
-        type: call
-        targetComponent: spec_loader
-        targetMethod: invalidateCache
-      - stepNumber: 30
         description: >-
           Return renamed (each moved spec's kind with its old and new id) and rewritten (the ids of
           the other specs whose references changed)
@@ -1092,10 +1026,87 @@ methods:
           was set
         type: return
         outcome: renamed
-lint:
-  allow:
-    - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits renameComponent, which lists more than 25 steps.
+  - name: moveRenamedSpecs
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Reload the component as the rewrite left it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: Does the component's own interface move?
+        type: branch
+        condition: the component's interface named i<componentId> moves
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reload the interface as the rewrite left it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpec
+      - stepNumber: 4
+        description: Does the component's own implementation move?
+        type: branch
+        condition: the implementation named <componentId>_impl moves
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reload the implementation as the rewrite left it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpec
+      - stepNumber: 6
+        description: >-
+          Write the component under newId, its own id rewritten; the loader nests a member of a
+          pattern under its owner
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 7
+        description: Save the moved interface?
+        type: branch
+        condition: the component's interface moves
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Write the interface under i<newId>, its id and component rewritten
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 9
+        description: Save the moved implementation?
+        type: branch
+        condition: the component's implementation moves
+        onFalseStep: 13
+      - stepNumber: 10
+        description: Does the new path collide with the implementation's current file?
+        type: branch
+        condition: >-
+          the implementation's new path is the file it already occupies (the nested layout, with a
+          contract that keeps its id)
+        onFalseStep: 12
+      - stepNumber: 11
+        description: 'Delete that file first: the loader refuses to write a spec over a file holding another id'
+        type: local
+      - stepNumber: 12
+        description: >-
+          Write the implementation under <newId>_impl, its id rewritten and its contract following a
+          renamed interface
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 13
+        description: Remove each moved spec's old file, found by its old id, and prune the folders left empty
+        type: local
+      - stepNumber: 14
+        description: >-
+          Drop the cached spec index again: the removed files changed the tree outside the save
+          paths
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 15
+        description: Return — every renamed spec now sits under its new id and the file it left is gone
+        type: return
+        outcome: void
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T22:31:19.338Z'
+updatedAt: '2026-09-18T18:00:52.791Z'

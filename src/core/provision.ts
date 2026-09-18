@@ -29,7 +29,13 @@ import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } fro
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
 import type { ProjectConfig } from '../models/project.js';
-import { SpecIdSchema, type InterfaceSpec, type SubsystemSpec } from '../models/index.js';
+import {
+  SpecIdSchema,
+  type ComponentSpec,
+  type ImplementationSpec,
+  type InterfaceSpec,
+  type SubsystemSpec,
+} from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Project provisioning (sdd_core, used by sdd_host)
@@ -882,20 +888,48 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
   // Step 15: the rewrite changed files outside the save paths.
   invalidateSpecCache();
 
-  // Step 16: the moved specs as the rewrite left them, their references to the
-  // component and its contract already following the rename.
+  // Step 16: each moved spec under its new id, and the file it left behind.
+  moveRenamedSpecs(componentId, newId, component, movingInterface, movingImplementation);
+
+  // Step 17: what moved, and what was rewritten.
+  return { renamed, rewritten };
+}
+
+/**
+ * Move each spec a component rename renames to its new id: reload it as the
+ * reference rewrite left it, write it under the new id where the loader places it,
+ * then remove the file it left behind and drop the cached index.
+ *
+ * Separate from `renameComponent` because it is a phase of its own — the rename
+ * decides WHAT moves, this writes the move — and because the reload matters: the
+ * rewrite already edited the moved specs' own files, so saving the in-memory
+ * copies loaded before it would undo their references. A spec the reload cannot
+ * find falls back to the copy the rename planned from.
+ */
+function moveRenamedSpecs(
+  componentId: string,
+  newId: string,
+  component: ComponentSpec,
+  movingInterface: InterfaceSpec | undefined,
+  movingImplementation: ImplementationSpec | undefined,
+): void {
+  const interfaceId = `i${newId}`;
+  const implementationId = `${newId}_impl`;
+
+  // The moved specs as the rewrite left them, their references to the component
+  // and its contract already following the rename.
   const movedComponent = loadComponentSpec(componentId) ?? component;
   const movedInterface = movingInterface ? loadInterfaceSpec(movingInterface.id) ?? movingInterface : null;
   const movedImplementation = movingImplementation
     ? loadImplementationSpec(movingImplementation.id) ?? movingImplementation
     : null;
 
-  // Step 17: the component under its new id, where the loader places it — an
-  // owned member nested under its owner.
+  // The component under its new id, where the loader places it — an owned member
+  // nested under its owner.
   saveComponentSpec({ ...movedComponent, id: newId });
-  // Step 18: its own interface, when that moves, under i<newId>.
+  // Its own interface, when that moves, under i<newId>.
   if (movedInterface) saveInterfaceSpec({ ...movedInterface, id: interfaceId, component: newId });
-  // Step 19: its own implementation, when that moves, under <newId>_impl.
+  // Its own implementation, when that moves, under <newId>_impl.
   if (movedImplementation) {
     // The nested layout keeps an implementation's file beside its contract's, so
     // one whose contract keeps its id is written to the very file it moves out
@@ -907,16 +941,14 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
     saveImplementationSpec({ ...movedImplementation, id: implementationId });
   }
 
-  // Step 20: remove each moved spec's old file, found by its old id — which the
-  // loader still indexes beside the new one, so a folder a save moved is followed.
+  // Remove each moved spec's old file, found by its old id — which the loader
+  // still indexes beside the new one, so a folder a save moved is followed.
   removeSpecFile(getComponentPath(componentId), componentId);
   if (movingInterface) removeSpecFile(getInterfacePath(movingInterface.id), movingInterface.id);
   if (movingImplementation) removeSpecFile(getImplementationPath(movingImplementation.id), movingImplementation.id);
 
-  // Step 21: the removed files changed the tree outside the save paths.
+  // The removed files changed the tree outside the save paths.
   invalidateSpecCache();
-  // Step 22: what moved, and what was rewritten.
-  return { renamed, rewritten };
 }
 
 /**

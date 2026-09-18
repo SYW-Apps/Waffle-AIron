@@ -741,6 +741,61 @@ was, in the file it already lived in.
   holds: being the one entry point of the terminal and of the library, which splitting along the call groups would
   multiply.
 
+### The long narratives find the homes their code already had
+
+The step check above named seven methods on wairon's own tree over its 25-step default, each carrying an
+`EXCESSIVE_NARRATIVE_STEPS` allow. None of them is complex — every one scores 9 or less on the cognitive axis — so
+this was length, not nesting. Five are answered by naming a phase the code already had: four of the six new contract
+methods are functions that were sitting in the source unmodelled, so their narrative steps move verbatim into the
+method they always belonged to. Two keep an allow, reworded, because their step count is the length of a list, not
+the size of a job.
+
+- **`completeSsoLogin` (26 → 20 steps) was inlining two methods its own contract already declares.** The code calls
+  `resolveEnabledProvider` and `tryAppendAudit`, which `identity_orchestrator` models as `resolveEnabledProvider` and
+  `appendAuditBestEffort` and which `mintSelfToken`, `revokeSelfToken` and `startSsoLogin` were written against; only
+  this narrative spelled both out longhand. The four provider-resolution steps and the four-step audit try/catch are
+  now one call each. Spec-only — not a line of code changed — and its allow is deleted.
+- **One initialization body, narrated once (`createGovernedProject`, 22 steps).** `initializeProjectWithProfile` (29 →
+  6) and `executeApprovedInit` (25 → 2) both call `performInit` in `src/server/policy.ts`, whose own comment calls it
+  "the single profile-aware initialization body shared by the gated portal path and approval execution". The spec had
+  it twice, and the copies had already drifted: three of the twenty step descriptions differed, one of them about who
+  `selectedBy` is stamped from. The body is now one method bound to that function by `symbol:`, and each entry narrates
+  only what is its own — the credential gate, or the note that there is none.
+- **`reconcileProjectPolicy` (34 → 24) hands its profile half to `repairGoverningProfile` (9 steps).** The method ran
+  two jobs under one authorization: apply the instance policy's missing required/default packs, then repair a governing
+  profile that is broken or non-compliant. The second is now a function of its own in `src/server/policy.ts` and a
+  method of its own on the contract, returning what it left in force (`ProfileRepair`); the eight steps moved into it
+  byte for byte. A `project_policy_orchestrator.appendAuditBestEffort` binds the same `tryAppendAudit` that file already
+  had, mirroring the identity plane, so the audit block is one step on both callers. Dependencies unchanged at 9 — a
+  method calling its own component adds no edge.
+- **`renameComponent` (30 → 17) hands the move itself to `moveRenamedSpecs` (15 steps).** What carries the length is
+  not the guards: reload each renamed spec as the reference rewrite left it, write it under the new id where the loader
+  places it, clear a colliding file first, then remove the file it left and prune the folders that empties. That is one
+  phase with one name, extracted in `src/core/provision.ts` and narrated there. The shared refusal block the phased
+  design proposed — the four guard steps `renameComponent` and `renameMethod` hold in common — is real, but it is worth
+  four steps and would have left this at 26: it stays for the DRY pass rather than riding along here.
+- **`validateSddTree` (26 → 25) names `resolveThroughParent` (4 steps).** The function has existed since chained
+  children were judged through their parents; only the narrative inlined it. This is the one place where a step was
+  partitioned rather than moved whole: the old step blended the walk and the parent's verdict (which are the callee's)
+  with the gate and the merge (which are the caller's), so each clause now sits on the side that performs it. Nothing
+  was dropped.
+- **`registerBuiltinRules` keeps its allow, reworded: 89 steps of catalog.** The function is three statements — empty
+  the set, walk `SDD_RULES`, append each — and the narrative says exactly that in steps 1, 88 and 89. The other 86 are
+  one `register` seed per built-in rule: the catalog that makes each rule family's method reachable, and the list
+  `tests/core/rule-catalog.test.ts` pins in order to `SDD_RULES` so registry and rule set cannot drift. Splitting the
+  seeds per family would split no code and would break that invariant — the eight families occur in thirteen
+  non-contiguous blocks of `SDD_RULES` (integrity alone in three, at positions 1–7, 59–61 and 86), so per-family
+  registration would reorder the run sequence. A new rule adds one step here, which is the point.
+- **`runPack` keeps its allow, reworded: 26 steps of command family.** A flat twelve-arm `if`-chain, one adapter call
+  per `wairon pack` subcommand, two steps each plus the switch and the unknown-action refusal. The same shape sits at
+  every size in the runner — `runPacks` (8), `runAgent` (9), `runSurface` (12), `runRemote` (14) — and there is no seam
+  to split on: all twelve arms call one module, and every subcommand's action calls `runPack` directly, so scope-based
+  sub-dispatchers would be invented rather than named.
+- **Allows deleted:** the `EXCESSIVE_NARRATIVE_STEPS` allows on `identity_orchestrator_impl`, `core_orchestrator_impl`,
+  `spec_validator_impl` and `project_policy_orchestrator_impl` (which covered two methods). `cli_runner_impl` keeps its
+  unrelated `UNDECLARED_DEPENDENCY` allow untouched. Two value objects are new for the extracted returns:
+  `ParentResolution` and `ProfileRepair`. Tree: 0 findings before and after.
+
 ### Execution budgets: the topology gains a resource axis
 
 The derived topology said who owns what, and nothing about what their work costs
