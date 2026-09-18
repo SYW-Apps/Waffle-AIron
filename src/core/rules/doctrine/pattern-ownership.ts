@@ -25,7 +25,12 @@ export const patternsRule: SddRule = {
     { code: 'UNOWNED_QUERY', defaultSeverity: 'error', summary: 'Query not owned by a Repository — a Query computes reads over its own Repository\'s Store' },
   ],
   check(ctx) {
-    const ownedBy = new Map<string, string>(); // member block id -> the pattern that first claimed it
+    // The tree's ONE ownership reading, shared with every rule that needs it:
+    // which pattern privately owns each member block, with the skips that
+    // decide findings (a retired or block claimant records nothing, so does an
+    // unresolved member or an inner pattern, and the first claimant wins)
+    // stated once in read-model.ts instead of rebuilt here.
+    const ownership = ctx.ownershipIndex();
     for (const comp of ctx.components) {
       // A retired component (a Specialist or Gateway) is skipped entirely: it
       // records no ownership and gets no pattern or containment finding —
@@ -61,11 +66,10 @@ export const patternsRule: SddRule = {
         }
         // The first pattern to claim a member stays its owner, so every later
         // claimant is reported against that first owner.
-        const firstOwner = ownedBy.get(memberId);
+        const firstOwner = ownership.ownerOf(memberId);
         if (firstOwner && firstOwner !== comp.id) {
           ctx.addIssue('error', 'SHARED_OWNED_MEMBER', `Block "${memberId}" is owned by both "${firstOwner}" and "${comp.id}"; a block has exactly one owner.`, comp.id, isDraftCtx);
         }
-        if (!firstOwner) ownedBy.set(memberId, comp.id);
       }
 
       // A FeatureComponent or RouterComponent owning a retired member is not
@@ -139,7 +143,7 @@ export const patternsRule: SddRule = {
     // "solving" a refused link by folding the state into the consumer, where
     // no spec, diagram, or conformance check can ever see it again.
     for (const comp of ctx.components) {
-      if (comp.componentType !== 'Store' || ownedBy.has(comp.id)) continue;
+      if (comp.componentType !== 'Store' || ownership.ownedMembers.has(comp.id)) continue;
       ctx.addIssue(
         'warning',
         'UNOWNED_STORE',
@@ -156,7 +160,7 @@ export const patternsRule: SddRule = {
     // Repository-owned Registries reach their Store as a sibling member and
     // are exempt from the dependency requirement.
     for (const comp of ctx.components) {
-      if (comp.componentType !== 'Registry' || ownedBy.has(comp.id)) continue;
+      if (comp.componentType !== 'Registry' || ownership.ownedMembers.has(comp.id)) continue;
       const hasStoreDep = comp.dependsOn.some(depId => ctx.componentMap.get(depId)?.componentType === 'Store');
       if (hasStoreDep) continue;
       ctx.addIssue(
@@ -172,7 +176,7 @@ export const patternsRule: SddRule = {
     // standalone form. A Query another pattern owns is that pattern's
     // containment finding, not this one.
     for (const comp of ctx.components) {
-      if (comp.componentType !== 'Query' || ownedBy.has(comp.id)) continue;
+      if (comp.componentType !== 'Query' || ownership.ownedMembers.has(comp.id)) continue;
       ctx.addIssue(
         'error',
         'UNOWNED_QUERY',
@@ -189,10 +193,10 @@ export const patternsRule: SddRule = {
     for (const comp of ctx.components) {
       if (isRetired(comp)) continue;
       for (const depId of comp.dependsOn) {
-        const owner = ownedBy.get(depId);
-        if (!owner) continue;                         // dep is a facade or standalone block — fine
-        if (owner === comp.id) continue;              // the owning pattern depending on its own member — fine
-        if (ownedBy.get(comp.id) === owner) continue; // a sibling member of the same group — fine
+        const owner = ownership.ownerOf(depId);
+        if (!owner) continue;                                  // dep is a facade or standalone block — fine
+        if (owner === comp.id) continue;                       // the owning pattern depending on its own member — fine
+        if (ownership.ownerOf(comp.id) === owner) continue;    // a sibling member of the same group — fine
         ctx.addIssue('error', 'VISIBILITY_VIOLATION', `Component "${comp.id}" depends on "${depId}", which is privately owned by pattern "${owner}". Depend on the facade "${owner}" instead.`, comp.id, ctx.isComponentDraft(comp.id) || ctx.isComponentDraft(depId));
       }
     }

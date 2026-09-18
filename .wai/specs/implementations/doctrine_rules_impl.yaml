@@ -693,7 +693,12 @@ methods:
     sourcePath: src/core/rules/doctrine/pattern-ownership.ts
     narrative:
       - stepNumber: 1
-        description: ownedBy = an empty map from member block id to the id of the pattern that first claimed it
+        description: >-
+          ownership = ctx.ownershipIndex(): which pattern privately owns each member block, derived
+          once per run and shared with every rule that needs it. Its skips are the semantics this
+          pass reports on — a retired or building-block claimant records nothing, so do an
+          unresolved member and an inner pattern, and where two patterns claim one block the first
+          claimant stays the owner
         type: local
       - stepNumber: 2
         label: component
@@ -701,7 +706,7 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 34
+        endStep: 33
       - stepNumber: 3
         label: liveComponent
         description: >-
@@ -745,7 +750,7 @@ methods:
         type: loop
         loopKind: forEach
         over: comp.owns
-        endStep: 19
+        endStep: 18
       - stepNumber: 10
         description: Does the member fail to resolve? (member = ctx.componentMap.get(memberId))
         type: branch
@@ -791,20 +796,14 @@ methods:
         label: sharedMember
         description: Has another pattern already claimed this member?
         type: branch
-        condition: 'ownedBy maps memberId to a component other than comp.id: the member''s first owner'
-        onFalseStep: 19
+        condition: 'ownership.ownerOf(memberId) is a component other than comp.id: the member''s first owner'
+        onFalseStep: 9
       - stepNumber: 18
         description: >-
           Report SHARED_OWNED_MEMBER (error, on comp.id; draft context isDraftCtx) naming the
           member, its first owner and comp.id: a block has exactly one owner
         type: local
       - stepNumber: 19
-        label: recordOwner
-        description: >-
-          Record ownedBy[memberId] = comp.id unless the member already has an owner: the first
-          pattern to claim a member stays its owner, and every later claimant is reported against it
-        type: local
-      - stepNumber: 20
         label: liveMembers
         description: >-
           Can the counting containment checks judge this pattern? A FeatureComponent or
@@ -819,7 +818,7 @@ methods:
           comp is neither a FeatureComponent nor a RouterComponent, or no member id in comp.owns
           resolves through ctx.componentMap to a component whose isRetired() holds
         onFalseStep: 2
-      - stepNumber: 21
+      - stepNumber: 20
         description: >-
           Check the containment the pattern's definition prescribes; any other stereotype prescribes
           none: continue with the next component
@@ -827,20 +826,20 @@ methods:
         'on': comp.componentType
         cases:
           - value: Repository
-            step: 22
+            step: 21
           - value: FeatureComponent
-            step: 26
+            step: 25
           - value: RouterComponent
-            step: 30
+            step: 29
         defaultStep: 2
-      - stepNumber: 22
+      - stepNumber: 21
         label: repositoryMember
         description: For each member id the Repository owns
         type: loop
         loopKind: forEach
         over: comp.owns
-        endStep: 24
-      - stepNumber: 23
+        endStep: 23
+      - stepNumber: 22
         description: >-
           Does the Repository own a member type it may not? Each member is judged on its own: a
           retired member is skipped, its STEREOTYPE_RETIRED being its one finding, while a live
@@ -849,80 +848,80 @@ methods:
         condition: >-
           ctx.componentMap resolves the member, the member is not retired (isRetired() is false),
           and its componentType is not Store, Registry, Index, Query or Adapter
-        onFalseStep: 22
-      - stepNumber: 24
+        onFalseStep: 21
+      - stepNumber: 23
         label: repositoryViolation
         description: >-
           Report REPOSITORY_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming the
           Repository, the member and its type: a Repository may own only Store, Registry, Index,
           Query and optionally Adapter
         type: local
-      - stepNumber: 25
+      - stepNumber: 24
         description: Continue with the next component
         type: jump
         toStep: 2
-      - stepNumber: 26
+      - stepNumber: 25
         label: featureCount
         description: >-
           Count the FeatureComponent's members by the componentType ctx.componentMap resolves:
           orchestrators, views and others (a member that does not resolve counts as none)
         type: local
-      - stepNumber: 27
+      - stepNumber: 26
         description: Is the feature slice shaped other than one Orchestrator with one or more Views?
         type: branch
         condition: orchestrators is not exactly 1, or views is below 1, or others is above 0
         onFalseStep: 2
-      - stepNumber: 28
+      - stepNumber: 27
         description: >-
           Report FEATURE_COMPONENT_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming
           the FeatureComponent: it must own exactly one Orchestrator and one or more Views, and no
           other member types
         type: local
-      - stepNumber: 29
+      - stepNumber: 28
         description: Continue with the next component
         type: jump
         toStep: 2
-      - stepNumber: 30
+      - stepNumber: 29
         label: routerCount
         description: >-
           portals = the number of the RouterComponent's members that resolve through
           ctx.componentMap to a Portal; hasChildren = some member resolves to any other type
         type: local
-      - stepNumber: 31
+      - stepNumber: 30
         description: Does the RouterComponent own no Portal facade, or more than one?
         type: branch
         condition: portals is not exactly 1
-        onFalseStep: 33
-      - stepNumber: 32
+        onFalseStep: 32
+      - stepNumber: 31
         description: >-
           Report ROUTER_COMPONENT_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming
           the RouterComponent: it must own exactly one Portal to act as its facade
         type: local
-      - stepNumber: 33
+      - stepNumber: 32
         label: routerChildrenCheck
         description: Does the RouterComponent lack children to route to?
         type: branch
         condition: not hasChildren
         onFalseStep: 2
-      - stepNumber: 34
+      - stepNumber: 33
         label: routerChildren
         description: >-
           Report ROUTER_COMPONENT_CONTAINMENT (error, on comp.id; draft context isDraftCtx) naming
           the RouterComponent: it must own at least one child component or View to route to
         type: local
-      - stepNumber: 35
+      - stepNumber: 34
         label: unownedStore
         description: 'Standalone Store pass: for each component in ctx.components'
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 37
-      - stepNumber: 36
+        endStep: 36
+      - stepNumber: 35
         description: Is the Store owned by no pattern?
         type: branch
-        condition: comp is a Store and ownedBy has no entry for comp.id
-        onFalseStep: 35
-      - stepNumber: 37
+        condition: comp is a Store and ownership.ownedMembers lacks comp.id
+        onFalseStep: 34
+      - stepNumber: 36
         label: unownedStoreReport
         description: >-
           Report UNOWNED_STORE (warning, on comp.id; draft context ctx.isComponentDraft(comp.id))
@@ -930,21 +929,21 @@ methods:
           Index; a deliberate standalone Store stays visible, is reached from the workflow layer and
           carries a lint.allow reason; never merge the state into a consuming component
         type: local
-      - stepNumber: 38
+      - stepNumber: 37
         label: standaloneRegistry
         description: 'Standalone Registry pass: for each component in ctx.components'
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 40
-      - stepNumber: 39
+        endStep: 39
+      - stepNumber: 38
         description: Is it a Registry outside any Repository with no Store to write to?
         type: branch
         condition: >-
-          comp is a Registry, ownedBy has no entry for comp.id, and no id in comp.dependsOn resolves
-          through ctx.componentMap to a Store
-        onFalseStep: 38
-      - stepNumber: 40
+          comp is a Registry, ownership.ownedMembers lacks comp.id, and no id in comp.dependsOn
+          resolves through ctx.componentMap to a Store
+        onFalseStep: 37
+      - stepNumber: 39
         label: registryReport
         description: >-
           Report REGISTRY_WITHOUT_STORE (warning, on comp.id; draft context
@@ -952,45 +951,45 @@ methods:
           retype it as a Store with honest durability; otherwise wire its Store, or lint.allow with
           a reason
         type: local
-      - stepNumber: 41
+      - stepNumber: 40
         label: unownedQuery
         description: 'Unowned Query pass: for each component in ctx.components'
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 43
-      - stepNumber: 42
+        endStep: 42
+      - stepNumber: 41
         description: >-
           Is the Query owned by no pattern? A Query that a non-Repository pattern owns is that
           pattern's containment finding, not this one
         type: branch
-        condition: comp is a Query and ownedBy has no entry for comp.id
-        onFalseStep: 41
-      - stepNumber: 43
+        condition: comp is a Query and ownership.ownedMembers lacks comp.id
+        onFalseStep: 40
+      - stepNumber: 42
         label: unownedQueryReport
         description: >-
           Report UNOWNED_QUERY (error, on comp.id; draft context ctx.isComponentDraft(comp.id))
           naming the Query: a Query computes reads over its own Repository's Store, so make it a
           member of the Repository whose Store it reads
         type: local
-      - stepNumber: 44
+      - stepNumber: 43
         label: visibility
         description: 'Visibility pass: for each dependency of each component'
         type: loop
         loopKind: forEach
         over: each dependency id depId of each component comp in ctx.components
-        endStep: 46
-      - stepNumber: 45
+        endStep: 45
+      - stepNumber: 44
         description: >-
           Is the dependency a block privately owned by another group? A retired depending component
           is skipped, as in the membership pass; a facade or standalone block, the owner's own
           member, and a sibling member of the same owner are all fine
         type: branch
         condition: >-
-          comp is not retired (comp.isRetired() is false), owner = ownedBy.get(depId) is set, owner
-          is not comp.id, and ownedBy.get(comp.id) is not owner
-        onFalseStep: 44
-      - stepNumber: 46
+          comp is not retired (comp.isRetired() is false), owner = ownership.ownerOf(depId) is set,
+          owner is not comp.id, and ownership.ownerOf(comp.id) is not owner
+        onFalseStep: 43
+      - stepNumber: 45
         label: visibilityReport
         description: >-
           Report VISIBILITY_VIOLATION (error, on comp.id; draft context
@@ -1060,4 +1059,4 @@ lint:
       reason: D2b splits stereotypeDependencies and patternOwnership, which list more than 25 steps.
 status: draft
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-17T17:52:44.207Z'
+updatedAt: '2026-09-18T00:27:51.243Z'

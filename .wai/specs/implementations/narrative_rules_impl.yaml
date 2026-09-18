@@ -211,7 +211,9 @@ methods:
     sourcePath: src/core/rules/narrative/narrative-detail.ts
     narrative:
       - stepNumber: 1
-        description: factsByPath = every ctx.codeModel.files entry keyed by ctx.codeModel.pathKey(entry.path)
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, the same index the
+          conformance family reads
         type: local
       - stepNumber: 2
         label: impls
@@ -285,11 +287,10 @@ methods:
         onFalseStep: 17
       - stepNumber: 14
         description: >-
-          facts = factsByPath.get(ctx.codeModel.pathKey(file)); symbol = implMethod.symbol, else
-          implMethod.name; complexity = facts.functionComplexity[symbol] as an own property, only
-          when facts is analyzed at exact grade; limit =
-          ctx.complexityConfigFor(component?.subsystem)?.maxUnnarratedComplexity, else the private
-          DEFAULT_MAX_UNNARRATED_COMPLEXITY (8)
+          facts = code.factsAt(file); symbol = implMethod.symbol, else implMethod.name; complexity =
+          facts.functionComplexity[symbol] as an own property, only when facts is analyzed at exact
+          grade; limit = ctx.complexityConfigFor(component?.subsystem)?.maxUnnarratedComplexity,
+          else the private DEFAULT_MAX_UNNARRATED_COMPLEXITY (8)
         type: local
       - stepNumber: 15
         description: Is real branching hiding below full?
@@ -917,4 +918,4 @@ lint:
         narrative-target-references, cross-tree-references and surface-reference-backing.
 status: draft
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-17T23:00:18.682Z'
+updatedAt: '2026-09-18T00:27:11.571Z'

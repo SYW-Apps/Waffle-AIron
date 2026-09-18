@@ -4,8 +4,6 @@ import {
   isLogic,
   methodSourceFile,
   passesIntentFloor,
-  pathKey,
-  type SourceFileFacts,
 } from '../../../models/index.js';
 import { SddRule } from '../types.js';
 
@@ -41,8 +39,7 @@ export const narrativeDetailRule: SddRule = {
     { code: 'DETAIL_BELOW_STEREOTYPE', defaultSeverity: 'warning', summary: 'Method explicitly dialed below the full narrative floor of its logic stereotype, with no narrative' },
   ],
   check(ctx) {
-    const factsByPath = new Map<string, SourceFileFacts>();
-    for (const f of ctx.codeModel.files) factsByPath.set(pathKey(f.path), f);
+    const code = ctx.codeIndex();
 
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
@@ -87,7 +84,7 @@ export const narrativeDetailRule: SddRule = {
         const file = methodSourceFile(implMethod, impl.sourcePath);
         if (file && tier !== 'off'
           && !(component && ctx.isInChainedSubproject(component.subsystem))) {
-          const facts = factsByPath.get(pathKey(file));
+          const facts = code.factsAt(file);
           const symbol = implMethod.symbol ?? implMethod.name;
           // Own-property lookup: a method named e.g. "constructor" must not
           // resolve to Object.prototype members.
