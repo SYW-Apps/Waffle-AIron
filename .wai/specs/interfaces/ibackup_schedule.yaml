@@ -30,6 +30,6 @@ methods:
       - name: config
         type: HostConfig
         description: The running instance's configuration
-status: draft
+status: complete
 createdAt: '2026-09-15T10:52:53.539Z'
-updatedAt: '2026-09-15T10:52:53.541Z'
+updatedAt: '2026-09-18T20:21:13.085Z'

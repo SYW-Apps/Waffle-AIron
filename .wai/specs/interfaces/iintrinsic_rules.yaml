@@ -86,6 +86,6 @@ methods:
         summary: >-
           Component typed with a retired stereotype: a Specialist is an Orchestrator with a
           dependencyClass, a Gateway is a Portal with the gateway variant
-status: draft
+status: complete
 createdAt: '2026-09-14T06:06:25.571Z'
-updatedAt: '2026-09-18T01:11:37.248Z'
+updatedAt: '2026-09-18T20:21:20.016Z'

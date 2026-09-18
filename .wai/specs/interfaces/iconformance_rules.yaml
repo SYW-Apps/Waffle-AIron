@@ -234,6 +234,6 @@ methods:
         summary: >-
           A narrative path has no sim:<component>.<method>[:<label>] anchor in the component's
           coverage-opted harness
-status: draft
+status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-18T12:56:44.263Z'
+updatedAt: '2026-09-18T20:21:13.918Z'

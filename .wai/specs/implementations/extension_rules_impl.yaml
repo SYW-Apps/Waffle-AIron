@@ -670,6 +670,6 @@ methods:
         description: This assertion is fully evaluated.
         type: local
     symbol: check
-status: draft
+status: complete
 createdAt: '2026-09-14T23:15:33.948Z'
-updatedAt: '2026-09-18T12:27:57.566Z'
+updatedAt: '2026-09-18T20:21:27.430Z'

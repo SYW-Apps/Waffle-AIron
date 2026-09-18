@@ -16,6 +16,6 @@ dependsOn:
   - narrative_graph_projector
 dependencyClass: pure
 variant: arbiter
-status: draft
+status: complete
 createdAt: '2026-09-14T05:42:42.284Z'
-updatedAt: '2026-09-15T20:40:53.171Z'
+updatedAt: '2026-09-18T20:21:10.996Z'

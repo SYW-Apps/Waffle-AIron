@@ -204,6 +204,6 @@ methods:
     symbol: check
 lint:
   allow: []
-status: draft
+status: complete
 createdAt: '2026-09-14T23:17:12.294Z'
-updatedAt: '2026-09-18T01:11:41.191Z'
+updatedAt: '2026-09-18T20:21:31.849Z'

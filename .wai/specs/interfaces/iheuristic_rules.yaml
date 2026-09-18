@@ -232,6 +232,6 @@ methods:
         summary: >-
           Orchestrator's methods form two or more groups of two or more that share no called
           component
-status: draft
+status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-09-18T16:59:19.126Z'
+updatedAt: '2026-09-18T20:21:17.320Z'

@@ -11,6 +11,6 @@ owns: []
 dependsOn:
   - admin_orchestrator
   - git_backing_orchestrator
-status: draft
+status: complete
 createdAt: '2026-09-15T10:51:19.458Z'
-updatedAt: '2026-09-15T10:51:19.463Z'
+updatedAt: '2026-09-18T20:20:51.209Z'

@@ -350,6 +350,6 @@ methods:
       - code: FACADE_FORWARDING
         severity: warning
         summary: Pattern facade narrative is not a single call to an owned member
-status: draft
+status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-09-18T13:33:45.509Z'
+updatedAt: '2026-09-18T20:21:14.791Z'
