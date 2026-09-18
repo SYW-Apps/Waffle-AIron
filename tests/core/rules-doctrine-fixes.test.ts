@@ -7,7 +7,7 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
 // Doctrine rule fixes: behaviour reported while narrating the pattern and
-// dependency rules and portal-endpoints, each pinned by a test that
+// dependency rules and the endpoint rules, each pinned by a test that
 // failed before its fix.
 // ---------------------------------------------------------------------------
 
@@ -295,7 +295,7 @@ describe('subsystem-boundary-dependencies: CROSS_SUBSYSTEM_TARGET_NON_PORTAL nam
   });
 });
 
-describe('portal-endpoints: the non-Portal endpoint ban reports like the Portal-side codes', () => {
+describe('non-portal-endpoints: the endpoint ban reports like the Portal-side codes', () => {
   it('anchors ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT on the interface that declares the endpoint', () => {
     const proj = createTempProject();
     proj.subsystem('claims');

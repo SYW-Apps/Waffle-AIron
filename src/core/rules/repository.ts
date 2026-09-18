@@ -19,14 +19,19 @@ import { guaranteeTokensRule } from './narrative/guarantee-tokens.js';
 import { narrativeStepConfigRule } from './narrative/narrative-step-config.js';
 import { narrativeReachabilityRule } from './narrative/narrative-reachability.js';
 import { narrativeJumpEdgesRule } from './narrative/narrative-jump-edges.js';
-import { narrativeAntipatternsRule } from './narrative/narrative-antipatterns.js';
+import { meaninglessBranchesRule } from './narrative/meaningless-branches.js';
+import { inescapableCyclesRule } from './narrative/inescapable-cycles.js';
+import { unconditionalCallCyclesRule } from './narrative/unconditional-call-cycles.js';
 import { narrativeDetailRule } from './narrative/narrative-detail.js';
+import { detailSufficiencyRule } from './narrative/detail-sufficiency.js';
 import { portalFieldsRule } from './intrinsic/portal-fields.js';
 import { durabilityDeclarationRule } from './intrinsic/durability-declaration.js';
 import { logicDeclarationRule } from './intrinsic/logic-declaration.js';
 import { retiredStereotypesRule } from './intrinsic/retired-stereotypes.js';
 import { portalsRule } from './doctrine/portal-endpoints.js';
+import { nonPortalEndpointsRule } from './doctrine/non-portal-endpoints.js';
 import { portalCallAuthRule } from './doctrine/portal-call-auth.js';
+import { authSourceWiringRule } from './doctrine/auth-source-wiring.js';
 import { subsystemBoundaryDepsRule } from './doctrine/subsystem-boundary-dependencies.js';
 import { logicDependencyClassRule } from './doctrine/logic-dependency-class.js';
 import { dataBlockDepsRule } from './doctrine/data-block-dependencies.js';
@@ -52,10 +57,14 @@ import { dispatchTableBindingsRule } from './wiring/dispatch-table-bindings.js';
 import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
 import { lifecycleRule } from './wiring/lifecycle-entrypoints.js';
 import { reachabilityRule } from './wiring/unused-detection.js';
+import { invokedByDescriptionRule } from './wiring/invoked-by-description.js';
+import { unusedTypesRule } from './wiring/unused-types.js';
 import { durabilityRule } from './wiring/durability-round-trip.js';
 import { untypedSeamRule } from './wiring/untyped-seams.js';
 import { proseClaimRule } from './wiring/prose-claims.js';
+import { uniqueInvariantIdsRule } from './wiring/unique-invariant-ids.js';
 import { invariantBackingRule } from './wiring/invariant-backing.js';
+import { invariantReferencesRule } from './wiring/invariant-references.js';
 import { eventTopologyRule } from './wiring/event-topology.js';
 import { sourceFileLinkageRule } from './conformance/source-file-linkage.js';
 import { methodRealizationRule } from './conformance/method-realization.js';
@@ -124,18 +133,30 @@ export const SDD_RULES: SddRule[] = [
   narrativeStepConfigRule,
   narrativeReachabilityRule,
   narrativeJumpEdgesRule,
-  // Antipatterns right after flow soundness: they analyze the same step
-  // graphs and only make sense once the graphs are structurally valid.
-  narrativeAntipatternsRule,
+  // Antipatterns right after flow soundness: they read the same step graphs
+  // and only make sense once the graphs are structurally valid. Three things
+  // structure alone can prove, in widening scope: a decision that decides
+  // nothing, a step cycle nothing leaves, and a call cycle with no guard.
+  meaninglessBranchesRule,
+  inescapableCyclesRule,
+  unconditionalCallCyclesRule,
+  // The detail dial in two questions: does a method carry the detail its level
+  // promises, and is that level low enough to be hiding something.
   narrativeDetailRule,
+  detailSufficiencyRule,
   // Field shape before endpoint bindings: a Portal-only field on the wrong
   // stereotype explains the endpoint findings around it, and this half is
   // spec-scoped so the write boundary refuses it first.
   portalFieldsRule,
+  // Endpoints from both sides: a Portal binds every method to its transport,
+  // and nothing that is not a Portal may bind one at all.
   portalsRule,
-  // Cross-call auth: a narrative call into an authed Portal must name its
-  // credential source (rides with the portal family).
+  nonPortalEndpointsRule,
+  // Cross-call auth rides with the portal family, in two questions: does a
+  // call into an authed Portal present a credential properly, and does the
+  // source it names resolve to a provider it is wired to.
   portalCallAuthRule,
+  authSourceWiringRule,
   // Dependencies in five questions, one owner each: where an edge is
   // allowed to LAND (the boundary, and what an unresolved id means), then
   // the intra-subsystem matrix by the layer that answers for it — an
@@ -184,7 +205,11 @@ export const SDD_RULES: SddRule[] = [
   dispatchTableBindingsRule,
   dispatchStepRoutingRule,
   lifecycleRule,
+  // The declared entrypoint's own prose before the walk that its declaration
+  // silences, then the walk, then the types no walk can reach.
+  invokedByDescriptionRule,
   reachabilityRule,
+  unusedTypesRule,
   // The declaration (spec-scoped, refused at the write boundary) before the
   // round-trip consequences it enables.
   durabilityDeclarationRule,
@@ -196,8 +221,13 @@ export const SDD_RULES: SddRule[] = [
   untypedSeamRule,
   proseClaimRule,
   // Invariant registry rides with the semantic-edge family: declared entity
-  // invariants must be asserted on every write path (declarations, not proofs).
+  // invariants must be asserted on every write path (declarations, not
+  // proofs). Three questions of one registry: are the entity's ids unique,
+  // does each invariant reach every write path of its owner, and does every
+  // asserted reference name something declared.
+  uniqueInvariantIdsRule,
   invariantBackingRule,
+  invariantReferencesRule,
   // Pub/sub completeness: emitted topics need subscribers and vice versa.
   eventTopologyRule,
   // Code↔spec: structural conformance consumes the injected CodeModel (built

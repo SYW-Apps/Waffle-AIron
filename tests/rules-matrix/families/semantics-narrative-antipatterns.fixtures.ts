@@ -1,6 +1,7 @@
 /**
- * Narrative-antipattern family (src/core/rules/narrative/narrative-antipatterns.ts):
- * provable narrative bugs, restricted to what structure alone proves.
+ * Narrative-antipattern family (src/core/rules/narrative/inescapable-cycles.ts,
+ * meaningless-branches.ts and unconditional-call-cycles.ts): provable narrative
+ * bugs, restricted to what structure alone proves.
  *
  * Documented intents pinned here:
  *  - INESCAPABLE_CYCLE (warning): a step cycle with no exit edge and no

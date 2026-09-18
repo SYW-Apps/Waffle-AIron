@@ -436,6 +436,11 @@ sides of a seam.
 | `public-surface` | `public-surface-binding` + `public-surface-declared-type` + `public-surface-bound-contract` | what BACKS the entry, whether that component's stereotype can realize the type it declares, and whether the contract it binds is that component's own |
 | `namespace-hygiene` | `reserved-id-segments` + `namespace-shadowing` | two questions of the same ids: the one segment the `::` grammar reserves, and the local name that would anchor a bare reference to the root instead |
 | `integration-conformance` | `integration-sim-declaration` + `integration-sim-file` + `integration-sim-wiring` + `integration-sim-coverage` | one rule per finding about one harness: is a harness expected here, does the declared one exist, does it wire the real modules, does it name every narrated path |
+| `narrative-antipatterns` | `meaningless-branches` + `inescapable-cycles` + `unconditional-call-cycles` | three separate proofs that happened to share a file: a decision whose arms all land on one step, a step cycle nothing can leave, and a call cycle in which no edge is guarded |
+| `narrative-detail` | `narrative-detail` + `detail-sufficiency` | does a method carry the detail its level PROMISES (a narrative at full, prose below it), and is that level low enough to be hiding something the reader is owed |
+| `portal-endpoints` | `portal-endpoints` + `non-portal-endpoints` | the two arms of one `if`, and two different subjects: what a Portal must bind, and what everything else may not carry at all |
+| `portal-call-auth` | `portal-call-auth` + `auth-source-wiring` | the CALL SITE (who may present a credential, and must it say where the credential comes from) separated from the SOURCE (does the `component:` reference resolve to a provider the presenter is wired to) |
+| `invariant-backing` | `unique-invariant-ids` + `invariant-backing` + `invariant-references` | three questions of one registry, two of which share nothing with the middle one: are the entity's ids unique, does each invariant reach every write path of its owner, and does every asserted reference name something declared |
 
 `profile-registration` also checks the project's own `projectType` before each subsystem's profile rather than after —
 the project-wide question first. On wairon's own tree the split retires `wiring_rules_impl`'s
@@ -559,6 +564,51 @@ byte-identical before and after. `integrity_rules_impl`'s two allows (`NARRATIVE
 in either family reaches the severe band or lists more than 25 steps any more. That last allow had named
 `dependencyConformance` among the narratives it covered, which stopped being true one wave earlier, when the shared read
 model below dropped that narrative from 28 to 14.
+
+The last six severe rule methods come under the bar together. `narrative-antipatterns` (26) was three separate proofs
+in one file, and its `MEANINGLESS_BRANCH`, `INESCAPABLE_CYCLE` and `UNCONDITIONAL_CALL_CYCLE` become
+`meaningless-branches` (11), `inescapable-cycles` (8) and `unconditional-call-cycles` (11). Two of them run a Tarjan
+SCC, but over graphs with nothing in common — one method's step graph, and the call graph across every component — so
+the traversal moves into a shared module (`narrative/completed-step-graph.ts`) beside the completion-closed step graph
+and the "is this step unavoidable" reading, and each rule states its own graph. Sharing the traversal is not sharing
+the graph. `narrative-detail` (27) splits along the seam its own comments drew: `narrative-detail` (18) keeps
+`MISSING_NARRATIVE` and `INTENT_FLOOR` — the two arms of one branch, a narrative at `full` and prose below it — while
+`detail-sufficiency` (16) takes `UNNARRATED_COMPLEXITY` and `DETAIL_BELOW_STEREOTYPE`, which stay together because the
+measured finding SUPPRESSES the stereotype one: evidence outranks expectation, and separating them would mean
+measuring the same function twice to reproduce that. `portal-endpoints` (20) and `portal-call-auth` (26) were the
+cleanest cuts. The first was two arms of one `if` about two different subjects, and becomes `portal-endpoints` (12)
+and `non-portal-endpoints` (8). The second is two questions with one subject: `portal-call-auth` (12) judges the CALL
+SITE (an authenticated outbound call is made by an Adapter, and says where its credential comes from) and
+`auth-source-wiring` (16) judges the SOURCE (a `component:` reference resolves, to an Adapter or Store, that the
+presenter is wired to). Five rules for five codes was rejected: the last three codes are one question's three failure
+modes — missing, wrong kind, unwired — and each extra rule would re-walk every narrative step in the tree to ask a
+third of it. `invariant-backing` (20) splits three ways, since the file already marked its seam: `unique-invariant-ids`
+(6) needs only the entity's own invariant list, `invariant-references` (3) walks the steps rather than the entities,
+and `invariant-backing` (12) keeps the two codes that share the owner resolution and its write-method scan. The
+invariant REFERENCE grammar (`<type-ref>.<invariant-id>`, split at the last dot) moves to `wiring/invariant-ref.ts`,
+because one rule resolves such a reference and another asks whether it denotes a particular entity's invariant, and the
+two must never disagree about what the string means.
+
+`unused-detection` (20) is deliberately split only three ways, and its three remaining codes stay together. The
+reachability walk is the expensive thing and it already runs TWICE: once from internal seeds alone, which is what makes
+`INVOKED_BY_REDUNDANT` answerable, and once with the `invokedBy` entrypoints added, which is what makes
+`UNUSED_COMPONENT` and `UNUSED_METHOD` answerable. One rule per code would walk the same graph four times. So
+`unused-types` (3) lifts out with its own reference scan, `invoked-by-description` (8) lifts out as a prose floor on
+the declaration's `caller`, and the reachability trio keeps the rule at 15.
+
+One proposal was refused. `detail-sufficiency` was to take its walk from `ctx.implementationMethods()`, as
+`call-conformance` did. It cannot: that member drops implementations whose contract names a component that does not
+resolve — which `UNNARRATED_COMPLEXITY` still judges today, tolerating an absent component throughout — and it drops
+chained subprojects, which is right for the code-side reading but wrong for `DETAIL_BELOW_STEREOTYPE`, a purely
+spec-side verdict that is judged at the parent root like every other spec-side rule. Since the suppression keeps the
+two codes in one rule, the rule flattens its own walk instead: it gathers the methods the dial holds below `full` with
+nothing written, then judges that flat list — 16 rather than the 26 a nested walk would have cost. No fixture covers
+either combination, so the identical finding set would not have caught it.
+
+Behaviour is preserved to the letter once more: the full finding set of all 561 rule-matrix fixtures (2069 findings) is
+byte-identical before and after. `narrative_rules_impl`'s, `doctrine_rules_impl`'s and `wiring_rules_impl`'s
+`NARRATIVE_COMPLEXITY` allows are retired outright — no rule family carries one any more, and the worst narrative left
+in the three measures 19. The built-in registry grows from 77 rules to 86.
 
 ### The rules share one derived read model
 

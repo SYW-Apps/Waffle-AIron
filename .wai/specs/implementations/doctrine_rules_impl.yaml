@@ -9,213 +9,6 @@ description: >-
 contract: idoctrine_rules
 simPath: tests/core/validation.test.ts
 methods:
-  - name: portalEndpoints
-    sourcePath: src/core/rules/doctrine/portal-endpoints.ts
-    narrative:
-      - stepNumber: 1
-        label: component
-        description: For each component in ctx.components
-        type: loop
-        loopKind: forEach
-        over: ctx.components
-        endStep: 14
-      - stepNumber: 2
-        description: >-
-          isDraftCtx = ctx.isComponentDraft(comp.id); compInterfaces = the ctx.interfaces whose
-          component is comp.id
-        type: local
-      - stepNumber: 3
-        description: Is the component a Portal? A non-Portal goes to the endpoint ban instead
-        type: branch
-        condition: comp.componentType is Portal
-        onFalseStep: 12
-      - stepNumber: 4
-        description: >-
-          Look up the transport this Portal's methods must bind: expected =
-          PORTAL_TRANSPORT[comp.portalType], a private constant of this file (HTTP_API to HTTP,
-          gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI; Custom to none). A Portal without a
-          portalType (the portal-fields rule reports that) or a Custom one carries no endpoint
-          obligation: continue with the next component
-        type: branch
-        condition: comp.portalType is set and PORTAL_TRANSPORT maps it to a transport
-        onFalseStep: 1
-      - stepNumber: 5
-        label: portalMethod
-        description: >-
-          For each method of each of the Portal's interfaces, with isIntfDraft = intf.status is
-          draft or design
-        type: loop
-        loopKind: forEach
-        over: each method m of each interface intf in compInterfaces
-        endStep: 10
-      - stepNumber: 6
-        description: Does the method lack an endpoint binding?
-        type: branch
-        condition: m.endpoint is not set
-        onFalseStep: 9
-      - stepNumber: 7
-        description: >-
-          Report MISSING_ENDPOINT (error, on intf.id; draft context isDraftCtx || isIntfDraft)
-          naming the method, the interface and the Portal's portalType, and telling the author to
-          bind it with sdd_set_endpoints under the expected transport
-        type: local
-      - stepNumber: 8
-        description: Continue with the next method
-        type: jump
-        toStep: 5
-      - stepNumber: 9
-        label: mismatchCheck
-        description: Does the bound endpoint use another transport than the Portal's portalType expects?
-        type: branch
-        condition: m.endpoint.transport differs from expected
-        onFalseStep: 5
-      - stepNumber: 10
-        label: mismatch
-        description: >-
-          Report ENDPOINT_TRANSPORT_MISMATCH (error, on intf.id; draft context isDraftCtx ||
-          isIntfDraft) naming the method, the interface, its declared transport, the Portal with its
-          portalType, and the expected transport
-        type: local
-      - stepNumber: 11
-        description: >-
-          The Portal's methods are judged: continue with the next component, skipping the non-Portal
-          endpoint ban
-        type: jump
-        toStep: 1
-      - stepNumber: 12
-        label: nonPortalMethod
-        description: >-
-          For a non-Portal component, for each method of each of its interfaces, with isIntfDraft =
-          intf.status is draft or design
-        type: loop
-        loopKind: forEach
-        over: each method m of each interface intf in compInterfaces
-        endStep: 14
-      - stepNumber: 13
-        description: Does the method declare an endpoint?
-        type: branch
-        condition: m.endpoint is set
-        onFalseStep: 12
-      - stepNumber: 14
-        label: componentEnd
-        description: >-
-          Report ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT (error, on intf.id as the Portal-side
-          codes report; draft context isDraftCtx || isIntfDraft) naming the component, its
-          componentType, the method and the interface: only Portal components may carry endpoints
-        type: local
-    symbol: check
-  - name: portalCallAuth
-    sourcePath: src/core/rules/doctrine/portal-call-auth.ts
-    narrative:
-      - stepNumber: 1
-        label: impl
-        description: For each implementation in ctx.implementations
-        type: loop
-        loopKind: forEach
-        over: ctx.implementations
-        endStep: 17
-      - stepNumber: 2
-        description: >-
-          ownComponent = the component of ctx.interfaceMap.get(impl.contract); presenter =
-          ctx.componentMap.get(ownComponent) when there is one, the component making the calls;
-          draft = ctx.isImplementationDraft(impl)
-        type: local
-      - stepNumber: 3
-        label: step
-        description: For each narrative step of each of the implementation's methods
-        type: loop
-        loopKind: forEach
-        over: each narrative step of each method of impl
-        endStep: 17
-      - stepNumber: 4
-        description: >-
-          Is the step an outbound call into another component's authenticated Portal? Dispatch steps
-          (a portal's own inbound routing), self-calls, unresolved or non-Portal targets, and
-          Portals without auth or with scheme none are skipped
-        type: branch
-        condition: >-
-          step.type is call, step.targetComponent is set and is not ownComponent, ctx.componentMap
-          resolves it to a Portal, and that Portal's auth is set with a scheme other than none
-        onFalseStep: 3
-      - stepNumber: 5
-        description: Is the credential presenter something other than an Adapter?
-        type: branch
-        condition: presenter is resolved and presenter.componentType is not Adapter
-        onFalseStep: 7
-      - stepNumber: 6
-        description: >-
-          Report AUTH_PRESENTER_NOT_ADAPTER (warning, on impl.id; draft context draft) naming the
-          step number, the method, the presenter with its componentType and the target Portal: an
-          authenticated cross-service call is external I/O, so route it through a client Adapter
-        type: local
-      - stepNumber: 7
-        label: source
-        description: Does the step leave out where its credential loads from? (from = step.auth.from)
-        type: branch
-        condition: step.auth.from is not set
-        onFalseStep: 10
-      - stepNumber: 8
-        description: >-
-          Report PORTAL_AUTH_UNMET (warning, on impl.id; draft context draft) naming the step
-          number, the method, the target Portal and its auth scheme: add the step's auth.from (a
-          secret-store component, env var, config key or vault ref), or drop the Portal's auth if it
-          needs none
-        type: local
-      - stepNumber: 9
-        description: 'No source to resolve: continue with the next step'
-        type: jump
-        toStep: 3
-      - stepNumber: 10
-        label: modeled
-        description: >-
-          Is the source a modeled component reference? COMPONENT_REF_PREFIX is a private constant of
-          this file; opaque sources (env:, config:, vault:, a free note) stay design notes and are
-          not resolved
-        type: branch
-        condition: from starts with COMPONENT_REF_PREFIX (component:)
-        onFalseStep: 3
-      - stepNumber: 11
-        description: >-
-          Does the referenced source exist? srcId = from without the component: prefix; src =
-          ctx.componentMap.get(srcId)
-        type: branch
-        condition: ctx.componentMap has no component srcId
-        onFalseStep: 14
-      - stepNumber: 12
-        description: >-
-          Report UNKNOWN_AUTH_SOURCE (warning, on impl.id; draft context draft) naming the step
-          number, the method and srcId, which does not exist
-        type: local
-      - stepNumber: 13
-        description: Continue with the next step
-        type: jump
-        toStep: 3
-      - stepNumber: 14
-        label: provider
-        description: Is the source something other than a credential provider?
-        type: branch
-        condition: src.componentType is neither Adapter nor Store
-        onFalseStep: 16
-      - stepNumber: 15
-        description: >-
-          Report AUTH_SOURCE_NOT_PROVIDER (warning, on impl.id; draft context draft) naming the step
-          number, the method, srcId and its componentType: a credential source must be an Adapter
-          (loads the secret) or a Store (holds it)
-        type: local
-      - stepNumber: 16
-        label: wiredCheck
-        description: Is the presenter not wired to its credential source?
-        type: branch
-        condition: presenter is resolved and neither presenter.dependsOn nor presenter.owns includes srcId
-        onFalseStep: 3
-      - stepNumber: 17
-        label: unwired
-        description: >-
-          Report AUTH_SOURCE_UNWIRED (warning, on impl.id; draft context draft) naming the step
-          number, the method, the presenter and srcId: declare the dependsOn edge so the credential
-          wiring is real
-        type: local
-    symbol: check
   - name: facadeForwarding
     sourcePath: src/core/rules/doctrine/facade-forwarding.ts
     narrative:
@@ -1090,12 +883,249 @@ methods:
           and its owner: depend on the facade instead
         type: local
     symbol: check
-lint:
-  allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: >-
-        D2b still owes portalEndpoints (score 20) and portalCallAuth (26) their split; every other
-        narrative in this family is now below the severe band.
+  - name: portalEndpoints
+    sourcePath: src/core/rules/doctrine/portal-endpoints.ts
+    narrative:
+      - stepNumber: 1
+        label: component
+        description: For each component in ctx.components
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 9
+      - stepNumber: 2
+        description: >-
+          Is this a Portal with a transport its methods must bind? expected =
+          PORTAL_TRANSPORT[comp.portalType], a private constant of this file (HTTP_API to HTTP,
+          gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI; Custom to none). A Portal without a
+          portalType (the portal-fields rule reports that) or a Custom one carries no endpoint
+          obligation, and a component that is not a Portal is non-portal-endpoints' subject
+        type: branch
+        condition: >-
+          comp.componentType is Portal, comp.portalType is set, and PORTAL_TRANSPORT maps it to a
+          transport
+        onFalseStep: 1
+      - stepNumber: 3
+        description: isDraftCtx = ctx.isComponentDraft(comp.id)
+        type: local
+      - stepNumber: 4
+        label: portalMethod
+        description: >-
+          For each method of each of the Portal's interfaces (the ctx.interfaces whose component is
+          comp.id), with isIntfDraft = intf.status is draft or design
+        type: loop
+        loopKind: forEach
+        over: each method m of each interface intf whose component is comp.id
+        endStep: 9
+      - stepNumber: 5
+        description: Does the method lack an endpoint binding?
+        type: branch
+        condition: m.endpoint is not set
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Report MISSING_ENDPOINT (error, on intf.id; draft context isDraftCtx || isIntfDraft)
+          naming the method, the interface and the Portal's portalType, and telling the author to
+          bind it with sdd_set_endpoints under the expected transport
+        type: local
+      - stepNumber: 7
+        description: Continue with the next method
+        type: jump
+        toStep: 4
+      - stepNumber: 8
+        label: mismatchCheck
+        description: Does the bound endpoint use another transport than the Portal's portalType expects?
+        type: branch
+        condition: m.endpoint.transport differs from expected
+        onFalseStep: 4
+      - stepNumber: 9
+        label: mismatch
+        description: >-
+          Report ENDPOINT_TRANSPORT_MISMATCH (error, on intf.id; draft context isDraftCtx ||
+          isIntfDraft) naming the method, the interface, its declared transport, the Portal with its
+          portalType, and the expected transport
+        type: local
+    symbol: check
+  - name: nonPortalEndpoints
+    sourcePath: src/core/rules/doctrine/non-portal-endpoints.ts
+    narrative:
+      - stepNumber: 1
+        label: component
+        description: For each component in ctx.components
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 6
+      - stepNumber: 2
+        description: A Portal's own endpoint bindings are portal-endpoints' question
+        type: branch
+        condition: comp.componentType is not Portal
+        onFalseStep: 1
+      - stepNumber: 3
+        description: isDraftCtx = ctx.isComponentDraft(comp.id)
+        type: local
+      - stepNumber: 4
+        label: nonPortalMethod
+        description: >-
+          For each method of each of the component's interfaces (the ctx.interfaces whose component
+          is comp.id), with isIntfDraft = intf.status is draft or design
+        type: loop
+        loopKind: forEach
+        over: each method m of each interface intf whose component is comp.id
+        endStep: 6
+      - stepNumber: 5
+        description: Does the method declare an endpoint?
+        type: branch
+        condition: m.endpoint is set
+        onFalseStep: 4
+      - stepNumber: 6
+        label: nonPortalReport
+        description: >-
+          Report ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT (error, on intf.id as the Portal-side
+          codes report, where the fix is made; draft context isDraftCtx || isIntfDraft) naming the
+          component, its componentType, the method and the interface: only Portal components may
+          carry endpoints
+        type: local
+    symbol: check
+  - name: portalCallAuth
+    sourcePath: src/core/rules/doctrine/portal-call-auth.ts
+    narrative:
+      - stepNumber: 1
+        label: impl
+        description: For each implementation in ctx.implementations
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 8
+      - stepNumber: 2
+        description: >-
+          ownComponent = the component of ctx.interfaceMap.get(impl.contract); presenter =
+          ctx.componentMap.get(ownComponent) when there is one, the component making the calls;
+          draft = ctx.isImplementationDraft(impl)
+        type: local
+      - stepNumber: 3
+        label: step
+        description: For each narrative step of each of the implementation's methods
+        type: loop
+        loopKind: forEach
+        over: each narrative step of each method of impl
+        endStep: 8
+      - stepNumber: 4
+        description: >-
+          Is the step an outbound call into another component's authenticated Portal? Dispatch steps
+          (a portal's own inbound routing), self-calls, unresolved or non-Portal targets, and
+          Portals without auth or with scheme none are skipped
+        type: branch
+        condition: >-
+          step.type is call, step.targetComponent is set and is not ownComponent, ctx.componentMap
+          resolves it to a Portal, and that Portal's auth is set with a scheme other than none
+        onFalseStep: 3
+      - stepNumber: 5
+        description: Is the credential presenter something other than an Adapter?
+        type: branch
+        condition: presenter is resolved and presenter.componentType is not Adapter
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report AUTH_PRESENTER_NOT_ADAPTER (warning, on impl.id; draft context draft) naming the
+          step number, the method, the presenter with its componentType and the target Portal: an
+          authenticated cross-service call is external I/O, so route it through a client Adapter
+        type: local
+      - stepNumber: 7
+        label: source
+        description: >-
+          Does the step leave out where its credential loads from? What a source it does name
+          denotes is auth-source-wiring's question
+        type: branch
+        condition: step.auth.from is not set
+        onFalseStep: 3
+      - stepNumber: 8
+        label: unmet
+        description: >-
+          Report PORTAL_AUTH_UNMET (warning, on impl.id; draft context draft) naming the step
+          number, the method, the target Portal and its auth scheme: add the step's auth.from (a
+          secret-store component, env var, config key or vault ref), or drop the Portal's auth if it
+          needs none
+        type: local
+    symbol: check
+  - name: authSourceWiring
+    sourcePath: src/core/rules/doctrine/auth-source-wiring.ts
+    narrative:
+      - stepNumber: 1
+        label: impl
+        description: For each implementation in ctx.implementations
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 11
+      - stepNumber: 2
+        description: >-
+          ownComponent = the component of ctx.interfaceMap.get(impl.contract); presenter =
+          ctx.componentMap.get(ownComponent) when there is one, the component making the calls;
+          draft = ctx.isImplementationDraft(impl)
+        type: local
+      - stepNumber: 3
+        label: step
+        description: For each narrative step of each of the implementation's methods
+        type: loop
+        loopKind: forEach
+        over: each narrative step of each method of impl
+        endStep: 11
+      - stepNumber: 4
+        description: >-
+          Is a MODELED credential source presented on an outbound call into another component's
+          authenticated Portal? A dispatch step is the portal's own inbound routing and a component
+          never calls its own portal, so neither is a cross-service call; a step with no source is
+          portal-call-auth's finding, and an opaque one (env:, config:, vault:, a free note) stays a
+          design note. COMPONENT_REF_PREFIX is a private constant of this file
+        type: branch
+        condition: >-
+          step.type is call, step.targetComponent is set and is not ownComponent, ctx.componentMap
+          resolves it to a Portal whose auth is set with a scheme other than none, and
+          step.auth.from is set and starts with COMPONENT_REF_PREFIX (component:)
+        onFalseStep: 3
+      - stepNumber: 5
+        description: >-
+          Does the referenced source exist? srcId = from without the component: prefix; src =
+          ctx.componentMap.get(srcId)
+        type: branch
+        condition: ctx.componentMap has no component srcId
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Report UNKNOWN_AUTH_SOURCE (warning, on impl.id; draft context draft) naming the step
+          number, the method and srcId, which does not exist
+        type: local
+      - stepNumber: 7
+        description: 'Nothing resolved to judge: continue with the next step'
+        type: jump
+        toStep: 3
+      - stepNumber: 8
+        label: provider
+        description: Is the source something other than a credential provider?
+        type: branch
+        condition: src.componentType is neither Adapter nor Store
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Report AUTH_SOURCE_NOT_PROVIDER (warning, on impl.id; draft context draft) naming the step
+          number, the method, srcId and its componentType: a credential source must be an Adapter
+          (loads the secret) or a Store (holds it)
+        type: local
+      - stepNumber: 10
+        label: wiredCheck
+        description: Is the presenter not wired to its credential source?
+        type: branch
+        condition: presenter is resolved and neither presenter.dependsOn nor presenter.owns includes srcId
+        onFalseStep: 3
+      - stepNumber: 11
+        label: unwired
+        description: >-
+          Report AUTH_SOURCE_UNWIRED (warning, on impl.id; draft context draft) naming the step
+          number, the method, the presenter and srcId: declare the dependsOn edge so the credential
+          wiring is real
+        type: local
+    symbol: check
 status: draft
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-18T01:07:54.413Z'
+updatedAt: '2026-09-18T13:41:28.564Z'

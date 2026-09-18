@@ -1,10 +1,4 @@
-import {
-  defaultConformanceTier,
-  effectiveDetail,
-  isLogic,
-  methodSourceFile,
-  passesIntentFloor,
-} from '../../../models/index.js';
+import { effectiveDetail, passesIntentFloor } from '../../../models/index.js';
 import { SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -14,13 +8,12 @@ import { SddRule } from '../types.js';
 // fields: Portals/Adapters are boundary pass-throughs (real logic belongs in
 // the Orchestrator they forward to), and a Store's semantics are a contract
 // paragraph, not choreography.
+//
+// This rule asks whether a method KEEPS the promise its level makes: a
+// full-level method owes a narrative, and every other level owes prose. Whether
+// the level itself is low enough to hide real behavior is the sufficiency
+// question, and it is a rule of its own (narrative/detail-sufficiency.ts).
 // ---------------------------------------------------------------------------
-
-// The detail-sufficiency floor: above this cyclomatic complexity a realized
-// function has enough real branching that leaving its method below detail:
-// full (with no narrative) hides logic from every deeper conformance check.
-// Overridable via rules.complexity.maxUnnarratedComplexity.
-export const DEFAULT_MAX_UNNARRATED_COMPLEXITY = 8;
 
 /**
  * Enforces that every method carries the detail its declared (or defaulted)
@@ -31,34 +24,24 @@ export const DEFAULT_MAX_UNNARRATED_COMPLEXITY = 8;
 export const narrativeDetailRule: SddRule = {
   name: 'narrative-detail',
   description:
-    'The narrative detail dial: each method resolves to full | calls-only | intent (method override → spec default → stereotype default). full requires a narrative; intent-level methods without a narrative must specify behavior as non-trivial prose (L4 intent or L3 description) — dialing detail down never means leaving behavior unspecified. Explicit declarations are held to their promise as errors; stereotype-defaulted gaps surface as warnings. Detail sufficiency rides along: a method whose realized function — in the method\'s own source file, else the implementation\'s — measures real branching (cyclomatic complexity above rules.complexity.maxUnnarratedComplexity, exact AST grade only) may not hide below detail: full without a narrative (UNNARRATED_COMPLEXITY), and an explicit dial below a full-floor logic stereotype without a narrative is a visible, lint.allow-justifiable choice (DETAIL_BELOW_STEREOTYPE). Both are honest lints over declarations — they never claim the narrative or prose is CORRECT.',
+    'The narrative detail dial: each method resolves to full | calls-only | intent (method override → spec default → stereotype default). full requires a narrative; intent-level methods without a narrative must specify behavior as non-trivial prose (L4 intent or L3 description) — dialing detail down never means leaving behavior unspecified. Explicit declarations are held to their promise as errors; stereotype-defaulted gaps surface as warnings. An honest lint over declarations — it never claims the narrative or the prose is CORRECT.',
   codes: [
     { code: 'MISSING_NARRATIVE', defaultSeverity: 'warning', summary: 'Method resolved to detail: full but has no narrative (error when the level was declared explicitly)' },
     { code: 'INTENT_FLOOR', defaultSeverity: 'warning', summary: 'Intent-level method whose intent/description prose is missing or placeholder-thin (error when declared explicitly)' },
-    { code: 'UNNARRATED_COMPLEXITY', defaultSeverity: 'warning', summary: 'Method below detail: full with no narrative whose realized function, in the method\'s source file, has real branching (cyclomatic complexity over the configured threshold, exact-grade analysis only)' },
-    { code: 'DETAIL_BELOW_STEREOTYPE', defaultSeverity: 'warning', summary: 'Method explicitly dialed below the full narrative floor of its logic stereotype, with no narrative' },
   ],
   check(ctx) {
-    const code = ctx.codeIndex();
-
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
       if (!contract) continue;
       const component = ctx.componentMap.get(contract.component);
-
-      const isDraftCtx =
-        impl.status === 'draft' || impl.status === 'design'
-        || contract.status === 'draft' || contract.status === 'design'
-        || ctx.isComponentDraft(contract.component);
+      const isDraftCtx = ctx.isImplementationDraft(impl);
 
       for (const implMethod of impl.methods) {
         const contractMethod = contract.methods.find(m => m.name === implMethod.name);
         if (!contractMethod) continue; // UNEXPECTED_IMPLEMENTATION_METHOD covers this
+        if (implMethod.narrative.length > 0) continue; // floors, not ceilings
 
         const eff = effectiveDetail(implMethod, impl, component);
-        const hasNarrative = implMethod.narrative.length > 0;
-        if (hasNarrative) continue; // floors, not ceilings
-
         if (eff.level === 'full') {
           ctx.addIssue(
             eff.explicit ? 'error' : 'warning',
@@ -70,59 +53,6 @@ export const narrativeDetailRule: SddRule = {
             isDraftCtx,
           );
           continue;
-        }
-
-        // Detail sufficiency (code side): the realized function's measured
-        // branching may not hide below detail: full. Exact-grade analysis
-        // only — a weaker grade skips rather than guesses. `off` conformance
-        // means the name↔symbol mapping is untrusted, so skip that too. The
-        // function is measured in the method's own source file: its
-        // sourcePath, else the implementation's.
-        let complexityFired = false;
-        const tier = implMethod.conformance ?? impl.conformance
-          ?? defaultConformanceTier(component);
-        const file = methodSourceFile(implMethod, impl.sourcePath);
-        if (file && tier !== 'off'
-          && !(component && ctx.isInChainedSubproject(component.subsystem))) {
-          const facts = code.factsAt(file);
-          const symbol = implMethod.symbol ?? implMethod.name;
-          // Own-property lookup: a method named e.g. "constructor" must not
-          // resolve to Object.prototype members.
-          const complexity = facts?.status === 'analyzed' && facts.analysisGrade === 'exact'
-            && facts.functionComplexity
-            && Object.prototype.hasOwnProperty.call(facts.functionComplexity, symbol)
-            ? facts.functionComplexity[symbol]
-            : undefined;
-          const limit = ctx.complexityConfigFor(component?.subsystem)?.maxUnnarratedComplexity
-            ?? DEFAULT_MAX_UNNARRATED_COMPLEXITY;
-          if (complexity !== undefined && complexity > limit) {
-            complexityFired = true;
-            ctx.addIssue(
-              'warning',
-              'UNNARRATED_COMPLEXITY',
-              `Method "${implMethod.name}" in implementation "${impl.id}" sits at detail: ${eff.level} with no narrative, but its realized function "${symbol}" in "${file}" measures cyclomatic complexity ${complexity} (limit ${limit}) — real branching is hiding behind ${eff.level}. Write the narrative, or keep the dial with a lint.allow stating why the branching needs no choreography.`,
-              impl.id,
-              isDraftCtx,
-            );
-          }
-        }
-
-        // Detail sufficiency (spec side): explicitly dialing a logic
-        // stereotype's method below its full floor is a visible design choice.
-        // Logic is where behavior genuinely lives — an Orchestrator, Supervisor
-        // or Actor (or a Specialist until it is migrated). Deliberately
-        // narrower than "everything defaulting to detail: full": pattern
-        // facades and presenter components inherit the full floor but forward
-        // to members, so an explicit dial-down there is a normal choice.
-        // Skipped when the code-backed finding already fired for this method.
-        if (!complexityFired && eff.explicit && component && isLogic(component)) {
-          ctx.addIssue(
-            'warning',
-            'DETAIL_BELOW_STEREOTYPE',
-            `Method "${implMethod.name}" in implementation "${impl.id}" is explicitly dialed to detail: ${eff.level}, below the full narrative floor of its ${component.componentType} stereotype, and has no narrative. Logic behavior belongs in a narrative — write one, or keep the dial with a lint.allow stating why.`,
-            impl.id,
-            isDraftCtx,
-          );
         }
 
         // intent — and calls-only with nothing to choreograph — must clear the

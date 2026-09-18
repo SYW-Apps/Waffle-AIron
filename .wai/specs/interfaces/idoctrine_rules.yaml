@@ -9,7 +9,7 @@ methods:
   - name: portalEndpoints
     description: >-
       Rule portal-endpoints. A Portal binds every interface method to a concrete endpoint of the
-      matching transport, and only a Portal may carry endpoints at all.
+      transport its portalType expects.
     signature: 'portalEndpoints(ctx: RuleContext): void'
     returns: void
     params:
@@ -23,6 +23,18 @@ methods:
       - code: ENDPOINT_TRANSPORT_MISMATCH
         severity: error
         summary: Endpoint transport does not match the Portal portalType
+  - name: nonPortalEndpoints
+    description: >-
+      Rule non-portal-endpoints. Only a Portal may carry endpoints: a method on a non-Portal
+      component's interface that declares one is publishing a block that is not the system's
+      boundary as if it were.
+    signature: 'nonPortalEndpoints(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT
         severity: error
         summary: Non-Portal component method declaring an endpoint
@@ -32,11 +44,8 @@ methods:
       into ANOTHER component's Portal whose auth is not `none` must (a) be made by an Adapter — the
       only block that does external I/O — and (b) declare the credential source it presents via the
       step's `auth.from`. Absence of a source warns PORTAL_AUTH_UNMET; a non-Adapter presenter warns
-      AUTH_PRESENTER_NOT_ADAPTER. When `auth.from` is a modeled reference (`component:<id>`) it must
-      resolve to an Adapter/Store the presenter is wired to (UNKNOWN_AUTH_SOURCE /
-      AUTH_SOURCE_NOT_PROVIDER / AUTH_SOURCE_UNWIRED). The actual secret is never stored in the
-      spec. Dispatch steps (a portal's OWN inbound routing) and self-calls are not cross-service
-      calls and are excluded.
+      AUTH_PRESENTER_NOT_ADAPTER. The actual secret is never stored in the spec. Dispatch steps (a
+      portal's OWN inbound routing) and self-calls are not cross-service calls and are excluded.
     signature: 'portalCallAuth(ctx: RuleContext): void'
     returns: void
     params:
@@ -54,6 +63,21 @@ methods:
         summary: >-
           A non-Adapter component authenticates an outbound call to a portal (external I/O must go
           through an Adapter)
+  - name: authSourceWiring
+    description: >-
+      Rule auth-source-wiring. Resolves the credential source a narrative call presents to an
+      authenticated Portal. When the step's `auth.from` is a modeled reference (`component:<id>`) it
+      must name a component that exists (UNKNOWN_AUTH_SOURCE), that can hold or load a secret — an
+      Adapter or a Store (AUTH_SOURCE_NOT_PROVIDER) — and that the presenting component depends on
+      or owns (AUTH_SOURCE_UNWIRED). Opaque sources (env:/config:/vault:/free note) are design notes
+      and are never resolved; a missing source is portal-call-auth's finding.
+    signature: 'authSourceWiring(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: UNKNOWN_AUTH_SOURCE
         severity: warning
         summary: 'auth.from references a component: source that does not exist'
@@ -328,4 +352,4 @@ methods:
         summary: Pattern facade narrative is not a single call to an owned member
 status: draft
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-09-18T01:01:28.570Z'
+updatedAt: '2026-09-18T13:33:45.509Z'
