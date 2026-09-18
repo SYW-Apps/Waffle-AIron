@@ -1,0 +1,15 @@
+id: mcp_authoring_adapter
+name: MCP Authoring Client Adapter
+description: >-
+  Local client adapter in sdd_mcp for the outward hop into sdd_authoring: the sdd_* write tools
+  reach the gated seam here rather than the spec store, so a misplaced field is refused before
+  anything touches disk. In-process import seam inside src/mcp/server.ts; the hop it names is the
+  one edge that used to be describable only as prose on the seam's own contract.
+subsystem: sdd_mcp
+componentType: Adapter
+owns: []
+dependsOn:
+  - authoring_portal
+status: complete
+createdAt: '2026-09-18T21:40:44.870Z'
+updatedAt: '2026-09-18T21:51:00.562Z'

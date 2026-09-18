@@ -426,24 +426,14 @@ methods:
       merged numbering. Compares the result with what is stored and writes NOTHING when they match.
       The caller's hooks, when given, judge the merged spec at the last point before anything
       reaches disk.
-    signature: 'updateSpec(kind: string, id: string, delta: object, hooks?: SpecWriteHooks): SpecChangeReport'
+    signature: >-
+      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
-      - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
-      - name: id
-        type: string
-        description: The stored spec's id; informational for the singleton L0
       - name: delta
-        type: object
+        type: SpecDelta
         description: The partial change to merge, shaped like the spec, carrying the delta's own verbs
-      - name: hooks
-        type: SpecWriteHooks
-        description: >-
-          The authoring caller's write-boundary judgement; a mechanical write passes none and stays
-          ungated
-        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T21:14:29.183Z'
+updatedAt: '2026-09-18T21:42:19.286Z'

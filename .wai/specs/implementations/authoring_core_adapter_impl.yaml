@@ -1,0 +1,43 @@
+id: authoring_core_adapter_impl
+name: Authoring Core Adapter Implementation
+description: >-
+  The outward hop into sdd_core, as the import seam inside src/core/authoring.ts. The writes forward
+  straight to the core's published surface; the configuration read is the module's own
+  `candidateOptions`, which reaches sdd_core's project-configuration Repository in process — the
+  declared edge names the published portal, which is the sanctioned shape for an in-process import
+  that lands in a peer's concrete module. Swappable for a remote spec store without changing the
+  workflow that calls it.
+contract: iauthoring_core_adapter
+sourcePath: src/core/authoring.ts
+methods:
+  - name: saveComponentSpec
+    narrative:
+      - stepNumber: 1
+        description: Persist the judged component through the core subsystem's published write
+        type: call
+        targetComponent: core_portal
+        targetMethod: saveComponentSpec
+  - name: updateSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Apply the delta through the core subsystem's published update, passing the caller's
+          judgement in as the write hook so it runs on the merged spec at the last point before
+          anything reaches disk
+        type: call
+        targetComponent: core_portal
+        targetMethod: updateSpec
+  - name: loadProjectConfig
+    narrative: []
+    intent: >-
+      Resolve the settings a candidate is judged with: the bound project's rule severities and
+      project type, read from sdd_core's project configuration. The read is deliberately defensive —
+      an uninitialized or unreadable project yields the default severities instead of throwing,
+      because a configuration read must never be the thing that fails a write closed. It reaches the
+      peer's configuration Repository in process rather than calling the published read, which is
+      why this method chooses prose over a call step: the declared edge to the core portal is the
+      sanctioned hop, and its barrel is cosmetic at runtime.
+    symbol: candidateOptions
+status: complete
+createdAt: '2026-09-18T21:43:38.007Z'
+updatedAt: '2026-09-18T21:51:09.810Z'

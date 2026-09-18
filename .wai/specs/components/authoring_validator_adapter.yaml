@@ -1,0 +1,17 @@
+id: authoring_validator_adapter
+name: Authoring Validator Client Adapter
+description: >-
+  Local client adapter in sdd_authoring for the outward hop into sdd_validator: judges a component
+  candidate against the spec-scoped rules before it is written. In-process import seam inside
+  src/core/authoring.ts today, swappable for a remote validator without changing the workflow that
+  calls it. It exists because only a client Adapter may cross a subsystem boundary, and the hop runs
+  outward — sdd_validator reads the spec tree through sdd_core and knows nothing of this seam, so
+  there is no mutual coupling to acknowledge.
+subsystem: sdd_authoring
+componentType: Adapter
+owns: []
+dependsOn:
+  - validator_portal
+status: complete
+createdAt: '2026-09-18T21:11:47.873Z'
+updatedAt: '2026-09-18T21:40:55.180Z'

@@ -23,10 +23,12 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: loadSubsystemSpec
       - stepNumber: 2
-        description: Persist the L2 component spec via the core client adapter
+        description: >-
+          Persist the L2 component spec through the authoring client adapter, so the intrinsic rules
+          judge the candidate before anything reaches disk
         type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveComponentSpec
+        targetComponent: mcp_authoring_adapter
+        targetMethod: addComponent
     symbol: sdd_add_component
   - name: defineInterface
     narrative:
@@ -270,4 +272,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-17T19:27:25.459Z'
+updatedAt: '2026-09-18T21:44:03.877Z'

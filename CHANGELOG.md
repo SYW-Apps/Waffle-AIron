@@ -1361,7 +1361,7 @@ the agent.
   component returns the resolved guidance and its same-variant siblings as a derived,
   read-only field. Previously it only reached generated agent files.
 
-### The gated write seam is in the spec tree
+### The gated write seam is its own subsystem
 
 `src/core/authoring.ts` is the boundary every spec write passes: it judges a
 component against the intrinsic rules and only then persists it, and it injects
@@ -1371,28 +1371,45 @@ not see — and the interface it calls said so out loud (`validateComponentCandi
 carried "no sdd_core narrative models that call yet, because no spec names
 authoring.ts").
 
-- **`spec_write_gate`** (Orchestrator, `sdd_core`) is that file: `addComponent`
+The file's own header states the layering: *access paths → authoring → specs +
+rules*. It is a layer **above** both `sdd_core` and `sdd_validator`, and a layer
+above two peers cannot live inside one of them without inverting an edge.
+Modelling it inside `sdd_core` first made that concrete, and cost three things —
+the same mistake in three shapes: a second component that existed only to make the
+hop into `sdd_validator` legal, a new `sdd_core → sdd_validator` trusted link
+declaring a mutual coupling that did not exist, and a gate nothing depended on,
+whose real caller could only be written down as prose. So the seam is
+**`sdd_authoring`**, a subsystem of its own.
+
+- **`authoring_portal`** (Portal) is the published surface: `addComponent` and
+  `updateSpecGated`, the two exports `src/mcp/server.ts` imports. It exists so the
+  inbound hop is a drawn edge — a cross-subsystem dependency may only enter through
+  a published Portal.
+- **`authoring_orchestrator`** (Orchestrator) is the gated workflow: `addComponent`
   judges a candidate and refuses it before anything touches disk; `updateSpecGated`
-  builds the judgement as a write hook and hands the delta to the core orchestrator.
-  It is an Orchestrator, not a Portal: it terminates no transport and it performs
-  the write itself, which is exactly the layer a Portal's writes must route through.
-- **`core_validator_adapter`** (Adapter, `sdd_core`) names the hop into
-  `sdd_validator`, matching the client shim every other subsystem already uses to
-  reach the validator.
+  builds the judgement as a write hook and hands the delta outward. A Portal never
+  performs the write itself, so both writes route through here — the layer the
+  doctrine has always required a Portal's writes to reach.
+- **`authoring_core_adapter`** and **`authoring_validator_adapter`** (Adapters) name
+  the two outward hops: to `sdd_core` for the writes and for the project's own rule
+  severities, and to `sdd_validator` for the candidate judgement. Only a local client
+  Adapter may cross a subsystem boundary, and both hops run outward.
+- **`mcp_authoring_adapter`** (Adapter, `sdd_mcp`) makes the seam's inbound edge real.
+  `sdd_add_component` now reaches `authoring_portal.addComponent` instead of claiming
+  a `core_portal.saveComponentSpec` call the code never made — the spec had recorded
+  the truth only as a `symbol: addComponent` footnote.
 - **`core_orchestrator.updateSpec`** is on the contract at last — the delta applier
   the authoring tools have written through for months, with the guards, the merge,
-  the no-op comparison and the injected gate in its narrative.
-- **`sdd_core` declares its trusted link to `sdd_validator`.** The coupling is
-  mutual and always was: the validator must read the spec tree to judge it, and the
-  write gate must call the rule engine to judge a component before it reaches disk.
-  It only became visible once a core component named the call. The declaration
-  records the commitment and states the reason; the client-Adapter shim is kept, so
-  the hop stays swappable.
-- **The seam's inbound edge cannot be drawn**, and the spec says why rather than
-  pretending: `src/mcp/server.ts` imports the gate directly, and a cross-subsystem
-  dependency may only enter through a published Portal — which `core_portal` is, and
-  which serves the ungated mechanical writes on purpose. Both gate methods carry an
-  `invokedBy` naming the real caller.
+  the no-op comparison and the injected gate in its narrative — and
+  **`core_portal.updateSpec`** publishes it, because the caller now stands outside
+  `sdd_core`.
+- **The `sdd_core → sdd_validator` trusted link is gone.** It was needed only while
+  the gate lived inside `sdd_core`. With the gate outside, both of its hops run
+  outward and `sdd_validator` reads the spec tree through `sdd_core` exactly as it
+  always did: no dependency is mutual, nothing needs acknowledging, and the tree now
+  declares no `trustedLinks` anywhere.
+- **No method carries an `invokedBy` any more.** Every edge the seam needs is drawn,
+  including the one from the MCP server that used only to be described.
 
 ### Spec authoring: array deltas upsert, and an optional field can be removed
 
