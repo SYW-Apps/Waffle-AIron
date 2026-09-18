@@ -1,0 +1,36 @@
+kind: value-object
+id: dependency_edges
+name: DependencyEdges
+description: >-
+  Every dependsOn edge in the tree, resolved once per run behind rule_context.dependencyEdges. Five
+  doctrine rules judge these edges, and each of them used to re-pay the same prologue before it
+  could judge anything: walk the components, walk their dependsOn, resolve the id, decide what an
+  unresolved one means, skip an edge with a retired end, tell an intra-subsystem edge from a
+  boundary crossing, and let the governing pack profile license the pair. That prologue is the edge.
+  The pack allowedEdges escape is why this must be one reading: it relaxes the whole intra-subsystem
+  matrix, and a matrix split five ways would otherwise repeat the escape five times — where a
+  licensed edge would escape some parts of it and not others.
+subsystem: sdd_validator
+fields:
+  - name: all
+    type: DependencyEdge[]
+    description: >-
+      Every edge, in component order then declaration order — the ones that reached nothing
+      included, since a reference finding is exactly what they are for
+    optional: false
+  - name: matrix
+    type: DependencyEdge[]
+    description: >-
+      The edges the intra-subsystem stereotype matrix judges: resolved inside one subsystem, both
+      ends live, and unlicensed by the governing pack profile. Their target always resolved
+    optional: false
+methods: []
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Named only by the return of rule_context.dependencyEdges, and unused-detection does not yet
+        count type-method signatures as references. Remove this allow once it does; the stale-allow
+        audit will flag it.
+createdAt: '2026-09-18T01:06:31.002Z'
+updatedAt: '2026-09-18T01:08:11.182Z'

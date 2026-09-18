@@ -30,11 +30,12 @@ import {
   SddRule,
   Severity,
   type CodeIndex,
+  type DependencyEdges,
   type ImportGraph,
   type OwnershipIndex,
   type RealizationIndex,
 } from './types.js';
-import { buildCodeIndex, buildImportGraph, buildOwnershipIndex, buildRealizationIndex } from './read-model.js';
+import { buildCodeIndex, buildDependencyEdges, buildImportGraph, buildOwnershipIndex, buildRealizationIndex } from './read-model.js';
 import { SDD_RULES } from './repository.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { emptyCodeModel } from '../source-analysis.js';
@@ -612,6 +613,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   };
   let ownershipMemo: OwnershipIndex | undefined;
   const ownershipIndex = (): OwnershipIndex => (ownershipMemo ??= buildOwnershipIndex(ctx));
+  let dependencyEdgesMemo: DependencyEdges | undefined;
+  const dependencyEdges = (): DependencyEdges => (dependencyEdgesMemo ??= buildDependencyEdges(ctx));
 
   const ctx: RuleContext = {
     system,
@@ -646,6 +649,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     realizationIndex,
     importGraph,
     ownershipIndex,
+    dependencyEdges,
     complexityConfigFor,
     documentationConfigFor,
     namingConfigFor,

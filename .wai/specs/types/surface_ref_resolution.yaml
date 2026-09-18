@@ -31,12 +31,5 @@ methods:
       providers whose contracts disagree, and the remedy (name the provider, or remove the snapshot
       that no longer applies). Each rule that resolves references reports it under
       SURFACE_REF_AMBIGUOUS itself, so the finding reads the same on every kind of edge.
-lint:
-  allow:
-    - code: UNUSED_TYPE
-      reason: >-
-        Named only by the return of rule_context.resolveSurfaceRef, and unused-detection does not
-        yet count type-method signatures as references. Remove this allow once it does; the
-        stale-allow audit will flag it.
 createdAt: '2026-09-14T06:03:40.298Z'
-updatedAt: '2026-09-14T06:10:14.459Z'
+updatedAt: '2026-09-18T01:09:45.230Z'

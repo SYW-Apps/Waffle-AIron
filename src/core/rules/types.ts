@@ -131,6 +131,73 @@ export interface ImportGraph {
 }
 
 /**
+ * Where a dependsOn edge lands, decided once per edge so the rules that judge
+ * it never re-derive it. The six answers are exhaustive: a ref either names a
+ * component in this tree (`internal` when it shares the source's subsystem,
+ * `cross-subsystem` when it does not), or it leaves the tree and a vendored
+ * surface snapshot declares it (`surface`) or several providers' snapshots
+ * disagree about it (`ambiguous`), or nothing declares it — `unpinned` when it
+ * was authored to leave this root, `missing` when it is a local typo.
+ */
+export type EdgeReach =
+  | 'internal'
+  | 'cross-subsystem'
+  | 'surface'
+  | 'ambiguous'
+  | 'unpinned'
+  | 'missing';
+
+/**
+ * dependency_edge — one dependsOn edge, resolved: what declares it, what it
+ * names, what that reached, and the verdicts every consumer would otherwise
+ * re-derive (retirement, draft context, pack licensing).
+ */
+export interface DependencyEdge {
+  /** The component whose dependsOn declares the edge. */
+  from: ComponentSpec;
+  /** The dependency id exactly as the spec names it. */
+  ref: string;
+  /** Where the ref lands (see EdgeReach). */
+  reach: EdgeReach;
+  /** The component the ref names in this tree — set for an `internal` or `cross-subsystem` edge only. */
+  to?: ComponentSpec;
+  /** What the surface snapshots answered — set for a `surface` or `ambiguous` edge only, and then always carrying that kind. */
+  surface?: SurfaceRefResolution;
+  /**
+   * Either end is a retired stereotype, so no boundary or matrix rule judges
+   * the edge: retired-stereotypes reports the component once, and its
+   * migration decides what the edge becomes. Never set on an edge that
+   * resolved nothing — a reference finding stands whatever declares it.
+   */
+  retired: boolean;
+  /** The draft context a finding on this edge takes: the source's, and the target's too once the target resolves. */
+  draftContext: boolean;
+  /**
+   * The governing pack profile's `allowedEdges` licenses this stereotype pair
+   * — the platform's own idiom, declared with a reason. It is carried on the
+   * edge because the matrix is five rules: repeated per rule, a licensed edge
+   * would escape some of them and not others.
+   */
+  licensed: boolean;
+}
+
+/**
+ * dependency_edges — every dependsOn edge in the tree, resolved once per run
+ * behind rule_context.dependencyEdges. Five doctrine rules judge these edges,
+ * and each of them used to re-pay the same prologue before it could judge
+ * anything: walk the components, walk their dependsOn, resolve the id, decide
+ * what an unresolved one means, skip an edge with a retired end, tell an
+ * intra-subsystem edge from a boundary crossing, and let the governing pack
+ * profile license the pair. That prologue is the edge.
+ */
+export interface DependencyEdges {
+  /** Every edge, in component order then declaration order — the ones that reached nothing included. */
+  all: DependencyEdge[];
+  /** The edges the intra-subsystem stereotype matrix judges: resolved inside one subsystem, both ends live, unlicensed. Their target always resolved. */
+  matrix: (DependencyEdge & { to: ComponentSpec })[];
+}
+
+/**
  * ownership_index — which pattern privately owns each member block, the tree's
  * ONE ownership reading. The skips are semantics, not shortcuts: see
  * buildOwnershipIndex for which claims record an owner and which do not.
@@ -249,6 +316,8 @@ export interface RuleContext {
   importGraph(paths?: Set<string>): ImportGraph;
   /** Which pattern privately owns each member block (memoized). */
   ownershipIndex(): OwnershipIndex;
+  /** Every dependsOn edge in the tree, resolved (memoized). */
+  dependencyEdges(): DependencyEdges;
   /** The complexity rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one. */
   complexityConfigFor(subsystemId?: string): ComplexityRuleConfig | undefined;
   /** The documentation rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one. */
@@ -344,7 +413,7 @@ export interface RuleContext {
 export type RuleScope = 'spec' | 'tree';
 
 export interface SddRule {
-  /** Stable rule id (kebab-case), e.g. "stereotype-dependencies". */
+  /** Stable rule id (kebab-case), e.g. "subsystem-boundary-dependencies". */
   name: string;
   /** One-paragraph description of what the rule enforces and why. */
   description: string;

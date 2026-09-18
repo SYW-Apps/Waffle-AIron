@@ -24,8 +24,15 @@ import { logicDeclarationRule } from './intrinsic/logic-declaration.js';
 import { retiredStereotypesRule } from './intrinsic/retired-stereotypes.js';
 import { portalsRule } from './doctrine/portal-endpoints.js';
 import { portalCallAuthRule } from './doctrine/portal-call-auth.js';
-import { stereotypeDepsRule } from './doctrine/stereotype-dependencies.js';
-import { patternsRule } from './doctrine/pattern-ownership.js';
+import { subsystemBoundaryDepsRule } from './doctrine/subsystem-boundary-dependencies.js';
+import { logicDependencyClassRule } from './doctrine/logic-dependency-class.js';
+import { dataBlockDepsRule } from './doctrine/data-block-dependencies.js';
+import { entrypointDepsRule } from './doctrine/entrypoint-dependencies.js';
+import { portalWriteShortcutRule } from './doctrine/portal-write-shortcut.js';
+import { patternMembershipRule } from './doctrine/pattern-membership.js';
+import { patternContainmentRule } from './doctrine/pattern-containment.js';
+import { unownedBlocksRule } from './doctrine/unowned-blocks.js';
+import { memberVisibilityRule } from './doctrine/member-visibility.js';
 import { facadeForwardingRule } from './doctrine/facade-forwarding.js';
 import { profileRegistrationRule } from './extension/profile-registration.js';
 import { profileStereotypeFencingRule } from './extension/profile-stereotype-fencing.js';
@@ -116,8 +123,24 @@ export const SDD_RULES: SddRule[] = [
   // Cross-call auth: a narrative call into an authed Portal must name its
   // credential source (rides with the portal family).
   portalCallAuthRule,
-  stereotypeDepsRule,
-  patternsRule,
+  // Dependencies in five questions, one owner each: where an edge is
+  // allowed to LAND (the boundary, and what an unresolved id means), then
+  // the intra-subsystem matrix by the layer that answers for it — an
+  // Orchestrator's declared class, the data blocks, the entry points and
+  // the process layer — and finally the Portal read-face guard, the one
+  // that reads narratives and dispatch tables rather than dependsOn.
+  subsystemBoundaryDepsRule,
+  logicDependencyClassRule,
+  dataBlockDepsRule,
+  entrypointDepsRule,
+  portalWriteShortcutRule,
+  // Patterns in four questions: who may own and what a claim must name,
+  // what each pattern must contain, which data blocks are left standing
+  // alone, and who may see a private member.
+  patternMembershipRule,
+  patternContainmentRule,
+  unownedBlocksRule,
+  memberVisibilityRule,
   // Facade shape rides with pattern ownership: same §7 doctrine, narrative side.
   facadeForwardingRule,
   // Profiles in three questions, three owners: is the name real (the

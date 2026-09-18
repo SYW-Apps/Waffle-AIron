@@ -1,5 +1,8 @@
 /**
- * Pattern-ownership fixtures (src/core/rules/doctrine/pattern-ownership.ts).
+ * Pattern-ownership fixtures, for the four rules that judge it:
+ * doctrine/pattern-membership.ts (who may own and what a claim must name),
+ * pattern-containment.ts (what each pattern must contain), unowned-blocks.ts
+ * (the data blocks no pattern owns) and member-visibility.ts.
  *
  * Documented intents pinned here:
  *  - EMPTY_PATTERN (error): a pattern must own member blocks.

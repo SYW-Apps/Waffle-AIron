@@ -63,20 +63,18 @@ methods:
       - code: AUTH_SOURCE_UNWIRED
         severity: warning
         summary: 'The presenter declares a component: credential source it does not depend on or own'
-  - name: stereotypeDependencies
+  - name: subsystemBoundaryDependencies
     description: >-
-      Rule stereotype-dependencies. Enforces the component-stereotype interaction matrix and the
-      cross-subsystem shape. The matrix: a Portal reaches the data layer only through
-      Repository/Index READ faces, and writes route through Orchestrators (PORTAL_WRITE_SHORTCUT);
-      Stores are depended upon; Registries write their Store; Adapters are sinks; Views stay
-      passive; an Orchestrator's dependencyClass bounds what it may depend on; a Supervisor reaches
-      data only through workflows; a live Actor is reached through a Supervisor that supervises it;
-      a Query reads its Store; any block may use pure logic. Across subsystems: client Adapter →
-      published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the
-      SOURCE subsystem (the published-Portal target requirement applies either way). A governing
-      pack profile may license intra-subsystem edges the matrix refuses via allowedEdges (its
-      platform idiom, with the stated reason); boundary rules stay unrelaxable.
-    signature: 'stereotypeDependencies(ctx: RuleContext): void'
+      Rule subsystem-boundary-dependencies. Judges every dependsOn edge that leaves its own
+      subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter
+      → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on
+      the SOURCE subsystem (the published-Portal target requirement applies either way). A reference
+      that names nothing in this tree is resolved against the stored surface snapshots: a hit is a
+      DECLARED remote portal and the same Adapter requirement applies to it, snapshots of several
+      providers that disagree make the reference ambiguous, and a reference authored to leave this
+      root that no snapshot covers warns instead of erroring. Boundary rules are never relaxed by a
+      pack profile.
+    signature: 'subsystemBoundaryDependencies(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -103,12 +101,42 @@ methods:
       - code: CROSS_SUBSYSTEM_TARGET_NON_PORTAL
         severity: error
         summary: Cross-subsystem hop entering through a non-Portal
-      - code: ARCHITECTURE_VIOLATION_PORTAL_DEP
+  - name: logicDependencyClass
+    description: >-
+      Rule logic-dependency-class. Bounds an Orchestrator's dependencies by the dependencyClass it
+      declares: pure logic depends only on pure Orchestrators; read logic also on read
+      Orchestrators, Repositories, Indexes and Adapters; an Orchestrator that declares no class is a
+      workflow and may depend on anything the rest of the matrix allows. Whether read logic calls a
+      WRITE method on one of those is judged only once facade methods carry effect tags.
+    signature: 'logicDependencyClass(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DEPENDENCY_CLASS_VIOLATION
         severity: error
-        summary: Component depending on a Portal/Observer
-      - code: ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP
-        severity: error
-        summary: Portal/Observer reaching the data layer directly
+        summary: >-
+          Orchestrator depending on a component its dependencyClass does not allow: pure logic
+          depends only on pure Orchestrators; read logic also on read Orchestrators, Repositories,
+          Indexes and Adapters
+  - name: dataBlockDependencies
+    description: >-
+      Rule data-block-dependencies. Keeps the data layer facing down. A Store may depend only on
+      another Store, a backend Adapter or pure logic — Registries and Indexes depend on the Store,
+      never the reverse. A Registry is the write path to its Store and may depend on that Store, a
+      backend Adapter, or the pure logic that validates the write. An Index is a read projection and
+      a Query a computed read, each over its Store through a backend Adapter where one serves it. An
+      Adapter is a sink toward the system: it may use pure logic, but never a Store or any other
+      Orchestrator.
+    signature: 'dataBlockDependencies(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: ARCHITECTURE_VIOLATION_STORE_DEP
         severity: error
         summary: Store depending on anything but another Store, a backend Adapter or pure logic
@@ -123,21 +151,35 @@ methods:
       - code: ARCHITECTURE_VIOLATION_INDEX_DEP
         severity: error
         summary: Index depending on anything but its Store, an Adapter or pure logic
+      - code: ARCHITECTURE_VIOLATION_QUERY_DEP
+        severity: error
+        summary: Query depending on anything but its Store, a backend Adapter or pure logic
+  - name: entrypointDependencies
+    description: >-
+      Rule entrypoint-dependencies. Judges the edges at the system's entry points and its process
+      layer. Portals and Observers are top-level entry points and subscribers, so nothing may depend
+      on them — and that is the edge's one finding, which is why no other matrix rule judges it.
+      Downward, a Portal dispatches to Orchestrators and may READ through Indexes and Repository
+      facades but never reaches Store/Registry/Query or an Adapter, while an Observer forwards to
+      one Orchestrator or Supervisor over a message-bus Adapter. A View stays a passive presenter. A
+      Supervisor reaches data only through workflows, and a component depending on a live Actor must
+      also depend on a Supervisor that supervises it.
+    signature: 'entrypointDependencies(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ARCHITECTURE_VIOLATION_PORTAL_DEP
+        severity: error
+        summary: Component depending on a Portal/Observer
+      - code: ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP
+        severity: error
+        summary: Portal/Observer reaching the data layer directly
       - code: ARCHITECTURE_VIOLATION_VIEW_DEP
         severity: error
         summary: View depending on persistence layers or on logic that is not pure
-      - code: PORTAL_WRITE_SHORTCUT
-        severity: error
-        summary: >-
-          Portal narrative call or dispatch-table binding reaches a write-effect method on a
-          Repository/Index directly — reads may shortcut, writes route through an Orchestrator
-          (judged on effect-tagged facade methods; untagged methods are not yet judged)
-      - code: DEPENDENCY_CLASS_VIOLATION
-        severity: error
-        summary: >-
-          Orchestrator depending on a component its dependencyClass does not allow: pure logic
-          depends only on pure Orchestrators; read logic also on read Orchestrators, Repositories,
-          Indexes and Adapters
       - code: ARCHITECTURE_VIOLATION_SUPERVISOR_DEP
         severity: error
         summary: >-
@@ -148,15 +190,34 @@ methods:
         summary: >-
           Component depending on a live Actor it does not supervise, without also depending on a
           Supervisor that supervises it — a live Actor is reached by id through its Supervisor
-      - code: ARCHITECTURE_VIOLATION_QUERY_DEP
-        severity: error
-        summary: Query depending on anything but its Store, a backend Adapter or pure logic
-  - name: patternOwnership
+  - name: portalWriteShortcut
     description: >-
-      Rule pattern-ownership. Patterns (Repository/FeatureComponent/RouterComponent) own member
-      blocks with the containment their definition prescribes; blocks own nothing; a member has
-      exactly one owner; and private members are reachable only via their facade or siblings.
-    signature: 'patternOwnership(ctx: RuleContext): void'
+      Rule portal-write-shortcut. A Portal narrative call step or dispatch-table binding that
+      reaches a write-effect method on a Repository or Index directly is the write shortcut: the
+      Portal→data-facade edge is licensed for reads only, and a write routes through an Orchestrator
+      that owns the workflow. A dispatch step reaches its server only through a table binding, so
+      judging every binding judges each dispatch step that takes it, once, where the route is
+      declared. Methods that carry no effect tag are not judged.
+    signature: 'portalWriteShortcut(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PORTAL_WRITE_SHORTCUT
+        severity: error
+        summary: >-
+          Portal narrative call or dispatch-table binding reaches a write-effect method on a
+          Repository/Index directly — reads may shortcut, writes route through an Orchestrator
+          (judged on effect-tagged facade methods; untagged methods are not yet judged)
+  - name: patternMembership
+    description: >-
+      Rule pattern-membership. Only patterns (Repository/FeatureComponent/RouterComponent) own
+      member blocks, and every pattern owns at least one. Each claim must name a component that
+      exists and is itself a building block — patterns compose at the subsystem (L1) level, never by
+      owning one another — and a block has exactly one owner, the first pattern to claim it.
+    signature: 'patternMembership(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -178,6 +239,22 @@ methods:
       - code: SHARED_OWNED_MEMBER
         severity: error
         summary: Block owned by two patterns
+  - name: patternContainment
+    description: >-
+      Rule pattern-containment. Holds each pattern to the containment its definition prescribes. A
+      Repository may own only Store, Registry, Index, Query and (optionally) Adapter, judged member
+      by member. A FeatureComponent owns exactly one Orchestrator (the logic side) and one or more
+      Views (its faces — list, detail, form — sharing the one logic component), and nothing else. A
+      RouterComponent owns exactly one Portal as its facade and at least one other child to route
+      to. A counting pattern that still owns a retired member is not judged until that member is
+      migrated: its counts change with the migration, and STEREOTYPE_RETIRED is the one finding.
+    signature: 'patternContainment(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: REPOSITORY_CONTAINMENT
         severity: error
         summary: Repository owning a non Store/Registry/Index/Query/Adapter member
@@ -187,9 +264,22 @@ methods:
       - code: ROUTER_COMPONENT_CONTAINMENT
         severity: error
         summary: RouterComponent not owning exactly one Portal facade, or owning no children to route to
-      - code: VISIBILITY_VIOLATION
-        severity: error
-        summary: Dependency on a block privately owned by another pattern
+  - name: unownedBlocks
+    description: >-
+      Rule unowned-blocks. Judges the data blocks no pattern owns. A Store may stand alone
+      deliberately — the sanctioned lightweight form for genuinely simple state, acknowledged with a
+      lint.allow — while the recommended shape stays a Repository; what must never happen is folding
+      the state into a consuming component, where no spec, diagram or conformance check can see it
+      again. A Registry standing alone with no Store to write to is either mistyped (the
+      "file-backed Registry" idiom, a fused persistent store that belongs typed Store) or orphaned.
+      A Query has no standalone form at all: it computes reads over its own Repository's Store.
+    signature: 'unownedBlocks(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: UNOWNED_STORE
         severity: warning
         summary: >-
@@ -203,6 +293,23 @@ methods:
       - code: UNOWNED_QUERY
         severity: error
         summary: Query not owned by a Repository — a Query computes reads over its own Repository's Store
+  - name: memberVisibility
+    description: >-
+      Rule member-visibility. A component may depend on a block within its own group (it is the
+      owning pattern, or a sibling member of the same pattern), on any pattern facade, or on a
+      standalone block — never on a block privately owned by ANOTHER pattern, which must be reached
+      through that pattern's facade. A retired depending component is skipped, as everywhere in this
+      family.
+    signature: 'memberVisibility(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: VISIBILITY_VIOLATION
+        severity: error
+        summary: Dependency on a block privately owned by another pattern
   - name: facadeForwarding
     description: >-
       Rule facade-forwarding. A Repository facade method with an authored narrative must be pure 1:1
@@ -221,4 +328,4 @@ methods:
         summary: Pattern facade narrative is not a single call to an owned member
 status: draft
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-09-15T17:42:33.459Z'
+updatedAt: '2026-09-18T01:01:28.570Z'

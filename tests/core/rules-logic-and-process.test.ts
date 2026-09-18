@@ -70,7 +70,7 @@ const byCode = (issues: Issue[], code: string) => issues.filter(i => i.code === 
 const on = (issues: Issue[], specId: string, codes: ReadonlySet<string>) =>
   issues.filter(i => i.specId === specId && codes.has(i.code)).map(i => i.code);
 
-/** Every code the stereotype-dependencies and pattern-ownership rules can report. */
+/** Every code the dependency and pattern rules can report. */
 const SHAPE_CODES: ReadonlySet<string> = new Set([
   'INVALID_DEPENDENCY_REFERENCE', 'CROSS_TREE_REF_UNRESOLVED', 'SURFACE_REF_AMBIGUOUS',
   'CROSS_SUBSYSTEM_NON_ADAPTER', 'CROSS_SUBSYSTEM_PRIVATE_ACCESS', 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL',
@@ -84,7 +84,7 @@ const SHAPE_CODES: ReadonlySet<string> = new Set([
   'UNOWNED_QUERY', 'DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR',
 ]);
 
-describe('stereotype-dependencies: an Orchestrator\'s dependencyClass bounds its dependencies', () => {
+describe('logic-dependency-class: an Orchestrator\'s dependencyClass bounds its dependencies', () => {
   it('pure logic depending on a workflow Orchestrator is DEPENDENCY_CLASS_VIOLATION', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
@@ -172,7 +172,7 @@ describe('stereotype-dependencies: an Orchestrator\'s dependencyClass bounds its
   });
 });
 
-describe('stereotype-dependencies: the process layer', () => {
+describe('entrypoint-dependencies: the process layer', () => {
   it('a Supervisor depending on a Store is ARCHITECTURE_VIOLATION_SUPERVISOR_DEP', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
@@ -343,7 +343,7 @@ describe('facade-forwarding: only a Repository facade is judged', () => {
   });
 });
 
-describe('pattern-ownership: retired members', () => {
+describe('pattern-containment: retired members', () => {
   it('a Repository skips a retired member but still reports a live mistake', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');

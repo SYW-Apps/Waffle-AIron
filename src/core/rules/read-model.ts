@@ -9,7 +9,15 @@ import {
   type ImplementationSpec,
   type SourceFileFacts,
 } from '../../models/index.js';
-import type { CodeIndex, ImportGraph, OwnershipIndex, RealizationIndex, RuleContext } from './types.js';
+import type {
+  CodeIndex,
+  DependencyEdge,
+  DependencyEdges,
+  ImportGraph,
+  OwnershipIndex,
+  RealizationIndex,
+  RuleContext,
+} from './types.js';
 
 // ---------------------------------------------------------------------------
 // The validation run's shared derived read model.
@@ -244,4 +252,81 @@ export function buildOwnershipIndex(ctx: RuleContext): OwnershipIndex {
     ownedMembers: new Set(ownedBy.keys()),
     ownerOf: (memberId) => ownedBy.get(memberId),
   };
+}
+
+/**
+ * dependency_edges — every dependsOn edge in the tree, resolved once.
+ *
+ * Five doctrine rules judge these edges, and each of them used to re-pay the
+ * same prologue before it could judge anything: walk the components, walk
+ * their dependsOn, resolve the id, decide what an unresolved one means, skip
+ * an edge with a retired end, tell an intra-subsystem edge from a boundary
+ * crossing, and let the governing pack profile license the pair. That prologue
+ * is the edge, here, so each rule starts at its own question.
+ *
+ * The pack `allowedEdges` escape is why this must be ONE reading: it relaxes
+ * the whole intra-subsystem matrix, and a matrix split five ways would
+ * otherwise repeat the escape five times — where a licensed edge would escape
+ * some parts of it and not others.
+ */
+export function buildDependencyEdges(ctx: RuleContext): DependencyEdges {
+  const all: DependencyEdge[] = [];
+  const matrix: (DependencyEdge & { to: ComponentSpec })[] = [];
+
+  for (const from of ctx.components) {
+    const fromDraft = ctx.isComponentDraft(from.id);
+    // The governing profile is a property of the SOURCE component, so it is
+    // read once per component rather than once per edge.
+    const profile = ctx.ext.profiles[ctx.getComponentProfile(from.id)];
+
+    for (const ref of from.dependsOn) {
+      const to = ctx.componentMap.get(ref);
+      if (!to) {
+        all.push(offTreeEdge(ctx, from, ref, fromDraft));
+        continue;
+      }
+      const edge = {
+        from,
+        ref,
+        to,
+        reach: (to.subsystem === from.subsystem ? 'internal' : 'cross-subsystem') as EdgeReachResolved,
+        retired: isRetired(from) || isRetired(to),
+        draftContext: fromDraft || ctx.isComponentDraft(to.id),
+        licensed: profile?.allowedEdges?.some(
+          e => e.from.includes(from.componentType) && e.to.includes(to.componentType),
+        ) ?? false,
+      };
+      all.push(edge);
+      if (edge.reach === 'internal' && !edge.retired && !edge.licensed) matrix.push(edge);
+    }
+  }
+
+  return { all, matrix };
+}
+
+/** The two reaches a ref that resolved in this tree can have. */
+type EdgeReachResolved = 'internal' | 'cross-subsystem';
+
+/**
+ * A ref that names no component in this tree. Only a ref authored to LEAVE the
+ * tree — an explicit cross-tree form, or one the loader collapsed at this root
+ * from inside a chained mount — is resolved against the stored surface
+ * snapshots, and only a HIT changes anything: from this root the whole tree is
+ * loaded, so a collapsed ref no snapshot covers is genuinely missing. Snapshots
+ * that answer with different contracts decide nothing either way — the
+ * ambiguity is the verdict.
+ *
+ * The edge is never marked retired: a reference finding stands whatever
+ * declares it, retired or not.
+ */
+function offTreeEdge(ctx: RuleContext, from: ComponentSpec, ref: string, fromDraft: boolean): DependencyEdge {
+  const base = { from, ref, retired: false, draftContext: fromDraft, licensed: false };
+  const external = ctx.isExternalNamespaceRef(ref);
+  if (external || ctx.isCollapsedCrossTreeRef(ref, from.subsystem)) {
+    const surface = ctx.resolveSurfaceRef(ref, from.subsystem);
+    if (surface.kind === 'ambiguous') return { ...base, reach: 'ambiguous', surface };
+    if (surface.kind === 'resolved') return { ...base, reach: 'surface', surface };
+    if (external) return { ...base, reach: 'unpinned' };
+  }
+  return { ...base, reach: 'missing' };
 }
