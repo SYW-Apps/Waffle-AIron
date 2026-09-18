@@ -1,0 +1,55 @@
+kind: value-object
+id: code_index
+name: CodeIndex
+description: >-
+  The run's source-code model keyed for lookup: every path's analysis facts and the three anchor
+  tiers a realization check reads, derived once per run behind rule_context.codeIndex. Eight rules
+  each rebuilt this map for themselves, with subtly different shapes; this is the reconciled one.
+  The model holds one entry per canonical key, and were it to hold two the later one answers —
+  exactly as the keyed maps the rules built did.
+subsystem: sdd_validator
+fields:
+  - name: paths
+    type: Set<string>
+    description: Every canonical path the model holds — the closed set an import specifier is resolved against
+    optional: false
+  - name: exactPaths
+    type: Set<string>
+    description: >-
+      The paths analyzed at exact AST grade: the only files an import graph may accuse from, a
+      measured function be read in, or a module-scope binding be judged in
+    optional: false
+methods:
+  - name: factsAt
+    signature: 'factsAt(path: string): SourceFileFacts | undefined'
+    returns: SourceFileFacts | undefined
+    description: >-
+      The analysis facts for a source path, by its canonical key; undefined when the run analyzed no
+      such path
+  - name: declarationsAt
+    signature: 'declarationsAt(path: string): Set<string>'
+    returns: Set<string>
+    description: >-
+      Declaration-tier anchors of a file: its declaredNames together with its exportedNames — what
+      the declared conformance tier is satisfied by; empty for a path the run never analyzed
+  - name: anchorsAt
+    signature: 'anchorsAt(path: string): Set<string>'
+    returns: Set<string>
+    description: >-
+      Anchored-tier anchors of a file: the declarations together with its anchoredNames — what the
+      anchored conformance tier is satisfied by
+  - name: findingAnchorsAt
+    signature: 'findingAnchorsAt(path: string): Set<string>'
+    returns: Set<string>
+    description: >-
+      The weak anchors of a file alone — string literals and property-access names, without the
+      declarations — which is where a contract method's declared finding code must appear
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Named only by the return of rule_context.codeIndex, and unused-detection does not yet count
+        type-method signatures as references. Remove this allow once it does; the stale-allow audit
+        will flag it.
+createdAt: '2026-09-18T00:21:08.829Z'
+updatedAt: '2026-09-18T00:22:12.680Z'

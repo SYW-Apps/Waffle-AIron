@@ -5,7 +5,7 @@ import { isRetired } from '../../../models/index.js';
  * The INTRINSIC half of the dependency-class family: whether the declaration
  * itself belongs on this component. Logic is an Orchestrator, so a
  * dependencyClass is an Orchestrator property; what the class then allows is
- * the stereotype-dependencies verdict. The check reads one component's own
+ * the logic-dependency-class verdict. The check reads one component's own
  * componentType + dependencyClass and nothing else, so this is `scope: 'spec'`
  * and also runs at the write boundary — a class on the wrong stereotype is
  * refused when authored. The schema refuses any value but pure and read before
@@ -15,7 +15,7 @@ export const logicDeclarationRule: SddRule = {
   name: 'logic-declaration',
   scope: 'spec',
   description:
-    'Only an Orchestrator may declare a dependencyClass (DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR); what the class allows is judged by stereotype-dependencies. Intrinsic to one component: no tree required.',
+    'Only an Orchestrator may declare a dependencyClass (DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR); what the class allows is judged by logic-dependency-class. Intrinsic to one component: no tree required.',
   codes: [
     { code: 'DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR', defaultSeverity: 'error', summary: 'dependencyClass declared on a component that is not an Orchestrator' },
   ],

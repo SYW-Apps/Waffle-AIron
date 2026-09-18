@@ -202,7 +202,9 @@ methods:
   - name: interfaceMethodsOf
     signature: 'interfaceMethodsOf(compId: string): MethodSignature[]'
     returns: MethodSignature[]
-    description: Every contract method across the component's interfaces
+    description: >-
+      Every contract method across the component's interfaces, memoized: eight rules ask per
+      dispatch binding or per narrative step, and the array was rebuilt on every call
   - name: complexityConfigFor
     signature: 'complexityConfigFor(subsystemId?: string): ComplexityRuleConfig | undefined'
     returns: ComplexityRuleConfig | undefined
@@ -228,5 +230,33 @@ methods:
     description: >-
       The naming rule config in force for a subsystem: its profile pack's settings, overlaid with
       the project's own, stereotype patterns merged key by key with the project's key winning
+  - name: codeIndex
+    signature: 'codeIndex(): CodeIndex'
+    returns: CodeIndex
+    description: >-
+      The run's source-code model keyed for lookup, derived on first ask and kept — the one index
+      the conformance family and the narrative detail dial read instead of each building its own
+  - name: realizationIndex
+    signature: 'realizationIndex(): RealizationIndex'
+    returns: RealizationIndex
+    description: Which source files realize which components, both ways, derived on first ask and kept
+  - name: importGraph
+    signature: 'importGraph(paths?: Set<string>): ImportGraph'
+    returns: ImportGraph
+    description: >-
+      The import graph over a closed set of source paths — every path the run analyzed when none is
+      given. Memoized per set, because resolution is string matching against it: a wider set
+      resolves specifiers differently, so two consumers with different sets get two graphs
+  - name: ownershipIndex
+    signature: 'ownershipIndex(): OwnershipIndex'
+    returns: OwnershipIndex
+    description: Which pattern privately owns each member block, derived on first ask and kept
+  - name: dependencyEdges
+    signature: 'dependencyEdges(): DependencyEdges'
+    returns: DependencyEdges
+    description: >-
+      Every dependsOn edge in the tree, resolved on first ask and kept: the prologue the five
+      dependency rules each used to re-pay before they could judge anything, including the pack
+      allowedEdges escape that must relax the whole matrix or none of it
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-17T15:16:03.295Z'
+updatedAt: '2026-09-18T01:06:34.239Z'

@@ -1,0 +1,61 @@
+kind: value-object
+id: dependency_edge
+name: DependencyEdge
+description: >-
+  One dependsOn edge, resolved: what declares it, what it names, what that reached, and the verdicts
+  every consumer would otherwise re-derive — retirement, draft context and pack licensing. Built
+  once per run as part of dependency_edges.
+subsystem: sdd_validator
+fields:
+  - name: from
+    type: ComponentSpec
+    description: The component whose dependsOn declares the edge
+    optional: false
+  - name: ref
+    type: string
+    description: The dependency id exactly as the spec names it
+    optional: false
+  - name: reach
+    type: string
+    description: >-
+      Where the ref lands, decided once so no rule re-derives it. The six answers are exhaustive:
+      internal (a component of the source's own subsystem), cross-subsystem (a component of a peer
+      subsystem in this tree), surface (a vendored surface snapshot declares it), ambiguous
+      (snapshots of several providers expose the name with different contracts, so none of them may
+      judge the edge), unpinned (authored to leave this root, and no snapshot covers it) and missing
+      (nothing in this tree or its snapshots names it)
+    optional: false
+  - name: to
+    type: ComponentSpec
+    description: The component the ref names in this tree; set for an internal or cross-subsystem edge only
+    optional: true
+  - name: surface
+    type: SurfaceRefResolution
+    description: >-
+      What the surface snapshots answered; set for a surface or ambiguous edge only, and then always
+      carrying that kind
+    optional: true
+  - name: retired
+    type: boolean
+    description: >-
+      Either end is a retired stereotype, so no boundary or matrix rule judges the edge:
+      retired-stereotypes reports the component once, and its migration decides what the edge
+      becomes. Never set on an edge that resolved nothing — a reference finding stands whatever
+      declares it
+    optional: false
+  - name: draftContext
+    type: boolean
+    description: >-
+      The draft context a finding on this edge takes: the source's, and the target's too once the
+      target resolves
+    optional: false
+  - name: licensed
+    type: boolean
+    description: >-
+      The governing pack profile's allowedEdges licenses this stereotype pair — the platform's own
+      idiom, declared with a reason. It is carried on the edge because the matrix is five rules:
+      repeated per rule, a licensed edge would escape some of them and not others
+    optional: false
+methods: []
+createdAt: '2026-09-18T01:06:24.794Z'
+updatedAt: '2026-09-18T01:06:24.802Z'

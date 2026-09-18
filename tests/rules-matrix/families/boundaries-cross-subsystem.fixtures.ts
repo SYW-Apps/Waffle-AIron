@@ -1,7 +1,7 @@
 /**
  * Cross-subsystem / cross-tree boundary fixtures for the remaining
- * doctrine/stereotype-dependencies.ts codes (the intra-subsystem matrix lives in
- * boundaries-stereotype-matrix.fixtures.ts).
+ * doctrine/subsystem-boundary-dependencies.ts codes (the intra-subsystem matrix
+ * lives in boundaries-stereotype-matrix.fixtures.ts).
  *
  * Documented intents pinned here (rule description + doc comments):
  *  - CROSS_SUBSYSTEM_NON_ADAPTER (error): only a local client Adapter may

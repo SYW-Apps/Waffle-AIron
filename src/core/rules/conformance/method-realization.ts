@@ -1,9 +1,7 @@
 import {
   defaultConformanceTier,
   methodSourceFile,
-  pathKey,
   type ConformanceTier,
-  type SourceFileFacts,
 } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
@@ -44,14 +42,9 @@ export const methodRealizationRule: SddRule = {
   ],
 
   check(ctx: RuleContext): void {
-    const lookups = new Map<string, { declared: Set<string>; anchored: Set<string>; facts: SourceFileFacts }>();
-    for (const facts of ctx.codeModel.files) {
-      lookups.set(pathKey(facts.path), {
-        declared: new Set([...facts.declaredNames, ...facts.exportedNames]),
-        anchored: new Set([...facts.declaredNames, ...facts.exportedNames, ...facts.anchoredNames]),
-        facts,
-      });
-    }
+    // declarationsAt is the declaration tier (declared + exported names);
+    // anchorsAt adds the weak anchors the `anchored` tier also accepts.
+    const code = ctx.codeIndex();
 
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
@@ -73,12 +66,12 @@ export const methodRealizationRule: SddRule = {
         if (tier === 'off') continue;
         const file = methodSourceFile(methodImpl ?? {}, impl.sourcePath);
         if (!file) continue;
-        const lookup = lookups.get(pathKey(file));
-        if (!lookup || lookup.facts.status !== 'analyzed') continue;
+        const facts = code.factsAt(file);
+        if (!facts || facts.status !== 'analyzed') continue;
 
         const symbol = methodImpl?.symbol ?? method.name;
-        const inDeclared = lookup.declared.has(symbol);
-        const inAnchored = inDeclared || lookup.anchored.has(symbol);
+        const inDeclared = code.declarationsAt(file).has(symbol);
+        const inAnchored = inDeclared || code.anchorsAt(file).has(symbol);
         const realized = tier === 'declared' ? inDeclared : inAnchored;
         if (realized) continue;
 
@@ -89,7 +82,7 @@ export const methodRealizationRule: SddRule = {
         ctx.addIssue(
           'warning',
           'UNREALIZED_METHOD',
-          `Method ${label} of contract "${impl.contract}" is not realized in "${file}" at the "${tier}" tier (analysis grade: ${lookup.facts.analysisGrade}).${weakHint}`,
+          `Method ${label} of contract "${impl.contract}" is not realized in "${file}" at the "${tier}" tier (analysis grade: ${facts.analysisGrade}).${weakHint}`,
           impl.id,
           draft,
         );

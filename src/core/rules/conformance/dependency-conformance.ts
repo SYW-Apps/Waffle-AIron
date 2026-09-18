@@ -1,4 +1,4 @@
-import { implementationSourceFiles, pathKey, resolveImport, type ComponentSpec, type ImplementationSpec } from '../../../models/index.js';
+import { implementationSourceFiles, pathKey, type ComponentSpec, type ImplementationSpec } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -26,24 +26,16 @@ import { RuleContext, SddRule } from '../types.js';
 //     side shares a file (N:1 collapse) — dependency-injection indirection can
 //     also produce false positives, which is why this stays a warning.
 //
-// Resolution is PURE: import specifiers are resolved string-wise against the
-// closed set of component-mapped paths (.js→.ts swaps, index files) — no I/O.
-// Only exact-grade (AST) analyzed files participate; pattern/generic imports
-// are too coarse to accuse anyone with. Type-only imports never reach the
-// model (excluded at collection). Chained-subproject implementations validate
-// standalone in their own run and are skipped here, as in Level 1.
+// Who realizes what comes from the shared realization index; the edges come
+// from the shared import graph, built over the component-mapped exact-grade
+// files ALONE. That closed set is part of the graph's identity: resolution is
+// pure string matching against it (.js→.ts swaps, index files), so widening it
+// would resolve specifiers differently. Only exact-grade (AST) analyzed files
+// participate; pattern/generic imports are too coarse to accuse anyone with.
+// Type-only imports never reach the model (excluded at collection).
+// Chained-subproject implementations validate standalone in their own run and
+// are absent from the realization index, as in Level 1.
 // ---------------------------------------------------------------------------
-
-interface FileNode {
-  /** Normalized project-relative path (forward slashes). */
-  path: string;
-  components: ComponentSpec[];
-  /** First impl id mapped to this file (deterministic finding anchor). */
-  anchorImplId: string;
-  imports: string[];
-  reexports: string[];
-  draft: boolean;
-}
 
 export const dependencyConformanceRule: SddRule = {
   name: 'dependency-conformance',
@@ -55,73 +47,36 @@ export const dependencyConformanceRule: SddRule = {
   ],
 
   check(ctx: RuleContext): void {
-    // ---- build the file→components map (exact-grade, non-chained only) ----
-    const factsByPath = new Map(ctx.codeModel.files.map(f => [pathKey(f.path), f]));
-    const nodes = new Map<string, FileNode>();
-    const filesByComponent = new Map<string, Set<string>>();
-    const implsByComponent = new Map<string, ImplementationSpec[]>();
+    // ---- the mapped files, and the import graph closed over exactly them ----
+    const code = ctx.codeIndex();
+    const realization = ctx.realizationIndex();
+    const isExact = (p: string): boolean => code.exactPaths.has(p);
+    const mappedPaths = new Set(realization.paths.filter(isExact));
+    const graph = ctx.importGraph(mappedPaths);
 
-    for (const impl of ctx.implementations) {
-      const contract = ctx.interfaceMap.get(impl.contract);
-      if (!contract) continue;
-      const component = ctx.componentMap.get(contract.component);
-      if (!component) continue;
-      if (ctx.isInChainedSubproject(component.subsystem)) continue;
-
-      // A component maps to every file its implementation names: the
-      // implementation's own sourcePath and each method's.
-      let mapped = false;
-      for (const file of implementationSourceFiles(impl)) {
-        const p = pathKey(file);
-        const facts = factsByPath.get(p);
-        if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
-
-        let node = nodes.get(p);
-        if (!node) {
-          node = { path: p, components: [], anchorImplId: impl.id, imports: facts.imports, reexports: facts.reexports, draft: false };
-          nodes.set(p, node);
-        }
-        if (!node.components.some(c => c.id === component.id)) node.components.push(component);
-        node.draft = node.draft || ctx.isImplementationDraft(impl);
-
-        if (!filesByComponent.has(component.id)) filesByComponent.set(component.id, new Set());
-        filesByComponent.get(component.id)!.add(p);
-        mapped = true;
+    const exactFiles = new Map<string, string[]>();
+    const filesOf = (compId: string): string[] => {
+      let files = exactFiles.get(compId);
+      if (!files) {
+        files = realization.filesOf(compId).filter(isExact);
+        exactFiles.set(compId, files);
       }
-      if (mapped) {
-        if (!implsByComponent.has(component.id)) implsByComponent.set(component.id, []);
-        implsByComponent.get(component.id)!.push(impl);
-      }
-    }
-
-    const mappedPaths = new Set(nodes.keys());
-
-    // ---- resolve import edges between mapped files ----
-    // Runtime imports are collaboration (checked); export-from re-exports are
-    // surface republication (never accused, but they DO realize a declared
-    // forwarding edge — a portal barrel republishing its orchestrator).
-    const edges = new Map<string, Set<string>>(); // from path -> to paths
-    const realizationEdges = new Map<string, Set<string>>(); // imports ∪ reexports
-    for (const node of nodes.values()) {
-      const targets = new Set<string>();
-      for (const spec of node.imports) {
-        const resolved = resolveImport(node.path, spec, mappedPaths);
-        if (resolved && resolved !== node.path) targets.add(resolved);
-      }
-      edges.set(node.path, targets);
-      const realized = new Set(targets);
-      for (const spec of node.reexports) {
-        const resolved = resolveImport(node.path, spec, mappedPaths);
-        if (resolved && resolved !== node.path) realized.add(resolved);
-      }
-      realizationEdges.set(node.path, realized);
-    }
+      return files;
+    };
+    const mappedImplsOf = (compId: string): ImplementationSpec[] =>
+      realization.implementationsOf(compId)
+        .filter(impl => implementationSourceFiles(impl).some(f => isExact(pathKey(f))));
 
     // ---- justification helpers ----
     const dependsOrOwns = (from: ComponentSpec, toId: string): boolean =>
       from.dependsOn.includes(toId) || (from.owns ?? []).includes(toId);
 
-    // pattern facade ownership, one hop (owner computed once, both directions)
+    // Pattern facade ownership, one hop, both directions. This is the PLAIN
+    // reading — every owns claim, last claimant winning — deliberately NOT the
+    // shared ownership index, which records nothing for an illegal claim. The
+    // two differ only on trees that already carry an ownership ERROR, and
+    // narrowing this map there would turn one finding into two; adopting the
+    // strict reading here is a doctrine decision, not a refactor.
     const ownerOf = new Map<string, ComponentSpec>();
     for (const c of ctx.components) {
       for (const member of c.owns ?? []) ownerOf.set(member, c);
@@ -134,9 +89,9 @@ export const dependencyConformanceRule: SddRule = {
       return from.dependsOn.some(d => published.has(d));
     };
 
-    const edgeJustified = (fromNode: FileNode, toNode: FileNode): boolean => {
-      for (const cf of fromNode.components) {
-        for (const cg of toNode.components) {
+    const edgeJustified = (from: ComponentSpec[], to: ComponentSpec[]): boolean => {
+      for (const cf of from) {
+        for (const cg of to) {
           if (cf.id === cg.id) return true;
           if (dependsOrOwns(cf, cg.id)) return true;
           // mutual wiring collapsed to one file direction: a portal declares
@@ -169,17 +124,22 @@ export const dependencyConformanceRule: SddRule = {
     };
 
     // ---- UNDECLARED_DEPENDENCY: every import edge needs a justification ----
-    for (const [fromPath, targets] of edges) {
-      const fromNode = nodes.get(fromPath)!;
-      for (const toPath of targets) {
-        const toNode = nodes.get(toPath)!;
-        if (edgeJustified(fromNode, toNode)) continue;
+    // Runtime imports are collaboration (checked); export-from re-exports are
+    // surface republication (never accused, but they DO realize a declared
+    // forwarding edge — a portal barrel republishing its orchestrator).
+    const draftAt = (path: string): boolean =>
+      realization.implementationsAt(path).some(impl => ctx.isImplementationDraft(impl));
+    for (const fromPath of mappedPaths) {
+      const fromComponents = realization.componentsAt(fromPath);
+      for (const toPath of graph.importsOf(fromPath)) {
+        const toComponents = realization.componentsAt(toPath);
+        if (edgeJustified(fromComponents, toComponents)) continue;
         ctx.addIssue(
           'warning',
           'UNDECLARED_DEPENDENCY',
-          `"${fromPath}" (realizing ${fromNode.components.map(c => c.id).join(', ')}) imports "${toPath}" (realizing ${toNode.components.map(c => c.id).join(', ')}) but no declared dependsOn/owns edge justifies it — declare the collaboration on the component that actually uses it, or route the cross-subsystem hop through the target's published surface.`,
-          fromNode.anchorImplId,
-          fromNode.draft || toNode.draft,
+          `"${fromPath}" (realizing ${fromComponents.map(c => c.id).join(', ')}) imports "${toPath}" (realizing ${toComponents.map(c => c.id).join(', ')}) but no declared dependsOn/owns edge justifies it — declare the collaboration on the component that actually uses it, or route the cross-subsystem hop through the target's published surface.`,
+          realization.implementationsAt(fromPath)[0]?.id,
+          draftAt(fromPath) || draftAt(toPath),
         );
       }
     }
@@ -188,25 +148,9 @@ export const dependencyConformanceRule: SddRule = {
     // A trace is a runtime import, a re-export (barrel forwarding), or — for a
     // mounting declarer (Portal/Observer) — the REVERSE import (the server
     // file imports the portal's file; mutual wiring, one file direction).
-    const hasImportBetween = (fromFiles: Set<string>, toFiles: Set<string>, allowReverse: boolean): boolean => {
-      for (const f of fromFiles) {
-        const targets = realizationEdges.get(f);
-        if (!targets) continue;
-        for (const t of toFiles) if (targets.has(t)) return true;
-      }
-      if (allowReverse) {
-        for (const t of toFiles) {
-          const reverse = realizationEdges.get(t);
-          if (!reverse) continue;
-          for (const f of fromFiles) if (reverse.has(f)) return true;
-        }
-      }
-      return false;
-    };
-
     for (const component of ctx.components) {
-      const fromFiles = filesByComponent.get(component.id);
-      if (!fromFiles) continue;
+      const fromFiles = filesOf(component.id);
+      if (fromFiles.length === 0) continue;
 
       const isMountingDeclarer = component.componentType === 'Portal' || component.componentType === 'Observer';
       // One edge per distinct target: a pattern may both own a member and
@@ -217,26 +161,24 @@ export const dependencyConformanceRule: SddRule = {
         const target = ctx.componentMap.get(targetId);
         if (!target) continue;
 
-        if (component.subsystem !== target.subsystem) {
-          // Cross-subsystem portal edge: realized when ANY import lands in the
-          // target subsystem's mapped files.
-          const subsystemFiles = new Set<string>();
-          for (const node of nodes.values()) {
-            if (node.components.some(c => c.subsystem === target.subsystem)) subsystemFiles.add(node.path);
-          }
-          if (subsystemFiles.size === 0) continue;
-          for (const f of fromFiles) subsystemFiles.delete(f); // shared files satisfy trivially
-          if (subsystemFiles.size === 0) continue;
-          if (hasImportBetween(fromFiles, subsystemFiles, isMountingDeclarer)) continue;
-        } else {
-          const toFiles = filesByComponent.get(targetId);
-          if (!toFiles) continue; // target unmapped (no source file / non-exact) — Level 1 territory
-          if ([...fromFiles].some(f => toFiles.has(f))) continue; // N:1 same-file collapse
-          if (hasImportBetween(fromFiles, toFiles, isMountingDeclarer)) continue;
-        }
+        // Across subsystems the sanctioned hop is the target subsystem's
+        // published surface, whose barrel is cosmetic at runtime: ANY of its
+        // mapped files proves the wiring, minus the ones shared with the
+        // source (those satisfy trivially). Within one subsystem the target's
+        // own files are the trace targets.
+        const crossSubsystem = component.subsystem !== target.subsystem;
+        const toFiles = crossSubsystem
+          ? realization.filesIn(target.subsystem).filter(p => isExact(p) && !fromFiles.includes(p))
+          : filesOf(targetId);
+        // An empty set is Level 1 territory (an unmapped target, or a target
+        // subsystem whose every mapped file is shared with the source), a
+        // shared file is the N:1 same-file collapse, and a trace realizes the
+        // edge.
+        if (toFiles.length === 0) continue;
+        if (fromFiles.some(f => toFiles.includes(f))) continue;
+        if (graph.connects(fromFiles, toFiles, isMountingDeclarer)) continue;
 
-        const impls = implsByComponent.get(component.id) ?? [];
-        const anchor = impls[0];
+        const impls = mappedImplsOf(component.id);
         const declaredDependsOn = component.dependsOn.includes(targetId);
         const declaredOwns = (component.owns ?? []).includes(targetId);
         const relation = declaredDependsOn && declaredOwns ? 'dependsOn and owns' : declaredDependsOn ? 'dependsOn' : 'owns';
@@ -245,8 +187,8 @@ export const dependencyConformanceRule: SddRule = {
         ctx.addIssue(
           'warning',
           'UNREALIZED_DEPENDENCY',
-          `Component "${component.id}" declares ${relation} "${targetId}", but no runtime import connects their source files (${[...fromFiles].join(', ')} ↛ ${target.subsystem !== component.subsystem ? `subsystem ${target.subsystem}` : [...(filesByComponent.get(targetId) ?? [])].join(', ')}) — either the collaboration is wired indirectly (DI) or the declared edge is stale.`,
-          anchor?.id ?? component.id,
+          `Component "${component.id}" declares ${relation} "${targetId}", but no runtime import connects their source files (${fromFiles.join(', ')} ↛ ${crossSubsystem ? `subsystem ${target.subsystem}` : filesOf(targetId).join(', ')}) — either the collaboration is wired indirectly (DI) or the declared edge is stale.`,
+          impls[0]?.id ?? component.id,
           draft,
         );
       }

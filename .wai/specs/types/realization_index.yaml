@@ -1,0 +1,50 @@
+kind: value-object
+id: realization_index
+name: RealizationIndex
+description: >-
+  Which source files realize which components, both ways, from one walk of the implementations whose
+  contract and component resolve and that do not sit in a chained subproject (a chained child's
+  sourcePaths are relative to its own root, and the child validates them in its own run). Derived
+  once per run behind rule_context.realizationIndex. The relation is deliberately unfiltered: which
+  files may accuse (exact grade) or count as present (analyzed or unreadable) is the reading rule's
+  doctrine, applied against the code index, not a property of who realizes what.
+subsystem: sdd_validator
+fields:
+  - name: paths
+    type: string[]
+    description: Every file those implementations name, canonical keys, in the order they were first named
+    optional: false
+methods:
+  - name: implementationsOf
+    signature: 'implementationsOf(compId: string): ImplementationSpec[]'
+    returns: ImplementationSpec[]
+    description: The implementations realizing a component, in load order
+  - name: implementationsAt
+    signature: 'implementationsAt(path: string): ImplementationSpec[]'
+    returns: ImplementationSpec[]
+    description: >-
+      The implementations naming a file, in load order — N:1 sharing made readable, and the anchor a
+      file-level finding takes
+  - name: filesOf
+    signature: 'filesOf(compId: string): string[]'
+    returns: string[]
+    description: The files a component's implementations name, canonical keys, in declaration order
+  - name: filesIn
+    signature: 'filesIn(subsystemId: string): string[]'
+    returns: string[]
+    description: >-
+      The files named across a whole subsystem — what a cross-subsystem hop is proven against, the
+      published surface's barrel being cosmetic at runtime
+  - name: componentsAt
+    signature: 'componentsAt(path: string): ComponentSpec[]'
+    returns: ComponentSpec[]
+    description: The components a file realizes, in the order their implementations named it
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Named only by the return of rule_context.realizationIndex, and unused-detection does not yet
+        count type-method signatures as references. Remove this allow once it does; the stale-allow
+        audit will flag it.
+createdAt: '2026-09-18T00:21:17.484Z'
+updatedAt: '2026-09-18T00:22:15.156Z'

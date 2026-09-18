@@ -12,6 +12,7 @@ import {
   DocumentationRuleConfig,
   NamingRuleConfig,
   CodeModel,
+  SourceFileFacts,
   SurfaceRefResolution,
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
@@ -65,6 +66,148 @@ export const PROJECT_KINDS = ['fullstack', 'system-of-systems', 'monorepo'] as c
  * string; UNKNOWN_PROFILE flags anything unregistered).
  */
 export type ArchProfile = string;
+
+/**
+ * code_index — the run's source-code model keyed for lookup: every analyzed
+ * path's facts and the three anchor tiers a realization check reads. Eight
+ * rules used to rebuild this map (with subtly different shapes) for
+ * themselves; it is built once per run behind `ctx.codeIndex()`.
+ */
+export interface CodeIndex {
+  /** Every canonical path the model holds — the closed set import specifiers resolve against. */
+  paths: Set<string>;
+  /** The paths analyzed at exact AST grade: the only files an import graph may accuse from, or a measured function be read in. */
+  exactPaths: Set<string>;
+  /** The analysis facts for a path, by its canonical key. */
+  factsAt(path: string): SourceFileFacts | undefined;
+  /** Declaration-tier anchors: the file's declared and exported names. */
+  declarationsAt(path: string): ReadonlySet<string>;
+  /** Anchored-tier anchors: the declarations together with the weak anchors. */
+  anchorsAt(path: string): ReadonlySet<string>;
+  /** The weak anchors alone — string literals and property-access names — which is where a declared finding code must appear. */
+  findingAnchorsAt(path: string): ReadonlySet<string>;
+}
+
+/**
+ * realization_index — which source files realize which components, both ways,
+ * from ONE walk of the implementations whose contract and component resolve
+ * and that do not sit in a chained subproject. The relation is unfiltered:
+ * which files may accuse (exact grade) or count as present (analyzed or
+ * unreadable) is the reading rule's doctrine, not the relation's.
+ */
+export interface RealizationIndex {
+  /** Every file those implementations name, canonical keys, in the order they were first named. */
+  paths: string[];
+  /** The implementations realizing a component, in load order. */
+  implementationsOf(compId: string): ImplementationSpec[];
+  /** The implementations naming a file — N:1 sharing made readable, and the anchor a file-level finding takes. */
+  implementationsAt(path: string): ImplementationSpec[];
+  /** The files a component's implementations name, in declaration order. */
+  filesOf(compId: string): string[];
+  /** The files named across a whole subsystem — what a cross-subsystem hop is proven against, the published barrel being cosmetic at runtime. */
+  filesIn(subsystemId: string): string[];
+  /** The components a file realizes, in the order their implementations named it. */
+  componentsAt(path: string): ComponentSpec[];
+}
+
+/**
+ * import_graph — the resolved import graph over a CLOSED set of source paths.
+ * Resolution is pure string matching against that set, so the set is part of
+ * the graph's identity. Runtime imports are collaboration; export-from
+ * re-exports are surface republication — together they are a file's TRACES,
+ * never an accusation on their own but enough to realize a declared edge.
+ */
+export interface ImportGraph {
+  /** The closed set this graph resolves against, in construction order. */
+  paths: string[];
+  /** A file's resolved runtime-import targets, itself excluded. */
+  importsOf(path: string): ReadonlySet<string>;
+  /** Its imports together with its resolved re-export targets. */
+  tracesOf(path: string): ReadonlySet<string>;
+  /** Whether any trace runs from one file set into the other — or, when the reverse is allowed (the mounting shape), back the other way. */
+  connects(from: Iterable<string>, to: Iterable<string>, allowReverse: boolean): boolean;
+  /** Every path reachable from a file by following traces transitively, the file included; traversal stops at a file the run did not analyze. */
+  reachFrom(path: string): Set<string>;
+}
+
+/**
+ * Where a dependsOn edge lands, decided once per edge so the rules that judge
+ * it never re-derive it. The six answers are exhaustive: a ref either names a
+ * component in this tree (`internal` when it shares the source's subsystem,
+ * `cross-subsystem` when it does not), or it leaves the tree and a vendored
+ * surface snapshot declares it (`surface`) or several providers' snapshots
+ * disagree about it (`ambiguous`), or nothing declares it — `unpinned` when it
+ * was authored to leave this root, `missing` when it is a local typo.
+ */
+export type EdgeReach =
+  | 'internal'
+  | 'cross-subsystem'
+  | 'surface'
+  | 'ambiguous'
+  | 'unpinned'
+  | 'missing';
+
+/**
+ * dependency_edge — one dependsOn edge, resolved: what declares it, what it
+ * names, what that reached, and the verdicts every consumer would otherwise
+ * re-derive (retirement, draft context, pack licensing).
+ */
+export interface DependencyEdge {
+  /** The component whose dependsOn declares the edge. */
+  from: ComponentSpec;
+  /** The dependency id exactly as the spec names it. */
+  ref: string;
+  /** Where the ref lands (see EdgeReach). */
+  reach: EdgeReach;
+  /** The component the ref names in this tree — set for an `internal` or `cross-subsystem` edge only. */
+  to?: ComponentSpec;
+  /** What the surface snapshots answered — set for a `surface` or `ambiguous` edge only, and then always carrying that kind. */
+  surface?: SurfaceRefResolution;
+  /**
+   * Either end is a retired stereotype, so no boundary or matrix rule judges
+   * the edge: retired-stereotypes reports the component once, and its
+   * migration decides what the edge becomes. Never set on an edge that
+   * resolved nothing — a reference finding stands whatever declares it.
+   */
+  retired: boolean;
+  /** The draft context a finding on this edge takes: the source's, and the target's too once the target resolves. */
+  draftContext: boolean;
+  /**
+   * The governing pack profile's `allowedEdges` licenses this stereotype pair
+   * — the platform's own idiom, declared with a reason. It is carried on the
+   * edge because the matrix is five rules: repeated per rule, a licensed edge
+   * would escape some of them and not others.
+   */
+  licensed: boolean;
+}
+
+/**
+ * dependency_edges — every dependsOn edge in the tree, resolved once per run
+ * behind rule_context.dependencyEdges. Five doctrine rules judge these edges,
+ * and each of them used to re-pay the same prologue before it could judge
+ * anything: walk the components, walk their dependsOn, resolve the id, decide
+ * what an unresolved one means, skip an edge with a retired end, tell an
+ * intra-subsystem edge from a boundary crossing, and let the governing pack
+ * profile license the pair. That prologue is the edge.
+ */
+export interface DependencyEdges {
+  /** Every edge, in component order then declaration order — the ones that reached nothing included. */
+  all: DependencyEdge[];
+  /** The edges the intra-subsystem stereotype matrix judges: resolved inside one subsystem, both ends live, unlicensed. Their target always resolved. */
+  matrix: (DependencyEdge & { to: ComponentSpec })[];
+}
+
+/**
+ * ownership_index — which pattern privately owns each member block, the tree's
+ * ONE ownership reading. The skips are semantics, not shortcuts: see
+ * buildOwnershipIndex for which claims record an owner and which do not.
+ */
+export interface OwnershipIndex {
+  /** The member blocks a legal claim was made on — the domain of ownerOf; a block outside it is a facade or standalone. */
+  ownedMembers: Set<string>;
+  /** The pattern that owns a member block, or none when no legal claim was made on it. */
+  ownerOf(memberId: string): string | undefined;
+}
 
 export interface RuleContext {
   system: SystemSpec;
@@ -163,8 +306,18 @@ export interface RuleContext {
    * contract make the reference ambiguous.
    */
   resolveSurfaceRef(ref: string, fromSubsystem?: string): SurfaceRefResolution;
-  /** Every contract method across the component's interfaces. */
+  /** Every contract method across the component's interfaces (memoized — eight rules ask per binding or per step). */
   interfaceMethodsOf(compId: string): MethodSignature[];
+  /** The run's source-code model keyed for lookup (memoized). */
+  codeIndex(): CodeIndex;
+  /** Which files realize which components, both ways (memoized). */
+  realizationIndex(): RealizationIndex;
+  /** The import graph over a closed set of paths — every path the run analyzed when none is given (memoized per set). */
+  importGraph(paths?: Set<string>): ImportGraph;
+  /** Which pattern privately owns each member block (memoized). */
+  ownershipIndex(): OwnershipIndex;
+  /** Every dependsOn edge in the tree, resolved (memoized). */
+  dependencyEdges(): DependencyEdges;
   /** The complexity rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one. */
   complexityConfigFor(subsystemId?: string): ComplexityRuleConfig | undefined;
   /** The documentation rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one. */
@@ -260,7 +413,7 @@ export interface RuleContext {
 export type RuleScope = 'spec' | 'tree';
 
 export interface SddRule {
-  /** Stable rule id (kebab-case), e.g. "stereotype-dependencies". */
+  /** Stable rule id (kebab-case), e.g. "subsystem-boundary-dependencies". */
   name: string;
   /** One-paragraph description of what the rule enforces and why. */
   description: string;

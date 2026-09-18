@@ -2,7 +2,6 @@ import {
   implementationSourceFiles,
   pathKey,
   methodSourceFile,
-  type SourceFileFacts,
 } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
@@ -45,8 +44,7 @@ export const sourceFileLinkageRule: SddRule = {
   ],
 
   check(ctx: RuleContext): void {
-    const factsByPath = new Map<string, SourceFileFacts>();
-    for (const facts of ctx.codeModel.files) factsByPath.set(pathKey(facts.path), facts);
+    const code = ctx.codeIndex();
 
     // A silently degraded gate is worse than a degraded gate: when ts/js files
     // could not be analyzed at exact grade the compiler was not resolvable —
@@ -120,7 +118,7 @@ export const sourceFileLinkageRule: SddRule = {
         const key = pathKey(file);
         if (reported.has(key)) continue;
         reported.add(key);
-        const facts = factsByPath.get(key);
+        const facts = code.factsAt(key);
         if (!facts || facts.status === 'analyzed') continue;
 
         const isImplementationFile = !!impl.sourcePath && pathKey(impl.sourcePath) === key;

@@ -6,8 +6,8 @@ import { validateSddTree } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
-// Doctrine rule fixes: behaviour reported while narrating pattern-ownership,
-// stereotype-dependencies and portal-endpoints, each pinned by a test that
+// Doctrine rule fixes: behaviour reported while narrating the pattern and
+// dependency rules and portal-endpoints, each pinned by a test that
 // failed before its fix.
 // ---------------------------------------------------------------------------
 
@@ -81,7 +81,7 @@ function createTempProject() {
 
 const byCode = (issues: Issue[], code: string) => issues.filter(i => i.code === code);
 
-describe('pattern-ownership: only a pattern\'s owns makes it an owner', () => {
+describe('pattern-membership: only a pattern\'s owns makes it an owner', () => {
   it('a building block owning a Store does not hide that Store from UNOWNED_STORE', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
@@ -127,7 +127,7 @@ describe('pattern-ownership: only a pattern\'s owns makes it an owner', () => {
   });
 });
 
-describe('pattern-ownership: PATTERN_OWNS_PATTERN names a pattern owner', () => {
+describe('pattern-membership: PATTERN_OWNS_PATTERN names a pattern owner', () => {
   it('a building block owning a pattern reports BLOCK_OWNS_MEMBERS only', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
@@ -175,7 +175,7 @@ describe('pattern-ownership: PATTERN_OWNS_PATTERN names a pattern owner', () => 
   });
 });
 
-describe('pattern-ownership: a RouterComponent owns exactly one Portal', () => {
+describe('pattern-containment: a RouterComponent owns exactly one Portal', () => {
   const router = (owns: string) => {
     const proj = createTempProject();
     proj.subsystem('pharmacy-web-ui', 'profile: frontend-reactive');
@@ -197,7 +197,7 @@ describe('pattern-ownership: a RouterComponent owns exactly one Portal', () => {
   });
 });
 
-describe('pattern-ownership: SHARED_OWNED_MEMBER names the first owner', () => {
+describe('pattern-membership: SHARED_OWNED_MEMBER names the first owner', () => {
   it('with three owners, each later claimant is reported against the first', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
@@ -220,7 +220,7 @@ describe('pattern-ownership: SHARED_OWNED_MEMBER names the first owner', () => {
   });
 });
 
-describe('stereotype-dependencies: PORTAL_WRITE_SHORTCUT judges dispatch-table routes', () => {
+describe('portal-write-shortcut: PORTAL_WRITE_SHORTCUT judges dispatch-table routes', () => {
   function bookingTree(binding: { component: string; method: string }, narrative?: string[]) {
     const proj = createTempProject();
     proj.subsystem('scheduling');
@@ -271,7 +271,7 @@ describe('stereotype-dependencies: PORTAL_WRITE_SHORTCUT judges dispatch-table r
   });
 });
 
-describe('stereotype-dependencies: CROSS_SUBSYSTEM_TARGET_NON_PORTAL names the crossing component', () => {
+describe('subsystem-boundary-dependencies: CROSS_SUBSYSTEM_TARGET_NON_PORTAL names the crossing component', () => {
   function billingPublishesItsOrchestrator(crosser: { id: string; type: string }) {
     const proj = createTempProject();
     proj.subsystem('front', 'trustedLinks:\n  - subsystem: billing\n    reason: in-process modular monolith - no network seam wanted between these two');

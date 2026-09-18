@@ -428,6 +428,8 @@ sides of a seam.
 | `structural-conformance` | `source-file-linkage` + `method-realization` + `finding-realization` | three questions about the same code model: does the spec name files that exist, does the file contain the method, does it report the codes the method declares |
 | `narrative-flow` | `narrative-step-config` + `narrative-reachability` + `narrative-jump-edges` | does each step carry the config its type requires, can every step be reached (and do the regions nest), and where do the jump edges land |
 | `contract-symmetry-and-narratives` | `contract-symmetry` + `narrative-target-references` + `cross-tree-references` + `surface-reference-backing` | four questions a user recognizes: does the implementation mirror its contract, does a target inside this tree resolve, does a target that leaves it pin to exactly one declared surface, and does that surface back what the step asks of it |
+| `stereotype-dependencies` | `subsystem-boundary-dependencies` + `logic-dependency-class` + `data-block-dependencies` + `entrypoint-dependencies` + `portal-write-shortcut` | where an edge is allowed to LAND, and then the intra-subsystem matrix by the layer that answers for it — an Orchestrator's declared class, the data blocks, the entry points and the process layer — with the Portal read-face guard last, the one that reads narratives and dispatch tables rather than `dependsOn` |
+| `pattern-ownership` | `pattern-membership` + `pattern-containment` + `unowned-blocks` + `member-visibility` | who may own and what a claim must name, what each pattern must contain, which data blocks are left standing alone, and who may see a private member |
 
 `profile-registration` also checks the project's own `projectType` before each subsystem's profile rather than after —
 the project-wide question first. On wairon's own tree the split retires `wiring_rules_impl`'s
@@ -459,6 +461,65 @@ even unified, so resolving a reference (`cross-tree-references`: ambiguous, unre
 typo) is separated from judging the contract it resolved to (`surface-reference-backing`: the declared collaborator, the
 exposed method or served capability, the asserted guarantees). The four narratives measure 13, 19, 11 and 18. The family's
 `EXCESSIVE_NARRATIVE_STEPS` allow is retired — nothing in it lists more than 20 steps any more.
+
+`stereotype-dependencies` and `pattern-ownership` were the two biggest left — 63 steps at cognitive score 95 and 45 at
+52 — and both were re-paying the same prologue before they could check anything: walk the components, walk their
+`dependsOn`, resolve the id, decide what an unresolved one means, skip an edge with a retired end, tell an
+intra-subsystem edge from a boundary crossing, and let the governing pack profile license the pair. So the prologue is
+extracted first, as a fifth entry in the shared read model the section below describes: `ctx.dependencyEdges()`, the
+run's resolved dependency edges, each carrying what it declares, what it reached, where that lands (`internal`,
+`cross-subsystem`, `surface`, `ambiguous`, `unpinned` or `missing` — six answers, exhaustive), whether either end is
+retired, the draft context a finding on it takes, and whether the profile's `allowedEdges` licenses the stereotype pair.
+`all` is every edge; `matrix` is the subset the intra-subsystem matrix judges, with all three filters already applied.
+The pack escape is the reason the extraction has to come first: it relaxes the WHOLE matrix, and a matrix split five
+ways would otherwise repeat it five times — where a licensed edge would escape some parts of it and not others.
+
+Two behaviours had to survive the cut exactly. `ARCHITECTURE_VIOLATION_PORTAL_DEP` is an edge's ONE finding — nothing
+may depend on a Portal or an Observer, and no consumer-side check reports the same edge again — which was a `continue`
+inside the single loop; `entrypoint-dependencies` keeps it for its own later checks, and the two consumer-side rules
+(`logic-dependency-class`, `data-block-dependencies`) open on the same guard, named as the doctrine it is. And
+`CROSS_SUBSYSTEM_NON_ADAPTER` still carries `surfaceResolved` on the surface-resolved path and not in-tree, which is
+what keeps a chained subproject's verdict at full strength: the two paths stayed two arms of the boundary rule rather
+than being merged on the strength of their shared code.
+
+The nine narratives measure 17, 7, 13, 12, 10 (dependencies) and 16, 10, 7, 3 (patterns). `pattern-containment` needed
+no further per-kind split: a Repository is judged member by member and the two counting patterns share one pass, which
+is 10. `member-visibility` deliberately does NOT read the edge index — it judges the dependency id as authored, and an
+id no pattern owns is nobody's private member whether it names a facade, a standalone block or nothing at all, so
+resolution, reach and licensing decide nothing there. Behaviour is preserved to the letter: the full finding set of all
+561 rule-matrix fixtures (2069 findings) is byte-identical before and after. `doctrine_rules_impl`'s
+`EXCESSIVE_NARRATIVE_STEPS` allow is retired and its `NARRATIVE_COMPLEXITY` allow now names only `portalEndpoints` and
+`portalCallAuth`, the two the family still owes.
+
+### The rules share one derived read model
+
+Four indexes were rebuilt inside individual rules — the same walk, in file after file, with subtly different shapes.
+That is duplicated work and duplicated semantics, and it is why several rules could not be split honestly: a seam that
+forces an index to be rebuilt twice is a bad seam. They are now memoized `RuleContext` methods over named value objects,
+so a pack-authored rule reads them too:
+
+| method | what it holds | who rebuilt it before |
+| --- | --- | --- |
+| `codeIndex()` | every analyzed path's facts, and its three anchor tiers: what the file declares, what is anchored in it, and its finding anchors | the seven code↔spec conformance rules and the narrative detail dial — eight files |
+| `realizationIndex()` | which files realize which components, both ways, plus the implementations behind each — one walk of the implementations whose contract and component resolve and that are not inside a chained subproject | `dependency-conformance` and `integration-conformance`, half-built in `source-file-linkage` |
+| `importGraph(paths?)` | resolved import edges, the re-export pass, the file-set connectivity test and the reachability closure — over a CLOSED path set, which is part of the graph's identity because resolution is string matching against it | `dependency-conformance` (mapped exact-grade files) and `integration-conformance` (every analyzed path) walked their own |
+| `ownershipIndex()` | which pattern privately owns each member block | `pattern-ownership`, which built it inside the loop that reports on it |
+
+`interfaceMethodsOf` is memoized too: eight rules ask it per dispatch binding or per narrative step, and it rebuilt its
+array on every call.
+
+The ownership map is the one whose shape decides findings rather than only speed, so it keeps `pattern-ownership`'s
+semantics exactly: a retired or building-block claimant records nothing, so do an unresolved member and an inner
+pattern, and where two patterns claim one block the first claimant stays the owner. `dependency-conformance` and
+`technology-boundaries` keep their own PLAIN owner maps — every `owns` claim, last claimant winning — because the two
+readings differ on trees that already carry an ownership error, where narrowing the map would turn one finding into two.
+Switching them is a doctrine decision, not a refactor, and each map now says so where it is built.
+
+Behaviour is preserved to the letter: the full finding set of all 561 rule-matrix fixtures (2069 findings, each dumped
+as severity, code, spec id, draft context, surface-resolved flag and message) is byte-identical before and after. On
+wairon's own tree `dependencyConformance` drops from cognitive score 28 to 14 — its file map, its edge pass and two
+near-identical trace branches are gone — and `hiddenState` from 8 to 6, now that the index's own exact-grade set is the
+loop. `patternOwnership` loses the step that recorded the map it reports on.
 
 ### Complexity, naming and cohesion are checked
 

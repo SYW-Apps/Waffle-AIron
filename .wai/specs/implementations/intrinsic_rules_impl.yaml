@@ -132,7 +132,7 @@ methods:
         description: >-
           Branch: does a live component other than an Orchestrator declare a dependencyClass? Only
           the stereotype is judged: the component schema refuses any value but pure and read before
-          a rule runs, and what a class allows is the stereotype-dependencies verdict. A retired
+          a rule runs, and what a class allows is the logic-dependency-class verdict. A retired
           component is skipped: a Specialist's STEREOTYPE_RETIRED is its one finding, and its
           migration sets the class.
         type: branch
@@ -206,4 +206,4 @@ lint:
   allow: []
 status: draft
 createdAt: '2026-09-14T23:17:12.294Z'
-updatedAt: '2026-09-17T21:41:19.180Z'
+updatedAt: '2026-09-18T01:11:41.191Z'

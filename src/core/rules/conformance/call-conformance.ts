@@ -1,4 +1,4 @@
-import { defaultConformanceTier, methodSourceFile, pathKey, type SourceFileFacts } from '../../../models/index.js';
+import { defaultConformanceTier, methodSourceFile, type SourceFileFacts } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -54,8 +54,7 @@ export const callConformanceRule: SddRule = {
     { code: 'CALL_STEP_UNREALIZED', defaultSeverity: 'warning', summary: 'Narrative call step whose target method name (or symbol) never appears among the realized function\'s callees in the method\'s source file (exact grade, set membership)' },
   ],
   check(ctx: RuleContext) {
-    const factsByPath = new Map<string, SourceFileFacts>();
-    for (const f of ctx.codeModel.files) factsByPath.set(pathKey(f.path), f);
+    const code = ctx.codeIndex();
 
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
@@ -76,7 +75,7 @@ export const callConformanceRule: SddRule = {
         // sourcePath, else the implementation's. Exact grade only.
         const file = methodSourceFile(implMethod, impl.sourcePath);
         if (!file) continue;
-        const facts = factsByPath.get(pathKey(file));
+        const facts = code.factsAt(file);
         if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
 
         const fnSymbol = implMethod.symbol ?? implMethod.name;

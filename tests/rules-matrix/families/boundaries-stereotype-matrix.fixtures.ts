@@ -1,18 +1,20 @@
 /**
  * The full stereotype × stereotype `dependsOn` matrix sweep for the
- * dependency-boundary rules in src/core/rules/doctrine/stereotype-dependencies.ts.
+ * intra-subsystem matrix rules in src/core/rules/doctrine/:
+ * logic-dependency-class.ts, data-block-dependencies.ts and
+ * entrypoint-dependencies.ts.
  *
  * Every pair over {Portal, Orchestrator (workflow), pure logic, read logic,
  * Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer} + the
  * Repository pattern gets exactly ONE fixture: illegal edges FIRE their
  * documented code, legal edges get a QUIET control on the code that would
  * police that consumer. A View row (frontend profile) rides along for
- * ARCHITECTURE_VIOLATION_VIEW_DEP, which the same rule module registers.
+ * ARCHITECTURE_VIOLATION_VIEW_DEP, which entrypoint-dependencies registers.
  * Logic is an Orchestrator: pure logic declares dependencyClass pure, read
  * logic dependencyClass read, and an Orchestrator with no class is a workflow.
  *
  * The legal/illegal verdicts are derived from the rules' DOCUMENTED tables —
- * the stereotype-deps rule description + narrative and the architecture
+ * three rule descriptions + narratives and the architecture
  * standard — never from trial runs:
  *
  *  - Portals/Observers are top-level entry points/subscribers and can never be

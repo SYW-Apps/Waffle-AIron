@@ -1,9 +1,7 @@
 import {
   defaultConformanceTier,
   methodSourceFile,
-  pathKey,
   type ConformanceTier,
-  type SourceFileFacts,
 } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
@@ -37,11 +35,9 @@ export const findingRealizationRule: SddRule = {
   ],
 
   check(ctx: RuleContext): void {
-    /** Each file's anchoredNames alone — string literals and property-access names at exact grade (weaker grades add identifiers or words). */
-    const lookups = new Map<string, { findingAnchors: Set<string>; facts: SourceFileFacts }>();
-    for (const facts of ctx.codeModel.files) {
-      lookups.set(pathKey(facts.path), { findingAnchors: new Set(facts.anchoredNames), facts });
-    }
+    // findingAnchorsAt is each file's anchoredNames alone — string literals and
+    // property-access names at exact grade (weaker grades add identifiers or words).
+    const code = ctx.codeIndex();
 
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
@@ -61,15 +57,16 @@ export const findingRealizationRule: SddRule = {
         if (tier === 'off') continue;
         const file = methodSourceFile(methodImpl ?? {}, impl.sourcePath);
         if (!file) continue;
-        const lookup = lookups.get(pathKey(file));
-        if (!lookup || lookup.facts.status !== 'analyzed') continue;
+        const facts = code.factsAt(file);
+        if (!facts || facts.status !== 'analyzed') continue;
+        const findingAnchors = code.findingAnchorsAt(file);
 
         for (const finding of method.findings) {
-          if (lookup.findingAnchors.has(finding.code)) continue;
+          if (findingAnchors.has(finding.code)) continue;
           ctx.addIssue(
             'warning',
             'UNREALIZED_FINDING',
-            `Method "${method.name}" of contract "${impl.contract}" declares finding "${finding.code}", but "${file}" has no string literal or property-access name "${finding.code}" (analysis grade: ${lookup.facts.analysisGrade}) — report the finding under its declared code, or remove the declaration.`,
+            `Method "${method.name}" of contract "${impl.contract}" declares finding "${finding.code}", but "${file}" has no string literal or property-access name "${finding.code}" (analysis grade: ${facts.analysisGrade}) — report the finding under its declared code, or remove the declaration.`,
             impl.id,
             draft,
           );

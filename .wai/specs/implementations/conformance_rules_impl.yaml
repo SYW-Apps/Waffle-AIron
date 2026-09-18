@@ -10,7 +10,9 @@ methods:
     sourcePath: src/core/rules/conformance/call-conformance.ts
     narrative:
       - stepNumber: 1
-        description: Index ctx.codeModel.files by ctx.codeModel.pathKey(path) into factsByPath
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, derived once and
+          shared with every conformance rule
         type: local
       - stepNumber: 2
         label: implLoop
@@ -44,7 +46,7 @@ methods:
       - stepNumber: 7
         description: >-
           tier = implMethod.conformance ?? specTier; file = implMethod.sourceFile(impl.sourcePath);
-          facts = factsByPath.get(ctx.codeModel.pathKey(file)) when file is named
+          facts = code.factsAt(file) when file is named
         type: local
       - stepNumber: 8
         description: >-
@@ -152,16 +154,13 @@ methods:
         type: local
       - stepNumber: 5
         label: fileLoop
-        description: Judge each source file in the code model
+        description: >-
+          Judge each exact-grade source file: the code index's own exact-grade path set is the loop,
+          so lower analysis grades never reach a verdict to guess at
         type: loop
-        over: ctx.codeModel.files
-        endStep: 8
+        over: ctx.codeIndex().exactPaths
+        endStep: 7
       - stepNumber: 6
-        description: 'Lower analysis grades never guess: continue with the next file'
-        type: branch
-        condition: facts.status is analyzed and facts.analysisGrade is exact
-        onFalseStep: 5
-      - stepNumber: 7
         description: >-
           A file with no module-scope let or var, an unmapped file, or a file also mapped to any
           component that is not stateless logic is exempt: a data or boundary component's file hosts
@@ -169,12 +168,12 @@ methods:
           definition, so its file may keep module-scope state. Continue with the next file
         type: branch
         condition: >-
-          facts.topLevelMutableBindings is non-empty, mapped =
-          byPath.get(ctx.codeModel.pathKey(facts.path)) is non-empty, and every mapped component is
-          stateless logic: component.isLogic() and not component.holdsState(), which is an
-          Orchestrator (or a Specialist until it is migrated)
+          facts = ctx.codeIndex().factsAt(path) has non-empty topLevelMutableBindings, mapped =
+          byPath.get(path) is non-empty, and every mapped component is stateless logic:
+          component.isLogic() and not component.holdsState(), which is an Orchestrator (or a
+          Specialist until it is migrated)
         onFalseStep: 5
-      - stepNumber: 8
+      - stepNumber: 7
         label: report
         description: >-
           Report HIDDEN_STATE (warning; spec the mapped implementation with the lowest impl.id;
@@ -190,163 +189,115 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Index ctx.codeModel.files by ctx.codeModel.pathKey(path) into factsByPath; start empty
-          nodes (per file: path, components, anchorImplId, imports, reexports, draft),
-          filesByComponent and implsByComponent
+          code = ctx.codeIndex(); realization = ctx.realizationIndex(); mappedPaths = the
+          realization index's paths that code.exactPaths holds. A component maps to every file its
+          implementations name (each implementation's sourcePath and each method's), chained
+          subprojects are absent from the index as in Level 1, and only exact-grade analyzed files
+          participate: pattern and generic imports are too coarse to accuse anyone with
         type: local
       - stepNumber: 2
-        label: implLoop
-        description: Map component files, exact grade and non-chained only
-        type: loop
-        over: ctx.implementations
-        endStep: 8
+        description: >-
+          graph = ctx.importGraph(mappedPaths): the import edges and re-export traces resolved
+          against exactly those files. The closed set is part of the graph's identity, so a
+          specifier can never resolve to a file outside the mapped set. filesOf(compId) =
+          realization.filesOf narrowed to code.exactPaths, kept per component; mappedImplsOf(compId)
+          = the component's implementations that named at least one such file
+        type: local
       - stepNumber: 3
         description: >-
-          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
-          ctx.componentMap.get(contract.component)
+          Build ownerOf over ctx.components: each id in a component's owns maps to that owning
+          component. This is the PLAIN reading — every claim, the last claimant winning —
+          deliberately not ctx.ownershipIndex(), which records nothing for an illegal claim: the two
+          differ only on trees that already carry an ownership error, where narrowing this map would
+          turn one finding into two, so adopting the strict reading here is a doctrine decision
+          rather than a refactor
         type: local
       - stepNumber: 4
-        description: >-
-          Unresolvable implementations are skipped, and chained-subproject implementations validate
-          standalone in their own run as in Level 1: continue with the next implementation
-        type: branch
-        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
-        onFalseStep: 2
-      - stepNumber: 5
-        label: fileLoop
-        description: Map each file the implementation names
-        type: loop
-        over: impl.sourceFiles() (its own sourcePath, then each method's)
-        endStep: 7
-      - stepNumber: 6
-        description: 'Only exact-grade analyzed files participate: continue with the next file'
-        type: branch
-        condition: >-
-          factsByPath holds facts for p = ctx.codeModel.pathKey(file) with status analyzed at
-          analysisGrade exact
-        onFalseStep: 5
-      - stepNumber: 7
-        label: mapFile
-        description: >-
-          Get or create the node for p (anchorImplId = impl.id, imports and reexports from its
-          facts, draft false); add component to node.components when absent; OR
-          ctx.isImplementationDraft(impl) into node.draft; add p to filesByComponent[component.id];
-          note that the implementation mapped a file
-        type: local
-      - stepNumber: 8
-        label: recordImpl
-        description: >-
-          When the implementation mapped at least one file, append impl to
-          implsByComponent[component.id]
-        type: local
-      - stepNumber: 9
-        description: >-
-          Resolve import edges between mapped files with the importing file's
-          facts.resolveImport(specifier, mapped paths), which takes relative specifiers only and
-          tries the joined path, its .js to .ts/.tsx swaps, the .ts/.tsx/.js suffixes and
-          index.ts/index.js: edges[node.path] = the resolved runtime imports other than the node
-          itself; realizationEdges[node.path] = those plus the resolved reexports other than the
-          node itself
-        type: local
-      - stepNumber: 10
-        description: >-
-          Build ownerOf over ctx.components: each id in a component's owns maps to that owning
-          component
-        type: local
-      - stepNumber: 11
         label: edgeLoop
-        description: Every runtime import edge needs a justification
+        description: Every runtime import edge between mapped files needs a justification
         type: loop
-        over: each import edge fromPath to toPath in edges
-        endStep: 14
-      - stepNumber: 12
+        over: >-
+          each import edge fromPath to toPath: for every path in mappedPaths, its graph.importsOf
+          targets
+        endStep: 7
+      - stepNumber: 5
         description: >-
-          justified = the private edgeJustified(fromNode, toNode): true when some component cf of
-          fromNode and cg of toNode are the same component; cf dependsOn or owns cg; they share a
-          subsystem and cg, a Portal or Observer, dependsOn or owns cf (the mounting shape);
-          ownerOf(cg) is cf or cf dependsOn or owns it; ownerOf(cf) is cg or dependsOn or owns cg;
-          both have the same owner; or they sit in different subsystems and cf dependsOn a component
-          published in ctx.publicSet for cg's subsystem (the private declaresSurfaceEdge)
+          justified = the private edgeJustified over realization.componentsAt(fromPath) and
+          realization.componentsAt(toPath): true when some component cf of the importer and cg of
+          the imported are the same component; cf dependsOn or owns cg; they share a subsystem and
+          cg, a Portal or Observer, dependsOn or owns cf (the mounting shape); ownerOf(cg) is cf or
+          cf dependsOn or owns it; ownerOf(cf) is cg or dependsOn or owns cg; both have the same
+          owner; or they sit in different subsystems and cf dependsOn a component published in
+          ctx.publicSet for cg's subsystem (the private declaresSurfaceEdge)
         type: local
-      - stepNumber: 13
+      - stepNumber: 6
         description: A justified edge continues with the next edge
         type: branch
         condition: justified is false
-        onFalseStep: 11
-      - stepNumber: 14
+        onFalseStep: 4
+      - stepNumber: 7
         label: undeclaredReport
         description: >-
-          Report UNDECLARED_DEPENDENCY (warning; spec fromNode.anchorImplId; draft context
-          fromNode.draft or toNode.draft) naming fromPath and toPath with the components each
-          realizes: declare the collaboration on the component that uses it, or route the
+          Report UNDECLARED_DEPENDENCY (warning; spec the first of
+          realization.implementationsAt(fromPath); draft context when any implementation naming
+          either file is ctx.isImplementationDraft) naming fromPath and toPath with the components
+          each realizes: declare the collaboration on the component that uses it, or route the
           cross-subsystem hop through the target's published surface
         type: local
-      - stepNumber: 15
+      - stepNumber: 8
         label: compLoop
-        description: Every declared edge should leave a trace
+        description: >-
+          Every declared edge should leave a trace. A trace is a runtime import or a re-export
+          (barrel forwarding), and for a mounting declarer the reverse import counts too
         type: loop
         over: ctx.components
-        endStep: 23
-      - stepNumber: 16
-        description: An unmapped component continues with the next component
+        endStep: 14
+      - stepNumber: 9
+        description: A component with no exact-grade file continues with the next component
         type: branch
-        condition: filesByComponent has fromFiles for component.id
-        onFalseStep: 15
-      - stepNumber: 17
+        condition: fromFiles = filesOf(component.id) is non-empty
+        onFalseStep: 8
+      - stepNumber: 10
         label: targetLoop
         description: Check each declared edge
         type: loop
         over: >-
           the distinct ids of component.dependsOn then component.owns (targetId), so a target
           declared under both is one edge
-        endStep: 23
-      - stepNumber: 18
+        endStep: 14
+      - stepNumber: 11
         description: An unresolvable target continues with the next target
         type: branch
         condition: ctx.componentMap resolves targetId to target
-        onFalseStep: 17
-      - stepNumber: 19
-        description: Cross-subsystem edges are realized by any import landing in the target subsystem
-        type: branch
-        condition: component.subsystem differs from target.subsystem
-        onFalseStep: 22
-      - stepNumber: 20
+        onFalseStep: 10
+      - stepNumber: 12
         description: >-
-          subsystemFiles = the paths of nodes realizing any component of target.subsystem, minus
-          fromFiles (shared files satisfy trivially)
+          toFiles = across subsystems, the exact-grade files of
+          realization.filesIn(target.subsystem) minus fromFiles, since the published surface's
+          barrel is cosmetic at runtime so any module of the subsystem proves the hop and a shared
+          file satisfies it trivially; within one subsystem, filesOf(targetId)
         type: local
-      - stepNumber: 21
+      - stepNumber: 13
+        label: traceGuard
         description: >-
-          The private hasImportBetween finds a trace when a realizationEdges target of some
-          from-file is a to-file, or, with reverse allowed for a mounting declarer, a
-          realizationEdges target of some to-file is a from-file. An empty set or a trace continues
-          with the next target
+          An empty toFiles is Level 1 territory (an unmapped target, or a target subsystem whose
+          every mapped file is shared with the source), a shared file is the N:1 same-file collapse,
+          and a trace realizes the edge: continue with the next target
         type: branch
         condition: >-
-          subsystemFiles is non-empty and hasImportBetween(fromFiles, subsystemFiles, component is a
-          Portal or Observer) is false
-        onTrueStep: 23
-        onFalseStep: 17
-      - stepNumber: 22
-        label: sameSubsystem
-        description: >-
-          An unmapped target is Level 1 territory, a shared file is the N:1 same-file collapse, and
-          a trace realizes the edge: continue with the next target
-        type: branch
-        condition: >-
-          filesByComponent has toFiles for targetId, fromFiles and toFiles share no file, and
-          hasImportBetween(fromFiles, toFiles, component is a Portal or Observer) is false
-        onFalseStep: 17
-      - stepNumber: 23
+          toFiles is non-empty, fromFiles and toFiles share no file, and graph.connects(fromFiles,
+          toFiles, component is a Portal or Observer) is false
+        onFalseStep: 10
+      - stepNumber: 14
         label: unrealizedReport
         description: >-
-          Report UNREALIZED_DEPENDENCY (warning; spec the first implementation in
-          implsByComponent[component.id], else component.id; draft context when
-          ctx.isComponentDraft(component.id), ctx.isComponentDraft(targetId), or any of those
-          implementations is ctx.isImplementationDraft) naming the edge as dependsOn and owns when
-          both declare targetId, else as whichever of the two does, with fromFiles and the target
-          subsystem across subsystems or the target's files: the collaboration is wired indirectly
-          (DI) or the declared edge is stale
+          Report UNREALIZED_DEPENDENCY (warning; spec the first of mappedImplsOf(component.id), else
+          component.id; draft context when ctx.isComponentDraft(component.id),
+          ctx.isComponentDraft(targetId), or any of those implementations is
+          ctx.isImplementationDraft) naming the edge as dependsOn and owns when both declare
+          targetId, else as whichever of the two does, with fromFiles and the target subsystem
+          across subsystems or the target's files: the collaboration is wired indirectly (DI) or the
+          declared edge is stale
         type: local
     symbol: check
   - name: integrationConformance
@@ -354,20 +305,19 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Index ctx.codeModel.files by ctx.codeModel.pathKey(path) into factsByPath; allPaths = its
-          keys
+          code = ctx.codeIndex(); realization = ctx.realizationIndex(); graph = ctx.importGraph()
+          over every path the run analyzed — the graph's default closed set, which is the one a
+          harness is walked over
         type: local
       - stepNumber: 2
         description: >-
-          For each implementation whose component resolves through ctx.interfaceMap and
-          ctx.componentMap and does not sit in a chained subproject
-          (!ctx.isInChainedSubproject(component.subsystem): a chained child's sourcePaths are
-          relative to its own root, and the child validates them in its own run): append it to
-          implsByComponent[component.id]; add each of impl.sourceFiles() that exists, by
-          ctx.codeModel.pathKey, to filesByComponent[component.id] and
-          filesBySubsystem[component.subsystem] (it exists when factsByPath holds facts for it with
-          status analyzed or unreadable; a missing or escaped file is structural conformance's
-          finding alone); and when it declares a simPath, add component.subsystem to adopted
+          A named file is a module only when it exists: code.factsAt reports status analyzed or
+          unreadable, a missing or escaped file being structural conformance's finding alone that no
+          harness can reach. modulesOf(compId) = realization.filesOf(compId) narrowed to those, and
+          modulesIn(subsystemId) = realization.filesIn(subsystemId) narrowed the same way — the
+          realization index already leaves out implementations whose component does not resolve and
+          those inside a chained subproject, whose sourcePaths are relative to the child's own root.
+          adopted = the subsystem of every such component whose implementation declares a simPath
         type: local
       - stepNumber: 3
         label: implLoop
@@ -416,9 +366,7 @@ methods:
         label: soundness
         description: 'Soundness half: the declared harness must exist inside the project'
         type: branch
-        condition: >-
-          facts = factsByPath.get(ctx.codeModel.pathKey(impl.simPath)) is absent or has status
-          missing, escaped or unreadable
+        condition: facts = code.factsAt(impl.simPath) is absent or has status missing, escaped or unreadable
         onFalseStep: 13
       - stepNumber: 11
         description: >-
@@ -440,11 +388,11 @@ methods:
         onFalseStep: 3
       - stepNumber: 14
         description: >-
-          reach = the private reachFrom(simPath): the paths reached depth-first from the normalized
-          simPath over the imports and reexports of each reached file with analyzed facts, each
-          specifier resolved by the importing file's facts.resolveImport(specifier, allPaths).
-          ownFiles = filesByComponent.get(comp.id) or empty. missing starts with the component's own
-          module when ownFiles is non-empty and reach holds none of them
+          reach = graph.reachFrom(simPath): the paths reached from the normalized simPath by
+          following the imports and re-exports of each reached analyzed file transitively, every
+          specifier resolved against the graph's closed set. ownFiles = modulesOf(comp.id). missing
+          starts with the component's own module when ownFiles is non-empty and reach holds none of
+          them
         type: local
       - stepNumber: 15
         label: depLoop
@@ -459,10 +407,10 @@ methods:
           subsystems): continue with the next dependency
         type: branch
         condition: >-
-          the private isTechBoundary(dep) is false (no implementation in implsByComponent[dep]
-          declares technologies), depFiles is non-empty (filesBySubsystem.get(depComp.subsystem)
-          when depComp = ctx.componentMap.get(dep) sits in another subsystem, else
-          filesByComponent.get(dep)), and reach holds none of depFiles
+          the private isTechBoundary(dep) is false (no implementation in
+          realization.implementationsOf(dep) declares technologies), depFiles is non-empty
+          (modulesIn(depComp.subsystem) when depComp = ctx.componentMap.get(dep) sits in another
+          subsystem, else modulesOf(dep)), and reach holds none of depFiles
         onFalseStep: 15
       - stepNumber: 17
         label: appendDep
@@ -527,7 +475,9 @@ methods:
     sourcePath: src/core/rules/conformance/source-file-linkage.ts
     narrative:
       - stepNumber: 1
-        description: Index ctx.codeModel.files into factsByPath, keyed by ctx.codeModel.pathKey(facts.path)
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, derived once and
+          shared with every conformance rule
         type: local
       - stepNumber: 2
         description: >-
@@ -657,9 +607,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Index ctx.codeModel.files into lookups keyed by ctx.codeModel.pathKey(facts.path):
-          declared = declaredNames plus exportedNames, anchored = declared plus anchoredNames, each
-          kept with its facts
+          code = ctx.codeIndex(): the shared per-path index, whose declarationsAt is declaredNames
+          plus exportedNames (the declared tier) and whose anchorsAt adds anchoredNames (the
+          anchored tier)
         type: local
       - stepNumber: 2
         label: implLoop
@@ -694,7 +644,7 @@ methods:
         description: >-
           methodImpl = the entry of impl.methods carrying the method's name; tier =
           methodImpl.conformance ?? specTier; file = methodImpl.sourceFile(impl.sourcePath), else
-          impl.sourcePath; lookup = lookups.get(ctx.codeModel.pathKey(file))
+          impl.sourcePath; facts = code.factsAt(file)
         type: local
       - stepNumber: 8
         description: >-
@@ -702,12 +652,13 @@ methods:
           not analyzed (source-file-linkage's own finding covers it, and only the methods realized
           in it are blocked): continue with the next method
         type: branch
-        condition: tier is not off, file is named, and lookup holds facts with status analyzed
+        condition: tier is not off, file is named, and facts exist with status analyzed
         onFalseStep: 6
       - stepNumber: 9
         description: >-
-          symbol = methodImpl.symbol ?? method.name; realized = lookup.declared holds symbol at tier
-          declared, and lookup.declared or lookup.anchored holds it at any other tier
+          symbol = methodImpl.symbol ?? method.name; realized = code.declarationsAt(file) holds
+          symbol at tier declared, and code.declarationsAt(file) or code.anchorsAt(file) holds it at
+          any other tier
         type: local
       - stepNumber: 10
         description: A realized method continues with the next method
@@ -719,8 +670,8 @@ methods:
         description: >-
           Report UNREALIZED_METHOD (warning; spec impl.id; draft context from draft) naming the
           method (with its symbol when one is mapped), impl.contract, file, tier and
-          lookup.facts.analysisGrade; adds the weak-anchor hint when the tier is declared and only
-          lookup.anchored holds symbol
+          facts.analysisGrade; adds the weak-anchor hint when the tier is declared and only
+          code.anchorsAt(file) holds symbol
         type: local
     symbol: check
   - name: findingRealization
@@ -728,10 +679,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Index ctx.codeModel.files into lookups keyed by ctx.codeModel.pathKey(facts.path):
-          findingAnchors = anchoredNames alone (string literals and property-access names at exact
-          grade; the pattern grade adds every identifier outside comments, the generic grade every
-          word), each kept with its facts
+          code = ctx.codeIndex(): the shared per-path index, whose findingAnchorsAt is anchoredNames
+          alone (string literals and property-access names at exact grade; the pattern grade adds
+          every identifier outside comments, the generic grade every word)
         type: local
       - stepNumber: 2
         label: implLoop
@@ -766,7 +716,7 @@ methods:
         description: >-
           methodImpl = the entry of impl.methods carrying the method's name; tier =
           methodImpl.conformance ?? specTier; file = methodImpl.sourceFile(impl.sourcePath), else
-          impl.sourcePath; lookup = lookups.get(ctx.codeModel.pathKey(file))
+          impl.sourcePath; facts = code.factsAt(file)
         type: local
       - stepNumber: 8
         description: >-
@@ -775,8 +725,8 @@ methods:
           continue with the next method
         type: branch
         condition: >-
-          method.findings is non-empty, tier is not off, file is named, and lookup holds facts with
-          status analyzed
+          method.findings is non-empty, tier is not off, file is named, and facts exist with status
+          analyzed
         onFalseStep: 6
       - stepNumber: 9
         label: findingLoop
@@ -789,14 +739,14 @@ methods:
           A code among the file's finding anchors (a string literal, or a property-access name at
           exact grade) continues with the next finding
         type: branch
-        condition: lookup.findingAnchors lacks finding.code
+        condition: code.findingAnchorsAt(file) lacks finding.code
         onFalseStep: 9
       - stepNumber: 11
         label: findingReport
         description: >-
           Report UNREALIZED_FINDING (warning; spec impl.id; draft context from draft) naming the
-          method, impl.contract, finding.code, file and lookup.facts.analysisGrade: report the
-          finding under its declared code, or remove the declaration
+          method, impl.contract, finding.code, file and facts.analysisGrade: report the finding
+          under its declared code, or remove the declaration
         type: local
     symbol: check
 lint:
@@ -807,4 +757,4 @@ lint:
         integrationConformance); the doctrine's own rules are the worst offenders and go first.
 status: draft
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-17T23:00:09.579Z'
+updatedAt: '2026-09-18T00:27:04.042Z'

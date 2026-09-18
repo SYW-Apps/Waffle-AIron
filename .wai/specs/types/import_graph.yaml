@@ -1,0 +1,51 @@
+kind: value-object
+id: import_graph
+name: ImportGraph
+description: >-
+  The resolved import graph over a closed set of source paths. Resolution is pure string matching
+  against that set, so the set is part of the graph's identity: the graph dependency conformance
+  accuses from (component-mapped exact-grade files alone) is a different graph from the one an
+  integration harness is walked over (every path the run analyzed), and rule_context.importGraph
+  keys its memo by the set for exactly that reason. A file's runtime imports are collaboration; its
+  export-from re-exports are surface republication — together they are its traces, never an
+  accusation on their own but enough to realize a declared forwarding edge.
+subsystem: sdd_validator
+fields:
+  - name: paths
+    type: string[]
+    description: The closed set this graph resolves against, in construction order
+    optional: false
+methods:
+  - name: importsOf
+    signature: 'importsOf(path: string): Set<string>'
+    returns: Set<string>
+    description: >-
+      A file's resolved runtime-import targets inside the closed set, itself excluded; empty for a
+      file the run did not analyze
+  - name: tracesOf
+    signature: 'tracesOf(path: string): Set<string>'
+    returns: Set<string>
+    description: >-
+      Its imports together with its resolved re-export targets — the traces a declared edge may be
+      realized by
+  - name: connects
+    signature: 'connects(from: Set<string>, to: Set<string>, allowReverse: boolean): boolean'
+    returns: boolean
+    description: >-
+      Whether any trace runs from one file set into the other — or, when the reverse is allowed (the
+      mounting shape, where the server file imports the portal's), back the other way
+  - name: reachFrom
+    signature: 'reachFrom(path: string): Set<string>'
+    returns: Set<string>
+    description: >-
+      Every path reachable from a file by following traces transitively, the file itself included;
+      traversal stops at a file the run did not analyze
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Named only by the return of rule_context.importGraph, and unused-detection does not yet
+        count type-method signatures as references. Remove this allow once it does; the stale-allow
+        audit will flag it.
+createdAt: '2026-09-18T00:21:25.963Z'
+updatedAt: '2026-09-18T00:22:17.722Z'

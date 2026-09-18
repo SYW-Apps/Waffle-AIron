@@ -41,6 +41,7 @@ export const hiddenStateRule: SddRule = {
   ],
   check(ctx: RuleContext) {
     // Source file → the implementations mapping it (with their components).
+    const code = ctx.codeIndex();
     const byPath = new Map<string, { impl: ImplementationSpec; component: ComponentSpec }[]>();
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
@@ -67,12 +68,14 @@ export const hiddenStateRule: SddRule = {
       }
     }
 
-    for (const facts of ctx.codeModel.files) {
-      if (facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
+    // Only exact-grade analyzed files are judged, so the code index's own
+    // exact-grade set is the loop: lower grades never guess.
+    for (const path of code.exactPaths) {
+      const facts = code.factsAt(path)!;
       const bindings = facts.topLevelMutableBindings ?? [];
       if (bindings.length === 0) continue;
 
-      const mapped = byPath.get(pathKey(facts.path)) ?? [];
+      const mapped = byPath.get(path) ?? [];
       if (mapped.length === 0) continue;
       if (!mapped.every(m => isStatelessLogic(m.component))) continue;
 

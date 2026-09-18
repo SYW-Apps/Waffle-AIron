@@ -55,7 +55,7 @@ methods:
     description: >-
       Rule logic-declaration. Only an Orchestrator may declare a dependencyClass
       (DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR); what the class allows is judged by
-      stereotype-dependencies. Intrinsic to one component: no tree required.
+      logic-dependency-class. Intrinsic to one component: no tree required.
     signature: 'logicDeclaration(ctx: RuleContext): void'
     returns: void
     params:
@@ -88,4 +88,4 @@ methods:
           dependencyClass, a Gateway is a Portal with the gateway variant
 status: draft
 createdAt: '2026-09-14T06:06:25.571Z'
-updatedAt: '2026-09-17T17:47:42.436Z'
+updatedAt: '2026-09-18T01:11:37.248Z'
