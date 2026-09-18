@@ -1,0 +1,29 @@
+kind: value-object
+id: spec_id
+name: SpecId
+description: >-
+  One spec id in the tree, carrying the kind label its findings name it by, gathered once per run
+  behind rule_context.specIds. The id hygiene rules judge ids and nothing else, so reaching them
+  across five typed collections was plumbing each of them unrolled: a check over every id is one
+  loop here. Every id is returned, in scope or not — which specs a rule may accuse is the stance
+  that rule states for itself, never a filter the read model applies on its behalf.
+subsystem: sdd_validator
+fields:
+  - name: id
+    type: string
+    description: The qualified spec id, exactly as the tree holds it
+    optional: false
+  - name: kind
+    type: string
+    description: 'The kind label a finding names it by: Subsystem, Component, Interface, Implementation or Type'
+    optional: false
+methods: []
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Named only by the return of rule_context.specIds, and unused-types does not yet count
+        type-method signatures as references. Remove this allow once it does; the stale-allow audit
+        will flag it.
+createdAt: '2026-09-18T13:02:31.894Z'
+updatedAt: '2026-09-18T13:53:35.620Z'

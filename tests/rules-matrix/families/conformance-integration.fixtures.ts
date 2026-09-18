@@ -1,6 +1,8 @@
 /**
- * Integration conformance (the static sim gate) —
- * src/core/rules/conformance/integration-conformance.ts (docs/design/integration-conformance.md §4).
+ * Integration conformance (the static sim gate) — the family's four rules
+ * under src/core/rules/conformance/: integration-sim-declaration.ts,
+ * integration-sim-file.ts, integration-sim-wiring.ts and
+ * integration-sim-coverage.ts (docs/design/integration-conformance.md §4).
  *
  * Documented intents pinned here (rule description + module doc comment):
  *  - MISSING_INTEGRATION_SIM (warning): once a subsystem adopts sims (its

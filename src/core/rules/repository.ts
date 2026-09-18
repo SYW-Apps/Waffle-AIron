@@ -1,12 +1,15 @@
 import { SddRule, RuleCode } from './types.js';
 
 import { hierarchyRule } from './integrity/hierarchy-integrity.js';
-import { namespaceHygieneRule } from './integrity/namespace-hygiene.js';
+import { reservedIdSegmentsRule } from './integrity/reserved-id-segments.js';
+import { namespaceShadowingRule } from './integrity/namespace-shadowing.js';
 import { roundtripRule } from './integrity/roundtrip-serialization.js';
 import { typeDeclarationsRule } from './integrity/type-declarations.js';
 import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
 import { signatureTypeReferencesRule } from './integrity/signature-type-references.js';
-import { publicSurfaceRule } from './integrity/public-surface.js';
+import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
+import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
+import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { contractSymmetryRule } from './narrative/contract-symmetry.js';
 import { narrativeTargetReferencesRule } from './narrative/narrative-target-references.js';
@@ -16,14 +19,19 @@ import { guaranteeTokensRule } from './narrative/guarantee-tokens.js';
 import { narrativeStepConfigRule } from './narrative/narrative-step-config.js';
 import { narrativeReachabilityRule } from './narrative/narrative-reachability.js';
 import { narrativeJumpEdgesRule } from './narrative/narrative-jump-edges.js';
-import { narrativeAntipatternsRule } from './narrative/narrative-antipatterns.js';
+import { meaninglessBranchesRule } from './narrative/meaningless-branches.js';
+import { inescapableCyclesRule } from './narrative/inescapable-cycles.js';
+import { unconditionalCallCyclesRule } from './narrative/unconditional-call-cycles.js';
 import { narrativeDetailRule } from './narrative/narrative-detail.js';
+import { detailSufficiencyRule } from './narrative/detail-sufficiency.js';
 import { portalFieldsRule } from './intrinsic/portal-fields.js';
 import { durabilityDeclarationRule } from './intrinsic/durability-declaration.js';
 import { logicDeclarationRule } from './intrinsic/logic-declaration.js';
 import { retiredStereotypesRule } from './intrinsic/retired-stereotypes.js';
 import { portalsRule } from './doctrine/portal-endpoints.js';
+import { nonPortalEndpointsRule } from './doctrine/non-portal-endpoints.js';
 import { portalCallAuthRule } from './doctrine/portal-call-auth.js';
+import { authSourceWiringRule } from './doctrine/auth-source-wiring.js';
 import { subsystemBoundaryDepsRule } from './doctrine/subsystem-boundary-dependencies.js';
 import { logicDependencyClassRule } from './doctrine/logic-dependency-class.js';
 import { dataBlockDepsRule } from './doctrine/data-block-dependencies.js';
@@ -39,7 +47,9 @@ import { profileStereotypeFencingRule } from './extension/profile-stereotype-fen
 import { packProfileStereotypesRule } from './extension/pack-profile-stereotypes.js';
 import { patternReferencesRule } from './extension/pattern-references.js';
 import { variantReferencesRule } from './extension/component-variants.js';
-import { declarativeAssertionsRule } from './extension/declarative-assertions.js';
+import { assertionForbiddenEdgesRule } from './extension/assertion-forbidden-edges.js';
+import { assertionRequiredFieldsRule } from './extension/assertion-required-fields.js';
+import { assertionEndpointShapesRule } from './extension/assertion-endpoint-shapes.js';
 import { packResolutionRule } from './extension/pack-resolution.js';
 import { reproducibilityRule } from './extension/pack-reproducibility.js';
 import { cyclesRule } from './wiring/dependency-cycles.js';
@@ -47,10 +57,14 @@ import { dispatchTableBindingsRule } from './wiring/dispatch-table-bindings.js';
 import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
 import { lifecycleRule } from './wiring/lifecycle-entrypoints.js';
 import { reachabilityRule } from './wiring/unused-detection.js';
+import { invokedByDescriptionRule } from './wiring/invoked-by-description.js';
+import { unusedTypesRule } from './wiring/unused-types.js';
 import { durabilityRule } from './wiring/durability-round-trip.js';
 import { untypedSeamRule } from './wiring/untyped-seams.js';
 import { proseClaimRule } from './wiring/prose-claims.js';
+import { uniqueInvariantIdsRule } from './wiring/unique-invariant-ids.js';
 import { invariantBackingRule } from './wiring/invariant-backing.js';
+import { invariantReferencesRule } from './wiring/invariant-references.js';
 import { eventTopologyRule } from './wiring/event-topology.js';
 import { sourceFileLinkageRule } from './conformance/source-file-linkage.js';
 import { methodRealizationRule } from './conformance/method-realization.js';
@@ -58,9 +72,14 @@ import { findingRealizationRule } from './conformance/finding-realization.js';
 import { callConformanceRule } from './conformance/call-conformance.js';
 import { hiddenStateRule } from './conformance/hidden-state.js';
 import { dependencyConformanceRule } from './conformance/dependency-conformance.js';
-import { integrationConformanceRule } from './conformance/integration-conformance.js';
+import { integrationSimDeclarationRule } from './conformance/integration-sim-declaration.js';
+import { integrationSimFileRule } from './conformance/integration-sim-file.js';
+import { integrationSimWiringRule } from './conformance/integration-sim-wiring.js';
+import { integrationSimCoverageRule } from './conformance/integration-sim-coverage.js';
 import { couplingRule } from './heuristic/coupling-health.js';
-import { languageRule } from './heuristic/target-language.js';
+import { signatureLanguageBuiltinsRule } from './heuristic/signature-language-builtins.js';
+import { narrativeLanguageConstructsRule } from './heuristic/narrative-language-constructs.js';
+import { technologyBindingRule } from './heuristic/technology-binding.js';
 import { technologyRule } from './heuristic/technology-boundaries.js';
 import { namingRule } from './heuristic/naming-conventions.js';
 import { complexityRule } from './heuristic/complexity-and-metadata.js';
@@ -84,8 +103,11 @@ import { methodCohesionRule } from './heuristic/method-cohesion.js';
 export const SDD_RULES: SddRule[] = [
   hierarchyRule,
   // Namespace integrity right after hierarchy: unresolvable/unwritable ids
-  // explain many downstream findings, so surface them early in the list.
-  namespaceHygieneRule,
+  // explain many downstream findings, so surface them early in the list. Two
+  // questions of the same ids: the segment no id may spend, and the local name
+  // that would anchor a bare reference to the root instead.
+  reservedIdSegmentsRule,
+  namespaceShadowingRule,
   roundtripRule,
   // The type vocabulary in three questions: what a type declares about
   // itself, then the identifiers its fields name, then the ones its
@@ -111,18 +133,30 @@ export const SDD_RULES: SddRule[] = [
   narrativeStepConfigRule,
   narrativeReachabilityRule,
   narrativeJumpEdgesRule,
-  // Antipatterns right after flow soundness: they analyze the same step
-  // graphs and only make sense once the graphs are structurally valid.
-  narrativeAntipatternsRule,
+  // Antipatterns right after flow soundness: they read the same step graphs
+  // and only make sense once the graphs are structurally valid. Three things
+  // structure alone can prove, in widening scope: a decision that decides
+  // nothing, a step cycle nothing leaves, and a call cycle with no guard.
+  meaninglessBranchesRule,
+  inescapableCyclesRule,
+  unconditionalCallCyclesRule,
+  // The detail dial in two questions: does a method carry the detail its level
+  // promises, and is that level low enough to be hiding something.
   narrativeDetailRule,
+  detailSufficiencyRule,
   // Field shape before endpoint bindings: a Portal-only field on the wrong
   // stereotype explains the endpoint findings around it, and this half is
   // spec-scoped so the write boundary refuses it first.
   portalFieldsRule,
+  // Endpoints from both sides: a Portal binds every method to its transport,
+  // and nothing that is not a Portal may bind one at all.
   portalsRule,
-  // Cross-call auth: a narrative call into an authed Portal must name its
-  // credential source (rides with the portal family).
+  nonPortalEndpointsRule,
+  // Cross-call auth rides with the portal family, in two questions: does a
+  // call into an authed Portal present a credential properly, and does the
+  // source it names resolve to a provider it is wired to.
   portalCallAuthRule,
+  authSourceWiringRule,
   // Dependencies in five questions, one owner each: where an edge is
   // allowed to LAND (the boundary, and what an unresolved id means), then
   // the intra-subsystem matrix by the layer that answers for it — an
@@ -152,9 +186,18 @@ export const SDD_RULES: SddRule[] = [
   patternReferencesRule,
   variantReferencesRule,
   // Pack-instantiated declarative doctrine rides with the pack-reference
-  // family: same data source, same provenance-bearing findings.
-  declarativeAssertionsRule,
-  publicSurfaceRule,
+  // family: same data source, same provenance-bearing findings. One rule per
+  // assertion kind — the kind is what a pack author writes, and each kind
+  // asks its own question of its own collection.
+  assertionForbiddenEdgesRule,
+  assertionRequiredFieldsRule,
+  assertionEndpointShapesRule,
+  // The published surface in three questions: what backs the entry, whether
+  // that component's stereotype can realize the type it declares, and whether
+  // the contract it binds is that component's own.
+  publicSurfaceBindingRule,
+  publicSurfaceDeclaredTypeRule,
+  publicSurfaceBoundContractRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
   // reader sees the broken edge finding next to the unused-detection fallout
@@ -162,7 +205,11 @@ export const SDD_RULES: SddRule[] = [
   dispatchTableBindingsRule,
   dispatchStepRoutingRule,
   lifecycleRule,
+  // The declared entrypoint's own prose before the walk that its declaration
+  // silences, then the walk, then the types no walk can reach.
+  invokedByDescriptionRule,
   reachabilityRule,
+  unusedTypesRule,
   // The declaration (spec-scoped, refused at the write boundary) before the
   // round-trip consequences it enables.
   durabilityDeclarationRule,
@@ -174,8 +221,13 @@ export const SDD_RULES: SddRule[] = [
   untypedSeamRule,
   proseClaimRule,
   // Invariant registry rides with the semantic-edge family: declared entity
-  // invariants must be asserted on every write path (declarations, not proofs).
+  // invariants must be asserted on every write path (declarations, not
+  // proofs). Three questions of one registry: are the entity's ids unique,
+  // does each invariant reach every write path of its owner, and does every
+  // asserted reference name something declared.
+  uniqueInvariantIdsRule,
   invariantBackingRule,
+  invariantReferencesRule,
   // Pub/sub completeness: emitted topics need subscribers and vice versa.
   eventTopologyRule,
   // Code↔spec: structural conformance consumes the injected CodeModel (built
@@ -194,10 +246,22 @@ export const SDD_RULES: SddRule[] = [
   hiddenStateRule,
   dependencyConformanceRule,
   // Integration wiring proof rides after the code↔spec family: it consumes
-  // the same code model and speaks about the same sourcePath modules.
-  integrationConformanceRule,
+  // the same code model and speaks about the same sourcePath modules. Four
+  // questions about one harness, in the order a reader meets them: is one
+  // expected here, does the declared one exist, does it wire the real
+  // modules, does it name every narrated path.
+  integrationSimDeclarationRule,
+  integrationSimFileRule,
+  integrationSimWiringRule,
+  integrationSimCoverageRule,
   couplingRule,
-  languageRule,
+  // Target-language fit in two questions: what a CONTRACT may name, and what
+  // a NARRATIVE may describe.
+  signatureLanguageBuiltinsRule,
+  narrativeLanguageConstructsRule,
+  // The declaration before the consequences: which stereotype may bind a
+  // technology at all, then where its name may appear.
+  technologyBindingRule,
   technologyRule,
   namingRule,
   complexityRule,

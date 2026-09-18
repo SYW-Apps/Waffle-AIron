@@ -57,281 +57,6 @@ methods:
           followed by fixHint
         type: local
     symbol: check
-  - name: narrativeAntipatterns
-    sourcePath: src/core/rules/narrative/narrative-antipatterns.ts
-    narrative:
-      - stepNumber: 1
-        label: methods
-        description: >-
-          For each implementation method, with per implementation component = the component of its
-          contract when ctx.interfaceMap and ctx.componentMap resolve both, and isDraftCtx =
-          ctx.isImplementationDraft(impl); cross-component call edges collect into callEdges, empty
-          at the start
-        type: loop
-        over: each method of each implementation in ctx.implementations
-        endStep: 16
-      - stepNumber: 2
-        description: Skip a method without a narrative
-        type: branch
-        condition: implMethod.narrative has steps
-        onFalseStep: 1
-      - stepNumber: 3
-        description: >-
-          graph = the completed step graph from the private completedStepGraph helper:
-          implMethod.narrative with a completion step appended, a return step numbered one past
-          every step number and every jump field value, read through stepGraph; so each place flow
-          falls off the end of the narrative (a simple step, a parallel arm whose join lies past the
-          end, a branch's true arm, a switch's default, a loop or try exit) continues at the
-          completion step under the step graph's own successor semantics
-        type: local
-      - stepNumber: 4
-        label: decisionSteps
-        description: Look for decisions that decide nothing
-        type: loop
-        over: implMethod.narrative
-        endStep: 8
-      - stepNumber: 5
-        description: Do both arms of a branch go to one step?
-        type: branch
-        condition: >-
-          the step is a branch with onFalseStep set whose targets are a single step: onFalseStep
-          together with onTrueStep when that is set, else together with every step
-          graph.successorsOf(step.stepNumber) continues it at (the true arm's fall-through included:
-          the last step of a parallel arm falls through to its join)
-        onFalseStep: 7
-      - stepNumber: 6
-        description: >-
-          Report MEANINGLESS_BRANCH (warning; draft context isDraftCtx) naming the branch step and
-          the one step both arms go to
-        type: local
-      - stepNumber: 7
-        label: switchCheck
-        description: Do every case and the default of a switch go to one step?
-        type: branch
-        condition: >-
-          the step is a switch with cases whose targets are a single step: its case steps together
-          with defaultStep when that is set, else together with every step
-          graph.successorsOf(step.stepNumber) continues it at (the default's fall-through included:
-          at the end of a parallel arm the join, past the narrative's end the completion step)
-        onFalseStep: 4
-      - stepNumber: 8
-        label: reportSwitch
-        description: >-
-          Report MEANINGLESS_BRANCH (warning; draft context isDraftCtx) naming the switch step and
-          the one step every case and the default go to
-        type: local
-      - stepNumber: 9
-        label: stepCycles
-        description: Look for step cycles that never terminate
-        type: loop
-        over: >-
-          each strongly connected component of the step graph, from the private
-          stronglyConnected(graph.stepNumbers, graph.successorsOf) (iterative Tarjan)
-        endStep: 11
-      - stepNumber: 10
-        description: Is the cycle inescapable?
-        type: branch
-        condition: >-
-          the component is a cycle (more than one step, or a step that is its own successor), no
-          member has a successor outside it, and no member is a return or throw step
-        onFalseStep: 9
-      - stepNumber: 11
-        label: reportCycle
-        description: >-
-          Report INESCAPABLE_CYCLE (warning; draft context isDraftCtx) listing the cycle's steps in
-          ascending order: once entered, the flow never terminates
-        type: local
-      - stepNumber: 12
-        description: The call-cycle pass needs the calling component
-        type: branch
-        condition: the implementation's component resolved
-        onFalseStep: 1
-      - stepNumber: 13
-        label: edgeSteps
-        description: Collect the method's cross-component call edges
-        type: loop
-        over: implMethod.narrative
-        endStep: 16
-      - stepNumber: 14
-        description: >-
-          Resolve the step's call target: a call step with targetComponent and targetMethod targets
-          them; a dispatch step with targetComponent and capability targets the component and method
-          bound to that capability in the portal's dispatch table
-          (ctx.componentMap.get(step.targetComponent)?.dispatch), when one is bound. Register steps
-          are never collected: a handoff defers the invocation, so it cannot recurse
-        type: local
-      - stepNumber: 15
-        description: Does the step make a call into a known component?
-        type: branch
-        condition: a target was resolved and ctx.componentMap has its component
-        onFalseStep: 13
-      - stepNumber: 16
-        label: recordEdge
-        description: >-
-          Add to callEdges the edge from '<component.id>::<method name>' to '<target
-          component>::<target method>' with the implementation, the method name, the step number and
-          the target label 'component.method'; the edge is unconditional when the private
-          isUnavoidable helper finds the step on every path to completion: over the completed step
-          graph with the step removed, the first step cannot complete, where the steps that can
-          complete are the least set in which a return or throw step completes, a parallel header
-          completes when every arm entry does (all arms run), and any other step completes when some
-          successor does
-        type: local
-      - stepNumber: 17
-        description: >-
-          Build the unconditional call graph: adjacency groups the unconditional edges of callEdges
-          by their from key, and its nodes are every from and to key
-        type: local
-      - stepNumber: 18
-        label: callCycles
-        description: Look for call cycles with no guarded edge
-        type: loop
-        over: >-
-          each strongly connected component of the unconditional call graph, from stronglyConnected
-          over the node indices and their adjacency successors
-        endStep: 20
-      - stepNumber: 19
-        description: Is the call cycle unconditional?
-        type: branch
-        condition: >-
-          the component is a cycle (more than one node, or a node with an edge to itself) and has
-          member edges, the unconditional edges between its nodes
-        onFalseStep: 18
-      - stepNumber: 20
-        label: reportCallCycle
-        description: >-
-          Report UNCONDITIONAL_CALL_CYCLE (warning; draft context when any member edge's
-          implementation is ctx.isImplementationDraft) on the implementation of the anchor, the
-          member edge that sorts first by from key, then implementation id, compared by code unit,
-          then step number, naming the cycle's nodes in sorted order and the anchor's step, method,
-          implementation and target: it recurses without a base case
-        type: local
-    symbol: check
-  - name: narrativeDetail
-    sourcePath: src/core/rules/narrative/narrative-detail.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          code = ctx.codeIndex(): the run's source files keyed by canonical path, the same index the
-          conformance family reads
-        type: local
-      - stepNumber: 2
-        label: impls
-        description: For each implementation spec
-        type: loop
-        over: ctx.implementations
-        endStep: 20
-      - stepNumber: 3
-        description: Skip an implementation whose contract does not resolve
-        type: branch
-        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
-        onFalseStep: 2
-      - stepNumber: 4
-        description: >-
-          component = ctx.componentMap.get(contract.component); isDraftCtx =
-          ctx.isImplementationDraft(impl), which the rule computes inline today as the
-          implementation or its contract in draft or design status, or
-          ctx.isComponentDraft(contract.component)
-        type: local
-      - stepNumber: 5
-        label: methods
-        description: Hold each implementation method to its detail level
-        type: loop
-        over: impl.methods
-        endStep: 20
-      - stepNumber: 6
-        description: Skip a method the contract does not define
-        type: branch
-        condition: contract.methods has a method named implMethod.name (contractMethod)
-        onFalseStep: 5
-      - stepNumber: 7
-        description: >-
-          eff = implMethod.effectiveDetail(impl, component): the method's detail, else the
-          implementation's, either one explicit, else the component's defaultNarrativeDetail() (full
-          when the component does not resolve)
-        type: local
-      - stepNumber: 8
-        description: 'Levels are floors, not ceilings: a method with a narrative passes'
-        type: branch
-        condition: implMethod.narrative is empty
-        onFalseStep: 5
-      - stepNumber: 9
-        description: Does the method owe a narrative?
-        type: branch
-        condition: eff.level is full
-        onFalseStep: 12
-      - stepNumber: 10
-        description: >-
-          Report MISSING_NARRATIVE (error when eff.explicit, else warning; draft context isDraftCtx)
-          naming the method and whether full was declared or is the component type's default
-        type: local
-      - stepNumber: 11
-        description: Continue with the next method
-        type: jump
-        toStep: 5
-      - stepNumber: 12
-        label: codeSide
-        description: >-
-          complexityFired = false; tier = implMethod.conformance, else impl.conformance, else
-          component.defaultConformanceTier() (declared when the component does not resolve); file =
-          implMethod.sourceFile(impl.sourcePath)
-        type: local
-      - stepNumber: 13
-        description: >-
-          Detail sufficiency, code side: measure only when the method has a source file of this root
-          and a trusted name-to-symbol mapping
-        type: branch
-        condition: >-
-          file is set, tier is not off, and the component is not in a chained subproject (a resolved
-          component for which ctx.isInChainedSubproject(component.subsystem) holds)
-        onFalseStep: 17
-      - stepNumber: 14
-        description: >-
-          facts = code.factsAt(file); symbol = implMethod.symbol, else implMethod.name; complexity =
-          facts.functionComplexity[symbol] as an own property, only when facts is analyzed at exact
-          grade; limit = ctx.complexityConfigFor(component?.subsystem)?.maxUnnarratedComplexity,
-          else the private DEFAULT_MAX_UNNARRATED_COMPLEXITY (8)
-        type: local
-      - stepNumber: 15
-        description: Is real branching hiding below full?
-        type: branch
-        condition: complexity was measured and exceeds limit
-        onFalseStep: 17
-      - stepNumber: 16
-        description: >-
-          Set complexityFired and report UNNARRATED_COMPLEXITY (warning; draft context isDraftCtx)
-          naming the level, the symbol, the file, the measured complexity and the limit
-        type: local
-      - stepNumber: 17
-        label: specSide
-        description: >-
-          Detail sufficiency, spec side: is a logic stereotype explicitly dialed below its full
-          floor?
-        type: branch
-        condition: >-
-          complexityFired is false, eff.explicit, and the component resolves and component.isLogic()
-          holds: an Orchestrator, Supervisor or Actor (or a Specialist until it is migrated)
-        onFalseStep: 19
-      - stepNumber: 18
-        description: >-
-          Report DETAIL_BELOW_STEREOTYPE (warning; draft context isDraftCtx) naming the explicit
-          level and the logic stereotype whose full floor it sits below
-        type: local
-      - stepNumber: 19
-        label: intentFloor
-        description: Intent, and calls-only with nothing to choreograph, must clear the intent floor
-        type: branch
-        condition: >-
-          contractMethod.passesIntentFloor(implMethod.intent, else contractMethod.description) is
-          false
-        onFalseStep: 5
-      - stepNumber: 20
-        label: reportIntentFloor
-        description: >-
-          Report INTENT_FLOOR (error when eff.explicit, else warning; draft context isDraftCtx)
-          naming the method and its level: its behavioural prose is missing or placeholder-thin
-        type: local
-    symbol: check
   - name: narrativeStepConfig
     sourcePath: src/core/rules/narrative/narrative-step-config.ts
     narrative:
@@ -909,13 +634,388 @@ methods:
           id that does not expose it
         type: local
     symbol: check
-lint:
-  allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: >-
-        D2b splits the narratives this still reports (narrativeAntipatterns and narrativeDetail);
-        contractSymmetryAndNarratives has already been split into contract-symmetry,
-        narrative-target-references, cross-tree-references and surface-reference-backing.
+  - name: meaninglessBranches
+    sourcePath: src/core/rules/narrative/meaningless-branches.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl)
+        type: loop
+        loopKind: forEach
+        over: each method of each implementation in ctx.implementations
+        endStep: 8
+      - stepNumber: 2
+        description: Skip a method without a narrative
+        type: branch
+        condition: implMethod.narrative has steps
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          graph = the completed step graph from the shared completedStepGraph helper:
+          implMethod.narrative with a completion step appended, a return step numbered one past
+          every step number and every jump field value, read through stepGraph; so each place flow
+          falls off the end of the narrative (a simple step, a parallel arm whose join lies past the
+          end, a branch's true arm, a switch's default, a loop or try exit) continues at the
+          completion step under the step graph's own successor semantics
+        type: local
+      - stepNumber: 4
+        label: decisionSteps
+        description: Look for decisions that decide nothing
+        type: loop
+        loopKind: forEach
+        over: implMethod.narrative
+        endStep: 8
+      - stepNumber: 5
+        description: Do both arms of a branch go to one step?
+        type: branch
+        condition: >-
+          the step is a branch with onFalseStep set whose targets are a single step: onFalseStep
+          together with onTrueStep when that is set, else together with every step
+          graph.successorsOf(step.stepNumber) continues it at (the true arm's fall-through included:
+          the last step of a parallel arm falls through to its join)
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report MEANINGLESS_BRANCH (warning; draft context isDraftCtx) naming the branch step and
+          the one step both arms go to
+        type: local
+      - stepNumber: 7
+        label: switchCheck
+        description: Do every case and the default of a switch go to one step?
+        type: branch
+        condition: >-
+          the step is a switch with cases whose targets are a single step: its case steps together
+          with defaultStep when that is set, else together with every step
+          graph.successorsOf(step.stepNumber) continues it at (the default's fall-through included:
+          at the end of a parallel arm the join, past the narrative's end the completion step)
+        onFalseStep: 4
+      - stepNumber: 8
+        label: reportSwitch
+        description: >-
+          Report MEANINGLESS_BRANCH (warning; draft context isDraftCtx) naming the switch step and
+          the one step every case and the default go to
+        type: local
+    symbol: check
+  - name: inescapableCycles
+    sourcePath: src/core/rules/narrative/inescapable-cycles.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl)
+        type: loop
+        loopKind: forEach
+        over: each method of each implementation in ctx.implementations
+        endStep: 6
+      - stepNumber: 2
+        description: Skip a method without a narrative
+        type: branch
+        condition: implMethod.narrative has steps
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          graph = the completed step graph from the shared completedStepGraph helper:
+          implMethod.narrative with a completion step appended, a return step numbered one past
+          every step number and every jump field value, so falling off the end of the narrative
+          counts as leaving the flow under the step graph's own successor semantics
+        type: local
+      - stepNumber: 4
+        label: stepCycles
+        description: Look for step cycles that never terminate
+        type: loop
+        loopKind: forEach
+        over: >-
+          each strongly connected component of the step graph, from the shared
+          stronglyConnected(graph.stepNumbers, graph.successorsOf) (iterative Tarjan)
+        endStep: 6
+      - stepNumber: 5
+        description: Is the cycle inescapable?
+        type: branch
+        condition: >-
+          the component is a cycle (more than one step, or a step that is its own successor), no
+          member has a successor outside it, and no member is a return or throw step
+        onFalseStep: 4
+      - stepNumber: 6
+        label: reportCycle
+        description: >-
+          Report INESCAPABLE_CYCLE (warning; draft context isDraftCtx) listing the cycle's steps in
+          ascending order: once entered, the flow never terminates
+        type: local
+    symbol: check
+  - name: unconditionalCallCycles
+    sourcePath: src/core/rules/narrative/unconditional-call-cycles.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: >-
+          For each implementation method of a component, with component = the component of impl's
+          contract; cross-component call edges collect into callEdges, empty at the start
+        type: loop
+        loopKind: forEach
+        over: >-
+          each method of each implementation in ctx.implementations whose contract resolves in
+          ctx.interfaceMap to a component that resolves in ctx.componentMap
+        endStep: 6
+      - stepNumber: 2
+        description: Skip a method without a narrative
+        type: branch
+        condition: implMethod.narrative has steps
+        onFalseStep: 1
+      - stepNumber: 3
+        label: edgeSteps
+        description: Collect the method's cross-component call edges
+        type: loop
+        loopKind: forEach
+        over: implMethod.narrative
+        endStep: 6
+      - stepNumber: 4
+        description: >-
+          Resolve the step's call target: a call step with targetComponent and targetMethod targets
+          them; a dispatch step with targetComponent and capability targets the component and method
+          bound to that capability in the portal's dispatch table
+          (ctx.componentMap.get(step.targetComponent)?.dispatch), when one is bound. Register steps
+          are never collected: a handoff defers the invocation, so it cannot recurse
+        type: local
+      - stepNumber: 5
+        description: Does the step make a call into a known component?
+        type: branch
+        condition: a target was resolved and ctx.componentMap has its component
+        onFalseStep: 3
+      - stepNumber: 6
+        label: recordEdge
+        description: >-
+          Add to callEdges the edge from '<component.id>::<method name>' to '<target
+          component>::<target method>' with the implementation, the method name, the step number and
+          the target label 'component.method'; the edge is unconditional when the shared
+          isUnavoidable helper finds the step on every path to completion: over the completed step
+          graph with the step removed, the first step cannot complete, where the steps that can
+          complete are the least set in which a return or throw step completes, a parallel header
+          completes when every arm entry does (all arms run), a doWhile header completes only when
+          its body entry does (the body runs before the test, so what the body cannot avoid the loop
+          cannot avoid), a try header never completes around the step its body begins at (it
+          executes before any handler can catch anything; anything deeper in the body stays
+          avoidable, since a throw before it diverts to the handler), and any other step completes
+          when some successor does
+        type: local
+      - stepNumber: 7
+        description: >-
+          Build the unconditional call graph: adjacency groups the unconditional edges of callEdges
+          by their from key, and its nodes are every from and to key
+        type: local
+      - stepNumber: 8
+        label: callCycles
+        description: Look for call cycles with no guarded edge
+        type: loop
+        loopKind: forEach
+        over: >-
+          each strongly connected component of the unconditional call graph, from the shared
+          stronglyConnected over the node indices and their adjacency successors
+        endStep: 10
+      - stepNumber: 9
+        description: Is the call cycle unconditional?
+        type: branch
+        condition: >-
+          the component is a cycle (more than one node, or a node with an edge to itself) and has
+          member edges, the unconditional edges between its nodes
+        onFalseStep: 8
+      - stepNumber: 10
+        label: reportCallCycle
+        description: >-
+          Report UNCONDITIONAL_CALL_CYCLE (warning; draft context when any member edge's
+          implementation is ctx.isImplementationDraft) on the implementation of the anchor, the
+          member edge that sorts first by from key, then implementation id, compared by code unit,
+          then step number, naming the cycle's nodes in sorted order and the anchor's step, method,
+          implementation and target: it recurses without a base case
+        type: local
+    symbol: check
+  - name: narrativeDetail
+    sourcePath: src/core/rules/narrative/narrative-detail.ts
+    narrative:
+      - stepNumber: 1
+        label: impls
+        description: For each implementation spec
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 12
+      - stepNumber: 2
+        description: Skip an implementation whose contract does not resolve
+        type: branch
+        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          component = ctx.componentMap.get(contract.component); isDraftCtx =
+          ctx.isImplementationDraft(impl)
+        type: local
+      - stepNumber: 4
+        label: methods
+        description: Hold each implementation method to its detail level
+        type: loop
+        loopKind: forEach
+        over: impl.methods
+        endStep: 12
+      - stepNumber: 5
+        description: Skip a method the contract does not define
+        type: branch
+        condition: contract.methods has a method named implMethod.name (contractMethod)
+        onFalseStep: 4
+      - stepNumber: 6
+        description: 'Levels are floors, not ceilings: a method with a narrative passes'
+        type: branch
+        condition: implMethod.narrative is empty
+        onFalseStep: 4
+      - stepNumber: 7
+        description: >-
+          eff = implMethod.effectiveDetail(impl, component): the method's detail, else the
+          implementation's, either one explicit, else the component's defaultNarrativeDetail() (full
+          when the component does not resolve)
+        type: local
+      - stepNumber: 8
+        description: Does the method owe a narrative?
+        type: branch
+        condition: eff.level is full
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Report MISSING_NARRATIVE (error when eff.explicit, else warning; draft context isDraftCtx)
+          naming the method and whether full was declared or is the component type's default
+        type: local
+      - stepNumber: 10
+        description: Continue with the next method
+        type: jump
+        toStep: 4
+      - stepNumber: 11
+        label: intentFloor
+        description: Intent, and calls-only with nothing to choreograph, must clear the intent floor
+        type: branch
+        condition: >-
+          contractMethod.passesIntentFloor(implMethod.intent, else contractMethod.description) is
+          false
+        onFalseStep: 4
+      - stepNumber: 12
+        label: reportIntentFloor
+        description: >-
+          Report INTENT_FLOOR (error when eff.explicit, else warning; draft context isDraftCtx)
+          naming the method and its level: its behavioural prose is missing or placeholder-thin
+        type: local
+    symbol: check
+  - name: detailSufficiency
+    sourcePath: src/core/rules/narrative/detail-sufficiency.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, the same index the
+          conformance family reads
+        type: local
+      - stepNumber: 2
+        label: impls
+        description: >-
+          Gather the methods the dial holds below full with nothing written — the only methods this
+          rule judges; dialedDown is empty at the start
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 7
+      - stepNumber: 3
+        description: Skip an implementation whose contract does not resolve
+        type: branch
+        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          component = ctx.componentMap.get(contract.component); draftContext =
+          ctx.isImplementationDraft(impl)
+        type: local
+      - stepNumber: 5
+        label: methods
+        description: >-
+          detail = implMethod.effectiveDetail(impl, component): the method's detail, else the
+          implementation's, either one explicit, else the component's defaultNarrativeDetail() (full
+          when the component does not resolve)
+        type: loop
+        loopKind: forEach
+        over: impl.methods
+        endStep: 7
+      - stepNumber: 6
+        description: >-
+          Is the dial holding this method below full with nothing written? A method the contract
+          does not define is contract-symmetry's finding, levels are floors so a narrated method
+          passes, and a method held to full owes a narrative rather than sufficiency
+          (narrative-detail reports that)
+        type: branch
+        condition: >-
+          contract.methods has a method named implMethod.name, implMethod.narrative is empty, and
+          detail.level is not full
+        onFalseStep: 5
+      - stepNumber: 7
+        label: collect
+        description: >-
+          Add the method to dialedDown with its implementation, its component, its resolved detail
+          and draftContext
+        type: local
+      - stepNumber: 8
+        label: judge
+        description: Judge each dialed-down method on both readings
+        type: loop
+        loopKind: forEach
+        over: dialedDown
+        endStep: 16
+      - stepNumber: 9
+        description: >-
+          tier = implMethod.conformance, else impl.conformance, else
+          component.defaultConformanceTier() (declared when the component does not resolve); file =
+          implMethod.sourceFile(impl.sourcePath); symbol = implMethod.symbol, else implMethod.name;
+          limit = ctx.complexityConfigFor(component?.subsystem)?.maxUnnarratedComplexity, else the
+          private DEFAULT_MAX_UNNARRATED_COMPLEXITY (8)
+        type: local
+      - stepNumber: 10
+        label: codeSide
+        description: >-
+          The code side: measure only when the method has a source file of this root and a trusted
+          name-to-symbol mapping
+        type: branch
+        condition: >-
+          file is set, tier is not off, and the component is not in a chained subproject (a resolved
+          component for which ctx.isInChainedSubproject(component.subsystem) holds)
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          facts = code.factsAt(file); complexity = facts.functionComplexity[symbol] as an own
+          property, only when facts is analyzed at exact grade — a weaker grade measures nothing
+          rather than guessing
+        type: local
+      - stepNumber: 12
+        label: measured
+        description: Is real branching hiding below the dial?
+        type: branch
+        condition: complexity was measured and exceeds limit
+        onFalseStep: 15
+      - stepNumber: 13
+        description: >-
+          Report UNNARRATED_COMPLEXITY (warning; draft context draftContext) naming the level, the
+          symbol, the file, the measured complexity and the limit
+        type: local
+      - stepNumber: 14
+        description: >-
+          Evidence outranks expectation: a method already accused of hiding real branching is not
+          accused twice — continue with the next dialed-down method
+        type: jump
+        toStep: 8
+      - stepNumber: 15
+        label: specSide
+        description: 'The spec side: is a logic stereotype explicitly dialed below its full floor?'
+        type: branch
+        condition: >-
+          detail.explicit, and the component resolves and component.isLogic() holds: an
+          Orchestrator, Supervisor or Actor (or a Specialist until it is migrated)
+        onFalseStep: 8
+      - stepNumber: 16
+        label: belowStereotype
+        description: >-
+          Report DETAIL_BELOW_STEREOTYPE (warning; draft context draftContext) naming the explicit
+          level and the logic stereotype whose full floor it sits below
+        type: local
+    symbol: check
 status: draft
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-18T00:27:11.571Z'
+updatedAt: '2026-09-18T13:52:00.368Z'

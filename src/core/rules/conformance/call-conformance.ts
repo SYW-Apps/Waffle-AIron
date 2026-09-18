@@ -1,4 +1,4 @@
-import { defaultConformanceTier, methodSourceFile, type SourceFileFacts } from '../../../models/index.js';
+import { defaultConformanceTier, type SourceFileFacts } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -56,78 +56,72 @@ export const callConformanceRule: SddRule = {
   check(ctx: RuleContext) {
     const code = ctx.codeIndex();
 
-    for (const impl of ctx.implementations) {
-      const contract = ctx.interfaceMap.get(impl.contract);
-      if (!contract) continue;
-      const component = ctx.componentMap.get(contract.component);
-      if (!component) continue;
-      if (ctx.isInChainedSubproject(component.subsystem)) continue;
+    // ctx.implementationMethods() is the descent — implementation, contract,
+    // component, chained-subproject skip, method, source file — resolved once
+    // for the whole run. What is done with the file it hands over stays here:
+    // the conformance dial and the exact-grade gate are this rule's own
+    // honesty stance, and belong where its accusation is read.
+    for (const entry of ctx.implementationMethods()) {
+      const { implementation: impl, method: implMethod, component, sourceFile: file } = entry;
+      const tier = implMethod.conformance ?? impl.conformance ?? defaultConformanceTier(component);
+      if (tier === 'off') continue;
+      if (!implMethod.narrative.length) continue;
 
-      const specTier = impl.conformance ?? defaultConformanceTier(component);
-      const isDraftCtx = ctx.isImplementationDraft(impl);
+      // The realized function lives in the method's own source file: its
+      // sourcePath, else the implementation's. Exact grade only.
+      if (!file) continue;
+      const facts = code.factsAt(file);
+      if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
 
-      for (const implMethod of impl.methods) {
-        const tier = implMethod.conformance ?? specTier;
-        if (tier === 'off') continue;
-        if (!implMethod.narrative.length) continue;
+      const fnSymbol = implMethod.symbol ?? implMethod.name;
+      const callees = closedCallees(facts, fnSymbol);
+      // The realized function itself is missing — UNREALIZED_METHOD's find,
+      // not ours; a duplicate finding here would just be noise.
+      if (!callees) continue;
 
-        // The realized function lives in the method's own source file: its
-        // sourcePath, else the implementation's. Exact grade only.
-        const file = methodSourceFile(implMethod, impl.sourcePath);
-        if (!file) continue;
-        const facts = code.factsAt(file);
-        if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
+      // Aggregate per method: one finding listing every unrealized call
+      // step, so a method with systematic naming drift reads as one review
+      // item instead of a finding per step.
+      const missing: { step: number; target: string; accepted: string[] }[] = [];
+      for (const step of implMethod.narrative) {
+        if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
+        // A target this tree does not contain is cross-tree-references'
+        // finding (and surface-reference-backing's once it resolves).
+        if (!ctx.componentMap.has(step.targetComponent)) continue;
 
-        const fnSymbol = implMethod.symbol ?? implMethod.name;
-        const callees = closedCallees(facts, fnSymbol);
-        // The realized function itself is missing — UNREALIZED_METHOD's find,
-        // not ours; a duplicate finding here would just be noise.
-        if (!callees) continue;
-
-        // Aggregate per method: one finding listing every unrealized call
-        // step, so a method with systematic naming drift reads as one review
-        // item instead of a finding per step.
-        const missing: { step: number; target: string; accepted: string[] }[] = [];
-        for (const step of implMethod.narrative) {
-          if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
-          // A target this tree does not contain is cross-tree-references'
-          // finding (and surface-reference-backing's once it resolves).
-          if (!ctx.componentMap.has(step.targetComponent)) continue;
-
-          // Accept the contract name or any symbol override a target-side
-          // implementation declares for that method.
-          const accepted = new Set<string>([step.targetMethod]);
-          for (const targetIntf of ctx.interfacesByComponent.get(step.targetComponent) ?? []) {
-            for (const targetImpl of ctx.implementationsByContract.get(targetIntf.id) ?? []) {
-              const targetMethod = targetImpl.methods.find(m => m.name === step.targetMethod);
-              if (targetMethod?.symbol) accepted.add(targetMethod.symbol);
-            }
+        // Accept the contract name or any symbol override a target-side
+        // implementation declares for that method.
+        const accepted = new Set<string>([step.targetMethod]);
+        for (const targetIntf of ctx.interfacesByComponent.get(step.targetComponent) ?? []) {
+          for (const targetImpl of ctx.implementationsByContract.get(targetIntf.id) ?? []) {
+            const targetMethod = targetImpl.methods.find(m => m.name === step.targetMethod);
+            if (targetMethod?.symbol) accepted.add(targetMethod.symbol);
           }
-
-          // N:1 identity forwarding: when the caller's own realized symbol IS
-          // the target name, facade and target collapse onto one function
-          // (pure 1:1 forwarding, barrel republication) — the call step is
-          // realized by identity, exactly as Level 1's N:1 sharing blesses.
-          if (accepted.has(fnSymbol)) continue;
-          if ([...accepted].some(name => callees.has(name))) continue;
-          missing.push({
-            step: step.stepNumber,
-            target: `${step.targetComponent}.${step.targetMethod}`,
-            accepted: [...accepted],
-          });
         }
-        if (missing.length === 0) continue;
-        const detail = missing
-          .map(m => `step ${m.step} → ${m.target} (looked for ${m.accepted.map(a => `"${a}"`).join(' / ')})`)
-          .join('; ');
-        ctx.addIssue(
-          'warning',
-          'CALL_STEP_UNREALIZED',
-          `Method "${implMethod.name}" in implementation "${impl.id}": ${missing.length} narrative call step(s) are not realized as calls of the function "${fnSymbol}" in "${file}" — ${detail}. Callees are matched by name, closed over same-file helpers (exact grade, set membership — order and arguments are not checked). Realize the calls, fix the narrative, or map code names via per-method symbols on the targets.`,
-          impl.id,
-          isDraftCtx,
-        );
+
+        // N:1 identity forwarding: when the caller's own realized symbol IS
+        // the target name, facade and target collapse onto one function
+        // (pure 1:1 forwarding, barrel republication) — the call step is
+        // realized by identity, exactly as Level 1's N:1 sharing blesses.
+        if (accepted.has(fnSymbol)) continue;
+        if ([...accepted].some(name => callees.has(name))) continue;
+        missing.push({
+          step: step.stepNumber,
+          target: `${step.targetComponent}.${step.targetMethod}`,
+          accepted: [...accepted],
+        });
       }
+      if (missing.length === 0) continue;
+      const detail = missing
+        .map(m => `step ${m.step} → ${m.target} (looked for ${m.accepted.map(a => `"${a}"`).join(' / ')})`)
+        .join('; ');
+      ctx.addIssue(
+        'warning',
+        'CALL_STEP_UNREALIZED',
+        `Method "${implMethod.name}" in implementation "${impl.id}": ${missing.length} narrative call step(s) are not realized as calls of the function "${fnSymbol}" in "${file}" — ${detail}. Callees are matched by name, closed over same-file helpers (exact grade, set membership — order and arguments are not checked). Realize the calls, fix the narrative, or map code names via per-method symbols on the targets.`,
+        impl.id,
+        entry.draftContext,
+      );
     }
   },
 };

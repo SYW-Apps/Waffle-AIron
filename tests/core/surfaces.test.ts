@@ -783,7 +783,7 @@ describe('sibling surface projection + pinned siblings', () => {
   it('projects an Observer-backed event surface', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
-    // public-surface.ts sanctions an Observer as the backing of a MessageBus entry.
+    // public-surface-declared-type.ts sanctions an Observer as the backing of a MessageBus entry.
     saveSubsystemSpec(subsystem('evt-sub', {
       publicInterfaces: [{ type: 'MessageBus', details: 'domain events', component: 'evt-observer' }],
     }));

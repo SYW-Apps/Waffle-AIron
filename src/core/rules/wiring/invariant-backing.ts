@@ -1,5 +1,6 @@
-import { ComponentSpec, ImplementationSpec, InterfaceSpec, TypeSpec, isDraftSubsystem, typeMatchesRef } from '../../../models/index.js';
+import { ComponentSpec, ImplementationSpec, InterfaceSpec, TypeSpec, isDraftSubsystem } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
+import { refMatchesInvariant } from './invariant-ref.js';
 
 // ---------------------------------------------------------------------------
 // The invariant registry — an HONEST linter, deliberately not a prover.
@@ -16,45 +17,12 @@ import { RuleContext, SddRule } from '../types.js';
 // visibly claims to uphold it. What it never proves: that the narrative (or
 // the code) actually enforces it — that is implementer correctness, checked
 // by tests, not by prose analysis. Findings default to warnings and are
-// lint.allow-suppressible; only dangling references are errors.
+// lint.allow-suppressible.
+//
+// The two codes are one question asked of one chain — who owns the invariant,
+// and does each of that owner's write paths claim it — so the owner resolution
+// and its write-method scan are paid once and read by both.
 // ---------------------------------------------------------------------------
-
-/** Split "<type-ref>.<invariant-id>" at the LAST dot (invariant ids cannot contain dots). */
-function splitInvariantRef(ref: string): { typeRef: string; invariantId: string } | null {
-  const at = ref.lastIndexOf('.');
-  if (at <= 0 || at === ref.length - 1) return null;
-  return { typeRef: ref.slice(0, at), invariantId: ref.slice(at + 1) };
-}
-
-/** Resolve an assertsInvariants reference against the declared entity invariants. */
-export function resolveInvariantRef(ref: string, types: TypeSpec[]): { type: TypeSpec; invariantId: string } | null {
-  const parts = splitInvariantRef(ref);
-  if (!parts) return null;
-  for (const t of types) {
-    if (!t.invariants?.length) continue;
-    if (!typeMatchesRef(t, parts.typeRef)) continue;
-    if (t.invariants.some(inv => inv.id === parts.invariantId)) {
-      return { type: t, invariantId: parts.invariantId };
-    }
-  }
-  return null;
-}
-
-/**
- * Does this reference denote THIS type's invariant? Matched directly against
- * the type under check (suffix-style over its qualified id) instead of through
- * a global first-in-scan-order resolution: when two subsystems (or a parent
- * and a chained subproject) declare same-named entities with same-named
- * invariants, first-match attributed a bare ref to whichever type the scan
- * happened to list first — crediting the wrong type's write path and flagging
- * the right one. A qualified ref still only matches its own namespace.
- */
-function refMatchesInvariant(ref: string, type: TypeSpec, invariantId: string): boolean {
-  const parts = splitInvariantRef(ref);
-  if (!parts || parts.invariantId !== invariantId) return false;
-  if (!(type.invariants ?? []).some(inv => inv.id === invariantId)) return false;
-  return typeMatchesRef(type, parts.typeRef);
-}
 
 /**
  * Whether the implementation's realization of the write method carries a step
@@ -99,34 +67,17 @@ function resolveComponentClass(t: TypeSpec, ctx: RuleContext): ComponentSpec | u
 export const invariantBackingRule: SddRule = {
   name: 'invariant-backing',
   description:
-    'The invariant registry: entities may declare domain invariants (type.invariants), anchored through their componentClass. Every write-effect contract method of the owning component must carry a narrative step asserting each invariant (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as semantic guarantees. This is an HONEST lint over declarations: a green run means every write path visibly claims the invariant, never that the narrative or code actually enforces it. An invariant with no resolvable owner or no declared write path is unanchored; dangling assertion references are errors.',
+    'The invariant registry: entities may declare domain invariants (type.invariants), anchored through their componentClass. Every write-effect contract method of the owning component must carry a narrative step asserting each invariant (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as semantic guarantees. This is an HONEST lint over declarations: a green run means every write path visibly claims the invariant, never that the narrative or code actually enforces it. An invariant with no resolvable owner or no declared write path is unanchored, and nothing further is claimed about it.',
   codes: [
-    { code: 'DUPLICATE_INVARIANT_ID', defaultSeverity: 'error', summary: 'An entity declares two invariants with the same id' },
     { code: 'INVARIANT_UNANCHORED', defaultSeverity: 'warning', summary: 'An entity declares invariants but has no componentClass, its componentClass does not resolve, or the owning component declares no write-effect contract methods' },
     { code: 'UNASSERTED_INVARIANT', defaultSeverity: 'warning', summary: 'A write-effect method of the invariant\'s owning component has no narrative step asserting it' },
-    { code: 'UNKNOWN_INVARIANT_REF', defaultSeverity: 'error', summary: 'A narrative step asserts an invariant that no entity declares' },
   ],
   check(ctx) {
-    // --- entity side: duplicates, anchoring, and write-path coverage --------
     for (const t of ctx.types) {
       const invariants = t.invariants ?? [];
       if (invariants.length === 0) continue;
-      // Every entity-side finding is draft context while the entity is.
+      // Every finding here is draft context while the entity is.
       const entityDraft = isEntityDraft(t, ctx);
-
-      const seen = new Set<string>();
-      for (const inv of invariants) {
-        if (seen.has(inv.id)) {
-          ctx.addIssue(
-            'error',
-            'DUPLICATE_INVARIANT_ID',
-            `Entity "${t.id}" declares invariant id "${inv.id}" more than once — invariant ids must be unique within the entity.`,
-            t.id,
-            entityDraft,
-          );
-        }
-        seen.add(inv.id);
-      }
 
       const comp = resolveComponentClass(t, ctx);
       if (!comp) {
@@ -164,25 +115,6 @@ export const invariantBackingRule: SddRule = {
               'warning',
               'UNASSERTED_INVARIANT',
               `Write method "${method.name}" of "${comp.id}" (implementation "${impl.id}") has no narrative step asserting invariant "${t.id}.${inv.id}" (${inv.description}). Add the step that upholds it and mark it with assertsInvariants — or lint.allow with a reason. Note: an assertion only declares the intent; it does not prove enforcement.`,
-              impl.id,
-              isDraftCtx,
-            );
-          }
-        }
-      }
-    }
-
-    // --- step side: every assertion reference must resolve ------------------
-    for (const impl of ctx.implementations) {
-      const isDraftCtx = ctx.isImplementationDraft(impl);
-      for (const method of impl.methods) {
-        for (const step of method.narrative) {
-          for (const ref of step.assertsInvariants ?? []) {
-            if (resolveInvariantRef(ref, ctx.types)) continue;
-            ctx.addIssue(
-              'error',
-              'UNKNOWN_INVARIANT_REF',
-              `Step ${step.stepNumber} of "${method.name}" in implementation "${impl.id}" asserts invariant "${ref}", but no entity declares it (expected "<type-id>.<invariant-id>" naming a declared entry in that entity's invariants).`,
               impl.id,
               isDraftCtx,
             );

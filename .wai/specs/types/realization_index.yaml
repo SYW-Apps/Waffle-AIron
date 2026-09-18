@@ -43,8 +43,8 @@ lint:
   allow:
     - code: UNUSED_TYPE
       reason: >-
-        Named only by the return of rule_context.realizationIndex, and unused-detection does not yet
+        Named only by the return of rule_context.realizationIndex, and unused-types does not yet
         count type-method signatures as references. Remove this allow once it does; the stale-allow
         audit will flag it.
 createdAt: '2026-09-18T00:21:17.484Z'
-updatedAt: '2026-09-18T00:22:15.156Z'
+updatedAt: '2026-09-18T13:53:27.902Z'

@@ -1,6 +1,7 @@
 /**
  * Graph family (dependency cycles in src/core/rules/wiring/dependency-cycles.ts,
- * unused-detection in src/core/rules/wiring/unused-detection.ts).
+ * unused-detection in src/core/rules/wiring/unused-detection.ts, with
+ * unused-types.ts and invoked-by-description.ts).
  *
  * Documented intents pinned here:
  *  - CIRCULAR_DEPENDENCY (error): "The component dependsOn graph must be a DAG."

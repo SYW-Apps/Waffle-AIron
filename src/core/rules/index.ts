@@ -34,8 +34,10 @@ import {
   type ImportGraph,
   type OwnershipIndex,
   type RealizationIndex,
+  type ResolvedMethod,
+  type SpecId,
 } from './types.js';
-import { buildCodeIndex, buildDependencyEdges, buildImportGraph, buildOwnershipIndex, buildRealizationIndex } from './read-model.js';
+import { buildCodeIndex, buildDependencyEdges, buildImplementationMethods, buildImportGraph, buildOwnershipIndex, buildRealizationIndex, buildSpecIds } from './read-model.js';
 import { SDD_RULES } from './repository.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { emptyCodeModel } from '../source-analysis.js';
@@ -615,6 +617,10 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   const ownershipIndex = (): OwnershipIndex => (ownershipMemo ??= buildOwnershipIndex(ctx));
   let dependencyEdgesMemo: DependencyEdges | undefined;
   const dependencyEdges = (): DependencyEdges => (dependencyEdgesMemo ??= buildDependencyEdges(ctx));
+  let specIdsMemo: SpecId[] | undefined;
+  const specIds = (): SpecId[] => (specIdsMemo ??= buildSpecIds(ctx));
+  let implementationMethodsMemo: ResolvedMethod[] | undefined;
+  const implementationMethods = (): ResolvedMethod[] => (implementationMethodsMemo ??= buildImplementationMethods(ctx));
 
   const ctx: RuleContext = {
     system,
@@ -650,6 +656,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     importGraph,
     ownershipIndex,
     dependencyEdges,
+    specIds,
+    implementationMethods,
     complexityConfigFor,
     documentationConfigFor,
     namingConfigFor,

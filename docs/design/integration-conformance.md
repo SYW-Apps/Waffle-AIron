@@ -2,11 +2,13 @@
 
 Status: **process shipped, gate shipped** (July 2026). The sdd-implement
 skill's Definition of Done requires an integration sim (§3); the static
-integration-conformance gate (§4) is implemented as the
-`integration-conformance` rule family, with one refinement over the original
-design: MISSING_INTEGRATION_SIM activates **per subsystem** once its first
-`simPath` is declared (§4.4) — the adoption story made mechanical, so a tree
-that has not adopted sims is not flooded with expectations it never made.
+integration-conformance gate (§4) is implemented as four rules, one per
+finding — `integration-sim-declaration`, `integration-sim-file`,
+`integration-sim-wiring` and `integration-sim-coverage` — with one refinement
+over the original design: MISSING_INTEGRATION_SIM activates **per subsystem**
+once its first `simPath` is declared (§4.4) — the adoption story made
+mechanical, so a tree that has not adopted sims is not flooded with
+expectations it never made.
 
 ## 1. Motivation (the retro that started this)
 

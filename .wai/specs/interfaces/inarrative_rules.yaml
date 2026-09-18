@@ -192,17 +192,31 @@ methods:
       - code: FALLTHROUGH_INTO_HANDLER
         severity: warning
         summary: try body falls through into its own catch/finally region on the success path
-  - name: narrativeAntipatterns
+  - name: meaninglessBranches
     description: >-
-      Rule narrative-antipatterns. Provable narrative bugs, caught at spec level before
-      implementation: a step-graph cycle with no exit edge and no return/throw member never
-      terminates by construction (INESCAPABLE_CYCLE); a branch or switch whose arms all target the
-      same step decides nothing (MEANINGLESS_BRANCH); a method-level call cycle across components in
-      which every call edge is unavoidable on every entry-to-exit path is unbounded recursion
-      (UNCONDITIONAL_CALL_CYCLE — dispatch steps resolved through their portal tables; a cycle with
-      even one guarded edge is NOT flagged, since prose conditions are never judged). Structure-only
-      claims — warnings, lint.allow-suppressible.
-    signature: 'narrativeAntipatterns(ctx: RuleContext): void'
+      Rule meaningless-branches. A branch or switch whose arms all target the same step decides
+      nothing: the condition is evaluated and flow continues at one place whatever it answers. A
+      decision's targets are its explicit ones plus, where it leaves its fall-through field unset,
+      the steps the step graph continues it at — so the classic authoring slip of pointing both arms
+      at the next step is caught. Structure-only — a warning, lint.allow-suppressible.
+    signature: 'meaninglessBranches(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MEANINGLESS_BRANCH
+        severity: warning
+        summary: Branch/switch whose arms all target the same step — the decision changes nothing
+  - name: inescapableCycles
+    description: >-
+      Rule inescapable-cycles. A cycle in a narrative's step graph with no exit edge and no return
+      or throw member never terminates, by construction: every path that enters it stays inside it
+      forever. Read over the step graph closed by a completion step, so falling off the end of the
+      narrative counts as leaving. Structure-only — prose conditions are never judged — and reported
+      as a warning, lint.allow-suppressible.
+    signature: 'inescapableCycles(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -212,9 +226,22 @@ methods:
       - code: INESCAPABLE_CYCLE
         severity: warning
         summary: Step cycle with no exit edge and no return/throw member — never terminates by construction
-      - code: MEANINGLESS_BRANCH
-        severity: warning
-        summary: Branch/switch whose arms all target the same step — the decision changes nothing
+  - name: unconditionalCallCycles
+    description: >-
+      Rule unconditional-call-cycles. A method-level call cycle across components in which every
+      call edge is unavoidable on every entry-to-exit path of its narrative is unbounded recursion,
+      by construction. Dispatch steps are resolved through their portal's table; register steps are
+      never edges (a handoff defers the invocation to the runtime, so it cannot recurse). A cycle
+      with even one guarded edge is NOT flagged, since prose conditions are never judged.
+      Structure-only — a warning, lint.allow-suppressible, anchored on the member edge that sorts
+      first so one allow covers the cycle.
+    signature: 'unconditionalCallCycles(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: UNCONDITIONAL_CALL_CYCLE
         severity: warning
         summary: >-
@@ -227,13 +254,8 @@ methods:
       intent-level methods without a narrative must specify behavior as non-trivial prose (L4 intent
       or L3 description) — dialing detail down never means leaving behavior unspecified. Explicit
       declarations are held to their promise as errors; stereotype-defaulted gaps surface as
-      warnings. Detail sufficiency rides along: a method whose realized function — in the method's
-      own source file, else the implementation's — measures real branching (cyclomatic complexity
-      above rules.complexity.maxUnnarratedComplexity, exact AST grade only) may not hide below
-      detail: full without a narrative (UNNARRATED_COMPLEXITY), and an explicit dial below a
-      full-floor logic stereotype without a narrative is a visible, lint.allow-justifiable choice
-      (DETAIL_BELOW_STEREOTYPE). Both are honest lints over declarations — they never claim the
-      narrative or prose is CORRECT.
+      warnings. An honest lint over declarations — it never claims the narrative or the prose is
+      CORRECT.
     signature: 'narrativeDetail(ctx: RuleContext): void'
     returns: void
     params:
@@ -251,6 +273,24 @@ methods:
         summary: >-
           Intent-level method whose intent/description prose is missing or placeholder-thin (error
           when declared explicitly)
+  - name: detailSufficiency
+    description: >-
+      Rule detail-sufficiency. A method dialed below detail: full with no narrative may not be
+      hiding behavior it owes a reader. A method whose realized function — in the method's own
+      source file, else the implementation's — measures real branching (cyclomatic complexity above
+      rules.complexity.maxUnnarratedComplexity, exact AST grade only) is reported
+      (UNNARRATED_COMPLEXITY), and an explicit dial below a full-floor logic stereotype without a
+      narrative is a visible, lint.allow-justifiable choice (DETAIL_BELOW_STEREOTYPE) — reported
+      only where the measured finding did not already fire, since evidence outranks expectation.
+      Both are honest lints over declarations: they never claim a narrative would be correct, only
+      that the dial hides something.
+    signature: 'detailSufficiency(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: UNNARRATED_COMPLEXITY
         severity: warning
         summary: >-
@@ -264,4 +304,4 @@ methods:
           narrative
 status: draft
 createdAt: '2026-09-14T06:06:18.256Z'
-updatedAt: '2026-09-17T22:55:46.741Z'
+updatedAt: '2026-09-18T13:32:40.895Z'

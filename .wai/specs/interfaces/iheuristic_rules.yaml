@@ -34,14 +34,13 @@ methods:
       - code: GOD_COMPONENT
         severity: warning
         summary: Component with excessive dependency fan-out
-  - name: targetLanguage
+  - name: signatureLanguageBuiltins
     description: >-
-      Rule target-language. Contracts must speak the declared target language: builtin types that
-      unambiguously belong to another language family are flagged in method signatures, and
-      narrative flow steps using constructs the language lacks (e.g. exceptions in Rust/Go, do-while
-      in Python) are flagged too. Set targetLanguage on the system (L0) or override per subsystem
-      (L1).
-    signature: 'targetLanguage(ctx: RuleContext): void'
+      Rule signature-language-builtins. Contracts must speak the declared target language: builtin
+      types that unambiguously belong to another language family are flagged in method signatures
+      (e.g. `usize` in a TypeScript system, `Promise` in a Rust one). Set targetLanguage on the
+      system (L0) or override per subsystem (L1).
+    signature: 'signatureLanguageBuiltins(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -51,16 +50,45 @@ methods:
       - code: LANGUAGE_FOREIGN_BUILTIN
         severity: warning
         summary: Signature uses a builtin from a different language family
+  - name: narrativeLanguageConstructs
+    description: >-
+      Rule narrative-language-constructs. Narratives must describe flows the declared target
+      language can express: steps using constructs the language lacks (e.g. exceptions in Rust/Go,
+      do-while in Python) are flagged with the idiomatic alternative. Set targetLanguage on the
+      system (L0) or override per subsystem (L1).
+    signature: 'narrativeLanguageConstructs(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: LANGUAGE_FOREIGN_FLOW
         severity: warning
         summary: Narrative flow step uses a construct the target language does not have
+  - name: technologyBinding
+    description: >-
+      Rule technology-binding. Only data-layer stereotypes (Adapter/Store/Registry/Index) should
+      bind a technology directly: an L4 that declares `technologies` on logic has no swap seam. No
+      hardcoded vendor lists — only declared tokens are policed, so the rule never fires on a tree
+      that doesn't opt in.
+    signature: 'technologyBinding(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: TECH_ON_LOGIC_COMPONENT
+        severity: warning
+        summary: Technology bound by a non-data-layer stereotype
   - name: technologyBoundaries
     description: >-
       Rule technology-boundaries. Technology stays behind its owning boundary: an L4 that declares
       `technologies` (e.g. [mysql]) makes its component's ownership tree the technology's home.
-      References outside that tree are leakage, L3 contract identifiers must stay intent-language
-      (the contract is the swap seam), and only data-layer stereotypes
-      (Adapter/Store/Registry/Index) should bind a technology directly.
+      References outside that tree are leakage, and L3 contract identifiers must stay
+      intent-language — the contract is the swap seam, so the vendor name is wrong even on the
+      owning component's own interface.
     signature: 'technologyBoundaries(ctx: RuleContext): void'
     returns: void
     params:
@@ -74,9 +102,6 @@ methods:
       - code: VENDOR_NAME_IN_CONTRACT
         severity: warning
         summary: Technology name in L3 contract identifiers
-      - code: TECH_ON_LOGIC_COMPONENT
-        severity: warning
-        summary: Technology bound by a non-data-layer stereotype
   - name: namingConventions
     description: >-
       Rule naming-conventions. Enforces naming conventions (casing styles or regular expressions)
@@ -208,4 +233,4 @@ methods:
           component
 status: draft
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-09-17T16:29:47.542Z'
+updatedAt: '2026-09-18T12:26:24.738Z'

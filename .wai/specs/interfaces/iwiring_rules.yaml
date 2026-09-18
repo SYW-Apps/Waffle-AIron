@@ -94,15 +94,30 @@ methods:
       - code: LIFECYCLE_CROSS_SUBSYSTEM
         severity: error
         summary: Lifecycle entrypoint roots a flow in another subsystem's component
+  - name: invokedByDescription
+    description: >-
+      Rule invoked-by-description. An invokedBy declaration names a caller outside the modeled graph
+      and silences unused-detection for its method, so the claim must stay reviewable: its "caller"
+      prose is held to the intent floor (missing or placeholder-thin prose is reported), stating WHO
+      invokes the method and when.
+    signature: 'invokedByDescription(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: INVOKED_BY_UNDESCRIBED
+        severity: warning
+        summary: invokedBy declaration whose caller prose is missing or placeholder-thin
   - name: unusedDetection
     description: >-
       Rule unused-detection. Walks the narrative execution graph (call steps, register handoffs,
       dispatch-table routing, lifecycle flows) from every entrypoint (Portal/Observer/published
       component/lifecycle entrypoint/invokedBy-declared method) and flags components and methods no
-      execution chain reaches, plus types no field or signature references. An interface method
-      declaring invokedBy (a real caller outside the modeled graph) seeds the walk, so its narrative
-      propagates reachability; the declaration itself is audited (thin caller prose, or a method the
-      internal walk already reaches).
+      execution chain reaches. An interface method declaring invokedBy (a real caller outside the
+      modeled graph) seeds the walk, so its narrative propagates reachability; a declaration the
+      INTERNAL walk (without those seeds) already reaches is stale and is reported.
     signature: 'unusedDetection(ctx: RuleContext): void'
     returns: void
     params:
@@ -116,17 +131,27 @@ methods:
       - code: UNUSED_METHOD
         severity: warning
         summary: Method never called by any narrative step
-      - code: UNUSED_TYPE
-        severity: warning
-        summary: Type never referenced by fields or signatures
-      - code: INVOKED_BY_UNDESCRIBED
-        severity: warning
-        summary: invokedBy declaration whose caller prose is missing or placeholder-thin
       - code: INVOKED_BY_REDUNDANT
         severity: warning
         summary: >-
           invokedBy declaration on a method the internal narrative walk already reaches — stale,
           remove it
+  - name: unusedTypes
+    description: >-
+      Rule unused-types. Flags types no field of any type and no interface method signature
+      references. References are matched through the type-reference grammar (generic arguments,
+      collections, qualified ids), and the declaring type's own generic parameters are left out — a
+      type parameter is not a reference to a type.
+    signature: 'unusedTypes(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNUSED_TYPE
+        severity: warning
+        summary: Type never referenced by fields or signatures
   - name: durabilityRoundTrip
     description: >-
       Rule durability-round-trip. A durable Store (persisted RAM projection) must carry
@@ -183,17 +208,12 @@ methods:
       - code: UNREALIZED_CLAIM
         severity: warning
         summary: Durability/side-effect claim in prose with no matching structural edge
-  - name: invariantBacking
+  - name: uniqueInvariantIds
     description: >-
-      Rule invariant-backing. The invariant registry: entities may declare domain invariants
-      (type.invariants), anchored through their componentClass. Every write-effect contract method
-      of the owning component must carry a narrative step asserting each invariant
-      (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as
-      semantic guarantees. This is an HONEST lint over declarations: a green run means every write
-      path visibly claims the invariant, never that the narrative or code actually enforces it. An
-      invariant with no resolvable owner or no declared write path is unanchored; dangling assertion
-      references are errors.
-    signature: 'invariantBacking(ctx: RuleContext): void'
+      Rule unique-invariant-ids. An entity's declared invariant ids must be unique within the
+      entity: a narrative step asserts an invariant by "<type-id>.<invariant-id>", so a repeated id
+      makes one assertion stand for two properties and satisfying either silences both.
+    signature: 'uniqueInvariantIds(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -203,6 +223,23 @@ methods:
       - code: DUPLICATE_INVARIANT_ID
         severity: error
         summary: An entity declares two invariants with the same id
+  - name: invariantBacking
+    description: >-
+      Rule invariant-backing. The invariant registry: entities may declare domain invariants
+      (type.invariants), anchored through their componentClass. Every write-effect contract method
+      of the owning component must carry a narrative step asserting each invariant
+      (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as
+      semantic guarantees. This is an HONEST lint over declarations: a green run means every write
+      path visibly claims the invariant, never that the narrative or code actually enforces it. An
+      invariant with no resolvable owner or no declared write path is unanchored, and nothing
+      further is claimed about it.
+    signature: 'invariantBacking(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: INVARIANT_UNANCHORED
         severity: warning
         summary: >-
@@ -213,6 +250,19 @@ methods:
         summary: >-
           A write-effect method of the invariant's owning component has no narrative step asserting
           it
+  - name: invariantReferences
+    description: >-
+      Rule invariant-references. Every invariant a narrative step asserts (step.assertsInvariants)
+      must resolve to a declared entity invariant: the reference splits at its last dot into a type
+      reference and an invariant id, and some entity matching that type reference must declare that
+      id. A reference nothing declares is an error — the step claims a property that exists nowhere.
+    signature: 'invariantReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
       - code: UNKNOWN_INVARIANT_REF
         severity: error
         summary: A narrative step asserts an invariant that no entity declares
@@ -240,4 +290,4 @@ methods:
         summary: Topic is subscribed to but nothing in the tree emits it
 status: draft
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-09-17T23:00:03.814Z'
+updatedAt: '2026-09-18T13:34:41.078Z'

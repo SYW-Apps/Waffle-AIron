@@ -299,6 +299,12 @@ newly fail on them (see *Upgrading*).
     command passes.
   - `UNREALIZED_CLAIM` recognises "persisting" and "persistence".
   - `UNCONDITIONAL_CALL_CYCLE` treats a call inside a parallel arm as unavoidable, because every arm runs.
+  - `UNCONDITIONAL_CALL_CYCLE` treats a call inside a `doWhile` body, and one in the FIRST step of a `try` body, as
+    unavoidable too. A `doWhile` runs its body before it tests, so what the body cannot avoid the loop cannot avoid; a
+    `try` is always entered at its body's first step, which executes before any handler can catch anything. Both headers
+    used to "complete" around their own body — the loop through its exit edge, the try through a catch — so a call that
+    genuinely always happens read as guarded and a real unbounded recursion went unreported. Anything DEEPER in a try
+    body is still avoidable: a throw before it diverts to the handler.
 - **No longer reported wrongly or twice.**
   - `MEANINGLESS_BRANCH` reads fall-through from the step graph: a branch or switch ending a parallel arm falls through
     to the join, not into the next arm, and a switch whose unmatched values end the method decides something.
@@ -430,6 +436,17 @@ sides of a seam.
 | `contract-symmetry-and-narratives` | `contract-symmetry` + `narrative-target-references` + `cross-tree-references` + `surface-reference-backing` | four questions a user recognizes: does the implementation mirror its contract, does a target inside this tree resolve, does a target that leaves it pin to exactly one declared surface, and does that surface back what the step asks of it |
 | `stereotype-dependencies` | `subsystem-boundary-dependencies` + `logic-dependency-class` + `data-block-dependencies` + `entrypoint-dependencies` + `portal-write-shortcut` | where an edge is allowed to LAND, and then the intra-subsystem matrix by the layer that answers for it — an Orchestrator's declared class, the data blocks, the entry points and the process layer — with the Portal read-face guard last, the one that reads narratives and dispatch tables rather than `dependsOn` |
 | `pattern-ownership` | `pattern-membership` + `pattern-containment` + `unowned-blocks` + `member-visibility` | who may own and what a claim must name, what each pattern must contain, which data blocks are left standing alone, and who may see a private member |
+| `declarative-assertions` | `assertion-forbidden-edges` + `assertion-required-fields` + `assertion-endpoint-shapes` | the assertion KIND is what a pack author writes, and each kind asks its own question of its own collection: an edge in the dependency graph, a field on a spec at one level, or the transport and address an endpoint binds |
+| `target-language` | `signature-language-builtins` + `narrative-language-constructs` | what a CONTRACT may name in the declared language, and what a NARRATIVE may describe in it — two codes over two collections that only ever shared the `targetLanguage` opt-in |
+| `technology-boundaries` | `technology-binding` + `technology-boundaries` | which stereotype may bind a technology at all, separated from where that technology's NAME may then appear |
+| `public-surface` | `public-surface-binding` + `public-surface-declared-type` + `public-surface-bound-contract` | what BACKS the entry, whether that component's stereotype can realize the type it declares, and whether the contract it binds is that component's own |
+| `namespace-hygiene` | `reserved-id-segments` + `namespace-shadowing` | two questions of the same ids: the one segment the `::` grammar reserves, and the local name that would anchor a bare reference to the root instead |
+| `integration-conformance` | `integration-sim-declaration` + `integration-sim-file` + `integration-sim-wiring` + `integration-sim-coverage` | one rule per finding about one harness: is a harness expected here, does the declared one exist, does it wire the real modules, does it name every narrated path |
+| `narrative-antipatterns` | `meaningless-branches` + `inescapable-cycles` + `unconditional-call-cycles` | three separate proofs that happened to share a file: a decision whose arms all land on one step, a step cycle nothing can leave, and a call cycle in which no edge is guarded |
+| `narrative-detail` | `narrative-detail` + `detail-sufficiency` | does a method carry the detail its level PROMISES (a narrative at full, prose below it), and is that level low enough to be hiding something the reader is owed |
+| `portal-endpoints` | `portal-endpoints` + `non-portal-endpoints` | the two arms of one `if`, and two different subjects: what a Portal must bind, and what everything else may not carry at all |
+| `portal-call-auth` | `portal-call-auth` + `auth-source-wiring` | the CALL SITE (who may present a credential, and must it say where the credential comes from) separated from the SOURCE (does the `component:` reference resolve to a provider the presenter is wired to) |
+| `invariant-backing` | `unique-invariant-ids` + `invariant-backing` + `invariant-references` | three questions of one registry, two of which share nothing with the middle one: are the entity's ids unique, does each invariant reach every write path of its owner, and does every asserted reference name something declared |
 
 `profile-registration` also checks the project's own `projectType` before each subsystem's profile rather than after —
 the project-wide question first. On wairon's own tree the split retires `wiring_rules_impl`'s
@@ -445,7 +462,8 @@ spec id, so it belongs to the one rule that builds the file index, or it would b
 
 On wairon's own tree the conformance split retires `conformance_rules_impl`'s `EXCESSIVE_NARRATIVE_STEPS` allow — the
 31-step narrative it named is gone and nothing left in that family lists more than 25 — and both families' remaining
-`NARRATIVE_COMPLEXITY` allows now name only the narratives that still report.
+`NARRATIVE_COMPLEXITY` allows were rewritten to name only the narratives that still reported at that point — the
+waves below retire them, and every other one, outright.
 
 `contract-symmetry-and-narratives` was the worst of them: 66 steps at cognitive score 99, because roughly half of it was
 the cross-tree surface-resolution sequence written twice — once for dispatch steps and once for call/register steps,
@@ -490,6 +508,114 @@ resolution, reach and licensing decide nothing there. Behaviour is preserved to 
 561 rule-matrix fixtures (2069 findings) is byte-identical before and after. `doctrine_rules_impl`'s
 `EXCESSIVE_NARRATIVE_STEPS` allow is retired and its `NARRATIVE_COMPLEXITY` allow now names only `portalEndpoints` and
 `portalCallAuth`, the two the family still owes.
+
+`declarative-assertions` was the last of the 48-step narratives, at cognitive score 61, and its shape was a ladder over
+the three assertion kinds: one loop, one `switch`, and three arms that shared nothing but a selector and a message
+suffix. The kinds are not implementation detail — a pack author writes `kind: forbid-edge` by hand — so each is now a
+rule a user can find in `wairon rules list` under the word they typed, and the shared reading of one assertion (which
+components a selector picks, how a violation is reported at the pack's severity with its stated reason) is
+`declared-assertion.ts`, imported by all three. The alternative, keeping one rule and hiding the kind dispatch in a
+derivation, would have moved the bulk of the logic into three unnarrated functions and left the registry claiming one
+rule where a user sees three doctrines. The three narratives measure 14, 14 and 10.
+
+`technology-boundaries` was reshaped rather than split in half: `TECH_ON_LOGIC_COMPONENT` reads an implementation's own
+`technologies` and its component's stereotype and nothing else, so it lifts out whole as `technology-binding` (score 3),
+but `TECH_LEAKAGE` and `VENDOR_NAME_IN_CONTRACT` share the technology-HOME index — the ownership closure, its contracts,
+its implementations and its subsystem chain, per declared token — and separating them would build that index twice. They
+stay one rule, at 15 rather than 23, because the collection phase now walks every declared token of every declaring
+implementation once instead of nesting a token loop inside an implementation loop, with each declaring component's scope
+computed once and reused. That map is deliberately still the PLAIN owner map (every `owns` claim, last claimant winning)
+and not `ctx.ownershipIndex()`: it feeds a scope-widening step, so narrowing it would turn one finding into two on a tree
+that already carries an ownership error. `target-language` needed neither trick — its two codes never shared a loop, only
+the `targetLanguage` opt-in — and its halves measure 6 and 6 once each collects the specs it judges before judging them.
+
+Behaviour is preserved to the letter: the full finding set of all 561 rule-matrix fixtures (2069 findings) is
+byte-identical before and after. Both families' `NARRATIVE_COMPLEXITY` and `EXCESSIVE_NARRATIVE_STEPS` allows are
+retired outright — nothing in `extension_rules_impl` or `heuristic_rules_impl` reaches the severe band or lists more
+than 25 steps any more, and the worst narrative left in either family measures 15.
+
+`public-surface` (33) and `integration-conformance` (29) split along seams their codes already drew, and both splits
+cost a precondition the single loop used to inherit by falling through. `public-surface`'s two `continue`s ARE its
+precedence: an entry that names no component, or one that names a component that does not exist, says nothing reliable
+about a type or a contract, so both siblings restate that guard rather than accuse on top of a binding finding.
+`public-surface-bound-contract` needs it most — `intf.component !== pi.component` is trivially true for EVERY interface
+when `pi.component` names nothing, so without the guard one mistyped component id would accuse a perfectly good
+contract of belonging elsewhere. Its three narratives measure 14, 15 and 16. `integration-conformance`'s precedence was
+two `continue`s and an exact-grade gate; `integration-sim-wiring` and `integration-sim-coverage` each restate
+`integration-sim-file`'s verdict, so a harness that does not exist is still reported once rather than three times, and
+the four measure 7, 7, 14 and 16. Neither split invents a shared "is this judgeable" helper: a precondition one rule
+inherits from another is doctrine it owes its own reader, and it is written out where the accusation is.
+
+`namespace-hygiene` (25) is two codes, and was not 25 because of either of them. Its private `checkId` closure has no
+spec representation, so the same two checks were unrolled across five id kinds, and splitting alone would have left two
+halves of 15 with the five-fold copy intact. The walk moves into the shared read model instead, as `ctx.specIds()` —
+every spec id in the tree with the kind label its findings already name it by (`Subsystem`, `Component`, `Interface`,
+`Implementation`, `Type`) — and `reserved-id-segments` and `namespace-shadowing` become one loop and one branch each, at
+3. It returns every id, in scope or not, and each rule keeps its own `ctx.isSpecInScope` test: which specs a rule may
+accuse is doctrine the rule states for itself, not plumbing to be folded away.
+
+`call-conformance` is NOT split and keeps its single code. It asks one question — is every narrative call step realized
+as a real call — and two rules for one question is what this section exists to prevent. Its 25 was the DESCENT:
+implementation, contract, component, chained-subproject skip, method, source file, facts, exact grade — six of its nine
+branches before a single call step was examined. So the descent becomes the read model's second new member,
+`ctx.implementationMethods()`: each implementation method with the component it realizes, the file that realizes it (the
+method's `sourcePath`, else the implementation's, absent when neither names one) and its draft context, with
+implementations whose contract or component does not resolve and those inside a chained subproject already left out.
+Plumbing only — the conformance dial and the exact-grade test stay written in `call-conformance`, because "only exact
+grade may accuse" is the honesty stance a rule owes its reader and belongs where the accusation is read. The narrative
+drops from 25 to 15. `narrative-detail` walks the same descent and will be its second consumer when it splits.
+
+Behaviour is preserved to the letter here too: the full finding set of all 561 rule-matrix fixtures (2069 findings) is
+byte-identical before and after. `integrity_rules_impl`'s two allows (`NARRATIVE_COMPLEXITY` and
+`EXCESSIVE_NARRATIVE_STEPS`) and `conformance_rules_impl`'s `NARRATIVE_COMPLEXITY` allow are retired outright — nothing
+in either family reaches the severe band or lists more than 25 steps any more. That last allow had named
+`dependencyConformance` among the narratives it covered, which stopped being true one wave earlier, when the shared read
+model below dropped that narrative from 28 to 14.
+
+The last six severe rule methods come under the bar together. `narrative-antipatterns` (26) was three separate proofs
+in one file, and its `MEANINGLESS_BRANCH`, `INESCAPABLE_CYCLE` and `UNCONDITIONAL_CALL_CYCLE` become
+`meaningless-branches` (11), `inescapable-cycles` (8) and `unconditional-call-cycles` (11). Two of them run a Tarjan
+SCC, but over graphs with nothing in common — one method's step graph, and the call graph across every component — so
+the traversal moves into a shared module (`narrative/completed-step-graph.ts`) beside the completion-closed step graph
+and the "is this step unavoidable" reading, and each rule states its own graph. Sharing the traversal is not sharing
+the graph. `narrative-detail` (27) splits along the seam its own comments drew: `narrative-detail` (18) keeps
+`MISSING_NARRATIVE` and `INTENT_FLOOR` — the two arms of one branch, a narrative at `full` and prose below it — while
+`detail-sufficiency` (16) takes `UNNARRATED_COMPLEXITY` and `DETAIL_BELOW_STEREOTYPE`, which stay together because the
+measured finding SUPPRESSES the stereotype one: evidence outranks expectation, and separating them would mean
+measuring the same function twice to reproduce that. `portal-endpoints` (20) and `portal-call-auth` (26) were the
+cleanest cuts. The first was two arms of one `if` about two different subjects, and becomes `portal-endpoints` (12)
+and `non-portal-endpoints` (8). The second is two questions with one subject: `portal-call-auth` (12) judges the CALL
+SITE (an authenticated outbound call is made by an Adapter, and says where its credential comes from) and
+`auth-source-wiring` (16) judges the SOURCE (a `component:` reference resolves, to an Adapter or Store, that the
+presenter is wired to). Five rules for five codes was rejected: the last three codes are one question's three failure
+modes — missing, wrong kind, unwired — and each extra rule would re-walk every narrative step in the tree to ask a
+third of it. `invariant-backing` (20) splits three ways, since the file already marked its seam: `unique-invariant-ids`
+(6) needs only the entity's own invariant list, `invariant-references` (3) walks the steps rather than the entities,
+and `invariant-backing` (12) keeps the two codes that share the owner resolution and its write-method scan. The
+invariant REFERENCE grammar (`<type-ref>.<invariant-id>`, split at the last dot) moves to `wiring/invariant-ref.ts`,
+because one rule resolves such a reference and another asks whether it denotes a particular entity's invariant, and the
+two must never disagree about what the string means.
+
+`unused-detection` (20) is deliberately split only three ways, and its three remaining codes stay together. The
+reachability walk is the expensive thing and it already runs TWICE: once from internal seeds alone, which is what makes
+`INVOKED_BY_REDUNDANT` answerable, and once with the `invokedBy` entrypoints added, which is what makes
+`UNUSED_COMPONENT` and `UNUSED_METHOD` answerable. One rule per code would walk the same graph four times. So
+`unused-types` (3) lifts out with its own reference scan, `invoked-by-description` (8) lifts out as a prose floor on
+the declaration's `caller`, and the reachability trio keeps the rule at 15.
+
+One proposal was refused. `detail-sufficiency` was to take its walk from `ctx.implementationMethods()`, as
+`call-conformance` did. It cannot: that member drops implementations whose contract names a component that does not
+resolve — which `UNNARRATED_COMPLEXITY` still judges today, tolerating an absent component throughout — and it drops
+chained subprojects, which is right for the code-side reading but wrong for `DETAIL_BELOW_STEREOTYPE`, a purely
+spec-side verdict that is judged at the parent root like every other spec-side rule. Since the suppression keeps the
+two codes in one rule, the rule flattens its own walk instead: it gathers the methods the dial holds below `full` with
+nothing written, then judges that flat list — 16 rather than the 26 a nested walk would have cost. No fixture covers
+either combination, so the identical finding set would not have caught it.
+
+Behaviour is preserved to the letter once more: the full finding set of all 561 rule-matrix fixtures (2069 findings) is
+byte-identical before and after. `narrative_rules_impl`'s, `doctrine_rules_impl`'s and `wiring_rules_impl`'s
+`NARRATIVE_COMPLEXITY` allows are retired outright — no rule family carries one any more, and the worst narrative left
+in the three measures 19. The built-in registry grows from 77 rules to 86.
 
 ### The rules share one derived read model
 

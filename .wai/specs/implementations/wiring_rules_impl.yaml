@@ -57,153 +57,6 @@ methods:
           its interfaces
         type: local
     symbol: check
-  - name: unusedDetection
-    sourcePath: src/core/rules/wiring/unused-detection.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Collect the base seeds from ctx.components: every Portal and every Observer, each seeding
-          all its contract methods
-        type: local
-      - stepNumber: 2
-        description: >-
-          Add the seeds from ctx.subsystems: the component behind each publicInterfaces entry that
-          names one, seeding all its contract methods, and each lifecycle entrypoint, seeding its
-          one method
-        type: local
-      - stepNumber: 3
-        description: >-
-          Phase 1, the internal walk: baseWalk = walk(ctx, seeds) with the default options, the
-          baseline an invokedBy declaration is judged redundant against
-        type: call
-        targetComponent: narrative_graph_projector
-        targetMethod: walk
-      - stepNumber: 4
-        label: declarations
-        description: Audit every invokedBy declaration
-        type: loop
-        loopKind: forEach
-        over: >-
-          each method m that declares invokedBy, on each interface intf of ctx.interfaces whose
-          component resolves in ctx.componentMap (a declaration on a dangling component is the
-          hierarchy family's finding)
-        endStep: 10
-      - stepNumber: 5
-        description: 'Add the seed {compId: intf.component, methodName: m.name} to invokedBySeeds'
-        type: local
-      - stepNumber: 6
-        description: An out-of-scope declaration still seeds the walk but is not audited
-        type: branch
-        condition: ctx.isSpecInScope(intf.id)
-        onFalseStep: 4
-      - stepNumber: 7
-        description: The caller prose must say who invokes the method and when
-        type: branch
-        condition: m.passesIntentFloor(m.invokedBy.caller) is false
-        onFalseStep: 9
-      - stepNumber: 8
-        description: >-
-          Report INVOKED_BY_UNDESCRIBED (warning; draft context when
-          ctx.isComponentDraft(intf.component) holds, which a draft or design subsystem makes true
-          as well, or intf.status is draft or design) on intf.id, naming the method, the component
-          and the invokedBy kind
-        type: local
-      - stepNumber: 9
-        label: checkRedundant
-        description: A method the internal walk already reaches needs no declared entrypoint
-        type: branch
-        condition: baseWalk.reachesMethod(intf.component, m.name)
-        onFalseStep: 4
-      - stepNumber: 10
-        label: declarationsEnd
-        description: >-
-          Report INVOKED_BY_REDUNDANT (warning; draft context when
-          ctx.isComponentDraft(intf.component) or intf.status is draft or design) on intf.id: the
-          declaration is stale
-        type: local
-      - stepNumber: 11
-        description: Without invokedBy seeds the full reach is baseWalk itself
-        type: branch
-        condition: invokedBySeeds is non-empty
-        onFalseStep: 13
-      - stepNumber: 12
-        description: >-
-          Phase 2, the full walk: reach = walk(ctx, seeds followed by invokedBySeeds) with the
-          default options, so a declared external caller's narrative propagates reachability
-        type: call
-        targetComponent: narrative_graph_projector
-        targetMethod: walk
-      - stepNumber: 13
-        label: components
-        description: Judge each component against the full reach
-        type: loop
-        loopKind: forEach
-        over: the components comp of ctx.components within scope (ctx.isSpecInScope(comp.id))
-        endStep: 19
-      - stepNumber: 14
-        description: An unreached component is reported whole, without its methods
-        type: branch
-        condition: reach.reachesComponent(comp.id) is false
-        onFalseStep: 17
-      - stepNumber: 15
-        description: >-
-          Report UNUSED_COMPONENT (warning; draft context from ctx.isComponentDraft(comp.id), which
-          a draft or design subsystem makes true as well) on comp.id
-        type: local
-      - stepNumber: 16
-        description: Continue with the next component
-        type: jump
-        toStep: 13
-      - stepNumber: 17
-        label: methods
-        description: Check every contract method of the reached component
-        type: loop
-        loopKind: forEach
-        over: each contract method m of each interface intf in ctx.interfacesByComponent for comp.id
-        endStep: 19
-      - stepNumber: 18
-        description: A method no narrative step reaches is unused
-        type: branch
-        condition: reach.reachesMethod(comp.id, m.name) is false
-        onFalseStep: 17
-      - stepNumber: 19
-        label: componentsEnd
-        description: >-
-          Report UNUSED_METHOD (warning; draft context when ctx.isComponentDraft(comp.id) or
-          intf.status is draft or design) on intf.id, the interface declaring the method, as for the
-          invokedBy findings, naming the method and the component
-        type: local
-      - stepNumber: 20
-        description: >-
-          Mark the types referenced by fields: for every field of every type t in ctx.types, pass
-          each ref of t.fieldTypeRefs(field.type) to the private helper markTypeReferenced, which
-          ignores a ref when ctx.isBuiltinType(ref) holds and otherwise records the id of every type
-          in ctx.types whose matchesRef(ref) holds
-        type: local
-      - stepNumber: 21
-        description: >-
-          Mark the types referenced by signatures: pass each ref of m.typeRefs(), for every method m
-          of every interface in ctx.interfaces, to markTypeReferenced
-        type: local
-      - stepNumber: 22
-        label: types
-        description: Judge each type against the recorded references
-        type: loop
-        loopKind: forEach
-        over: the types t of ctx.types within scope (ctx.isSpecInScope(t.id))
-        endStep: 24
-      - stepNumber: 23
-        description: A type no field or signature names is unused
-        type: branch
-        condition: t.id was never recorded as referenced
-        onFalseStep: 22
-      - stepNumber: 24
-        label: typesEnd
-        description: >-
-          Report UNUSED_TYPE (warning; draft context when the subsystem in ctx.subsystems whose id
-          is t.subsystem has status draft or design, none when there is no such subsystem) on t.id
-        type: local
-    symbol: check
   - name: durabilityRoundTrip
     sourcePath: src/core/rules/wiring/durability-round-trip.ts
     narrative:
@@ -390,120 +243,6 @@ methods:
           Report UNREALIZED_CLAIM (warning; draft context from ctx.isImplementationDraft(impl)) on
           impl.id: the intent claims the phrase but the component neither depends on nor owns any
           data-layer component
-        type: local
-    symbol: check
-  - name: invariantBacking
-    sourcePath: src/core/rules/wiring/invariant-backing.ts
-    narrative:
-      - stepNumber: 1
-        label: entities
-        description: 'Entity side: judge each entity''s invariants'
-        type: loop
-        loopKind: forEach
-        over: the types t of ctx.types that declare at least one invariant
-        endStep: 13
-      - stepNumber: 2
-        label: ids
-        description: Check the invariant ids for repeats
-        type: loop
-        loopKind: forEach
-        over: t.invariants, tracking the invariant ids seen so far
-        endStep: 4
-      - stepNumber: 3
-        description: Invariant ids must be unique within the entity
-        type: branch
-        condition: inv.id was already seen
-        onFalseStep: 2
-      - stepNumber: 4
-        label: idsEnd
-        description: >-
-          Report DUPLICATE_INVARIANT_ID (error; draft context from the private helper
-          isEntityDraft(t), which holds when the subsystem in ctx.subsystems whose id is t.subsystem
-          has status draft or design) on t.id, naming the repeated id
-        type: local
-      - stepNumber: 5
-        description: >-
-          Resolve the owning component with the private helper resolveComponentClass:
-          t.componentClass exactly in ctx.componentMap, else inside t's mount namespace (the part of
-          t.id before its last ::); no componentClass means no owner
-        type: branch
-        condition: the owner comp does not resolve
-        onFalseStep: 8
-      - stepNumber: 6
-        description: >-
-          Report INVARIANT_UNANCHORED (warning; draft context from isEntityDraft(t)) on t.id, naming
-          the componentClass that does not resolve, or its absence
-        type: local
-      - stepNumber: 7
-        description: 'Without an owner there is no write path to judge: continue with the next entity'
-        type: jump
-        toStep: 1
-      - stepNumber: 8
-        label: checkWritePaths
-        description: The write-effect contract methods are the paths that must assert the invariants
-        type: branch
-        condition: >-
-          no method of the owner's contracts (ctx.interfacesByComponent for comp.id) has effect
-          write
-        onFalseStep: 11
-      - stepNumber: 9
-        description: >-
-          Report INVARIANT_UNANCHORED (warning; draft context when isEntityDraft(t) or
-          ctx.isComponentDraft(comp.id)) on t.id: the owner declares no effect: write method
-        type: local
-      - stepNumber: 10
-        description: Continue with the next entity
-        type: jump
-        toStep: 1
-      - stepNumber: 11
-        label: writePaths
-        description: Check every write path of every implementation against every invariant
-        type: loop
-        loopKind: forEach
-        over: >-
-          each write-effect method of each owner contract intf, then each implementation impl of
-          that contract (ctx.implementationsByContract.get(intf.id)), then each invariant inv of t
-        endStep: 13
-      - stepNumber: 12
-        description: >-
-          A write method's narrative asserts the invariant when one of its steps lists, in
-          assertsInvariants, a ref the private helper refMatchesInvariant accepts: the ref splits at
-          its last dot (splitInvariantRef) into a type ref and an invariant id equal to inv.id, t
-          declares that id, and t.matchesRef(type ref) holds. An implementation that does not
-          implement the method has no such step: the obligation attaches to the contract's write
-          method, which exists, so the finding stands beside MISSING_IMPLEMENTATION_METHOD and names
-          the invariants the missing narrative must assert
-        type: branch
-        condition: the private helper stepAsserts(impl, method.name, t, inv.id) finds no asserting step
-        onFalseStep: 11
-      - stepNumber: 13
-        label: entitiesEnd
-        description: >-
-          Report UNASSERTED_INVARIANT (warning; draft context when isEntityDraft(t) or
-          ctx.isImplementationDraft(impl)) on impl.id, naming the write method, the owner, the
-          implementation and the invariant with its description
-        type: local
-      - stepNumber: 14
-        label: refs
-        description: 'Reference side: every asserted invariant reference must resolve'
-        type: loop
-        loopKind: forEach
-        over: >-
-          each ref in the assertsInvariants of each narrative step of each method of each
-          implementation impl in ctx.implementations
-        endStep: 16
-      - stepNumber: 15
-        description: >-
-          The ref resolves when it splits at its last dot and some type in ctx.types with invariants
-          both matchesRef(type ref) and declares that invariant id
-        type: branch
-        condition: the private helper resolveInvariantRef(ref, ctx.types) resolves nothing
-        onFalseStep: 14
-      - stepNumber: 16
-        label: refsEnd
-        description: >-
-          Report UNKNOWN_INVARIANT_REF (error; draft context from ctx.isImplementationDraft(impl))
-          on impl.id, naming the step number, the method and the ref
         type: local
     symbol: check
   - name: eventTopology
@@ -787,13 +526,318 @@ methods:
           naming the guarantee, the capability and the bound component and method
         type: local
     symbol: check
-lint:
-  allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: >-
-        D2b splits the narratives this still reports (unusedDetection and invariantBacking);
-        dispatchTables has already been split into dispatch-table-bindings and
-        dispatch-step-routing.
+  - name: invokedByDescription
+    sourcePath: src/core/rules/wiring/invoked-by-description.ts
+    narrative:
+      - stepNumber: 1
+        label: contracts
+        description: For each interface in ctx.interfaces
+        type: loop
+        loopKind: forEach
+        over: ctx.interfaces
+        endStep: 5
+      - stepNumber: 2
+        description: >-
+          A declaration on an unresolvable component cannot be judged (the dangling reference is the
+          hierarchy family's finding), and an out-of-scope interface is not audited
+        type: branch
+        condition: ctx.componentMap has intf.component and ctx.isSpecInScope(intf.id)
+        onFalseStep: 1
+      - stepNumber: 3
+        label: declarations
+        description: Audit every invokedBy declaration on the interface
+        type: loop
+        loopKind: forEach
+        over: each method m of intf.methods that declares invokedBy
+        endStep: 5
+      - stepNumber: 4
+        description: The caller prose must say who invokes the method and when
+        type: branch
+        condition: m.passesIntentFloor(m.invokedBy.caller) is false
+        onFalseStep: 3
+      - stepNumber: 5
+        label: undescribed
+        description: >-
+          Report INVOKED_BY_UNDESCRIBED (warning; draft context when
+          ctx.isComponentDraft(intf.component) holds, which a draft or design subsystem makes true
+          as well, or intf.status is draft or design) on intf.id, naming the method, the component
+          and the invokedBy kind
+        type: local
+    symbol: check
+  - name: unusedDetection
+    sourcePath: src/core/rules/wiring/unused-detection.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Collect the base seeds from ctx.components: every Portal and every Observer, each seeding
+          all its contract methods
+        type: local
+      - stepNumber: 2
+        description: >-
+          Add the seeds from ctx.subsystems: the component behind each publicInterfaces entry that
+          names one, seeding all its contract methods, and each lifecycle entrypoint, seeding its
+          one method
+        type: local
+      - stepNumber: 3
+        description: >-
+          Phase 1, the internal walk: baseWalk = walk(ctx, seeds) with the default options, the
+          baseline an invokedBy declaration is judged redundant against
+        type: call
+        targetComponent: narrative_graph_projector
+        targetMethod: walk
+      - stepNumber: 4
+        label: declarations
+        description: Collect every invokedBy declaration's entrypoint seed
+        type: loop
+        loopKind: forEach
+        over: >-
+          each method m that declares invokedBy, on each interface intf of ctx.interfaces whose
+          component resolves in ctx.componentMap (a declaration on a dangling component is the
+          hierarchy family's finding)
+        endStep: 8
+      - stepNumber: 5
+        description: 'Add the seed {compId: intf.component, methodName: m.name} to invokedBySeeds'
+        type: local
+      - stepNumber: 6
+        description: An out-of-scope declaration still seeds the walk but is not judged
+        type: branch
+        condition: ctx.isSpecInScope(intf.id)
+        onFalseStep: 4
+      - stepNumber: 7
+        description: A method the internal walk already reaches needs no declared entrypoint
+        type: branch
+        condition: baseWalk.reachesMethod(intf.component, m.name)
+        onFalseStep: 4
+      - stepNumber: 8
+        label: declarationsEnd
+        description: >-
+          Report INVOKED_BY_REDUNDANT (warning; draft context when
+          ctx.isComponentDraft(intf.component) or intf.status is draft or design) on intf.id: the
+          declaration is stale
+        type: local
+      - stepNumber: 9
+        description: Without invokedBy seeds the full reach is baseWalk itself
+        type: branch
+        condition: invokedBySeeds is non-empty
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Phase 2, the full walk: reach = walk(ctx, seeds followed by invokedBySeeds) with the
+          default options, so a declared external caller's narrative propagates reachability
+        type: call
+        targetComponent: narrative_graph_projector
+        targetMethod: walk
+      - stepNumber: 11
+        label: components
+        description: Judge each component against the full reach
+        type: loop
+        loopKind: forEach
+        over: the components comp of ctx.components within scope (ctx.isSpecInScope(comp.id))
+        endStep: 17
+      - stepNumber: 12
+        description: An unreached component is reported whole, without its methods
+        type: branch
+        condition: reach.reachesComponent(comp.id) is false
+        onFalseStep: 15
+      - stepNumber: 13
+        description: >-
+          Report UNUSED_COMPONENT (warning; draft context from ctx.isComponentDraft(comp.id), which
+          a draft or design subsystem makes true as well) on comp.id
+        type: local
+      - stepNumber: 14
+        description: Continue with the next component
+        type: jump
+        toStep: 11
+      - stepNumber: 15
+        label: methods
+        description: Check every contract method of the reached component
+        type: loop
+        loopKind: forEach
+        over: each contract method m of each interface intf in ctx.interfacesByComponent for comp.id
+        endStep: 17
+      - stepNumber: 16
+        description: A method no narrative step reaches is unused
+        type: branch
+        condition: reach.reachesMethod(comp.id, m.name) is false
+        onFalseStep: 15
+      - stepNumber: 17
+        label: componentsEnd
+        description: >-
+          Report UNUSED_METHOD (warning; draft context when ctx.isComponentDraft(comp.id) or
+          intf.status is draft or design) on intf.id, the interface declaring the method, as for the
+          invokedBy findings, naming the method and the component
+        type: local
+    symbol: check
+  - name: unusedTypes
+    sourcePath: src/core/rules/wiring/unused-types.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Mark the types referenced by fields: for every field of every type t in ctx.types, pass
+          each ref of t.fieldTypeRefs(field.type) to the private helper markTypeReferenced, which
+          ignores a ref when ctx.isBuiltinType(ref) holds and otherwise records the id of every type
+          in ctx.types whose matchesRef(ref) holds
+        type: local
+      - stepNumber: 2
+        description: >-
+          Mark the types referenced by signatures: pass each ref of m.typeRefs(), for every method m
+          of every interface in ctx.interfaces, to markTypeReferenced
+        type: local
+      - stepNumber: 3
+        label: types
+        description: Judge each type against the recorded references
+        type: loop
+        loopKind: forEach
+        over: the types t of ctx.types within scope (ctx.isSpecInScope(t.id))
+        endStep: 5
+      - stepNumber: 4
+        description: A type no field or signature names is unused
+        type: branch
+        condition: t.id was never recorded as referenced
+        onFalseStep: 3
+      - stepNumber: 5
+        label: typesEnd
+        description: >-
+          Report UNUSED_TYPE (warning; draft context when the subsystem in ctx.subsystems whose id
+          is t.subsystem has status draft or design, none when there is no such subsystem) on t.id
+        type: local
+    symbol: check
+  - name: uniqueInvariantIds
+    sourcePath: src/core/rules/wiring/unique-invariant-ids.ts
+    narrative:
+      - stepNumber: 1
+        label: entities
+        description: >-
+          For each entity that declares invariants, with entityDraft = the subsystem in
+          ctx.subsystems whose id is t.subsystem has status draft or design (a type carries no
+          status of its own, so its subsystem decides, as it does for UNUSED_TYPE)
+        type: loop
+        loopKind: forEach
+        over: the types t of ctx.types that declare at least one invariant
+        endStep: 4
+      - stepNumber: 2
+        label: ids
+        description: Check the invariant ids for repeats
+        type: loop
+        loopKind: forEach
+        over: t.invariants, tracking the invariant ids seen so far
+        endStep: 4
+      - stepNumber: 3
+        description: Invariant ids must be unique within the entity
+        type: branch
+        condition: inv.id was already seen
+        onFalseStep: 2
+      - stepNumber: 4
+        label: idsEnd
+        description: >-
+          Report DUPLICATE_INVARIANT_ID (error; draft context entityDraft) on t.id, naming the
+          repeated id
+        type: local
+    symbol: check
+  - name: invariantBacking
+    sourcePath: src/core/rules/wiring/invariant-backing.ts
+    narrative:
+      - stepNumber: 1
+        label: entities
+        description: >-
+          For each entity that declares invariants, with entityDraft = the private helper
+          isEntityDraft(t), which holds when the subsystem in ctx.subsystems whose id is t.subsystem
+          has status draft or design
+        type: loop
+        loopKind: forEach
+        over: the types t of ctx.types that declare at least one invariant
+        endStep: 10
+      - stepNumber: 2
+        description: >-
+          Resolve the owning component with the private helper resolveComponentClass:
+          t.componentClass exactly in ctx.componentMap, else inside t's mount namespace (the part of
+          t.id before its last ::); no componentClass means no owner
+        type: branch
+        condition: the owner comp does not resolve
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Report INVARIANT_UNANCHORED (warning; draft context entityDraft) on t.id, naming the
+          componentClass that does not resolve, or its absence
+        type: local
+      - stepNumber: 4
+        description: 'Without an owner there is no write path to judge: continue with the next entity'
+        type: jump
+        toStep: 1
+      - stepNumber: 5
+        label: checkWritePaths
+        description: The write-effect contract methods are the paths that must assert the invariants
+        type: branch
+        condition: >-
+          no method of the owner's contracts (ctx.interfacesByComponent for comp.id) has effect
+          write
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Report INVARIANT_UNANCHORED (warning; draft context when entityDraft or
+          ctx.isComponentDraft(comp.id)) on t.id: the owner declares no effect: write method
+        type: local
+      - stepNumber: 7
+        description: Continue with the next entity
+        type: jump
+        toStep: 1
+      - stepNumber: 8
+        label: writePaths
+        description: Check every write path of every implementation against every invariant
+        type: loop
+        loopKind: forEach
+        over: >-
+          each write-effect method of each owner contract intf, then each implementation impl of
+          that contract (ctx.implementationsByContract.get(intf.id)), then each invariant inv of t
+        endStep: 10
+      - stepNumber: 9
+        description: >-
+          A write method's narrative asserts the invariant when one of its steps lists, in
+          assertsInvariants, a ref the shared refMatchesInvariant helper accepts: the ref splits at
+          its last dot (splitInvariantRef) into a type ref and an invariant id equal to inv.id, t
+          declares that id, and t.matchesRef(type ref) holds. An implementation that does not
+          implement the method has no such step: the obligation attaches to the contract's write
+          method, which exists, so the finding stands beside MISSING_IMPLEMENTATION_METHOD and names
+          the invariants the missing narrative must assert
+        type: branch
+        condition: the private helper stepAsserts(impl, method.name, t, inv.id) finds no asserting step
+        onFalseStep: 8
+      - stepNumber: 10
+        label: entitiesEnd
+        description: >-
+          Report UNASSERTED_INVARIANT (warning; draft context when entityDraft or
+          ctx.isImplementationDraft(impl)) on impl.id, naming the write method, the owner, the
+          implementation and the invariant with its description
+        type: local
+    symbol: check
+  - name: invariantReferences
+    sourcePath: src/core/rules/wiring/invariant-references.ts
+    narrative:
+      - stepNumber: 1
+        label: refs
+        description: >-
+          For every invariant a narrative step asserts, with isDraftCtx =
+          ctx.isImplementationDraft(impl)
+        type: loop
+        loopKind: forEach
+        over: >-
+          each ref in the assertsInvariants of each narrative step of each method of each
+          implementation impl in ctx.implementations
+        endStep: 3
+      - stepNumber: 2
+        description: >-
+          The ref resolves when it splits at its last dot and some type in ctx.types with invariants
+          both matchesRef(type ref) and declares that invariant id
+        type: branch
+        condition: the shared resolveInvariantRef(ref, ctx.types) helper resolves nothing
+        onFalseStep: 1
+      - stepNumber: 3
+        label: refsEnd
+        description: >-
+          Report UNKNOWN_INVARIANT_REF (error; draft context isDraftCtx) on impl.id, naming the step
+          number, the method and the ref
+        type: local
+    symbol: check
 status: draft
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-17T23:00:06.650Z'
+updatedAt: '2026-09-18T13:41:30.424Z'

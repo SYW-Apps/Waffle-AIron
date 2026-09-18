@@ -10,7 +10,7 @@ import { findingRealizationRule } from '../../src/core/rules/conformance/finding
 
 // ---------------------------------------------------------------------------
 // Reported misbehaviour in the conformance family, each pinned where it was
-// reproduced: integration-conformance counting files that do not exist and
+// reproduced: integration-sim-wiring counting files that do not exist and
 // chained subprojects' child-relative paths, dependency-conformance reporting
 // one edge twice, hidden-state ignoring the method-level conformance dial, and
 // finding-realization's UNREALIZED_FINDING summary.
@@ -129,7 +129,7 @@ function validate(t: Tree, children: Record<string, Tree> = {}): ValidationIssue
 
 const byCode = (issues: ValidationIssue[], code: string): ValidationIssue[] => issues.filter(i => i.code === code);
 
-describe('integration-conformance — a missing own file reports once', () => {
+describe('integration-sim-wiring — a missing own file reports once', () => {
   it('a component whose named file does not exist gets MISSING_SOURCE_FILE, not UNWIRED_INTEGRATION_SIM on top', () => {
     const issues = validate(tree([
       unit('order-orchestrator', {
@@ -184,7 +184,7 @@ describe('integration-conformance — a missing own file reports once', () => {
   });
 });
 
-describe('integration-conformance — chained subprojects', () => {
+describe('the integration-sim rules — chained subprojects', () => {
   it("a dependency realized in a chained subproject is not judged by its child-relative paths resolved at this root", () => {
     const parent = tree([
       unit('checkout-orchestrator', {

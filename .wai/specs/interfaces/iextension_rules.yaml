@@ -102,15 +102,47 @@ methods:
       - code: VARIANT_BASE_MISMATCH
         severity: error
         summary: Component's stereotype does not match the variant's declared base
-  - name: declarativeAssertions
+  - name: assertionForbiddenEdges
     description: >-
-      Rule declarative-assertions. Evaluates the declarative rule assertions loaded packs declare
-      (forbid-edge / require-field / endpoint-shape) — closed kinds instantiated with pack data, the
-      hosted-safe doctrine channel. Findings carry the pack's namespaced code (<PACK>_<CODE>) and
-      its stated reason; severity is the pack's declaration (project sddRuleSeverity still wins, and
-      error downgrades to warning in draft context). The codes are the packs' own, so no fixed code
-      list applies.
-    signature: 'declarativeAssertions(ctx: RuleContext): void'
+      Rule assertion-forbidden-edges. Evaluates the `forbid-edge` assertions loaded packs declare:
+      for every component matching the assertion's from-selector, every dependsOn/owns id whose
+      target matches the to-selector is reported. Findings carry the pack's namespaced code
+      (<PACK>_<CODE>) and its stated reason; severity is the pack's declaration (project
+      sddRuleSeverity still wins, and error downgrades to warning in draft context). The codes are
+      the packs' own, so no fixed code list applies.
+    signature: 'assertionForbiddenEdges(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings: []
+  - name: assertionRequiredFields
+    description: >-
+      Rule assertion-required-fields. Evaluates the `require-field` assertions loaded packs declare:
+      at the assertion's level (component / interface / implementation), every spec whose owning
+      component matches the on-selector must declare the named field — a top-level spec field or an
+      `ext.*` path — and, when the assertion states a closed value set, hold one of those values.
+      Findings carry the pack's namespaced code (<PACK>_<CODE>) and its stated reason; severity is
+      the pack's declaration (project sddRuleSeverity still wins, and error downgrades to warning in
+      draft context). The codes are the packs' own, so no fixed code list applies.
+    signature: 'assertionRequiredFields(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings: []
+  - name: assertionEndpointShapes
+    description: >-
+      Rule assertion-endpoint-shapes. Evaluates the `endpoint-shape` assertions loaded packs
+      declare: every endpoint bound on a contract whose component matches the on-selector must use
+      an allowed transport and bind an address (path / topic / command / pipe / channel) matching
+      the assertion's anchored pattern. Findings carry the pack's namespaced code (<PACK>_<CODE>)
+      and its stated reason; severity is the pack's declaration (project sddRuleSeverity still wins,
+      and error downgrades to warning in draft context). The codes are the packs' own, so no fixed
+      code list applies.
+    signature: 'assertionEndpointShapes(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
@@ -172,4 +204,4 @@ methods:
         summary: Pack selection is neither bundled nor obtainable from a recorded source
 status: draft
 createdAt: '2026-09-14T06:07:43.654Z'
-updatedAt: '2026-09-17T21:55:33.283Z'
+updatedAt: '2026-09-18T12:25:32.983Z'

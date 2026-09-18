@@ -139,191 +139,6 @@ methods:
         description: Continue with the next implementation.
         type: local
     symbol: check
-  - name: namespaceHygiene
-    sourcePath: src/core/rules/integrity/namespace-hygiene.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Compute rootSubs — the set of root-level subsystem ids: every id in ctx.subsystems with no
-          "::" segment.
-        type: local
-      - stepNumber: 2
-        label: nsSubStart
-        description: >-
-          For each subsystem id, check it against the namespace grammar (mirrors the shared private
-          checkId(id, 'Subsystem') helper).
-        type: loop
-        loopKind: forEach
-        over: ctx.subsystems
-        endStep: 7
-      - stepNumber: 3
-        description: 'Branch: in scope and does the id use the reserved "super" segment?'
-        type: branch
-        condition: >-
-          the id is in scope (ctx.isSpecInScope) and its "::" segments include the reserved keyword
-          "super"
-        onFalseStep: 5
-      - stepNumber: 4
-        description: >-
-          Report RESERVED_ID_SEGMENT (error) naming the subsystem id ("Subsystem") and warning a
-          stored reference to it would be consumed as a namespace hop and resolve to a different
-          spec.
-        type: local
-      - stepNumber: 5
-        label: nsSubShadowCheck
-        description: 'Branch: in scope, namespaced, and does its local name shadow a root subsystem?'
-        type: branch
-        condition: >-
-          the id is in scope, has more than one "::" segment, and its last segment matches a
-          root-level subsystem id in rootSubs
-        onFalseStep: 7
-      - stepNumber: 6
-        description: >-
-          Report NAMESPACE_SHADOWING (error) naming the subsystem id ("Subsystem"), the root
-          subsystem it shadows, and that a bare reference inside its subproject would anchor to the
-          root, making the local spec unaddressable.
-        type: local
-      - stepNumber: 7
-        label: nsSubEnd
-        description: Continue with the next subsystem id.
-        type: local
-      - stepNumber: 8
-        label: nsCompStart
-        description: For each component id, check it against the namespace grammar ("Component").
-        type: loop
-        loopKind: forEach
-        over: ctx.components
-        endStep: 13
-      - stepNumber: 9
-        description: 'Branch: in scope and does the id use the reserved "super" segment?'
-        type: branch
-        condition: the id is in scope and its "::" segments include the reserved keyword "super"
-        onFalseStep: 11
-      - stepNumber: 10
-        description: >-
-          Report RESERVED_ID_SEGMENT (error) naming the component id ("Component") and warning a
-          stored reference would be consumed as a namespace hop.
-        type: local
-      - stepNumber: 11
-        label: nsCompShadowCheck
-        description: 'Branch: in scope, namespaced, and does its local name shadow a root subsystem?'
-        type: branch
-        condition: >-
-          the id is in scope, has more than one "::" segment, and its last segment matches a
-          root-level subsystem id in rootSubs
-        onFalseStep: 13
-      - stepNumber: 12
-        description: >-
-          Report NAMESPACE_SHADOWING (error) naming the component id ("Component"), the root
-          subsystem it shadows, and the anchoring hazard.
-        type: local
-      - stepNumber: 13
-        label: nsCompEnd
-        description: Continue with the next component id.
-        type: local
-      - stepNumber: 14
-        label: nsIntfStart
-        description: For each interface id, check it against the namespace grammar ("Interface").
-        type: loop
-        loopKind: forEach
-        over: ctx.interfaces
-        endStep: 19
-      - stepNumber: 15
-        description: 'Branch: in scope and does the id use the reserved "super" segment?'
-        type: branch
-        condition: the id is in scope and its "::" segments include the reserved keyword "super"
-        onFalseStep: 17
-      - stepNumber: 16
-        description: >-
-          Report RESERVED_ID_SEGMENT (error) naming the interface id ("Interface") and warning a
-          stored reference would be consumed as a namespace hop.
-        type: local
-      - stepNumber: 17
-        label: nsIntfShadowCheck
-        description: 'Branch: in scope, namespaced, and does its local name shadow a root subsystem?'
-        type: branch
-        condition: >-
-          the id is in scope, has more than one "::" segment, and its last segment matches a
-          root-level subsystem id in rootSubs
-        onFalseStep: 19
-      - stepNumber: 18
-        description: >-
-          Report NAMESPACE_SHADOWING (error) naming the interface id ("Interface"), the root
-          subsystem it shadows, and the anchoring hazard.
-        type: local
-      - stepNumber: 19
-        label: nsIntfEnd
-        description: Continue with the next interface id.
-        type: local
-      - stepNumber: 20
-        label: nsImplStart
-        description: For each implementation id, check it against the namespace grammar ("Implementation").
-        type: loop
-        loopKind: forEach
-        over: ctx.implementations
-        endStep: 25
-      - stepNumber: 21
-        description: 'Branch: in scope and does the id use the reserved "super" segment?'
-        type: branch
-        condition: the id is in scope and its "::" segments include the reserved keyword "super"
-        onFalseStep: 23
-      - stepNumber: 22
-        description: >-
-          Report RESERVED_ID_SEGMENT (error) naming the implementation id ("Implementation") and
-          warning a stored reference would be consumed as a namespace hop.
-        type: local
-      - stepNumber: 23
-        label: nsImplShadowCheck
-        description: 'Branch: in scope, namespaced, and does its local name shadow a root subsystem?'
-        type: branch
-        condition: >-
-          the id is in scope, has more than one "::" segment, and its last segment matches a
-          root-level subsystem id in rootSubs
-        onFalseStep: 25
-      - stepNumber: 24
-        description: >-
-          Report NAMESPACE_SHADOWING (error) naming the implementation id ("Implementation"), the
-          root subsystem it shadows, and the anchoring hazard.
-        type: local
-      - stepNumber: 25
-        label: nsImplEnd
-        description: Continue with the next implementation id.
-        type: local
-      - stepNumber: 26
-        label: nsTypeStart
-        description: For each type id, check it against the namespace grammar ("Type").
-        type: loop
-        loopKind: forEach
-        over: ctx.types
-        endStep: 31
-      - stepNumber: 27
-        description: 'Branch: in scope and does the id use the reserved "super" segment?'
-        type: branch
-        condition: the id is in scope and its "::" segments include the reserved keyword "super"
-        onFalseStep: 29
-      - stepNumber: 28
-        description: >-
-          Report RESERVED_ID_SEGMENT (error) naming the type id ("Type") and warning a stored
-          reference would be consumed as a namespace hop.
-        type: local
-      - stepNumber: 29
-        label: nsTypeShadowCheck
-        description: 'Branch: in scope, namespaced, and does its local name shadow a root subsystem?'
-        type: branch
-        condition: >-
-          the id is in scope, has more than one "::" segment, and its last segment matches a
-          root-level subsystem id in rootSubs
-        onFalseStep: 31
-      - stepNumber: 30
-        description: >-
-          Report NAMESPACE_SHADOWING (error) naming the type id ("Type"), the root subsystem it
-          shadows, and the anchoring hazard.
-        type: local
-      - stepNumber: 31
-        label: nsTypeEnd
-        description: Continue with the next type id.
-        type: local
-    symbol: check
   - name: roundtripSerialization
     sourcePath: src/core/rules/integrity/roundtrip-serialization.ts
     narrative:
@@ -337,165 +152,6 @@ methods:
       - stepNumber: 2
         label: rtEnd
         description: Report ROUNDTRIP_SERIALIZATION (error) using the issue's own message and specId verbatim.
-        type: local
-    symbol: check
-  - name: publicSurface
-    sourcePath: src/core/rules/integrity/public-surface.ts
-    narrative:
-      - stepNumber: 1
-        label: psSubStart
-        description: >-
-          For each loaded subsystem, check every declared public interface entry against its backing
-          component.
-        type: loop
-        loopKind: forEach
-        over: ctx.subsystems
-        endStep: 28
-      - stepNumber: 2
-        description: isDraftCtx = sub.isDraft().
-        type: local
-      - stepNumber: 3
-        label: psPiStart
-        description: For each public interface entry declared on the subsystem.
-        type: loop
-        loopKind: forEach
-        over: sub.publicInterfaces
-        endStep: 27
-      - stepNumber: 4
-        description: 'Branch: is pi.component unset?'
-        type: branch
-        condition: the entry declares no backing component (pi.component is unset)
-        onFalseStep: 7
-      - stepNumber: 5
-        description: >-
-          Report PUBLIC_INTERFACE_UNBOUND (error; isDraftCtx) naming the subsystem and the entry's
-          declared type, with no backing component bound.
-        type: local
-      - stepNumber: 6
-        description: >-
-          Skip the rest of this entry's checks and continue with the next public interface (mirrors
-          the source's continue).
-        type: jump
-        toStep: 27
-      - stepNumber: 7
-        label: psHasComponent
-        description: backing = ctx.componentMap.get(pi.component).
-        type: local
-      - stepNumber: 8
-        description: 'Branch: does pi.component resolve to no existing component?'
-        type: branch
-        condition: no component matches pi.component in ctx.componentMap (backing is undefined)
-        onFalseStep: 11
-      - stepNumber: 9
-        description: >-
-          Report PUBLIC_INTERFACE_INVALID_COMPONENT (error; isDraftCtx) naming the subsystem and the
-          non-existent component pi.component references.
-        type: local
-      - stepNumber: 10
-        description: >-
-          Skip the rest of this entry's checks and continue with the next public interface (mirrors
-          the source's continue).
-        type: jump
-        toStep: 27
-      - stepNumber: 11
-        label: psHasBacking
-        description: isSubsystemOwner = backing.subsystem equals sub.id, or starts with sub.id + "::".
-        type: local
-      - stepNumber: 12
-        description: 'Branch: is isSubsystemOwner false?'
-        type: branch
-        condition: the subsystem does not own the backing component (isSubsystemOwner is false)
-        onFalseStep: 14
-      - stepNumber: 13
-        description: >-
-          Report PUBLIC_INTERFACE_FOREIGN_COMPONENT (error; isDraftCtx) naming the subsystem, the
-          component, and the subsystem it actually belongs to — a subsystem may only publish its own
-          components.
-        type: local
-      - stepNumber: 14
-        label: psAfterForeign
-        description: 'Branch: does pubTypeMatches report a mismatch?'
-        type: branch
-        condition: >-
-          the entry's declared type cannot be realized by the backing component's stereotype
-          (pubTypeMatches(pi.type, backing.componentType, backing.portalType) is false)
-        onFalseStep: 16
-      - stepNumber: 15
-        description: >-
-          Report PUBLIC_INTERFACE_TYPE_MISMATCH (error; isDraftCtx) naming the subsystem, the
-          component and its stereotype/portalType, and the expected shape for pi.type (expectedFor).
-        type: local
-      - stepNumber: 16
-        label: psAfterTypeMismatch
-        description: 'Branch: is pi.interface set?'
-        type: branch
-        condition: the entry names a bound L3 interface (pi.interface is set)
-        onFalseStep: 23
-      - stepNumber: 17
-        description: intf = ctx.interfaceMap.get(pi.interface).
-        type: local
-      - stepNumber: 18
-        description: 'Branch: does pi.interface resolve to no existing interface?'
-        type: branch
-        condition: no interface matches pi.interface in ctx.interfaceMap (intf is undefined)
-        onTrueStep: 19
-        onFalseStep: 21
-      - stepNumber: 19
-        label: psReportMissingInterface
-        description: >-
-          Report PUBLIC_INTERFACE_INVALID_INTERFACE (error; isDraftCtx) naming the subsystem and the
-          non-existent interface pi.interface references.
-        type: local
-      - stepNumber: 20
-        description: Continue past the interface-ownership check (already resolved as missing).
-        type: jump
-        toStep: 23
-      - stepNumber: 21
-        label: psCheckInterfaceOwner
-        description: 'Branch: does the interface belong to a different component?'
-        type: branch
-        condition: >-
-          the resolved interface belongs to a different component than pi.component (intf.component
-          !== pi.component)
-        onFalseStep: 23
-      - stepNumber: 22
-        description: >-
-          Report PUBLIC_INTERFACE_INVALID_INTERFACE (error; isDraftCtx) naming the subsystem, the
-          interface pi.interface, the component it is bound to (pi.component), and the component it
-          actually belongs to (intf.component).
-        type: local
-      - stepNumber: 23
-        label: psAfterInterfaceCheck
-        description: 'Branch: is pi.type "Custom" and does EVENT_VOCAB match pi.details?'
-        type: branch
-        condition: >-
-          the entry is typed Custom and its details prose matches the event/async vocabulary
-          (EVENT_VOCAB)
-        onFalseStep: 27
-      - stepNumber: 24
-        description: >-
-          eventCapable = backing.componentType is "Observer", or backing.componentType is "Portal"
-          with portalType "MessageBus".
-        type: local
-      - stepNumber: 25
-        description: 'Branch: is eventCapable false?'
-        type: branch
-        condition: the backing component cannot realize eventing (eventCapable is false)
-        onFalseStep: 27
-      - stepNumber: 26
-        description: >-
-          Report PUBLIC_INTERFACE_EVENT_MISTYPED (warning; isDraftCtx) naming the subsystem, the
-          Custom entry's description, and the backing component's stereotype/portalType,
-          recommending it be retyped MessageBus and backed by an Observer or MessageBus Portal, or
-          reworded.
-        type: local
-      - stepNumber: 27
-        label: psPiEnd
-        description: Continue with the next public interface entry.
-        type: local
-      - stepNumber: 28
-        label: psSubEnd
-        description: Continue with the next subsystem.
         type: local
     symbol: check
   - name: lintAllows
@@ -677,15 +333,285 @@ methods:
           the undefined reference.
         type: local
     symbol: check
-lint:
-  allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: >-
-        D2b splits the narratives this still reports (namespaceHygiene and publicSurface);
-        typeReferences has already been split into type-declarations, field-type-references and
-        signature-type-references.
-    - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: D2b splits namespaceHygiene and publicSurface, which list more than 25 steps.
+  - name: reservedIdSegments
+    sourcePath: src/core/rules/integrity/reserved-id-segments.ts
+    narrative:
+      - stepNumber: 1
+        label: ridStart
+        description: >-
+          For each spec id in the tree, with the kind label its findings name it by (ctx.specIds():
+          the subsystem, component, interface, implementation and type ids, in that order).
+        type: loop
+        loopKind: forEach
+        over: ctx.specIds()
+        endStep: 3
+      - stepNumber: 2
+        description: 'Branch: is the id in scope and does it spend a segment on the reserved keyword?'
+        type: branch
+        condition: >-
+          the id is in scope (ctx.isSpecInScope) and its "::" segments include the reserved keyword
+          "super"
+        onFalseStep: 1
+      - stepNumber: 3
+        label: ridReport
+        description: >-
+          Report RESERVED_ID_SEGMENT (error) naming the id and its kind label, and warning that a
+          stored reference to it would be consumed as a namespace hop and resolve to a different
+          spec.
+        type: local
+    symbol: check
+  - name: namespaceShadowing
+    sourcePath: src/core/rules/integrity/namespace-shadowing.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Compute rootSubs — the set of root-level subsystem ids: every id in ctx.subsystems with no
+          "::" segment.
+        type: local
+      - stepNumber: 2
+        label: shadowStart
+        description: For each spec id in the tree, with the kind label its findings name it by (ctx.specIds()).
+        type: loop
+        loopKind: forEach
+        over: ctx.specIds()
+        endStep: 4
+      - stepNumber: 3
+        description: 'Branch: is the id in scope, namespaced, and does its local name shadow a root subsystem?'
+        type: branch
+        condition: >-
+          the id is in scope (ctx.isSpecInScope), has more than one "::" segment, and its last
+          segment matches a root-level subsystem id in rootSubs
+        onFalseStep: 2
+      - stepNumber: 4
+        label: shadowReport
+        description: >-
+          Report NAMESPACE_SHADOWING (error) naming the id and its kind label, the root subsystem it
+          shadows, and that a bare reference inside its subproject would anchor to the ROOT
+          subsystem, making the local spec unaddressable — rename one of them.
+        type: local
+    symbol: check
+  - name: publicSurfaceBinding
+    sourcePath: src/core/rules/integrity/public-surface-binding.ts
+    narrative:
+      - stepNumber: 1
+        label: psbSubStart
+        description: For each loaded subsystem, check what backs every declared public interface entry.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 12
+      - stepNumber: 2
+        description: isDraftCtx = sub.isDraft().
+        type: local
+      - stepNumber: 3
+        label: psbPiStart
+        description: For each public interface entry declared on the subsystem.
+        type: loop
+        loopKind: forEach
+        over: sub.publicInterfaces
+        endStep: 12
+      - stepNumber: 4
+        description: 'Branch: is pi.component unset?'
+        type: branch
+        condition: the entry declares no backing component (pi.component is unset)
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Report PUBLIC_INTERFACE_UNBOUND (error; isDraftCtx) naming the subsystem and the entry's
+          declared type, with no backing component bound.
+        type: local
+      - stepNumber: 6
+        description: >-
+          Skip the rest of this entry's checks and continue with the next public interface (mirrors
+          the source's continue).
+        type: jump
+        toStep: 3
+      - stepNumber: 7
+        label: psbHasComponent
+        description: backing = ctx.componentMap.get(pi.component).
+        type: local
+      - stepNumber: 8
+        description: 'Branch: does pi.component resolve to no existing component?'
+        type: branch
+        condition: no component matches pi.component in ctx.componentMap (backing is undefined)
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Report PUBLIC_INTERFACE_INVALID_COMPONENT (error; isDraftCtx) naming the subsystem and the
+          non-existent component pi.component references.
+        type: local
+      - stepNumber: 10
+        description: >-
+          Skip the rest of this entry's checks and continue with the next public interface (mirrors
+          the source's continue).
+        type: jump
+        toStep: 3
+      - stepNumber: 11
+        label: psbOwnership
+        description: >-
+          Branch: does the subsystem own the backing component — is backing.subsystem equal to
+          sub.id, or does it start with sub.id + "::"?
+        type: branch
+        condition: the subsystem does not own the backing component (isSubsystemOwner is false)
+        onFalseStep: 3
+      - stepNumber: 12
+        label: psbForeignReport
+        description: >-
+          Report PUBLIC_INTERFACE_FOREIGN_COMPONENT (error; isDraftCtx) naming the subsystem, the
+          component, and the subsystem it actually belongs to — a subsystem may only publish its own
+          components.
+        type: local
+    symbol: check
+  - name: publicSurfaceDeclaredType
+    sourcePath: src/core/rules/integrity/public-surface-declared-type.ts
+    narrative:
+      - stepNumber: 1
+        label: psdSubStart
+        description: >-
+          For each loaded subsystem, check what every declared public interface entry's type asks of
+          its backing component.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 11
+      - stepNumber: 2
+        description: isDraftCtx = sub.isDraft().
+        type: local
+      - stepNumber: 3
+        label: psdPiStart
+        description: For each public interface entry declared on the subsystem.
+        type: loop
+        loopKind: forEach
+        over: sub.publicInterfaces
+        endStep: 11
+      - stepNumber: 4
+        description: backing = ctx.componentMap.get(pi.component) when the entry names a component.
+        type: local
+      - stepNumber: 5
+        description: >-
+          Branch: public-surface-binding's preconditions, restated — does the entry name a component
+          that resolves? An unbound or unresolvable entry is that rule's finding and has no
+          stereotype to judge: continue with the next entry.
+        type: branch
+        condition: >-
+          the entry names a backing component and it resolves in ctx.componentMap (backing is
+          defined)
+        onFalseStep: 3
+      - stepNumber: 6
+        description: 'Branch: does the private pubTypeMatches report a mismatch?'
+        type: branch
+        condition: >-
+          the entry's declared type cannot be realized by the backing component's stereotype
+          (pubTypeMatches(pi.type, backing.componentType, backing.portalType) is false)
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report PUBLIC_INTERFACE_TYPE_MISMATCH (error; isDraftCtx) naming the subsystem, the
+          component and its stereotype/portalType, and the expected shape for pi.type (the private
+          expectedFor).
+        type: local
+      - stepNumber: 8
+        label: psdCustomEscape
+        description: >-
+          Branch: is pi.type "Custom" and does the private EVENT_VOCAB match pi.details — the
+          escape-to-Custom hole, where an unrealized event boundary hides behind the one type that
+          carries no backing obligation?
+        type: branch
+        condition: >-
+          the entry is typed Custom and its details prose matches the event/async vocabulary
+          (EVENT_VOCAB)
+        onFalseStep: 3
+      - stepNumber: 9
+        description: >-
+          eventCapable = backing.componentType is "Observer", or backing.componentType is "Portal"
+          with portalType "MessageBus".
+        type: local
+      - stepNumber: 10
+        description: 'Branch: is eventCapable false?'
+        type: branch
+        condition: the backing component cannot realize eventing (eventCapable is false)
+        onFalseStep: 3
+      - stepNumber: 11
+        label: psdEventReport
+        description: >-
+          Report PUBLIC_INTERFACE_EVENT_MISTYPED (warning; isDraftCtx) naming the subsystem, the
+          Custom entry's description, and the backing component's stereotype/portalType,
+          recommending it be retyped MessageBus and backed by an Observer or MessageBus Portal, or
+          reworded.
+        type: local
+    symbol: check
+  - name: publicSurfaceBoundContract
+    sourcePath: src/core/rules/integrity/public-surface-bound-contract.ts
+    narrative:
+      - stepNumber: 1
+        label: pscSubStart
+        description: >-
+          For each loaded subsystem, check the L3 interface every declared public interface entry
+          binds.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 11
+      - stepNumber: 2
+        description: isDraftCtx = sub.isDraft().
+        type: local
+      - stepNumber: 3
+        label: pscPiStart
+        description: For each public interface entry declared on the subsystem.
+        type: loop
+        loopKind: forEach
+        over: sub.publicInterfaces
+        endStep: 11
+      - stepNumber: 4
+        description: 'Branch: does the entry bind an L3 interface at all?'
+        type: branch
+        condition: the entry names a bound L3 interface (pi.interface is set)
+        onFalseStep: 3
+      - stepNumber: 5
+        description: >-
+          Branch: public-surface-binding's preconditions, restated — does the entry name a component
+          that resolves? Against an entry that names nothing real the ownership comparison is
+          trivially true for every interface, so it can only misfire: continue with the next entry.
+        type: branch
+        condition: the entry names a backing component and ctx.componentMap has it
+        onFalseStep: 3
+      - stepNumber: 6
+        description: intf = ctx.interfaceMap.get(pi.interface).
+        type: local
+      - stepNumber: 7
+        description: 'Branch: does pi.interface resolve to no existing interface?'
+        type: branch
+        condition: no interface matches pi.interface in ctx.interfaceMap (intf is undefined)
+        onTrueStep: 8
+        onFalseStep: 10
+      - stepNumber: 8
+        label: pscMissingInterface
+        description: >-
+          Report PUBLIC_INTERFACE_INVALID_INTERFACE (error; isDraftCtx) naming the subsystem and the
+          non-existent interface pi.interface references.
+        type: local
+      - stepNumber: 9
+        description: Continue with the next public interface entry (already resolved as missing).
+        type: jump
+        toStep: 3
+      - stepNumber: 10
+        label: pscInterfaceOwner
+        description: >-
+          Branch: does the resolved interface belong to a different component than the one the entry
+          publishes?
+        type: branch
+        condition: >-
+          the resolved interface belongs to a different component than pi.component (intf.component
+          !== pi.component)
+        onFalseStep: 3
+      - stepNumber: 11
+        label: pscForeignInterface
+        description: >-
+          Report PUBLIC_INTERFACE_INVALID_INTERFACE (error; isDraftCtx) naming the subsystem, the
+          interface pi.interface, the component it is bound to (pi.component), and the component it
+          actually belongs to (intf.component).
+        type: local
+    symbol: check
 status: draft
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-17T22:00:20.709Z'
+updatedAt: '2026-09-18T13:01:22.801Z'

@@ -258,5 +258,22 @@ methods:
       Every dependsOn edge in the tree, resolved on first ask and kept: the prologue the five
       dependency rules each used to re-pay before they could judge anything, including the pack
       allowedEdges escape that must relax the whole matrix or none of it
+  - name: specIds
+    signature: 'specIds(): SpecId[]'
+    returns: SpecId[]
+    description: >-
+      Every spec id in the tree with the kind label its findings name it by, in subsystem,
+      component, interface, implementation, type order, derived on first ask and kept: the id
+      hygiene rules judge ids and nothing else, and the five-collection walk was most of what their
+      narratives said
+  - name: implementationMethods
+    signature: 'implementationMethods(): ResolvedMethod[]'
+    returns: ResolvedMethod[]
+    description: >-
+      Every implementation method whose descent resolves, with the component it realizes, the file
+      that realizes it and its draft context, derived on first ask and kept: the six hops a
+      conformance rule paid before it could examine anything, and plumbing in all of them. The
+      conformance dial and the exact-grade test are not applied — that stance stays written in the
+      rule that accuses
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-18T01:06:34.239Z'
+updatedAt: '2026-09-18T13:02:44.557Z'

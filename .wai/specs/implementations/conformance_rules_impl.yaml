@@ -6,122 +6,6 @@ description: >-
 contract: iconformance_rules
 simPath: tests/core/validation.test.ts
 methods:
-  - name: callConformance
-    sourcePath: src/core/rules/conformance/call-conformance.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          code = ctx.codeIndex(): the run's source files keyed by canonical path, derived once and
-          shared with every conformance rule
-        type: local
-      - stepNumber: 2
-        label: implLoop
-        description: Check each implementation
-        type: loop
-        over: ctx.implementations
-        endStep: 17
-      - stepNumber: 3
-        description: >-
-          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
-          ctx.componentMap.get(contract.component)
-        type: local
-      - stepNumber: 4
-        description: >-
-          Unresolvable and chained-subproject implementations are skipped: continue with the next
-          implementation
-        type: branch
-        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
-        onFalseStep: 2
-      - stepNumber: 5
-        description: >-
-          specTier = impl.conformance ?? component.defaultConformanceTier(); isDraftCtx =
-          ctx.isImplementationDraft(impl)
-        type: local
-      - stepNumber: 6
-        label: methodLoop
-        description: Check each implementation method
-        type: loop
-        over: impl.methods
-        endStep: 17
-      - stepNumber: 7
-        description: >-
-          tier = implMethod.conformance ?? specTier; file = implMethod.sourceFile(impl.sourcePath);
-          facts = code.factsAt(file) when file is named
-        type: local
-      - stepNumber: 8
-        description: >-
-          The conformance dial off skips, and only exact analysis grade fires (weaker grades never
-          guess): otherwise continue with the next method
-        type: branch
-        condition: >-
-          tier is not off, implMethod.narrative is non-empty, file is named, and facts exist with
-          status analyzed at analysisGrade exact
-        onFalseStep: 6
-      - stepNumber: 9
-        description: >-
-          fnSymbol = implMethod.symbol ?? implMethod.name. callees = the private
-          closedCallees(facts, fnSymbol): the function's own entry in facts.functionCalls (read
-          through the private ownEntry, own properties only, so names like toString never resolve to
-          Object.prototype), closed transitively over the same-file named functions it calls; none
-          when the function has no entry. Start an empty missing list
-        type: local
-      - stepNumber: 10
-        description: >-
-          A missing realized function is structural conformance's finding, and a duplicate here
-          would be noise: continue with the next method
-        type: branch
-        condition: callees is present
-        onFalseStep: 6
-      - stepNumber: 11
-        label: stepLoop
-        description: Check each narrative step
-        type: loop
-        over: implMethod.narrative
-        endStep: 15
-      - stepNumber: 12
-        description: >-
-          Only call steps count (dispatch steps route through runtime tables, so the bound name
-          never appears at the call site); a target this tree does not contain is
-          cross-tree-references' finding, and surface-reference-backing's once it resolves: continue
-          with the next step
-        type: branch
-        condition: >-
-          step is a call step with targetComponent and targetMethod, and ctx.componentMap has
-          step.targetComponent
-        onFalseStep: 11
-      - stepNumber: 13
-        description: >-
-          accepted = step.targetMethod plus the symbol of the same-named method in each
-          implementation (ctx.implementationsByContract.get(interface.id)) of each interface in
-          ctx.interfacesByComponent.get(step.targetComponent)
-        type: local
-      - stepNumber: 14
-        description: >-
-          N:1 identity forwarding (the caller's own realized symbol is the target name) or a
-          matching callee realizes the step: continue with the next step
-        type: branch
-        condition: accepted lacks fnSymbol and no name in accepted is among callees
-        onFalseStep: 11
-      - stepNumber: 15
-        label: appendMissing
-        description: >-
-          Append the step's stepNumber, its target (targetComponent.targetMethod) and the accepted
-          names to missing
-        type: local
-      - stepNumber: 16
-        description: A method with every call step realized continues with the next method
-        type: branch
-        condition: missing is non-empty
-        onFalseStep: 6
-      - stepNumber: 17
-        label: report
-        description: >-
-          Report CALL_STEP_UNREALIZED (warning; spec impl.id; draft context isDraftCtx), one finding
-          per method listing each unrealized step with its target and the names looked for, the
-          function fnSymbol and file: callees are matched by name, closed over same-file helpers,
-          set membership only (order and arguments are not checked)
-        type: local
-    symbol: check
   - name: hiddenState
     sourcePath: src/core/rules/conformance/hidden-state.ts
     narrative:
@@ -298,177 +182,6 @@ methods:
           targetId, else as whichever of the two does, with fromFiles and the target subsystem
           across subsystems or the target's files: the collaboration is wired indirectly (DI) or the
           declared edge is stale
-        type: local
-    symbol: check
-  - name: integrationConformance
-    sourcePath: src/core/rules/conformance/integration-conformance.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          code = ctx.codeIndex(); realization = ctx.realizationIndex(); graph = ctx.importGraph()
-          over every path the run analyzed — the graph's default closed set, which is the one a
-          harness is walked over
-        type: local
-      - stepNumber: 2
-        description: >-
-          A named file is a module only when it exists: code.factsAt reports status analyzed or
-          unreadable, a missing or escaped file being structural conformance's finding alone that no
-          harness can reach. modulesOf(compId) = realization.filesOf(compId) narrowed to those, and
-          modulesIn(subsystemId) = realization.filesIn(subsystemId) narrowed the same way — the
-          realization index already leaves out implementations whose component does not resolve and
-          those inside a chained subproject, whose sourcePaths are relative to the child's own root.
-          adopted = the subsystem of every such component whose implementation declares a simPath
-        type: local
-      - stepNumber: 3
-        label: implLoop
-        description: Judge each implementation's integration harness
-        type: loop
-        over: ctx.implementations
-        endStep: 25
-      - stepNumber: 4
-        description: >-
-          Resolve comp = ctx.componentMap.get(contract.component) for contract =
-          ctx.interfaceMap.get(impl.contract); once comp resolves, deps = the distinct ids of
-          comp.dependsOn then comp.owns that ctx.componentMap resolves
-        type: local
-      - stepNumber: 5
-        description: >-
-          Unresolvable and chained-subproject implementations are skipped: continue with the next
-          implementation
-        type: branch
-        condition: comp resolves and !ctx.isInChainedSubproject(comp.subsystem)
-        onFalseStep: 3
-      - stepNumber: 6
-        description: 'Expectation half: whether this implementation should declare a harness'
-        type: branch
-        condition: impl declares no simPath
-        onFalseStep: 10
-      - stepNumber: 7
-        description: >-
-          Expected only once the subsystem has adopted sims, only for complete implementations, and
-          only for non-leaf components (a leaf's unit suite is its sim): otherwise continue with the
-          next implementation
-        type: branch
-        condition: adopted has comp.subsystem, !ctx.isImplementationDraft(impl), and deps is non-empty
-        onFalseStep: 3
-      - stepNumber: 8
-        description: >-
-          Report MISSING_INTEGRATION_SIM (warning; spec impl.id; no draft context argument, draft
-          implementations were already skipped) naming the component, its dependency count and its
-          subsystem: declare the committed harness that constructs it with its real dependencies, or
-          lint.allow with the reason
-        type: local
-      - stepNumber: 9
-        description: Continue with the next implementation
-        type: jump
-        toStep: 3
-      - stepNumber: 10
-        label: soundness
-        description: 'Soundness half: the declared harness must exist inside the project'
-        type: branch
-        condition: facts = code.factsAt(impl.simPath) is absent or has status missing, escaped or unreadable
-        onFalseStep: 13
-      - stepNumber: 11
-        description: >-
-          Report SIM_FILE_MISSING (warning; spec impl.id; draft context
-          ctx.isImplementationDraft(impl)) naming impl.simPath and why: it resolves to no file (no
-          facts, or status missing), escapes the project root, or is not readable as source text
-        type: local
-      - stepNumber: 12
-        description: Continue with the next implementation
-        type: jump
-        toStep: 3
-      - stepNumber: 13
-        label: gradeGate
-        description: >-
-          Only exact-grade import graphs prove wiring, and weaker grades stay silent: continue with
-          the next implementation
-        type: branch
-        condition: facts.analysisGrade is exact
-        onFalseStep: 3
-      - stepNumber: 14
-        description: >-
-          reach = graph.reachFrom(simPath): the paths reached from the normalized simPath by
-          following the imports and re-exports of each reached analyzed file transitively, every
-          specifier resolved against the graph's closed set. ownFiles = modulesOf(comp.id). missing
-          starts with the component's own module when ownFiles is non-empty and reach holds none of
-          them
-        type: local
-      - stepNumber: 15
-        label: depLoop
-        description: Check that the harness reaches each direct dependency
-        type: loop
-        over: deps
-        endStep: 17
-      - stepNumber: 16
-        description: >-
-          A technology boundary's fake is sanctioned, an unrealized dependency is covered by its own
-          findings, and one reached module proves the wiring (any module of the subsystem across
-          subsystems): continue with the next dependency
-        type: branch
-        condition: >-
-          the private isTechBoundary(dep) is false (no implementation in
-          realization.implementationsOf(dep) declares technologies), depFiles is non-empty
-          (modulesIn(depComp.subsystem) when depComp = ctx.componentMap.get(dep) sits in another
-          subsystem, else modulesOf(dep)), and reach holds none of depFiles
-        onFalseStep: 15
-      - stepNumber: 17
-        label: appendDep
-        description: >-
-          Append the dependency to missing: dep with its subsystem (any module of it) across
-          subsystems, else dep with its files
-        type: local
-      - stepNumber: 18
-        description: A fully wired harness goes on to path coverage
-        type: branch
-        condition: missing is non-empty
-        onFalseStep: 20
-      - stepNumber: 19
-        description: >-
-          Report UNWIRED_INTEGRATION_SIM (warning; spec impl.id; draft context
-          ctx.isImplementationDraft(impl)) naming impl.simPath and every module in missing its
-          import graph does not reach: import the real modules (technology-boundary adapters may
-          stay faked), or fix the simPath
-        type: local
-      - stepNumber: 20
-        label: coverage
-        description: >-
-          Path coverage is opt-in per component: simAnchors = the sim: anchors of the harness, and
-          only an anchor for this component claims coverage (no sim: anchors means no claim):
-          otherwise continue with the next implementation. Start an empty uncovered list
-        type: branch
-        condition: 'some anchor in facts.anchoredNames that starts with sim: starts with sim:<comp.id>.'
-        onFalseStep: 3
-      - stepNumber: 21
-        label: methodLoop
-        description: Check each narrated method's paths
-        type: loop
-        over: impl.methods
-        endStep: 23
-      - stepNumber: 22
-        description: A method with no narrative continues with the next method
-        type: branch
-        condition: method.narrative is non-empty
-        onFalseStep: 21
-      - stepNumber: 23
-        label: appendPaths
-        description: >-
-          Append the happy path to uncovered when simAnchors lacks sim:<comp.id>.<method.name>,
-          then, for each throw step that carries a label, its error path when simAnchors lacks
-          sim:<comp.id>.<method.name>:<step.label>
-        type: local
-      - stepNumber: 24
-        description: A fully covered harness continues with the next implementation
-        type: branch
-        condition: uncovered is non-empty
-        onFalseStep: 3
-      - stepNumber: 25
-        label: coverageReport
-        description: >-
-          Report SIM_PATH_UNCOVERED (warning; spec impl.id; draft context
-          ctx.isImplementationDraft(impl)) naming impl.simPath, comp.id and every uncovered happy or
-          error path: drive the path and anchor it with the exact string literal, or drop the
-          component's sim: anchors to withdraw the claim
         type: local
     symbol: check
   - name: sourceFileLinkage
@@ -749,12 +462,381 @@ methods:
           under its declared code, or remove the declaration
         type: local
     symbol: check
-lint:
-  allow:
-    - code: NARRATIVE_COMPLEXITY
-      reason: >-
-        D2b splits the narratives this reports (callConformance, dependencyConformance and
-        integrationConformance); the doctrine's own rules are the worst offenders and go first.
+  - name: integrationSimDeclaration
+    sourcePath: src/core/rules/conformance/integration-sim-declaration.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          adopted = the subsystem of every component whose implementation declares a simPath,
+          resolved through contract = ctx.interfaceMap.get(impl.contract) and comp =
+          ctx.componentMap.get(contract.component), skipping what does not resolve and what sits in
+          a chained subproject (whose paths are relative to the child's own root)
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Judge each implementation against its subsystem's adoption
+        type: loop
+        over: ctx.implementations
+        endStep: 7
+      - stepNumber: 3
+        description: >-
+          A declared harness is integration-sim-file's, -wiring's and -coverage's question, not this
+          one: continue with the next implementation
+        type: branch
+        condition: impl declares no simPath
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          Resolve comp = ctx.componentMap.get(contract.component) for contract =
+          ctx.interfaceMap.get(impl.contract)
+        type: local
+      - stepNumber: 5
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: comp resolves and !ctx.isInChainedSubproject(comp.subsystem)
+        onFalseStep: 2
+      - stepNumber: 6
+        description: >-
+          Expected only once the subsystem has adopted sims, only for complete implementations, and
+          only for non-leaf components (a leaf's unit suite is its sim): otherwise continue with the
+          next implementation
+        type: branch
+        condition: >-
+          adopted has comp.subsystem, !ctx.isImplementationDraft(impl), and deps — the distinct ids
+          of comp.dependsOn then comp.owns that ctx.componentMap resolves — is non-empty
+        onFalseStep: 2
+      - stepNumber: 7
+        label: report
+        description: >-
+          Report MISSING_INTEGRATION_SIM (warning; spec impl.id; no draft context argument, draft
+          implementations were already skipped) naming the component, its dependency count and its
+          subsystem: declare the committed harness that constructs it with its real dependencies, or
+          lint.allow with the reason
+        type: local
+    symbol: check
+  - name: integrationSimFile
+    sourcePath: src/core/rules/conformance/integration-sim-file.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, derived once and
+          shared with every conformance rule
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Judge each declared integration harness
+        type: loop
+        over: ctx.implementations
+        endStep: 7
+      - stepNumber: 3
+        description: >-
+          An implementation that declares no harness is integration-sim-declaration's question:
+          continue with the next implementation
+        type: branch
+        condition: impl declares a simPath
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          Resolve comp = ctx.componentMap.get(contract.component) for contract =
+          ctx.interfaceMap.get(impl.contract)
+        type: local
+      - stepNumber: 5
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped, a chained child's paths
+          being relative to its own root: continue with the next implementation
+        type: branch
+        condition: comp resolves and !ctx.isInChainedSubproject(comp.subsystem)
+        onFalseStep: 2
+      - stepNumber: 6
+        description: >-
+          A harness that resolves to a readable committed file is sound: continue with the next
+          implementation
+        type: branch
+        condition: facts = code.factsAt(impl.simPath) is absent or has status missing, escaped or unreadable
+        onFalseStep: 2
+      - stepNumber: 7
+        label: report
+        description: >-
+          Report SIM_FILE_MISSING (warning; spec impl.id; draft context
+          ctx.isImplementationDraft(impl)) naming impl.simPath and why: it resolves to no file (no
+          facts, or status missing), escapes the project root, or is not readable as source text
+        type: local
+    symbol: check
+  - name: integrationSimWiring
+    sourcePath: src/core/rules/conformance/integration-sim-wiring.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(); realization = ctx.realizationIndex(); graph = ctx.importGraph()
+          over every path the run analyzed — the graph's default closed set, which is the one a
+          harness is walked over. A named file is a module only when it exists: code.factsAt reports
+          status analyzed or unreadable, a missing or escaped file being structural conformance's
+          finding alone that no harness can reach. modulesOf(compId) = realization.filesOf(compId)
+          narrowed to those, and modulesIn(subsystemId) = realization.filesIn(subsystemId) narrowed
+          the same way — the realization index already leaves out implementations whose component
+          does not resolve and those inside a chained subproject
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Judge each declared harness's import graph
+        type: loop
+        over: ctx.implementations
+        endStep: 12
+      - stepNumber: 3
+        description: >-
+          An implementation that declares no harness is integration-sim-declaration's question:
+          continue with the next implementation
+        type: branch
+        condition: impl declares a simPath
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          Resolve comp = ctx.componentMap.get(contract.component) for contract =
+          ctx.interfaceMap.get(impl.contract)
+        type: local
+      - stepNumber: 5
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: comp resolves and !ctx.isInChainedSubproject(comp.subsystem)
+        onFalseStep: 2
+      - stepNumber: 6
+        description: >-
+          integration-sim-file's verdict restated — a harness that resolves to no readable file
+          reaches nothing and is its finding, not ours — and only exact-grade import graphs prove
+          wiring, weaker grades staying silent: otherwise continue with the next implementation
+        type: branch
+        condition: facts = code.factsAt(impl.simPath) has status analyzed at analysisGrade exact
+        onFalseStep: 2
+      - stepNumber: 7
+        description: >-
+          deps = the distinct ids of comp.dependsOn then comp.owns that ctx.componentMap resolves.
+          reach = graph.reachFrom(simPath): the paths reached from the normalized simPath by
+          following the imports and re-exports of each reached analyzed file transitively, every
+          specifier resolved against the graph's closed set. ownFiles = modulesOf(comp.id). missing
+          starts with the component's own module when ownFiles is non-empty and reach holds none of
+          them
+        type: local
+      - stepNumber: 8
+        label: depLoop
+        description: Check that the harness reaches each direct dependency
+        type: loop
+        over: deps
+        endStep: 10
+      - stepNumber: 9
+        description: >-
+          A technology boundary's fake is sanctioned, an unrealized dependency is covered by its own
+          findings, and one reached module proves the wiring (any module of the subsystem across
+          subsystems): continue with the next dependency
+        type: branch
+        condition: >-
+          the private isTechBoundary(dep) is false (no implementation in
+          realization.implementationsOf(dep) declares technologies), depFiles is non-empty
+          (modulesIn(depComp.subsystem) when depComp = ctx.componentMap.get(dep) sits in another
+          subsystem, else modulesOf(dep)), and reach holds none of depFiles
+        onFalseStep: 8
+      - stepNumber: 10
+        label: appendDep
+        description: >-
+          Append the dependency to missing: dep with its subsystem (any module of it) across
+          subsystems, else dep with its files
+        type: local
+      - stepNumber: 11
+        description: A fully wired harness continues with the next implementation
+        type: branch
+        condition: missing is non-empty
+        onFalseStep: 2
+      - stepNumber: 12
+        label: report
+        description: >-
+          Report UNWIRED_INTEGRATION_SIM (warning; spec impl.id; draft context
+          ctx.isImplementationDraft(impl)) naming impl.simPath and every module in missing its
+          import graph does not reach: import the real modules (technology-boundary adapters may
+          stay faked), or fix the simPath
+        type: local
+    symbol: check
+  - name: integrationSimCoverage
+    sourcePath: src/core/rules/conformance/integration-sim-coverage.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, derived once and
+          shared with every conformance rule
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Judge the path coverage each harness claims
+        type: loop
+        over: ctx.implementations
+        endStep: 12
+      - stepNumber: 3
+        description: >-
+          An implementation that declares no harness is integration-sim-declaration's question:
+          continue with the next implementation
+        type: branch
+        condition: impl declares a simPath
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          Resolve comp = ctx.componentMap.get(contract.component) for contract =
+          ctx.interfaceMap.get(impl.contract)
+        type: local
+      - stepNumber: 5
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: comp resolves and !ctx.isInChainedSubproject(comp.subsystem)
+        onFalseStep: 2
+      - stepNumber: 6
+        description: >-
+          integration-sim-file's verdict restated — a harness that resolves to no readable file
+          carries no anchors and is its finding, not ours — and anchors are read from the file, so
+          only exact grade may accuse: otherwise continue with the next implementation
+        type: branch
+        condition: facts = code.factsAt(impl.simPath) has status analyzed at analysisGrade exact
+        onFalseStep: 2
+      - stepNumber: 7
+        description: >-
+          Path coverage is opt-in per component: simAnchors = the sim: anchors of the harness, and
+          only an anchor for this component claims coverage (no sim: anchors means no claim):
+          otherwise continue with the next implementation. Start an empty uncovered list
+        type: branch
+        condition: 'some anchor in facts.anchoredNames that starts with sim: starts with sim:<comp.id>.'
+        onFalseStep: 2
+      - stepNumber: 8
+        label: methodLoop
+        description: Check each narrated method's paths
+        type: loop
+        over: impl.methods
+        endStep: 10
+      - stepNumber: 9
+        description: A method with no narrative continues with the next method
+        type: branch
+        condition: method.narrative is non-empty
+        onFalseStep: 8
+      - stepNumber: 10
+        label: appendPaths
+        description: >-
+          Append the happy path to uncovered when simAnchors lacks sim:<comp.id>.<method.name>,
+          then, for each throw step that carries a label, its error path when simAnchors lacks
+          sim:<comp.id>.<method.name>:<step.label>
+        type: local
+      - stepNumber: 11
+        description: A fully covered harness continues with the next implementation
+        type: branch
+        condition: uncovered is non-empty
+        onFalseStep: 2
+      - stepNumber: 12
+        label: report
+        description: >-
+          Report SIM_PATH_UNCOVERED (warning; spec impl.id; draft context
+          ctx.isImplementationDraft(impl)) naming impl.simPath, comp.id and every uncovered happy or
+          error path: drive the path and anchor it with the exact string literal, or drop the
+          component's sim: anchors to withdraw the claim
+        type: local
+    symbol: check
+  - name: callConformance
+    sourcePath: src/core/rules/conformance/call-conformance.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, derived once and
+          shared with every conformance rule
+        type: local
+      - stepNumber: 2
+        label: methodLoop
+        description: >-
+          Check each method of ctx.implementationMethods() — the descent resolved once for the whole
+          run: the implementation, its contract's component, the file that realizes the method (its
+          sourcePath, else the implementation's) and its draft context, with unresolvable and
+          chained-subproject implementations already left out
+        type: loop
+        over: ctx.implementationMethods()
+        endStep: 13
+      - stepNumber: 3
+        description: >-
+          tier = implMethod.conformance ?? impl.conformance ?? component.defaultConformanceTier();
+          facts = code.factsAt(the entry's sourceFile) when it names one
+        type: local
+      - stepNumber: 4
+        description: >-
+          The conformance dial off skips, and only exact analysis grade fires (weaker grades never
+          guess) — the stance stays written here, where the accusation is read: otherwise continue
+          with the next method
+        type: branch
+        condition: >-
+          tier is not off, implMethod.narrative is non-empty, the entry names a sourceFile, and
+          facts exist with status analyzed at analysisGrade exact
+        onFalseStep: 2
+      - stepNumber: 5
+        description: >-
+          fnSymbol = implMethod.symbol ?? implMethod.name. callees = the private
+          closedCallees(facts, fnSymbol): the function's own entry in facts.functionCalls (read
+          through the private ownEntry, own properties only, so names like toString never resolve to
+          Object.prototype), closed transitively over the same-file named functions it calls; none
+          when the function has no entry. Start an empty missing list
+        type: local
+      - stepNumber: 6
+        description: >-
+          A missing realized function is structural conformance's finding, and a duplicate here
+          would be noise: continue with the next method
+        type: branch
+        condition: callees is present
+        onFalseStep: 2
+      - stepNumber: 7
+        label: stepLoop
+        description: Check each narrative step
+        type: loop
+        over: implMethod.narrative
+        endStep: 11
+      - stepNumber: 8
+        description: >-
+          Only call steps count (dispatch steps route through runtime tables, so the bound name
+          never appears at the call site); a target this tree does not contain is
+          cross-tree-references' finding, and surface-reference-backing's once it resolves: continue
+          with the next step
+        type: branch
+        condition: >-
+          step is a call step with targetComponent and targetMethod, and ctx.componentMap has
+          step.targetComponent
+        onFalseStep: 7
+      - stepNumber: 9
+        description: >-
+          accepted = step.targetMethod plus the symbol of the same-named method in each
+          implementation (ctx.implementationsByContract.get(interface.id)) of each interface in
+          ctx.interfacesByComponent.get(step.targetComponent)
+        type: local
+      - stepNumber: 10
+        description: >-
+          N:1 identity forwarding (the caller's own realized symbol is the target name) or a
+          matching callee realizes the step: continue with the next step
+        type: branch
+        condition: accepted lacks fnSymbol and no name in accepted is among callees
+        onFalseStep: 7
+      - stepNumber: 11
+        label: appendMissing
+        description: >-
+          Append the step's stepNumber, its target (targetComponent.targetMethod) and the accepted
+          names to missing
+        type: local
+      - stepNumber: 12
+        description: A method with every call step realized continues with the next method
+        type: branch
+        condition: missing is non-empty
+        onFalseStep: 2
+      - stepNumber: 13
+        label: report
+        description: >-
+          Report CALL_STEP_UNREALIZED (warning; spec impl.id; draft context the entry's
+          draftContext), one finding per method listing each unrealized step with its target and the
+          names looked for, the function fnSymbol and file: callees are matched by name, closed over
+          same-file helpers, set membership only (order and arguments are not checked)
+        type: local
+    symbol: check
 status: draft
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-18T00:27:04.042Z'
+updatedAt: '2026-09-18T13:01:24.676Z'

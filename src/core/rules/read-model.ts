@@ -2,6 +2,7 @@ import {
   implementationSourceFiles,
   isPattern,
   isRetired,
+  methodSourceFile,
   pathKey,
   resolveImport,
   type CodeModel,
@@ -16,7 +17,9 @@ import type {
   ImportGraph,
   OwnershipIndex,
   RealizationIndex,
+  ResolvedMethod,
   RuleContext,
+  SpecId,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -302,6 +305,72 @@ export function buildDependencyEdges(ctx: RuleContext): DependencyEdges {
   }
 
   return { all, matrix };
+}
+
+/**
+ * spec_ids — every spec id in the tree, each carrying the kind label its
+ * findings name it by, in subsystem, component, interface, implementation,
+ * type order.
+ *
+ * The id hygiene rules judge ids and nothing else. Reaching them meant
+ * unrolling the same check across five typed collections, once per rule — the
+ * walk was most of what those narratives said. It is one list here, so each
+ * rule is one loop over one question.
+ *
+ * Every id is returned, in scope or not: which specs a rule may ACCUSE is the
+ * stance that rule states for itself (ctx.isSpecInScope), never a filter the
+ * read model applies on its behalf.
+ */
+export function buildSpecIds(ctx: RuleContext): SpecId[] {
+  const out: SpecId[] = [];
+  for (const s of ctx.subsystems) out.push({ id: s.id, kind: 'Subsystem' });
+  for (const c of ctx.components) out.push({ id: c.id, kind: 'Component' });
+  for (const i of ctx.interfaces) out.push({ id: i.id, kind: 'Interface' });
+  for (const im of ctx.implementations) out.push({ id: im.id, kind: 'Implementation' });
+  for (const t of ctx.types) out.push({ id: t.id, kind: 'Type' });
+  return out;
+}
+
+/**
+ * resolved_methods — every implementation method whose descent resolves, in
+ * implementation order then method order, each with the component it realizes,
+ * the file that realizes it (the method's sourcePath, else the
+ * implementation's) and the draft context a finding on it takes.
+ *
+ * The descent is the same six hops in rule after rule — implementation,
+ * contract, component, chained-subproject skip, method, source file — and it
+ * is plumbing in all of them: an implementation whose contract or component
+ * does not resolve is a hierarchy finding, and a chained child's sourcePaths
+ * are relative to its own root, so the child validates them in its own run.
+ *
+ * The file is handed over RAW, exactly as the spec names it, because that is
+ * the string a finding quotes. Whether it exists, what grade it was analyzed
+ * at and whether the conformance dial lets the method be judged at all are
+ * NOT decided here: that is the honesty stance each rule owes its reader, and
+ * it stays written where the reader reads the accusation.
+ */
+export function buildImplementationMethods(ctx: RuleContext): ResolvedMethod[] {
+  const out: ResolvedMethod[] = [];
+  for (const impl of ctx.implementations) {
+    const contract = ctx.interfaceMap.get(impl.contract);
+    if (!contract) continue;
+    const component = ctx.componentMap.get(contract.component);
+    if (!component) continue;
+    if (ctx.isInChainedSubproject(component.subsystem)) continue;
+
+    const draftContext = ctx.isImplementationDraft(impl);
+    for (const method of impl.methods) {
+      const sourceFile = methodSourceFile(method, impl.sourcePath);
+      out.push({
+        implementation: impl,
+        method,
+        component,
+        ...(sourceFile !== undefined ? { sourceFile } : {}),
+        draftContext,
+      });
+    }
+  }
+  return out;
 }
 
 /** The two reaches a ref that resolved in this tree can have. */

@@ -1,22 +1,24 @@
 import { SddRule } from '../types.js';
-import { fieldTypeRefs, methodTypeRefs, passesIntentFloor, typeMatchesRef } from '../../../models/index.js';
 import { walk, type WalkSeed } from '../narrative-graph-projector.js';
 
 /**
  * Reachability analysis from entrypoints (Portals, Observers, published
- * components, declared lifecycle flows): unwired components/methods and
- * unreferenced types are flagged. The walk itself is the narrative graph
- * projector's.
+ * components, declared lifecycle flows): unwired components and methods are
+ * flagged. The walk itself is the narrative graph projector's.
+ *
+ * The three codes ride TWO walks of one graph and stay together for that
+ * reason: the internal walk (base seeds alone) is what makes a declared
+ * entrypoint's redundancy answerable, and the full walk (the invokedBy
+ * entrypoints added) is what makes the UNUSED_ verdicts answerable. Split
+ * apart, the same graph would be walked four times.
  */
 export const reachabilityRule: SddRule = {
   name: 'unused-detection',
   description:
-    'Walks the narrative execution graph (call steps, register handoffs, dispatch-table routing, lifecycle flows) from every entrypoint (Portal/Observer/published component/lifecycle entrypoint/invokedBy-declared method) and flags components and methods no execution chain reaches, plus types no field or signature references. An interface method declaring invokedBy (a real caller outside the modeled graph) seeds the walk, so its narrative propagates reachability; the declaration itself is audited (thin caller prose, or a method the internal walk already reaches).',
+    'Walks the narrative execution graph (call steps, register handoffs, dispatch-table routing, lifecycle flows) from every entrypoint (Portal/Observer/published component/lifecycle entrypoint/invokedBy-declared method) and flags components and methods no execution chain reaches. An interface method declaring invokedBy (a real caller outside the modeled graph) seeds the walk, so its narrative propagates reachability; a declaration the INTERNAL walk (without those seeds) already reaches is stale and is reported.',
   codes: [
     { code: 'UNUSED_COMPONENT', defaultSeverity: 'warning', summary: 'Component never reached by any narrative call chain' },
     { code: 'UNUSED_METHOD', defaultSeverity: 'warning', summary: 'Method never called by any narrative step' },
-    { code: 'UNUSED_TYPE', defaultSeverity: 'warning', summary: 'Type never referenced by fields or signatures' },
-    { code: 'INVOKED_BY_UNDESCRIBED', defaultSeverity: 'warning', summary: 'invokedBy declaration whose caller prose is missing or placeholder-thin' },
     { code: 'INVOKED_BY_REDUNDANT', defaultSeverity: 'warning', summary: 'invokedBy declaration on a method the internal narrative walk already reaches — stale, remove it' },
   ],
   check(ctx) {
@@ -44,7 +46,8 @@ export const reachabilityRule: SddRule = {
     // decides whether an invokedBy declaration is redundant.
     const baseWalk = walk(ctx, seeds);
 
-    // Audit invokedBy declarations and collect their entrypoint seeds.
+    // Collect the invokedBy entrypoint seeds, and report the declarations the
+    // internal walk already reaches.
     const invokedBySeeds: WalkSeed[] = [];
     for (const intf of ctx.interfaces) {
       // A declaration on an unresolvable component can't be judged (the
@@ -54,18 +57,9 @@ export const reachabilityRule: SddRule = {
         if (!m.invokedBy) continue;
         invokedBySeeds.push({ compId: intf.component, methodName: m.name });
         if (!ctx.isSpecInScope(intf.id)) continue;
-        // A draft or design subsystem makes its components draft context too.
-        const isDraftCtx = ctx.isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
-        if (!passesIntentFloor(m.invokedBy.caller, m.name)) {
-          ctx.addIssue(
-            'warning',
-            'INVOKED_BY_UNDESCRIBED',
-            `Method "${m.name}" on component "${intf.component}" declares invokedBy (${m.invokedBy.kind}) but its "caller" prose is missing or placeholder-thin — state WHO invokes it and when, so the entrypoint claim stays reviewable.`,
-            intf.id,
-            isDraftCtx,
-          );
-        }
         if (baseWalk.reachesMethod(intf.component, m.name)) {
+          // A draft or design subsystem makes its components draft context too.
+          const isDraftCtx = ctx.isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
           ctx.addIssue(
             'warning',
             'INVOKED_BY_REDUNDANT',
@@ -95,70 +89,24 @@ export const reachabilityRule: SddRule = {
           comp.id,
           isDraftCtx,
         );
-      } else {
-        // Warn about unused methods on this reached component (across ALL its
-        // interfaces), each on the interface that declares it — the method is
-        // an L3 declaration, as it is for the invokedBy findings.
-        for (const intf of ctx.interfacesByComponent.get(comp.id) ?? []) {
-          for (const m of intf.methods) {
-            if (!reach.reachesMethod(comp.id, m.name)) {
-              const isDraftCtx = ctx.isComponentDraft(comp.id) || intf.status === 'draft' || intf.status === 'design';
-              ctx.addIssue(
-                'warning',
-                'UNUSED_METHOD',
-                `Method "${m.name}" on component "${comp.id}" is defined but never called by any narrative step.`,
-                intf.id,
-                isDraftCtx,
-              );
-            }
+        continue;
+      }
+      // Warn about unused methods on this reached component (across ALL its
+      // interfaces), each on the interface that declares it — the method is
+      // an L3 declaration, as it is for the invokedBy findings.
+      for (const intf of ctx.interfacesByComponent.get(comp.id) ?? []) {
+        for (const m of intf.methods) {
+          if (!reach.reachesMethod(comp.id, m.name)) {
+            const isDraftCtx = ctx.isComponentDraft(comp.id) || intf.status === 'draft' || intf.status === 'design';
+            ctx.addIssue(
+              'warning',
+              'UNUSED_METHOD',
+              `Method "${m.name}" on component "${comp.id}" is defined but never called by any narrative step.`,
+              intf.id,
+              isDraftCtx,
+            );
           }
         }
-      }
-    }
-
-    // Generate warnings for unused types
-    const referencedTypes = new Set<string>();
-    const markTypeReferenced = (ref: string) => {
-      if (ctx.isBuiltinType(ref)) return;
-      for (const spec of ctx.types) {
-        if (typeMatchesRef(spec, ref)) {
-          referencedTypes.add(spec.id);
-        }
-      }
-    };
-
-    // 1. Scan type fields (the type's own generic parameters are left out)
-    for (const t of ctx.types) {
-      for (const field of t.fields) {
-        const refs = fieldTypeRefs(t, field.type);
-        for (const ref of refs) {
-          markTypeReferenced(ref);
-        }
-      }
-    }
-
-    // 2. Scan interface method signatures & returns (structured params preferred)
-    for (const intf of ctx.interfaces) {
-      for (const m of intf.methods) {
-        const refs = methodTypeRefs(m);
-        for (const ref of refs) {
-          markTypeReferenced(ref);
-        }
-      }
-    }
-
-    for (const t of ctx.types) {
-      if (!ctx.isSpecInScope(t.id)) continue;
-      if (!referencedTypes.has(t.id)) {
-        const sub = ctx.subsystems.find(s => s.id === t.subsystem);
-        const isDraftCtx = sub ? (sub.status === 'draft' || sub.status === 'design') : false;
-        ctx.addIssue(
-          'warning',
-          'UNUSED_TYPE',
-          `Type "${t.id}" is defined but never referenced by any type fields or interface methods.`,
-          t.id,
-          isDraftCtx,
-        );
       }
     }
   },
