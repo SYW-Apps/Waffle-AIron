@@ -276,6 +276,28 @@ describe('delta application', () => {
     expect(steps()).toHaveLength(2);
   });
 
+  it('refuses a step marker the merge would ignore', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-delta-step-marker-'));
+    seedTree(proj);
+    saveNarrative([
+      { stepNumber: 1, description: 'prepare', type: 'local' },
+      { stepNumber: 2, description: 'write it', type: 'local' },
+    ]);
+
+    const attempt = (step: Record<string, unknown>): (() => unknown) => () => updateSpec(
+      'implementation', 'flow_impl', { methods: [{ name: 'run', narrative: [step] }] },
+    );
+
+    expect(attempt({ stepNumber: 2, remove: 'true' })).toThrow(/"remove" must be the boolean true/);
+    expect(attempt({ stepNumber: 2, action: 'remove' })).toThrow(/unknown action "remove"/);
+    expect(attempt({ stepNumber: 2, captureJumps: true, description: 'moved' }))
+      .toThrow(/"captureJumps" only means anything on an inserted step/);
+    expect(attempt({ description: 'no number at all', type: 'local' }))
+      .toThrow(/a step delta must carry the "stepNumber" it addresses/);
+
+    expect(steps().map(s => s.description)).toEqual(['prepare', 'write it']);
+  });
+
   // -- A7: arrays inside elements merge by identity --------------------------
 
   it('merges a method\'s params by name instead of replacing the list', () => {

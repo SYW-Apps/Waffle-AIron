@@ -2819,6 +2819,42 @@ export class SpecWorkspace {
       const sortedDeltas = [...deltaSteps].sort((a, b) => a.stepNumber - b.stepNumber);
       for (const deltaStep of sortedDeltas) {
         const stepNum = deltaStep.stepNumber;
+
+        // The markers a STEP delta may carry. The keyed arrays have refused a
+        // malformed marker since the intent guards went in; narrative steps,
+        // which carry two more verbs than any of them, were skipped. `remove:
+        // "true"`, `action: "remove"` and a `captureJumps` on anything but an
+        // insert all match no branch, are stripped on write, and leave the
+        // caller told a step was removed or captured over a narrative left
+        // exactly as it was.
+        if (typeof stepNum !== 'number') {
+          throw new Error(
+            `Refusing to update the narrative of "${methodName}": a step delta must carry the "stepNumber" `
+            + `it addresses, got ${JSON.stringify(stepNum ?? null)}.`,
+          );
+        }
+        if ('remove' in deltaStep && typeof deltaStep.remove !== 'boolean') {
+          throw new Error(
+            `Refusing to update narrative step ${stepNum} of "${methodName}": "remove" must be the boolean true, `
+            + `got ${JSON.stringify(deltaStep.remove)}. A non-boolean is ignored, which would leave the step in `
+            + 'place while reporting success.',
+          );
+        }
+        if ('action' in deltaStep && deltaStep.action !== 'insert' && deltaStep.action !== 'delete') {
+          throw new Error(
+            `Refusing to update narrative step ${stepNum} of "${methodName}": unknown action `
+            + `${JSON.stringify(deltaStep.action)} — expected "insert" or "delete", or no action at all to edit the `
+            + 'step in place. An unknown verb is ignored, which would report success for an edit never made.',
+          );
+        }
+        if ('captureJumps' in deltaStep && deltaStep.action !== 'insert') {
+          throw new Error(
+            `Refusing to update narrative step ${stepNum} of "${methodName}": "captureJumps" only means anything on `
+            + 'an inserted step — it decides whether jumps aimed at that number follow the shifted original or land '
+            + 'on the new step. On any other delta it is ignored.',
+          );
+        }
+
         if (deltaStep.action === 'delete' || deltaStep.remove === true) {
           const idx = steps.findIndex(s => s.stepNumber === stepNum);
           if (idx !== -1) {

@@ -1647,6 +1647,14 @@ method's narrative. Two mechanisms close that honestly:
   what is being deleted is the only way that is ever noticed. That order is now
   written down: in the tool description, on the `SpecDelta` type, and above
   `updateSpec` itself alongside the rest of the application pipeline.
+- **A malformed marker on a narrative step was a silent no-op.** The keyed arrays
+  have refused `remove: "true"` and `action: "remove"` since the delta intent guards
+  went in; narrative steps, which carry two more verbs than any of them, were
+  skipped — the marker matched no branch, the writer stripped it, and the caller was
+  told a step had been removed over a narrative left exactly as it was. A step delta
+  now refuses a non-boolean `remove`, an `action` that is neither `insert` nor
+  `delete`, a `captureJumps` on anything but an insert (where alone it means
+  something), and a step delta with no `stepNumber` to address.
 - **The identity promise stopped one level below the spec's own fields.** "Arrays
   upsert, they do not replace" was true of a spec's top-level arrays and of nothing
   inside them: a delta naming ONE of a method's `params` replaced the whole list and
@@ -1822,6 +1830,10 @@ method's narrative. Two mechanisms close that honestly:
     - **A delta that retypes a step and also sets a field the new type cannot carry
       is refused**, where the field used to merge through and surface later as
       `MALFORMED_FLOW_STEP`. Drop the field from the delta.
+    - **A step delta carrying `remove: "true"`, an unknown `action`, or
+      `captureJumps` outside an insert is refused**, where the marker used to be
+      ignored and the write reported as done. Fix the marker — these deltas were
+      never applying.
 
 ## v5.1.0 (from v5.0.1)
 
