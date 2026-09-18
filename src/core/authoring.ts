@@ -6,7 +6,7 @@ import {
 } from './specs.js';
 import { validateComponentCandidate } from './validation.js';
 import { formatCandidateRefusal, type CandidateVerdict } from './rules/candidate.js';
-import { projectConfigRepository } from '../config/project-config.js';
+import { loadProjectConfig } from './index.js';
 
 // ---------------------------------------------------------------------------
 // The AUTHORING seam — gated spec writes, shared by every access path.
@@ -35,7 +35,7 @@ import { projectConfigRepository } from '../config/project-config.js';
 /** The project's severity overrides, so `sddRuleSeverity` disarms a gate exactly as it disarms validate. */
 function candidateOptions(): { rules?: RulesConfig; projectType?: string } {
   try {
-    const config = projectConfigRepository.load();
+    const config = loadProjectConfig();
     return config ? { rules: config.rules, projectType: config.projectType } : {};
   } catch {
     // An uninitialized or unreadable project gets default severities. A config
