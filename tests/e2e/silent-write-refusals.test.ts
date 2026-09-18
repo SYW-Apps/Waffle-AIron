@@ -61,16 +61,31 @@ describe('the authoring surface refuses silent no-ops', () => {
     expect(res.text).toMatch(/did you mean "dependsOn"/i);
   });
 
-  it('still accepts the correctly spelled field', async () => {
-    const out = await callToolOk(proj.client, 'sdd_update_spec', {
+  it('accepts the correctly spelled field, and says it changed nothing when it did not', async () => {
+    // The orchestrator was authored WITH this dependency, so re-applying it is
+    // a no-op. The answer has to say so: "Successfully updated" here is the
+    // same sentence a real edit gets, which is how a delta that landed
+    // nowhere read as a completed edit.
+    const same = await callToolOk(proj.client, 'sdd_update_spec', {
       kind: 'component',
       id: JOURNEY.orch,
       delta: { dependsOn: [JOURNEY.worker] },
     });
-    expect(out.text).toMatch(/Successfully updated/i);
+    expect(same.text).toMatch(/No change to component "journey-orch"/i);
+    expect(same.text).toMatch(/nothing was written/i);
 
     const onDisk = findSpecOnDisk(proj.dir, JOURNEY.orch) as { dependsOn?: string[] } | null;
     expect(onDisk?.dependsOn ?? []).toContain(JOURNEY.worker);
+  });
+
+  it('reports exactly what a real change changed', async () => {
+    const out = await callToolOk(proj.client, 'sdd_update_spec', {
+      kind: 'component',
+      id: JOURNEY.orch,
+      delta: { description: 'Owns the journey workflow and coordinates the worker, revised' },
+    });
+    expect(out.text).toMatch(/Updated component "journey-orch": 1 change\./);
+    expect(out.text).toMatch(/- description set/);
   });
 
   it('refuses a near-miss method identity rather than appending a duplicate', async () => {

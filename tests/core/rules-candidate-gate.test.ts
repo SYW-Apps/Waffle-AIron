@@ -274,7 +274,7 @@ describe('authoring: updateSpecGated', () => {
     writeSpec('component', 'store1', 'schemaVersion: 1.0.0\nid: store1\nname: Store1\ndescription: d\nsubsystem: sub-a\ncomponentType: Store');
     invalidateSpecCache();
 
-    const notices = updateSpecGated('component', 'store1', { description: 'a better description' });
+    const { notices } = updateSpecGated('component', 'store1', { description: 'a better description' });
     expect(notices.some(n => n.startsWith('MISSING_DURABILITY'))).toBe(true);
     invalidateSpecCache();
     expect(loadComponentSpec('store1')?.description).toBe('a better description');

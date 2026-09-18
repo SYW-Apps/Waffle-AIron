@@ -783,6 +783,154 @@ export interface SpecWriteHooks {
   ): string[] | void;
 }
 
+/** The kinds `updateSpec` addresses — every level of the tree. */
+export type WritableSpecKind =
+  'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
+
+/**
+ * ONE change a write made to a stored spec, addressed by a dotted path with
+ * names and indexes: `methods.createChainedSubsystem.narrative.step 7.type`,
+ * `dependsOn`, `description`.
+ */
+export interface SpecChange {
+  path: string;
+  /** `set` a value, `added` a key/element, `removed` one, `cleared` a list. */
+  change: 'set' | 'added' | 'removed' | 'cleared';
+  /** The previous value, summarized; absent when there was none. */
+  before?: string;
+  /** The new value, summarized; absent when there is none. */
+  after?: string;
+}
+
+/**
+ * The answer to an authoring write: exactly what changed, or that nothing did.
+ *
+ * A write that changes nothing writes nothing — `written` is false, the file's
+ * `updatedAt` is untouched, and `summary` says so. Reporting success for a
+ * write that changed nothing is how a typo'd delta ("dependson", a method-level
+ * `unset` that no-opped) read as a completed edit for a whole session.
+ */
+export interface SpecChangeReport {
+  kind: WritableSpecKind;
+  id: string;
+  /** False when the merged spec equals what is stored: nothing reached disk. */
+  written: boolean;
+  /** Every change the write made; empty exactly when `written` is false. */
+  changes: SpecChange[];
+  /** Store placement notices, gate warnings and delta notices. */
+  notices: string[];
+  /** One line for people. */
+  summary: string;
+}
+
+/** A value as a change report shows it: compact, and never a wall of YAML. */
+function summarizeValue(value: unknown): string {
+  if (value === undefined) return '';
+  const text = typeof value === 'string' ? value : JSON.stringify(value) ?? String(value);
+  return text.length > 120 ? `${text.slice(0, 117)}...` : text;
+}
+
+/**
+ * The identity key for an element of a delta-mergeable array, or null when the
+ * array has no per-element identity (a list of plain strings like `owns` or
+ * `guarantees`, where wholesale replacement is the only sane semantic).
+ *
+ * This table is what makes the documented contract true. Arrays used to be
+ * upserted only if they were explicitly listed below; everything else fell to
+ * wholesale replacement, so a delta naming ONE element silently deleted every
+ * element it did not mention — the same data loss already fixed for `dispatch`
+ * and `lifecycle`, still live for trustedLinks, invariants, patterns, lint
+ * allows, boundaries, and global requirements. Keyed here rather than guessed,
+ * with a name/id fallback so a future array field inherits upsert semantics
+ * instead of silently regressing to destructive replace.
+ */
+function identityKeyOf(field: string, item: unknown): string | null {
+  if (item === null || typeof item !== 'object') return null; // string lists: replace wholesale
+  const o = item as Record<string, unknown>;
+  const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  switch (field) {
+    case 'dispatch':           return str(o.capability);
+    case 'lifecycle':          return `${String(o.phase)} ${String(o.component)} ${String(o.method)}`;
+    case 'emits':
+    case 'subscribesTo':       return `${String(o.topic)} ${o.event === undefined ? '' : String(o.event)}`;
+    case 'trustedLinks':       return str(o.subsystem);
+    case 'allow':              return str(o.code);       // lint.allow
+    case 'findings':           return str(o.code);       // an interface method's findings
+    case 'invariants':         return str(o.id);
+    case 'patterns':           return str(o.id);
+    case 'boundaries':         return str(o.name);
+    case 'globalRequirements': return str(o.description);
+    case 'databases':          return str(o.id) ?? str(o.name);
+    default:                   return str(o.name) ?? str(o.id);
+  }
+}
+
+/**
+ * The identity a CHANGE REPORT addresses an array element by: the merge's own
+ * identity where it has one, and the step number for a narrative — so a
+ * changed step reads as `narrative.step 7.type` rather than a bare index.
+ */
+function reportIdentityOf(field: string, item: unknown): string | null {
+  if (item !== null && typeof item === 'object') {
+    const step = (item as Record<string, unknown>).stepNumber;
+    if (field === 'narrative' && typeof step === 'number') return `step ${step}`;
+  }
+  return identityKeyOf(field, item);
+}
+
+/**
+ * Every difference between the stored spec and the one a write would persist,
+ * as addressed paths. Arrays whose elements carry an identity are matched by
+ * it, so a reordered list is not reported as a rewrite; everything else is
+ * compared as a value.
+ */
+export function specChanges(before: unknown, after: unknown, prefix = ''): SpecChange[] {
+  const at = (key: string): string => (prefix ? `${prefix}.${key}` : key);
+  const isPlain = (v: unknown): v is Record<string, unknown> =>
+    typeof v === 'object' && v !== null && !Array.isArray(v);
+
+  if (Array.isArray(before) && Array.isArray(after)) {
+    if (after.length === 0 && before.length > 0) {
+      return [{ path: prefix, change: 'cleared', before: summarizeValue(before) }];
+    }
+    const identified = [...before, ...after].every(i => reportIdentityOf(prefix.split('.').pop() ?? prefix, i) !== null);
+    if (!identified) {
+      return JSON.stringify(before) === JSON.stringify(after)
+        ? []
+        : [{ path: prefix, change: 'set', before: summarizeValue(before), after: summarizeValue(after) }];
+    }
+    const field = prefix.split('.').pop() ?? prefix;
+    const keyOf = (i: unknown): string => String(reportIdentityOf(field, i));
+    const changes: SpecChange[] = [];
+    for (const item of before) {
+      const match = after.find(a => keyOf(a) === keyOf(item));
+      if (match === undefined) changes.push({ path: at(keyOf(item)), change: 'removed', before: summarizeValue(item) });
+      else changes.push(...specChanges(item, match, at(keyOf(item))));
+    }
+    for (const item of after) {
+      if (!before.some(b => keyOf(b) === keyOf(item))) {
+        changes.push({ path: at(keyOf(item)), change: 'added', after: summarizeValue(item) });
+      }
+    }
+    return changes;
+  }
+
+  if (isPlain(before) && isPlain(after)) {
+    const changes: SpecChange[] = [];
+    for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      const b = before[key];
+      const a = after[key];
+      if (b === undefined && a !== undefined) changes.push({ path: at(key), change: 'added', after: summarizeValue(a) });
+      else if (b !== undefined && a === undefined) changes.push({ path: at(key), change: 'removed', before: summarizeValue(b) });
+      else changes.push(...specChanges(b, a, at(key)));
+    }
+    return changes;
+  }
+
+  if (JSON.stringify(before) === JSON.stringify(after)) return [];
+  return [{ path: prefix, change: 'set', before: summarizeValue(before), after: summarizeValue(after) }];
+}
+
 // ---------------------------------------------------------------------------
 // SpecWorkspace
 // ---------------------------------------------------------------------------
@@ -2275,11 +2423,11 @@ export class SpecWorkspace {
    * empty when the merge had nothing to warn about.
    */
   updateSpec(
-    kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+    kind: WritableSpecKind,
     id: string,
     delta: Record<string, any>,
     hooks?: SpecWriteHooks,
-  ): string[] {
+  ): SpecChangeReport {
     const notices: string[] = [];
     const result = (() => {
       switch (kind) {
@@ -2400,6 +2548,29 @@ export class SpecWorkspace {
     const normalizeIdentity = (k: unknown): string =>
       String(k ?? '').toLowerCase().replace(/[_\-\s]/g, '');
 
+    /**
+     * `unset` is a delta verb at EVERY level, not only the spec's own fields.
+     *
+     * It used to be read off the top-level delta alone. Nested, it was neither
+     * a field nor a verb: it merged onto the element as data, the writer schema
+     * stripped it, and the tool answered "Successfully updated" for a spec it
+     * had left exactly as it found it. A method's `symbol`, a param's default,
+     * a step's `label` could be set and never cleared — with no way to tell
+     * from the answer that the edit had not happened.
+     */
+    const unsetFieldsOf = (item: any): string[] => (Array.isArray(item?.unset)
+      ? (item.unset as unknown[]).filter((f): f is string => typeof f === 'string')
+      : []);
+
+    /** An element merged from `delta` onto `existing`, with its `unset` honoured and the verb dropped. */
+    const withUnset = (merged: any, deltaItem: any): any => {
+      const fields = unsetFieldsOf(deltaItem);
+      const out = { ...merged };
+      delete out.unset;
+      for (const field of fields) delete out[field];
+      return out;
+    };
+
     /** Refuse markers that look like a delete but match no delete branch. */
     const assertDeltaMarkers = (item: any, label: string): void => {
       if (!item || typeof item !== 'object') return;
@@ -2495,18 +2666,18 @@ export class SpecWorkspace {
             capture,
           ));
           const { action, remove, captureJumps, ...cleanStep } = deltaStep;
-          steps.push(cleanStep);
+          steps.push(withUnset(cleanStep, deltaStep));
         } else {
           const idx = steps.findIndex(s => s.stepNumber === stepNum);
           if (idx !== -1) {
             const { action, remove, ...cleanStep } = deltaStep;
-            steps[idx] = {
+            steps[idx] = withUnset({
               ...steps[idx],
               ...cleanStep,
-            };
+            }, deltaStep);
           } else {
             const { action, remove, ...cleanStep } = deltaStep;
-            steps.push(cleanStep);
+            steps.push(withUnset(cleanStep, deltaStep));
           }
         }
       }
@@ -2545,20 +2716,25 @@ export class SpecWorkspace {
           } else {
             const existingMethod = merged[idx];
             let narrative = existingMethod.narrative ? [...existingMethod.narrative] : [];
-            if (deltaMethod.narrative && Array.isArray(deltaMethod.narrative)) {
-              narrative = mergeNarrative(narrative, deltaMethod.narrative);
+            if (Array.isArray(deltaMethod.narrative)) {
+              // `[]` clears the list it names, at this level too: fed to the
+              // step merge it means "upsert no steps", which left the narrative
+              // in place and reported success for a write that did nothing.
+              narrative = deltaMethod.narrative.length === 0
+                ? []
+                : mergeNarrative(narrative, deltaMethod.narrative);
             }
             const { narrative: _, ...cleanMethod } = deltaMethod;
-            merged[idx] = {
+            merged[idx] = withUnset({
               ...existingMethod,
               ...cleanMethod,
               ...(deltaMethod.ext !== undefined ? { ext: mergeExt(existingMethod.ext, deltaMethod.ext) } : {}),
               narrative,
-            };
+            }, deltaMethod);
           }
         } else {
           assertUnmatchedIsAnAddition(deltaMethod, deltaMethod.name, merged.map(m => m.name), 'method');
-          merged.push(deltaMethod);
+          merged.push(withUnset(deltaMethod, deltaMethod));
         }
       }
       return merged;
@@ -2573,7 +2749,7 @@ export class SpecWorkspace {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
             merged.splice(idx, 1);
           } else {
-            merged[idx] = {
+            merged[idx] = withUnset({
               ...merged[idx],
               ...deltaItem,
               ...(deltaItem.ext !== undefined ? { ext: mergeExt(merged[idx].ext, deltaItem.ext) } : {}),
@@ -2582,11 +2758,11 @@ export class SpecWorkspace {
               ...(Array.isArray(deltaItem.findings) && deltaItem.findings.length > 0
                 ? { findings: mergeIdentifiedArray('findings', merged[idx].findings ?? [], deltaItem.findings) }
                 : {}),
-            };
+            }, deltaItem);
           }
         } else {
           assertUnmatchedIsAnAddition(deltaItem, deltaItem.name, merged.map(i => i.name), 'entry');
-          merged.push(deltaItem);
+          merged.push(withUnset(deltaItem, deltaItem));
         }
       }
       return merged;
@@ -2605,11 +2781,11 @@ export class SpecWorkspace {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
             merged.splice(idx, 1);
           } else {
-            merged[idx] = { ...merged[idx], ...deltaItem };
+            merged[idx] = withUnset({ ...merged[idx], ...deltaItem }, deltaItem);
           }
         } else {
           assertUnmatchedIsAnAddition(deltaItem, keyOf(deltaItem), merged.map(keyOf), 'entry');
-          merged.push(deltaItem);
+          merged.push(withUnset(deltaItem, deltaItem));
         }
       }
       return merged.map(({ action, remove, ...item }) => item);
@@ -2625,52 +2801,17 @@ export class SpecWorkspace {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
             merged.splice(idx, 1);
           } else {
-            merged[idx] = {
+            merged[idx] = withUnset({
               ...merged[idx],
               ...deltaItem,
-            };
+            }, deltaItem);
           }
         } else {
           assertUnmatchedIsAnAddition(deltaItem, piKey(deltaItem), merged.map(piKey), 'publicInterface');
-          merged.push(deltaItem);
+          merged.push(withUnset(deltaItem, deltaItem));
         }
       }
       return merged;
-    };
-
-    /**
-     * The identity key for an element of a delta-mergeable array, or null when the
-     * array has no per-element identity (a list of plain strings like `owns` or
-     * `guarantees`, where wholesale replacement is the only sane semantic).
-     *
-     * This table is what makes the documented contract true. Arrays used to be
-     * upserted only if they were explicitly listed below; everything else fell to
-     * wholesale replacement, so a delta naming ONE element silently deleted every
-     * element it did not mention — the same data loss already fixed for `dispatch`
-     * and `lifecycle`, still live for trustedLinks, invariants, patterns, lint
-     * allows, boundaries, and global requirements. Keyed here rather than guessed,
-     * with a name/id fallback so a future array field inherits upsert semantics
-     * instead of silently regressing to destructive replace.
-     */
-    const identityKeyOf = (field: string, item: unknown): string | null => {
-      if (item === null || typeof item !== 'object') return null; // string lists: replace wholesale
-      const o = item as Record<string, unknown>;
-      const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
-      switch (field) {
-        case 'dispatch':           return str(o.capability);
-        case 'lifecycle':          return `${String(o.phase)} ${String(o.component)} ${String(o.method)}`;
-        case 'emits':
-        case 'subscribesTo':       return `${String(o.topic)} ${o.event === undefined ? '' : String(o.event)}`;
-        case 'trustedLinks':       return str(o.subsystem);
-        case 'allow':              return str(o.code);       // lint.allow
-        case 'findings':           return str(o.code);       // an interface method's findings
-        case 'invariants':         return str(o.id);
-        case 'patterns':           return str(o.id);
-        case 'boundaries':         return str(o.name);
-        case 'globalRequirements': return str(o.description);
-        case 'databases':          return str(o.id) ?? str(o.name);
-        default:                   return str(o.name) ?? str(o.id);
-      }
     };
 
     /** Upsert an array whose elements carry an identity, honouring delete markers. */
@@ -2687,7 +2828,7 @@ export class SpecWorkspace {
         const isDelete = deltaItem?.remove === true || deltaItem?.action === 'delete';
         if (idx !== -1) {
           if (isDelete) merged.splice(idx, 1);
-          else merged[idx] = { ...merged[idx], ...deltaItem };
+          else merged[idx] = withUnset({ ...merged[idx], ...deltaItem }, deltaItem);
         } else {
           // An element with no resolvable identity cannot near-miss anything;
           // only the phantom-delete guard is meaningful for it.
@@ -2698,7 +2839,7 @@ export class SpecWorkspace {
           } else if (isDelete) {
             throw new Error(`Refusing to delete a ${field} entry with no resolvable identity.`);
           }
-          merged.push(deltaItem);
+          merged.push(withUnset(deltaItem, deltaItem));
         }
       }
       return merged.map((item) =>
@@ -2712,6 +2853,8 @@ export class SpecWorkspace {
     const mergeDelta = (existing: any, delta2: any): any => {
       const res = { ...existing };
       for (const [key, value] of Object.entries(delta2)) {
+        // `unset` is the verb, never a field — at this level as at the top.
+        if (key === 'unset') continue;
         if (value === undefined || value === null) {
           continue;
         }
@@ -2747,7 +2890,7 @@ export class SpecWorkspace {
           res[key] = value;
         }
       }
-      return res;
+      return withUnset(res, delta2);
     };
 
     // Callers write DELTAS with LOCAL names (the natural form inside a
@@ -2832,9 +2975,14 @@ export class SpecWorkspace {
       : [];
     const { unset: _unset, ...mergeableDelta } = delta as Record<string, unknown>;
 
+    // The stored spec as it was BEFORE the merge. The merge shares nested
+    // objects with it wherever the delta did not reach, so label resolution —
+    // which edits steps in place — would otherwise edit the "before" too and
+    // the comparison below would see no difference where there was one.
+    const storedBefore = JSON.parse(JSON.stringify(result));
+
     const mergedResult = mergeDelta(result, qualifyDeltaRefs(mergeableDelta));
     for (const field of unsetFields) delete mergedResult[field];
-    mergedResult.updatedAt = new Date().toISOString();
 
     // Symbolic step-label references resolve AFTER the merge, so a delta can
     // reference labels anchored on pre-existing steps. Unresolved references
@@ -2849,6 +2997,37 @@ export class SpecWorkspace {
         throw new Error(`Unresolved narrative label references — nothing was saved:\n- ${labelErrors.join('\n- ')}`);
       }
     }
+
+    // What actually changed, judged on the form that would be PERSISTED: the
+    // level schema strips whatever it does not know, so a delta key the writer
+    // would drop cannot be counted as a change. The stored side goes through
+    // the same schema, so the two are compared like for like. A merged spec
+    // the schema refuses (unsetting a required field) is compared raw and left
+    // to the save, which names the offending field — the honest failure.
+    const canonical = (spec: unknown): Record<string, any> => {
+      const parsed = deltaSchema.safeParse(spec);
+      const value: Record<string, any> = { ...(parsed.success ? parsed.data : (spec as object)) } as Record<string, any>;
+      delete value.updatedAt; // a stamp, not authored content
+      return value;
+    };
+    const changes = specChanges(canonical(storedBefore), canonical(mergedResult));
+
+    // A write that changes nothing writes NOTHING and says so. Re-stamping
+    // updatedAt and answering "Successfully updated" is how a delta that
+    // no-opped — a mistyped key, a marker the merge ignored — read as a
+    // completed edit, sometimes for a whole session.
+    if (changes.length === 0) {
+      return {
+        kind,
+        id,
+        written: false,
+        changes,
+        notices,
+        summary: `No change to ${kind} "${id}" — the delta matches what is stored, so nothing was written.`,
+      };
+    }
+
+    mergedResult.updatedAt = new Date().toISOString();
 
     // Write-boundary gate, on the MERGED result — the only point where the spec
     // the caller will actually get exists as one object, and still the last
@@ -2872,7 +3051,14 @@ export class SpecWorkspace {
       case 'type':           notices.push(...this.saveTypeSpec(mergedResult)); break;
     }
 
-    return notices;
+    return {
+      kind,
+      id,
+      written: true,
+      changes,
+      notices,
+      summary: `Updated ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'}.`,
+    };
   }
 }
 
@@ -3278,10 +3464,10 @@ export function findLegacySpecFiles(): { path: string; expected: string }[] {
 }
 
 export function updateSpec(
-  kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+  kind: WritableSpecKind,
   id: string,
   delta: Record<string, any>,
   hooks?: SpecWriteHooks,
-): string[] {
+): SpecChangeReport {
   return current().updateSpec(kind, id, delta, hooks);
 }

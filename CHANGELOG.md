@@ -1361,6 +1361,39 @@ the agent.
   component returns the resolved guidance and its same-variant siblings as a derived,
   read-only field. Previously it only reached generated agent files.
 
+### The gated write seam is in the spec tree
+
+`src/core/authoring.ts` is the boundary every spec write passes: it judges a
+component against the intrinsic rules and only then persists it, and it injects
+that same judgement into the store's delta update as a hook. No spec named it, so
+the one place that decides what may be written was the one place the tree could
+not see — and the interface it calls said so out loud (`validateComponentCandidate`
+carried "no sdd_core narrative models that call yet, because no spec names
+authoring.ts").
+
+- **`spec_write_gate`** (Orchestrator, `sdd_core`) is that file: `addComponent`
+  judges a candidate and refuses it before anything touches disk; `updateSpecGated`
+  builds the judgement as a write hook and hands the delta to the core orchestrator.
+  It is an Orchestrator, not a Portal: it terminates no transport and it performs
+  the write itself, which is exactly the layer a Portal's writes must route through.
+- **`core_validator_adapter`** (Adapter, `sdd_core`) names the hop into
+  `sdd_validator`, matching the client shim every other subsystem already uses to
+  reach the validator.
+- **`core_orchestrator.updateSpec`** is on the contract at last — the delta applier
+  the authoring tools have written through for months, with the guards, the merge,
+  the no-op comparison and the injected gate in its narrative.
+- **`sdd_core` declares its trusted link to `sdd_validator`.** The coupling is
+  mutual and always was: the validator must read the spec tree to judge it, and the
+  write gate must call the rule engine to judge a component before it reaches disk.
+  It only became visible once a core component named the call. The declaration
+  records the commitment and states the reason; the client-Adapter shim is kept, so
+  the hop stays swappable.
+- **The seam's inbound edge cannot be drawn**, and the spec says why rather than
+  pretending: `src/mcp/server.ts` imports the gate directly, and a cross-subsystem
+  dependency may only enter through a published Portal — which `core_portal` is, and
+  which serves the ungated mechanical writes on purpose. Both gate methods carry an
+  `invokedBy` naming the real caller.
+
 ### Spec authoring: array deltas upsert, and an optional field can be removed
 
 `sdd_update_spec` documented that arrays are "matched by name (or id) and
@@ -1542,6 +1575,25 @@ method's narrative. Two mechanisms close that honestly:
 
 ### Fixes
 
+- **A write that changed nothing reported "Successfully updated".** `sdd_update_spec`
+  answered with the same sentence whether a delta rewrote a narrative or landed
+  nowhere at all, and re-stamped `updatedAt` on the way, so an edit that never
+  happened was indistinguishable from one that did — and left a diff behind to prove
+  it had. An update now compares the merged spec with what is stored, read through
+  the same level schema the writer uses, and **writes nothing when they match**: the
+  answer says so, and the file is untouched. When something did change, the answer
+  names every change by path — `methods.runJourney.narrative.step 7.type`,
+  `dependsOn`, `description` — with what it was and what it is. `updateSpec` and
+  `updateSpecGated` return that report instead of a bare notice list.
+- **A method-level `unset` silently did nothing.** `unset` was a verb at the top
+  level only. One level down — on a method, a param, a field, a narrative step, a
+  dispatch binding — it was neither a field nor a verb: it merged onto the element
+  as data, the writer schema stripped it, and the tool answered "Successfully
+  updated implementation spec" over a spec it had left exactly as it found it. A
+  method's `symbol`, a step's `label`, could be set and never cleared. `unset` is
+  now honoured at every level, and `[]` clears a method's `narrative` the way it
+  clears every other list it names (fed to the step merge, `[]` used to mean "upsert
+  no steps" and left the narrative in place).
 - **A stale lock reported itself as locked.** The hosted project config view judged
   "locked" from the mere EXISTENCE of a lock record while the promote gate compared
   state identities — so a project whose specs changed after locking still claimed a

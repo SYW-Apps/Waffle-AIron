@@ -536,7 +536,7 @@ describe('narrative insert vs jump targets (captureJumps)', () => {
 
   it('default insert relocates incoming jumps past the new step and returns a notice', () => {
     buildFixture();
-    const notices = updateSpec('implementation', 'impl-orch-a', {
+    const { notices } = updateSpec('implementation', 'impl-orch-a', {
       methods: [{
         name: 'run',
         narrative: [{ stepNumber: 3, action: 'insert', description: 'inserted cleanup', type: 'local' }],
@@ -591,7 +591,7 @@ describe('narrative insert vs jump targets (captureJumps)', () => {
 
   it('captureJumps: true retargets incoming jumps onto the inserted step, no notice', () => {
     buildFixture();
-    const notices = updateSpec('implementation', 'impl-orch-a', {
+    const { notices } = updateSpec('implementation', 'impl-orch-a', {
       methods: [{
         name: 'run',
         narrative: [{ stepNumber: 3, action: 'insert', description: 'inserted cleanup', type: 'local', captureJumps: true }],

@@ -115,7 +115,7 @@ describe('type placement notices', () => {
   it('sdd_update_spec bubbles the save notices', () => {
     flatProject(['billing', 'ops']);
     saveTypeSpec(typeSpec());
-    const notices = updateSpec('type', 'invoice', { subsystem: 'ops' });
+    const { notices } = updateSpec('type', 'invoice', { subsystem: 'ops' });
     expect(notices.some(n => n.includes('never relocates'))).toBe(true);
   });
 });

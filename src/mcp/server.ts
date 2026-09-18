@@ -52,6 +52,7 @@ import { resolveDomains } from '../core/domains.js';
 // Statically imported for the same reason as the core adapters below: it reads
 // the request-scoped project root at CALL time.
 import { addComponent, updateSpecGated } from '../core/authoring.js';
+import type { SpecChangeReport } from '../core/specs.js';
 import type { ComponentSpec } from '../models/specs.js';
 // Statically imported for the same reason as the skills adapter: these read the
 // request-scoped project root at CALL time, so a static binding stays correct per
@@ -234,6 +235,25 @@ function json(value: unknown): CallToolResult {
 
 function errText(message: string): CallToolResult {
   return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
+}
+
+/**
+ * A write's answer, as the caller needs to read it: what changed, addressed
+ * path by path — or that nothing did and nothing was written.
+ *
+ * "Successfully updated" was the same sentence whether a delta rewrote a
+ * narrative or landed nowhere at all, so an edit that never happened read
+ * exactly like one that did.
+ */
+function renderChangeReport(report: SpecChangeReport): string {
+  const lines = [report.summary];
+  for (const change of report.changes) {
+    const to = change.after === undefined ? '' : `: ${JSON.stringify(change.after)}`;
+    const from = change.before === undefined ? '' : ` (was ${JSON.stringify(change.before)})`;
+    lines.push(`- ${change.path} ${change.change}${to}${from}`);
+  }
+  if (report.notices.length) lines.push('', 'NOTICE:', ...report.notices.map(n => `- ${n}`));
+  return lines.join('\n');
 }
 
 // Spec WRITES go through core/authoring.ts, never straight to the store: the
@@ -1731,9 +1751,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ kind, id, delta }) => {
       try {
-        const notices = updateSpecGated(kind, id, delta);
-        const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
-        return text(`Successfully updated ${kind} spec "${id}".${noticeBlock}`);
+        return text(renderChangeReport(updateSpecGated(kind, id, delta)));
       } catch (e) {
         return errText(String(e));
       }
