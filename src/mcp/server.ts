@@ -1608,7 +1608,11 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
             name: z.string(),
             type: z.string().describe(TYPE_REF_GRAMMAR('The parameter\'s type')),
             description: z.string().optional(),
-            optional: z.boolean().optional(),
+            optional: z.boolean().optional().describe(
+              'Whether the parameter may be OMITTED by a caller. It is not nullability: a parameter that must be '
+              + 'passed but may be passed as nothing is a required parameter whose type is a union — '
+              + '"ProjectConfig | null". Say whichever is true; they are different contracts.',
+            ),
           }).strict()).optional().describe('Structured parameters — authoritative for type checking (the prose signature becomes display-only). Strongly preferred.'),
           guarantees: z.array(z.string().min(1)).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here. Builtin tokens: idempotent | atomic | transactional | exactly-once; extension packs may declare more (any other token is UNKNOWN_GUARANTEE)'),
           effect: z.enum(['read', 'write']).optional().describe('State-effect direction on the component\'s held state — required on a durable Store\'s contract methods so the durability round-trip rule can pair writes with hydration read-backs'),

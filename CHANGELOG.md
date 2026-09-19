@@ -1763,7 +1763,11 @@ same as not knowing whether the next one an author writes will.
   resolve), `Promise<Invoice | null>`, `Map<string, Invoice | null>`,
   `Invoice[] | null`, `(Invoice | null)[]`, qualified members, and spacing that
   does not matter. A union of string literals (`'read' | 'write'`) names no type
-  at all, and resolves to nothing rather than to a missing type.
+  at all, and resolves to nothing rather than to a missing type. A parameter's
+  `optional` says the caller may OMIT it, which is a different contract from a
+  parameter that must be passed and may be passed as nothing — that one is
+  required, with a union for a type — and its description now says so, because
+  using `optional` for nullability is the mistake that started this.
 - **A migration leaves a union exactly as written.** The reference rewrites
   behind `sdd_rename_component`, `sdd_rename_method`,
   `sdd_externalize_subsystem` and `sdd_internalize_subsystem` remap a `type`
