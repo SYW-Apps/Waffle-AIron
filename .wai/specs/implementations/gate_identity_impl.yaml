@@ -13,11 +13,16 @@ methods:
       - stepNumber: 1
         description: >-
           Project the built-in rules onto their identity: each rule by name with its codes, each
-          code with its default severity, the codes sorted by code and the rules sorted by name. A
-          rule is a function and cannot be digested, so its name and codes stand for it. The wairon
-          version is left out: a release that changes no rule keeps every lock valid, and one that
-          adds, removes or re-grades a code invalidates exactly the locks it should. Accepted gap: a
-          rule whose check grows stricter without a name, code or severity change is not caught.
+          code with its default severity, the codes sorted by code and the rules sorted by name.
+          Every sort in this projection — here and in the steps below — compares by CODEPOINT, never
+          by a locale-aware collation: collation is a property of the machine's ICU build, and it
+          already ordered a real pair of shipped codes the other way round (EXCESSIVE_METHOD_PARAMS
+          before EXCESSIVE_METHODS), which would make the identity depend on where it was computed.
+          A rule is a function and cannot be digested, so its name and codes stand for it. The
+          wairon version is left out: a release that changes no rule keeps every lock valid, and one
+          that adds, removes or re-grades a code invalidates exactly the locks it should. Accepted
+          gap: a rule whose check grows stricter without a name, code or severity change is not
+          caught.
         type: local
       - stepNumber: 2
         description: >-
@@ -68,8 +73,8 @@ methods:
           identity (sha256) never compares equal to a gate identity.
         type: return
         outcome: StateId (the gate identity)
-    detail: full
     symbol: computeGateIdentity
+detail: full
 status: complete
 createdAt: '2026-09-15T17:55:53.605Z'
-updatedAt: '2026-09-18T20:21:28.327Z'
+updatedAt: '2026-09-19T13:14:53.396Z'

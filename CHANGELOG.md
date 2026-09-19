@@ -5,20 +5,22 @@
 **Breaking.** Merge dev → main with `[major]` in the merge commit message →
 **v6.0.0**. Six changes are visible on upgrade without any action by the user,
 and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
-a project that has not declared them, existing lock records read as stale, a
-project referencing a global pack's profile can newly fail `validate --ci`, and so
-can a chained subproject whose gate was waving cross-tree findings through or whose
-nested mount reaches outside its own project, a tree that still has a Specialist or
-a Gateway or breaks the new Supervisor and Actor dependency rules, a tree whose
-narratives or names the new readability checks judge, or a tree holding a case the
-fixed validator rules used to miss — including a narrative step carrying a field its
-own step type cannot have. A scripted `sdd_update_spec` delta can also
-behave differently, where it was relying on a merge rule that was silently wrong
-(item 10), and a scripted call to a create tool that carries an unknown key
-inside a method, a param or a narrative step is now refused where it used to be
-stripped (item 12). Nine `sdd_*` tools now declare an `outputSchema`, which
-changes what a conforming MCP client expects back from them (item 13). Nothing
-here is purely additive, so `[minor]` would understate it.
+a project that has not declared them, existing lock records read as stale — the
+identity they record was machine-specific, and making it reproducible moves it
+once more — a project referencing a global pack's profile can newly fail
+`validate --ci`, and so can a chained subproject whose gate was waving cross-tree
+findings through or whose nested mount reaches outside its own project, a tree
+that still has a Specialist or a Gateway or breaks the new Supervisor and Actor
+dependency rules, a tree whose narratives or names the new readability checks
+judge, or a tree holding a case the fixed validator rules used to miss —
+including a narrative step carrying a field its own step type cannot have. A
+scripted `sdd_update_spec` delta can also behave differently, where it was
+relying on a merge rule that was silently wrong (item 10), and a scripted call
+to a create tool that carries an unknown key inside a method, a param or a
+narrative step is now refused where it used to be stripped (item 12). Nine
+`sdd_*` tools now declare an `outputSchema`, which changes what a conforming MCP
+client expects back from them (item 13). Nothing here is purely additive, so
+`[minor]` would understate it.
 
 ### `wairon lock-check`: refuse a merge whose specs were never approved (new, optional)
 
@@ -71,6 +73,51 @@ nobody had said yes to — silently, because there was no gate to notice.
   merging is the thing that was reviewed. It also cannot block a merge by
   itself: a workflow can only fail a job, and making a failing job stop a merge
   is a branch-protection setting on the repository.
+
+### The gate identity is the same on every machine (breaking: re-lock once)
+
+The identity a lock records was machine-specific. `computeStateId` digested the
+spec tree in the order the filesystem handed the spec files back — NTFS returns
+a directory sorted one way, ext4 returns it in hash order — and `canonicalize`
+sorts object keys but never arrays. So the same commit hashed differently
+depending on where it was hashed, and a lock only ever verified on the machine
+that took it.
+
+This was not theoretical: the `lock-check` gate above failed in CI on the very
+commit that added it, with a valid record and an unchanged tree. Reading the
+identical files, this repository's spec tree digested to `5d7bef12…` on Windows
+and `0697076b…` on Linux. The first divergence was two real component ids,
+`share_snapshots` and `share_snapshot_index`: `_` sorts before `s` by codepoint,
+and after it under the directory order Windows returns.
+
+- **The specs are put in a deterministic order before they are digested**: by
+  id, and for the duplicate-id case (itself a validation error) by canonical
+  content, compared by codepoint. It lives in `computeStateId`, the function
+  that claims the determinism, and it reorders only whole specs. The arrays
+  INSIDE a spec — a narrative's steps, a method's params — are ordered by
+  meaning; sorting those in `canonicalize` would have made a reordered flow
+  digest identically to the original and a lock survive a real design change.
+- **No sort that decides an identity uses `localeCompare` any more.** The
+  doctrine projection sorted its rules, codes, packs, patterns and assertions
+  with it, and collation is a property of the machine's ICU build, not of the
+  data: it already ordered a shipped pair of codes the other way round
+  (`EXCESSIVE_METHOD_PARAMS` before `EXCESSIVE_METHODS`, where the codepoints say
+  the reverse). Pack DISCOVERY order — which decides who wins a doctrine
+  collision, and so reaches both the verdict and the identity — was sorted the
+  same way and is now ordinal too. Human-readable listings keep `localeCompare`,
+  which is what it is for.
+- **Proven by construction, not by a second laptop.** A property test permutes
+  the loaders' output and requires the digest not to move; a second test renames
+  every spec file so the directory order flips; a third pins a fixture tree's
+  digest as a constant, generated on both platforms and confirmed equal, so any
+  future reordering shows up in a diff instead of in someone's CI. After the fix
+  this repository's tree digests to `0697076b…` on Windows and on Linux alike,
+  and its gate identity to `a523af3f…` on both.
+
+**Breaking, once.** Both halves move the identity, so every lock record written
+before this release reads as *stale* and every project re-locks — see
+*Upgrading*. That is the correct reading: those records attest to a digest that
+was never reproducible off the machine that wrote it.
 
 ### A chained subproject is judged through its parent — never waved through
 
@@ -2016,10 +2063,16 @@ same as not knowing whether the next one an author writes will.
    if you upgraded from a pre-permission-model version — legacy users and API tokens
    otherwise resolve to zero permissions, and units without slugs break the
    organizations page. `wairon serve` now warns when this is pending.
-2. **Re-lock any locked project.** The lock now covers doctrine and the surface
-   contracts a verdict consulted, so records written before this release read as
-   *stale* until you re-lock. This fails closed by design: those locks were taken
-   without that coverage and cannot be retro-verified.
+2. **Re-lock any locked project.** Two changes make every earlier record read as
+   *stale*, and one `wairon lock` settles both. The lock now covers doctrine and
+   the surface contracts a verdict consulted, so records written without that
+   coverage cannot be retro-verified. And the gate identity itself moved: it was
+   computed over the spec tree in filesystem order and sorted with a
+   locale-aware comparison, so it differed between machines — a lock taken on a
+   laptop read as stale in CI. Both fail closed by design. If you gate merges
+   with `wairon lock-check`, expect one red run per repository until the fresh
+   record is committed; after that the same commit reads the same on every
+   machine, which it did not before.
 3. **Declare the packs your projects apply.** Machine-wide packs no longer apply
    unless a project selects them. Run `wairon doctor` to see what is installed but
    unapplied and `wairon doctor --fix` to record it as explicit selections — or set

@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { canonicalize } from '../../utils/canonical-json.js';
+import { canonicalize, compareOrdinal } from '../../utils/canonical-json.js';
 import type { RulesConfig } from '../../models/project.js';
 import type { LoadedExtensions } from '../extensions.js';
 import type { StateId } from '../statehash.js';
@@ -52,8 +52,11 @@ const GATE_ALGORITHM = 'sha256+content+doctrine+inputs';
  * its declared codes stands as its identity.
  */
 function doctrineIdentity(doctrine: LoadedExtensions, builtinRules: SddRule[], gate: GateConfig): Record<string, unknown> {
+  // Ordinal, never localeCompare: collation is locale- and ICU-dependent, and it
+  // re-weights exactly the characters rule names are full of (hyphens,
+  // underscores), so the same rule set could digest differently on two machines.
   const byKey = <T>(items: T[], key: (item: T) => string): T[] =>
-    [...items].sort((a, b) => key(a).localeCompare(key(b)));
+    [...items].sort((a, b) => compareOrdinal(key(a), key(b)));
 
   return {
     /**
