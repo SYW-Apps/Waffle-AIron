@@ -4,11 +4,12 @@ import { z } from 'zod';
 import { aiPathsAt, WaiPaths } from '../config/loader.js';
 import { projectConfigRepository } from '../config/project-config.js';
 import type { ProjectConfig, PackSelection, ProjectProfileSelection } from '../models/project.js';
-import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
+import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
-import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
+import { readYamlFile } from '../utils/yaml.js';
+import { listSpecFiles, readSpecFile, writeSpecFile } from './spec-files.js';
 import {
   SystemSpec,
   SystemSpecSchema,
@@ -400,10 +401,10 @@ export function findChainingParent(childRoot: string, ceiling?: string): Chainin
     if (bound && !isWithin(bound, dir)) break;
     const specsDir = aiPathsAt(dir).specsDir();
     if (pathExists(specsDir)) {
-      for (const file of listFilesRecursive(specsDir, '.yaml')) {
+      for (const file of listSpecFiles(specsDir)) {
         let raw: unknown;
         try {
-          raw = readYamlFile(file);
+          raw = readSpecFile(file);
         } catch {
           continue;
         }
@@ -466,10 +467,10 @@ export function inspectChainedRoots(rootDir: string = getProjectRoot()): Chained
   const walk = (projectDir: string, prefix: string, ancestors: ReadonlySet<string>, depth: number): void => {
     const specsDir = aiPathsAt(projectDir).specsDir();
     if (!pathExists(specsDir)) return;
-    for (const file of listFilesRecursive(specsDir, '.yaml')) {
+    for (const file of listSpecFiles(specsDir)) {
       let raw: unknown;
       try {
-        raw = readYamlFile(file);
+        raw = readSpecFile(file);
       } catch {
         continue;
       }
@@ -723,7 +724,7 @@ function computeSpecTreeSignature(dirs: string[]): string {
       parts.push(`${dir}:missing`);
       continue;
     }
-    for (const f of listFilesRecursive(dir, '.yaml')) {
+    for (const f of listSpecFiles(dir)) {
       try {
         const st = fs.statSync(f);
         parts.push(`${f}:${st.mtimeMs}:${st.size}`);
@@ -1189,7 +1190,7 @@ export class SpecWorkspace {
     this.scanVisitedSpecDirs.push(specsDir);
     if (!pathExists(specsDir)) return index;
 
-    const files = listFilesRecursive(specsDir, '.yaml');
+    const files = listSpecFiles(specsDir);
     const systemYaml = path.normalize(projectPaths.specsSystem());
 
     const localSubprojects: { subsystemId: string; projectPath: string }[] = [];
@@ -1206,7 +1207,7 @@ export class SpecWorkspace {
       // silently dropped that mount's schema errors.
       let rawId: string | undefined;
       try {
-        const raw = readYamlFile(file);
+        const raw = readSpecFile(file);
         if (raw === null || typeof raw !== 'object') {
           this.loaderIssues.push({
             severity: 'error',
@@ -1787,7 +1788,7 @@ export class SpecWorkspace {
     const p = this.paths.specsSystem();
     if (!pathExists(p)) return null;
     try {
-      const raw = readYamlFile(p);
+      const raw = readSpecFile(p);
       return SystemSpecSchema.parse(raw);
     } catch (e: any) {
       this.loaderIssues.push({
@@ -1803,7 +1804,7 @@ export class SpecWorkspace {
   saveSystemSpec(spec: SystemSpec): void {
     const p = this.paths.specsSystem();
     ensureDir(path.dirname(p));
-    writeYamlFile(p, parseOrThrow(SystemSpecSchema, spec, 'system', spec.name));
+    writeSpecFile(p, parseOrThrow(SystemSpecSchema, spec, 'system', spec.name));
     invalidateSpecCache();
   }
 
@@ -1823,7 +1824,7 @@ export class SpecWorkspace {
     const p = this.getSubsystemPath(id);
     if (!pathExists(p)) return null;
     try {
-      const raw = readYamlFile(p);
+      const raw = readSpecFile(p);
       return SubsystemSpecSchema.parse(raw);
     } catch (e: any) {
       this.loaderIssues.push({
@@ -1993,7 +1994,7 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeYamlFile(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id));
+    writeSpecFile(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id));
     invalidateSpecCache();
   }
 
@@ -2022,7 +2023,7 @@ export class SpecWorkspace {
     const p = this.getComponentPath(id);
     if (!pathExists(p)) return null;
     try {
-      const raw = readYamlFile(p);
+      const raw = readSpecFile(p);
       return ComponentSpecSchema.parse(raw);
     } catch (e: any) {
       this.loaderIssues.push({
@@ -2077,7 +2078,7 @@ export class SpecWorkspace {
       );
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeYamlFile(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id));
+    writeSpecFile(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id));
     invalidateSpecCache();
     // Keep the physical layout in sync with ownership: nest owned members under
     // their pattern, and move anything an `owns` change has displaced.
@@ -2151,7 +2152,7 @@ export class SpecWorkspace {
     const p = this.getInterfacePath(id);
     if (!pathExists(p)) return null;
     try {
-      const raw = readYamlFile(p);
+      const raw = readSpecFile(p);
       return InterfaceSpecSchema.parse(raw);
     } catch (e: any) {
       this.loaderIssues.push({
@@ -2183,7 +2184,7 @@ export class SpecWorkspace {
     if (!pathExists(p)) return;
     let occupantId: string | undefined;
     try {
-      occupantId = (readYamlFile(p) as { id?: string } | null)?.id;
+      occupantId = (readSpecFile(p) as { id?: string } | null)?.id;
     } catch {
       return; // unreadable/legacy — the write is the repair
     }
@@ -2229,7 +2230,7 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeYamlFile(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id));
+    writeSpecFile(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id));
     invalidateSpecCache();
     return notices;
   }
@@ -2259,7 +2260,7 @@ export class SpecWorkspace {
     const p = this.getImplementationPath(id);
     if (!pathExists(p)) return null;
     try {
-      const raw = readYamlFile(p);
+      const raw = readSpecFile(p);
       return ImplementationSpecSchema.parse(raw);
     } catch (e: any) {
       this.loaderIssues.push({
@@ -2296,7 +2297,7 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeYamlFile(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id));
+    writeSpecFile(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id));
     invalidateSpecCache();
     return notices;
   }
@@ -2363,7 +2364,7 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeYamlFile(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id));
+    writeSpecFile(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id));
     invalidateSpecCache();
     return notices;
   }
@@ -2401,7 +2402,7 @@ export class SpecWorkspace {
       specToWrite.createdAt = existing.createdAt;
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeYamlFile(p, parseOrThrow(GroupSpecSchema, specToWrite, 'group', spec.id));
+    writeSpecFile(p, parseOrThrow(GroupSpecSchema, specToWrite, 'group', spec.id));
     invalidateSpecCache();
   }
 
@@ -2566,7 +2567,7 @@ export class SpecWorkspace {
   findLegacySpecFiles(): { path: string; expected: string }[] {
     const specsDir = this.paths.specsDir();
     if (!pathExists(specsDir)) return [];
-    const files = listFilesRecursive(specsDir, '.yaml');
+    const files = listSpecFiles(specsDir);
     const legacy: { path: string; expected: string }[] = [];
     for (const f of files) {
       const base = path.basename(f);

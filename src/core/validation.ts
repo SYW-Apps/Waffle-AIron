@@ -520,6 +520,12 @@ export function validateSddTree(
       ...knownIssueCodes().map((rc) => rc.code),
       ...extensions.assertions.map((a) => a.fullCode),
     ]);
+    // The codes a rule declares CARRYABLE: the closed set the conformance
+    // debt register's entries are checked against, so the register can name
+    // measured code-vs-spec debt and nothing else.
+    const carryableCodes = new Set(
+      knownIssueCodes().filter((rc) => rc.carryable).map((rc) => rc.code),
+    );
 
     const ctx = buildRuleContext({
       system,
@@ -540,6 +546,7 @@ export function validateSddTree(
       codeModel,
       roundTripIssues,
       knownIssueCodes: knownCodes,
+      carryableIssueCodes: carryableCodes,
       issues,
     });
 

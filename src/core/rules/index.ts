@@ -23,6 +23,7 @@ import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
 import type { PackSelection } from '../../models/project.js';
+import type { CarriedFindingEntry, FindingParts } from './types.js';
 import {
   ArchProfile,
   BUILTIN_PROFILES,
@@ -234,6 +235,8 @@ export interface BuildContextOptions {
   roundTripIssues: ValidationIssue[];
   /** Every code the registered rules and loaded declarative assertions can report, gathered by the caller (see RuleContext.knownIssueCodes). */
   knownIssueCodes: Set<string>;
+  /** Every code a registered rule declares CARRYABLE, gathered by the caller (see RuleContext.carryableIssueCodes). */
+  carryableIssueCodes?: Set<string>;
   /** Collector the context's addIssue pushes into. */
   issues: ValidationIssue[];
 }
@@ -547,6 +550,35 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   for (const im of implementations) collectAllows(im.id, im.lint);
   for (const t of types) collectAllows(t.id, t.lint);
 
+  // The conformance debt register — wairon's counterpart to the frozen
+  // `unclaimed` list, for findings about code a spec DOES claim. Flattened
+  // here from the reason groups the config holds, so every entry carries the
+  // kind and the reason that explain it; addIssue consults it AFTER the lint
+  // allows, so an allow and an entry can never both claim one finding (the
+  // entry is then reported stale, which is the truth: it carries nothing).
+  const carriedFindings: CarriedFindingEntry[] = [];
+  const carriedLookup = new Map<string, CarriedFindingEntry>();
+  const carriedKey = (spec: string, code: string, at: string): string => `${spec}\u0000${code}\u0000${at}`;
+  for (const group of rules?.conformance?.carried ?? []) {
+    for (const f of group.findings ?? []) {
+      const entry: CarriedFindingEntry = {
+        kind: group.kind,
+        why: group.why,
+        code: f.code,
+        spec: f.spec,
+        at: f.at,
+        covers: f.covers ?? [],
+        fired: false,
+        seen: new Set<string>(),
+      };
+      carriedFindings.push(entry);
+      // A second entry for the same finding never matches, so it can never
+      // carry anything; the audit names the duplicate for what it is.
+      const key = carriedKey(f.spec, f.code, f.at);
+      if (!carriedLookup.has(key)) carriedLookup.set(key, entry);
+    }
+  }
+
   const addIssue = (
     defaultSeverity: Severity,
     code: string,
@@ -554,6 +586,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     specId?: string,
     isDraftContext?: boolean,
     surfaceResolved?: boolean,
+    parts?: FindingParts,
   ): void => {
     if (scopeSubsystem && specId && !isSpecInScope(specId)) {
       return;
@@ -575,6 +608,27 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         if (severity === 'warning') return;
       }
     }
+    // The conformance debt register, consulted with the finding's IDENTITY
+    // rather than its prose. An entry carries the warning only when it lists
+    // EVERY unit the finding reports: a crossing or a step the entry does not
+    // name is growth, and growth is exactly what a register must not absorb —
+    // so the finding still fires, and its message says which units are new.
+    // Errors are never carried, for the reason an allow never silences one.
+    let text = message;
+    if (specId && parts && severity === 'warning') {
+      const entry = carriedLookup.get(carriedKey(specId, code, parts.at));
+      if (entry) {
+        entry.fired = true;
+        const listed = new Set(entry.covers);
+        const grew: string[] = [];
+        for (const unit of parts.covers ?? []) {
+          if (listed.has(unit)) entry.seen.add(unit);
+          else grew.push(unit);
+        }
+        if (grew.length === 0) return;
+        text = `${text} The conformance debt register carries this finding, but not ${grew.length} part(s) of it — ${grew.map(u => `"${u}"`).join('; ')} ${grew.length === 1 ? 'is' : 'are'} new. Fix them, or add them to the entry's \`covers\` with a reason that is actually true.`;
+      }
+    }
     // Carry the draft/design provenance onto the issue (only when true, to keep
     // issues clean) so command-level policy can classify draft-related warnings
     // without re-deriving spec status. The rule stays fully emitted/visible.
@@ -584,7 +638,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     issues.push({
       severity,
       code,
-      message,
+      message: text,
       specId,
       ...(isDraftContext ? { draftContext: true } : {}),
       ...(surfaceResolved ? { surfaceResolved: true } : {}),
@@ -670,6 +724,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     roundTripIssues: opts.roundTripIssues,
     lintAllows,
     knownIssueCodes: opts.knownIssueCodes,
+    carriedFindings,
+    carryableIssueCodes: opts.carryableIssueCodes ?? new Set<string>(),
     addIssue,
   };
   return ctx;

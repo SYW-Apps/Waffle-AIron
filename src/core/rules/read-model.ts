@@ -1,10 +1,14 @@
 import {
+  fieldTypesOf,
   implementationSourceFiles,
+  importBindingOf,
   isPattern,
   isRetired,
   methodSourceFile,
   pathKey,
   resolveImport,
+  typeBindingOf,
+  type CallSiteFact,
   type CodeModel,
   type ComponentSpec,
   type ImplementationSpec,
@@ -87,15 +91,141 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
     return built;
   };
 
+  // What a module REPUBLISHES, transitively and itself included: a call
+  // resolved to a barrel lands in the file the barrel re-exports from, so the
+  // hop is part of resolution rather than something each reader re-walks.
+  const republished = new Map<string, ReadonlySet<string>>();
+  const republishedFrom = (path: string): ReadonlySet<string> => {
+    const cached = republished.get(path);
+    if (cached) return cached;
+    const out = new Set<string>([path]);
+    const queue = [path];
+    while (queue.length) {
+      const from = queue.pop()!;
+      const f = facts.get(from);
+      if (f?.status !== 'analyzed') continue;
+      for (const specifier of f.reexports) {
+        const to = resolveImport(from, specifier, paths);
+        if (to && !out.has(to)) { out.add(to); queue.push(to); }
+      }
+    }
+    republished.set(path, out);
+    return out;
+  };
+
+  const NO_ORIGIN: ReadonlySet<string> = new Set<string>();
+
+  /** Where a module specifier LANDS from a file: the module, widened by what it republishes. */
+  const landingFrom = (scope: string, specifier: string): ReadonlySet<string> => {
+    const to = resolveImport(scope, specifier, paths);
+    return to ? republishedFrom(to) : NO_ORIGIN;
+  };
+
+  /**
+   * The file a site's names resolve in, and its facts — but only at EXACT
+   * grade, since a weaker grade records no bindings to resolve WITH. A carried
+   * site names the file it was READ in; its names resolve in that file's
+   * scope, never in the barrel that republished it.
+   */
+  const scopeOf = (site: CallSiteFact, from: string): { path: string; facts: SourceFileFacts } | undefined => {
+    const path = pathKey(site.from ?? from);
+    const f = facts.get(path);
+    return f?.status === 'analyzed' && f.analysisGrade === 'exact' ? { path, facts: f } : undefined;
+  };
+
+  const originOf = (site: CallSiteFact, from: string): ReadonlySet<string> => {
+    const resolved = scopeOf(site, from);
+    // An empty answer says exactly that a pure model cannot say — never that
+    // the call is absent.
+    if (!resolved) return NO_ORIGIN;
+    const { path: scope, facts: f } = resolved;
+    const landing = (specifier: string): ReadonlySet<string> => landingFrom(scope, specifier);
+    if (!site.member) {
+      const binding = importBindingOf(f, site.name);
+      if (binding) return landing(binding.from);
+      // Declared here and imported from nowhere: the function is this file's
+      // own. Anything else is a global, an ambient or an injected name.
+      return declarationsAt(scope).has(site.name) ? republishedFrom(scope) : NO_ORIGIN;
+    }
+    // `ns.save()` is that module's own export whenever `ns` is a NAMESPACE
+    // binding: its properties are that module's exports, nothing else.
+    if (!site.via) return NO_ORIGIN;
+    const receiver = importBindingOf(f, site.via);
+    if (!receiver) return NO_ORIGIN;
+    if (receiver.namespace) return landing(receiver.from);
+    // Through a VALUE the module handed over (`hostCore.renderDiagram()`) the
+    // property could have been attached anywhere, so the module alone is not
+    // an answer — it becomes one only when that module declares the invoked
+    // name as well (the object literal's own key, the function it holds).
+    // Where it does not, the value was assembled elsewhere and this resolves
+    // to nothing rather than to the nearest module in sight.
+    const through = landing(receiver.from);
+    for (const candidate of through) {
+      if (declarationsAt(candidate).has(site.name)) return through;
+    }
+    return NO_ORIGIN;
+  };
+
+  /**
+   * The same question, asked one tier weaker: every file the callee CAN have
+   * been written in. Two receivers are followed, and both are followed through
+   * a NAME the code writes down rather than through a value it holds.
+   *
+   *   `this.<field>.save()`  through the TYPE the class declares that field
+   *                          with — its import binding (type-only or runtime
+   *                          alike, since a declared type may be spelled
+   *                          either way), else this file when it declares that
+   *                          name itself.
+   *   `new Class().save()`   through the module the CLASS NAME came from — its
+   *                          RUNTIME import binding only, because a
+   *                          constructed class is a value and a type-only
+   *                          binding could never have built one — else this
+   *                          file when it declares that class.
+   *
+   * Both are POSSIBILITIES and not facts. A declared type says what a
+   * constructor-injected collaborator IS, never which class ships the body, so
+   * an interface's implementor may live anywhere; a constructed class says
+   * where the CLASS was written, never where a method it INHERITS was, and a
+   * base class lives in whatever module it likes. Which is why this tier is
+   * separate rather than folded into originOf — a rule may ACCEPT a call on
+   * it, and must never accuse one on it. A field the file annotates with
+   * nothing, and a class name it cannot place, resolve to nothing, exactly as
+   * the proven tier does.
+   */
+  const possibleOriginsOf = (site: CallSiteFact, from: string): ReadonlySet<string> => {
+    const proven = originOf(site, from);
+    if (!site.field && !site.constructed) return proven;
+    const resolved = scopeOf(site, from);
+    if (!resolved) return proven;
+    const { path: scope, facts: f } = resolved;
+    const out = new Set(proven);
+    /** Where a NAME this file writes down leads: its module, else this file when it declares it. */
+    const widenThrough = (name: string, specifier: string | undefined): void => {
+      const landings = specifier !== undefined
+        ? landingFrom(scope, specifier)
+        : declarationsAt(scope).has(name) ? republishedFrom(scope) : NO_ORIGIN;
+      for (const candidate of landings) out.add(candidate);
+    };
+    if (site.field) {
+      for (const typeName of fieldTypesOf(f, site.field)) widenThrough(typeName, typeBindingOf(f, typeName));
+    }
+    if (site.constructed) widenThrough(site.constructed, importBindingOf(f, site.constructed)?.from);
+    return out;
+  };
+
+  const declarationsAt = (path: string): ReadonlySet<string> =>
+    namesAt(declarations, pathKey(path), f => new Set([...f.declaredNames, ...f.exportedNames]));
+
   return {
     paths,
     exactPaths,
     factsAt: (path) => facts.get(pathKey(path)),
-    declarationsAt: (path) =>
-      namesAt(declarations, pathKey(path), f => new Set([...f.declaredNames, ...f.exportedNames])),
+    declarationsAt,
     anchorsAt: (path) =>
       namesAt(anchors, pathKey(path), f => new Set([...f.declaredNames, ...f.exportedNames, ...f.anchoredNames])),
     findingAnchorsAt: (path) => namesAt(findingAnchors, pathKey(path), f => new Set(f.anchoredNames)),
+    originOf,
+    possibleOriginsOf,
   };
 }
 

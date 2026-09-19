@@ -1,0 +1,36 @@
+kind: value-object
+id: carried_finding
+name: CarriedFinding
+description: >-
+  One carried finding, named precisely enough that the register can only hold what would otherwise
+  fire — and, crucially, precisely enough that a finding which AGGREGATES cannot grow behind it.
+fields:
+  - name: code
+    type: string
+    description: >-
+      The issue code, which must be one a rule declares CARRYABLE — anything else is
+      UNCARRYABLE_FINDING, an error.
+    optional: false
+  - name: spec
+    type: string
+    description: The spec the finding is anchored to.
+    optional: false
+  - name: at
+    type: string
+    description: >-
+      The site inside that spec the finding names — for the code↔spec call checks, the contract
+      method.
+    optional: false
+  - name: covers
+    type: string[]
+    description: >-
+      The units an aggregating finding covers: the crossings of one UNDECLARED_COLOCATED_CALL, the
+      steps of one CALL_STEP_UNREALIZED. Keyed by code, spec and site alone, a 24th crossing added
+      to a finding that already lists 23 would be carried by an entry nobody wrote for it — so a
+      live finding is carried only when every unit it reports is listed here, and a unit that
+      appears is reported as new.
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-19T19:04:07.920Z'
+updatedAt: '2026-09-19T19:04:07.932Z'

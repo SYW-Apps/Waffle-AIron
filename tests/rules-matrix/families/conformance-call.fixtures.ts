@@ -5,15 +5,27 @@
  * Documented intent pinned here (rule description + module doc comment +
  * the narrative step-type vocabulary in src/models/specs.ts):
  *  - CALL_STEP_UNREALIZED (warning): every narrative `call` step of an
- *    exactly-analyzed method must appear among the callees of the realized
+ *    exactly-analyzed method must be realized by a call of the realized
  *    function in the method's own source file (its sourcePath, else the
- *    implementation's) — matched by the target method's contract name OR any per-method
+ *    implementation's) that RESOLVES TO one of the target method's own source
+ *    files — matched by the target method's contract name OR any per-method
  *    `symbol` override a target-side implementation declares, closed
- *    transitively over same-file named helpers (extract-helper refactors stay
- *    clean). Set membership only; order/arguments/conditions unverified.
+ *    transitively over the named helpers the function calls (extract-helper
+ *    refactors stay clean). A target naming no file of its own falls back to
+ *    name membership. Order/arguments/conditions stay unverified.
  *    `register` steps are a reachability edge, "never an invocation"
  *    (step-type vocabulary), so they are exempt — only `call` steps are held
  *    to realization.
+ *  - CALL_ORIGIN_UNRESOLVED (warning): the target's name IS called inside the
+ *    realized function, but only from call sites a pure model cannot resolve
+ *    to any file — a member call through a value (`this.store.save()`). A
+ *    distinct answer from "the call is missing": the step is neither proven
+ *    realized nor accused, because only what resolved may accuse.
+ *  - UNDECLARED_COLOCATED_CALL (warning): the realized function calls a
+ *    modelled method of ANOTHER component living in the same source file, and
+ *    no narrative step declares that call — a boundary crossing that nothing
+ *    imports, which the file-level checks structurally cannot see. A call to a
+ *    same-file PRIVATE helper is no modelled method and is never reported.
  */
 import { defineRuleFixture } from '../harness.js';
 
@@ -629,7 +641,560 @@ export default [
       ].join('\n'),
     }),
   }),
+  // -------------------------------------------------------------------------
+  // CALL_ORIGIN_UNRESOLVED — the name IS called, from a site with no readable
+  // origin: a different answer from "the call is missing", and never an
+  // accusation
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'shipment_scheduler_impl',
+    expectFire: true,
+    scenario:
+      'The shipment scheduler holds its carrier adapter as a constructor-injected field and quotes through this.carrier.fetchQuotes, so nothing in the module says which file that function was written in.',
+    tree: injectedSchedulerTree([
+      'export class ShipmentScheduler {',
+      '  private readonly carrier: { fetchQuotes(parcelId: string): number[] };',
+      '',
+      '  constructor(carrier: { fetchQuotes(parcelId: string): number[] }) {',
+      '    this.carrier = carrier;',
+      '  }',
+      '',
+      '  scheduleShipment(parcelId: string): void {',
+      '    const quotes = this.carrier.fetchQuotes(parcelId);',
+      '    this.pickCheapest(quotes);',
+      '  }',
+      '',
+      '  private pickCheapest(quotes: number[]): number {',
+      '    return Math.min(...quotes);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'A namespace import binding\'s properties ARE that module\'s own exports, so carrierQuotes.fetchQuotes resolves to the adapter\'s source file and the step is proven realized instead of left unreadable.',
+    scenario:
+      'The shipment scheduler imports the carrier quote adapter as a namespace and quotes through carrierQuotes.fetchQuotes.',
+    tree: injectedSchedulerTree([
+      'import * as carrierQuotes from \'./carrier-quote-adapter.js\';',
+      '',
+      'export class ShipmentScheduler {',
+      '  scheduleShipment(parcelId: string): void {',
+      '    const quotes = carrierQuotes.fetchQuotes(parcelId);',
+      '    this.pickCheapest(quotes);',
+      '  }',
+      '',
+      '  private pickCheapest(quotes: number[]): number {',
+      '    return Math.min(...quotes);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
+  // UNDECLARED_COLOCATED_CALL — the converse direction: a call that crosses a
+  // component boundary inside one file, which no file-level check can see
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_COLOCATED_CALL',
+    severity: 'warning',
+    anchoredTo: 'shipment_scheduler_impl',
+    expectFire: true,
+    scenario:
+      'The dispatch desk module holds both the shipment scheduler and the carrier quote adapter, and the scheduler quotes through the adapter\'s function without a narrative step saying so.',
+    tree: dispatchDeskTree({
+      schedulerNarrative: [
+        { stepNumber: 1, type: 'local', description: 'Pick the cheapest quote that meets the delivery window.' },
+      ],
+      module: [
+        'export function scheduleShipment(parcelId: string): void {',
+        '  const quotes = fetchQuotes(parcelId);',
+        '  bookCheapest(parcelId, quotes);',
+        '}',
+        '',
+        'export function fetchQuotes(parcelId: string): number[] {',
+        '  return [12.5, 14.0];',
+        '}',
+        '',
+        'function bookCheapest(parcelId: string, quotes: number[]): void {',
+        '  // hand the cheapest quote to the chosen carrier',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
+  defineRuleFixture({
+    code: 'UNDECLARED_COLOCATED_CALL',
+    expectFire: false,
+    reason: 'The narrative declares the call to the colocated adapter method, which is the whole of what the converse direction asks for.',
+    scenario:
+      'The dispatch desk scheduler quotes through the colocated carrier quote adapter and narrates that call as a call step.',
+    tree: dispatchDeskTree({
+      schedulerNarrative: [
+        {
+          stepNumber: 1,
+          type: 'call',
+          description: 'Fetch carrier quotes for the parcel.',
+          targetComponent: 'carrier-quote-adapter',
+          targetMethod: 'fetchQuotes',
+        },
+        { stepNumber: 2, type: 'local', description: 'Pick the cheapest quote that meets the delivery window.' },
+      ],
+      module: [
+        'export function scheduleShipment(parcelId: string): void {',
+        '  const quotes = fetchQuotes(parcelId);',
+        '  bookCheapest(parcelId, quotes);',
+        '}',
+        '',
+        'export function fetchQuotes(parcelId: string): number[] {',
+        '  return [12.5, 14.0];',
+        '}',
+        '',
+        'function bookCheapest(parcelId: string, quotes: number[]): void {',
+        '  // hand the cheapest quote to the chosen carrier',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
+  defineRuleFixture({
+    code: 'UNDECLARED_COLOCATED_CALL',
+    expectFire: false,
+    reason:
+      'A same-file PRIVATE helper is no modelled method of any component, so reporting it would turn every rule\'s internal factoring into a finding — only a call to a colocated MODELLED method crosses a boundary.',
+    scenario:
+      'The dispatch desk scheduler calls only its own private rate-table helpers, leaving the colocated carrier quote adapter alone.',
+    tree: dispatchDeskTree({
+      schedulerNarrative: [
+        { stepNumber: 1, type: 'local', description: 'Book the parcel against the standing rate table.' },
+      ],
+      module: [
+        'export function scheduleShipment(parcelId: string): void {',
+        '  const rate = standingRate(parcelId);',
+        '  bookCheapest(parcelId, [rate]);',
+        '}',
+        '',
+        'function standingRate(parcelId: string): number {',
+        '  return 13.25;',
+        '}',
+        '',
+        'export function fetchQuotes(parcelId: string): number[] {',
+        '  return [12.5, 14.0];',
+        '}',
+        '',
+        'function bookCheapest(parcelId: string, quotes: number[]): void {',
+        '  // hand the cheapest quote to the chosen carrier',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
+
+  // -------------------------------------------------------------------------
+  // CALL_STEP_UNREALIZED — the call resolves, but into another module: the
+  // same-named function the name-only check used to accept
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    severity: 'warning',
+    anchoredTo: 'shipment_scheduler_impl',
+    expectFire: true,
+    scenario:
+      'The shipment scheduler imports fetchQuotes from the archived rate-table module instead of the carrier quote adapter its narrative names, so the call lands in a different file altogether.',
+    tree: sameNameTree([
+      'import { fetchQuotes } from \'./rate-table-archive.js\';',
+      '',
+      'export function scheduleShipment(parcelId: string): void {',
+      '  fetchQuotes(parcelId);',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'The call resolves to the carrier quote adapter\'s own source file, which is what realizing the step means — the identically named archive function beside it never enters into it.',
+    scenario:
+      'The shipment scheduler imports fetchQuotes from the carrier quote adapter, while an identically named function also sits in the archived rate-table module.',
+    tree: sameNameTree([
+      'import { fetchQuotes } from \'./carrier-quote-adapter.js\';',
+      '',
+      'export function scheduleShipment(parcelId: string): void {',
+      '  fetchQuotes(parcelId);',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
+  // CALL_ORIGIN_UNRESOLVED — the `this.<field>.<method>()` receiver, followed
+  // through the TYPE the class declares the field with. A possibility, not a
+  // proof: it may ACCEPT a call, and it must never accuse one.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'The constructor parameter property declares what the collaborator IS, so this.store.append is followed through the PayslipStore binding to the store\'s own source file — the call site does say where it can land.',
+    scenario:
+      'The payslip repository takes its store as a typed constructor parameter property and appends the payslip through this.store.append.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly store: PayslipStore) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    this.store.append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'Following the field\'s declared type lands the call in the store\'s own source file, which is what realizing the step means — the step is proven, not merely unaccused.',
+    scenario:
+      'The payslip repository appends through this.store.append, and the store it declares that field with is the very component the narrative names.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly store: PayslipStore) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    this.store.append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'payslip_repository_impl',
+    expectFire: true,
+    scenario:
+      'The payslip repository assigns its store to an unannotated field in the constructor body, so this.store.append names a value the module never says the type of.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  private readonly store;',
+      '',
+      '  constructor(store: PayslipStore) {',
+      '    this.store = store;',
+      '  }',
+      '',
+      '  record(payslipId: string): void {',
+      '    this.store.append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
+  // The no-accusation property: a field type that resolves SOMEWHERE ELSE
+  // leaves the step unresolved. Widening what a call may have reached can
+  // accept a step; it may never turn "I cannot say" into "it landed there".
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'payslip_repository_impl',
+    expectFire: true,
+    scenario:
+      'The payslip repository narrates an append to the payslip store but appends to the cold-storage archive instead, through a field declared as the archive.',
+    tree: payslipRepositoryTree([
+      'import { PayslipArchive } from \'./payslip-archive.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly archive: PayslipArchive) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    this.archive.append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'A declared type says what a collaborator IS, never which class ships the body, so a landing read off one can accept a step but can never name where a call went instead: a miss stays "cannot say" and is reported as CALL_ORIGIN_UNRESOLVED.',
+    scenario:
+      'The payslip repository appends through a field declared as the cold-storage archive while its narrative names the payslip store, so the followed type lands in a file that is not the target\'s.',
+    tree: payslipRepositoryTree([
+      'import { PayslipArchive } from \'./payslip-archive.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly archive: PayslipArchive) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    this.archive.append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  // -------------------------------------------------------------------------
+  // CALL_ORIGIN_UNRESOLVED — the `new Class(…).<method>()` receiver, followed
+  // through the module its CLASS NAME came from. The same tier as a declared
+  // field type: it may ACCEPT a call, and it must never accuse one.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'The code NAMES the class it builds, so `new PayslipStore(...).append` is followed through the PayslipStore import to the store\'s own source file — the call site does say where it can land.',
+    scenario:
+      'The payslip repository constructs the payslip store inline for the one append it makes, rather than holding it as a field.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly dataDir: string) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    new PayslipStore(this.dataDir).append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'Following the constructed class lands the call in the store\'s own source file, which is what realizing the step means — the step is accepted, not merely unaccused.',
+    scenario:
+      'The payslip repository appends through a payslip store it constructs inline, and that store is the very component the narrative names.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly dataDir: string) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    new PayslipStore(this.dataDir).append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'payslip_repository_impl',
+    expectFire: true,
+    scenario:
+      'The payslip repository narrates an append to the payslip store but constructs the cold-storage archive inline and appends to that instead.',
+    tree: payslipRepositoryTree([
+      'import { PayslipArchive } from \'./payslip-archive.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly dataDir: string) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    new PayslipArchive(this.dataDir).append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'A constructed class says where the CLASS was written, never that this call went there, so a landing read off one can accept a step but can never name where a call went instead: a miss stays "cannot say" and is reported as CALL_ORIGIN_UNRESOLVED.',
+    scenario:
+      'The payslip repository appends through an inline-constructed cold-storage archive while its narrative names the payslip store, so the followed class lands in a file that is not the target\'s.',
+    tree: payslipRepositoryTree([
+      'import { PayslipArchive } from \'./payslip-archive.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly dataDir: string) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    new PayslipArchive(this.dataDir).append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
+  // The INHERITED-METHOD limit of the constructed receiver, recorded rather
+  // than discovered later. Following `new JournalWriter(…)` claims the module
+  // the CLASS was written in — never the module a method it INHERITS from a
+  // base was written in, which is free to live anywhere. So the reading
+  // reaches the derived class's file and stops there: what it cannot see
+  // stays a false NEGATIVE, and a possibility still never accuses.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'entry_recorder_impl',
+    expectFire: true,
+    scenario:
+      'The entry recorder constructs the payroll journal writer and appends through it, but append is inherited from the general-ledger writer in another module, which is where the narrative\'s target is realized.',
+    tree: ledgerJournalTree('ledger-writer'),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'The constructed class\'s own module is all the code states, so an inherited body it cannot see leaves the step unresolved — never accused of being missing, which is the whole of why this reading lives in the possible tier.',
+    scenario:
+      'The entry recorder appends through an inherited method of the journal writer it constructs, while its narrative names the general-ledger writer the base class lives in.',
+    tree: ledgerJournalTree('ledger-writer'),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'What the widened reading DOES claim is the constructed class\'s own module: the narrative names the journal writer, `new JournalWriter(...)` lands there, and the step is accepted — on where the class was written, never on a proof that the body is in that file.',
+    scenario:
+      'The entry recorder constructs the payroll journal writer and appends through it, and the journal writer is the component its narrative names.',
+    tree: ledgerJournalTree('journal-writer'),
+  }),
 ];
+
+/**
+ * A payroll repository facade over its own store, with a cold-storage archive
+ * beside it; only the repository module's text varies. Used for the
+ * `this.<field>.<method>()` cases, where the question is what the class says
+ * the field IS — and what may be concluded from an answer that is a
+ * possibility rather than a proof.
+ */
+function payslipRepositoryTree(repositoryModule: string): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'payroll', description: 'Pay runs, payslip records and their retention.' }],
+    components: [
+      {
+        id: 'payslip-repository',
+        componentType: 'Repository',
+        subsystem: 'payroll',
+        description: 'The pay-run facade over the payslip rows and their cold-storage archive.',
+        owns: ['payslip-store', 'payslip-archive'],
+      },
+      {
+        id: 'payslip-store',
+        componentType: 'Store',
+        subsystem: 'payroll',
+        durability: 'read-through',
+        description: 'The authoritative payslip rows of every open pay run.',
+      },
+      {
+        id: 'payslip-archive',
+        componentType: 'Adapter',
+        subsystem: 'payroll',
+        description: 'Cold storage for the pay runs closed past the retention window.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ipayslip_repository',
+        component: 'payslip-repository',
+        methods: [{ name: 'record', description: 'Record one employee\'s payslip for the open pay run.' }],
+      },
+      {
+        id: 'ipayslip_store',
+        component: 'payslip-store',
+        methods: [{ name: 'append', description: 'Append one payslip row to the open pay run.' }],
+      },
+      {
+        id: 'ipayslip_archive',
+        component: 'payslip-archive',
+        methods: [{ name: 'append', description: 'Append one payslip row to the cold-storage archive.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'payslip_repository_impl',
+        contract: 'ipayslip_repository',
+        sourcePath: 'src/payroll/payslip-repository.ts',
+        methods: [
+          {
+            name: 'record',
+            narrative: [
+              {
+                stepNumber: 1,
+                type: 'call',
+                description: 'Append the payslip row to the open pay run.',
+                targetComponent: 'payslip-store',
+                targetMethod: 'append',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'payslip_store_impl',
+        contract: 'ipayslip_store',
+        sourcePath: 'src/payroll/payslip-store.ts',
+        methods: [
+          {
+            name: 'append',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Write the payslip row into the open pay run.' }],
+          },
+        ],
+      },
+      {
+        id: 'payslip_archive_impl',
+        contract: 'ipayslip_archive',
+        sourcePath: 'src/payroll/payslip-archive.ts',
+        methods: [
+          {
+            name: 'append',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Write the payslip row into the cold-storage archive.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/payroll/payslip-repository.ts': repositoryModule,
+      'src/payroll/payslip-store.ts': [
+        '/** The authoritative payslip rows of every open pay run. */',
+        'export class PayslipStore {',
+        '  append(payslipId: string): void {',
+        '    // persist the payslip row',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+      'src/payroll/payslip-archive.ts': [
+        '/** Cold storage for the pay runs closed past the retention window. */',
+        'export class PayslipArchive {',
+        '  append(payslipId: string): void {',
+        '    // append the payslip row to cold storage',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}
 
 /**
  * The shipment scheduler whose scheduleShipment names its own command module
@@ -706,6 +1271,298 @@ function shipmentCommandTree(modules: { schedulerModule: string; commandModule: 
       'src/fulfillment/carrier-quote-adapter.ts': [
         'export function fetchQuotes(parcelId: string): number[] {',
         '  return [12.5, 14.0];',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}
+
+/**
+ * A shipment scheduler whose narrative quotes through the carrier quote
+ * adapter beside it; only the scheduler module's text varies. Used for the
+ * call-ORIGIN cases, where the question is not whether the name is called but
+ * whether the call site says where it lands.
+ */
+function injectedSchedulerTree(schedulerModule: string): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'fulfillment', description: 'Parcel scheduling and carrier hand-off.' }],
+    components: [
+      {
+        id: 'shipment-scheduler',
+        componentType: 'Orchestrator',
+        subsystem: 'fulfillment',
+        description: 'Plans each parcel pickup and books the cheapest eligible carrier.',
+        dependsOn: ['carrier-quote-adapter'],
+      },
+      {
+        id: 'carrier-quote-adapter',
+        componentType: 'Adapter',
+        subsystem: 'fulfillment',
+        description: 'Wraps the external carrier rate APIs behind one quote interface.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ishipment_scheduler',
+        component: 'shipment-scheduler',
+        methods: [{ name: 'scheduleShipment', description: 'Book the cheapest eligible carrier for a parcel.' }],
+      },
+      {
+        id: 'icarrier_quote_adapter',
+        component: 'carrier-quote-adapter',
+        methods: [{ name: 'fetchQuotes', description: 'Fetch current rate quotes from all connected carriers.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'shipment_scheduler_impl',
+        contract: 'ishipment_scheduler',
+        sourcePath: 'src/fulfillment/shipment-scheduler.ts',
+        methods: [
+          {
+            name: 'scheduleShipment',
+            narrative: [
+              {
+                stepNumber: 1,
+                type: 'call',
+                description: 'Fetch carrier quotes for the parcel.',
+                targetComponent: 'carrier-quote-adapter',
+                targetMethod: 'fetchQuotes',
+              },
+              { stepNumber: 2, type: 'local', description: 'Pick the cheapest quote that meets the delivery window.' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'carrier_quote_adapter_impl',
+        contract: 'icarrier_quote_adapter',
+        sourcePath: 'src/fulfillment/carrier-quote-adapter.ts',
+        methods: [
+          {
+            name: 'fetchQuotes',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Call each connected carrier rate API and merge the quotes.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/fulfillment/shipment-scheduler.ts': schedulerModule,
+      'src/fulfillment/carrier-quote-adapter.ts': [
+        'export function fetchQuotes(parcelId: string): number[] {',
+        '  return [12.5, 14.0];',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}
+
+/**
+ * A dispatch desk where the shipment scheduler and the carrier quote adapter
+ * are realized in ONE module — the colocation the converse direction exists
+ * for. The scheduler's narrative and the shared module's text vary.
+ */
+function dispatchDeskTree(opts: {
+  schedulerNarrative: Record<string, unknown>[];
+  module: string;
+}): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'fulfillment', description: 'Parcel scheduling and carrier hand-off.' }],
+    components: [
+      {
+        id: 'shipment-scheduler',
+        componentType: 'Orchestrator',
+        subsystem: 'fulfillment',
+        description: 'Plans each parcel pickup and books the cheapest eligible carrier.',
+        dependsOn: ['carrier-quote-adapter'],
+      },
+      {
+        id: 'carrier-quote-adapter',
+        componentType: 'Adapter',
+        subsystem: 'fulfillment',
+        description: 'Wraps the external carrier rate APIs behind one quote interface.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ishipment_scheduler',
+        component: 'shipment-scheduler',
+        methods: [{ name: 'scheduleShipment', description: 'Book the cheapest eligible carrier for a parcel.' }],
+      },
+      {
+        id: 'icarrier_quote_adapter',
+        component: 'carrier-quote-adapter',
+        methods: [{ name: 'fetchQuotes', description: 'Fetch current rate quotes from all connected carriers.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'shipment_scheduler_impl',
+        contract: 'ishipment_scheduler',
+        sourcePath: 'src/fulfillment/dispatch-desk.ts',
+        methods: [{ name: 'scheduleShipment', narrative: opts.schedulerNarrative }],
+      },
+      {
+        id: 'carrier_quote_adapter_impl',
+        contract: 'icarrier_quote_adapter',
+        sourcePath: 'src/fulfillment/dispatch-desk.ts',
+        methods: [
+          {
+            name: 'fetchQuotes',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Call each connected carrier rate API and merge the quotes.' }],
+          },
+        ],
+      },
+    ],
+    files: { 'src/fulfillment/dispatch-desk.ts': opts.module },
+  };
+}
+
+/**
+ * A shipment scheduler beside TWO modules exporting a function called
+ * fetchQuotes: the carrier quote adapter its narrative names, and an archived
+ * rate-table module no spec claims. Only the scheduler module's text varies —
+ * which of the two it imports is the whole question.
+ */
+function sameNameTree(schedulerModule: string): import('../harness.js').FixtureTree {
+  const tree = injectedSchedulerTree(schedulerModule);
+  tree.files!['src/fulfillment/rate-table-archive.ts'] = [
+    '// Last year\'s frozen rate table, kept for reconciliation only.',
+    'export function fetchQuotes(parcelId: string): number[] {',
+    '  return [19.9];',
+    '}',
+    '',
+  ].join('\n');
+  tree.rules = { conformance: { sourceRoots: ['src'] } };
+  return tree;
+}
+/**
+ * A payroll journal writer that INHERITS its append from a general-ledger
+ * writer in another module, and an entry recorder that constructs it inline.
+ * `target` picks which of the two the recorder's narrative names: the base
+ * module the method is really written in, or the derived module the
+ * constructed class is written in. The one fixture family where those are not
+ * the same file — which is exactly the limit of following a `new Class(…)`.
+ */
+function ledgerJournalTree(target: 'ledger-writer' | 'journal-writer'): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'accounting', description: 'General-ledger posting for the payroll runs.' }],
+    components: [
+      {
+        id: 'entry-recorder',
+        componentType: 'Orchestrator',
+        subsystem: 'accounting',
+        description: 'Records each payroll line as one journal entry on the run\'s open journal.',
+        dependsOn: ['journal-writer', 'ledger-writer'],
+      },
+      {
+        id: 'journal-writer',
+        componentType: 'Adapter',
+        subsystem: 'accounting',
+        description: 'The payroll journal\'s writer: general-ledger appends stamped with the run\'s journal id.',
+        dependsOn: ['ledger-writer'],
+      },
+      {
+        id: 'ledger-writer',
+        componentType: 'Adapter',
+        subsystem: 'accounting',
+        description: 'The append-only entry log of the general ledger.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ientry_recorder',
+        component: 'entry-recorder',
+        methods: [{ name: 'record', description: 'Record one payroll line as a journal entry.' }],
+      },
+      {
+        id: 'ijournal_writer',
+        component: 'journal-writer',
+        methods: [{ name: 'append', description: 'Append one entry to the run\'s payroll journal.' }],
+      },
+      {
+        id: 'iledger_writer',
+        component: 'ledger-writer',
+        methods: [{ name: 'append', description: 'Append one entry to the general ledger.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'entry_recorder_impl',
+        contract: 'ientry_recorder',
+        sourcePath: 'src/accounting/entry-recorder.ts',
+        methods: [
+          {
+            name: 'record',
+            narrative: [
+              {
+                stepNumber: 1,
+                type: 'call',
+                description: 'Append the payroll line as a journal entry.',
+                targetComponent: target,
+                targetMethod: 'append',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'journal_writer_impl',
+        contract: 'ijournal_writer',
+        sourcePath: 'src/accounting/journal-writer.ts',
+        methods: [
+          {
+            name: 'append',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Stamp the entry with the journal id and append it to the general ledger.' }],
+          },
+        ],
+      },
+      {
+        id: 'ledger_writer_impl',
+        contract: 'iledger_writer',
+        sourcePath: 'src/accounting/ledger-writer.ts',
+        methods: [
+          {
+            name: 'append',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Append the entry to the general ledger\'s open period.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/accounting/entry-recorder.ts': [
+        'import { JournalWriter } from \'./journal-writer.js\';',
+        '',
+        '/** Records each payroll line as one journal entry on the run\'s open journal. */',
+        'export class EntryRecorder {',
+        '  record(entry: string): void {',
+        '    new JournalWriter(\'2026-Q1\').append(entry);',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+      // The derived class declares NO append of its own: the body this call
+      // reaches lives in the BASE module, which the constructed class's name
+      // does not point at.
+      'src/accounting/journal-writer.ts': [
+        'import { LedgerWriter } from \'./ledger-writer.js\';',
+        '',
+        '/** The payroll journal\'s writer: general-ledger appends stamped with the run\'s journal id. */',
+        'export class JournalWriter extends LedgerWriter {',
+        '  constructor(private readonly journalId: string) {',
+        '    super();',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+      'src/accounting/ledger-writer.ts': [
+        '/** The append-only entry log of the general ledger. */',
+        'export class LedgerWriter {',
+        '  append(entry: string): void {',
+        '    // append the entry to the general ledger\'s open period',
+        '  }',
         '}',
         '',
       ].join('\n'),

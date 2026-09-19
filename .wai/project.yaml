@@ -127,9 +127,980 @@ rules:
       - src/utils/errors.ts
       - src/utils/filenames.ts
       - src/utils/filteredCheckbox.ts
+      # The shared yaml and fs helpers. The spec file store used to claim both
+      # as its own sourcePaths, which was false: it is its own module and these
+      # are utilities many modules use. Carried here rather than left on a spec
+      # that does not hold them.
       - src/utils/fs.ts
       - src/utils/logger.ts
       - src/utils/version.ts
       - src/utils/yaml.ts
+    # The conformance debt register: the code-vs-spec findings this tree carries
+    # as DECLARED debt, grouped by the reason that explains them. `unclaimed`'s
+    # one-way shape, for findings about code a spec does name.
+    #
+    # It is not a second lint.allow. An allow says "this finding is wrong here,
+    # by design", and means to live forever; an entry here says "this finding is
+    # RIGHT, and it is not paid yet". Only a CARRYABLE code may appear (anything
+    # else is an error), an entry carries a finding only when it lists EVERY
+    # unit that finding reports (so an aggregating finding cannot grow behind
+    # it), and an entry that stops applying is STALE_CARRIED_FINDING — so the
+    # register can only shrink, and `wairon validate` prints what is left.
+    #
+    # `kind` is what makes it a register rather than a suppression list:
+    # drift is spec-vs-code disagreement an author fixes, undecided is a
+    # modelling decision nobody has taken, unreadable is a shape the analysis
+    # cannot follow and there is nothing in the tree to fix for it.
+    carried:
+      # 46 finding(s), 59 unit(s).
+      - kind: drift
+        why: >-
+          A spec names a source file that only USES the function, and the code that holds it lives
+          somewhere else. Both checks prove it rather than guess: the call resolves, and it
+          resolves outside the target's own file; the method name is declared, and the declaration
+          is an import or a destructured binding with no body under it. Two shapes. One, the thin
+          "core adapter" components (mcp_core_adapter, validator_core_adapter,
+          surfaces_core_adapter, cli_core_adapter, authoring_core_adapter and their neighbours)
+          are realized by the file that CONSUMES the core API; that file imports the functions and
+          neither writes nor republishes them, so every step routed through such an adapter lands
+          in src/core/specs.ts or src/core/extensions.ts instead. Two, a portal's methods are
+          claimed by one file and written in another: admin_portal is realized by
+          src/server/http.ts while createProject and its siblings live in src/server/admin.ts.
+          Paying it means pointing each spec at the module that holds the code, or narrating the
+          target the code actually reaches. Either way an author's edit, not a limit of the
+          reader.
+        findings:
+          - code: CALL_STEP_UNREALIZED
+            spec: authoring_orchestrator_impl
+            at: 'addComponent'
+            covers:
+              - '2:authoring_validator_adapter.validateComponentCandidate'
+              - '5:authoring_core_adapter.saveComponentSpec'
+          - code: CALL_STEP_UNREALIZED
+            spec: authoring_orchestrator_impl
+            at: 'updateSpecGated'
+            covers:
+              - '2:authoring_core_adapter.updateSpec'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_host_adapter_impl
+            at: 'createProject'
+            covers:
+              - '1:admin_portal.createProject'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_host_adapter_impl
+            at: 'destroyProject'
+            covers:
+              - '1:admin_portal.destroyProject'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_host_adapter_impl
+            at: 'listKeys'
+            covers:
+              - '1:admin_portal.listKeys'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_host_adapter_impl
+            at: 'listProjects'
+            covers:
+              - '1:admin_portal.listProjects'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_host_adapter_impl
+            at: 'lockProject'
+            covers:
+              - '1:admin_portal.lockProject'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_host_adapter_impl
+            at: 'mintKey'
+            covers:
+              - '1:admin_portal.mintKey'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_host_adapter_impl
+            at: 'revokeKey'
+            covers:
+              - '1:admin_portal.revokeKey'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_runner_impl
+            at: 'runDoctor'
+            covers:
+              - '5:cli_skills_adapter.exportSddSkills'
+              - '9:cli_mcp_adapter.installMcpServer'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_runner_impl
+            at: 'runSubsystemExternalize'
+            covers:
+              - '4:cli_core_adapter.externalizeSubsystem'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_runner_impl
+            at: 'runSubsystemInternalize'
+            covers:
+              - '2:cli_core_adapter.internalizeSubsystem'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_runner_impl
+            at: 'runSubsystemMove'
+            covers:
+              - '4:cli_core_adapter.moveSubsystemProject'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_runner_impl
+            at: 'runSurface'
+            covers:
+              - '10:cli_surfaces_client_adapter.pinFamilySurfaces'
+              - '2:cli_surfaces_client_adapter.exportSurface'
+              - '4:cli_surfaces_client_adapter.importSurface'
+              - '6:cli_surfaces_client_adapter.listSnapshots'
+              - '8:cli_surfaces_client_adapter.listExternalInterfaces'
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_validator_adapter_impl
+            at: 'runValidation'
+            covers:
+              - '3:cli_validator_adapter.validateRegistry'
+              - '4:cli_validator_adapter.validateProjectConfig'
+              - '5:cli_validator_adapter.validateSddTree'
+          - code: CALL_STEP_UNREALIZED
+            spec: mcp_server_impl
+            at: 'create'
+            covers:
+              - '9:mcp_core_adapter.resolveChainingParent'
+          - code: CALL_STEP_UNREALIZED
+            spec: spec_validator_impl
+            at: 'computeGateStateId'
+            covers:
+              - '2:validator_core_adapter.loadProjectExtensions'
+          - code: CALL_STEP_UNREALIZED
+            spec: spec_validator_impl
+            at: 'listRules'
+            covers:
+              - '1:validator_core_adapter.loadProjectExtensions'
+          - code: CALL_STEP_UNREALIZED
+            spec: spec_validator_impl
+            at: 'validateAsComplete'
+            covers:
+              - '11:validator_core_adapter.dryRunSerializeSpecs'
+              - '2:validator_core_adapter.loadSystemSpec'
+              - '3:validator_core_adapter.loadSubsystemSpecs'
+              - '4:validator_core_adapter.loadComponentSpecs'
+              - '5:validator_core_adapter.loadInterfaceSpecs'
+              - '6:validator_core_adapter.loadImplementationSpecs'
+              - '7:validator_core_adapter.loadTypeSpecs'
+              - '8:validator_surfaces_adapter.loadSurfaceSnapshots'
+              - '9:validator_surfaces_adapter.loadMountSurfaceSnapshots'
+          - code: CALL_STEP_UNREALIZED
+            spec: spec_validator_impl
+            at: 'validateSddTree'
+            covers:
+              - '13:validator_core_adapter.loadProjectExtensions'
+              - '14:validator_core_adapter.dryRunSerializeSpecs'
+              - '2:validator_core_adapter.loadSystemSpec'
+              - '3:validator_core_adapter.loadSubsystemSpecs'
+              - '4:validator_core_adapter.loadComponentSpecs'
+              - '5:validator_core_adapter.loadInterfaceSpecs'
+              - '6:validator_core_adapter.loadImplementationSpecs'
+              - '7:validator_core_adapter.loadTypeSpecs'
+              - '8:validator_surfaces_adapter.loadSurfaceSnapshots'
+              - '9:validator_surfaces_adapter.loadMountSurfaceSnapshots'
+          - code: CALL_STEP_UNREALIZED
+            spec: surface_orchestrator_impl
+            at: 'listExternalInterfaces'
+            covers:
+              - '2:surfaces_core_adapter.resolveChainingParent'
+          - code: CALL_STEP_UNREALIZED
+            spec: surface_orchestrator_impl
+            at: 'listMountSnapshots'
+            covers:
+              - '2:surfaces_core_adapter.resolveSubprojectForNamespace'
+          - code: CALL_STEP_UNREALIZED
+            spec: surface_orchestrator_impl
+            at: 'pinFamilySurfaces'
+            covers:
+              - '1:surfaces_core_adapter.resolveChainingParent'
+              - '5:surfaces_core_adapter.loadSubsystemSpecs'
+          - code: CALL_STEP_UNREALIZED
+            spec: surface_projector_impl
+            at: 'projectOwnSurface'
+            covers:
+              - '1:surfaces_core_adapter.loadSystemSpec'
+              - '2:surfaces_core_adapter.loadSubsystemSpecs'
+              - '3:surfaces_core_adapter.loadComponentSpecs'
+              - '4:surfaces_core_adapter.loadInterfaceSpecs'
+              - '5:surfaces_core_adapter.loadTypeSpecs'
+          - code: CALL_STEP_UNREALIZED
+            spec: surface_projector_impl
+            at: 'projectSubsystemSurface'
+            covers:
+              - '1:surfaces_core_adapter.loadSystemSpec'
+              - '2:surfaces_core_adapter.loadSubsystemSpecs'
+              - '3:surfaces_core_adapter.loadComponentSpecs'
+              - '4:surfaces_core_adapter.loadInterfaceSpecs'
+              - '5:surfaces_core_adapter.loadTypeSpecs'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'createChainedSubsystem'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'externalizeSubsystem'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'internalizeSubsystem'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'loadComponentSpec'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'loadComponentSpecs'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'loadImplementationSpecs'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'loadInterfaceSpec'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'loadInterfaceSpecs'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'loadSubsystemSpec'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'loadSubsystemSpecs'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'loadSystemSpec'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'moveSubsystemProject'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'resolveAgentTopology'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'saveImplementationSpec'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'saveInterfaceSpec'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'saveSubsystemSpec'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'saveSystemSpec'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_orchestrator_impl
+            at: 'externalizeSubsystem'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_orchestrator_impl
+            at: 'internalizeSubsystem'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_orchestrator_impl
+            at: 'moveSubsystemProject'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_validator_adapter_impl
+            at: 'validateSddTree'
+      # 94 finding(s), 131 unit(s).
+      - kind: drift
+        why: >-
+          A narrative does not declare a call the code makes across a component boundary that
+          happens to live inside one file. The components and the boundary are right; only the
+          narrative is silent, and because nothing is imported no file-level check can see the
+          hop. Paying it means adding the call step (or moving the code so the boundary is a real
+          module edge), one method at a time.
+        findings:
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: authoring_portal_impl
+            at: 'addComponent'
+            covers:
+              - 'authoring_core_adapter.loadProjectConfig'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: cli_runner_impl
+            at: 'runRemote'
+            covers:
+              - 'remote_orchestrator.listStoredInstances'
+              - 'remote_orchestrator.resolveTarget'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: cli_runner_impl
+            at: 'runSubsystemAdd'
+            covers:
+              - 'cli_core_adapter.loadSystemSpec'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'computeStateIdAt'
+            covers:
+              - 'spec_loader.loadSystemSpec'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'saveComponentSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'saveImplementationSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'saveInterfaceSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'saveSubsystemSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'saveSystemSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'updateSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: credential_repository_impl
+            at: 'create'
+            covers:
+              - 'credential_store.read'
+              - 'credential_store.write'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: credential_repository_impl
+            at: 'findByToken'
+            covers:
+              - 'credential_store.read'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: credential_repository_impl
+            at: 'list'
+            covers:
+              - 'credential_store.read'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: credential_repository_impl
+            at: 'listByOwner'
+            covers:
+              - 'credential_store.read'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: credential_repository_impl
+            at: 'revoke'
+            covers:
+              - 'credential_store.read'
+              - 'credential_store.write'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: credential_repository_impl
+            at: 'revokeAllForOwner'
+            covers:
+              - 'credential_store.read'
+              - 'credential_store.write'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: extension_orchestrator_impl
+            at: 'diagnoseProjectPacks'
+            covers:
+              - 'pack_source_adapter.discoverPacks'
+              - 'pack_source_adapter.globalPacksDir'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: git_backing_orchestrator_impl
+            at: 'bindScope'
+            covers:
+              - 'git_backing_repository.listBindings'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: git_backing_orchestrator_impl
+            at: 'runPeriodicBackingSync'
+            covers:
+              - 'git_backing_repository.touchSync'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: identity_portal_impl
+            at: 'completeSsoLogin'
+            covers:
+              - 'identity_orchestrator.appendAuditBestEffort'
+              - 'identity_orchestrator.resolveEnabledProvider'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: identity_portal_impl
+            at: 'mintToken'
+            covers:
+              - 'identity_orchestrator.appendAuditBestEffort'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: identity_portal_impl
+            at: 'pruneAuditEvents'
+            covers:
+              - 'identity_orchestrator.appendAuditBestEffort'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: identity_portal_impl
+            at: 'removeIdentityProvider'
+            covers:
+              - 'identity_orchestrator.appendAuditBestEffort'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: identity_portal_impl
+            at: 'revokeToken'
+            covers:
+              - 'identity_orchestrator.appendAuditBestEffort'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: identity_portal_impl
+            at: 'setUserStatus'
+            covers:
+              - 'identity_orchestrator.appendAuditBestEffort'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: identity_portal_impl
+            at: 'startSsoLogin'
+            covers:
+              - 'identity_orchestrator.appendAuditBestEffort'
+              - 'identity_orchestrator.resolveEnabledProvider'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: identity_portal_impl
+            at: 'upsertIdentityProvider'
+            covers:
+              - 'identity_orchestrator.appendAuditBestEffort'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: identity_portal_impl
+            at: 'upsertUser'
+            covers:
+              - 'identity_orchestrator.appendAuditBestEffort'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: landscape_portal_impl
+            at: 'generateLandscape'
+            covers:
+              - 'landscape_graph.build'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: operations_portal_impl
+            at: 'evaluateQuota'
+            covers:
+              - 'diagnostics.collectUsage'
+              - 'quota_rules.evaluateUsage'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: operations_portal_impl
+            at: 'getHealthReport'
+            covers:
+              - 'diagnostics.buildHealthReport'
+              - 'diagnostics.collectUsage'
+              - 'diagnostics.runChecks'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: operations_portal_impl
+            at: 'getUsage'
+            covers:
+              - 'diagnostics.collectUsage'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: pack_orchestrator_impl
+            at: 'listGlobalPacks'
+            covers:
+              - 'pack_store.storeListGlobalPacks'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: permission_repository_impl
+            at: 'getAssignment'
+            covers:
+              - 'permission_store.load'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: permission_repository_impl
+            at: 'listAssignments'
+            covers:
+              - 'permission_store.load'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: permission_repository_impl
+            at: 'remapScope'
+            covers:
+              - 'permission_store.load'
+              - 'permission_store.replaceAll'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: permission_repository_impl
+            at: 'removeAssignment'
+            covers:
+              - 'permission_store.load'
+              - 'permission_store.replaceAll'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: permission_repository_impl
+            at: 'removeAssignmentsForScopes'
+            covers:
+              - 'permission_store.load'
+              - 'permission_store.replaceAll'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: permission_repository_impl
+            at: 'setAssignment'
+            covers:
+              - 'permission_store.load'
+              - 'permission_store.replaceAll'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_index_impl
+            at: 'resolveBinding'
+            covers:
+              - 'project_store.read'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_index_impl
+            at: 'resolveRoot'
+            covers:
+              - 'project_repository.resolveBinding'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_orchestrator_impl
+            at: 'createGovernedProject'
+            covers:
+              - 'policy_store.load'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_orchestrator_impl
+            at: 'evaluateInitRequest'
+            covers:
+              - 'policy_store.load'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_orchestrator_impl
+            at: 'evaluateProjectPolicy'
+            covers:
+              - 'policy_store.load'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_orchestrator_impl
+            at: 'getPackPolicy'
+            covers:
+              - 'policy_store.load'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_orchestrator_impl
+            at: 'reconcileProjectPolicy'
+            covers:
+              - 'policy_store.load'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_orchestrator_impl
+            at: 'setPackPolicy'
+            covers:
+              - 'policy_store.replaceActive'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_portal_impl
+            at: 'evaluateProjectPolicy'
+            covers:
+              - 'policy_store.load'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_portal_impl
+            at: 'getPackPolicy'
+            covers:
+              - 'policy_store.load'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_portal_impl
+            at: 'initializeProjectWithProfile'
+            covers:
+              - 'project_policy_orchestrator.createGovernedProject'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_portal_impl
+            at: 'reconcileProjectPolicy'
+            covers:
+              - 'policy_store.load'
+              - 'project_policy_orchestrator.appendAuditBestEffort'
+              - 'project_policy_orchestrator.repairGoverningProfile'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_policy_portal_impl
+            at: 'setPackPolicy'
+            covers:
+              - 'policy_store.replaceActive'
+              - 'project_policy_orchestrator.appendAuditBestEffort'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_repository_impl
+            at: 'create'
+            covers:
+              - 'project_store.read'
+              - 'project_store.write'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_repository_impl
+            at: 'list'
+            covers:
+              - 'project_store.read'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_repository_impl
+            at: 'remove'
+            covers:
+              - 'project_store.read'
+              - 'project_store.write'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_repository_impl
+            at: 'resolveBinding'
+            covers:
+              - 'project_store.read'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: role_repository_impl
+            at: 'create'
+            covers:
+              - 'role_store.load'
+              - 'role_store.replaceAll'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: role_repository_impl
+            at: 'delete'
+            covers:
+              - 'role_store.load'
+              - 'role_store.replaceAll'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: role_repository_impl
+            at: 'list'
+            covers:
+              - 'role_store.load'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: role_repository_impl
+            at: 'update'
+            covers:
+              - 'role_store.load'
+              - 'role_store.replaceAll'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: rule_repository_impl
+            at: 'knownIssueCodes'
+            covers:
+              - 'rule_store.list'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: rule_repository_impl
+            at: 'registerBuiltinRules'
+            covers:
+              - 'rule_store.add'
+              - 'rule_store.clear'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: rule_repository_impl
+            at: 'registerPackRules'
+            covers:
+              - 'rule_store.add'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: secret_repository_impl
+            at: 'list'
+            covers:
+              - 'secret_store.read'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: secret_repository_impl
+            at: 'write'
+            covers:
+              - 'secret_store.read'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: skills_orchestrator_impl
+            at: 'export'
+            covers:
+              - 'skills_core_adapter.loadProjectConfig'
+              - 'skills_core_adapter.loadProjectExtensions'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: skills_portal_impl
+            at: 'exportSddSkills'
+            covers:
+              - 'skills_core_adapter.loadProjectConfig'
+              - 'skills_core_adapter.loadProjectExtensions'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: skills_portal_impl
+            at: 'listResources'
+            covers:
+              - 'skill_resources.listSkillResources'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: skills_portal_impl
+            at: 'readResource'
+            covers:
+              - 'skill_resources.listSkillResources'
+              - 'skill_resources.readSkillResource'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_index_impl
+            at: 'listChainedRoots'
+            covers:
+              - 'spec_loader.inspectChainedRoots'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'saveComponentSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'saveImplementationSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'saveInterfaceSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'saveSubsystemSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'saveSystemSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_validator_impl
+            at: 'resolveThroughParent'
+            covers:
+              - 'validator_portal.validateSddTree'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_validator_impl
+            at: 'validateAsComplete'
+            covers:
+              - 'validator_portal.validateSddTree'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_orchestrator_impl
+            at: 'getSnapshot'
+            covers:
+              - 'surface_store.list'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_orchestrator_impl
+            at: 'import'
+            covers:
+              - 'surface_store.put'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_orchestrator_impl
+            at: 'listExternalInterfaces'
+            covers:
+              - 'surface_projector.projectSubsystemSurface'
+              - 'surface_store.list'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_orchestrator_impl
+            at: 'listMountSnapshots'
+            covers:
+              - 'surface_store.list'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_orchestrator_impl
+            at: 'pinFamilySurfaces'
+            covers:
+              - 'surface_store.list'
+              - 'surface_store.put'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_portal_impl
+            at: 'exportSurface'
+            covers:
+              - 'surface_projector.projectOwnSurface'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_portal_impl
+            at: 'getSnapshot'
+            covers:
+              - 'surface_store.list'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_portal_impl
+            at: 'importSurface'
+            covers:
+              - 'surface_store.put'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_portal_impl
+            at: 'listExternalInterfaces'
+            covers:
+              - 'surface_projector.projectChildSurface'
+              - 'surface_projector.projectSubsystemSurface'
+              - 'surface_store.list'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_portal_impl
+            at: 'listMountSnapshots'
+            covers:
+              - 'surface_store.list'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_portal_impl
+            at: 'pinFamilySurfaces'
+            covers:
+              - 'surface_projector.projectChildSurface'
+              - 'surface_projector.projectSubsystemSurface'
+              - 'surface_store.list'
+              - 'surface_store.put'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_registry_impl
+            at: 'hydrateFromFiles'
+            covers:
+              - 'surface_store.list'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_repository_impl
+            at: 'getSnapshot'
+            covers:
+              - 'surface_store.list'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: surface_repository_impl
+            at: 'hydrate'
+            covers:
+              - 'surface_store.list'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: user_repository_impl
+            at: 'remapUnitReferences'
+            covers:
+              - 'user_store.load'
+              - 'user_store.replaceAll'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: validator_portal_impl
+            at: 'computeGateStateId'
+            covers:
+              - 'validator_core_adapter.computeStateId'
+              - 'validator_core_adapter.consumedContractInputs'
+              - 'validator_core_adapter.loadProjectConfig'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: validator_portal_impl
+            at: 'validateSddTree'
+            covers:
+              - 'spec_validator.resolveThroughParent'
+              - 'validator_core_adapter.loadProjectConfig'
+      # 6 finding(s), 52 unit(s).
+      - kind: undecided
+        why: >-
+          src/mcp/server.ts is one file modelled as five components (mcp_portal, mcp_server,
+          mcp_orchestrator, mcp_core_adapter, mcp_skills_adapter), so every hop between them is a
+          boundary crossing that looks local. createMcpServer alone crosses 23 of them. Narrating
+          23 cross-component calls inside one function would be an unreadable narrative, and
+          splitting a 2000-line server registration into five modules is a real change with real
+          risk: which of the two is right is a decision nobody has taken. It is recorded here as a
+          question, not as work somebody forgot.
+        findings:
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: mcp_orchestrator_impl
+            at: 'listResources'
+            covers:
+              - 'mcp_core_adapter.composeAgentBrief'
+              - 'mcp_skills_adapter.readResource'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: mcp_orchestrator_impl
+            at: 'readResource'
+            covers:
+              - 'mcp_skills_adapter.listResources'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: mcp_portal_impl
+            at: 'createMcpServer'
+            covers:
+              - 'mcp_core_adapter.composeAgentBrief'
+              - 'mcp_core_adapter.createChainedSubsystem'
+              - 'mcp_core_adapter.loadComponentSpecs'
+              - 'mcp_core_adapter.loadImplementationSpecs'
+              - 'mcp_core_adapter.loadInterfaceSpecs'
+              - 'mcp_core_adapter.loadProjectConfig'
+              - 'mcp_core_adapter.loadSubsystemSpecs'
+              - 'mcp_core_adapter.loadSystemSpec'
+              - 'mcp_core_adapter.resolveAgentTopology'
+              - 'mcp_core_adapter.saveImplementationSpec'
+              - 'mcp_core_adapter.saveInterfaceSpec'
+              - 'mcp_core_adapter.saveSubsystemSpec'
+              - 'mcp_core_adapter.saveSystemSpec'
+              - 'mcp_orchestrator.externalizeSubsystem'
+              - 'mcp_orchestrator.internalizeSubsystem'
+              - 'mcp_orchestrator.moveSubsystemProject'
+              - 'mcp_orchestrator.renameComponent'
+              - 'mcp_orchestrator.renameMethod'
+              - 'mcp_skills_adapter.buildServerInstructions'
+              - 'mcp_skills_adapter.listResources'
+              - 'mcp_skills_adapter.readResource'
+              - 'mcp_surfaces_adapter.listExternalInterfaces'
+              - 'mcp_validator_adapter.validateSddTree'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: mcp_portal_impl
+            at: 'listResources'
+            covers:
+              - 'mcp_core_adapter.composeAgentBrief'
+              - 'mcp_skills_adapter.listResources'
+              - 'mcp_skills_adapter.readResource'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: mcp_portal_impl
+            at: 'readResource'
+            covers:
+              - 'mcp_core_adapter.composeAgentBrief'
+              - 'mcp_skills_adapter.listResources'
+              - 'mcp_skills_adapter.readResource'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: mcp_server_impl
+            at: 'create'
+            covers:
+              - 'mcp_core_adapter.composeAgentBrief'
+              - 'mcp_core_adapter.createChainedSubsystem'
+              - 'mcp_core_adapter.loadComponentSpecs'
+              - 'mcp_core_adapter.loadImplementationSpecs'
+              - 'mcp_core_adapter.loadInterfaceSpecs'
+              - 'mcp_core_adapter.loadProjectConfig'
+              - 'mcp_core_adapter.loadSubsystemSpecs'
+              - 'mcp_core_adapter.saveImplementationSpec'
+              - 'mcp_core_adapter.saveInterfaceSpec'
+              - 'mcp_core_adapter.saveSubsystemSpec'
+              - 'mcp_core_adapter.saveSystemSpec'
+              - 'mcp_orchestrator.externalizeSubsystem'
+              - 'mcp_orchestrator.internalizeSubsystem'
+              - 'mcp_orchestrator.moveSubsystemProject'
+              - 'mcp_orchestrator.renameComponent'
+              - 'mcp_orchestrator.renameMethod'
+              - 'mcp_portal.readResource'
+              - 'mcp_skills_adapter.listResources'
+              - 'mcp_skills_adapter.readResource'
+              - 'mcp_surfaces_adapter.listExternalInterfaces'
+      # 12 finding(s).
+      - kind: unreadable
+        why: >-
+          The contract is realized by a FORWARDING BINDING, and the check reads function-like
+          bodies only. src/server/adapters.ts declares its adapters as objects of forwards
+          (hostGit = { publish: gitPortal.publish, ... }), and src/server/http.ts realizes
+          ihost_server.init as `export { bootstrapInstance as init }`. In every one of these the
+          realization is real and deliberate: the name is bound, and the body is one hop away
+          through a property or an alias the model does not follow. This is the same blind spot
+          the pure re-export barrel exemption closes for Level 1, one level down, and there is
+          nothing in the tree to fix for it.
+        findings:
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_git_adapter_impl
+            at: 'configureSync'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_git_adapter_impl
+            at: 'disable'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_git_adapter_impl
+            at: 'enable'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_git_adapter_impl
+            at: 'publish'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_git_adapter_impl
+            at: 'status'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_git_adapter_impl
+            at: 'sync'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_producer_adapter_impl
+            at: 'configure'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_producer_adapter_impl
+            at: 'list'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_producer_adapter_impl
+            at: 'produce'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_producer_adapter_impl
+            at: 'remove'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_server_impl
+            at: 'init'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: host_surfaces_adapter_impl
+            at: 'exportBoundSurface'
+      # 6 finding(s), 7 unit(s).
+      - kind: unreadable
+        why: >-
+          The step's target IS called by name, from a site written in a shape a pure model cannot
+          resolve to a file: a bare call on a name bound to a package specifier (scaffoldPack,
+          extractPack out of the SDK), a receiver holding a value the module assembled (sdkPortal,
+          hostCore), and a receiver this model records no name for at all. The code is deliberate
+          about this: CALL_ORIGIN_UNRESOLVED exists to report what was NOT checked, so the step is
+          neither proven realized nor accused of being missing, and no working call is asked to be
+          rewritten to suit the reader. Nothing here is an author defect; it is the reader's
+          reach, written down.
+        findings:
+          - code: CALL_ORIGIN_UNRESOLVED
+            spec: cli_packs_adapter_impl
+            at: 'initPack'
+            covers:
+              - '1:sdk_portal.scaffoldPack'
+          - code: CALL_ORIGIN_UNRESOLVED
+            spec: cli_packs_adapter_impl
+            at: 'installPack'
+            covers:
+              - '2:sdk_portal.extractPack'
+          - code: CALL_ORIGIN_UNRESOLVED
+            spec: cli_packs_adapter_impl
+            at: 'syncPacks'
+            covers:
+              - '12:sdk_portal.extractPack'
+          - code: CALL_ORIGIN_UNRESOLVED
+            spec: core_orchestrator_impl
+            at: 'updateSpec'
+            covers:
+              - '16:spec_loader.saveComponentSpec'
+              - '1:spec_loader.loadComponentSpec'
+          - code: CALL_ORIGIN_UNRESOLVED
+            spec: host_sdk_adapter_impl
+            at: 'extractArchive'
+            covers:
+              - '1:sdk_portal.extractPack'
+          - code: CALL_ORIGIN_UNRESOLVED
+            spec: host_validator_adapter_impl
+            at: 'validateAsComplete'
+            covers:
+              - '1:host_core_adapter.loadProjectConfig'
+      # 1 finding(s), 1 unit(s).
+      - kind: unreadable
+        why: >-
+          The forward check does not follow a TARGET through the file that republishes it.
+          core_portal is realized by src/core/index.ts, which re-exports src/core/extensions.ts,
+          and the call is proven to land in extensions.ts. Landing-side widening already follows a
+          call through a barrel to where the function lives; the same relation read from the
+          target side is not read yet. Measured on this tree it is exactly 1 of the 60 call-step
+          units — the other 59 are real drift — so it is recorded as the narrow reader gap it is
+          and not used to excuse them.
+        findings:
+          - code: CALL_STEP_UNREALIZED
+            spec: cli_patterns_adapter_impl
+            at: 'listPatterns'
+            covers:
+              - '1:core_portal.loadProjectExtensions'
 createdAt: '2026-06-10T20:23:10.714Z'
 updatedAt: '2026-06-10T20:23:10.714Z'

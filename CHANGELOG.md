@@ -3,7 +3,7 @@
 ## Unreleased (from v5.1.0)
 
 **Breaking.** Merge dev → main with `[major]` in the merge commit message →
-**v6.0.0**. Six changes are visible on upgrade without any action by the user,
+**v6.0.0**. Seven changes are visible on upgrade without any action by the user,
 and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
 a project that has not declared them, existing lock records read as stale — the
 identity they record was machine-specific, and making it reproducible moves it
@@ -12,15 +12,113 @@ once more — a project referencing a global pack's profile can newly fail
 findings through or whose nested mount reaches outside its own project, a tree
 that still has a Specialist or a Gateway or breaks the new Supervisor and Actor
 dependency rules, a tree whose narratives or names the new readability checks
-judge, or a tree holding a case the fixed validator rules used to miss —
-including a narrative step carrying a field its own step type cannot have. A
+judge, a tree whose code↔spec conformance the tightened call and body checks
+can now follow, or a tree holding a case the fixed validator rules used to miss
+— including a narrative step carrying a field its own step type cannot have. A
 scripted `sdd_update_spec` delta can also behave differently, where it was
 relying on a merge rule that was silently wrong (item 10), and a scripted call
 to a create tool that carries an unknown key inside a method, a param or a
-narrative step is now refused where it used to be stripped (item 12). Nine
+narrative step is now refused where it used to be stripped (item 13). Nine
 `sdd_*` tools now declare an `outputSchema`, which changes what a conforming MCP
-client expects back from them (item 13). Nothing here is purely additive, so
+client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
+
+### Conformance that never goes quiet: a call is realized where it LANDS
+
+Level 3 matched narrative `call` steps by **callee name**, closed over same-file helpers, as set membership — so a step
+naming `billing_store.save` was satisfied by any function called `save` the realizing function could reach, in any
+module at all. Level 1 accepted a method as realized because its **name** was in the file, whether or not anything with
+a body stood behind it. And neither could see a call that crosses a component boundary **inside one file**, because
+nothing is imported there for a file-level check to read.
+
+**Breaking.** Three newly reported findings, and one existing finding that now fires where it used to pass: a project
+upgrading will see calls reported that previously passed, and `validate --ci` can newly fail (see *Upgrading*).
+
+- **`CALL_STEP_UNREALIZED` now asks where the call LANDS.** A step is realized only by a call whose callee resolves to
+  one of the **target method's own source files**. The call site's SHAPE is what makes that answerable without a type
+  checker: a bare call resolves through this file's import bindings or its own declarations; `ns.save()` through a
+  NAMESPACE import binding, whose properties are that module's exports; `value.save()` through a value binding only
+  when that module declares `save` too, since the property could otherwise have been attached anywhere. Every landing
+  is widened by what the module republishes, so a call through a barrel still lands where the function lives. A target
+  that names no file of its own has nothing to resolve against and keeps the old name-membership answer.
+- **`CALL_ORIGIN_UNRESOLVED` (warning): the name IS called, from a site written in a shape the reader cannot follow.**
+  A receiver holding a value the module assembled, a receiver with no name to record, an import from a PACKAGE
+  specifier: none of these carries an origin a pure model can read. That is a different answer from *the call is
+  missing*, and keeping the two apart is the point: **only what resolved may accuse.** The finding NAMES the shape it
+  could not follow (``written as `hostCore.loadProjectConfig(…)` ``) and asks for nothing. It reports what was **not
+  checked**, not what is wrong, and no working call is asked to be rewritten to suit the analysis: it is a coverage
+  hole, reported for the same reason `CONFORMANCE_DEGRADED` is, that a silently degraded gate is worse than a degraded
+  one. Its severity stays **warning**, which is what this tree's other two coverage-hole codes
+  (`CONFORMANCE_ANALYSIS_SKIPPED`, `CONFORMANCE_DEGRADED`) carry.
+- **`METHOD_BODY_NOT_FOUND` (warning): the symbol is a declaration, not an implementation.** At exact grade a method
+  realized by a DECLARATION owes a function body as well, so a signature, an overload, an ambient or interface
+  declaration or a plain value binding stops reading as an implementation. *Body* is what the model measures, not what
+  a compiler would infer: a function, method or accessor declaration, or a function/arrow initializer bound to a named
+  slot. Two things are deliberately not reported — a weak string-literal anchor at the `anchored` tier claims no
+  function at all (a route registration is meant to be a string), and a body **reachable** through the imports and
+  republications the file forwards the name by IS the implementation, the N:1 identity forwarding Level 1 blesses.
+- **`UNDECLARED_COLOCATED_CALL` (warning): a boundary crossing that looks local.** When the realizing function calls a
+  modelled method of ANOTHER component living in the **same file**, the narrative must declare it. Sharing a file does
+  not make the hop internal, and no file-level check can see it: nothing is imported, and Level 2 judges edges
+  *between* files. A call to a same-file **private helper** is no modelled method and is never reported — reporting it
+  would turn every module's internal factoring into a finding. The walk stops AT a colocated modelled method, because
+  what that method goes on to call belongs to its own narrative.
+- **Two analysis gaps closed on the way, both of which had been keeping the tree quieter than it should be.**
+  - **A named re-export republishes exactly as `export *` does.** The barrel chase carried a republished function's
+    measured body only through star exports, so a Portal barrel written `export { enable, sync } from './orchestrator.js'`
+    — the shape `src/git/index.ts` uses — published names with nothing behind them. The two spellings are now chased
+    alike, which is what keeps `METHOD_BODY_NOT_FOUND` off a legitimate barrel.
+  - **A carried call site keeps the file it was read in.** A barrel's republished sites would otherwise arrive with no
+    origin of their own, and their bare names would resolve in the barrel's scope instead of the real module's.
+- **The facts the model carries, restated.** `SourceFileFacts.functionCalls` (callee NAMES) is replaced by
+  `functionCallSites` (`CallSiteFact[]`: the name, whether it was a member access, the receiver identifier, and the
+  file a carried site was read in), and `importBindings` (`ImportBindingFact`: the specifier, whether it was a
+  namespace import, the name it was renamed from) is new. A function-like **with a body** always gets a sites entry,
+  empty when it calls nothing; a name with **no** entry has no body to read — that difference is the whole of
+  `hasFunctionBody`, and why an empty entry is never dropped. `CodeIndex.originOf(site, from)` resolves a call site's
+  landing against the run's closed path set, answering the empty set where a pure model cannot say. Embedding wairon
+  as a library and reading `functionCalls`? Read `functionCallSites` and map its `name`.
+- **A `this.<field>.<method>()` call is followed through what the class DECLARES the field to be.** A
+  constructor-injected collaborator is the one member receiver a pure model can follow past the value it holds: the
+  class writes down its type, and the type names a module. The analyzer now records the type names each instance field
+  is declared with (class property declarations and constructor parameter properties) and the module each TYPE-ONLY
+  import binding came from — kept apart from `importBindings`, because a type binding can never be a call origin and
+  is exactly what a declared type resolves through. A field the code annotates with nothing records nothing: what an
+  initializer INFERS is not what the code declares.
+  **This tier may only ACCEPT a call, never accuse one.** A declared type says what a collaborator IS, never which
+  class ships the body, so it is a possibility and not a fact — `CodeIndex.possibleOriginsOf(site, from)` answers it
+  and `originOf` stays the proven tier a finding names a landing from. A followed type that lands somewhere OTHER than
+  the target's file therefore leaves the step reported as `CALL_ORIGIN_UNRESOLVED`, exactly as before, and never as
+  `CALL_STEP_UNREALIZED`. Measured on wairon's own tree: `CALL_ORIGIN_UNRESOLVED` 49 → 44 findings (50 → 45 steps), and the
+  `CALL_STEP_UNREALIZED` set is unchanged finding for finding, and the whole tree gained no finding at all.
+- **A `new Class(…).<method>()` call is followed through the module its CLASS NAME came from.** The second receiver a
+  pure model can follow, and for the same reason: the code NAMES the class right there, and that name is bound to a
+  module. `new ApprovalRegistry(dataDir, store).create(request)` is good code — a collaborator built for one call — and
+  it was the commonest shape the reader could not read. It resolves through the class's RUNTIME import binding (a
+  constructed class is a value, never a type-only binding), else this file when it declares that class.
+  **Acceptance only, like the declared field type:** `possibleOriginsOf` answers it, `originOf` stays the proven tier a
+  finding names a landing from, and a constructed class that lands somewhere OTHER than the target's file leaves the
+  step reported as `CALL_ORIGIN_UNRESOLVED`, never as `CALL_STEP_UNREALIZED`.
+  **The limit, recorded rather than discovered later:** a constructed class says where the CLASS was written, never
+  where a method it INHERITS from a base was — and a base lives in whatever module it likes. So the reading reaches the
+  derived class's file and stops there, which is a false NEGATIVE and never an accusation; fixtures pin both halves of
+  that claim. Measured on wairon's own tree: `CALL_ORIGIN_UNRESOLVED` 44 → **6** findings (45 → 7 steps), with
+  `CALL_STEP_UNREALIZED`, `UNDECLARED_COLOCATED_CALL` and `METHOD_BODY_NOT_FOUND` unchanged finding for finding and the
+  whole tree gaining no finding at all. What survives is three named reader gaps and no author defect: a package
+  specifier (`@wairon/sdk`) the resolver does not map to a path, a receiver bound to a same-file `const` object, and a
+  plain `this.<method>()` self-call the model records no receiver name for.
+- **One author defect these checks exposed, repaired.** `spec_file_store_impl` declared `sourcePath: src/core/specs.ts`
+  while its methods carry `symbol: readYamlFile` / `writeYamlFile` / `listFilesRecursive` — declared in
+  `src/utils/yaml.ts` and `src/utils/fs.ts`, which `src/core/specs.ts` only imports and calls. The declaration tier
+  accepted it (an import binding anchors a declaration), and 21 narrative call steps across the tree were accused of
+  landing in the wrong module as a result. Each method now names the file that DECLARES its symbol, and those two files
+  leave `rules.conformance.unclaimed` — the ratchet working, and that list only shrinks.
+  **What it cost, measured:** `CALL_STEP_UNREALIZED` 42 → 26 findings (81 → 60 steps), and **26 new
+  `UNDECLARED_DEPENDENCY`** findings, because a method's `sourcePath` claims the whole FILE and those two are
+  general-purpose utility modules that nineteen other implementations import. That debt was always there; it was invisible
+  while the files sat on the unclaimed register. Declaring those edges would be a lie — the importers use `pathExists`
+  and `parseYaml`, not the spec file store — so the honest resolutions are to split the store's three symbols into
+  their own module, or to accept the coarse claim.
 
 ### `wairon lock-check`: refuse a merge whose specs were never approved (new, optional)
 
@@ -2190,7 +2288,28 @@ same as not knowing whether the next one an author writes will.
       `captureJumps` outside an insert is refused**, where the marker used to be
       ignored and the write reported as done. Fix the marker — these deltas were
       never applying.
-11. **Re-run `validate --ci`: two rules now see what they always claimed to judge.**
+11. **Re-run `validate --ci`: code↔spec conformance follows the call now.** Three
+    new findings, and one existing one that reaches further, so read them before
+    you silence anything.
+    - `CALL_STEP_UNREALIZED` is no longer satisfied by a same-named function in
+      another module. Where it newly fires, either the call really does land
+      somewhere else, or the target's `sourcePath` names a file the function was
+      never written in — the finding prints the files it did land in, which is
+      usually the answer. Map an intent-language name onto the code name with a
+      per-method `symbol` rather than renaming either.
+    - `CALL_ORIGIN_UNRESOLVED` is not an accusation: the target's name IS called,
+      from a member call through a value the analysis cannot follow
+      (`this.store.save()`). Call the target through its module binding to make
+      the step provable, or read the finding as the grade's limit.
+    - `METHOD_BODY_NOT_FOUND` fires where a `sourcePath` names a file holding the
+      method's declaration but not its body — commonly a header module, an
+      interface, or a forwarding table whose entry no chase can follow. Point the
+      path at the file that implements it, or dial that method to `off`.
+    - `UNDECLARED_COLOCATED_CALL` fires where several components share one source
+      file and one calls another without a narrative step saying so. Narrate the
+      call — it is a real edge — or split the file so the boundary is one the
+      import graph can see.
+12. **Re-run `validate --ci`: two rules now see what they always claimed to judge.**
     - **New warning `FOREIGN_STEP_FIELD`** on a narrative step carrying a field its
       own `type` cannot have — `outcome` on a branch, `error` on a call,
       `targetComponent` on a `throw`. These are the leftovers of retypes made before
@@ -2201,7 +2320,7 @@ same as not knowing whether the next one an author writes will.
       only by another type's method no longer reports. Delete any `lint.allow` that
       was standing in for this — it now goes stale as `UNUSED_LINT_ALLOW`. A type
       named nowhere but its OWN methods still reports, deliberately.
-12. **Scripted authoring calls: an unknown key NESTED in a tool's input is now
+13. **Scripted authoring calls: an unknown key NESTED in a tool's input is now
     refused.** Only the top level of an `sdd_*` tool's input was strict, so a key
     the schema did not know inside a method, a param, a narrative step, a
     finding, a dispatch binding, an endpoint, a lifecycle entrypoint, a trusted
@@ -2215,7 +2334,7 @@ same as not knowing whether the next one an author writes will.
       is the one place the shapes nest further than a boundary schema should
       restate. It now reports what it dropped instead, under `NO EFFECT` in the
       answer — read that list where you would have read a refusal.
-13. **MCP clients: nine tools now declare an `outputSchema`.**
+14. **MCP clients: nine tools now declare an `outputSchema`.**
     `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_add_component`,
     `sdd_define_interface`, `sdd_write_narrative`, `sdd_add_type`,
     `sdd_update_spec`, `sdd_get_spec` and `sdd_validate_tree` return
@@ -2237,7 +2356,7 @@ same as not knowing whether the next one an author writes will.
       variantGuidance?}` — the spec sits under `spec`, NOT at the top level as it
       does in the text block, because the two derived markers belong beside it
       and not inside it.
-14. **`wairon lock-check` is OPTIONAL — nothing starts failing because you
+15. **`wairon lock-check` is OPTIONAL — nothing starts failing because you
     upgraded.** It is a new command and a new reusable workflow; no existing
     command changed, no CI step is added to your repository by installing this
     release, and nothing runs it unless you ask. If you do adopt it, adopt it in

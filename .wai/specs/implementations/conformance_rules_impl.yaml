@@ -315,78 +315,6 @@ methods:
           it were not checked
         type: local
     symbol: check
-  - name: methodRealization
-    sourcePath: src/core/rules/conformance/method-realization.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          code = ctx.codeIndex(): the shared per-path index, whose declarationsAt is declaredNames
-          plus exportedNames (the declared tier) and whose anchorsAt adds anchoredNames (the
-          anchored tier)
-        type: local
-      - stepNumber: 2
-        label: implLoop
-        description: Check each implementation
-        type: loop
-        over: ctx.implementations
-        endStep: 11
-      - stepNumber: 3
-        description: >-
-          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
-          ctx.componentMap.get(contract.component)
-        type: local
-      - stepNumber: 4
-        description: >-
-          Unresolvable and chained-subproject implementations are skipped: continue with the next
-          implementation
-        type: branch
-        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
-        onFalseStep: 2
-      - stepNumber: 5
-        description: >-
-          draft = ctx.isImplementationDraft(impl); specTier = impl.conformance ??
-          component.defaultConformanceTier()
-        type: local
-      - stepNumber: 6
-        label: methodLoop
-        description: Check that each contract method is realized in its own source file
-        type: loop
-        over: contract.methods
-        endStep: 11
-      - stepNumber: 7
-        description: >-
-          methodImpl = the entry of impl.methods carrying the method's name; tier =
-          methodImpl.conformance ?? specTier; file = methodImpl.sourceFile(impl.sourcePath), else
-          impl.sourcePath; facts = code.factsAt(file)
-        type: local
-      - stepNumber: 8
-        description: >-
-          Tier off, no file (source-file-linkage's MISSING_SOURCE_PATH covers it) or a file that is
-          not analyzed (source-file-linkage's own finding covers it, and only the methods realized
-          in it are blocked): continue with the next method
-        type: branch
-        condition: tier is not off, file is named, and facts exist with status analyzed
-        onFalseStep: 6
-      - stepNumber: 9
-        description: >-
-          symbol = methodImpl.symbol ?? method.name; realized = code.declarationsAt(file) holds
-          symbol at tier declared, and code.declarationsAt(file) or code.anchorsAt(file) holds it at
-          any other tier
-        type: local
-      - stepNumber: 10
-        description: A realized method continues with the next method
-        type: branch
-        condition: realized is false
-        onFalseStep: 6
-      - stepNumber: 11
-        label: methodReport
-        description: >-
-          Report UNREALIZED_METHOD (warning; spec impl.id; draft context from draft) naming the
-          method (with its symbol when one is mapped), impl.contract, file, tier and
-          facts.analysisGrade; adds the weak-anchor hint when the tier is declared and only
-          code.anchorsAt(file) holds symbol
-        type: local
-    symbol: check
   - name: findingRealization
     sourcePath: src/core/rules/conformance/finding-realization.ts
     narrative:
@@ -739,104 +667,6 @@ methods:
           component's sim: anchors to withdraw the claim
         type: local
     symbol: check
-  - name: callConformance
-    sourcePath: src/core/rules/conformance/call-conformance.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          code = ctx.codeIndex(): the run's source files keyed by canonical path, derived once and
-          shared with every conformance rule
-        type: local
-      - stepNumber: 2
-        label: methodLoop
-        description: >-
-          Check each method of ctx.implementationMethods() — the descent resolved once for the whole
-          run: the implementation, its contract's component, the file that realizes the method (its
-          sourcePath, else the implementation's) and its draft context, with unresolvable and
-          chained-subproject implementations already left out
-        type: loop
-        over: ctx.implementationMethods()
-        endStep: 13
-      - stepNumber: 3
-        description: >-
-          tier = implMethod.conformance ?? impl.conformance ?? component.defaultConformanceTier();
-          facts = code.factsAt(the entry's sourceFile) when it names one
-        type: local
-      - stepNumber: 4
-        description: >-
-          The conformance dial off skips, and only exact analysis grade fires (weaker grades never
-          guess) — the stance stays written here, where the accusation is read: otherwise continue
-          with the next method
-        type: branch
-        condition: >-
-          tier is not off, implMethod.narrative is non-empty, the entry names a sourceFile, and
-          facts exist with status analyzed at analysisGrade exact
-        onFalseStep: 2
-      - stepNumber: 5
-        description: >-
-          fnSymbol = implMethod.symbol ?? implMethod.name. callees = the private
-          closedCallees(facts, fnSymbol): the function's own entry in facts.functionCalls (read
-          through the private ownEntry, own properties only, so names like toString never resolve to
-          Object.prototype), closed transitively over the same-file named functions it calls; none
-          when the function has no entry. Start an empty missing list
-        type: local
-      - stepNumber: 6
-        description: >-
-          A missing realized function is structural conformance's finding, and a duplicate here
-          would be noise: continue with the next method
-        type: branch
-        condition: callees is present
-        onFalseStep: 2
-      - stepNumber: 7
-        label: stepLoop
-        description: Check each narrative step
-        type: loop
-        over: implMethod.narrative
-        endStep: 11
-      - stepNumber: 8
-        description: >-
-          Only call steps count (dispatch steps route through runtime tables, so the bound name
-          never appears at the call site); a target this tree does not contain is
-          cross-tree-references' finding, and surface-reference-backing's once it resolves: continue
-          with the next step
-        type: branch
-        condition: >-
-          step is a call step with targetComponent and targetMethod, and ctx.componentMap has
-          step.targetComponent
-        onFalseStep: 7
-      - stepNumber: 9
-        description: >-
-          accepted = step.targetMethod plus the symbol of the same-named method in each
-          implementation (ctx.implementationsByContract.get(interface.id)) of each interface in
-          ctx.interfacesByComponent.get(step.targetComponent)
-        type: local
-      - stepNumber: 10
-        description: >-
-          N:1 identity forwarding (the caller's own realized symbol is the target name) or a
-          matching callee realizes the step: continue with the next step
-        type: branch
-        condition: accepted lacks fnSymbol and no name in accepted is among callees
-        onFalseStep: 7
-      - stepNumber: 11
-        label: appendMissing
-        description: >-
-          Append the step's stepNumber, its target (targetComponent.targetMethod) and the accepted
-          names to missing
-        type: local
-      - stepNumber: 12
-        description: A method with every call step realized continues with the next method
-        type: branch
-        condition: missing is non-empty
-        onFalseStep: 2
-      - stepNumber: 13
-        label: report
-        description: >-
-          Report CALL_STEP_UNREALIZED (warning; spec impl.id; draft context the entry's
-          draftContext), one finding per method listing each unrealized step with its target and the
-          names looked for, the function fnSymbol and file: callees are matched by name, closed over
-          same-file helpers, set membership only (order and arguments are not checked)
-        type: local
-    symbol: check
   - name: typeRealization
     sourcePath: src/core/rules/conformance/type-realization.ts
     narrative:
@@ -1005,6 +835,395 @@ methods:
           outside the declared roots) — delete the entry, the list only shrinks
         type: local
     symbol: check
+  - name: methodRealization
+    sourcePath: src/core/rules/conformance/method-realization.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the shared per-path index, whose declarationsAt is declaredNames
+          plus exportedNames (the declared tier) and whose anchorsAt adds anchoredNames (the
+          anchored tier)
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Check each implementation
+        type: loop
+        over: ctx.implementations
+        endStep: 15
+      - stepNumber: 3
+        description: >-
+          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
+          ctx.componentMap.get(contract.component)
+        type: local
+      - stepNumber: 4
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
+        onFalseStep: 2
+      - stepNumber: 5
+        description: >-
+          draft = ctx.isImplementationDraft(impl); specTier = impl.conformance ??
+          component.defaultConformanceTier()
+        type: local
+      - stepNumber: 6
+        label: methodLoop
+        description: Check that each contract method is realized in its own source file
+        type: loop
+        over: contract.methods
+        endStep: 15
+      - stepNumber: 7
+        description: >-
+          methodImpl = the entry of impl.methods carrying the method's name; tier =
+          methodImpl.conformance ?? specTier; file = methodImpl.sourceFile(impl.sourcePath), else
+          impl.sourcePath; facts = code.factsAt(file)
+        type: local
+      - stepNumber: 8
+        description: >-
+          Tier off, no file (source-file-linkage's MISSING_SOURCE_PATH covers it) or a file that is
+          not analyzed (source-file-linkage's own finding covers it, and only the methods realized
+          in it are blocked): continue with the next method
+        type: branch
+        condition: tier is not off, file is named, and facts exist with status analyzed
+        onFalseStep: 6
+      - stepNumber: 9
+        description: >-
+          symbol = methodImpl.symbol ?? method.name; inDeclared = code.declarationsAt(file) holds
+          symbol; realized = inDeclared at tier declared, and inDeclared or code.anchorsAt(file)
+          holds symbol at any other tier
+        type: local
+      - stepNumber: 10
+        description: 'A realized method is asked the second question instead: is there a body under that name?'
+        type: branch
+        condition: realized is false
+        onFalseStep: 13
+      - stepNumber: 11
+        label: methodReport
+        description: >-
+          Report UNREALIZED_METHOD (warning; spec impl.id; draft context from draft) naming the
+          method (with its symbol when one is mapped), impl.contract, file, tier and
+          facts.analysisGrade; adds the weak-anchor hint when the tier is declared and only
+          code.anchorsAt(file) holds symbol
+        type: local
+      - stepNumber: 12
+        description: 'An unrealized method is reported once: continue with the next method'
+        type: jump
+        toStep: 6
+      - stepNumber: 13
+        label: bodyReach
+        description: >-
+          reachable = the private bodyReachable(code, file, symbol): the origins code.originOf
+          resolves a bare call site of symbol in file to, answering true when any of them holds
+          facts.hasFunctionBody under symbol — or under the file's importBindingOf(symbol).imported
+          when the import renamed it. No origin at all, or one below exact grade, also answers true:
+          unreadable is not absent
+        type: local
+      - stepNumber: 14
+        description: >-
+          A weak string anchor claims no function (the anchored tier's registration is deliberate),
+          a weaker grade measures no bodies, and a reachable body is realization: continue with the
+          next method
+        type: branch
+        condition: inDeclared, facts.analysisGrade is exact, and reachable is false
+        onFalseStep: 6
+      - stepNumber: 15
+        label: bodyReport
+        description: >-
+          Report METHOD_BODY_NOT_FOUND (warning; spec impl.id; draft context from draft) naming the
+          method (with its symbol when one is mapped), impl.contract and file: the name is a
+          declaration with no function body behind it — a signature, an ambient or interface
+          declaration, a value binding, or a name this file only imports or re-exports — so every
+          deeper check reads nothing and the method is judged on its name alone
+        type: local
+    symbol: check
+  - name: callConformance
+    sourcePath: src/core/rules/conformance/call-conformance.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path. methods =
+          ctx.implementationMethods() — the descent resolved once for the whole run: the
+          implementation, its contract's component, the file that realizes the method (its
+          sourcePath, else the implementation's) and its draft context, with unresolvable and
+          chained-subproject implementations already left out. modelledAt = for every entry that
+          names a sourceFile, its realizing symbol (implMethod.symbol ?? implMethod.name) under that
+          file's canonical key, carrying the component and method it belongs to — the converse
+          direction's whole subject, read off the same descent so a component and its colocated
+          neighbour come from one walk
+        type: local
+      - stepNumber: 2
+        label: methodLoop
+        description: >-
+          Judge each method's narrative call steps against the calls its realized function makes,
+          and those calls against its narrative
+        type: loop
+        over: methods
+        endStep: 18
+      - stepNumber: 3
+        description: >-
+          tier = implMethod.conformance ?? impl.conformance ?? component.defaultConformanceTier();
+          facts = code.factsAt(the entry's sourceFile) when it names one
+        type: local
+      - stepNumber: 4
+        description: >-
+          The conformance dial off skips, and only exact analysis grade fires (weaker grades never
+          guess) — the stance stays written here, where the accusation is read: otherwise continue
+          with the next method
+        type: branch
+        condition: >-
+          tier is not off, implMethod.narrative is non-empty, the entry names a sourceFile, and
+          facts exist with status analyzed at analysisGrade exact
+        onFalseStep: 2
+      - stepNumber: 5
+        description: >-
+          fnSymbol = implMethod.symbol ?? implMethod.name; colocated = modelledAt at that file;
+          sites = the private closedCallSites(code, file, fnSymbol): the function's own
+          facts.callSitesOf entry, closed transitively over the named helpers it calls, each site
+          carrying the file its names resolve in. The forward direction closes over EVERYTHING the
+          function reaches — a wider callee set can only accept more, never accuse. Start an empty
+          missed list
+        type: local
+      - stepNumber: 6
+        description: >-
+          The function has no body here at all — UNREALIZED_METHOD's find when the name is absent,
+          METHOD_BODY_NOT_FOUND's when it is a bodyless declaration: continue with the next method
+        type: branch
+        condition: sites is present
+        onFalseStep: 2
+      - stepNumber: 7
+        label: stepLoop
+        description: Check each narrative step
+        type: loop
+        over: implMethod.narrative
+        endStep: 13
+      - stepNumber: 8
+        description: >-
+          Only call steps count (dispatch steps route through runtime tables, so the bound name
+          never appears at the call site); a target this tree does not contain is
+          cross-tree-references' finding, and surface-reference-backing's once it resolves: continue
+          with the next step
+        type: branch
+        condition: >-
+          step is a call step with targetComponent and targetMethod, and ctx.componentMap has
+          step.targetComponent
+        onFalseStep: 7
+      - stepNumber: 9
+        description: >-
+          target = the private resolveCallTarget over the implementations of each interface in
+          ctx.interfacesByComponent.get(step.targetComponent): accepted = step.targetMethod plus the
+          symbol each target-side implementation declares for it, files = each such implementation's
+          method sourcePath, else its own
+        type: local
+      - stepNumber: 10
+        description: >-
+          N:1 identity forwarding — the caller's own realized symbol IS the target name, so facade
+          and target collapse onto one function and the step is realized by identity, exactly as
+          Level 1's N:1 sharing blesses: continue with the next step
+        type: branch
+        condition: accepted lacks fnSymbol
+        onFalseStep: 7
+      - stepNumber: 11
+        description: >-
+          matching = the sites whose name is in accepted. reached = the union of
+          code.possibleOriginsOf(site, file) over matching — every file each matching call CAN have
+          been written in, a this.<field>.<method>() receiver followed through the field's declared
+          type and a new Class(...).<method>() receiver through the module its class name came from.
+          landed = the union of code.originOf(site, file) over the same sites — the files a call
+          PROVABLY lands in, empty where a pure model cannot say, and the only tier a finding may
+          name a landing from: widening what a call reached can accept a step, it must never accuse
+          one
+        type: local
+      - stepNumber: 12
+        description: >-
+          A target naming no file of its own has nothing to resolve AGAINST (MISSING_SOURCE_PATH
+          reports exactly that), so it falls back to the name membership this check has always had;
+          otherwise a call landing in one of the target's own files realizes the step: continue with
+          the next step
+        type: branch
+        condition: >-
+          the step is unrealized: target.files is empty and matching is empty, or target.files is
+          non-empty and reached meets none of it
+        onFalseStep: 7
+      - stepNumber: 13
+        label: appendMissed
+        description: >-
+          Append the step's stepNumber, its target (targetComponent.targetMethod), the accepted
+          names and the miss to missed: absent when matching is empty, unresolved when landed is
+          empty — carrying the distinct SHAPES the matching sites were written in, which is what an
+          unresolved answer is about — else elsewhere carrying the files it did land in
+        type: local
+      - stepNumber: 14
+        label: unrealizedReport
+        description: >-
+          When missed holds an entry whose miss is NOT unresolved, report CALL_STEP_UNREALIZED
+          (warning; spec impl.id; draft context the entry's draftContext), one finding per method
+          listing each such step with its target, the names looked for and the files it landed in
+          instead, plus the function fnSymbol and file: callees are closed over the named helpers
+          the function calls and resolved through this file's import bindings, order and arguments
+          unchecked. Only what RESOLVED may accuse, so an unresolved miss is never counted here
+        type: local
+      - stepNumber: 15
+        label: unresolvedReport
+        description: >-
+          When missed holds an unresolved entry, report CALL_ORIGIN_UNRESOLVED (warning; spec
+          impl.id; draft context the entry's draftContext), one finding per method listing each such
+          step with the shape its call sites were written in: the target name IS called inside
+          fnSymbol, but from no site this analysis can resolve to a file. It names which forms
+          resolve and which do not, and asks for nothing — this is a coverage hole in the reader,
+          not a defect in the code or the narrative, so the step is neither proven realized nor
+          accused of being missing and no working call is asked to be rewritten to suit the analysis
+        type: local
+      - stepNumber: 16
+        description: >-
+          declared = every targetComponent.targetMethod any narrative step of the method names.
+          crossings = the sites of closedCallSites(code, file, fnSymbol, stopping AT the colocated
+          names) whose name is a colocated modelled method of another component, is not in declared,
+          and whose code.originOf resolves to this very file. The converse direction stops at a
+          modelled method because what it goes on to call belongs to its own narrative
+        type: local
+      - stepNumber: 17
+        description: >-
+          A call to a same-file PRIVATE helper is no modelled method and never appears among the
+          crossings, so a rule's internal factoring is never a finding: continue with the next
+          method
+        type: branch
+        condition: crossings is non-empty
+        onFalseStep: 2
+      - stepNumber: 18
+        label: colocatedReport
+        description: >-
+          Report UNDECLARED_COLOCATED_CALL (warning; spec impl.id; draft context the entry's
+          draftContext), one finding per method naming each crossing's called symbol and the
+          component method it is: sharing a file does not make the hop internal — it crosses a
+          component boundary nothing imports, which no file-level check can see. Narrate the call,
+          or move the code so the boundary is real
+        type: local
+    symbol: check
+  - name: carriedDebt
+    sourcePath: src/core/rules/conformance/carried-debt.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          carried = ctx.carriedFindings, the conformance debt register flattened to one entry per
+          carried finding, each holding its reason group's kind and why
+        type: local
+      - stepNumber: 2
+        description: A project that declares no debt has nothing to audit
+        type: branch
+        condition: carried is empty
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Report nothing
+        type: return
+        outcome: void
+      - stepNumber: 4
+        label: legality
+        description: >-
+          Legality first, and whatever the run saw: a code that may not be carried is wrong even in
+          a run that judged no code at all
+        type: loop
+        loopKind: forEach
+        over: carried
+        endStep: 7
+      - stepNumber: 5
+        description: 'A carryable code is the register''s whole domain: continue with the next entry'
+        type: branch
+        condition: ctx.carryableIssueCodes holds the entry's code
+        onTrueStep: 4
+        onFalseStep: 6
+      - stepNumber: 6
+        description: >-
+          why = ctx.knownIssueCodes holds the code ? that code is not CARRYABLE, because the
+          register holds measured code↔spec debt and a doctrine, soundness or configuration finding
+          says the design is illegal rather than unfinished : no registered rule emits that code
+        type: local
+      - stepNumber: 7
+        description: >-
+          Report UNCARRYABLE_FINDING (error; no spec id, so no lint allow can reach it) naming the
+          code, the spec, the site and why: remove the entry, or declare the code carryable on the
+          rule that emits it
+        type: local
+      - stepNumber: 8
+        description: A run that built no code model could not have fired one conformance finding
+        type: branch
+        condition: ctx.codeModel.files is empty
+        onFalseStep: 10
+      - stepNumber: 9
+        description: 'Report nothing: every entry would read as stale for a reason the reader never chose'
+        type: return
+        outcome: void
+      - stepNumber: 10
+        description: known = every spec id in the tree; addressed = the spec, code and site keys already judged
+        type: local
+      - stepNumber: 11
+        label: audit
+        description: Audit each entry against what the run actually saw, so the register can only shrink
+        type: loop
+        loopKind: forEach
+        over: carried
+        endStep: 22
+      - stepNumber: 12
+        description: >-
+          A silence the project itself chose, and a spec this run never reached, are not debts
+          anyone paid: continue with the next entry
+        type: branch
+        condition: >-
+          the entry's code is carryable, the project did not switch that code off, and its spec is
+          in this run's scope
+        onTrueStep: 13
+        onFalseStep: 11
+      - stepNumber: 13
+        description: Only the first entry for a finding can ever match, so a repeat carries nothing
+        type: branch
+        condition: addressed already holds the entry's spec, code and site
+        onTrueStep: 14
+        onFalseStep: 16
+      - stepNumber: 14
+        description: >-
+          Report STALE_CARRIED_FINDING (warning; no spec id) naming the repeat: delete it and merge
+          its units into the one entry
+        type: local
+      - stepNumber: 15
+        description: Continue with the next entry
+        type: jump
+        toStep: 11
+      - stepNumber: 16
+        description: Record the entry's spec, code and site in addressed
+        type: local
+      - stepNumber: 17
+        description: An entry no finding matched carries nothing
+        type: branch
+        condition: the entry fired this run
+        onTrueStep: 20
+        onFalseStep: 18
+      - stepNumber: 18
+        description: >-
+          Report STALE_CARRIED_FINDING (warning; no spec id) naming the entry with its kind and
+          reason: no such finding fired, so the debt is paid or the spec no longer reaches that site
+          — or the tree holds no such spec at all. Delete the entry; the register only shrinks
+        type: local
+      - stepNumber: 19
+        description: Continue with the next entry
+        type: jump
+        toStep: 11
+      - stepNumber: 20
+        description: paid = the entry's covers the live finding did not report
+        type: local
+      - stepNumber: 21
+        description: >-
+          An entry that lists exactly what fired is the register doing its job: continue with the
+          next entry
+        type: branch
+        condition: paid is empty
+        onTrueStep: 11
+        onFalseStep: 22
+      - stepNumber: 22
+        description: >-
+          Report STALE_CARRIED_FINDING (warning; no spec id) naming the paid units: that much of the
+          debt is paid, so delete those lines from the entry's covers; the register only shrinks
+        type: local
+    symbol: check
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-19T11:03:39.503Z'
+updatedAt: '2026-09-19T19:06:23.841Z'

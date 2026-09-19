@@ -1,0 +1,32 @@
+kind: value-object
+id: carried_debt
+name: CarriedDebt
+description: >-
+  One REASON, and the conformance findings it explains. The grouping is the point: the same fact
+  usually produces many findings (one file modelled as five components produces a crossing per
+  method), and a reason restated per finding is prose that rots in N places instead of one. A
+  register that records only WHAT it holds is a suppression list with extra steps, so the kind and
+  the reason are both required.
+fields:
+  - name: kind
+    type: string
+    description: >-
+      drift (the spec and the code genuinely disagree, and an author fixes one of them), undecided
+      (the finding is right and the fix waits on a modelling decision nobody has taken), or
+      unreadable (the analysis cannot follow the shape the code is written in, so nothing in this
+      tree is wrong). Drift and undecided are owed; unreadable is a limit to live with.
+    optional: false
+  - name: why
+    type: string
+    description: >-
+      The reason itself, in the author's own words — what is true here, and what paying it would
+      take.
+    optional: false
+  - name: findings
+    type: CarriedFinding[]
+    description: The findings this reason explains.
+    optional: false
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-19T19:04:02.008Z'
+updatedAt: '2026-09-19T19:04:02.023Z'

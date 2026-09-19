@@ -7,8 +7,10 @@ component: rule_index
 methods:
   - name: ruleSequence
     description: >-
-      Return the ordered rule run sequence (built-ins first, then pack rules) the validator
-      executes.
+      Return the ordered rule run sequence the validator executes: registration order (built-ins
+      first, then pack rules) with the two audits of declared exceptions forced last — the
+      conformance debt register, then the lint allows. Both read what the earlier rules did with a
+      declared exception, so a pack rule registered after the built-ins must still run before them.
     signature: 'ruleSequence(): SddRule[]'
     returns: SddRule[]
     params: []
@@ -28,4 +30,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-14T19:17:17.309Z'
-updatedAt: '2026-09-14T06:07:02.122Z'
+updatedAt: '2026-09-19T19:06:49.321Z'

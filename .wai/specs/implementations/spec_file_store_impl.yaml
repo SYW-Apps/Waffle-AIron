@@ -1,34 +1,45 @@
 id: spec_file_store_impl
 name: Spec File Store Implementation
 description: >-
-  Raw YAML file I/O over the shared yaml/fs utilities (readYamlFile, writeYamlFile, listFiles,
-  listFilesRecursive) as imported and used by the spec workspace.
+  The spec tree's file face, in a module that is only that: src/core/spec-files.ts holds
+  readSpecFile, writeSpecFile and listSpecFiles, and the `.yaml` storage format is decided there
+  once. It delegates to the project's general-purpose YAML and directory helpers, but those are NOT
+  the store — src/utils/yaml.ts and src/utils/fs.ts are shared infrastructure that project config,
+  pack manifests, templates, variants, surface snapshots and the registry all read through, so
+  naming them here claimed two utility modules whole and made nineteen unrelated importers read as
+  consumers of a Repository-private Store. findChainingParent is the one method written in the
+  workspace module itself (src/core/specs.ts), where the validator can reach it without reaching
+  into this Store.
 contract: ispec_file_store
-sourcePath: src/core/specs.ts
+sourcePath: src/core/spec-files.ts
 methods:
   - name: read
+    sourcePath: src/core/spec-files.ts
     narrative: []
     detail: intent
     intent: >-
-      Reads the YAML document at the given project-relative spec path and parses it into a plain
-      object; returns null when the file is absent or empty, and propagates a parse error for
-      malformed YAML.
-    symbol: readYamlFile
+      Reads the spec document at the given path (resolved by the caller) and parses it; returns null
+      when the file is absent or empty, and propagates a parse error for malformed content. The
+      storage format — YAML — is decided here, not by the caller.
+    symbol: readSpecFile
   - name: write
+    sourcePath: src/core/spec-files.ts
     narrative: []
     detail: intent
     intent: >-
-      Serializes the given document as YAML and writes it to the spec path, creating parent
-      directories as needed; filesystem failures propagate to the caller.
-    symbol: writeYamlFile
+      Serializes the given document in the spec storage format and writes it to the given path,
+      creating parent directories as needed; filesystem failures propagate to the caller.
+    symbol: writeSpecFile
   - name: listTree
+    sourcePath: src/core/spec-files.ts
     narrative: []
     detail: intent
     intent: >-
-      Recursively lists YAML spec files under the given directory tree; returns an empty list when
-      the root is absent rather than failing.
-    symbol: listFilesRecursive
+      Recursively lists the spec documents under the given directory, matching them by the storage
+      format's extension; returns an empty list when the root is absent rather than failing.
+    symbol: listSpecFiles
   - name: findChainingParent
+    sourcePath: src/core/specs.ts
     narrative:
       - stepNumber: 1
         description: Resolve the bound project root and set the bounded ancestor hop budget
@@ -67,4 +78,4 @@ methods:
     intent: ''
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-07-24T18:06:44.579Z'
+updatedAt: '2026-09-19T18:25:35.344Z'

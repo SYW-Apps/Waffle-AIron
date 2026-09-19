@@ -450,17 +450,24 @@ methods:
         targetComponent: extension_rules
         targetMethod: packReproducibility
       - stepNumber: 89
+        description: >-
+          Register carried-debt (the rule index later moves it, with lint-allows, after any pack
+          rules)
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: carriedDebt
+      - stepNumber: 90
         description: Register lint-allows (the rule index later moves it after any pack rules)
         type: register
         targetComponent: integrity_rules
         targetMethod: lintAllows
-      - stepNumber: 90
+      - stepNumber: 91
         description: For each registered built-in rule, in that order
         type: loop
         loopKind: forEach
         over: the registered built-in rules
-        endStep: 91
-      - stepNumber: 91
+        endStep: 92
+      - stepNumber: 92
         label: append-builtin
         description: Append the rule to the store
         type: call
@@ -499,4 +506,4 @@ lint:
         ruleSequence reads. A new rule adds one step here, which is the point.
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-09-19T10:50:56.814Z'
+updatedAt: '2026-09-19T19:06:35.847Z'
