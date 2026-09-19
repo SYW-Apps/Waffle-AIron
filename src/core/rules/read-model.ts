@@ -1,4 +1,5 @@
 import {
+  fieldTypesOf,
   implementationSourceFiles,
   importBindingOf,
   isPattern,
@@ -6,6 +7,7 @@ import {
   methodSourceFile,
   pathKey,
   resolveImport,
+  typeBindingOf,
   type CallSiteFact,
   type CodeModel,
   type ComponentSpec,
@@ -112,18 +114,32 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
   };
 
   const NO_ORIGIN: ReadonlySet<string> = new Set<string>();
+
+  /** Where a module specifier LANDS from a file: the module, widened by what it republishes. */
+  const landingFrom = (scope: string, specifier: string): ReadonlySet<string> => {
+    const to = resolveImport(scope, specifier, paths);
+    return to ? republishedFrom(to) : NO_ORIGIN;
+  };
+
+  /**
+   * The file a site's names resolve in, and its facts — but only at EXACT
+   * grade, since a weaker grade records no bindings to resolve WITH. A carried
+   * site names the file it was READ in; its names resolve in that file's
+   * scope, never in the barrel that republished it.
+   */
+  const scopeOf = (site: CallSiteFact, from: string): { path: string; facts: SourceFileFacts } | undefined => {
+    const path = pathKey(site.from ?? from);
+    const f = facts.get(path);
+    return f?.status === 'analyzed' && f.analysisGrade === 'exact' ? { path, facts: f } : undefined;
+  };
+
   const originOf = (site: CallSiteFact, from: string): ReadonlySet<string> => {
-    // A carried site names the file it was READ in; its names resolve in that
-    // file's scope, never in the barrel that republished it.
-    const scope = pathKey(site.from ?? from);
-    const f = facts.get(scope);
-    // Only exact grade records bindings at all, so a weaker grade has nothing
-    // to resolve WITH — and an empty answer says exactly that.
-    if (f?.status !== 'analyzed' || f.analysisGrade !== 'exact') return NO_ORIGIN;
-    const landing = (specifier: string): ReadonlySet<string> => {
-      const to = resolveImport(scope, specifier, paths);
-      return to ? republishedFrom(to) : NO_ORIGIN;
-    };
+    const resolved = scopeOf(site, from);
+    // An empty answer says exactly that a pure model cannot say — never that
+    // the call is absent.
+    if (!resolved) return NO_ORIGIN;
+    const { path: scope, facts: f } = resolved;
+    const landing = (specifier: string): ReadonlySet<string> => landingFrom(scope, specifier);
     if (!site.member) {
       const binding = importBindingOf(f, site.name);
       if (binding) return landing(binding.from);
@@ -150,6 +166,37 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
     return NO_ORIGIN;
   };
 
+  /**
+   * The same question, asked one tier weaker: every file the callee CAN have
+   * been written in. A `this.<field>.save()` receiver is followed through the
+   * TYPE the class declares that field with — its import binding (type-only or
+   * runtime alike, since a declared type may be spelled either way), else this
+   * file when it declares that name itself.
+   *
+   * That is a POSSIBILITY and not a fact: the declared type says what a
+   * constructor-injected collaborator IS, never which class ships the body, so
+   * an interface's implementor may live anywhere. Which is why this tier is
+   * separate rather than folded into originOf — a rule may ACCEPT a call on
+   * it, and must never accuse one on it. A field the file annotates with
+   * nothing resolves to nothing, exactly as the proven tier does.
+   */
+  const possibleOriginsOf = (site: CallSiteFact, from: string): ReadonlySet<string> => {
+    const proven = originOf(site, from);
+    if (!site.field) return proven;
+    const resolved = scopeOf(site, from);
+    if (!resolved) return proven;
+    const { path: scope, facts: f } = resolved;
+    const out = new Set(proven);
+    for (const typeName of fieldTypesOf(f, site.field)) {
+      const specifier = typeBindingOf(f, typeName);
+      const landings = specifier !== undefined
+        ? landingFrom(scope, specifier)
+        : declarationsAt(scope).has(typeName) ? republishedFrom(scope) : NO_ORIGIN;
+      for (const candidate of landings) out.add(candidate);
+    }
+    return out;
+  };
+
   const declarationsAt = (path: string): ReadonlySet<string> =>
     namesAt(declarations, pathKey(path), f => new Set([...f.declaredNames, ...f.exportedNames]));
 
@@ -162,6 +209,7 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
       namesAt(anchors, pathKey(path), f => new Set([...f.declaredNames, ...f.exportedNames, ...f.anchoredNames])),
     findingAnchorsAt: (path) => namesAt(findingAnchors, pathKey(path), f => new Set(f.anchoredNames)),
     originOf,
+    possibleOriginsOf,
   };
 }
 

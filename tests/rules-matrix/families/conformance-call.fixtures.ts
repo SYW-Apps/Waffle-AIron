@@ -832,7 +832,244 @@ export default [
       '',
     ].join('\n')),
   }),
+
+  // -------------------------------------------------------------------------
+  // CALL_ORIGIN_UNRESOLVED — the `this.<field>.<method>()` receiver, followed
+  // through the TYPE the class declares the field with. A possibility, not a
+  // proof: it may ACCEPT a call, and it must never accuse one.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'The constructor parameter property declares what the collaborator IS, so this.store.append is followed through the PayslipStore binding to the store\'s own source file — the call site does say where it can land.',
+    scenario:
+      'The payslip repository takes its store as a typed constructor parameter property and appends the payslip through this.store.append.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly store: PayslipStore) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    this.store.append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'Following the field\'s declared type lands the call in the store\'s own source file, which is what realizing the step means — the step is proven, not merely unaccused.',
+    scenario:
+      'The payslip repository appends through this.store.append, and the store it declares that field with is the very component the narrative names.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly store: PayslipStore) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    this.store.append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'payslip_repository_impl',
+    expectFire: true,
+    scenario:
+      'The payslip repository assigns its store to an unannotated field in the constructor body, so this.store.append names a value the module never says the type of.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  private readonly store;',
+      '',
+      '  constructor(store: PayslipStore) {',
+      '    this.store = store;',
+      '  }',
+      '',
+      '  record(payslipId: string): void {',
+      '    this.store.append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
+  // The no-accusation property: a field type that resolves SOMEWHERE ELSE
+  // leaves the step unresolved. Widening what a call may have reached can
+  // accept a step; it may never turn "I cannot say" into "it landed there".
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'payslip_repository_impl',
+    expectFire: true,
+    scenario:
+      'The payslip repository narrates an append to the payslip store but appends to the cold-storage archive instead, through a field declared as the archive.',
+    tree: payslipRepositoryTree([
+      'import { PayslipArchive } from \'./payslip-archive.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly archive: PayslipArchive) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    this.archive.append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'A declared type says what a collaborator IS, never which class ships the body, so a landing read off one can accept a step but can never name where a call went instead: a miss stays "cannot say" and is reported as CALL_ORIGIN_UNRESOLVED.',
+    scenario:
+      'The payslip repository appends through a field declared as the cold-storage archive while its narrative names the payslip store, so the followed type lands in a file that is not the target\'s.',
+    tree: payslipRepositoryTree([
+      'import { PayslipArchive } from \'./payslip-archive.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly archive: PayslipArchive) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    this.archive.append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
 ];
+
+/**
+ * A payroll repository facade over its own store, with a cold-storage archive
+ * beside it; only the repository module's text varies. Used for the
+ * `this.<field>.<method>()` cases, where the question is what the class says
+ * the field IS — and what may be concluded from an answer that is a
+ * possibility rather than a proof.
+ */
+function payslipRepositoryTree(repositoryModule: string): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'payroll', description: 'Pay runs, payslip records and their retention.' }],
+    components: [
+      {
+        id: 'payslip-repository',
+        componentType: 'Repository',
+        subsystem: 'payroll',
+        description: 'The pay-run facade over the payslip rows and their cold-storage archive.',
+        owns: ['payslip-store', 'payslip-archive'],
+      },
+      {
+        id: 'payslip-store',
+        componentType: 'Store',
+        subsystem: 'payroll',
+        durability: 'read-through',
+        description: 'The authoritative payslip rows of every open pay run.',
+      },
+      {
+        id: 'payslip-archive',
+        componentType: 'Adapter',
+        subsystem: 'payroll',
+        description: 'Cold storage for the pay runs closed past the retention window.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ipayslip_repository',
+        component: 'payslip-repository',
+        methods: [{ name: 'record', description: 'Record one employee\'s payslip for the open pay run.' }],
+      },
+      {
+        id: 'ipayslip_store',
+        component: 'payslip-store',
+        methods: [{ name: 'append', description: 'Append one payslip row to the open pay run.' }],
+      },
+      {
+        id: 'ipayslip_archive',
+        component: 'payslip-archive',
+        methods: [{ name: 'append', description: 'Append one payslip row to the cold-storage archive.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'payslip_repository_impl',
+        contract: 'ipayslip_repository',
+        sourcePath: 'src/payroll/payslip-repository.ts',
+        methods: [
+          {
+            name: 'record',
+            narrative: [
+              {
+                stepNumber: 1,
+                type: 'call',
+                description: 'Append the payslip row to the open pay run.',
+                targetComponent: 'payslip-store',
+                targetMethod: 'append',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'payslip_store_impl',
+        contract: 'ipayslip_store',
+        sourcePath: 'src/payroll/payslip-store.ts',
+        methods: [
+          {
+            name: 'append',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Write the payslip row into the open pay run.' }],
+          },
+        ],
+      },
+      {
+        id: 'payslip_archive_impl',
+        contract: 'ipayslip_archive',
+        sourcePath: 'src/payroll/payslip-archive.ts',
+        methods: [
+          {
+            name: 'append',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Write the payslip row into the cold-storage archive.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/payroll/payslip-repository.ts': repositoryModule,
+      'src/payroll/payslip-store.ts': [
+        '/** The authoritative payslip rows of every open pay run. */',
+        'export class PayslipStore {',
+        '  append(payslipId: string): void {',
+        '    // persist the payslip row',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+      'src/payroll/payslip-archive.ts': [
+        '/** Cold storage for the pay runs closed past the retention window. */',
+        'export class PayslipArchive {',
+        '  append(payslipId: string): void {',
+        '    // append the payslip row to cold storage',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}
 
 /**
  * The shipment scheduler whose scheduleShipment names its own command module

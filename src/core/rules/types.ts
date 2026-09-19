@@ -89,9 +89,9 @@ export interface CodeIndex {
   /** The weak anchors alone — string literals and property-access names — which is where a declared finding code must appear. */
   findingAnchorsAt(path: string): ReadonlySet<string>;
   /**
-   * The files the function a call site invokes can have been WRITTEN in,
-   * resolved against the closed path set, or EMPTY when a pure model cannot
-   * say — which is an answer of its own and never a denial.
+   * The files the function a call site invokes IS written in, resolved
+   * against the closed path set, or EMPTY when a pure model cannot say —
+   * which is an answer of its own and never a denial.
    *
    * `from` is the file the site was read in (a carried site names its own).
    * Four shapes resolve: a bare call on an import binding lands in the module
@@ -102,8 +102,24 @@ export interface CodeIndex {
    * else — a member call through a value, a receiver that is not a plain
    * identifier, a specifier outside the closed set, a name with no binding at
    * all — resolves to nothing.
+   *
+   * This is the PROVEN tier, and the only one an accusation may be built on.
    */
   originOf(site: CallSiteFact, from: string): ReadonlySet<string>;
+  /**
+   * Every file the function a call site invokes CAN have been written in: the
+   * proven origins, widened for a `this.<field>.<method>()` site by the
+   * modules that declare the field's DECLARED TYPE — its type-only or runtime
+   * import binding, else this file when it declares that name itself.
+   *
+   * A possibility, not a fact: the type says what a constructor-injected
+   * collaborator is, never which class ships the body, so an interface's
+   * implementor may live anywhere. A widened answer may therefore only ACCEPT
+   * a call as realized; naming a file a call landed in stays `originOf`'s word
+   * alone. A field the file annotates with nothing resolves to nothing,
+   * exactly as the proven tier does.
+   */
+  possibleOriginsOf(site: CallSiteFact, from: string): ReadonlySet<string>;
 }
 
 /**

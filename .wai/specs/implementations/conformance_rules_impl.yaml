@@ -1025,9 +1025,13 @@ methods:
         onFalseStep: 7
       - stepNumber: 11
         description: >-
-          matching = the sites whose name is in accepted; landed = the union of code.originOf(site,
-          file) over matching — the files each matching call can have been written in, empty where a
-          pure model cannot say
+          matching = the sites whose name is in accepted. reached = the union of
+          code.possibleOriginsOf(site, file) over matching — every file each matching call CAN have
+          been written in, a this.<field>.<method>() receiver followed through the field's declared
+          type to the module declaring it. landed = the union of code.originOf(site, file) over the
+          same sites — the files a call PROVABLY lands in, empty where a pure model cannot say, and
+          the only tier a finding may name a landing from: widening what a call reached can accept a
+          step, it must never accuse one
         type: local
       - stepNumber: 12
         description: >-
@@ -1038,7 +1042,7 @@ methods:
         type: branch
         condition: >-
           the step is unrealized: target.files is empty and matching is empty, or target.files is
-          non-empty and landed meets none of it
+          non-empty and reached meets none of it
         onFalseStep: 7
       - stepNumber: 13
         label: appendMissed
@@ -1094,4 +1098,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-19T15:35:22.658Z'
+updatedAt: '2026-09-19T16:49:51.032Z'

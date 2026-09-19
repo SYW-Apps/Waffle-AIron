@@ -324,6 +324,15 @@ interface ExactFacts {
   calls: Map<string, Map<string, CallSiteFact>>;
   /** Runtime (value) import bindings by local name. */
   importBindings: Map<string, ImportBindingFact>;
+  /** Module specifier of each TYPE-ONLY import binding, by local name. */
+  typeOnlyBindings: Map<string, string>;
+  /**
+   * The type names each instance FIELD is declared with — a class property's
+   * annotation, or a constructor parameter property's. Same-named fields of
+   * different classes union, because the file cannot say which class a
+   * `this` was.
+   */
+  fieldTypes: Map<string, Set<string>>;
   /** Module-scope mutable (`let`/`var`) binding names. */
   mutableBindings: Set<string>;
   /**
@@ -348,10 +357,17 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const complexity = new Map<string, number>();
   const calls = new Map<string, Map<string, CallSiteFact>>();
   const importBindings = new Map<string, ImportBindingFact>();
+  const typeOnlyBindings = new Map<string, string>();
+  const fieldTypes = new Map<string, Set<string>>();
   const mutableBindings = new Set<string>();
 
-  /** The dedup key of a call site: its shape, not its number of occurrences. */
-  const siteKey = (site: CallSiteFact): string => `${site.member ? 'm' : 'b'}:${site.via ?? ''}:${site.name}`;
+  /**
+   * The dedup key of a call site: its shape, not its number of occurrences.
+   * The receiver is part of the shape, so `this.store.save()` and
+   * `getStore().save()` stay the two different questions they are.
+   */
+  const siteKey = (site: CallSiteFact): string =>
+    `${site.member ? 'm' : 'b'}:${site.via ?? (site.field ? `this.${site.field}` : '')}:${site.name}`;
 
   const addBindingNames = (name: import('typescript').BindingName): void => {
     if (ts.isIdentifier(name)) declared.add(name.text);
@@ -366,6 +382,33 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
     if (ts.isPrivateIdentifier(name)) return name.text;
     return undefined;
+  };
+
+  // A declared type, read only where the declaration NAMES one: a plain type
+  // reference (`store: SpecStore`). A generic, a literal, a union or an
+  // intersection resolves to nothing rather than to one arbitrary member of
+  // itself — what a field could then be is a question this model does not ask.
+  const typeReferenceName = (type: import('typescript').TypeNode | undefined): string | undefined =>
+    type && ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName) ? type.typeName.text : undefined;
+
+  // The one modifier set that turns a constructor parameter into a FIELD.
+  // A decorator is a modifier too, so the check is by keyword, not by count.
+  const isParameterProperty = (node: import('typescript').ParameterDeclaration): boolean =>
+    !!node.modifiers?.some(m =>
+      m.kind === ts.SyntaxKind.PublicKeyword || m.kind === ts.SyntaxKind.PrivateKeyword
+      || m.kind === ts.SyntaxKind.ProtectedKeyword || m.kind === ts.SyntaxKind.ReadonlyKeyword);
+
+  const recordFieldType = (
+    name: import('typescript').PropertyName | import('typescript').BindingName,
+    type: import('typescript').TypeNode | undefined,
+  ): void => {
+    const typeName = typeReferenceName(type);
+    if (!typeName) return;
+    const field = propertyNameText(name as import('typescript').PropertyName);
+    if (!field) return;
+    const named = fieldTypes.get(field) ?? new Set<string>();
+    named.add(typeName);
+    fieldTypes.set(field, named);
   };
 
   const hasExportModifier = (node: import('typescript').Node): boolean => {
@@ -419,15 +462,19 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
         // The call's SHAPE is the whole of what a pure model can say about
         // where it lands: a bare identifier resolves in this file's scope, a
         // member access through a plain identifier resolves through that
-        // binding, and a member access through anything else (`this.store.x()`,
-        // `getStore().x()`) resolves nowhere without a type checker.
+        // binding, a member access through `this.<field>` resolves through the
+        // type the class declares that field with, and a member access through
+        // anything else (`getStore().x()`) resolves nowhere without a type
+        // checker.
         const callee = node.expression;
         if (ts.isIdentifier(callee)) addSite({ name: callee.text, member: false });
         else if (ts.isPropertyAccessExpression(callee)) {
           const receiver = callee.expression;
-          addSite(ts.isIdentifier(receiver)
-            ? { name: callee.name.text, member: true, via: receiver.text }
-            : { name: callee.name.text, member: true });
+          const name = callee.name.text;
+          if (ts.isIdentifier(receiver)) addSite({ name, member: true, via: receiver.text });
+          else if (ts.isPropertyAccessExpression(receiver) && receiver.expression.kind === ts.SyntaxKind.ThisKeyword) {
+            addSite({ name, member: true, field: receiver.name.text });
+          } else addSite({ name, member: true });
         }
       }
       ts.forEachChild(node, count);
@@ -447,6 +494,14 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       const sites = calls.get(fnName) ?? new Map<string, CallSiteFact>();
       for (const [key, site] of facts.callees) sites.set(key, site);
       calls.set(fnName, sites);
+    }
+    // What the code DECLARES an instance field to be: a class property's own
+    // annotation, and a constructor parameter property's — the shape that
+    // writes down what a constructor-injected collaborator is. Read outside
+    // the chain below, which is an else-if over the same node kinds.
+    if (ts.isPropertyDeclaration(node)) recordFieldType(node.name, node.type);
+    else if (ts.isParameter(node) && node.parent && ts.isConstructorDeclaration(node.parent) && isParameterProperty(node)) {
+      recordFieldType(node.name, node.type);
     }
     if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)
       || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isModuleDeclaration(node)) {
@@ -481,12 +536,15 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       const typeOnly = clause?.isTypeOnly ?? false;
       const spec = ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : undefined;
       if (!typeOnly && spec) imports.add(spec);
-      // A binding records where the name came from only when the import is a
-      // RUNTIME one: a type binding can never be a call origin. A per-element
-      // `type` marker excludes that element alone.
+      // A binding records where the name came from as a call ORIGIN only when
+      // the import is a RUNTIME one: a type binding can never be one. A
+      // per-element `type` marker excludes that element alone. The type-only
+      // half is kept too, apart — it is never an origin, but it is what a
+      // declared field type is resolved through.
       const bind = (name: string, namespace: boolean, imported?: string, elementTypeOnly = false): void => {
         declared.add(name);
-        if (typeOnly || elementTypeOnly || !spec) return;
+        if (!spec) return;
+        if (typeOnly || elementTypeOnly) { typeOnlyBindings.set(name, spec); return; }
         const fact: ImportBindingFact = { from: spec };
         if (namespace) fact.namespace = true;
         if (imported && imported !== name) fact.imported = imported;
@@ -538,7 +596,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, mutableBindings, reexportOnly };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -823,6 +881,8 @@ export function buildCodeModel(
             functionComplexity: Object.fromEntries(facts.complexity),
             functionCallSites: Object.fromEntries([...facts.calls].map(([k, v]) => [k, [...v.values()]])),
             importBindings: Object.fromEntries(facts.importBindings),
+            typeOnlyBindings: Object.fromEntries(facts.typeOnlyBindings),
+            fieldTypes: Object.fromEntries([...facts.fieldTypes].map(([k, v]) => [k, [...v]])),
             topLevelMutableBindings: [...facts.mutableBindings],
             reexportOnly: facts.reexportOnly,
           };

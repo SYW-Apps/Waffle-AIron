@@ -73,6 +73,19 @@ upgrading will see calls reported that previously passed, and `validate --ci` ca
   `hasFunctionBody`, and why an empty entry is never dropped. `CodeIndex.originOf(site, from)` resolves a call site's
   landing against the run's closed path set, answering the empty set where a pure model cannot say. Embedding wairon
   as a library and reading `functionCalls`? Read `functionCallSites` and map its `name`.
+- **A `this.<field>.<method>()` call is followed through what the class DECLARES the field to be.** A
+  constructor-injected collaborator is the one member receiver a pure model can follow past the value it holds: the
+  class writes down its type, and the type names a module. The analyzer now records the type names each instance field
+  is declared with (class property declarations and constructor parameter properties) and the module each TYPE-ONLY
+  import binding came from — kept apart from `importBindings`, because a type binding can never be a call origin and
+  is exactly what a declared type resolves through. A field the code annotates with nothing records nothing: what an
+  initializer INFERS is not what the code declares.
+  **This tier may only ACCEPT a call, never accuse one.** A declared type says what a collaborator IS, never which
+  class ships the body, so it is a possibility and not a fact — `CodeIndex.possibleOriginsOf(site, from)` answers it
+  and `originOf` stays the proven tier a finding names a landing from. A followed type that lands somewhere OTHER than
+  the target's file therefore leaves the step reported as `CALL_ORIGIN_UNRESOLVED`, exactly as before, and never as
+  `CALL_STEP_UNREALIZED`. Measured on wairon's own tree: `CALL_ORIGIN_UNRESOLVED` 49 → 44 findings (50 → 45 steps), and the
+  `CALL_STEP_UNREALIZED` set is unchanged finding for finding, and the whole tree gained no finding at all.
 
 ### `wairon lock-check`: refuse a merge whose specs were never approved (new, optional)
 

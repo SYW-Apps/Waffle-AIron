@@ -52,6 +52,15 @@ export interface CallSiteFact {
   /** The receiver identifier — set only when the receiver is a plain identifier (`specs.save()` → "specs"). */
   via?: string;
   /**
+   * The instance FIELD the receiver is — set only when the call was written
+   * `this.<field>.name(…)` (`this.store.save()` → "store"), and never together
+   * with `via`. The one receiver a pure model can follow past the value it
+   * holds, because the class DECLARES what the field is; what that type
+   * resolves to is a POSSIBLE origin, never a proven one, since the declared
+   * type says what a collaborator is and not which class ships the body.
+   */
+  field?: string;
+  /**
    * The file this site was READ in, set only when it is not the file these
    * facts describe — a pure re-export barrel carries the sites of the function
    * it publishes. A carried site's bare names and receivers resolve in that
@@ -114,6 +123,29 @@ export interface SourceFileFacts {
    * local name they bound.
    */
   importBindings?: Record<string, ImportBindingFact>;
+  /**
+   * The type names an instance FIELD is DECLARED with, by field name — read
+   * off class property declarations and constructor parameter properties,
+   * which is where a constructor-injected collaborator says what it is.
+   * EXACT grade only.
+   *
+   * Same-named fields of different classes in one file keep EVERY declared
+   * type: the file cannot say which class a call site's `this` was, and a
+   * wider answer only ever widens what a call may have reached. A field with
+   * no annotation records nothing — what an initializer INFERS is not what
+   * the code declares, and a guess is not a fact.
+   */
+  fieldTypes?: Record<string, string[]>;
+  /**
+   * The module specifier each TYPE-ONLY import binding came from, by local
+   * name. EXACT grade only.
+   *
+   * The half of the import list `importBindings` deliberately leaves out,
+   * because a type binding can never be a call ORIGIN — and exactly what a
+   * declared field type is resolved through, which is why it is kept apart
+   * rather than folded in.
+   */
+  typeOnlyBindings?: Record<string, string>;
   /**
    * Module-scope mutable bindings (`let`/`var` at the top level of the file).
    * EXACT grade only. The static approximation of held state a logic
@@ -186,6 +218,29 @@ function ownEntry<T>(record: Record<string, T> | undefined, key: string): T | un
  */
 export function importBindingOf(facts: SourceFileFacts, name: string): ImportBindingFact | undefined {
   return ownEntry(facts.importBindings, name);
+}
+
+/** The empty answer a field the file annotates with nothing gives. */
+const NO_FIELD_TYPES: string[] = [];
+
+/**
+ * source_file_facts.fieldTypesOf — the type names an instance field is
+ * DECLARED with, or EMPTY when the file declares no such field, annotates it
+ * with nothing, or was analyzed below exact grade. The empty answer is what
+ * keeps an unresolvable field from becoming a guess.
+ */
+export function fieldTypesOf(facts: SourceFileFacts, field: string): string[] {
+  return ownEntry(facts.fieldTypes, field) ?? NO_FIELD_TYPES;
+}
+
+/**
+ * source_file_facts.typeBindingOf — the module specifier a NAME was imported
+ * from, whether the import was type-only or a runtime one, since a declared
+ * type may be spelled either way. Undefined when the file imports no such
+ * name, which leaves the name local, global or ambient.
+ */
+export function typeBindingOf(facts: SourceFileFacts, name: string): string | undefined {
+  return ownEntry(facts.typeOnlyBindings, name) ?? ownEntry(facts.importBindings, name)?.from;
 }
 
 /**

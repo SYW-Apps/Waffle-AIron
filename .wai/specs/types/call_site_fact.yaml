@@ -26,6 +26,14 @@ fields:
       The receiver identifier — set only when the receiver is a plain identifier (specs.save() gives
       "specs"), never for a longer chain or an expression
     optional: true
+  - name: field
+    type: string
+    description: >-
+      The instance FIELD the receiver is — set only when the call was written this.<field>.name(...)
+      (this.store.save() gives "store"), and never together with via. The one receiver a pure model
+      can follow past the value it holds, because the class DECLARES the field's type; what that
+      type resolves to is a possible origin, never a proven one
+    optional: true
   - name: from
     type: string
     description: >-
@@ -36,4 +44,4 @@ fields:
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-19T15:29:49.702Z'
-updatedAt: '2026-09-19T15:29:49.715Z'
+updatedAt: '2026-09-19T16:47:45.848Z'

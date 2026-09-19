@@ -22,7 +22,11 @@ import { CodeIndex, RuleContext, SddRule } from '../types.js';
 //             call is there but a pure model cannot say where it lands, that
 //             is CALL_ORIGIN_UNRESOLVED — a different answer from "the call is
 //             missing", and keeping them apart is the point: only what
-//             resolved may accuse.
+//             resolved may accuse. A `this.store.save()` receiver is followed
+//             through the TYPE the class declares that field with, which says
+//             where the callee CAN have been written and never where it was:
+//             so that reading accepts a step, and a landing a finding names
+//             still comes from what was proven.
 //   converse  a call to a modelled method of ANOTHER component that lives in
 //             the SAME FILE crosses a component boundary while looking local,
 //             so the narrative must declare it (UNDECLARED_COLOCATED_CALL).
@@ -125,7 +129,7 @@ function describeMiss(m: MissedStep): string {
 export const callConformanceRule: SddRule = {
   name: 'call-conformance',
   description:
-    'Code↔spec Level 3: the narrative `call` step ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. Forward: every `call` step must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls; a matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED rather than accused of being missing, and a target that names no file of its own falls back to name membership. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the narrative must declare it (UNDECLARED_COLOCATED_CALL) — a same-file private helper is no modelled method and is never reported. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are skipped, the conformance dial (off) skips, and weaker analysis grades never guess.',
+    'Code↔spec Level 3: the narrative `call` step ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. Forward: every `call` step must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls, and resolved against every file the call CAN have reached, a `this.<field>.<method>()` receiver followed through the field\'s DECLARED TYPE to the module declaring it; a matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED rather than accused of being missing, a finding names a landing only from the PROVEN tier so that widening what a call reached can accept a step but never accuse one, and a target that names no file of its own falls back to name membership. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the narrative must declare it (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper is no modelled method and is never reported. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are skipped, the conformance dial (off) skips, and weaker analysis grades never guess.',
   codes: [
     { code: 'CALL_STEP_UNREALIZED', defaultSeverity: 'warning', summary: 'Narrative call step realized by no call that resolves to the target method\'s own source file — the call is absent, or it lands in another module' },
     { code: 'CALL_ORIGIN_UNRESOLVED', defaultSeverity: 'warning', summary: 'Narrative call step whose target name IS called, but only from call sites a pure model cannot resolve to any file — neither proven realized nor accused' },
@@ -209,11 +213,18 @@ export const callConformanceRule: SddRule = {
           continue;
         }
 
+        // Two tiers, and the difference is the whole of the honesty here.
+        // ACCEPTANCE reads everything a call can have reached, `this.store`
+        // followed through the type the class declares the field with. A
+        // LANDING a finding may name comes from the proven tier alone: a
+        // declared type says what a collaborator is, not which class ships the
+        // body, so widening what a call reached can only ever accept a step —
+        // it must never turn "I cannot say" into an accusation.
         const landed = new Set<string>();
         let realized = false;
         for (const site of matching) {
-          for (const origin of code.originOf(site, file)) {
-            landed.add(origin);
+          for (const origin of code.originOf(site, file)) landed.add(origin);
+          for (const origin of code.possibleOriginsOf(site, file)) {
             if (target.files.has(origin)) realized = true;
           }
         }

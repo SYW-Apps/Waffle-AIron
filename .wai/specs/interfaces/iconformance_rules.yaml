@@ -107,14 +107,18 @@ methods:
       implementation's), at exact analysis grade only. Forward: every `call` step must be realized
       by a call whose callee RESOLVES TO one of the target method's own source files — the target's
       contract name or a per-method `symbol` override, closed transitively over the named helpers
-      the realized function calls; a matching call whose origin a pure model cannot resolve is
-      reported apart as CALL_ORIGIN_UNRESOLVED rather than accused of being missing, and a target
-      that names no file of its own falls back to name membership. Converse: a call that resolves to
-      a modelled method of ANOTHER component in the SAME file crosses a component boundary while
-      looking local, so the narrative must declare it (UNDECLARED_COLOCATED_CALL) — a same-file
-      private helper is no modelled method and is never reported. Order, arguments and conditions
-      stay unverified, dispatch steps (runtime-table routed) are skipped, the conformance dial (off)
-      skips, and weaker analysis grades never guess.
+      the realized function calls, and resolved against every file the call CAN have reached, a
+      `this.<field>.<method>()` receiver followed through the field's DECLARED TYPE to the module
+      declaring it; a matching call whose origin a pure model cannot resolve is reported apart as
+      CALL_ORIGIN_UNRESOLVED rather than accused of being missing, a finding names a landing only
+      from the PROVEN tier so that widening what a call reached can accept a step but never accuse
+      one, and a target that names no file of its own falls back to name membership. Converse: a
+      call that resolves to a modelled method of ANOTHER component in the SAME file crosses a
+      component boundary while looking local, so the narrative must declare it
+      (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper
+      is no modelled method and is never reported. Order, arguments and conditions stay unverified,
+      dispatch steps (runtime-table routed) are skipped, the conformance dial (off) skips, and
+      weaker analysis grades never guess.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -332,4 +336,4 @@ methods:
           source-root walk no longer finds — delete it, the list only shrinks
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-19T15:32:16.195Z'
+updatedAt: '2026-09-19T17:06:26.393Z'

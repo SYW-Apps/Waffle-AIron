@@ -101,6 +101,24 @@ fields:
       specifiers but never which local name they bound. The closed set a call site's origin is
       resolved through
     optional: true
+  - name: fieldTypes
+    type: Record<string, string[]>
+    description: >-
+      The type names an instance FIELD is DECLARED with, by field name — read off class property
+      declarations and constructor parameter properties, which is where a constructor-injected
+      collaborator says what it is; exact grade only. Same-named fields of different classes in one
+      file keep every declared type, since the file cannot say which class a call site's `this` was,
+      and a wider answer only ever widens what a call may have reached. A field with no annotation
+      records nothing: what an initializer INFERS is not what the code declares
+    optional: true
+  - name: typeOnlyBindings
+    type: Record<string, string>
+    description: >-
+      The module specifier each TYPE-ONLY import binding came from, by local name; exact grade only.
+      The half of the import list importBindings deliberately leaves out, because a type binding can
+      never be a call ORIGIN — and exactly what a declared field type is resolved through, which is
+      why it is kept apart rather than folded in
+    optional: true
 methods:
   - name: resolveImport
     signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
@@ -133,6 +151,20 @@ methods:
     description: >-
       The runtime import binding this file makes under a local name, or undefined when the name is
       not an import of this file — it is local, global, or bound type-only
+  - name: fieldTypesOf
+    signature: 'fieldTypesOf(field: string): string[]'
+    returns: string[]
+    description: >-
+      The type names an instance field is declared with, or EMPTY when the file declares no such
+      field, annotates it with nothing, or was analyzed below exact grade — an empty answer being
+      what keeps an unresolvable field from becoming a guess
+  - name: typeBindingOf
+    signature: 'typeBindingOf(name: string): string | undefined'
+    returns: string | undefined
+    description: >-
+      The module specifier a NAME was imported from, whether the import was type-only or a runtime
+      one, since a declared type may be spelled either way; undefined when the file imports no such
+      name, which leaves the name local, global or ambient
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-09-19T15:30:54.777Z'
+updatedAt: '2026-09-19T16:48:42.556Z'
