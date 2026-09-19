@@ -671,18 +671,18 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // UNUSED_COMPONENT — the detail-dial fallback: an intent-level method with
-  // no narrative floods its component's dependsOn/owns (lower declared
-  // fidelity must not false-flag collaborators); a full-detail method gets NO
-  // fallback (its missing narrative is a reported gap, unused stays strong).
+  // UNUSED_COMPONENT — the detail dial does NOT vouch for a collaborator. A
+  // method whose narrative does not show its calls contributes the ones it
+  // DECLARES (`calls`) and nothing else: there is no fallback behind them, so
+  // the pair below is the same tree with and without the declaration.
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'UNUSED_COMPONENT',
-    expectFire: false,
-    reason:
-      'The close-period method is explicitly dialed to intent, so its missing narrative triggers the component-granularity fallback over dependsOn — the ledger adjuster must not be false-flagged for a deliberately lower-fidelity method.',
+    severity: 'warning',
+    anchoredTo: 'ledger-adjuster',
+    expectFire: true,
     scenario:
-      'The billing orchestrator closePeriod method is dialed to intent with prose only, and its declared dependency on the ledger adjuster keeps the adjuster reachable.',
+      'The billing orchestrator closePeriod method is dialed to intent with prose only and declares no calls, so nothing in the graph reaches the ledger adjuster its prose mentions.',
     tree: {
       subsystems: [{ id: 'billing', description: 'Accounting-period management and ledger adjustments.' }],
       components: [
@@ -752,6 +752,99 @@ export default [
               intent:
                 'Close the open accounting period: freeze postings, run the adjustment pass over every open ledger via the ledger adjuster, and emit the close report.',
               narrative: [],
+            },
+          ],
+        },
+        {
+          id: 'ledger_adjuster_impl',
+          contract: 'iledger_adjuster',
+          methods: [
+            {
+              name: 'applyAdjustments',
+              narrative: [{ stepNumber: 1, type: 'local', description: 'Apply accrual and rounding adjustments to each open ledger line.' }],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNUSED_COMPONENT',
+    expectFire: false,
+    reason:
+      'closePeriod declares the call its prose makes, so the walk takes that edge and the ledger adjuster is reached — the declaration, not the detail dial, is what keeps it out of the finding.',
+    scenario:
+      'The same intent-level closePeriod declares its call as ledger-adjuster.applyAdjustments.',
+    tree: {
+      subsystems: [{ id: 'billing', description: 'Accounting-period management and ledger adjustments.' }],
+      components: [
+        {
+          id: 'billing-portal',
+          componentType: 'Portal',
+          portalType: 'HTTP_API',
+          description: 'Back-office HTTP entry for accounting operations.',
+          dependsOn: ['billing-orchestrator'],
+        },
+        {
+          id: 'billing-orchestrator',
+          componentType: 'Orchestrator',
+          description: 'Drives the accounting-period close.',
+          dependsOn: ['ledger-adjuster'],
+        },
+        {
+          id: 'ledger-adjuster',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
+          description: 'Applies accrual and rounding adjustments to open ledgers.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'ibilling_portal',
+          component: 'billing-portal',
+          methods: [{ name: 'closeBooks', description: 'Trigger the close of the current accounting period.' }],
+        },
+        {
+          id: 'ibilling_orchestrator',
+          component: 'billing-orchestrator',
+          methods: [{ name: 'closePeriod', description: 'Freeze postings and close the open accounting period.' }],
+        },
+        {
+          id: 'iledger_adjuster',
+          component: 'ledger-adjuster',
+          methods: [{ name: 'applyAdjustments', description: 'Apply accrual and rounding adjustments to each open ledger.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'billing_portal_impl',
+          contract: 'ibilling_portal',
+          methods: [
+            {
+              name: 'closeBooks',
+              narrative: [
+                {
+                  stepNumber: 1,
+                  type: 'call',
+                  description: 'Kick off the period close workflow.',
+                  targetComponent: 'billing-orchestrator',
+                  targetMethod: 'closePeriod',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'billing_orchestrator_impl',
+          contract: 'ibilling_orchestrator',
+          methods: [
+            {
+              name: 'closePeriod',
+              detail: 'intent',
+              intent:
+                'Close the open accounting period: freeze postings, run the adjustment pass over every open ledger via the ledger adjuster, and emit the close report.',
+              narrative: [],
+              calls: ['ledger-adjuster.applyAdjustments'],
             },
           ],
         },

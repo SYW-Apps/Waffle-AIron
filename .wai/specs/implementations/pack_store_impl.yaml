@@ -33,6 +33,10 @@ methods:
       layer or a mounted packs volume). On success writes it atomically as <name>.yaml into the
       MUTABLE instance packs directory (WAIRON_PACKS_DIR), creating that directory if needed; the
       immutable image-layer directory is never written. Returns its probe (tier 'instance').
+    calls:
+      - host_core_adapter.checkDeclarativePack
+      - host_core_adapter.globalPacksDir
+      - host_core_adapter.loadExtensionPacks
   - name: removeGlobalPack
     narrative: []
     detail: intent
@@ -79,6 +83,10 @@ methods:
     intent: >-
       Reads the server-global pack directory fresh and returns one PackDescriptor per vendored
       declarative pack — no credential gate; internal pre-authorized read.
+    calls:
+      - host_core_adapter.globalPacksDir
+      - host_core_adapter.discoverPacks
+      - host_core_adapter.loadExtensionPacks
   - name: executeApprovedListProjectPacks
     narrative: []
     intent: >-
@@ -106,6 +114,11 @@ methods:
       a declarative pack via the core adapter (defense in depth), removing the partial extraction on
       failure. Probe and return the PackDescriptor (tier instance). Fails loudly on an unsafe
       archive, a code pack, or a non-declarative payload.
+    calls:
+      - host_sdk_adapter.inspectArchive
+      - host_sdk_adapter.extractArchive
+      - host_core_adapter.globalPacksDir
+      - host_core_adapter.loadExtensionPacks
   - name: installProjectPackArchive
     narrative: []
     detail: intent
@@ -116,6 +129,10 @@ methods:
       calling orchestrator registers (committed with the project, so every clone and CI enforce it).
       Writes nothing to .wai/project.yaml. Assumes the orchestrator has already bound the project
       root. Fails loudly on unsafe / code / non-declarative input.
+    calls:
+      - host_sdk_adapter.inspectArchive
+      - host_sdk_adapter.extractArchive
+      - host_core_adapter.loadExtensionPacks
   - name: executeApprovedResolveGlobalPacks
     narrative: []
     detail: intent
@@ -146,6 +163,11 @@ methods:
       source set to the pack's canonical name and family carried through from the pack's ProfileDef
       when present. Dedupe by (id, source). A pack that fails to load contributes nothing (its error
       rides on its descriptor elsewhere); this read never throws. Never mutates any tier.
+    calls:
+      - host_core_adapter.builtinProfileIds
+      - host_core_adapter.globalPacksDir
+      - host_core_adapter.discoverPacks
+      - host_core_adapter.loadExtensionPacks
   - name: executeApprovedListProjectProfiles
     narrative: []
     detail: intent
@@ -183,7 +205,10 @@ methods:
       makes resolvable is returned untouched, and a repeat call made before the caller registered an
       earlier adoption re-vendors the same content and reports the same adoption, so the flow
       converges.
+    calls:
+      - host_core_adapter.builtinProjectKinds
+      - host_core_adapter.builtinProfileIds
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-09-17T16:34:46.733Z'
+updatedAt: '2026-09-19T21:26:59.474Z'

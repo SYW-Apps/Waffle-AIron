@@ -10,7 +10,9 @@ methods:
       Stamps a fresh snapshot id + capturedAt on the payload set and persists it write-once through
       the store; returns the stored ShareSnapshot. Snapshots are never updated in place — a refresh
       mints a new id.
+    calls:
+      - share_snapshot_store.write
 detail: intent
 status: complete
 createdAt: '2026-07-18T09:26:21.446Z'
-updatedAt: '2026-07-18T10:10:40.920Z'
+updatedAt: '2026-09-19T21:26:58.988Z'

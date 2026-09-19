@@ -9,14 +9,20 @@ methods:
     intent: >-
       Reads the configuration through the store, or null when the project has none; a schema failure
       surfaces as the store's validation error.
+    calls:
+      - project_config_store.read
   - name: exists
     narrative: []
     intent: Reports whether the project has a configuration file, through the store.
+    calls:
+      - project_config_store.exists
   - name: declaresGlobalPacks
     narrative: []
     intent: >-
       Asks the store whether `extensions.useGlobalPacks` is present in the document itself rather
       than supplied by the schema default.
+    calls:
+      - project_config_store.declares
   - name: specsDir
     narrative: []
     intent: >-
@@ -25,7 +31,9 @@ methods:
       root. It falls back to the specs folder under the project's `.wai` directory (or legacy
       `.wairon`) when the project has no configuration or declares no such path, so a configuration
       that fails the schema still locates its specs.
+    calls:
+      - project_config_store.readField
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:27.409Z'
-updatedAt: '2026-09-14T05:16:00.105Z'
+updatedAt: '2026-09-19T21:26:57.567Z'

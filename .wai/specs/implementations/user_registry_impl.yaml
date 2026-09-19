@@ -15,6 +15,9 @@ methods:
       set durably via write-temp-then-rename so a crash never truncates the file, then push the new
       set into the store with replaceAll and return the stored record. When persistence fails, no
       in-memory state changes and the storage error propagates to the caller.
+    calls:
+      - user_store.load
+      - user_store.replaceAll
     symbol: registryUpsert
   - name: setStatus
     narrative: []
@@ -23,6 +26,9 @@ methods:
       (active, suspended, deactivated) while preserving identity, grant, and audit-history fields
       untouched, stamp updatedAt, then persist and swap exactly as upsert does. Invalid status
       values are rejected before any mutation.
+    calls:
+      - user_store.load
+      - user_store.replaceAll
     symbol: registrySetStatus
   - name: remapUnitReferences
     narrative: []
@@ -32,7 +38,10 @@ methods:
       when the old matches a remap entry, and clear its home unitId or a role binding whose scope is
       in removedScopeIds. Rewrite the persisted user collection via write-temp-then-rename and
       refresh the store. Users referencing none of the ids are untouched.
+    calls:
+      - user_store.load
+      - user_store.replaceAll
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:03.044Z'
-updatedAt: '2026-07-15T22:49:39.444Z'
+updatedAt: '2026-09-19T21:26:59.185Z'

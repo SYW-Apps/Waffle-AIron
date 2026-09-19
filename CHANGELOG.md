@@ -3,7 +3,7 @@
 ## Unreleased (from v5.1.0)
 
 **Breaking.** Merge dev → main with `[major]` in the merge commit message →
-**v6.0.0**. Eight changes are visible on upgrade without any action by the user,
+**v6.0.0**. Nine changes are visible on upgrade without any action by the user,
 and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
 a project that has not declared them, existing lock records read as stale — the
 identity they record was machine-specific, and making it reproducible moves it
@@ -15,7 +15,9 @@ dependency rules, a tree whose narratives or names the new readability checks
 judge, a tree whose code↔spec conformance the tightened call and body checks
 can now follow, or a tree holding a case the fixed validator rules used to miss
 — including a narrative step carrying a field its own step type cannot have, or a
-tree whose coarse `lint.allow` stops covering findings that name a site. A
+tree whose coarse `lint.allow` stops covering findings that name a site, or a
+tree whose intent-level methods were vouching for collaborators no narrative
+reaches now that the detail dial no longer does that for them. A
 scripted `sdd_update_spec` delta can also behave differently, where it was
 relying on a merge rule that was silently wrong (item 10), and a scripted call
 to a create tool that carries an unknown key inside a method, a param or a
@@ -23,6 +25,48 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 `sdd_*` tools now declare an `outputSchema`, which changes what a conforming MCP
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
+
+### A method declares the calls it makes
+
+A method whose narrative shows no steps used to reach **every contract method of its component's `dependsOn` and
+`owns`** — a detail-dial fallback, so that a lower declared fidelity could not false-flag a collaborator as unused.
+It is gone, and `calls` replaces it: what the method says it calls, and nothing else.
+
+Measured on wairon's own tree before the change: **215 implementation methods have an empty narrative and 138 of them
+sit on a component with dependencies**, but disabling the fallback produced only **31 findings** — 19
+`UNUSED_COMPONENT` (17 Stores and 2 Adapters) and 12 `UNUSED_METHOD`. So the fallback was not holding up the detail
+dial broadly; it was holding up the Index and Registry members of Repository patterns, whose intent prose says they
+read and write their sibling Store while nothing in the graph said so.
+
+- **`calls` on the L4 method** (beside `narrative`, `intent` and `detail`), each entry one `<component>.<method>`
+  reference. It is `invokedBy`'s mirror — that declares the caller OUTSIDE the modeled graph, this declares the
+  callees inside it — and it lives at L4 rather than beside `invokedBy` at L3 because what a method CALLS is a
+  property of the realization: the dial that hides the steps is here, and two implementations of one contract may
+  reach different collaborators.
+- **The spelling is the debt register's and the lint allow's**: `<component>.<method>`, exactly what `at`/`covers`
+  name a unit with (a `covers` entry is the same string with the step number a declaration has no equivalent of). A
+  third vocabulary for "which method" would be the worse outcome.
+- **The walk takes the declared edges and no others.** An undeclared collaborator is NOT reached, so `UNUSED_*` is
+  now as strong below `full` detail as it always was at `full`.
+- **A declared call is checked like a call step**, in the same rule and the same loop: the reference must read
+  `<component>.<method>` (`MALFORMED_DECLARED_CALL`, a new error), the component must be one this component declares
+  (`UNDECLARED_DEPENDENCY_CALL`), and the method must be on its contract (`INVALID_TARGET_METHOD_REFERENCE`). A
+  declaration cannot buy reachability for free.
+- **Refused beside a non-empty narrative.** A method with steps already says what it calls, in steps the flow rules
+  check; a second spelling beside them could only ever disagree with the first.
+- `UNUSED_METHOD` and `INVOKED_BY_REDUNDANT` now name their SITE (the method), so an allow for one covers exactly
+  that method and never its neighbours on the same interface.
+
+**Upgrading.** Run `wairon validate`. A method with an empty narrative below `full` detail no longer vouches for its
+component's collaborators, so `UNUSED_COMPONENT`/`UNUSED_METHOD` can newly fire and `validate --ci` newly fail. The
+remedy is to write the calls that method actually makes into its `calls` — which is also the declaration that makes
+its intent prose checkable. Where the call cannot be written truthfully (nobody knows what it calls, or the answer is
+a modelling question), that is debt: a sited `lint.allow` with the reason that is true there, or a fix to the model.
+Do not declare a call the code does not make.
+
+*Not yet wired:* a declared call is validated against the SPEC (target resolves, collaborator declared, method on the
+contract) but not yet against the CODE — Level-3 call conformance still reads narrative `call` steps only. Extending
+it is the natural follow-on, and would make a declaration exactly as checkable as a step.
 
 ### A `lint.allow` covers exactly the finding it names
 

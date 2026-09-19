@@ -8,6 +8,19 @@ componentType: Store
 owns: []
 dependsOn: []
 durability: read-through
+lint:
+  allow:
+    - code: UNUSED_COMPONENT
+      reason: >-
+        The whole component is an N:1 identity with its own index and registry: in
+        src/server/policy.ts getPackPolicyRecord realizes BOTH policy_store.load and
+        policy_index.getPackPolicy, and setPackPolicyRecord realizes both policy_store.replaceActive
+        and policy_registry.setPackPolicy (each pair names the same symbol). There is no second side
+        to call from — the store layer exists in the model only — so no narrative can reach it
+        without declaring a call a function makes to itself. The conformance debt register already
+        carries the same fact as drift (policy_store.load and policy_store.replaceActive under
+        project_policy_orchestrator and project_policy_portal). Splitting the layer in code, or
+        collapsing it in the spec, is the decision owed.
 status: complete
 createdAt: '2026-07-08T21:59:02.612Z'
-updatedAt: '2026-07-19T11:31:01.679Z'
+updatedAt: '2026-09-19T21:29:24.767Z'

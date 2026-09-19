@@ -55,6 +55,17 @@ fields:
       integration and hidden-state conformance and the narrative-detail lint read the method against
       it; agent write fences include it.
     optional: true
+  - name: calls
+    type: string[]
+    description: >-
+      The calls this method makes, when its narrative does not show them (detail: intent, or
+      calls-only with no steps authored). Each entry is one "<component>.<method>" reference — the
+      spelling the conformance debt register and a lint allow name a unit with. The narrative graph
+      walk takes exactly these edges for a method with no narrative and no others, so an undeclared
+      collaborator is not reached; each entry is validated like a call step
+      (narrative-target-references). Refused beside a non-empty narrative, where the steps already
+      say what is called.
+    optional: true
 methods:
   - name: sourceFile
     signature: 'sourceFile(implementationSourcePath?: string): string | undefined'
@@ -100,6 +111,14 @@ methods:
       number the narrative actually has. Reachability, region nesting and jump-edge judgement all
       read the step graph, so each of them runs behind the soundness it reports.
     sourcePath: src/models/step-config.ts
+  - name: parseCall
+    signature: 'parseCall(reference: string): DeclaredCall | null'
+    returns: DeclaredCall | null
+    description: >-
+      One `calls` entry read apart: the component the reference names and the method on it, or null
+      when it is not "<component>.<method>". Split at the LAST dot — a component id may be
+      namespaced with "::" but never holds a dot, and a method name is alphanumeric.
+    symbol: parseDeclaredCall
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-13T16:59:08.774Z'
-updatedAt: '2026-09-19T11:07:10.735Z'
+updatedAt: '2026-09-19T21:38:40.917Z'

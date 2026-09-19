@@ -937,6 +937,31 @@ export const MethodImplementationSchema = z.object({
   /** Conformance tier for THIS method (overrides the spec-level default). */
   conformance: ConformanceTierSchema.optional(),
   /**
+   * The calls this method makes, when its narrative does not show them.
+   *
+   * The mirror of the contract's `invokedBy`: that declares the caller
+   * OUTSIDE the modeled graph, this declares the callees INSIDE it. It lives
+   * here and not on the L3 method because what a method CALLS is a property
+   * of the realization — the detail dial that hides the steps is here, and two
+   * implementations of one contract may reach different collaborators —
+   * whereas an external caller is a fact about the contract's role that must
+   * hold for every realization.
+   *
+   * Each entry names one target the way the debt register and a lint allow
+   * name a unit: `<component>.<method>` (a `covers` entry is the same
+   * spelling with the step number a declaration has no equivalent of). A
+   * third vocabulary for "which method" would be the worse outcome.
+   *
+   * The narrative graph walk takes exactly these edges for a method with no
+   * narrative, and NOTHING else: an undeclared collaborator is not reached,
+   * so a lower detail dial no longer vouches for everything the component
+   * declares. Each entry gets the same target validation a `call` step gets
+   * (the component resolves, the caller declares it, the method is on its
+   * contract). Refused beside a non-empty narrative, where the steps already
+   * say what is called and a second spelling could only disagree.
+   */
+  calls: z.array(z.string().min(1)).optional(),
+  /**
    * The code-level name realizing this contract method in the sourcePath
    * file, when it legitimately differs from the intent-language contract
    * name — e.g. a store's `put` realized by `saveSnapshot`.
@@ -947,6 +972,28 @@ export const MethodImplementationSchema = z.object({
 });
 
 export type MethodImplementation = z.infer<typeof MethodImplementationSchema>;
+
+/**
+ * One `calls` entry read apart (declared_call): the component the reference
+ * names and the method on it. Spelled `<component>.<method>` — the spelling
+ * the conformance debt register and a lint allow name a unit with.
+ */
+export interface DeclaredCall {
+  compId: string;
+  methodName: string;
+}
+
+/**
+ * method_implementation.parseCall — one `calls` entry split into the component
+ * it names and the method on it, or null when it is not `<component>.<method>`.
+ * Split at the LAST dot: a component id may be namespaced with `::` but never
+ * holds a dot, and a method name is alphanumeric.
+ */
+export function parseDeclaredCall(ref: string): DeclaredCall | null {
+  const at = ref.lastIndexOf('.');
+  if (at <= 0 || at === ref.length - 1) return null;
+  return { compId: ref.slice(0, at), methodName: ref.slice(at + 1) };
+}
 
 export const ImplementationSpecSchema = z.object({
   id: SpecIdSchema,
@@ -973,7 +1020,19 @@ export const ImplementationSpecSchema = z.object({
    * stereotypes should bind tech directly (TECH_ON_LOGIC_COMPONENT).
    */
   technologies: z.array(z.string()).optional(),
-  methods: z.array(MethodImplementationSchema).default([]),
+  methods: z.array(MethodImplementationSchema).default([]).superRefine((methods, ctx) => {
+    // `calls` is the NARRATIVE-LESS spelling of a call. A method that has a
+    // narrative already says what it calls, in steps the flow rules check; a
+    // second spelling beside them could only ever disagree with the first.
+    methods.forEach((m, i) => {
+      if (!m.calls?.length || m.narrative.length === 0) return;
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [i, 'calls'],
+        message: `Method "${m.name}" declares calls AND a narrative — \`calls\` says what a method calls when its narrative does not show it, and this one has ${m.narrative.length} step(s) that already do. Add the call step, or drop the declaration.`,
+      });
+    });
+  }),
   /** Spec-level narrative detail default for all methods (each may override). */
   detail: NarrativeDetailSchema.optional(),
   /** Spec-level conformance tier default (each method may override). */

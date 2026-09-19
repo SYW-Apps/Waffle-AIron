@@ -13,6 +13,9 @@ methods:
       applying its defaults; returns null when the file is absent. A document that fails the schema
       raises the validation error with the project root and the offending fields, never a partially
       defaulted configuration.
+    calls:
+      - project_config_fs_adapter.documentExists
+      - project_config_fs_adapter.readDocument
   - name: write
     narrative: []
     intent: >-
@@ -20,23 +23,35 @@ methods:
       configuration, keeps every key the schema does not know exactly as it was, and writes the
       merged document back, so a hand-added or newer key survives any write. A configuration that
       fails the schema is refused before anything is written.
+    calls:
+      - project_config_fs_adapter.documentExists
+      - project_config_fs_adapter.readDocument
+      - project_config_fs_adapter.writeDocument
   - name: exists
     narrative: []
     intent: >-
       Reports whether the configuration file exists, through the fs adapter; it never parses the
       document, so a malformed file still counts as existing.
+    calls:
+      - project_config_fs_adapter.documentExists
   - name: declares
     narrative: []
     intent: >-
       Reads the raw document through the fs adapter and reports whether the given top-level or
       dotted field (for example `extensions.useGlobalPacks`) is present in it, as opposed to
       supplied by a schema default; false when the file is absent.
+    calls:
+      - project_config_fs_adapter.documentExists
+      - project_config_fs_adapter.readDocument
   - name: readField
     narrative: []
     intent: >-
       Reads the document through the fs adapter and walks the dotted path without parsing against
       the schema; returns undefined when the file, or any segment of the path, is absent.
+    calls:
+      - project_config_fs_adapter.documentExists
+      - project_config_fs_adapter.readDocument
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:15.916Z'
-updatedAt: '2026-09-14T05:16:00.389Z'
+updatedAt: '2026-09-19T21:26:57.476Z'

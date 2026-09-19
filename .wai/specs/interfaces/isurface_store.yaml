@@ -32,6 +32,26 @@ methods:
       - name: projectName
         type: string
     effect: write
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      at: get
+      reason: >-
+        N:1 identity with the index: in src/core/surfaces.ts getSnapshot realizes BOTH
+        surface_store.get and surface_index.byProject (both specs name that symbol). The read the
+        model puts in two layers is one function, so nothing distinct calls the store side —
+        declaring the call would declare a function calling itself. The conformance debt register
+        already carries this family's collapse as drift. Splitting the layer in code, or collapsing
+        it in the spec, is the decision owed.
+    - code: UNUSED_METHOD
+      at: list
+      reason: >-
+        N:1 identity with the index: in src/core/surfaces.ts listSnapshots realizes BOTH
+        surface_store.list and surface_index.all (both specs name that symbol), and it is also what
+        surface_registry.hydrateFromFiles and the repository read through. One function, two
+        modelled layers, so nothing distinct calls the store side. The debt register already carries
+        surface_store.list as drift under surface_orchestrator, surface_portal, surface_repository
+        and surface_registry.
 status: complete
 createdAt: '2026-07-10T23:13:31.819Z'
-updatedAt: '2026-07-11T09:04:02.719Z'
+updatedAt: '2026-09-19T21:29:24.487Z'

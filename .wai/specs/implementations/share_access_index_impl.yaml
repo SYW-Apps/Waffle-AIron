@@ -9,7 +9,9 @@ methods:
     intent: >-
       Loads the log, filters entries by linkId, sorts most-recent-first, and returns at most `limit`
       of them for the owner's access-log view.
+    calls:
+      - share_access_store.load
 detail: intent
 status: complete
 createdAt: '2026-07-18T09:26:32.419Z'
-updatedAt: '2026-07-18T10:10:40.182Z'
+updatedAt: '2026-09-19T21:26:58.700Z'

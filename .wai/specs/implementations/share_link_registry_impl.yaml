@@ -10,18 +10,27 @@ methods:
       Loads the collection, stamps a fresh id + createdAt on the record (persisting its tokenHash
       only, never a raw token), appends it, and replaces the collection atomically through the
       store; returns the stored record.
+    calls:
+      - share_link_store.load
+      - share_link_store.replaceAll
   - name: update
     narrative: []
     intent: >-
       Loads the collection, replaces the record matching the given id in place (preserving
       id/createdAt/tokenHash), and swaps the collection atomically; returns the updated record. A
       missing id is a not-found error.
+    calls:
+      - share_link_store.load
+      - share_link_store.replaceAll
   - name: remove
     narrative: []
     intent: >-
       Loads the collection, drops the record with the given id, and swaps atomically; an absent id
       is a silent no-op.
+    calls:
+      - share_link_store.load
+      - share_link_store.replaceAll
 detail: intent
 status: complete
 createdAt: '2026-07-18T09:26:18.391Z'
-updatedAt: '2026-07-18T10:10:40.630Z'
+updatedAt: '2026-09-19T21:26:58.791Z'

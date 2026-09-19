@@ -19,6 +19,8 @@ methods:
       Read the rule store's rules and aggregate every RuleCode each can emit into the known-code set
       used to validate lint.allow references (UNKNOWN_LINT_ALLOW_CODE). Read-only, derived fresh
       from the store.
+    calls:
+      - rule_store.list
   - name: specScopedRules
     narrative: []
     intent: >-
@@ -30,4 +32,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T19:17:48.847Z'
-updatedAt: '2026-09-15T00:29:31.902Z'
+updatedAt: '2026-09-19T21:26:58.332Z'

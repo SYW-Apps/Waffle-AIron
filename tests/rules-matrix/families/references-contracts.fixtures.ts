@@ -21,6 +21,9 @@
  *  - INVALID_TARGET_METHOD_REFERENCE (error): the target component exists and
  *    is a declared dependency, but no interface of it defines the named
  *    method. Covered for the call and register shapes.
+ *  - MALFORMED_DECLARED_CALL (error): a method's declared call is not the
+ *    `<component>.<method>` reference the conformance debt register and a
+ *    lint allow name a unit with, so it names no target at all.
  *  - NARRATIVE_SEMANTIC_UNBACKED (warning): a step asserts a semantic
  *    guarantee the called contract does not declare. Covered for the local
  *    (in-tree L3 contract) path and the cross-tree (surface snapshot) path.
@@ -1122,6 +1125,85 @@ export default [
           ],
         }),
       },
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // MALFORMED_DECLARED_CALL — the declared-call shape of "names no target".
+  // A method whose narrative does not show its calls declares them instead;
+  // each entry must read `<component>.<method>`, and the fire/quiet pair is
+  // the same tree with the dot present or missing.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'MALFORMED_DECLARED_CALL',
+    severity: 'error',
+    anchoredTo: 'booking_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The booking orchestrator is dialed to intent and declares the calls its prose makes, but writes the dock registry as a bare component id with no method on it.',
+    tree: {
+      subsystems: [{ id: 'freight-booking', description: 'Dock reservation booking for inbound freight.' }],
+      components: bookingComponents(['dock-registry']),
+      interfaces: [
+        {
+          id: 'ibooking_orchestrator',
+          component: 'booking-orchestrator',
+          methods: [{ name: 'bookDelivery', description: 'Book a dock slot for an inbound delivery.' }],
+        },
+        dockRegistryInterface([{ name: 'reserveDock', description: 'Reserve a dock for a delivery window.' }]),
+      ],
+      implementations: [
+        {
+          id: 'booking_orchestrator_impl',
+          contract: 'ibooking_orchestrator',
+          methods: [
+            {
+              name: 'bookDelivery',
+              detail: 'intent',
+              intent:
+                'Reserve a dock for the delivery window through the dock registry, refusing the booking when no dock is free in that window.',
+              narrative: [],
+              // The defect: a bare component id names no method to reach.
+              calls: ['dock-registry'],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'MALFORMED_DECLARED_CALL',
+    expectFire: false,
+    reason: 'The declared call reads as `<component>.<method>`, so it names a target the rule can resolve.',
+    scenario:
+      'The same intent-level booking orchestrator declares its call as dock-registry.reserveDock, the component and the method it reaches on it.',
+    tree: {
+      subsystems: [{ id: 'freight-booking', description: 'Dock reservation booking for inbound freight.' }],
+      components: bookingComponents(['dock-registry']),
+      interfaces: [
+        {
+          id: 'ibooking_orchestrator',
+          component: 'booking-orchestrator',
+          methods: [{ name: 'bookDelivery', description: 'Book a dock slot for an inbound delivery.' }],
+        },
+        dockRegistryInterface([{ name: 'reserveDock', description: 'Reserve a dock for a delivery window.' }]),
+      ],
+      implementations: [
+        {
+          id: 'booking_orchestrator_impl',
+          contract: 'ibooking_orchestrator',
+          methods: [
+            {
+              name: 'bookDelivery',
+              detail: 'intent',
+              intent:
+                'Reserve a dock for the delivery window through the dock registry, refusing the booking when no dock is free in that window.',
+              narrative: [],
+              calls: ['dock-registry.reserveDock'],
+            },
+          ],
+        },
+      ],
     },
   }),
 ];

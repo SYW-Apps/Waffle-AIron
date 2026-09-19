@@ -291,35 +291,41 @@ methods:
     sourcePath: src/core/rules/narrative/narrative-target-references.ts
     narrative:
       - stepNumber: 1
-        label: targetSteps
+        label: targetEntries
         description: >-
-          Resolve the target every narrative step names, whatever its kind: call, dispatch and
-          register steps all name one. Register steps (runtime-callback handoffs) name a target
-          exactly like call steps do and get IDENTICAL validation — the handoff must point at a real
-          dependency's real method even though it never invokes
+          Resolve the target every entry of a method names, whatever kind of entry names it: call,
+          dispatch and register steps all name one, and so does each entry of that same method's
+          declared calls — the narrative-less spelling of a call step, which arrives read apart into
+          a component and a method and with no step number to point at. Register steps
+          (runtime-callback handoffs) name a target exactly like call steps do and get IDENTICAL
+          validation — the handoff must point at a real dependency's real method even though it
+          never invokes
         type: loop
         loopKind: forEach
         over: >-
-          the call, dispatch and register steps of every method narrative of every implementation
-          impl in ctx.implementations whose contract ctx.interfaceMap.get(impl.contract) resolves
+          the call, dispatch and register steps of every method narrative, then that same method's
+          declared calls, of every implementation impl in ctx.implementations whose contract
+          ctx.interfaceMap.get(impl.contract) resolves
         endStep: 17
       - stepNumber: 2
         description: >-
           Compute isDraftCtx = ctx.isImplementationDraft(impl); caller =
-          ctx.componentMap.get(contract.component), the calling component; and the verb every
-          finding reads with, which is all the step kinds differ by: 'dispatches through' for a
-          dispatch step, 'registers callback' for a register step, 'calls' otherwise
+          ctx.componentMap.get(contract.component), the calling component; where a finding points,
+          which is " (step N)" for a narrative step and nothing at all for a declared call; and the
+          verb every finding reads with, which is all the entry kinds differ by: 'dispatches
+          through' for a dispatch step, 'registers callback' for a register step, 'declares a call
+          to' for a declared call, and 'calls' otherwise
         type: local
       - stepNumber: 3
         label: requiredTargets
         description: >-
-          Which of the two required targets the step leaves unset decides what is reported; a step
-          missing its component is never judged on its method as well
+          Which required target the entry fails to name decides what is reported; an entry that
+          names no component is never judged on its method as well
         type: switch
         'on': >-
-          the required target the step leaves unset: its target component when step.targetComponent
-          is missing, else its target method when a call or register step has no step.targetMethod,
-          and neither otherwise
+          the required target the entry fails to name: its target component — which a declared call
+          whose reference does not read as "<component>.<method>" also fails to name — else its
+          target method when a call or register step has no step.targetMethod, and neither otherwise
         cases:
           - value: targetComponent
             step: 4
@@ -327,9 +333,13 @@ methods:
             step: 6
         defaultStep: 8
       - stepNumber: 4
+        label: noTargetComponent
         description: >-
-          Report MISSING_TARGET_COMPONENT (error; draft context isDraftCtx) naming the method, the
-          step type and the step number
+          Report what the entry failed to name: MALFORMED_DECLARED_CALL (error; draft context
+          isDraftCtx) naming the method and the reference exactly as written, with the
+          "<component>.<method>" spelling it should have had, when the entry is a declared call
+          whose reference does not read that way; MISSING_TARGET_COMPONENT (error; draft context
+          isDraftCtx) naming the method, the step type and the step number otherwise
         type: local
       - stepNumber: 5
         description: Continue with the next step
@@ -355,17 +365,17 @@ methods:
         onFalseStep: 1
       - stepNumber: 9
         label: declaredDependency
-        description: The caller must declare every collaborator a step reaches
+        description: The caller must declare every collaborator an entry reaches
         type: branch
         condition: >-
-          caller resolves, step.targetComponent is not the caller itself, and the caller neither
-          dependsOn nor owns it
+          caller resolves, the entry's target component is not the caller itself, and the caller
+          neither dependsOn nor owns it
         onFalseStep: 11
       - stepNumber: 10
         description: >-
           Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
-          ctx.isComponentDraft(caller.id)) naming the caller, the verb and the component it reaches
-          without declaring it
+          ctx.isComponentDraft(caller.id)) naming the caller, the verb, the component it reaches
+          without declaring it, and where
         type: local
       - stepNumber: 11
         label: namedMethod
@@ -373,7 +383,7 @@ methods:
           A dispatch step names a capability rather than a method; resolving it against the target
           Portal's dispatch table is dispatch-step-routing's
         type: branch
-        condition: the step is a call or register step
+        condition: the entry is a call step, a register step or a declared call
         onFalseStep: 1
       - stepNumber: 12
         label: resolveTargetMethod
@@ -388,10 +398,11 @@ methods:
         description: >-
           Semantic cross-check (consistency, not truth): the gate cannot read prose, but it can
           catch a step that asserts a guarantee the contract it calls does not declare. Whether the
-          method truly delivers it is implementation correctness, not this
+          method truly delivers it is implementation correctness, not this. A declared call asserts
+          no guarantee, so it never enters here
         type: loop
         loopKind: forEach
-        over: step.assertsGuarantees (none when the step asserts no guarantee)
+        over: the entry's assertsGuarantees (none when it asserts no guarantee)
         endStep: 15
       - stepNumber: 14
         description: Is the asserted guarantee undeclared on the called contract?
@@ -413,8 +424,8 @@ methods:
         label: invalidMethod
         description: >-
           Report INVALID_TARGET_METHOD_REFERENCE (error; draft context isDraftCtx or
-          ctx.isComponentDraft(step.targetComponent)) naming the method, the verb, the target
-          component and the step
+          ctx.isComponentDraft(the target component)) naming the method, the verb, the target
+          component and where
         type: local
     symbol: check
   - name: crossTreeReferences
@@ -1018,4 +1029,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-18T23:49:52.714Z'
+updatedAt: '2026-09-19T21:40:56.219Z'

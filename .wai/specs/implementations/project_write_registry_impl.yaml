@@ -9,11 +9,17 @@ methods:
     intent: >-
       Validates the id shape (path-traversal safe), refuses an existing id, creates
       <dataDir>/projects/<id>, and persists an active HostedProjectRecord.
+    calls:
+      - project_store.read
+      - project_store.write
     symbol: createProjectRecord
   - name: remove
     narrative: []
     intent: Deletes the record and recursively removes the isolated project tree; a missing id is a no-op.
+    calls:
+      - project_store.read
+      - project_store.write
     symbol: removeProjectRecord
 status: complete
 createdAt: '2026-07-19T09:00:09.975Z'
-updatedAt: '2026-07-19T09:01:00.672Z'
+updatedAt: '2026-09-19T21:26:57.943Z'

@@ -110,27 +110,31 @@ methods:
           body step.
         type: local
       - stepNumber: 16
+        label: declaredCallLoop
         description: >-
-          An empty narrative below full detail falls back to component-level reachability; a
-          full-detail method's empty narrative is a real gap with no fallback, and an unresolvable
-          component has nothing to fall back to.
-        type: branch
-        condition: >-
-          methodImpl.narrative is empty, compId resolves to a component in ctx.componentMap, and
-          methodImpl.effectiveDetail(impl, component).level is not 'full'
-        onFalseStep: 19
-      - stepNumber: 17
-        label: fallbackLoop
-        description: 'For each id in the component''s dependsOn and owns:'
+          For each reference in the resolved method's declared calls (none when it declares none):
+          the narrative-less spelling of a call step, and the only edges a method with no narrative
+          contributes — there is no fallback behind them, so a collaborator the method does not name
+          is not reached whatever its detail dial.
         type: loop
         loopKind: forEach
-        over: '[...component.dependsOn, ...component.owns]'
+        over: methodImpl.calls
         endStep: 18
-      - stepNumber: 18
-        label: fallbackApply
+      - stepNumber: 17
+        label: declaredCallParse
         description: >-
-          When ctx.componentMap has this id, reach it (the shared reach-a-component behavior above)
-          and enqueue every one of its contract methods, exactly as a methodless seed does.
+          Read the reference apart into the component it names and the method on it; a reference
+          that is not "<component>.<method>", or one naming a component ctx.componentMap does not
+          hold, contributes no edge and the walk moves to the next reference
+          (narrative-target-references is what reports either).
+        type: local
+      - stepNumber: 18
+        label: declaredCallApply
+        description: >-
+          Reach the named component (the shared reach-a-component behavior above) and, if
+          reach.reachesMethod(component, method) is false, add methodKey(component, method) to
+          reachedMethods and push {compId, methodName} onto the queue. This is also the
+          declared-call loop's last body step.
         type: local
       - stepNumber: 19
         label: bfsContinue
@@ -201,4 +205,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-09-14T23:13:09.851Z'
-updatedAt: '2026-09-18T20:21:32.825Z'
+updatedAt: '2026-09-19T21:40:56.358Z'

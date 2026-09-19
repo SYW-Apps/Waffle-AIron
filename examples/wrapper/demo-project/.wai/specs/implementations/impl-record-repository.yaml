@@ -1,18 +1,28 @@
-schemaVersion: 1.0.0
 id: impl-record-repository
 name: Record Repository Implementation
 description: Facade over the store; storage-technology agnostic by design.
 contract: irecord-repository
 methods:
   - name: get
+    narrative: []
     detail: intent
-    intent: Resolves the record through the store by id; returns an empty record marker when the id is unknown rather than failing.
+    intent: >-
+      Resolves the record through the store by id; returns an empty record marker when the id is
+      unknown rather than failing.
+    calls:
+      - record-store.readRow
   - name: save
+    narrative: []
     detail: intent
-    intent: Writes the record through the store, overwriting an existing row with the same id; storage failures surface to the caller unchanged.
-createdAt: '2026-07-03T12:00:00Z'
-updatedAt: '2026-07-03T12:00:00Z'
+    intent: >-
+      Writes the record through the store, overwriting an existing row with the same id; storage
+      failures surface to the caller unchanged.
+    calls:
+      - record-store.writeRow
 lint:
   allow:
     - code: MISSING_SOURCE_PATH
       reason: Spec-only demo project — the flowops automation ships no source checkout in this example.
+status: complete
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-09-19T21:44:12.305Z'

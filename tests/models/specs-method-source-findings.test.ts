@@ -6,6 +6,7 @@ import {
   MethodSignatureSchema,
   implementationSourceFiles,
   methodSourceFile,
+  parseDeclaredCall,
 } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -129,5 +130,43 @@ describe('method_implementation.sourceFile', () => {
   it("is the implementation's sourcePath otherwise, else none", () => {
     expect(methodSourceFile({}, 'src/cli/index.ts')).toBe('src/cli/index.ts');
     expect(methodSourceFile({})).toBeUndefined();
+  });
+});
+
+describe('method_implementation.calls', () => {
+  it('reads one entry apart at the LAST dot, so a namespaced component id survives', () => {
+    expect(parseDeclaredCall('credential_store.read')).toEqual({ compId: 'credential_store', methodName: 'read' });
+    expect(parseDeclaredCall('billing::invoice_store.save')).toEqual({ compId: 'billing::invoice_store', methodName: 'save' });
+  });
+
+  it('answers null for anything that is not <component>.<method>', () => {
+    expect(parseDeclaredCall('credential_store')).toBeNull();
+    expect(parseDeclaredCall('.read')).toBeNull();
+    expect(parseDeclaredCall('credential_store.')).toBeNull();
+  });
+
+  it('is kept on a method whose narrative shows no steps', () => {
+    const parsed = ImplementationSpecSchema.parse({
+      id: 'x_impl', name: 'x', description: 'd', contract: 'ix',
+      methods: [{ name: 'read', calls: ['store.load'] }],
+      createdAt: now, updatedAt: now,
+    });
+    expect(parsed.methods[0].calls).toEqual(['store.load']);
+  });
+
+  it('is REFUSED beside a narrative — the steps already say what is called', () => {
+    const result = ImplementationSpecSchema.safeParse({
+      id: 'x_impl', name: 'x', description: 'd', contract: 'ix',
+      methods: [{
+        name: 'read',
+        calls: ['store.load'],
+        narrative: [{ stepNumber: 1, description: 'read through the store', type: 'call', targetComponent: 'store', targetMethod: 'load' }],
+      }],
+      createdAt: now, updatedAt: now,
+    });
+    expect(result.success).toBe(false);
+    expect(issueMessages(result)).toEqual([
+      'Method "read" declares calls AND a narrative — `calls` says what a method calls when its narrative does not show it, and this one has 1 step(s) that already do. Add the call step, or drop the declaration.',
+    ]);
   });
 });

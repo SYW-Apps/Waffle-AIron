@@ -1,4 +1,4 @@
-import { effectiveDetail } from '../../models/index.js';
+import { parseDeclaredCall } from '../../models/index.js';
 import type { NarrativeStep } from '../../models/index.js';
 import type { RuleContext } from './types.js';
 
@@ -108,9 +108,8 @@ export function stepEdges(
  * dispatch binding of a reached Portal (its declared served surface — the
  * runtime dispatches into those bindings even though no static call names
  * them); the options switch the last two off. A reached method with no
- * implementation contributes nothing; one whose narrative is empty and whose
- * effective detail is below full reaches every contract method of its
- * component's dependsOn and owns instead.
+ * implementation contributes nothing; one whose narrative does not show its
+ * calls contributes the ones it DECLARES (`calls`), and nothing else.
  */
 export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions = {}): NarrativeReach {
   const followDispatchTables = options.followDispatchTables ?? true;
@@ -181,21 +180,18 @@ export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions =
       }
     }
 
-    // Detail-dial fallback: an intent/calls-only method with no narrative
-    // contributes no call edges, so walk its component's L2 dependsOn/owns
-    // at component granularity (all contract methods) instead — the lower
-    // declared fidelity must not false-positive its collaborators as
-    // unused. Full-detail methods get NO fallback: their missing narrative
-    // is a reported gap (MISSING_NARRATIVE) and unused-detection stays strong.
-    if (methodImpl.narrative.length === 0) {
-      const comp = ctx.componentMap.get(compId);
-      if (comp && effectiveDetail(methodImpl, impl, comp).level !== 'full') {
-        for (const depId of [...comp.dependsOn, ...comp.owns]) {
-          if (!ctx.componentMap.has(depId)) continue;
-          reachComponent(depId);
-          enqueueAllMethods(depId);
-        }
-      }
+    // Declared calls: a method whose narrative does not show its calls says
+    // which ones it makes, and the walk takes exactly those edges. They stand
+    // in for the steps, so they count wherever a call step would — including
+    // the boot-graph walk, where an explicit call is an invocation whatever
+    // its detail dial. There is no fallback behind them: a collaborator the
+    // method does not name is NOT reached, so a lower detail dial no longer
+    // vouches for everything its component declares.
+    for (const ref of methodImpl.calls ?? []) {
+      const parsed = parseDeclaredCall(ref);
+      if (!parsed || !ctx.componentMap.has(parsed.compId)) continue;
+      reachComponent(parsed.compId);
+      enqueueMethod(parsed.compId, parsed.methodName);
     }
   }
 

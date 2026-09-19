@@ -7,12 +7,16 @@ methods:
   - name: get
     narrative: []
     intent: Reads the snapshot with the given id through the store, or null when absent.
+    calls:
+      - share_snapshot_store.read
   - name: getArtifact
     narrative: []
     intent: >-
       Reads the snapshot and returns the requested artifact field (canvasModel | html | openapi) as
       its serialized payload, or null when the snapshot or that artifact is absent.
+    calls:
+      - share_snapshot_store.read
 detail: intent
 status: complete
 createdAt: '2026-07-18T09:26:30.446Z'
-updatedAt: '2026-07-18T10:10:40.863Z'
+updatedAt: '2026-09-19T21:26:59.093Z'

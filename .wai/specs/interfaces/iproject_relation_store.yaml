@@ -21,6 +21,20 @@ methods:
     params:
       - name: records
         type: ProjectRelationRecord[]
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      at: load
+      reason: >-
+        The read-through store's hydration is called by the repository FACADE, not by a member:
+        every exported facade function in src/server/relations.ts constructs the store, calls
+        load(), and only then forwards to the registry or index. A Repository facade narrative is
+        held to a single call step (FACADE_FORWARDING), so that hydration call has nowhere to live
+        in the model and load has no modelled caller. The shape that fixes it already exists in this
+        tree — surface_repository.hydrate forwards to surface_registry.hydrateFromFiles — and this
+        family predates it. Modelling the hydration that way (or letting the facade doctrine carry a
+        hydrate-then-forward pair) is the decision owed; declaring a call from the registry or index
+        would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:05:52.453Z'
-updatedAt: '2026-07-09T22:13:20.528Z'
+updatedAt: '2026-09-19T21:29:24.140Z'

@@ -235,6 +235,19 @@ methods:
         description: The exact project-relative pack path reference to drop
     guarantees:
       - idempotent
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      at: readLockRecord
+      reason: >-
+        A dead forwarder, surfaced by removing the detail-dial fallback (which reached every method
+        of this adapter from pack_store's intent-level methods). src/server/adapters.ts exports
+        readLockRecord on the hostCore adapter and nothing under src/ calls it: the sibling
+        writeLockRecord is called from src/server/admin.ts and modelled in admin_orchestrator, and
+        the hosted read side goes through readLockState. Spec and code agree — both carry the
+        forwarder, neither uses it — so this is not drift; deleting it from the contract AND the
+        adapter object is the fix, and that is this adapter owner's contract change. Named here
+        instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-15T10:52:04.827Z'
+updatedAt: '2026-09-19T21:29:24.621Z'
