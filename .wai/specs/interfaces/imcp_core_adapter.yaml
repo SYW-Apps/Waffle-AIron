@@ -139,6 +139,30 @@ methods:
           Whether an implementation that declares no symbol is pinned to the old name; true when
           omitted
         optional: true
+  - name: loadImplementationSpec
+    description: Calls loadImplementationSpec on core portal
+    signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
+    returns: ImplementationSpec | null
+    params:
+      - name: id
+        type: string
+        description: The stored implementation's id
+  - name: loadTypeSpec
+    description: Calls loadTypeSpec on core portal
+    signature: 'loadTypeSpec(id: string): TypeSpec | null'
+    returns: TypeSpec | null
+    params:
+      - name: id
+        type: string
+        description: The type's id
+  - name: saveTypeSpec
+    description: Calls saveTypeSpec on core portal, answering with the placement notices the write owes
+    signature: 'saveTypeSpec(spec: TypeSpec): string[]'
+    returns: string[]
+    params:
+      - name: spec
+        type: TypeSpec
+        description: The type to persist
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T21:42:07.836Z'
+updatedAt: '2026-09-19T23:04:54.104Z'

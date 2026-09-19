@@ -460,6 +460,24 @@ methods:
       - name: apply
         type: boolean
         description: Write the repair; false plans without writing
+  - name: loadTypeSpec
+    description: Read one type specification by id through the spec repository.
+    signature: 'loadTypeSpec(id: string): TypeSpec | null'
+    returns: TypeSpec | null
+    params:
+      - name: id
+        type: string
+        description: The type's id
+  - name: saveTypeSpec
+    description: >-
+      Persist a type specification through the spec repository, answering with the placement notices
+      the write owes.
+    signature: 'saveTypeSpec(spec: TypeSpec): string[]'
+    returns: string[]
+    params:
+      - name: spec
+        type: TypeSpec
+        description: The type to persist
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T00:27:05.220Z'
+updatedAt: '2026-09-19T23:04:53.623Z'

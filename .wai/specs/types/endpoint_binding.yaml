@@ -1,0 +1,80 @@
+kind: value-object
+id: endpoint_binding
+name: EndpointBinding
+description: >-
+  One method's wire binding as the sdd_set_endpoints tool receives it: the contract method to bind,
+  the transport, and that transport's own address fields flattened onto one object. It is the tool's
+  input shape, not the stored Endpoint — the transport's fields are picked out and re-parsed against
+  the endpoint schema before anything is saved, so a field belonging to another transport is dropped
+  rather than stored.
+subsystem: sdd_mcp
+fields:
+  - name: method
+    type: string
+    description: The NAME of the contract method to bind — not the HTTP verb.
+    optional: false
+  - name: transport
+    type: string
+    description: >-
+      The wire protocol: HTTP, gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI or Custom. It must
+      match the Portal's portalType.
+    optional: false
+  - name: httpMethod
+    type: string
+    description: 'HTTP: the verb.'
+    optional: true
+  - name: path
+    type: string
+    description: 'HTTP: the route path.'
+    optional: true
+  - name: service
+    type: string
+    description: 'gRPC: the service name.'
+    optional: true
+  - name: rpcMethod
+    type: string
+    description: 'gRPC: the rpc method name.'
+    optional: true
+  - name: operation
+    type: string
+    description: 'GraphQL: query, mutation or subscription.'
+    optional: true
+  - name: field
+    type: string
+    description: 'GraphQL: the root field name.'
+    optional: true
+  - name: topic
+    type: string
+    description: 'MessageBus: the topic.'
+    optional: true
+  - name: event
+    type: string
+    description: 'MessageBus: the event name.'
+    optional: true
+  - name: queue
+    type: string
+    description: 'MessageBus: the queue or consumer group.'
+    optional: true
+  - name: direction
+    type: string
+    description: 'MessageBus: subscribe (the default) or publish.'
+    optional: true
+  - name: pipe
+    type: string
+    description: 'NamedPipe: the pipe name.'
+    optional: true
+  - name: channel
+    type: string
+    description: 'IPC: the channel name.'
+    optional: true
+  - name: command
+    type: string
+    description: 'CLI: the command or subcommand.'
+    optional: true
+  - name: address
+    type: string
+    description: 'Custom: the free-form address.'
+    optional: true
+methods: []
+createdAt: '2026-09-19T22:58:35.555Z'
+updatedAt: '2026-09-19T22:58:36.040Z'

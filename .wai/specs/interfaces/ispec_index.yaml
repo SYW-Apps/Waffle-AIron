@@ -86,6 +86,16 @@ methods:
     returns: ChainedRootsInspection
     guarantees:
       - idempotent
+  - name: loadTypeSpec
+    description: >-
+      Loads a single type specification by id, across the flat, per-subsystem and grouped layouts;
+      null when the workspace holds none under that id.
+    signature: 'loadTypeSpec(id: string): TypeSpec | null'
+    returns: TypeSpec | null
+    params:
+      - name: id
+        type: string
+        description: The type's id, qualified when it lives in a chained subproject
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-09-12T17:38:09.947Z'
+updatedAt: '2026-09-19T23:04:52.703Z'

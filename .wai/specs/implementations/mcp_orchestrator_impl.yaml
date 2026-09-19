@@ -269,7 +269,227 @@ methods:
           when one was set
         type: return
         outcome: MethodRename
+  - name: updateSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Patch the stored spec through the authoring client adapter, so the same gate that judges a
+          create judges the merged candidate — an update can introduce a misplaced field as easily
+          as a create can
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 2
+        description: >-
+          Render the change report as the text answer and carry that same report as the structured
+          twin, so the sentence and the data are two renderings of one object and can never disagree
+        type: local
+    symbol: sdd_update_spec
+  - name: setEndpoints
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load the L3 contract the bindings attach to; an id no contract holds is refused before
+          anything is built
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadInterfaceSpec
+      - stepNumber: 2
+        description: >-
+          For each binding, resolve the method on the contract and build the raw endpoint from that
+          transport's own address fields, then parse it against the endpoint schema — a method the
+          contract does not declare, or an endpoint the schema rejects, refuses the whole write with
+          the offending field named, so a half-bound contract is never saved
+        type: local
+      - stepNumber: 3
+        description: Persist the contract with every binding attached and its updatedAt restamped
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: saveInterfaceSpec
+    symbol: sdd_set_endpoints
+  - name: setPublicInterfaces
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load the L1 subsystem whose published surface is being set; an id no subsystem holds is
+          refused
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadSubsystemSpec
+      - stepNumber: 2
+        description: >-
+          Persist the subsystem with its publicInterfaces REPLACED by the list given and updatedAt
+          restamped — a replacement, not a merge, so an entry left out is gone
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: saveSubsystemSpec
+    symbol: sdd_set_public_interfaces
+  - name: setSubsystemProjectPath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load the L1 subsystem whose chaining link is being rewritten; an id no subsystem holds is
+          refused
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadSubsystemSpec
+      - stepNumber: 2
+        description: >-
+          Persist the subsystem with projectPath set to the path given — or cleared when none was —
+          and updatedAt restamped; only the link moves, never the directory it names
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: saveSubsystemSpec
+    symbol: sdd_set_subsystem_project_path
+  - name: getSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Route the read on the kind asked for: each level has its own loader on the core client
+          adapter
+        type: switch
+        'on': the kind of spec to read
+        cases:
+          - value: system
+            step: 2
+          - value: subsystem
+            step: 4
+          - value: component
+            step: 6
+          - value: interface
+            step: 8
+          - value: implementation
+            step: 10
+          - value: type
+            step: 12
+        defaultStep: 14
+      - stepNumber: 2
+        description: Read the L0 system spec, the singleton whose load ignores the id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 3
+        description: Join the shared answer path
+        type: jump
+        toStep: 13
+      - stepNumber: 4
+        description: Read the L1 subsystem spec by id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadSubsystemSpec
+      - stepNumber: 5
+        description: Join the shared answer path
+        type: jump
+        toStep: 13
+      - stepNumber: 6
+        description: Read the L2 component spec by id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpec
+      - stepNumber: 7
+        description: Join the shared answer path
+        type: jump
+        toStep: 13
+      - stepNumber: 8
+        description: Read the L3 interface spec by id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadInterfaceSpec
+      - stepNumber: 9
+        description: Join the shared answer path
+        type: jump
+        toStep: 13
+      - stepNumber: 10
+        description: Read the L4 implementation spec by id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadImplementationSpec
+      - stepNumber: 11
+        description: Join the shared answer path
+        type: jump
+        toStep: 13
+      - stepNumber: 12
+        description: Read the type spec by id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadTypeSpec
+      - stepNumber: 13
+        label: found-check
+        description: Decide whether a spec of that kind holds that id
+        type: branch
+        condition: the load found nothing
+        onFalseStep: 15
+      - stepNumber: 14
+        label: not-found
+        description: Refuse a read of a spec that does not exist, naming the kind and the id asked for
+        type: return
+        outcome: no such spec
+      - stepNumber: 15
+        description: Decide whether the read was narrowed to named methods
+        type: branch
+        condition: the read named methods to filter by
+        onFalseStep: 17
+      - stepNumber: 16
+        description: >-
+          Refuse the filter outright when the spec declares no methods at all, or when a name it
+          does not declare is asked for — naming the ones it does, and returning nothing, so a
+          misspelling never reads as a method with no content. Otherwise keep the named methods and
+          attach the partial-result marker: what is shown, how many are omitted, and the warning
+          that a write REPLACES the method list, so re-authoring from this answer would remove every
+          method left out
+        type: local
+      - stepNumber: 17
+        description: Decide whether the spec read carries variant guidance
+        type: branch
+        condition: the spec is a component that declares a variant
+        onFalseStep: 19
+      - stepNumber: 18
+        description: >-
+          Resolve the component's variant guidance — the variant's base, its implementation
+          guidance, and the same-variant sibling components — and attach it as clearly derived and
+          read-only. The resolution reaches sdd_core over its published barrel surface rather than a
+          modeled component edge, which is why the variant registry's own contract declares this
+          caller as an invokedBy seed instead of the graph carrying the hop
+        type: local
+      - stepNumber: 19
+        description: >-
+          Answer with the STORED spec and the derived markers beside it, so nothing derived can be
+          mistaken for something stored and written back; the text rendering folds them in, as it
+          always has
+        type: return
+        outcome: SpecReadResult
+    symbol: sdd_get_spec
+  - name: addType
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the stored type under that id through the core client adapter: a define is an upsert,
+          so this is what decides between added and re-authored, and what carries the stored
+          createdAt and group forward
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadTypeSpec
+      - stepNumber: 2
+        description: >-
+          Build the type document from the input: its fields with their identity markers and foreign
+          references, its pure intrinsic methods, its declared invariants, its database, table and
+          linked-entity bindings, and the sourcePath and symbol that turn it into a claim on code.
+          Note every field the input does not express so it can be carried forward, and every list
+          an omission clears
+        type: local
+      - stepNumber: 3
+        description: Persist the type through the core client adapter and take the store's placement notices
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: saveTypeSpec
+      - stepNumber: 4
+        description: >-
+          Compose the write receipt: whether a spec already held the id, and one notice per thing a
+          restatement did — what was carried forward, which field or method it removed, what an
+          omission cleared. A type carries no lifecycle status, so the receipt states none
+        type: local
+    symbol: sdd_add_type
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-18T21:44:03.877Z'
+updatedAt: '2026-09-19T23:07:19.472Z'

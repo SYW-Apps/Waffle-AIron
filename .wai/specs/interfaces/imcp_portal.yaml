@@ -11,9 +11,18 @@ methods:
       MCP capabilities truthfully: resources and prompts advertise listChanged only because the
       long-lived stdio session actually emits list-changed notifications after a successful spec
       write that alters the agent topology or skill set (the stateless hosted transport advertises
-      none and stays correct-on-poll).
-    signature: 'createMcpServer(): McpServer'
+      none and stays correct-on-poll). A hosted caller may also ask for the sixteen hosted
+      data-plane tools to be advertised in tools/list; they are discovery only, served by the
+      hosting request orchestrator before any call reaches this server.
+    signature: 'createMcpServer(hostedTools?: boolean): McpServer'
     returns: McpServer
+    params:
+      - name: hostedTools
+        type: boolean
+        description: >-
+          Advertise the hosted data-plane tools for discovery; false for the stdio server, which
+          cannot serve them.
+        optional: true
     endpoint:
       transport: Custom
       address: 'stdio json-rpc: server bootstrap (wairon mcp serve)'
@@ -223,6 +232,141 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_rename_method
+  - name: sdd_update_spec
+    description: >-
+      Tool: patch an existing spec with a granular delta. The delta's arrays UPSERT by element
+      identity rather than replace, so a delta naming one element leaves the others intact, and it
+      is deliberately open below its top level — a key that is not a field at its depth is named
+      back under NO EFFECT instead of being silently dropped. The answer carries the change report
+      as structured content beside the rendered sentence, from the one report, so the prose can
+      never disagree with the data.
+    signature: >-
+      sdd_update_spec(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
+      SpecChangeReport
+    returns: SpecChangeReport
+    params:
+      - name: kind
+        type: string
+        description: 'The spec kind to patch: system, subsystem, component, interface, implementation or type'
+      - name: id
+        type: string
+        description: The stored spec's id, namespaced if needed
+      - name: delta
+        type: SpecDelta
+        description: The partial change to merge, carrying the delta's own verbs
+      - name: dryRun
+        type: boolean
+        description: >-
+          Ask what the delta would do instead of doing it: the whole write runs, the candidate gate
+          included, and not one byte of the stored file moves
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_update_spec
+  - name: sdd_set_endpoints
+    description: >-
+      Tool: bind concrete wire endpoints to existing L3 contract methods — required for every
+      Portal, and run after sdd_define_interface. The caller picks a transport and fills that
+      transport's address fields; the binding is checked against the endpoint schema before the
+      contract is saved.
+    signature: 'sdd_set_endpoints(interfaceId: string, endpoints: EndpointBinding[]): string'
+    returns: string
+    params:
+      - name: interfaceId
+        type: string
+        description: The L3 contract to bind, as the tool's interface argument names it
+      - name: endpoints
+        type: EndpointBinding[]
+        description: >-
+          One binding per method: the method NAME (not the HTTP verb), the transport, and that
+          transport's address fields
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_set_endpoints
+  - name: sdd_set_public_interfaces
+    description: >-
+      Tool: set — replace — an existing subsystem's publicInterfaces, binding each to the component,
+      and optionally the contract, that realizes it. The tool for backfilling bindings once a
+      subsystem's components exist, because a cross-subsystem dependency may only target a published
+      public component.
+    signature: 'sdd_set_public_interfaces(subsystemId: string, publicInterfaces: PublicInterface[]): string'
+    returns: string
+    params:
+      - name: subsystemId
+        type: string
+        description: The L1 subsystem to update, as the tool's subsystem argument names it
+      - name: publicInterfaces
+        type: PublicInterface[]
+        description: The full replacement list of published surfaces for this subsystem
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_set_public_interfaces
+  - name: sdd_set_subsystem_project_path
+    description: >-
+      Tool: set, or clear, an L1 subsystem's projectPath — the chaining link to an external
+      subproject root, given as a path relative to this project. It rewrites the link only;
+      sdd_move_subsystem_project is what relocates the directory with it.
+    signature: 'sdd_set_subsystem_project_path(subsystemId: string, projectPath?: string): string'
+    returns: string
+    params:
+      - name: subsystemId
+        type: string
+        description: The L1 subsystem to update, as the tool's subsystem argument names it
+      - name: projectPath
+        type: string
+        description: Relative path to the external project root; omitted clears the link
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_set_subsystem_project_path
+  - name: sdd_get_spec
+    description: >-
+      Tool: read the parsed contents of one stored spec, without filesystem path searching. A
+      methods filter reads only the named methods of a contract, an implementation or a type — a
+      forty-method spec fetched whole to look at one of them is the read side of the same waste a
+      restatement is on the write side — and the answer then carries a partial-result marker naming
+      what was left out, which must never be re-authored from. For a variant-tagged component the
+      answer also carries derived, read-only variant guidance. The structured content keeps both
+      derived markers SEPARATE from the stored spec, so nothing derived can be written back by
+      accident; the text block folds them in as it always has.
+    signature: 'sdd_get_spec(kind: string, id: string, methods?: string[]): SpecReadResult'
+    returns: SpecReadResult
+    params:
+      - name: kind
+        type: string
+        description: 'The kind of spec to read: system, subsystem, component, interface, implementation or type'
+      - name: id
+        type: string
+        description: >-
+          The id to read it by; the L0 system spec is a singleton, named by the system name or
+          "system"
+      - name: methods
+        type: string[]
+        description: Return only these methods by name; omit it for the whole spec
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_get_spec
+  - name: sdd_add_type
+    description: >-
+      Tool: define an entity or value-object — the data the components operate on. Entities are
+      owned by a subsystem; a shared value object names none and is system-level. Fields are data;
+      methods are PURE intrinsic behaviour only, because anything needing a collaborator belongs on
+      a component that takes the entity as an argument. A type may also CLAIM code: a sourcePath
+      names the file holding its declaration and a symbol binds the code-level name, and the file
+      must then resolve with the declaration anchored in it. The answer carries the write receipt as
+      structured content beside the sentence.
+    signature: 'sdd_add_type(spec: TypeSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: spec
+        type: TypeSpec
+        description: >-
+          The type to define: its kind, id, name, owning subsystem, fields, pure methods,
+          invariants, database bindings and code claim
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_add_type
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T07:49:59.630Z'
+updatedAt: '2026-09-19T23:12:59.258Z'

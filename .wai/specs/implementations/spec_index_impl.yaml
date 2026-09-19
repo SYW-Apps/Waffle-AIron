@@ -206,6 +206,25 @@ methods:
       collecting the followable roots in walk order and every refused mount (escapes, missing,
       cyclic, too-deep) with its qualified id, declared path and reason; listChainedRoots returns
       the roots half.
+  - name: loadTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the full specs tree for type documents — types live flat, per-subsystem, and in
+          groups
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: listTree
+      - stepNumber: 2
+        description: Read each type document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: >-
+          Parse each against TypeSpecSchema and answer with the one whose id matches, or null when
+          none does
+        type: local
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-12T17:38:14.066Z'
+updatedAt: '2026-09-19T23:04:52.844Z'

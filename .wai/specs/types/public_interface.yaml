@@ -1,0 +1,29 @@
+kind: value-object
+id: public_interface
+name: PublicInterface
+description: >-
+  One entry of an L1 subsystem's published surface: the protocol it speaks, what it is for, and the
+  L2 component — optionally the L3 contract on it — that realizes it. The binding is what makes a
+  cross-subsystem dependency legal, because such a dependency may only target a published public
+  component.
+fields:
+  - name: type
+    type: string
+    description: 'The protocol this surface speaks: REST, GraphQL, MessageBus, RPC or Custom.'
+    optional: false
+  - name: details
+    type: string
+    description: What the surface is and what it is for, in prose.
+    optional: false
+  - name: component
+    type: string
+    description: The L2 component that realizes this surface.
+    optional: true
+  - name: interface
+    type: string
+    description: The L3 contract on that component backing this entry.
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-19T22:58:35.555Z'
+updatedAt: '2026-09-19T22:58:35.838Z'

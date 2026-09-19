@@ -4,9 +4,22 @@ description: Interface contract for starting and configuring the wairon Model Co
 component: mcp_server
 methods:
   - name: create
-    description: Factory method to create, configure, and register standard tools on the MCP server
-    signature: 'create(): McpServer'
+    description: >-
+      Factory method to create, configure, and register the standard sdd_* tools, the prompts and
+      the skill/agent resources on the MCP server. A caller may additionally ask for the hosted
+      data-plane tools to be ADVERTISED: sixteen registrations that exist so tools/list can show
+      them, never to run. Their execution is served by the hosting request orchestrator before a
+      call reaches this server, so the handlers registered here refuse by design outside a hosted
+      request.
+    signature: 'create(hostedTools?: boolean): McpServer'
     returns: McpServer
+    params:
+      - name: hostedTools
+        type: boolean
+        description: >-
+          Advertise the sixteen hosted data-plane tools in tools/list — discovery only, and false
+          for the stdio server, which cannot serve any of them.
+        optional: true
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-17T20:30:35.612Z'
+updatedAt: '2026-09-19T23:12:58.949Z'

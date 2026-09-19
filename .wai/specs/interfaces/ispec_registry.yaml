@@ -58,6 +58,19 @@ methods:
     guarantees:
       - idempotent
     effect: write
+  - name: saveTypeSpec
+    description: >-
+      Validates and persists a type specification, returning the placement notices it owes. A
+      re-save updates fields in place and NEVER relocates an existing file, and under the flat
+      layout a subsystem is recorded as a field while the document stays in the shared types
+      directory — both are by design, and silent they would read as a parameter that was ignored, so
+      each is reported.
+    signature: 'saveTypeSpec(spec: TypeSpec): string[]'
+    returns: string[]
+    params:
+      - name: spec
+        type: TypeSpec
+        description: The type to persist
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-09-19T00:30:02.797Z'
+updatedAt: '2026-09-19T23:04:52.947Z'

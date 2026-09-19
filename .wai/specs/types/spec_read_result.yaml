@@ -1,0 +1,35 @@
+kind: value-object
+id: spec_read_result
+name: SpecReadResult
+description: >-
+  What a spec read answers with: the STORED spec, and beside it the two derived markers a read may
+  attach. They are kept separate rather than folded in, so nothing derived can be mistaken for
+  something stored and written back. The text rendering folds both into the spec, as it always has,
+  for a client that reads no structured content.
+subsystem: sdd_mcp
+fields:
+  - name: kind
+    type: string
+    description: 'The kind of spec read: system, subsystem, component, interface, implementation or type.'
+    optional: false
+  - name: id
+    type: string
+    description: The id it was read by.
+    optional: false
+  - name: spec
+    type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+    description: The stored spec, exactly as it is held, minus the derived markers beside it.
+    optional: false
+  - name: partialResult
+    type: PartialMethodResult | null
+    description: Present only when a methods filter narrowed the read.
+    optional: true
+  - name: variantGuidance
+    type: VariantDef | null
+    description: >-
+      Derived, read-only guidance for a variant-tagged component, resolved from the variant registry
+      rather than stored on the spec. Never written back.
+    optional: true
+methods: []
+createdAt: '2026-09-19T23:05:27.992Z'
+updatedAt: '2026-09-19T23:05:28.293Z'

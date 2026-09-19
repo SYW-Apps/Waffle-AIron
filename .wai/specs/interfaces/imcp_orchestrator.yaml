@@ -135,6 +135,116 @@ methods:
           Whether an implementation that declares no symbol is pinned to the old name; true when
           omitted
         optional: true
+  - name: updateSpec
+    description: >-
+      The sdd_update_spec workflow: patch a stored spec at any level through the authoring gate, and
+      answer with the change report — what changed, every path the delta named that the write did
+      not act on, or that nothing changed and nothing was written. A dry run runs the whole write,
+      gate included, and writes nothing.
+    signature: 'updateSpec(kind: string, id: string, delta: SpecDelta, dryRun?: boolean): SpecChangeReport'
+    returns: SpecChangeReport
+    params:
+      - name: kind
+        type: string
+        description: 'The spec kind to patch: system, subsystem, component, interface, implementation or type'
+      - name: id
+        type: string
+        description: The stored spec's id, namespaced if needed
+      - name: delta
+        type: SpecDelta
+        description: The partial change to merge, carrying the delta's own verbs
+      - name: dryRun
+        type: boolean
+        description: >-
+          Ask what the delta would do instead of doing it; the report comes back marked dryRun with
+          written false
+        optional: true
+  - name: setEndpoints
+    description: >-
+      The sdd_set_endpoints workflow: verify the L3 contract exists, build one wire endpoint per
+      named method from that transport's own address fields and check it against the endpoint
+      schema, then persist the contract with the bindings attached. A method the contract does not
+      declare, or an endpoint the schema rejects, refuses the whole write before anything is saved.
+    signature: 'setEndpoints(interfaceId: string, endpoints: EndpointBinding[]): string'
+    returns: string
+    params:
+      - name: interfaceId
+        type: string
+        description: The L3 contract to bind, as the tool's interface argument names it
+      - name: endpoints
+        type: EndpointBinding[]
+        description: >-
+          One binding per method: the method name, the transport, and that transport's address
+          fields
+  - name: setPublicInterfaces
+    description: >-
+      The sdd_set_public_interfaces workflow: verify the subsystem exists, then REPLACE its
+      published surface with the list given — each entry bound to the component, and optionally the
+      contract, that realizes it — and restamp updatedAt. A replacement, not a merge: an entry left
+      out is gone.
+    signature: 'setPublicInterfaces(subsystemId: string, publicInterfaces: PublicInterface[]): string'
+    returns: string
+    params:
+      - name: subsystemId
+        type: string
+        description: The L1 subsystem whose published surface is replaced
+      - name: publicInterfaces
+        type: PublicInterface[]
+        description: >-
+          The full replacement list: type, details, and the realizing component and optional
+          interface
+  - name: setSubsystemProjectPath
+    description: >-
+      The sdd_set_subsystem_project_path workflow: verify the subsystem exists, then set — or, when
+      no path is given, clear — its projectPath chaining link and restamp updatedAt. It rewrites the
+      link only; the subproject directory itself is relocated by moveSubsystemProject.
+    signature: 'setSubsystemProjectPath(subsystemId: string, projectPath?: string): string'
+    returns: string
+    params:
+      - name: subsystemId
+        type: string
+        description: The L1 subsystem whose chaining link is rewritten
+      - name: projectPath
+        type: string
+        description: Relative path to the external project root; omitted clears the link
+        optional: true
+  - name: getSpec
+    description: >-
+      The sdd_get_spec workflow: read one stored spec by kind and id through the core client
+      adapter, optionally narrowed to named methods, and answer with the stored spec plus the
+      derived markers a read may attach. A methods filter that names something the spec does not
+      declare returns nothing and says what it does declare, so a misspelling never reads as a
+      method with no content; a narrowed answer carries the partial-result marker, because the write
+      tools REPLACE a method list and re-authoring from a partial read would delete every method
+      left out.
+    signature: 'getSpec(kind: string, id: string, methods?: string[]): SpecReadResult'
+    returns: SpecReadResult
+    params:
+      - name: kind
+        type: string
+        description: 'The kind of spec to read: system, subsystem, component, interface, implementation or type'
+      - name: id
+        type: string
+        description: The id to read it by; the L0 system spec is a singleton
+      - name: methods
+        type: string[]
+        description: >-
+          Read only these methods by name; every other field comes back unchanged. Only a contract,
+          an implementation and a type declare methods
+        optional: true
+  - name: addType
+    description: >-
+      The sdd_add_type workflow: define an entity or value-object through the core client adapter
+      and answer with the receipt for it. A define is an UPSERT, so re-defining an id REPLACES its
+      fields, methods and invariants and restates its code claim — the notices name what was carried
+      forward, what a dropped member removed and what an omission cleared. A type carries no
+      lifecycle status, so the receipt states none.
+    signature: 'addType(spec: TypeSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: spec
+        type: TypeSpec
+        description: The type as the tool's arguments describe it
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-19T07:49:35.512Z'
+updatedAt: '2026-09-19T23:07:19.222Z'

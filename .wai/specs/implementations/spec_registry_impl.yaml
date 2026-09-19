@@ -105,6 +105,21 @@ methods:
           per-project scopes) must keep receiving invalidations
         type: local
     symbol: invalidateSpecCache
+  - name: saveTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the document's path from the id, its subsystem and the group the stored type
+          already carried, carry createdAt and that group forward, qualify ids and relativize
+          namespaces, stamp updatedAt (unless preserved for a mechanical re-save), re-parse through
+          the writer schema, and collect the placement notices a moved subsystem field or a flat
+          layout owes
+        type: local
+      - stepNumber: 2
+        description: Persist the serialized document to its type spec path through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: write
 lint:
   allow:
     - code: UNNARRATED_COMPLEXITY
@@ -115,4 +130,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-09-19T00:29:46.442Z'
+updatedAt: '2026-09-19T23:04:53.118Z'
