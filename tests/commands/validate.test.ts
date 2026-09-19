@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { isCiDraftWaivable, validateAsComplete } from '../../src/commands/validate.js';
+import { carriedDebtSummary, isCiDraftWaivable, validateAsComplete } from '../../src/commands/validate.js';
+import type { CarriedDebt } from '../../src/models/project.js';
 import { validateSddTree } from '../../src/core/validation.js';
 import type { ValidationIssue } from '../../src/core/validation.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
@@ -21,6 +22,54 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 function warn(code: string, extra: Partial<ValidationIssue> = {}): ValidationIssue {
   return { severity: 'warning', code, message: `${code} message`, ...extra };
 }
+
+// ---------------------------------------------------------------------------
+// The conformance debt register's own line, and the one thing an audit can
+// never check: whether a `why` is TRUE. A group that admits its classification
+// is unsettled says so with `revisit`, and every run counts those findings
+// beside the kind totals — a confident-sounding reason that is wrong reads as
+// settled, and silence is what lets nobody look again.
+// ---------------------------------------------------------------------------
+
+const group = (kind: CarriedDebt['kind'], findings: number, revisit?: string): CarriedDebt => ({
+  kind,
+  why: `carried because the ${kind} is not paid yet`,
+  ...(revisit ? { revisit } : {}),
+  findings: Array.from({ length: findings }, (_, i) => ({
+    code: 'CALL_STEP_UNREALIZED',
+    spec: `billing_orchestrator_impl`,
+    at: `settleInvoice${i}`,
+    covers: ['1:ledger_store.append', '2:ledger_store.commit'],
+  })),
+});
+
+describe('carriedDebtSummary (the register said out loud)', () => {
+  it('says nothing at all when the register is empty', () => {
+    expect(carriedDebtSummary(undefined)).toBeNull();
+    expect(carriedDebtSummary([])).toBeNull();
+  });
+
+  it('counts findings, units and kinds, and stays silent about re-evaluation when nothing is marked', () => {
+    const summary = carriedDebtSummary([group('drift', 2), group('unreadable', 1)]);
+    expect(summary?.line).toContain('3 finding(s) over 6 unit(s) carried');
+    expect(summary?.line).toContain('2 drift, 0 undecided, 1 unreadable');
+    expect(summary?.line).not.toContain('re-evaluation');
+    expect(summary?.revisits).toEqual([]);
+  });
+
+  it('counts the findings of every group marked provisional, and prints what would settle each', () => {
+    const summary = carriedDebtSummary([
+      group('drift', 2, 'Prove the adapters are realized by the file that consumes them.'),
+      group('unreadable', 1),
+      group('undecided', 3, 'Decide whether the alias or the target is wrong.'),
+    ]);
+    expect(summary?.line).toContain('5 finding(s) in 2 group(s) are marked for re-evaluation');
+    expect(summary?.revisits).toEqual([
+      '  re-evaluate (drift, 2 finding(s)): Prove the adapters are realized by the file that consumes them.',
+      '  re-evaluate (undecided, 3 finding(s)): Decide whether the alias or the target is wrong.',
+    ]);
+  });
+});
 
 describe('isCiDraftWaivable (--ci draft tolerance)', () => {
   it('waives DRAFT_COMPONENT_WARNING (it only exists to surface a draft)', () => {

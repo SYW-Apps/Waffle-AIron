@@ -534,16 +534,37 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   // severity resolution: a matching allow silences a WARNING, while an error
   // still surfaces (architecture violations are never locally suppressible —
   // the allow is only marked used so it isn't flagged as stale).
+  //
+  // A MATCH is site-for-site, in the conformance debt register's own
+  // vocabulary: a finding that carries `parts` is covered only by an allow
+  // naming that same `parts.at`, and a finding that carries none only by an
+  // allow naming no site either. Keyed by code and spec alone — as it was —
+  // one allow silenced every occurrence a rule reported there, which on
+  // wairon's own tree made 14 of 46 suppressed findings invisible to the allow
+  // that named them. Several allows may now share a code on one spec, so the
+  // lookup holds a LIST; the first with the matching site wins and a second
+  // one for it can never match, which the audit reports as stale.
   const lintAllows: RuleContext['lintAllows'] = [];
-  const allowLookup = new Map<string, Map<string, RuleContext['lintAllows'][number]>>();
-  const collectAllows = (specId: string, lint?: { allow: { code: string; reason: string }[] }): void => {
+  const allowLookup = new Map<string, Map<string, RuleContext['lintAllows'][number][]>>();
+  const collectAllows = (specId: string, lint?: { allow: { code: string; at?: string; covers?: string[]; reason: string }[] }): void => {
     for (const a of lint?.allow ?? []) {
-      const entry = { specId, code: a.code, reason: a.reason, used: false };
+      const entry = { specId, code: a.code, at: a.at, covers: a.covers, reason: a.reason, used: false };
       lintAllows.push(entry);
       if (!allowLookup.has(specId)) allowLookup.set(specId, new Map());
-      allowLookup.get(specId)!.set(a.code, entry);
+      const forSpec = allowLookup.get(specId)!;
+      const forCode = forSpec.get(a.code) ?? [];
+      forCode.push(entry);
+      forSpec.set(a.code, forCode);
     }
   };
+  // Where this run's findings landed, per spec and code — filled by addIssue
+  // before any suppression, read by the lint-allows audit.
+  const sitesSeen = new Map<string, { sites: Set<string>; unsited: boolean }>();
+  const sitesReported = (specId: string, code: string): { sites: string[]; unsited: boolean } => {
+    const seen = sitesSeen.get(`${specId}\u0000${code}`);
+    return { sites: [...(seen?.sites ?? [])], unsited: seen?.unsited ?? false };
+  };
+
   for (const s of subsystems) collectAllows(s.id, s.lint);
   for (const c of components) collectAllows(c.id, c.lint);
   for (const i of interfaces) collectAllows(i.id, i.lint);
@@ -601,11 +622,34 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     }
     const severity = getRuleSeverity(code, defaultSeverity, isDraftContext, owner);
     if (severity === 'off') return;
+    let text = message;
+    // What this finding said about where it landed, recorded before anything
+    // can silence it: the audit needs the sites of the findings an allow did
+    // NOT match to tell a stale allow from a merely coarse one.
     if (specId) {
-      const allow = allowLookup.get(specId)?.get(code);
+      const key = `${specId}\u0000${code}`;
+      let seen = sitesSeen.get(key);
+      if (!seen) sitesSeen.set(key, (seen = { sites: new Set<string>(), unsited: false }));
+      if (parts) seen.sites.add(parts.at);
+      else seen.unsited = true;
+    }
+    // The allow, matched on the finding's IDENTITY rather than its code alone.
+    // An allow covers one occurrence: the site it names, and — where the
+    // finding aggregates — the units it lists. A unit it does not list is a
+    // decision nobody took, so the finding still fires and says which.
+    let allowClaimed = false;
+    if (specId) {
+      const allow = (allowLookup.get(specId)?.get(code) ?? [])
+        .find(a => (parts ? a.at === parts.at : a.at === undefined));
       if (allow) {
         allow.used = true;
-        if (severity === 'warning') return;
+        allowClaimed = true;
+        const grew = (parts?.covers ?? []).filter(unit => !(allow.covers ?? []).includes(unit));
+        if (grew.length === 0) {
+          if (severity === 'warning') return;
+        } else {
+          text = `${text} A lint.allow covers this site, but not ${grew.length} part(s) of it — ${grew.map(u => `"${u}"`).join('; ')} ${grew.length === 1 ? 'is' : 'are'} new. Decide on them: add them to the allow's \`covers\` with a reason that is actually true, or fix them.`;
+        }
       }
     }
     // The conformance debt register, consulted with the finding's IDENTITY
@@ -614,8 +658,11 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     // name is growth, and growth is exactly what a register must not absorb —
     // so the finding still fires, and its message says which units are new.
     // Errors are never carried, for the reason an allow never silences one.
-    let text = message;
-    if (specId && parts && severity === 'warning') {
+    // An allow that claimed this site is the end of it: the two mechanisms
+    // make different claims, and one finding is never both "wrong by design"
+    // and "right but unpaid" — the entry is then reported stale, which is the
+    // truth, because it carries nothing.
+    if (specId && parts && severity === 'warning' && !allowClaimed) {
       const entry = carriedLookup.get(carriedKey(specId, code, parts.at));
       if (entry) {
         entry.fired = true;
@@ -723,6 +770,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     codeModel: opts.codeModel ?? emptyCodeModel(),
     roundTripIssues: opts.roundTripIssues,
     lintAllows,
+    sitesReported,
     knownIssueCodes: opts.knownIssueCodes,
     carriedFindings,
     carryableIssueCodes: opts.carryableIssueCodes ?? new Set<string>(),

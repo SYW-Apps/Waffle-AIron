@@ -30,12 +30,7 @@ methods:
         targetComponent: skills_portal
         targetMethod: buildServerInstructions
 lint:
-  allow:
-    - code: CALL_STEP_UNREALIZED
-      reason: >-
-        Skill resources are served from the embedded exported skill set inside the MCP server, not
-        by calling the skills portal at runtime — the narrative names the semantic owner of the
-        resource content. Revisit with the skills-resource refactor.
+  allow: []
 status: complete
 createdAt: '2026-07-10T12:21:52.237Z'
-updatedAt: '2026-07-29T10:53:24.764Z'
+updatedAt: '2026-09-19T20:28:40.691Z'

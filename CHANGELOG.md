@@ -3,7 +3,7 @@
 ## Unreleased (from v5.1.0)
 
 **Breaking.** Merge dev → main with `[major]` in the merge commit message →
-**v6.0.0**. Seven changes are visible on upgrade without any action by the user,
+**v6.0.0**. Eight changes are visible on upgrade without any action by the user,
 and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
 a project that has not declared them, existing lock records read as stale — the
 identity they record was machine-specific, and making it reproducible moves it
@@ -14,7 +14,8 @@ that still has a Specialist or a Gateway or breaks the new Supervisor and Actor
 dependency rules, a tree whose narratives or names the new readability checks
 judge, a tree whose code↔spec conformance the tightened call and body checks
 can now follow, or a tree holding a case the fixed validator rules used to miss
-— including a narrative step carrying a field its own step type cannot have. A
+— including a narrative step carrying a field its own step type cannot have, or a
+tree whose coarse `lint.allow` stops covering findings that name a site. A
 scripted `sdd_update_spec` delta can also behave differently, where it was
 relying on a merge rule that was silently wrong (item 10), and a scripted call
 to a create tool that carries an unknown key inside a method, a param or a
@@ -22,6 +23,58 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 `sdd_*` tools now declare an `outputSchema`, which changes what a conforming MCP
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
+
+### A `lint.allow` covers exactly the finding it names
+
+A rule that reports a SITE fires once per site; an allow was keyed by code and spec alone, so one of them silenced
+every occurrence there was. Measured on wairon's own tree: **32 allows suppressed 46 findings** — 14 occurrences, 30%,
+invisible even to the allow that named them, and at unit granularity 4 more. The prose rotted in the same gap: one
+allow claimed "27 of the runner's 32 narrated methods", one named a second edge that had stopped firing, one named a
+single call target for six methods while one of them called something else entirely.
+
+**Breaking.** An existing project's coarse allow stops covering what it used to, for every code whose findings name a
+site. The finding surfaces and `validate --ci` can newly fail; the allow is reported `UNUSED_LINT_ALLOW`, and that
+finding lists the sites that fired so the remedy is a copy-paste. Today the sited codes are `CALL_STEP_UNREALIZED`,
+`CALL_ORIGIN_UNRESOLVED`, `UNDECLARED_COLOCATED_CALL`, `METHOD_BODY_NOT_FOUND`, `UNDECLARED_DEPENDENCY` and
+`UNREALIZED_DEPENDENCY`; an allow for any other code is unaffected and needs no edit.
+
+- **`at` — the site the allow covers**, named exactly as the finding names it: a contract method, an import edge
+  `from -> to`, a declared edge `component -> target`. A sited finding is covered only by an allow naming that site;
+  a finding that names none is covered only by an allow that names none either, so the codes that fire once per spec
+  (`GOD_COMPONENT`, `UNOWNED_STORE`, `EXCESSIVE_NARRATIVE_STEPS`, …) stay exactly as they were — a site field there
+  would be ceremony.
+- **`covers` — the units of an aggregating finding**, each named the way the finding's message names it
+  (`3:billing_store.save`). The allow silences the finding only when it lists every unit reported; a unit nobody
+  listed is named back as new instead of inheriting a decision taken about its neighbours. `covers` without `at` is
+  refused by the schema.
+- **This is the conformance debt register's vocabulary, deliberately.** `at`/`covers` are `FindingParts`, the same
+  words the register matches on, because it is the same question — which occurrence — and a second vocabulary for it
+  would be the worse outcome.
+- **`UNUSED_LINT_ALLOW` now says what the run saw.** An allow whose site no longer exists, and a coarse allow left on
+  a sited code, are both stale, and the finding names the sites that did fire — "no such finding fired" would read as
+  a lie on a spec where three of them did.
+- `sdd_update_spec` merges `lint.allow` by **code AND `at`**, since several allows may now share a code on one spec.
+
+**Upgrading.** Run `wairon validate`. Every `UNUSED_LINT_ALLOW` it reports names the sites the run found: split the
+allow into one per site, each with the reason that is true THERE. Where the reason turns out to say the finding is
+right but unpaid ("reconcile later", "overclaimed"), it belongs in `rules.conformance.carried`, not in an allow.
+
+### A carried classification can say it is not settled yet
+
+`STALE_CARRIED_FINDING` catches an entry that stopped applying. Nothing catches one that still applies for a reason
+that has become false — and a confident-sounding `why` that is wrong is worse than a missing one, because it reads as
+settled and nobody looks again.
+
+- **`revisit` on a reason group** (`rules.conformance.carried[].revisit`): a sentence saying what would settle the
+  classification. Every run counts the findings in the marked groups beside the kind totals — *"172 finding(s) over
+  294 unit(s) carried … 48 finding(s) in 2 group(s) are marked for re-evaluation"* — and prints each group's sentence,
+  so the uncertainty is as loud as the debt. It is a sentence and not a flag because a reader deciding whether to pick
+  it up needs to know what to measure.
+- **There is no counterpart on `lint.allow`, and that is a decision.** An entry in the register silences nothing — the
+  finding is counted out loud on every run — so marking one uncertain adds a second dial to something already visible.
+  An allow DOES silence, and a "provisional allow" would buy the silence and defer the decision: the finding gone, the
+  doubt in a field nobody opens. The mechanism for a decision nobody has taken is to not take it — leave the warning
+  firing — or, where the code is carryable, an entry of kind `undecided`, which is exactly that sentence.
 
 ### Conformance that never goes quiet: a call is realized where it LANDS
 

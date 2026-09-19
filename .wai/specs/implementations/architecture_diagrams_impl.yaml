@@ -147,17 +147,17 @@ methods:
 lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
+      at: src/core/diagram.ts -> src/core/validation.ts
       reason: >-
-        The canvas issue overlay invokes validateSddTree directly, and reads the project
-        configuration (through project_config_repository) only to hand that call its rules and
-        projectType; the proper shape is issues passed in by the caller, which removes both edges —
-        cross-subsystem refactor candidate (architecture_diagrams is sdd_core, the validator is
-        sdd_validator).
-    - code: CALL_STEP_UNREALIZED
+        The canvas issue overlay invokes validateSddTree directly (diagramIssues); the proper shape
+        is issues passed in by the caller, which removes this edge — cross-subsystem refactor
+        candidate (architecture_diagrams is sdd_core, the validator is sdd_validator).
+    - code: UNDECLARED_DEPENDENCY
+      at: src/core/diagram.ts -> src/config/project-config.ts
       reason: >-
-        The graph/diagram builders read spec data through the shared workspace scan performed
-        upstream, not via direct loader calls per kind — the narrative names the data dependencies.
-        Reconcile with the canvas engine epic's renderer extraction.
+        The same overlay reads the project configuration (through project_config_repository) only to
+        hand that validateSddTree call its rules and projectType, so this edge goes with the one
+        above, in the same refactor.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-09-17T20:28:15.226Z'
+updatedAt: '2026-09-19T20:28:40.882Z'

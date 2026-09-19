@@ -597,13 +597,14 @@ detail: calls-only
 lint:
   allow:
     - code: UNREALIZED_DEPENDENCY
+      at: cli_packs_adapter -> sdk_portal
       reason: >-
-        cli_packs_adapter imports the published @wairon/sdk surface (`import { scaffoldPack,
-        buildPack, extractPack } from '@wairon/sdk'`), but sdd_sdk is a SEPARATE npm workspace
+        cli_packs_adapter imports the published @wairon/sdk surface (import { scaffoldPack,
+        buildPack, extractPack } from '@wairon/sdk'), but sdd_sdk is a SEPARATE npm workspace
         package (its sourcePaths are sdk/src/*). The Level-2 dependency analyzer resolves only
         RELATIVE specifiers against the mapped source files, so a legitimate cross-package import of
         the published portal reads as unrealized. The edge is real and correct — an analyzer
-        limitation at the workspace-package boundary.
+        limitation at the workspace-package boundary, in src/commands/packs.ts.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-09-18T23:56:47.948Z'
+updatedAt: '2026-09-19T20:28:41.456Z'

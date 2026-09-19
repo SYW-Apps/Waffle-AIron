@@ -31,10 +31,12 @@ methods:
 lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
+      at: src/server/gitbacking.ts -> src/utils/secrets.ts
       reason: >-
-        Uses the shared secrets utility (utils/secrets.ts, spec-homed under sdd_host's
-        secret_repository) for the git bot token, exactly like the per-project git_adapter_impl —
-        placement debt (shared infrastructure candidate), not a sanctioned cross-subsystem reach.
+        Uses the shared secrets utility (src/utils/secrets.ts), which is spec-homed under sdd_host's
+        secret_repository — placement debt: a shared-infrastructure candidate, not a sanctioned
+        cross-subsystem reach. The hosted git backing reads the same bot token, exactly as the
+        per-project git_adapter does.
 status: complete
 createdAt: '2026-07-16T15:40:11.338Z'
-updatedAt: '2026-09-17T16:37:03.410Z'
+updatedAt: '2026-09-19T20:28:41.183Z'

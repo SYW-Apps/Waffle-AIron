@@ -177,6 +177,31 @@ export const CarriedDebtSchema = z.object({
   kind: CarriedDebtKindSchema,
   /** The reason itself, in the author's own words — what is true here, and what paying it would take. */
   why: z.string().min(1),
+  /**
+   * This classification is PROVISIONAL, and this is what would settle it.
+   *
+   * A confident-sounding `why` that is wrong is worse than a missing one: it
+   * reads as settled, so nobody looks again, and the register keeps counting
+   * the finding under a kind that was never true. Nothing can check a reason
+   * for truth — `kind` and `why` are prose, and STALE_CARRIED_FINDING only
+   * ever catches "this stopped applying", never "this still applies for a
+   * reason that has become false". What a register CAN do is let an author say
+   * out loud that they are not sure yet, and then keep saying it: every run
+   * counts the groups marked here beside the kind totals, so the uncertainty
+   * is as loud as the debt.
+   *
+   * It is deliberately a SENTENCE and not a flag, and deliberately on the
+   * reason GROUP rather than the finding: what is provisional is the reason,
+   * and a reader deciding whether to pick this up needs to know what to
+   * measure — "is the adapter really realized by the file that consumes it, or
+   * is that a modelling error?" — not merely that somebody once hesitated. A
+   * finding whose own classification is uncertain while its neighbours' is not
+   * is a different reason, and belongs in its own group.
+   *
+   * There is no counterpart on `lint.allow`, and that is a decision, not an
+   * omission: see the note on ConformanceRuleConfig.carried.
+   */
+  revisit: z.string().min(1).optional(),
   /** The findings this reason explains. */
   findings: z.array(CarriedFindingSchema),
 });
@@ -224,6 +249,17 @@ export const ConformanceRuleConfigSchema = z.object({
    *   • every entry states its kind and its reason, and `wairon validate`
    *     prints the running total, so the debt is loud where a suppression is
    *     silent.
+   *
+   * A reason group may also declare itself PROVISIONAL (`revisit`), and the
+   * total says how many did. There is no such marker on a `lint.allow`, and
+   * the asymmetry is the point: an entry here does not silence anything — the
+   * finding is counted out loud on every run — so marking one uncertain adds a
+   * second dial to something already visible. An allow DOES silence, and a
+   * "provisional allow" would buy the silence and defer the decision, which is
+   * the one combination that cannot be reviewed: the finding is gone and the
+   * doubt is in a field nobody opens. The mechanism for a decision nobody has
+   * taken is to not take it — leave the warning firing — or, where the code is
+   * carryable, an entry of kind `undecided`, which is exactly that sentence.
    */
   carried: z.array(CarriedDebtSchema).optional(),
 });

@@ -511,10 +511,32 @@ export interface RuleContext {
    * Bookkeeping for per-spec lint suppressions (lint.allow). Suppression
    * itself happens inside addIssue (warnings only — errors always surface);
    * the lint-allows rule audits these entries at the end of the run.
+   *
+   * `at`/`covers` are the finding's own identity (FindingParts), so an allow
+   * covers exactly the occurrence it names: a sited finding matches only an
+   * allow naming that site, an unsited one only an allow naming none, and a
+   * listed-units allow silences the finding only when it lists them all.
    */
-  lintAllows: { specId: string; code: string; reason: string; used: boolean }[];
+  lintAllows: {
+    specId: string;
+    code: string;
+    /** The site this allow names, if any — matched against the finding's `parts.at`. */
+    at?: string;
+    /** The units it covers, if any — the finding is silenced only when every unit it reports is listed. */
+    covers?: string[];
+    reason: string;
+    used: boolean;
+  }[];
   /** Every issue code a registered rule or loaded declarative assertion can emit, gathered by the validator (for allow validation). */
   knownIssueCodes: Set<string>;
+
+  /**
+   * What the run's findings of one code said about WHERE they landed on one
+   * spec: the sites they named, and whether any of them named none. The
+   * lint-allows audit reads it to tell a stale allow from a merely coarse one
+   * and to say, in the finding, which sites an allow could name instead.
+   */
+  sitesReported(specId: string, code: string): { sites: string[]; unsited: boolean };
 
   /**
    * The conformance debt register (`rules.conformance.carried`), flattened to

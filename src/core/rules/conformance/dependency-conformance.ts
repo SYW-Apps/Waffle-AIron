@@ -140,6 +140,12 @@ export const dependencyConformanceRule: SddRule = {
           `"${fromPath}" (realizing ${fromComponents.map(c => c.id).join(', ')}) imports "${toPath}" (realizing ${toComponents.map(c => c.id).join(', ')}) but no declared dependsOn/owns edge justifies it — declare the collaboration on the component that actually uses it, or route the cross-subsystem hop through the target's published surface.`,
           realization.implementationsAt(fromPath)[0]?.id,
           draftAt(fromPath) || draftAt(toPath),
+          undefined,
+          // One import edge, one indivisible fact — but one implementation
+          // maps many files and many edges, so the EDGE is the site, not the
+          // spec. Without it a single allow on the spec covers every crossing
+          // that file ever grows.
+          { at: `${fromPath} -> ${toPath}` },
         );
       }
     }
@@ -190,6 +196,11 @@ export const dependencyConformanceRule: SddRule = {
           `Component "${component.id}" declares ${relation} "${targetId}", but no runtime import connects their source files (${fromFiles.join(', ')} ↛ ${crossSubsystem ? `subsystem ${target.subsystem}` : filesOf(targetId).join(', ')}) — either the collaboration is wired indirectly (DI) or the declared edge is stale.`,
           impls[0]?.id ?? component.id,
           draft,
+          undefined,
+          // One declared edge, one indivisible fact. A component declares many,
+          // and they all anchor on its one implementation spec, so the EDGE is
+          // the site.
+          { at: `${component.id} -> ${targetId}` },
         );
       }
     }

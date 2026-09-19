@@ -3,6 +3,7 @@ import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, loadRegistry } from '../config/loader.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import { loadProjectConfig } from '../core/index.js';
+import type { CarriedDebt } from '../models/project.js';
 import { validateRegistry, validateProjectConfig, validateAsComplete, validateSddTree, computeGateStateId, ValidationIssue } from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
@@ -49,6 +50,44 @@ export interface ValidateOptions {
 // Every other warning remains fatal in --ci mode. The warnings are still
 // printed — this classifies the failure decision, it does not silence rules.
 // ---------------------------------------------------------------------------
+
+/**
+ * The conformance debt register, said out loud on every run. A suppression is
+ * silent by nature — that is what makes it rot — so the count of what this
+ * tree carries, and which of it is debt rather than a limit, is composed here
+ * whether or not anything else was reported.
+ *
+ * The re-evaluation count rides on the same line. `STALE_CARRIED_FINDING`
+ * catches an entry that stopped applying; nothing catches one that still
+ * applies for a reason that has become FALSE, and a confident-sounding `why`
+ * that is wrong is worse than a missing one because it reads as settled and
+ * nobody looks again. A group that admits it is unsure says so here, and each
+ * one's sentence follows, because a reader deciding whether to pick it up
+ * needs to know what to measure.
+ */
+export function carriedDebtSummary(
+  carried: CarriedDebt[] | undefined,
+): { line: string; revisits: string[] } | null {
+  if (!carried || carried.length === 0) return null;
+  const findings = carried.flatMap(g => g.findings ?? []);
+  const units = findings.reduce((n, f) => n + (f.covers?.length ?? 1), 0);
+  const perKind = (kind: string): number =>
+    carried.filter(g => g.kind === kind).reduce((n, g) => n + (g.findings?.length ?? 0), 0);
+  const provisional = carried.filter(g => g.revisit);
+  const unsettled = provisional.reduce((n, g) => n + (g.findings?.length ?? 0), 0);
+  return {
+    line:
+      `Conformance debt register: ${findings.length} finding(s) over ${units} unit(s) carried — `
+      + `${perKind('drift')} drift, ${perKind('undecided')} undecided, ${perKind('unreadable')} unreadable `
+      + '(`rules.conformance.carried`). Drift and undecided are owed; unreadable is what the analysis cannot follow.'
+      + (unsettled > 0
+        ? ` ${unsettled} finding(s) in ${provisional.length} group(s) are marked for re-evaluation — the classification is provisional, not the debt.`
+        : ''),
+    revisits: provisional.map(
+      g => `  re-evaluate (${g.kind}, ${g.findings?.length ?? 0} finding(s)): ${g.revisit}`,
+    ),
+  };
+}
 
 export function isCiDraftWaivable(issue: ValidationIssue): boolean {
   if (issue.severity !== 'warning') return false;
@@ -187,18 +226,11 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   // is silent by nature — that is what makes it rot — so the count of what
   // this tree carries, and which of it is debt rather than a limit, is
   // printed whether or not anything else was reported.
-  const carried = projectConfig.rules?.conformance?.carried ?? [];
-  if (carried.length > 0) {
-    const findings = carried.flatMap(g => g.findings ?? []);
-    const units = findings.reduce((n, f) => n + (f.covers?.length ?? 1), 0);
-    const perKind = (kind: string): number =>
-      carried.filter(g => g.kind === kind).reduce((n, g) => n + (g.findings?.length ?? 0), 0);
+  const summary = carriedDebtSummary(projectConfig.rules?.conformance?.carried);
+  if (summary) {
     logger.blank();
-    logger.info(chalk.yellow(
-      `Conformance debt register: ${findings.length} finding(s) over ${units} unit(s) carried — `
-      + `${perKind('drift')} drift, ${perKind('undecided')} undecided, ${perKind('unreadable')} unreadable `
-      + '(`rules.conformance.carried`). Drift and undecided are owed; unreadable is what the analysis cannot follow.',
-    ));
+    logger.info(chalk.yellow(summary.line));
+    for (const note of summary.revisits) logger.info(chalk.gray(note));
   }
 
   logger.blank();

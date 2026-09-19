@@ -50,12 +50,7 @@ methods:
         targetMethod: put
     symbol: loadSurfaceSnapshots
 lint:
-  allow:
-    - code: CALL_STEP_UNREALIZED
-      reason: >-
-        hydrateFromFiles parses and returns snapshots; seating them in the store is the repository
-        facade's edge in code (N:1 collapse) — reconcile the narrative when the surfaces subsystem
-        takes its final lock.
+  allow: []
 status: complete
 createdAt: '2026-07-10T23:15:34.448Z'
-updatedAt: '2026-07-18T18:47:54.756Z'
+updatedAt: '2026-09-19T20:28:40.596Z'

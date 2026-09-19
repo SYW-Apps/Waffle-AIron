@@ -1465,13 +1465,6 @@ methods:
     symbol: lockCheckCommand
 lint:
   allow:
-    - code: UNDECLARED_DEPENDENCY
-      reason: >-
-        src/commands/doctor.ts imports core directly for work no spec models yet: legacy spec
-        filenames and chained-subproject config backfill (specs.ts, provision.ts), skill freshness
-        and active targets (skills.ts), the approver text (lockfile.ts), and pack diagnosis and
-        pinning (extensions.ts). Track D designs those areas and routes doctor through modelled
-        adapters. The validation import goes when D1's code routes it through cli_validator_adapter.
     - code: EXCESSIVE_NARRATIVE_STEPS
       reason: >-
         runPack is the `wairon pack` family's action dispatcher: a flat twelve-arm if-chain in
@@ -1483,6 +1476,35 @@ lint:
         and every `pack` subcommand's action calls runPack directly, so scope-based sub-dispatchers
         would be invented here rather than named in the code. Adding a pack subcommand adds two
         steps, which is the point.
+    - code: UNDECLARED_DEPENDENCY
+      at: src/commands/doctor.ts -> src/core/specs.ts
+      reason: >-
+        doctor reaches core directly for work no spec models yet: findLegacySpecFiles, the legacy
+        spec-filename check. Track D designs that area and routes doctor through a modelled adapter.
+    - code: UNDECLARED_DEPENDENCY
+      at: src/commands/doctor.ts -> src/core/provision.ts
+      reason: >-
+        doctor reaches core directly for work no spec models yet: backfillChainedSubprojectConfigs,
+        the chained-subproject config backfill. Track D designs that area and routes doctor through
+        a modelled adapter.
+    - code: UNDECLARED_DEPENDENCY
+      at: src/commands/doctor.ts -> src/core/skills.ts
+      reason: >-
+        doctor reaches core directly for work no spec models yet: activeTargetTypes,
+        checkSkillFreshness and exportSddSkills — skill freshness and the active targets. Track D
+        designs that area and routes doctor through a modelled adapter.
+    - code: UNDECLARED_DEPENDENCY
+      at: src/commands/doctor.ts -> src/core/lockfile.ts
+      reason: >-
+        doctor reaches core directly for work no spec models yet: describeApprover, the approver
+        text on the lock report. Track D designs that area and routes doctor through a modelled
+        adapter.
+    - code: UNDECLARED_DEPENDENCY
+      at: src/commands/doctor.ts -> src/core/extensions.ts
+      reason: >-
+        doctor reaches core directly for work no spec models yet: diagnoseProjectPacks and
+        pinInstalledPacksAsSelections — pack diagnosis and pinning. Track D designs that area and
+        routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-19T12:25:40.269Z'
+updatedAt: '2026-09-19T20:32:04.783Z'
