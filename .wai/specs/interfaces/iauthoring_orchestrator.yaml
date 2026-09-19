@@ -23,9 +23,12 @@ methods:
       Patch an existing spec of any level through the same judgement, by injecting it into the
       store's delta update as a write hook. The hook judges the MERGED spec, because a delta on its
       own cannot tell you the resulting componentType, and it is the resulting componentType that
-      decides whether a field belongs. Answers with the change report: exactly what changed, or that
-      nothing did and nothing was written.
-    signature: 'updateSpecGated(kind: string, id: string, delta: SpecDelta): SpecChangeReport'
+      decides whether a field belongs. Answers with the change report: exactly what changed, which
+      of the delta's paths changed nothing, or that nothing did and nothing was written. A dry run
+      forwards the caller's request to be told what the delta would do without writing it.
+    signature: >-
+      updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -37,6 +40,10 @@ methods:
       - name: delta
         type: SpecDelta
         description: The partial change to merge, shaped like the spec, carrying the delta's own verbs
+      - name: dryRun
+        type: boolean
+        description: Answer with what the delta would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-09-18T21:41:40.295Z'
+updatedAt: '2026-09-19T00:26:47.326Z'

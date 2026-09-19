@@ -30,6 +30,21 @@ fields:
     type: string
     description: One line for people, naming the spec and either the change count or that nothing was written.
     optional: false
+  - name: dryRun
+    type: boolean
+    description: >-
+      True when the caller asked what the delta would do and nothing was written. `written` is false
+      for a dry run exactly as it is for a delta that changed nothing, and only this field tells the
+      two apart.
+    optional: false
+  - name: ineffective
+    type: string[]
+    description: >-
+      Every path the delta named that the write did not act on, each with why: a key the level's
+      schema drops (a nested typo the permissive delta cannot refuse), or a value the stored spec
+      already held. Named rather than stripped, because a key silently dropped is how a typo reads
+      as a completed edit.
+    optional: false
 methods: []
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-09-18T21:11:43.574Z'
+updatedAt: '2026-09-19T00:26:09.623Z'

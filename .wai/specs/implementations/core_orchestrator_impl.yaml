@@ -1172,7 +1172,9 @@ methods:
         description: >-
           Collect every difference between the stored spec and the merged one as an addressed
           change, both read through the level's canonical schema so a key the writer would drop
-          cannot count as a change
+          cannot count as a change, and name every path the delta carried that the write does not
+          act on — one the schema drops at a depth the permissive delta cannot refuse, and one whose
+          value the stored spec already held
         type: local
       - stepNumber: 11
         description: Decide whether there is anything to write
@@ -1182,25 +1184,40 @@ methods:
       - stepNumber: 12
         description: >-
           Write nothing, leave the stored updatedAt untouched, and report that the delta matched
-          what is stored
+          what is stored, naming the paths it did not act on; a caller asking only what the delta
+          would do is answered the same way, because there is nothing it would do
         type: return
         outcome: unchanged
       - stepNumber: 13
         description: >-
-          Stamp updatedAt and run the caller's injected judgement on the merged spec — the last
-          point before anything reaches disk, so a refusal leaves "nothing was saved" literally true
+          Run the caller's injected judgement on the merged spec — the last point before anything
+          could reach disk, and run for a caller asking only what the delta would do as well, so an
+          answer that reports changes reports a write that would really be accepted
         type: local
       - stepNumber: 14
+        description: Decide whether the caller wanted the write or only the account of it
+        type: branch
+        condition: the caller asked only what the delta would do
+        onFalseStep: 16
+      - stepNumber: 15
+        label: dry-run
         description: >-
-          Persist the merged spec through the saver for its level, allowing a deliberate status
-          demotion when the delta carried an explicit status
+          Answer with the changes the write would make and the paths it would not act on, marked as
+          an account rather than a write: nothing is stamped and not one byte of the stored file
+          moves
+        type: return
+        outcome: dry run
+      - stepNumber: 16
+        description: >-
+          Stamp updatedAt and persist the merged spec through the saver for its level, allowing a
+          deliberate status demotion when the delta carried an explicit status
         type: call
         targetComponent: spec_loader
         targetMethod: saveComponentSpec
-      - stepNumber: 15
+      - stepNumber: 17
         description: >-
-          Report what was written: every change it made, the store's placement notices and the
-          judgement's warnings
+          Report what was written: every change it made, every path of the delta it did not act on,
+          the store's placement notices and the judgement's warnings
         type: return
         outcome: written
   - name: repairForeignStepFields
@@ -1267,4 +1284,4 @@ methods:
         outcome: the repairs, in tree order
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T23:51:10.433Z'
+updatedAt: '2026-09-19T00:29:12.137Z'

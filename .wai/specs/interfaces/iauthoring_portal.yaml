@@ -23,9 +23,13 @@ methods:
     description: >-
       Patch an existing spec at any level through the same gate. An update can introduce a misplaced
       field as easily as a create can, and unlike a create it can change the componentType out from
-      under fields that were legal before. Answers with the change report: exactly what changed, or
-      that nothing did and nothing was written. Routed to the gated workflow.
-    signature: 'updateSpecGated(kind: string, id: string, delta: SpecDelta): SpecChangeReport'
+      under fields that were legal before. Answers with the change report: exactly what changed,
+      which of the delta's paths changed nothing, or that nothing did and nothing was written. A dry
+      run runs the whole write, gate included, and answers with the report it would have produced
+      without touching disk. Routed to the gated workflow.
+    signature: >-
+      updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -37,6 +41,12 @@ methods:
       - name: delta
         type: SpecDelta
         description: The partial change to merge, carrying the delta's own verbs
+      - name: dryRun
+        type: boolean
+        description: >-
+          Answer with what the delta would do and write nothing; the report carries dryRun true and
+          written false
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:41:27.211Z'
-updatedAt: '2026-09-18T21:51:02.384Z'
+updatedAt: '2026-09-19T00:26:35.504Z'

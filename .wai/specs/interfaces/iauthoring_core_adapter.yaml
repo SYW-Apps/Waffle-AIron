@@ -20,10 +20,11 @@ methods:
     description: >-
       Apply a delta to one stored spec and persist the result, with the caller's judgement passed in
       as the write hook the store runs on the merged spec at the last point before anything reaches
-      disk. Forwarded to the core portal.
+      disk. A dry run is forwarded too: the store runs the whole write and answers with the report
+      it would have produced, writing nothing. Forwarded to the core portal.
     signature: >-
-      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks):
-      SpecChangeReport
+      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?:
+      boolean): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -39,6 +40,10 @@ methods:
         type: SpecWriteHooks
         description: The write-boundary judgement to run on the merged spec
         optional: true
+      - name: dryRun
+        type: boolean
+        description: Report what the delta would do and write nothing
+        optional: true
   - name: loadProjectConfig
     description: >-
       The bound project's configuration, or null when it has none — its rule severities and project
@@ -52,4 +57,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-18T21:41:49.125Z'
-updatedAt: '2026-09-18T21:51:04.239Z'
+updatedAt: '2026-09-19T00:26:52.045Z'
