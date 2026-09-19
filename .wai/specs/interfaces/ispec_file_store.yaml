@@ -1,21 +1,22 @@
 id: ispec_file_store
 name: Spec File Store Interface
 description: >-
-  Contract for raw YAML spec-file I/O: path-addressed reads/writes and directory listings, flat and
-  recursive.
+  Contract for spec-document file I/O: path-addressed reads and writes, and the recursive walk of a
+  spec directory. Paths are resolved by the caller and taken as given — the store is not bound to
+  one specs directory.
 component: spec_file_store
 methods:
   - name: read
     description: >-
-      Read and parse the YAML document at the given project-relative spec path, or null when absent
-      or empty.
+      Read and parse the spec document at the given path (resolved by the caller), or null when
+      absent or empty.
     signature: 'read(specPath: string): json | null'
     returns: json | null
     effect: read
   - name: write
     description: >-
-      Serialize the document as YAML and write it to the spec path, creating parent directories as
-      needed.
+      Serialize the document in the spec storage format and write it to the given path, creating
+      parent directories as needed.
     signature: 'write(specPath: string, document: json): void'
     returns: void
     effect: write
@@ -37,4 +38,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.287Z'
-updatedAt: '2026-07-24T18:01:45.212Z'
+updatedAt: '2026-09-19T18:25:31.364Z'
