@@ -18,7 +18,17 @@ fields:
     type: string
     description: One-line description of what the code flags.
     optional: false
+  - name: carryable
+    type: boolean
+    description: >-
+      This code may appear in the conformance debt register (rules.conformance.carried) — the
+      allowlist that keeps the register from becoming a second, general-purpose lint.allow. A code
+      earns it by MEASURING this project's own code against its own spec at a site the finding can
+      name, so paying it means changing code or spec; a doctrine, soundness or configuration finding
+      says the design is illegal rather than unfinished and is never carryable. Naming an
+      uncarryable code in the register is UNCARRYABLE_FINDING, an error.
+    optional: true
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:14.460Z'
-updatedAt: '2026-09-19T11:07:16.854Z'
+updatedAt: '2026-09-19T19:03:34.173Z'

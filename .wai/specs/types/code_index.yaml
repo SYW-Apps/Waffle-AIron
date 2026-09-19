@@ -44,6 +44,37 @@ methods:
     description: >-
       The weak anchors of a file alone — string literals and property-access names, without the
       declarations — which is where a contract method's declared finding code must appear
+  - name: originOf
+    signature: 'originOf(site: CallSiteFact, from: string): Set<string>'
+    returns: Set<string>
+    description: >-
+      The files the function a call site invokes IS written in, resolved against the closed path
+      set, or EMPTY when a pure model cannot say — which is an answer of its own and never a denial.
+      `from` is the file the site was read in, a carried site naming its own. Four shapes resolve: a
+      bare call on an import binding lands in the module that binding came from; a bare call on a
+      locally declared name lands in that file; a member call through a NAMESPACE import binding
+      lands in that module; a member call through a VALUE binding lands in that module only when the
+      module declares the invoked name too, since the property could otherwise have been attached
+      anywhere. Every landing is widened by the modules it republishes, so a call through a barrel
+      still lands where the function lives; a receiver that is not a plain identifier, a specifier
+      outside the closed set, a name with no binding at all, and any file below exact grade resolve
+      to nothing. This is the PROVEN tier, and the only one an accusation may be built on
+  - name: possibleOriginsOf
+    signature: 'possibleOriginsOf(site: CallSiteFact, from: string): Set<string>'
+    returns: Set<string>
+    description: >-
+      Every file the function a call site invokes CAN have been written in: the proven origins,
+      widened for the two receivers the code writes down. A this.<field>.<method>() site widens by
+      the modules that declare the field's declared TYPE (its type-only or runtime import binding,
+      else this file when it declares that name); a new Class(...).<method>() site widens by the
+      module the CLASS NAME came from (its runtime import binding — a constructed class is a value,
+      never a type-only one — else this file when it declares that class). Both are possibilities
+      and not facts: a declared type says what a constructor-injected collaborator is and never
+      which class ships the body, and a constructed class says where the class was written and never
+      where a method it INHERITS from a base was. Empty for a field the file annotates with nothing
+      and for a class name it cannot place, exactly as the proven tier is. A widened answer may only
+      ACCEPT a call as realized; naming a file a call landed in stays the proven tier's word alone,
+      since a possibility can never accuse
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:08.829Z'
-updatedAt: '2026-09-19T11:07:06.085Z'
+updatedAt: '2026-09-19T17:34:48.594Z'

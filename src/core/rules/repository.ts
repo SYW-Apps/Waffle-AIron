@@ -78,6 +78,7 @@ import { integrationSimWiringRule } from './conformance/integration-sim-wiring.j
 import { integrationSimCoverageRule } from './conformance/integration-sim-coverage.js';
 import { typeRealizationRule } from './conformance/type-realization.js';
 import { unclaimedSourceRule } from './conformance/unclaimed-source.js';
+import { carriedDebtRule } from './conformance/carried-debt.js';
 import { couplingRule } from './heuristic/coupling-health.js';
 import { signatureLanguageBuiltinsRule } from './heuristic/signature-language-builtins.js';
 import { narrativeLanguageConstructsRule } from './heuristic/narrative-language-constructs.js';
@@ -283,8 +284,11 @@ export const SDD_RULES: SddRule[] = [
   // elsewhere?) rather than spec content.
   packResolutionRule,
   reproducibilityRule,
-  // MUST run last: it audits which lint.allow entries the earlier rules
-  // actually consumed (stale/unknown allows).
+  // MUST run last, in this order: each audits what the earlier rules did
+  // with a declared exception. The debt register first (which carried
+  // findings the conformance family actually matched), then the allows
+  // (which suppressions any rule actually consumed).
+  carriedDebtRule,
   lintAllowsRule,
 ];
 
@@ -316,10 +320,15 @@ export function registerPackRules(packRules: SddRule[]): void {
   for (const rule of packRules) addRule(rule);
 }
 
-/** rule_index: the ordered run sequence — registration order with the lint-allows audit forced last. */
+/**
+ * rule_index: the ordered run sequence — registration order with the two
+ * audits of declared exceptions forced last, debt register before allows.
+ * Both read what the earlier rules did, so a pack rule registered after the
+ * built-ins must still run before them.
+ */
 export function ruleSequence(): SddRule[] {
-  const base = ruleSet.filter(r => r !== lintAllowsRule);
-  return ruleSet.includes(lintAllowsRule) ? [...base, lintAllowsRule] : base;
+  const audits = [carriedDebtRule, lintAllowsRule].filter(r => ruleSet.includes(r));
+  return [...ruleSet.filter(r => !audits.includes(r)), ...audits];
 }
 
 /**

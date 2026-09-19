@@ -125,6 +125,63 @@ export type ComplexityRuleConfig = z.infer<typeof ComplexityRuleConfigSchema>;
  * reported. That is what makes "the list cannot grow silently" a property
  * rather than a hope.
  */
+/**
+ * Why a conformance finding is carried instead of fixed. A register that
+ * records only WHAT it holds is a suppression list with extra steps; the kind
+ * is what lets a reader tell debt to pay from a limit to live with, and it is
+ * required for exactly that reason.
+ *
+ *  - `drift`      the spec and the code genuinely disagree, and an author
+ *                 fixes one of them. Debt, and whose it is is known.
+ *  - `undecided`  the finding is right and the fix waits on a modelling
+ *                 decision nobody has taken. Debt, but a decision comes first.
+ *  - `unreadable` the analysis cannot follow the shape the code is written in,
+ *                 so it reports what it did not check. Nothing in this tree is
+ *                 wrong: a limit, until the reader learns the shape.
+ */
+export const CarriedDebtKindSchema = z.enum(['drift', 'undecided', 'unreadable']);
+export type CarriedDebtKind = z.infer<typeof CarriedDebtKindSchema>;
+
+/**
+ * One carried finding, named precisely enough that the register can only hold
+ * what would otherwise fire — and, crucially, precisely enough that a finding
+ * which AGGREGATES cannot grow behind it.
+ */
+export const CarriedFindingSchema = z.object({
+  /** The issue code, which must be one a rule declares CARRYABLE — anything else is UNCARRYABLE_FINDING, an error. */
+  code: z.string(),
+  /** The spec the finding is anchored to. */
+  spec: z.string(),
+  /** The site inside that spec the finding names — for the code-vs-spec call checks, the contract method. */
+  at: z.string(),
+  /**
+   * The units an aggregating finding covers: the crossings of one
+   * UNDECLARED_COLOCATED_CALL, the steps of one CALL_STEP_UNREALIZED. Keyed by
+   * code + spec + site ALONE, a 24th crossing added to a finding that already
+   * lists 23 would be carried by an entry nobody wrote for it — so a live
+   * finding is carried only when every unit it reports is listed here, and a
+   * unit that appears is reported as new.
+   */
+  covers: z.array(z.string()).optional(),
+});
+export type CarriedFinding = z.infer<typeof CarriedFindingSchema>;
+
+/**
+ * One REASON, and the conformance findings it explains. The grouping is the
+ * point: the same fact usually produces many findings (one file modelled as
+ * five components produces a crossing per method), and a reason restated per
+ * finding is prose that rots in N places instead of one.
+ */
+export const CarriedDebtSchema = z.object({
+  /** Which of the three kinds this reason is (see CarriedDebtKindSchema). */
+  kind: CarriedDebtKindSchema,
+  /** The reason itself, in the author's own words — what is true here, and what paying it would take. */
+  why: z.string().min(1),
+  /** The findings this reason explains. */
+  findings: z.array(CarriedFindingSchema),
+});
+export type CarriedDebt = z.infer<typeof CarriedDebtSchema>;
+
 export const ConformanceRuleConfigSchema = z.object({
   /**
    * Project-relative paths holding this project's own source code; a
@@ -148,6 +205,27 @@ export const ConformanceRuleConfigSchema = z.object({
    * STALE_UNCLAIMED_ENTRY.
    */
   unclaimed: z.array(z.string()).optional(),
+  /**
+   * The conformance findings this tree carries as declared debt, grouped by
+   * the reason that explains them — `unclaimed`'s shape, for findings about
+   * code a spec DOES claim.
+   *
+   * It is not a second lint.allow, and the difference is the claim each makes.
+   * An allow says "this finding is wrong here, by design", and is meant to
+   * live forever; an entry here says "this finding is RIGHT, and it is not
+   * paid yet". A mechanism that cannot tell those apart can never be asked how
+   * much the tree owes. Four properties keep it a register:
+   *   • only a code a rule declares CARRYABLE may appear (UNCARRYABLE_FINDING,
+   *     an error, which no allow and no --ci waiver can reach);
+   *   • an entry carries a finding only when it lists EVERY unit that finding
+   *     reports, so an aggregating finding cannot grow behind it;
+   *   • an entry that stops applying — gone, or listing a unit no longer
+   *     reported — is STALE_CARRIED_FINDING, so the register only shrinks;
+   *   • every entry states its kind and its reason, and `wairon validate`
+   *     prints the running total, so the debt is loud where a suppression is
+   *     silent.
+   */
+  carried: z.array(CarriedDebtSchema).optional(),
 });
 export type ConformanceRuleConfig = z.infer<typeof ConformanceRuleConfigSchema>;
 

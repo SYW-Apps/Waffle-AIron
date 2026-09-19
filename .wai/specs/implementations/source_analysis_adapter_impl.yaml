@@ -44,19 +44,36 @@ methods:
       - stepNumber: 5
         description: >-
           Extract per-file facts: declaration-tier names (named declarations at any nesting depth,
-          destructuring bindings, object-literal keys, import bindings, export specifiers with
-          export-* barrels chased through relative specifiers using a visited set), weak anchors
-          (exact string literals and property-access references), exported names, import module
-          specifiers, and — at exact grade, before the barrel chase adds the republished names —
-          whether the file declared nothing of its own and only re-exported, which is what makes it
-          a pure re-export barrel
+          destructuring bindings, object-literal keys, import bindings, export specifiers), weak
+          anchors (exact string literals and property-access references), exported names, import
+          module specifiers, and — at exact grade — the runtime import BINDINGS by local name (which
+          module each came from, which were bound as a whole namespace, which the import renamed),
+          the module each TYPE-ONLY binding came from, kept apart because a type binding can never
+          be a call origin though it is what a declared type resolves through, the type names each
+          instance FIELD is declared with from class property declarations and constructor parameter
+          properties, an unannotated field recording nothing since an inferred type is not a
+          declared one, the call SITES of each named function-like with the shape each call was
+          written in — a bare name, a plain-identifier receiver, the this.<field> receiver whose
+          declared type can be followed, or the new Class(...) receiver whose class name can be —
+          and, before any republication is folded in, whether the file declared nothing of its own
+          and only re-exported, which is what makes it a pure re-export barrel
         type: local
       - stepNumber: 6
+        label: chaseReexports
+        description: >-
+          Chase the re-export barrels through their relative specifiers with a visited set: merge
+          every export-* target's exported names into the declaration tier, and carry the measured
+          BODY — complexity and call sites — of every name a barrel republishes, named re-export and
+          star alike, since the two spellings republish the same way. A carried site keeps the file
+          it was READ in, so its bare names and receivers resolve in the real module's scope and
+          never in the barrel's
+        type: local
+      - stepNumber: 7
         description: >-
           Degrade any file whose exact analysis throws to the generic scan, recording the grade per
           file — a single file never aborts the run
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Return the assembled CodeModel: per-file facts, the resolved project root, and the walked
           root-file list the unclaimed-source rule judges
@@ -64,4 +81,4 @@ methods:
         outcome: CodeModel
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-09-19T10:58:44.380Z'
+updatedAt: '2026-09-19T17:34:57.412Z'

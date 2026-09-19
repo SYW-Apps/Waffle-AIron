@@ -1,9 +1,11 @@
 import {
   defaultConformanceTier,
+  hasFunctionBody,
+  importBindingOf,
   methodSourceFile,
   type ConformanceTier,
 } from '../../../models/index.js';
-import { RuleContext, SddRule } from '../types.js';
+import { CodeIndex, RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Code↔spec Level 1, second question: does the file contain the method?
@@ -31,14 +33,58 @@ import { RuleContext, SddRule } from '../types.js';
 // A file that escapes the root, is missing or is unreadable blocks only the
 // methods realized in it: source-file-linkage reports it once, and the method
 // is skipped here rather than reported twice.
+//
+// A name being PRESENT is not the same as an implementation being there, and
+// the second question is METHOD_BODY_NOT_FOUND's: the symbol is a declaration
+// of this file, and the file holds no function-like BODY under it — an
+// overload signature, an ambient declaration, an interface or type member, a
+// plain value binding, a name this file only imports or re-exports. Every
+// deeper check reads a body (the callee set of Level 3, the measured
+// complexity of the detail dial), so without one they all go quiet and the
+// method reads as realized on the strength of its name alone. Only EXACT
+// grade measures bodies, so only exact grade asks; and only a DECLARED symbol
+// is asked about, because the anchored tier's string-literal registration
+// deliberately claims no function at all.
 // ---------------------------------------------------------------------------
+
+/**
+ * Whether a body can be REACHED under a symbol from the file that claims it —
+ * here, or wherever this file's own imports and republications carry it.
+ *
+ * A thin adapter that forwards a name (`export const hostCore = { provision }`,
+ * a re-export barrel) writes no body of its own, and demanding one would turn
+ * the N:1 identity forwarding Level 1 already blesses into a finding. What is
+ * NOT reachable is a name with no body at the end of that chain: a signature,
+ * an ambient or interface declaration, a plain value binding.
+ *
+ * Every origin must be measured at exact grade before the answer can be "no":
+ * a file the run did not read at exact grade holds no measured bodies at all,
+ * which is not the same as holding none — and a symbol that resolves nowhere
+ * (a package import) is unreadable rather than absent.
+ */
+function bodyReachable(code: CodeIndex, file: string, symbol: string): boolean {
+  const facts = code.factsAt(file);
+  if (!facts) return true;
+  const names = new Set([symbol]);
+  const binding = importBindingOf(facts, symbol);
+  if (binding?.imported) names.add(binding.imported);
+  const origins = code.originOf({ name: symbol, member: false }, file);
+  if (origins.size === 0) return true;
+  for (const origin of origins) {
+    const at = code.factsAt(origin);
+    if (!at || at.status !== 'analyzed' || at.analysisGrade !== 'exact') return true;
+    for (const name of names) if (hasFunctionBody(at, name)) return true;
+  }
+  return false;
+}
 
 export const methodRealizationRule: SddRule = {
   name: 'method-realization',
   description:
-    'Code↔spec Level 1: every L3 contract method must be realized in its own source file (the method\'s sourcePath, else the implementation\'s) at its conformance tier — declared | anchored | off; Portals default to anchored, everything else to declared, and a per-method `symbol` maps an intent-language name onto the code name. Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. Methods whose file escapes the root, is missing or could not be analyzed are left to source-file-linkage, and implementations under chained subsystems (projectPath) validate standalone in their own project run.',
+    'Code↔spec Level 1: every L3 contract method must be realized in its own source file (the method\'s sourcePath, else the implementation\'s) at its conformance tier — declared | anchored | off; Portals default to anchored, everything else to declared, and a per-method `symbol` maps an intent-language name onto the code name. A method realized by a DECLARATION owes a function BODY as well: at exact grade one must be reachable under the symbol, here or through the imports and republications this file forwards it by, so a signature, an ambient or interface declaration or a plain value binding stops reading as an implementation (METHOD_BODY_NOT_FOUND). Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. Methods whose file escapes the root, is missing or could not be analyzed are left to source-file-linkage, and implementations under chained subsystems (projectPath) validate standalone in their own project run.',
   codes: [
     { code: 'UNREALIZED_METHOD', defaultSeverity: 'warning', summary: 'An L3 contract method has no anchor in its own source file (the method\'s sourcePath, else the implementation\'s) at the required conformance tier' },
+    { code: 'METHOD_BODY_NOT_FOUND', defaultSeverity: 'warning', summary: 'The method symbol IS declared in its own source file, but the file holds no function-like body under it — a signature, an ambient or interface declaration, a value binding, an imported or re-exported name', carryable: true },
   ],
 
   check(ctx: RuleContext): void {
@@ -73,7 +119,25 @@ export const methodRealizationRule: SddRule = {
         const inDeclared = code.declarationsAt(file).has(symbol);
         const inAnchored = inDeclared || code.anchorsAt(file).has(symbol);
         const realized = tier === 'declared' ? inDeclared : inAnchored;
-        if (realized) continue;
+        if (realized) {
+          // Realized by a DECLARATION, at the grade that measures bodies, and
+          // no body under that name anywhere the model can follow: the spec
+          // points at a symbol no deeper check can read.
+          if (!inDeclared || facts.analysisGrade !== 'exact' || bodyReachable(code, file, symbol)) continue;
+          const bodyLabel = methodImpl?.symbol ? `"${method.name}" (symbol "${symbol}")` : `"${method.name}"`;
+          ctx.addIssue(
+            'warning',
+            'METHOD_BODY_NOT_FOUND',
+            `Method ${bodyLabel} of contract "${impl.contract}" is declared in "${file}" but has no function body there — a signature, an ambient or interface declaration, a value binding, or a name this file only imports or re-exports. Every deeper check reads a body (the realized calls of Level 3, the measured complexity of the detail dial), so this method is judged on its name alone. Point the sourcePath at the file that implements it, map the code name via a per-method SYMBOL, or dial this method to "off".`,
+            impl.id,
+            draft,
+            undefined,
+            // One method, one indivisible fact: nothing here aggregates, so
+            // the site alone is the whole identity.
+            { at: method.name },
+          );
+          continue;
+        }
 
         const label = methodImpl?.symbol ? `"${method.name}" (symbol "${symbol}")` : `"${method.name}"`;
         const weakHint = tier === 'declared' && inAnchored

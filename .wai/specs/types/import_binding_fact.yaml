@@ -1,0 +1,34 @@
+kind: value-object
+id: import_binding_fact
+name: ImportBindingFact
+description: >-
+  One runtime (value) import binding a file makes: the module specifier a local name came from, and
+  whether it was bound as a whole NAMESPACE. The namespace flag separates the two readings of
+  x.save(). For a namespace import (import * as specs from './specs.js'), specs.save IS that
+  module's own export, so the call site resolves to the module. For a named or default binding,
+  db.save is a property of a VALUE that module handed over, and where that property's function was
+  written is beyond a pure model — so the module alone answers nothing until it is seen to declare
+  the invoked name too. Type-only imports are never recorded: a type binding cannot be a call
+  origin.
+subsystem: sdd_validator
+fields:
+  - name: from
+    type: string
+    description: The module specifier the binding came from, exactly as written
+    optional: false
+  - name: namespace
+    type: boolean
+    description: >-
+      True for import * as name from ... — the only binding whose property calls are that module's
+      own exports
+    optional: true
+  - name: imported
+    type: string
+    description: >-
+      The name the module publishes it under, set only when the import renamed it (import { save as
+      store })
+    optional: true
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-09-19T15:30:44.956Z'
+updatedAt: '2026-09-19T15:30:44.966Z'

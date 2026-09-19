@@ -1,0 +1,25 @@
+kind: value-object
+id: finding_parts
+name: FindingParts
+description: >-
+  What a carryable finding IS, apart from the prose it is reported in: where inside its spec it
+  lands, and which units it aggregates. Prose cannot be an identity — it is reworded, and it carries
+  counts. The units can: an UNDECLARED_COLOCATED_CALL that lists 23 crossings is 23 facts wearing
+  one message, and a register keyed by code and spec alone would carry the 24th for free.
+fields:
+  - name: at
+    type: string
+    description: >-
+      The site inside the spec the finding names — for the code↔spec call checks, the contract
+      method.
+    optional: false
+  - name: covers
+    type: string[]
+    description: >-
+      The units the finding aggregates, each named the way the finding's own message names it.
+      Omitted when the finding is one indivisible fact.
+    optional: true
+methods: []
+sourcePath: src/core/rules/types.ts
+createdAt: '2026-09-19T19:04:12.229Z'
+updatedAt: '2026-09-19T19:04:12.242Z'

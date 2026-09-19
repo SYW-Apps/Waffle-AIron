@@ -15,10 +15,11 @@ import {
   CodeModel,
   SourceFileFacts,
   SurfaceRefResolution,
+  CallSiteFact,
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
-import type { PackSelection } from '../../models/project.js';
+import type { CarriedDebtKind, PackSelection } from '../../models/project.js';
 import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
 
@@ -41,6 +42,60 @@ export interface RuleCode {
   code: string;
   defaultSeverity: Severity;
   summary: string;
+  /**
+   * This code may appear in the conformance debt register
+   * (`rules.conformance.carried`) — the allowlist that keeps the register from
+   * becoming a second, general-purpose lint.allow.
+   *
+   * A code earns it by MEASURING this project's own code against its own spec
+   * at a site the finding can name: the answer is a fact about the tree as it
+   * stands, and paying it means changing code or spec. A doctrine violation, a
+   * malformed spec and a configuration error are none of those — they say the
+   * design is illegal, not that the work is unfinished — and are never
+   * carryable. Naming an uncarryable code in the register is UNCARRYABLE_FINDING,
+   * an ERROR, so widening this set is always a reviewed act.
+   *
+   * A carryable code's rule must hand `addIssue` the finding's `parts`; without
+   * them nothing can match it, and every entry written for it reads as stale.
+   */
+  carryable?: boolean;
+}
+
+/**
+ * What a carryable finding IS, apart from the prose it is reported in: where
+ * inside its spec it lands, and which units it aggregates.
+ *
+ * Prose cannot be an identity — it is reworded, and it carries counts. The
+ * units can: an UNDECLARED_COLOCATED_CALL that lists 23 crossings is 23 facts
+ * wearing one message, and a register keyed by code and spec alone would carry
+ * the 24th for free. `covers` is what closes that.
+ */
+export interface FindingParts {
+  /** The site inside the spec the finding names — for the code↔spec call checks, the contract method. */
+  at: string;
+  /** The units the finding aggregates, each named the way the finding's own message names it. Omitted when the finding is one indivisible fact. */
+  covers?: string[];
+}
+
+/**
+ * One entry of the conformance debt register, resolved for the run: the
+ * finding it names, the reason group it came from, and what the run actually
+ * saw of it — which is how the audit tells a live entry from a stale one.
+ */
+export interface CarriedFindingEntry {
+  /** The kind its reason group declared: drift, undecided or unreadable. */
+  kind: CarriedDebtKind;
+  /** That group's reason, carried onto the entry so a finding about it can quote it. */
+  why: string;
+  code: string;
+  spec: string;
+  at: string;
+  /** The units the entry carries; empty when the finding it names is one indivisible fact. */
+  covers: string[];
+  /** A finding with this code, spec and site fired this run. */
+  fired: boolean;
+  /** Which of `covers` that finding actually reported — a listed unit missing from it has been paid. */
+  seen: Set<string>;
 }
 
 /** The built-in architectural profiles; extension packs may register more. */
@@ -87,6 +142,43 @@ export interface CodeIndex {
   anchorsAt(path: string): ReadonlySet<string>;
   /** The weak anchors alone — string literals and property-access names — which is where a declared finding code must appear. */
   findingAnchorsAt(path: string): ReadonlySet<string>;
+  /**
+   * The files the function a call site invokes IS written in, resolved
+   * against the closed path set, or EMPTY when a pure model cannot say —
+   * which is an answer of its own and never a denial.
+   *
+   * `from` is the file the site was read in (a carried site names its own).
+   * Four shapes resolve: a bare call on an import binding lands in the module
+   * that binding came from; a bare call on a locally declared name lands in
+   * that file; a member call through a NAMESPACE import binding lands in that
+   * module; and every landing is widened by the modules it republishes, so a
+   * call through a barrel still lands where the function lives. Everything
+   * else — a member call through a value, a receiver that is not a plain
+   * identifier, a specifier outside the closed set, a name with no binding at
+   * all — resolves to nothing.
+   *
+   * This is the PROVEN tier, and the only one an accusation may be built on.
+   */
+  originOf(site: CallSiteFact, from: string): ReadonlySet<string>;
+  /**
+   * Every file the function a call site invokes CAN have been written in: the
+   * proven origins, widened for the two receivers the code writes a NAME for.
+   * A `this.<field>.<method>()` site widens by the modules that declare the
+   * field's DECLARED TYPE — its type-only or runtime import binding, else this
+   * file when it declares that name itself; a `new Class(…).<method>()` site
+   * widens by the module its CLASS NAME came from — its RUNTIME import binding
+   * (a constructed class is a value, never a type-only binding), else this
+   * file when it declares that class.
+   *
+   * Possibilities, not facts: a declared type says what a constructor-injected
+   * collaborator is, never which class ships the body, and a constructed class
+   * says where the class was written, never where a method it INHERITS from a
+   * base was. A widened answer may therefore only ACCEPT a call as realized;
+   * naming a file a call landed in stays `originOf`'s word alone. A field the
+   * file annotates with nothing, and a class name it cannot place, resolve to
+   * nothing, exactly as the proven tier does.
+   */
+  possibleOriginsOf(site: CallSiteFact, from: string): ReadonlySet<string>;
 }
 
 /**
@@ -425,6 +517,17 @@ export interface RuleContext {
   knownIssueCodes: Set<string>;
 
   /**
+   * The conformance debt register (`rules.conformance.carried`), flattened to
+   * one entry per carried finding and carrying its reason group's kind and
+   * why. Carrying happens inside addIssue — after the lint allows, so an
+   * allow and an entry can never both claim one finding — and the
+   * carried-debt rule audits these entries at the end of the run.
+   */
+  carriedFindings: CarriedFindingEntry[];
+  /** Every issue code a registered rule declares CARRYABLE — what the register's entries are checked against. */
+  carryableIssueCodes: Set<string>;
+
+  /**
    * Report an issue. Applies scope filtering, user severity overrides
    * (rules.sddRuleSeverity), and draft-context downgrades for completeness
    * rules. 'off' suppresses the issue entirely.
@@ -433,6 +536,12 @@ export interface RuleContext {
    * vendored surface snapshot — a genuine contract/boundary verdict rather
    * than a resolution failure, so it keeps full strength in a chained
    * subproject.
+   *
+   * `parts` is the finding's IDENTITY — its site inside the spec and the units
+   * it aggregates — which is what the conformance debt register matches on. A
+   * rule emitting a CARRYABLE code must supply it; a matching entry that lists
+   * every unit carries the warning, and a unit the entry does not list is
+   * named back as new rather than absorbed.
    */
   addIssue(
     defaultSeverity: Severity,
@@ -441,6 +550,7 @@ export interface RuleContext {
     specId?: string,
     isDraftContext?: boolean,
     surfaceResolved?: boolean,
+    parts?: FindingParts,
   ): void;
 }
 

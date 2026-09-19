@@ -1,0 +1,44 @@
+kind: value-object
+id: carried_finding_entry
+name: CarriedFindingEntry
+description: >-
+  One entry of the conformance debt register, resolved for the run: the finding it names, the reason
+  group it came from, and what the run actually saw of it — which is how the audit tells a live
+  entry from a stale one.
+fields:
+  - name: kind
+    type: string
+    description: 'The kind its reason group declared: drift, undecided or unreadable.'
+    optional: false
+  - name: why
+    type: string
+    description: That group's reason, carried onto the entry so a finding about it can quote it.
+    optional: false
+  - name: code
+    type: string
+    description: The issue code the entry carries.
+    optional: false
+  - name: spec
+    type: string
+    description: The spec the carried finding is anchored to.
+    optional: false
+  - name: at
+    type: string
+    description: The site inside that spec the carried finding names.
+    optional: false
+  - name: covers
+    type: string[]
+    description: The units the entry carries; empty when the finding it names is one indivisible fact.
+    optional: false
+  - name: fired
+    type: boolean
+    description: A finding with this code, spec and site fired this run.
+    optional: false
+  - name: seen
+    type: Set<string>
+    description: Which of covers that finding actually reported — a listed unit missing from it has been paid.
+    optional: false
+methods: []
+sourcePath: src/core/rules/types.ts
+createdAt: '2026-09-19T19:04:18.420Z'
+updatedAt: '2026-09-19T19:04:18.433Z'
