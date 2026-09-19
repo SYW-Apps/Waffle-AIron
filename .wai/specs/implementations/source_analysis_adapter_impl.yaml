@@ -15,38 +15,53 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Deduplicate the distinct source paths across all implementations — each implementation's
-          sourcePath, each method's own sourcePath and each simPath — and resolve each against the
+          Walk the declared source roots for the files no spec need name: resolve each root within
+          the project root (an absolute or parent-escaping root is refused by containment and never
+          walked), take a file root as itself and descend a directory root recursively without
+          entering a directory named node_modules or one whose name begins with a dot, and keep each
+          file, once and as a canonical project-relative key, whose extension names a language the
+          analyzer knows and that is not at, or under, an exclude entry. Declaring no root finds
+          nothing, which is what keeps the unclaimed-source check opt-in
+        type: local
+      - stepNumber: 2
+        description: >-
+          Deduplicate the distinct source paths the specs name — each implementation's sourcePath,
+          each method's own sourcePath and each simPath, then each type's sourcePath and each type
+          method's own sourcePath — append the walked rootFiles, and resolve each against the
           project root, classifying absolute or parent-escaping paths as escaped (containment,
           mirroring the projectPath rule) and nonexistent files as missing
         type: local
-      - stepNumber: 2
+      - stepNumber: 3
         description: Read each remaining file as text, classifying binary or unreadable content as unreadable
         type: local
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
           Select the analyzer per file: exact AST when the TypeScript compiler module resolves
           dynamically for ts/js (analyzed project's node_modules first, wairon's own installation
           second, never bundled); else the file language's declarative pattern table (built-in
           tables merged under extension-pack registrations); else the generic word-boundary scan
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Extract per-file facts: declaration-tier names (named declarations at any nesting depth,
           destructuring bindings, object-literal keys, import bindings, export specifiers with
           export-* barrels chased through relative specifiers using a visited set), weak anchors
-          (exact string literals and property-access references), exported names, and import module
-          specifiers
+          (exact string literals and property-access references), exported names, import module
+          specifiers, and — at exact grade, before the barrel chase adds the republished names —
+          whether the file declared nothing of its own and only re-exported, which is what makes it
+          a pure re-export barrel
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Degrade any file whose exact analysis throws to the generic scan, recording the grade per
           file — a single file never aborts the run
         type: local
-      - stepNumber: 6
-        description: Return the assembled CodeModel (per-file facts plus the resolved project root)
+      - stepNumber: 7
+        description: >-
+          Return the assembled CodeModel: per-file facts, the resolved project root, and the walked
+          root-file list the unclaimed-source rule judges
         type: return
         outcome: CodeModel
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-09-13T20:55:18.297Z'
+updatedAt: '2026-09-19T10:58:44.380Z'

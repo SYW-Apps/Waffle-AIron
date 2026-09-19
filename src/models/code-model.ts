@@ -59,6 +59,15 @@ export interface SourceFileFacts {
    * const-bound containers is invisible to this collection; the lint says so.)
    */
   topLevelMutableBindings?: string[];
+  /**
+   * True when the file declared nothing of its own and only re-exported —
+   * a pure re-export barrel, which has no code to claim. Measured BEFORE the
+   * barrel chase folds the republished names into `declaredNames`, since
+   * after it a barrel is indistinguishable from the files it publishes.
+   * EXACT grade only: a weaker grade cannot tell a barrel from a file it
+   * failed to parse, so it leaves this unset rather than guess.
+   */
+  reexportOnly?: boolean;
 }
 
 export interface CodeModel {
@@ -66,6 +75,13 @@ export interface CodeModel {
   files: SourceFileFacts[];
   /** The root every sourcePath was resolved and containment-checked against. */
   projectRoot: string;
+  /**
+   * Every source file the declared source-root walk found, as canonical keys
+   * in walk order — the domain the unclaimed-source rule judges. Empty when
+   * the project declares no source roots, which is what keeps that rule
+   * opt-in. Facts for these files live in `files`, like any other path.
+   */
+  rootFiles: string[];
 }
 
 /**

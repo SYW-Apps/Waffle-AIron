@@ -1107,6 +1107,21 @@ export const TypeMethodSchema = z.object({
   signature: z.string(),
   returns: z.string(),
   description: z.string().optional(),
+  /**
+   * Source file realizing this method when it is not the type's own
+   * sourcePath. A type's pure methods routinely live apart from its
+   * declaration: the declaration is a struct or an interface, the methods are
+   * free functions, and a language without methods-on-data has nowhere else
+   * to put them.
+   */
+  sourcePath: z.string().optional(),
+  /**
+   * The code-level name realizing this method, when it legitimately differs
+   * from the method name — e.g. `narrative_step.foreignFields` realized by
+   * `narrativeStepForeignFields`, the free-function form a pure type method
+   * takes in a language whose data carries no methods.
+   */
+  symbol: z.string().optional(),
 });
 export type TypeMethod = z.infer<typeof TypeMethodSchema>;
 
@@ -1162,6 +1177,23 @@ export const TypeSpecSchema = z.object({
    * logical system entity type it maps to.
    */
   linkedEntity: z.string().optional(),
+  /**
+   * The source file holding this type's declaration, and the default for
+   * every method that names no sourcePath of its own. Relative to the root of
+   * the project that holds the spec.
+   *
+   * Naming one turns the type into a CLAIM on code, judged exactly as an
+   * implementation's sourcePath is: the file must resolve, and the
+   * declaration must be anchored in it (UNREALIZED_TYPE). A type that names
+   * none claims nothing and is never reported.
+   */
+  sourcePath: z.string().optional(),
+  /**
+   * The code-level name realizing this type's declaration, when it
+   * legitimately differs from `name` — a type named "Invoice Line" declared
+   * as `InvoiceLine`.
+   */
+  symbol: z.string().optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
@@ -1170,6 +1202,22 @@ export const TypeSpecSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 export type TypeSpec = z.infer<typeof TypeSpecSchema>;
+
+/**
+ * Every source file a type names — its own sourcePath, then each method's —
+ * deduplicated, in declaration order (type_spec.sourceFiles).
+ */
+export function typeSourceFiles(
+  type: Pick<TypeSpec, 'sourcePath'> & { methods?: ReadonlyArray<Pick<TypeMethod, 'sourcePath'>> },
+): string[] {
+  const files: string[] = [];
+  const add = (file: string | undefined): void => {
+    if (file && !files.includes(file)) files.push(file);
+  };
+  add(type.sourcePath);
+  for (const method of type.methods ?? []) add(method.sourcePath);
+  return files;
+}
 
 // ---------------------------------------------------------------------------
 // Surface snapshots — the portable, contract-grade public-surface artifact

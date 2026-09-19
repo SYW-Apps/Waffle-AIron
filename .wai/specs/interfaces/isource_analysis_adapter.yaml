@@ -2,37 +2,63 @@ id: isource_analysis_adapter
 name: Source Analysis Adapter Interface
 description: >-
   Adapter contract for building the pure source-code model that structural conformance validates
-  against. Intent-language only — the parser technology is a swap seam declared on the L4. The
-  contract promises graceful degradation: analysis grade may vary per file, but a readable file
-  always yields facts and a failed file yields a classified non-analyzed entry; the run itself never
-  fails.
+  against, and for finding the source files a project declares as its own. Intent-language only —
+  the parser technology is a swap seam declared on the L4. The contract promises graceful
+  degradation: analysis grade may vary per file, but a readable file always yields facts and a
+  failed file yields a classified non-analyzed entry; the run itself never fails.
 component: source_analysis_adapter
 methods:
   - name: buildCodeModel
     description: >-
-      Resolve each distinct source file the implementations name — every implementation sourcePath,
-      every method's own sourcePath and every simPath — within the project root (absolute or
-      parent-escaping paths classify as escaped, nonexistent files as missing, binary/unreadable
-      content as unreadable), analyze every readable file with the best available analyzer — exact
-      AST when the TypeScript compiler module resolves dynamically for ts/js, else the language's
-      declarative pattern table (built-in or extension-pack registered), else the generic
-      word-boundary scan — and return per-file facts (declaration-tier names, string-literal and
-      property-access anchors, exported names, import specifiers, and — at exact grade only —
-      per-named-function cyclomatic complexity plus per-named-function direct callee names, fuel for
-      the detail-sufficiency lint and the call-step realization check; lower grades omit both rather
-      than guess) graded exact | pattern | generic. Deterministic over file contents; a single
-      file's analysis failure degrades that file, never the run.
-    signature: 'buildCodeModel(implementations: ImplementationSpec[], projectRoot: string): CodeModel'
+      Walk the declared source roots for the files no spec need name — each root resolved and
+      containment-checked within the project root (an absolute or parent-escaping root is refused,
+      never walked), a file root standing for itself and a directory root descended recursively
+      without entering node_modules or a dot-directory, keeping each file whose extension names a
+      language the analyzer knows and that is not at, or under, an exclude entry — then resolve each
+      distinct source file the specs name (every implementation sourcePath, every method's own
+      sourcePath, every simPath, and every type sourcePath and type-method sourcePath) on the same
+      terms (absolute or parent-escaping paths classify as escaped, nonexistent files as missing,
+      binary/unreadable content as unreadable), analyze every readable file with the best available
+      analyzer — exact AST when the TypeScript compiler module resolves dynamically for ts/js, else
+      the language's declarative pattern table (built-in or extension-pack registered), else the
+      generic word-boundary scan — and return per-file facts (declaration-tier names, string-literal
+      and property-access anchors, exported names, import specifiers, and — at exact grade only —
+      per-named-function cyclomatic complexity, per-named-function direct callee names and whether
+      the file is a pure re-export barrel that declares nothing of its own; lower grades omit all
+      three rather than guess) graded exact | pattern | generic, beside the walked file list the
+      unclaimed-source rule judges. Declaring no source root walks nothing, which is what keeps that
+      rule opt-in. Deterministic over file contents; a single file's analysis failure degrades that
+      file, never the run.
+    signature: >-
+      buildCodeModel(implementations: ImplementationSpec[], types: TypeSpec[], projectRoot: string,
+      sourceRoots: string[], exclude: string[]): CodeModel
     returns: CodeModel
     params:
       - name: implementations
         type: ImplementationSpec[]
         description: >-
-          The loaded L4 specs whose implementation, method and sim paths define the file set
+          The loaded L4 specs whose implementation, method and sim paths define part of the file set
           (deduplicated — N:1 sharing is expected)
+      - name: types
+        type: TypeSpec[]
+        description: >-
+          The loaded type specs whose own and per-method sourcePaths claim code, analyzed on the
+          same terms
       - name: projectRoot
         type: string
-        description: The root all source paths are resolved and containment-checked within
+        description: The root every source path and source root is resolved and containment-checked within
+      - name: sourceRoots
+        type: string[]
+        description: >-
+          Project-relative directories or files holding this project's own source code; empty means
+          no walk, and the unclaimed-source rule stays silent
+        optional: true
+      - name: exclude
+        type: string[]
+        description: >-
+          Paths inside those roots that are not this project's code to claim — vendored libraries,
+          generated output, a chained subproject's own directory
+        optional: true
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-09-13T20:55:16.250Z'
+updatedAt: '2026-09-19T10:58:40.081Z'
