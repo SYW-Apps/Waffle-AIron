@@ -86,14 +86,20 @@ export function addComponent(candidate: ComponentSpec): string[] {
  * misplaced field just as easily as a create can — and unlike a create, it can
  * also change the componentType out from under fields that were legal before.
  *
- * Answers with a SpecChangeReport: exactly what changed, or that nothing did
- * and nothing was written. A caller that cannot tell those apart eventually
- * ships an edit it never made.
+ * Answers with a SpecChangeReport: exactly what changed, which of the delta's
+ * paths changed nothing, or that nothing did and nothing was written. A caller
+ * that cannot tell those apart eventually ships an edit it never made.
+ *
+ * `dryRun` runs the whole write, this gate included, and answers with the report
+ * it would have produced without touching disk — so "what will this delta do to
+ * a 200-step narrative" is a question that can be asked before it is answered
+ * by the file.
  */
 export function updateSpecGated(
   kind: WritableSpecKind,
   id: string,
   delta: Record<string, any>,
+  dryRun?: boolean,
 ): SpecChangeReport {
-  return updateSpec(kind, id, delta, componentCandidateGate());
+  return updateSpec(kind, id, delta, componentCandidateGate(), dryRun);
 }

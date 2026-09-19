@@ -821,8 +821,21 @@ export interface SpecChangeReport {
   id: string;
   /** False when the merged spec equals what is stored: nothing reached disk. */
   written: boolean;
+  /**
+   * True when the caller asked what the delta would do and nothing was written.
+   * `written` is false for a dry run exactly as it is for a delta that changed
+   * nothing, and only this field tells the two apart.
+   */
+  dryRun: boolean;
   /** Every change the write made; empty exactly when `written` is false. */
   changes: SpecChange[];
+  /**
+   * Every path the delta named that the write did not act on, each with why: a
+   * key the level's schema drops (a nested typo the permissive delta cannot
+   * refuse), or a value the stored spec already held. Named rather than
+   * stripped — a key silently dropped is how a typo reads as a completed edit.
+   */
+  ineffective: string[];
   /** Store placement notices, gate warnings and delta notices. */
   notices: string[];
   /** One line for people. */
@@ -944,6 +957,145 @@ export function specChanges(before: unknown, after: unknown, prefix = ''): SpecC
 
   if (JSON.stringify(before) === JSON.stringify(after)) return [];
   return [{ path: prefix, change: 'set', before: summarizeValue(before), after: summarizeValue(after) }];
+}
+
+/**
+ * The delta's own verbs, at every depth — addressing and instructions, never
+ * content, so they are never judged as paths that "had no effect".
+ */
+const DELTA_VERBS = new Set(['action', 'remove', 'captureJumps']);
+
+/**
+ * A jump field's symbolic twin. It resolves into its numeric field during the
+ * merge and is gone from the stored spec afterwards, which is an effect, not a
+ * silent drop.
+ */
+const JUMP_LABEL_TWINS = new Set([
+  'onTrueLabel', 'onFalseLabel', 'defaultLabel', 'endLabel', 'finallyLabel', 'toLabel',
+]);
+
+/** Array fields whose elements carry a `label` twin rather than a `label` field. */
+const LABEL_TWIN_CONTAINERS = new Set(['cases', 'catches', 'branches']);
+
+/**
+ * The KEY NAMES an array field's elements are matched by — the same table
+ * `identityKeyOf` reads values from. A delta restates them to ADDRESS an
+ * element, so restating one unchanged is addressing, not a failed edit.
+ */
+function identityFieldsOf(field: string): string[] {
+  switch (field) {
+    case 'dispatch':           return ['capability'];
+    case 'lifecycle':          return ['phase', 'component', 'method'];
+    case 'emits':
+    case 'subscribesTo':       return ['topic', 'event'];
+    case 'trustedLinks':       return ['subsystem'];
+    case 'allow':
+    case 'findings':           return ['code'];
+    case 'invariants':
+    case 'patterns':           return ['id'];
+    case 'boundaries':         return ['name'];
+    case 'globalRequirements': return ['description'];
+    case 'databases':          return ['id', 'name'];
+    case 'cases':              return ['value'];
+    case 'catches':            return ['error'];
+    case 'narrative':          return ['stepNumber'];
+    default:                   return ['name', 'id'];
+  }
+}
+
+/** Whether a delta element carries an insert/delete marker — its paths do not compare. */
+function carriesEditMarker(item: unknown): boolean {
+  if (item === null || typeof item !== 'object') return false;
+  const o = item as Record<string, unknown>;
+  return o.action !== undefined || o.remove !== undefined;
+}
+
+/**
+ * Every path the delta named that the write did not act on.
+ *
+ * The delta arrives as a permissive record BY DESIGN — the shapes nest further
+ * than any schema at the tool boundary should restate — so the top-level
+ * unknown-key refusal cannot reach a typo one level down. `methods[0].descriptoin`
+ * merges, is stripped by the level's schema on write, and is never mentioned:
+ * the same silent drop, one depth lower. This names it instead.
+ *
+ * Judged against the spec the write would PERSIST and the one it replaced, both
+ * read through the level's canonical schema, so a key the writer drops shows up
+ * as missing and a value the stored spec already held shows up as already held.
+ * Narrative arrays carrying an insert or delete are skipped whole: renumbering
+ * moves every step, so a path through them proves nothing either way.
+ */
+export function ineffectiveDeltaPaths(
+  delta: Record<string, unknown>,
+  merged: Record<string, any>,
+  stored: Record<string, any>,
+): string[] {
+  const out: string[] = [];
+  const isPlain = (v: unknown): v is Record<string, unknown> =>
+    typeof v === 'object' && v !== null && !Array.isArray(v);
+  const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+  const at = (prefix: string, key: string): string => (prefix ? `${prefix}.${key}` : key);
+  const say = (path: string, why: string): void => { out.push(`${path} — ${why}`); };
+
+  const walkValue = (d: unknown, m: unknown, s: unknown, path: string, field: string): void => {
+    if (Array.isArray(d)) {
+      if (!Array.isArray(m)) { say(path, 'the level does not have this field, so the write dropped it'); return; }
+      // A narrative whose delta inserts or deletes renumbers everything after
+      // the mutation point; no path through it can be compared honestly.
+      if (field === 'narrative' && d.some(carriesEditMarker)) return;
+      for (const element of d) {
+        if (carriesEditMarker(element)) continue;      // its own refusals and notices cover it
+        const key = reportIdentityOf(field, element);
+        if (key === null) {                             // a plain-string list: replaced wholesale
+          if (!same(m, d)) say(path, 'the level does not keep this value, so the write dropped it');
+          else if (same(s, d)) say(path, 'the stored spec already held this value');
+          return;
+        }
+        const mMatch = (m as unknown[]).find(i => reportIdentityOf(field, i) === key);
+        const sMatch = Array.isArray(s) ? s.find(i => reportIdentityOf(field, i) === key) : undefined;
+        if (mMatch === undefined) { say(at(path, key), 'the write did not store this element'); continue; }
+        walk(element as Record<string, unknown>, mMatch, sMatch, at(path, key), field);
+      }
+      return;
+    }
+    if (isPlain(d)) {
+      if (!isPlain(m)) { say(path, 'the level does not have this field, so the write dropped it'); return; }
+      walk(d, m, s, path, field);
+      return;
+    }
+    if (!same(m, d)) say(path, 'the write did not store it — the level\'s schema does not keep this value');
+    else if (same(s, d)) say(path, 'the stored spec already held this value');
+  };
+
+  function walk(d: Record<string, unknown>, m: unknown, s: unknown, path: string, container: string): void {
+    for (const [key, value] of Object.entries(d)) {
+      if (DELTA_VERBS.has(key) || JUMP_LABEL_TWINS.has(key)) continue;
+      if (key === 'label' && LABEL_TWIN_CONTAINERS.has(container)) continue;
+      if (identityFieldsOf(container).includes(key)) continue;   // addressing, not content
+      // `unset` is a verb whose effect IS observable: the field it names must
+      // have been there and must be gone.
+      if (key === 'unset') {
+        for (const name of Array.isArray(value) ? value : []) {
+          if (typeof name !== 'string') continue;
+          const had = isPlain(s) && s[name] !== undefined;
+          const still = isPlain(m) && m[name] !== undefined;
+          if (!had) say(at(path, name), 'unset named a field the stored spec did not have');
+          else if (still) say(at(path, name), 'unset did not remove it');
+        }
+        continue;
+      }
+      // null/undefined mean "no change" by contract — never a failed edit.
+      if (value === undefined || value === null) continue;
+      const here = at(path, key);
+      const mValue = isPlain(m) ? m[key] : undefined;
+      const sValue = isPlain(s) ? s[key] : undefined;
+      if (mValue === undefined) { say(here, 'the level does not have this field, so the write dropped it'); continue; }
+      walkValue(value, mValue, sValue, here, key);
+    }
+  }
+
+  walk(delta, merged, stored, '', '');
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -1831,6 +1983,14 @@ export class SpecWorkspace {
     const existing = this.loadSubsystemSpec(spec.id);
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
+      // The same no-demotion guard its four sibling savers have had all along.
+      // Without it, re-authoring a subsystem through a create tool — which
+      // always states 'draft' — quietly reopened a frozen one, taking its whole
+      // subtree back into draft context with it. A deliberate demotion still
+      // works: the caller says so with allowStatusDemotion.
+      if (!opts?.allowStatusDemotion && existing.status && (!spec.status || spec.status === 'draft')) {
+        specToWrite.status = existing.status;
+      }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     writeYamlFile(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id));
@@ -2459,8 +2619,15 @@ export class SpecWorkspace {
    *     carry, and a label in the delta retargets the stored numeric jump it
    *     twins. An unresolved reference aborts the whole update.
    *  7. COMPARE with what is stored, both read through the level's canonical
-   *     schema. Equal means nothing is written and `written` is false.
-   *  8. GATE the merged spec through the caller's hook, then SAVE.
+   *     schema. Equal means nothing is written and `written` is false. The same
+   *     comparison names every delta path the write did NOT act on — one the
+   *     schema drops at a depth the permissive delta cannot refuse, one the
+   *     stored spec already held, an `unset` that removed nothing.
+   *  8. GATE the merged spec through the caller's hook. A DRY RUN stops here
+   *     and answers with the report it would have produced — after the gate, so
+   *     it accounts for a write that would really be accepted, and before the
+   *     stamp, so not one byte of the stored file moves.
+   *  9. STAMP updatedAt and SAVE.
    *
    * Returns the change report, whose `notices` carry the non-fatal effects (an
    * insert whose position was a jump target, so the relocated jumps now bypass
@@ -2472,6 +2639,7 @@ export class SpecWorkspace {
     id: string,
     delta: Record<string, any>,
     hooks?: SpecWriteHooks,
+    dryRun = false,
   ): SpecChangeReport {
     const notices: string[] = [];
     const result = (() => {
@@ -3219,7 +3387,11 @@ export class SpecWorkspace {
     // the comparison below would see no difference where there was one.
     const storedBefore = JSON.parse(JSON.stringify(result));
 
-    const mergedResult = mergeDelta(result, qualifyDeltaRefs(mergeableDelta));
+    // The delta with its references already resolved into the namespace the
+    // spec is stored in — the only form whose values can be compared with what
+    // the write persisted, since an unqualified id is rewritten on the way in.
+    const qualifiedDelta = qualifyDeltaRefs(mergeableDelta);
+    const mergedResult = mergeDelta(result, qualifiedDelta);
     for (const field of unsetFields) delete mergedResult[field];
 
     // Symbolic step-label references resolve AFTER the merge, so a delta can
@@ -3248,31 +3420,63 @@ export class SpecWorkspace {
       delete value.updatedAt; // a stamp, not authored content
       return value;
     };
-    const changes = specChanges(canonical(storedBefore), canonical(mergedResult));
+    const canonicalStored = canonical(storedBefore);
+    const canonicalMerged = canonical(mergedResult);
+    const changes = specChanges(canonicalStored, canonicalMerged);
+
+    // …and what the delta named that the write did NOT act on. The top-level
+    // unknown-key refusal above cannot see one depth down, where the delta is
+    // permissive by design, so a nested typo would merge, be stripped on write,
+    // and never be mentioned. Named here instead of stripped in silence.
+    const ineffective = ineffectiveDeltaPaths(
+      { ...qualifiedDelta, ...(unsetFields.length ? { unset: unsetFields } : {}) },
+      canonicalMerged,
+      canonicalStored,
+    );
 
     // A write that changes nothing writes NOTHING and says so. Re-stamping
     // updatedAt and answering "Successfully updated" is how a delta that
     // no-opped — a mistyped key, a marker the merge ignored — read as a
-    // completed edit, sometimes for a whole session.
+    // completed edit, sometimes for a whole session. A caller asking only what
+    // the delta WOULD do is answered the same way: there is nothing it would do.
     if (changes.length === 0) {
       return {
         kind,
         id,
         written: false,
+        dryRun,
         changes,
+        ineffective,
         notices,
-        summary: `No change to ${kind} "${id}" — the delta matches what is stored, so nothing was written.`,
+        summary: `No change to ${kind} "${id}" — the delta matches what is stored, so nothing ${dryRun ? 'would be' : 'was'} written.`,
       };
     }
-
-    mergedResult.updatedAt = new Date().toISOString();
 
     // Write-boundary gate, on the MERGED result — the only point where the spec
     // the caller will actually get exists as one object, and still the last
     // point before anything touches disk. A refusal throws, so "nothing was
-    // saved" stays literally true.
+    // saved" stays literally true. It runs for a DRY RUN too: an account of a
+    // write that the write itself would be refused is not an account worth
+    // having.
     const gateNotices = hooks?.gate?.(kind, mergedResult);
     if (gateNotices?.length) notices.push(...gateNotices);
+
+    // The account, and nothing else. Stamping happens below, so a dry run
+    // leaves the stored file byte for byte as it was.
+    if (dryRun) {
+      return {
+        kind,
+        id,
+        written: false,
+        dryRun: true,
+        changes,
+        ineffective,
+        notices,
+        summary: `Dry run on ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'} would be made. Nothing was written.`,
+      };
+    }
+
+    mergedResult.updatedAt = new Date().toISOString();
 
     // An explicit status in the delta is a deliberate change — allow demotion
     // (e.g. reopening a completed spec to 'draft' for revision).
@@ -3282,7 +3486,7 @@ export class SpecWorkspace {
 
     switch (kind) {
       case 'system':         this.saveSystemSpec(mergedResult); break;
-      case 'subsystem':      this.saveSubsystemSpec(mergedResult); break;
+      case 'subsystem':      this.saveSubsystemSpec(mergedResult, opts); break;
       case 'component':      notices.push(...this.saveComponentSpec(mergedResult, opts)); break;
       case 'interface':      notices.push(...this.saveInterfaceSpec(mergedResult, opts)); break;
       case 'implementation': notices.push(...this.saveImplementationSpec(mergedResult, opts)); break;
@@ -3293,7 +3497,9 @@ export class SpecWorkspace {
       kind,
       id,
       written: true,
+      dryRun: false,
       changes,
+      ineffective,
       notices,
       summary: `Updated ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'}.`,
     };
@@ -3706,6 +3912,7 @@ export function updateSpec(
   id: string,
   delta: Record<string, any>,
   hooks?: SpecWriteHooks,
+  dryRun?: boolean,
 ): SpecChangeReport {
-  return current().updateSpec(kind, id, delta, hooks);
+  return current().updateSpec(kind, id, delta, hooks, dryRun);
 }
