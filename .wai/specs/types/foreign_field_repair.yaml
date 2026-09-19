@@ -1,0 +1,30 @@
+kind: value-object
+id: foreign_field_repair
+name: ForeignFieldRepair
+description: >-
+  One narrative step carrying fields its own type cannot have, and the fields dropped from it —
+  planned, or written
+fields:
+  - name: implementation
+    type: string
+    description: The implementation spec whose narrative holds the step
+    optional: false
+  - name: method
+    type: string
+    description: The method whose narrative holds the step
+    optional: false
+  - name: stepNumber
+    type: number
+    description: The step the fields sat on
+    optional: false
+  - name: stepType
+    type: string
+    description: The step's own type, which is what makes the fields foreign
+    optional: false
+  - name: fields
+    type: string[]
+    description: The foreign fields, in the order the step declared them
+    optional: false
+methods: []
+createdAt: '2026-09-18T23:50:31.848Z'
+updatedAt: '2026-09-18T23:50:31.959Z'

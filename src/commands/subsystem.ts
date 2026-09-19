@@ -10,6 +10,7 @@ import {
   externalizeSubsystem,
   internalizeSubsystem,
   retireSpecialists as coreRetireSpecialists,
+  repairForeignStepFields as coreRepairForeignStepFields,
   composeAgentBrief as coreComposeAgentBrief,
   exportSpecTree as coreExportSpecTree,
   importSpecTree as coreImportSpecTree,
@@ -23,7 +24,7 @@ import {
   defaultPackSelections as coreDefaultPackSelections,
 } from '../core/index.js';
 import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
-import type { SpecialistRetirement, TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
+import type { ForeignFieldRepair, SpecialistRetirement, TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
 import type {
   AgentBrief,
   AgentRecord,
@@ -122,6 +123,13 @@ export function listDirectChainedSubprojects(projectRoot: string): { dir: string
 // its dependencies decide, and each Specialist-based project variant rebased.
 export function retireSpecialists(apply: boolean): SpecialistRetirement {
   return coreRetireSpecialists(apply);
+}
+
+// cli_core_adapter.repairForeignStepFields — 1:1 forward backing `wairon doctor`:
+// every narrative step carrying a field its own type cannot have, planned, and
+// with apply written — the fields dropped, the step otherwise untouched.
+export function repairForeignStepFields(apply: boolean): ForeignFieldRepair[] {
+  return coreRepairForeignStepFields(apply);
 }
 
 // cli_core_adapter.defaultPackSelections — 1:1 forward: the store packs that

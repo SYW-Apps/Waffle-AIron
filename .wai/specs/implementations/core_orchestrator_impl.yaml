@@ -1203,6 +1203,68 @@ methods:
           judgement's warnings
         type: return
         outcome: written
+  - name: repairForeignStepFields
+    sourcePath: src/core/narrative-repair.ts
+    narrative:
+      - stepNumber: 1
+        description: Load every implementation spec in the bound tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 2
+        label: impls
+        description: Walk each implementation, collecting what its narratives carry that they cannot
+        type: loop
+        loopKind: forEach
+        over: each loaded implementation
+        endStep: 10
+      - stepNumber: 3
+        description: Walk every step of every one of its methods
+        type: loop
+        loopKind: forEach
+        over: each step of each method's narrative, in method then step order
+        endStep: 8
+      - stepNumber: 4
+        description: >-
+          Read the step's foreign fields through narrative_step.foreignFields(), the one per-type
+          table a retype also rebuilds against
+        type: local
+      - stepNumber: 5
+        description: A step whose every field belongs to its type is left alone
+        type: branch
+        condition: the step carries at least one foreign field
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Record the repair: the implementation id, the method name, the step number, the step's own
+          type, and the foreign fields in declaration order
+        type: local
+      - stepNumber: 7
+        description: >-
+          Drop those fields from the step, in memory. Its type, description, label and every field
+          its type does carry are untouched — the repair removes what means nothing, it never
+          reinterprets the step
+        type: local
+      - stepNumber: 8
+        label: stepsEnd
+        description: On to the next step
+        type: local
+      - stepNumber: 9
+        description: >-
+          Only an implementation that changed is written, and only when the caller asked for the
+          write
+        type: branch
+        condition: apply, and this implementation had at least one step repaired
+        onFalseStep: 2
+      - stepNumber: 10
+        description: Save the repaired implementation spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 11
+        description: Answer with every repair, planned or written
+        type: return
+        outcome: the repairs, in tree order
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T22:48:47.382Z'
+updatedAt: '2026-09-18T23:51:10.433Z'

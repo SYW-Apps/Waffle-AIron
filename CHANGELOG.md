@@ -11,7 +11,8 @@ can a chained subproject whose gate was waving cross-tree findings through or wh
 nested mount reaches outside its own project, a tree that still has a Specialist or
 a Gateway or breaks the new Supervisor and Actor dependency rules, a tree whose
 narratives or names the new readability checks judge, or a tree holding a case the
-fixed validator rules used to miss. A scripted `sdd_update_spec` delta can also
+fixed validator rules used to miss — including a narrative step carrying a field its
+own step type cannot have. A scripted `sdd_update_spec` delta can also
 behave differently, where it was relying on a merge rule that was silently wrong
 (item 10). Nothing here is purely additive, so `[minor]` would understate it.
 
@@ -349,6 +350,41 @@ newly fail on them (see *Upgrading*).
 - **The skills say what the rules check.** The narrative skill documents a switch's `on` as optional, the two ways to
   continue a loop, and a closing step per nested loop; the guides and the architect and implement skills say
   `PORTAL_WRITE_SHORTCUT` covers dispatch-table bindings.
+
+### Two rules could not see what they claimed to judge
+
+Both were narrow in a way nothing pointed at: a type named only by a type-method signature read as unused, and a step
+carrying a field its own type cannot have was never reported at all. Each is a newly reported finding, not a refactor —
+run `validate --ci` (see *Upgrading*).
+
+- **A type method is a reference.** `UNUSED_TYPE` counted fields and interface signatures, never the methods declared on
+  types — so `rule_context.codeIndex(): CodeIndex` left `CodeIndex` flagged. It now reads each type method's signature
+  and returns too. A type named nowhere but its **own** methods stays unused, the way a function that only calls itself
+  is. The finding's message and summary name type methods.
+  - **Ten `lint.allow` entries retired** from wairon's own tree, each of which said exactly this and asked to be
+    deleted once the rule could see it: `code_index`, `dependency_edges`, `import_graph`, `ownership_index`,
+    `realization_index`, `resolved_detail`, `resolved_method`, `spec_id`, `step_config_verdict`, `step_graph`. The
+    eleventh, on `openapi_spec_index`, is a different reason — a wire shape carried inside a string artifact body — and
+    still reports. If you carry an allow with the same wording, `UNUSED_LINT_ALLOW` will now tell you to drop it.
+- **`FOREIGN_STEP_FIELD` (warning): a step carries only what its own `type` defines.** `MALFORMED_FLOW_STEP` checked
+  flow config on `local`/`call`/`register`/`dispatch` steps only, so `outcome` on a branch, `error` on a call and
+  `targetComponent` on a `throw` all passed. Each is a leftover of an edit that changed a step's type back when the
+  writer merged the new type's fields over the old step instead of rebuilding it. **This closes the loop with that
+  fix**: rebuilding a retyped step stopped new ones appearing, and this reports the ones already written. The finding
+  never guesses — only the author knows whether a `local` carrying a target was meant to be a call — and it does not
+  make a narrative unsound: dead configuration leaves the flow perfectly readable.
+  - **`wairon doctor` names each one, and `--fix` drops them.** A mechanical repair like the filename migration: the
+    field goes, the step's type, description, label and real config stay.
+  - **Seven steps repaired** in wairon's own tree, three of them fossils of exactly that retype:
+    `admin_orchestrator_impl.executeApprovedLock` step 11 and `.lockProject` step 15 (`outcome` on a call),
+    `cli_runner_impl.runRemote` step 7 (`error` on a call) and step 13 (`targetComponent`, `targetMethod` on a throw),
+    `cli_runner_impl.runLogin` step 3 and `cli_packs_adapter_impl.installPack` step 3 (`targetComponent`,
+    `targetMethod` on a local), and `surface_exchange_orchestrator_impl.exportProjectSurface` step 7 (`outcome` on a
+    branch).
+- **One table, in the model layer.** The per-type field table lived in `src/core/specs.ts` — the writer — where a rule
+  reaching for it would have inverted the layering. It now lives beside the verdict that judges a step
+  (`src/models/step-config.ts`) as `narrative_step.foreignFields()`, and the writer reads it from there. The retype
+  rebuild and the finding cannot disagree, because there is nothing left to disagree with.
 
 ### Logic is an Orchestrator; Specialist and the Gateway pattern retire
 
@@ -1834,6 +1870,17 @@ method's narrative. Two mechanisms close that honestly:
       `captureJumps` outside an insert is refused**, where the marker used to be
       ignored and the write reported as done. Fix the marker — these deltas were
       never applying.
+11. **Re-run `validate --ci`: two rules now see what they always claimed to judge.**
+    - **New warning `FOREIGN_STEP_FIELD`** on a narrative step carrying a field its
+      own `type` cannot have — `outcome` on a branch, `error` on a call,
+      `targetComponent` on a `throw`. These are the leftovers of retypes made before
+      the writer rebuilt a retyped step. Run `wairon doctor` to see each one and
+      `wairon doctor --fix` to drop them; where the step really was a call that lost
+      its type, retype it instead.
+    - **`UNUSED_TYPE` counts a type-method signature as a reference.** A type named
+      only by another type's method no longer reports. Delete any `lint.allow` that
+      was standing in for this — it now goes stale as `UNUSED_LINT_ALLOW`. A type
+      named nowhere but its OWN methods still reports, deliberately.
 
 ## v5.1.0 (from v5.0.1)
 

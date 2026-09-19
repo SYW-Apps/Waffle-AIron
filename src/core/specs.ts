@@ -28,6 +28,12 @@ import {
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
   splitNamespace,
+  // The ONE per-type step-field table (models/step-config.ts). The writer
+  // rebuilds a retyped step against it; the narrative-step-config rule judges
+  // a stored step against the same table, so neither can drift from the other.
+  STEP_TYPE_FIELDS,
+  STEP_LABEL_TWINS,
+  stepFieldsFor,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -872,59 +878,6 @@ function identityKeyOf(field: string, item: unknown): string | null {
     case 'catches':            return str(o.error);
     default:                   return str(o.name) ?? str(o.id);
   }
-}
-
-/**
- * The flow configuration each narrative step TYPE may carry, beyond what every
- * step carries. This is the field set a retype rebuilds against.
- *
- * Changing a step's `type` used to merge the new type's fields over the old
- * step's and leave the rest standing, so a `branch` that became a `call` kept
- * its `condition` and `onFalseStep`: a step the schema accepts, a write that
- * reports success, and a MALFORMED_FLOW_STEP at the next validate, blamed on
- * the narrative rather than on the edit that made it. Mirrors the per-type
- * requirements in models/step-config.ts, which is what judges the result.
- */
-const STEP_TYPE_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  local:    [],
-  call:     ['targetComponent', 'targetMethod', 'auth', 'detach'],
-  register: ['targetComponent', 'targetMethod'],
-  dispatch: ['targetComponent', 'capability', 'auth', 'detach'],
-  branch:   ['condition', 'onTrueStep', 'onFalseStep'],
-  switch:   ['on', 'cases', 'defaultStep'],
-  loop:     ['loopKind', 'over', 'condition', 'endStep'],
-  try:      ['endStep', 'catches', 'finallyStep'],
-  parallel: ['endStep', 'branches'],
-  jump:     ['toStep'],
-  return:   ['outcome'],
-  throw:    ['error'],
-};
-
-/**
- * What a step carries whatever its type — the human's own content. A retype
- * keeps these: the author is changing HOW the step works, not what it is for,
- * and re-typing a step should never cost them the sentence they wrote or the
- * anchor other steps address it by.
- */
-const STEP_COMMON_FIELDS: readonly string[] = [
-  'stepNumber', 'label', 'description', 'type', 'assertsGuarantees', 'assertsInvariants',
-];
-
-/** The transient `*Label` twin of each jump-by-number field, resolved and dropped at write time. */
-const STEP_LABEL_TWINS: Readonly<Record<string, string>> = {
-  onTrueStep: 'onTrueLabel', onFalseStep: 'onFalseLabel', defaultStep: 'defaultLabel',
-  endStep: 'endLabel', finallyStep: 'finallyLabel', toStep: 'toLabel',
-};
-
-/** Every field a step of this type may carry, including the transient label twins. */
-function stepFieldsFor(type: string): Set<string> {
-  const own = STEP_TYPE_FIELDS[type] ?? [];
-  const allowed = new Set<string>([...STEP_COMMON_FIELDS, ...own]);
-  for (const field of own) {
-    const twin = STEP_LABEL_TWINS[field];
-    if (twin) allowed.add(twin);
-  }
-  return allowed;
 }
 
 /**

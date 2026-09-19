@@ -14,8 +14,8 @@ fields:
   - name: code
     type: string
     description: >-
-      The finding code this problem maps to: DUPLICATE_STEP_LABEL, MALFORMED_FLOW_STEP or
-      INVALID_STEP_JUMP.
+      The finding code this problem maps to: DUPLICATE_STEP_LABEL, MALFORMED_FLOW_STEP,
+      INVALID_STEP_JUMP or FOREIGN_STEP_FIELD.
     optional: false
   - name: detail
     type: string
@@ -23,4 +23,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-09-17T22:21:25.211Z'
-updatedAt: '2026-09-17T22:21:25.228Z'
+updatedAt: '2026-09-18T23:48:23.643Z'

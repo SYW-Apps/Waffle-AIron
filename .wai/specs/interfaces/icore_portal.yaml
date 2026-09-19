@@ -470,6 +470,16 @@ methods:
           The authoring caller's write-boundary judgement; a mechanical write passes none and stays
           ungated
         optional: true
+  - name: repairForeignStepFields
+    description: >-
+      Forward to core_orchestrator.repairForeignStepFields: plan, and with apply write, the removal
+      of every narrative-step field its own step type cannot have. Without apply nothing is written.
+    signature: 'repairForeignStepFields(apply: boolean): ForeignFieldRepair[]'
+    returns: ForeignFieldRepair[]
+    params:
+      - name: apply
+        type: boolean
+        description: Write the repair; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T21:42:16.531Z'
+updatedAt: '2026-09-18T23:51:14.050Z'

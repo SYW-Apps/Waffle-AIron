@@ -983,7 +983,6 @@ methods:
         type: call
         targetComponent: remote_orchestrator
         targetMethod: attach
-        error: 'Unknown remote action (supported: push, pull)'
       - stepNumber: 8
         label: attachReported
         description: Report what is now attached
@@ -1012,8 +1011,6 @@ methods:
       - stepNumber: 13
         description: Reject an unknown remote action, naming the supported ones.
         type: throw
-        targetComponent: remote_orchestrator
-        targetMethod: describeAttachment
         error: 'Unknown remote action (supported: push, pull, attach, detach, status)'
       - stepNumber: 14
         label: outcome
@@ -1044,8 +1041,6 @@ methods:
           Confirm which instance is now reachable, and point at `wairon remote attach` as the next
           step. Never echo the credential.
         type: local
-        targetComponent: remote_orchestrator
-        targetMethod: attach
       - stepNumber: 4
         description: Confirm which instance is now reachable, without echoing the credential.
         type: local
@@ -1295,7 +1290,7 @@ methods:
         description: With --fix, apply the repairs before the report, so the report shows the repaired state
         type: branch
         condition: '--fix was given'
-        onFalseStep: 10
+        onFalseStep: 11
       - stepNumber: 2
         description: 'Read the configuration: the fixes need an initialized project whose configuration is valid'
         type: call
@@ -1305,7 +1300,7 @@ methods:
         description: Skip the fixes otherwise, warning when the configuration is invalid; the report flags both
         type: branch
         condition: the project is initialized and its configuration is valid
-        onFalseStep: 10
+        onFalseStep: 11
       - stepNumber: 4
         description: Regenerate the context files under .wai/context
         type: local
@@ -1330,48 +1325,56 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
       - stepNumber: 8
+        description: >-
+          Repair the narrative steps carrying a field their own type cannot have, with apply true:
+          each foreign field is dropped and nothing else about the step changes; print what was
+          repaired. A mechanical spec repair, like the filename migration above
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairForeignStepFields
+      - stepNumber: 9
         description: Register or repair the MCP server for each active backend
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           For a Gemini or Antigravity target, remove the legacy global Antigravity plugin whose name
           collides with the MCP server
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         label: report
         description: 'Project: is this an initialized wairon project?'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
-      - stepNumber: 11
+      - stepNumber: 12
         description: Stop at a folder that is not a wairon project
         type: branch
         condition: the project is not initialized
-        onFalseStep: 13
-      - stepNumber: 12
+        onFalseStep: 14
+      - stepNumber: 13
         description: Report it, naming `wairon init`, print the summary and exit non-zero
         type: return
         outcome: not a wairon project
-      - stepNumber: 13
+      - stepNumber: 14
         description: Report whether the configuration is valid, and read its active targets
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Report whether the system spec is present, whether the spec filenames are current, and any
           chained subproject with specs but no project.yaml
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Spec tree: with a system spec and a valid configuration, run the conformance gate and
           report its error and warning counts
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateSddTree
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           Stereotypes: plan the Specialist retirement with apply false and report each Specialist
           with the dependencyClass it would take as an Orchestrator, and each variant to rebase,
@@ -1379,18 +1382,26 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 17
+      - stepNumber: 18
+        description: >-
+          Narrative steps: plan the foreign-field repair with apply false and report each step
+          carrying a field its own type cannot have — the implementation, the method, the step and
+          the fields — pointing at `wairon doctor --fix`; silent when every step is clean
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairForeignStepFields
+      - stepNumber: 19
         description: >-
           Generated files and skills: compare the version stamps of the context files and injected
           guides with the installed wairon, and check each active target's skills for stale or
           missing files
         type: local
-      - stepNumber: 18
+      - stepNumber: 20
         description: 'Lock: compute the gate identity as it stands now'
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 19
+      - stepNumber: 21
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
           frozen, warning when it predates per-spec approval; a stale one warns to re-lock; a
@@ -1398,18 +1409,18 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readLockState
-      - stepNumber: 20
+      - stepNumber: 22
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed but not applied, and those applied from
           the machine-wide store
         type: local
-      - stepNumber: 21
+      - stepNumber: 23
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and flag a legacy global Antigravity plugin
         type: local
-      - stepNumber: 22
+      - stepNumber: 24
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -1436,4 +1447,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-18T18:01:46.724Z'
+updatedAt: '2026-09-18T23:56:48.045Z'

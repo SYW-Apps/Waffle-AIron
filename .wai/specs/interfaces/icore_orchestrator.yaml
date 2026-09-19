@@ -438,6 +438,21 @@ methods:
       - name: delta
         type: SpecDelta
         description: The partial change to merge, shaped like the spec, carrying the delta's own verbs
+  - name: repairForeignStepFields
+    description: >-
+      Plan, and with apply write, the repair of narrative steps carrying a field their own type
+      cannot have. Such a field is the leftover of an edit that changed a step's type back when the
+      writer merged instead of rebuilding; it configures nothing and means nothing, and
+      FOREIGN_STEP_FIELD reports it. Each foreign field is dropped from its step and nothing else
+      about the step changes — a step's type is never guessed at from the fields, because only its
+      author knows whether a local carrying a target was meant to be a call. Without apply nothing
+      is written.
+    signature: 'repairForeignStepFields(apply: boolean): ForeignFieldRepair[]'
+    returns: ForeignFieldRepair[]
+    params:
+      - name: apply
+        type: boolean
+        description: Write the repair; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T22:48:41.987Z'
+updatedAt: '2026-09-18T23:50:39.741Z'

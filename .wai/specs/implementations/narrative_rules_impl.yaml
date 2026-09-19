@@ -85,9 +85,9 @@ methods:
       - stepNumber: 4
         label: reportProblem
         description: >-
-          Report problem.code — DUPLICATE_STEP_LABEL, MALFORMED_FLOW_STEP or INVALID_STEP_JUMP, each
-          an error; draft context isDraftCtx — with problem.detail following the
-          method-and-implementation prefix
+          Report problem.code at the severity this rule declares for it — DUPLICATE_STEP_LABEL,
+          MALFORMED_FLOW_STEP and INVALID_STEP_JUMP are errors, FOREIGN_STEP_FIELD a warning; draft
+          context isDraftCtx — with problem.detail following the method-and-implementation prefix
         type: local
     symbol: check
   - name: narrativeReachability
@@ -1018,4 +1018,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-18T20:21:33.611Z'
+updatedAt: '2026-09-18T23:49:52.714Z'

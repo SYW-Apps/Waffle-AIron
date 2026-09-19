@@ -363,7 +363,6 @@ methods:
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-        outcome: lock record
       - stepNumber: 12
         description: Only a real publish has a commit to record.
         type: branch
@@ -560,7 +559,6 @@ methods:
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-        outcome: lock record
       - stepNumber: 16
         description: Only a real publish has a commit to record.
         type: branch
@@ -1073,4 +1071,4 @@ methods:
         outcome: imported tree
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-17T16:41:50.297Z'
+updatedAt: '2026-09-18T23:56:47.848Z'
