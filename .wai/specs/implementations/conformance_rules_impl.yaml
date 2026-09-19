@@ -1028,10 +1028,11 @@ methods:
           matching = the sites whose name is in accepted. reached = the union of
           code.possibleOriginsOf(site, file) over matching — every file each matching call CAN have
           been written in, a this.<field>.<method>() receiver followed through the field's declared
-          type to the module declaring it. landed = the union of code.originOf(site, file) over the
-          same sites — the files a call PROVABLY lands in, empty where a pure model cannot say, and
-          the only tier a finding may name a landing from: widening what a call reached can accept a
-          step, it must never accuse one
+          type and a new Class(...).<method>() receiver through the module its class name came from.
+          landed = the union of code.originOf(site, file) over the same sites — the files a call
+          PROVABLY lands in, empty where a pure model cannot say, and the only tier a finding may
+          name a landing from: widening what a call reached can accept a step, it must never accuse
+          one
         type: local
       - stepNumber: 12
         description: >-
@@ -1049,7 +1050,8 @@ methods:
         description: >-
           Append the step's stepNumber, its target (targetComponent.targetMethod), the accepted
           names and the miss to missed: absent when matching is empty, unresolved when landed is
-          empty, else elsewhere carrying the files it did land in
+          empty — carrying the distinct SHAPES the matching sites were written in, which is what an
+          unresolved answer is about — else elsewhere carrying the files it did land in
         type: local
       - stepNumber: 14
         label: unrealizedReport
@@ -1066,9 +1068,11 @@ methods:
         description: >-
           When missed holds an unresolved entry, report CALL_ORIGIN_UNRESOLVED (warning; spec
           impl.id; draft context the entry's draftContext), one finding per method listing each such
-          step: the target name IS called inside fnSymbol, but only from sites this analysis cannot
-          resolve to any file — a member call through a value carries no origin a pure model can
-          read, so the step is neither proven realized nor accused of being missing
+          step with the shape its call sites were written in: the target name IS called inside
+          fnSymbol, but from no site this analysis can resolve to a file. It names which forms
+          resolve and which do not, and asks for nothing — this is a coverage hole in the reader,
+          not a defect in the code or the narrative, so the step is neither proven realized nor
+          accused of being missing and no working call is asked to be rewritten to suit the analysis
         type: local
       - stepNumber: 16
         description: >-
@@ -1098,4 +1102,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-19T16:49:51.032Z'
+updatedAt: '2026-09-19T17:44:22.513Z'

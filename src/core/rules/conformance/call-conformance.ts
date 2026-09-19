@@ -23,10 +23,11 @@ import { CodeIndex, RuleContext, SddRule } from '../types.js';
 //             is CALL_ORIGIN_UNRESOLVED — a different answer from "the call is
 //             missing", and keeping them apart is the point: only what
 //             resolved may accuse. A `this.store.save()` receiver is followed
-//             through the TYPE the class declares that field with, which says
-//             where the callee CAN have been written and never where it was:
-//             so that reading accepts a step, and a landing a finding names
-//             still comes from what was proven.
+//             through the TYPE the class declares that field with, and a
+//             `new Registry(store).save()` receiver through the module its
+//             CLASS NAME came from — each says where the callee CAN have been
+//             written and never where it was: so those readings accept a step,
+//             and a landing a finding names still comes from what was proven.
 //   converse  a call to a modelled method of ANOTHER component that lives in
 //             the SAME FILE crosses a component boundary while looking local,
 //             so the narrative must declare it (UNDECLARED_COLOCATED_CALL).
@@ -110,7 +111,8 @@ function resolveCallTarget(ctx: RuleContext, componentId: string, methodName: st
 type Miss =
   | { kind: 'absent' }
   | { kind: 'elsewhere'; landed: string[] }
-  | { kind: 'unresolved' };
+  /** `shapes`: how the matching sites were WRITTEN — an answer that cannot say where a call went owes the form it could not follow. */
+  | { kind: 'unresolved'; shapes: string[] };
 
 interface MissedStep {
   step: number;
@@ -119,20 +121,34 @@ interface MissedStep {
   miss: Miss;
 }
 
+/**
+ * How a call site was WRITTEN, read off its shape alone — the subject of the
+ * unresolved answer. The shape is all this reports: naming the form it could
+ * not follow is the honest content of "I cannot say", where advice to write
+ * the call differently would be asking working code to suit the analysis.
+ */
+function describeSite(site: CallSiteFact): string {
+  if (!site.member) return `${site.name}(…)`;
+  if (site.via) return `${site.via}.${site.name}(…)`;
+  if (site.field) return `this.${site.field}.${site.name}(…)`;
+  if (site.constructed) return `new ${site.constructed}(…).${site.name}(…)`;
+  return `<receiver>.${site.name}(…)`;
+}
+
 function describeMiss(m: MissedStep): string {
   const head = `step ${m.step} → ${m.target} (looked for ${m.accepted.map(a => `"${a}"`).join(' / ')}`;
-  return m.miss.kind === 'elsewhere'
-    ? `${head}, called but resolved to ${m.miss.landed.map(p => `"${p}"`).join(', ')})`
-    : `${head})`;
+  if (m.miss.kind === 'elsewhere') return `${head}, called but resolved to ${m.miss.landed.map(p => `"${p}"`).join(', ')})`;
+  if (m.miss.kind === 'unresolved') return `${head}, written as ${m.miss.shapes.map(s => `\`${s}\``).join(' / ')})`;
+  return `${head})`;
 }
 
 export const callConformanceRule: SddRule = {
   name: 'call-conformance',
   description:
-    'Code↔spec Level 3: the narrative `call` step ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. Forward: every `call` step must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls, and resolved against every file the call CAN have reached, a `this.<field>.<method>()` receiver followed through the field\'s DECLARED TYPE to the module declaring it; a matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED rather than accused of being missing, a finding names a landing only from the PROVEN tier so that widening what a call reached can accept a step but never accuse one, and a target that names no file of its own falls back to name membership. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the narrative must declare it (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper is no modelled method and is never reported. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are skipped, the conformance dial (off) skips, and weaker analysis grades never guess.',
+    'Code↔spec Level 3: the narrative `call` step ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. Forward: every `call` step must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls, and resolved against every file the call CAN have reached: a `this.<field>.<method>()` receiver followed through the field\'s DECLARED TYPE, a `new Class(...).<method>()` receiver through the module its CLASS NAME came from. A matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which NAMES the shape it could not follow and asks for nothing — a coverage hole in the reader, reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a degraded one. A finding names a landing only from the PROVEN tier so that widening what a call reached can accept a step but never accuse one, and a target that names no file of its own falls back to name membership. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the narrative must declare it (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper is no modelled method and is never reported. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are skipped, the conformance dial (off) skips, and weaker analysis grades never guess.',
   codes: [
     { code: 'CALL_STEP_UNREALIZED', defaultSeverity: 'warning', summary: 'Narrative call step realized by no call that resolves to the target method\'s own source file — the call is absent, or it lands in another module' },
-    { code: 'CALL_ORIGIN_UNRESOLVED', defaultSeverity: 'warning', summary: 'Narrative call step whose target name IS called, but only from call sites a pure model cannot resolve to any file — neither proven realized nor accused' },
+    { code: 'CALL_ORIGIN_UNRESOLVED', defaultSeverity: 'warning', summary: 'Narrative call step whose target name IS called, but only from call sites written in a shape this analysis cannot resolve to a file — the step was not checked, and is neither proven realized nor accused' },
     { code: 'UNDECLARED_COLOCATED_CALL', defaultSeverity: 'warning', summary: 'The realized function calls a modelled method of another component living in the same source file, and no narrative step declares that call' },
   ],
   check(ctx: RuleContext) {
@@ -214,12 +230,15 @@ export const callConformanceRule: SddRule = {
         }
 
         // Two tiers, and the difference is the whole of the honesty here.
-        // ACCEPTANCE reads everything a call can have reached, `this.store`
-        // followed through the type the class declares the field with. A
-        // LANDING a finding may name comes from the proven tier alone: a
+        // ACCEPTANCE reads everything a call can have reached: `this.store`
+        // followed through the type the class declares the field with, and
+        // `new Registry(...)` through the module its class name came from. A
+        // LANDING a finding may name comes from the proven tier alone — a
         // declared type says what a collaborator is, not which class ships the
-        // body, so widening what a call reached can only ever accept a step —
-        // it must never turn "I cannot say" into an accusation.
+        // body, and a constructed class says where the class was written, not
+        // where a method it inherits was — so widening what a call reached can
+        // only ever accept a step: it must never turn "I cannot say" into an
+        // accusation.
         const landed = new Set<string>();
         let realized = false;
         for (const site of matching) {
@@ -232,7 +251,7 @@ export const callConformanceRule: SddRule = {
         const miss: Miss = matching.length === 0
           ? { kind: 'absent' }
           : landed.size === 0
-            ? { kind: 'unresolved' }
+            ? { kind: 'unresolved', shapes: [...new Set(matching.map(describeSite))].sort() }
             : { kind: 'elsewhere', landed: [...landed].sort() };
         missed.push({ step: step.stepNumber, target: ref, accepted: [...target.accepted], miss });
       }
@@ -252,7 +271,7 @@ export const callConformanceRule: SddRule = {
         ctx.addIssue(
           'warning',
           'CALL_ORIGIN_UNRESOLVED',
-          `Method "${implMethod.name}" in implementation "${impl.id}": ${unresolved.length} narrative call step(s) ARE called by name inside the function "${fnSymbol}" in "${file}", but only from call sites this analysis cannot resolve to any file — ${unresolved.map(describeMiss).join('; ')}. A member call through a value (\`this.store.save()\`, \`handle.save()\`) carries no origin a pure model can read, so the step is neither proven realized nor accused of being missing. Call the target through its module binding, or accept this as the grade's limit.`,
+          `Method "${implMethod.name}" in implementation "${impl.id}": ${unresolved.length} narrative call step(s) ARE called by name inside the function "${fnSymbol}" in "${file}", but every site calling them is written in a shape this analysis cannot resolve to a file — ${unresolved.map(describeMiss).join('; ')}. What resolves is a name bound to a module of THIS project: a bare or namespaced call through such an import binding, a \`this.<field>\` receiver whose declared type names one, a \`new Class(…)\` receiver whose class does. What does not: an import from a PACKAGE specifier, a receiver holding a value the module assembled, a receiver this model records no name for. This reports what was not checked, not what is wrong — the step is neither proven realized nor accused of being missing, and no working call is asked to be rewritten to suit the reader.`,
           impl.id,
           entry.draftContext,
         );

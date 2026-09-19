@@ -36,10 +36,10 @@ export interface ImportBindingFact {
 /**
  * One call SITE SHAPE inside a named function-like: the invoked name together
  * with how the call was written. Shape is what a pure model can honestly say
- * about a call's ORIGIN — with no type checker, `save(x)`, `ledger.save(x)`
- * and `this.store.save(x)` are three different questions, and collapsing them
- * onto the name "save" is what let a call into an unrelated module count as
- * realizing a narrative step.
+ * about a call's ORIGIN — with no type checker, `save(x)`, `ledger.save(x)`,
+ * `this.store.save(x)` and `new Ledger(db).save(x)` are four different
+ * questions, and collapsing them onto the name "save" is what let a call into
+ * an unrelated module count as realizing a narrative step.
  *
  * Sites are deduplicated per shape, never counted: the checks that read them
  * ask where a call could land, never how often it was written.
@@ -60,6 +60,16 @@ export interface CallSiteFact {
    * type says what a collaborator is and not which class ships the body.
    */
   field?: string;
+  /**
+   * The CLASS the receiver was constructed from — set only when the call was
+   * written `new Class(…).name(…)` (`new ApprovalRegistry(store).create()` →
+   * "ApprovalRegistry"), and never together with `via` or `field`. The second
+   * receiver a pure model can follow, because the code NAMES the class it
+   * built. Like a declared field type it is a POSSIBLE origin and never a
+   * proven one: a method the class INHERITS is written in its base's module,
+   * not in the constructed class's.
+   */
+  constructed?: string;
   /**
    * The file this site was READ in, set only when it is not the file these
    * facts describe — a pure re-export barrel carries the sites of the function

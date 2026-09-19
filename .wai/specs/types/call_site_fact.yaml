@@ -4,10 +4,10 @@ name: CallSiteFact
 description: >-
   One call SITE SHAPE inside a named function-like: the invoked name together with how the call was
   written. Shape is what a pure model can honestly say about a call's ORIGIN — with no type checker,
-  save(x), ledger.save(x) and this.store.save(x) are three different questions, and collapsing them
-  onto the name "save" is what let a call into an unrelated module count as realizing a narrative
-  step. Sites are deduplicated per shape, never counted: the checks that read them ask where a call
-  could land, never how often it was written.
+  save(x), ledger.save(x), this.store.save(x) and new Ledger(db).save(x) are four different
+  questions, and collapsing them onto the name "save" is what let a call into an unrelated module
+  count as realizing a narrative step. Sites are deduplicated per shape, never counted: the checks
+  that read them ask where a call could land, never how often it was written.
 subsystem: sdd_validator
 fields:
   - name: name
@@ -34,6 +34,16 @@ fields:
       can follow past the value it holds, because the class DECLARES the field's type; what that
       type resolves to is a possible origin, never a proven one
     optional: true
+  - name: constructed
+    type: string
+    description: >-
+      The CLASS the receiver was constructed from — set only when the call was written new
+      Class(...).name(...) (new ApprovalRegistry(store).create() gives "ApprovalRegistry"), and
+      never together with via or field. The second receiver a pure model can follow, because the
+      code NAMES the class it built: what that name resolves to is a possible origin and never a
+      proven one, since a method the class INHERITS is written in its base's module and not in the
+      constructed class's
+    optional: true
   - name: from
     type: string
     description: >-
@@ -44,4 +54,4 @@ fields:
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-19T15:29:49.702Z'
-updatedAt: '2026-09-19T16:47:45.848Z'
+updatedAt: '2026-09-19T17:34:43.090Z'

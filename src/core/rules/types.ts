@@ -108,16 +108,21 @@ export interface CodeIndex {
   originOf(site: CallSiteFact, from: string): ReadonlySet<string>;
   /**
    * Every file the function a call site invokes CAN have been written in: the
-   * proven origins, widened for a `this.<field>.<method>()` site by the
-   * modules that declare the field's DECLARED TYPE — its type-only or runtime
-   * import binding, else this file when it declares that name itself.
+   * proven origins, widened for the two receivers the code writes a NAME for.
+   * A `this.<field>.<method>()` site widens by the modules that declare the
+   * field's DECLARED TYPE — its type-only or runtime import binding, else this
+   * file when it declares that name itself; a `new Class(…).<method>()` site
+   * widens by the module its CLASS NAME came from — its RUNTIME import binding
+   * (a constructed class is a value, never a type-only binding), else this
+   * file when it declares that class.
    *
-   * A possibility, not a fact: the type says what a constructor-injected
-   * collaborator is, never which class ships the body, so an interface's
-   * implementor may live anywhere. A widened answer may therefore only ACCEPT
-   * a call as realized; naming a file a call landed in stays `originOf`'s word
-   * alone. A field the file annotates with nothing resolves to nothing,
-   * exactly as the proven tier does.
+   * Possibilities, not facts: a declared type says what a constructor-injected
+   * collaborator is, never which class ships the body, and a constructed class
+   * says where the class was written, never where a method it INHERITS from a
+   * base was. A widened answer may therefore only ACCEPT a call as realized;
+   * naming a file a call landed in stays `originOf`'s word alone. A field the
+   * file annotates with nothing, and a class name it cannot place, resolve to
+   * nothing, exactly as the proven tier does.
    */
   possibleOriginsOf(site: CallSiteFact, from: string): ReadonlySet<string>;
 }

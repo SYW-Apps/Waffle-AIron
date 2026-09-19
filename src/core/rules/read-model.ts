@@ -168,32 +168,48 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
 
   /**
    * The same question, asked one tier weaker: every file the callee CAN have
-   * been written in. A `this.<field>.save()` receiver is followed through the
-   * TYPE the class declares that field with — its import binding (type-only or
-   * runtime alike, since a declared type may be spelled either way), else this
-   * file when it declares that name itself.
+   * been written in. Two receivers are followed, and both are followed through
+   * a NAME the code writes down rather than through a value it holds.
    *
-   * That is a POSSIBILITY and not a fact: the declared type says what a
+   *   `this.<field>.save()`  through the TYPE the class declares that field
+   *                          with — its import binding (type-only or runtime
+   *                          alike, since a declared type may be spelled
+   *                          either way), else this file when it declares that
+   *                          name itself.
+   *   `new Class().save()`   through the module the CLASS NAME came from — its
+   *                          RUNTIME import binding only, because a
+   *                          constructed class is a value and a type-only
+   *                          binding could never have built one — else this
+   *                          file when it declares that class.
+   *
+   * Both are POSSIBILITIES and not facts. A declared type says what a
    * constructor-injected collaborator IS, never which class ships the body, so
-   * an interface's implementor may live anywhere. Which is why this tier is
+   * an interface's implementor may live anywhere; a constructed class says
+   * where the CLASS was written, never where a method it INHERITS was, and a
+   * base class lives in whatever module it likes. Which is why this tier is
    * separate rather than folded into originOf — a rule may ACCEPT a call on
    * it, and must never accuse one on it. A field the file annotates with
-   * nothing resolves to nothing, exactly as the proven tier does.
+   * nothing, and a class name it cannot place, resolve to nothing, exactly as
+   * the proven tier does.
    */
   const possibleOriginsOf = (site: CallSiteFact, from: string): ReadonlySet<string> => {
     const proven = originOf(site, from);
-    if (!site.field) return proven;
+    if (!site.field && !site.constructed) return proven;
     const resolved = scopeOf(site, from);
     if (!resolved) return proven;
     const { path: scope, facts: f } = resolved;
     const out = new Set(proven);
-    for (const typeName of fieldTypesOf(f, site.field)) {
-      const specifier = typeBindingOf(f, typeName);
+    /** Where a NAME this file writes down leads: its module, else this file when it declares it. */
+    const widenThrough = (name: string, specifier: string | undefined): void => {
       const landings = specifier !== undefined
         ? landingFrom(scope, specifier)
-        : declarationsAt(scope).has(typeName) ? republishedFrom(scope) : NO_ORIGIN;
+        : declarationsAt(scope).has(name) ? republishedFrom(scope) : NO_ORIGIN;
       for (const candidate of landings) out.add(candidate);
+    };
+    if (site.field) {
+      for (const typeName of fieldTypesOf(f, site.field)) widenThrough(typeName, typeBindingOf(f, typeName));
     }
+    if (site.constructed) widenThrough(site.constructed, importBindingOf(f, site.constructed)?.from);
     return out;
   };
 

@@ -953,6 +953,131 @@ export default [
       '',
     ].join('\n')),
   }),
+  // -------------------------------------------------------------------------
+  // CALL_ORIGIN_UNRESOLVED — the `new Class(…).<method>()` receiver, followed
+  // through the module its CLASS NAME came from. The same tier as a declared
+  // field type: it may ACCEPT a call, and it must never accuse one.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'The code NAMES the class it builds, so `new PayslipStore(...).append` is followed through the PayslipStore import to the store\'s own source file — the call site does say where it can land.',
+    scenario:
+      'The payslip repository constructs the payslip store inline for the one append it makes, rather than holding it as a field.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly dataDir: string) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    new PayslipStore(this.dataDir).append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'Following the constructed class lands the call in the store\'s own source file, which is what realizing the step means — the step is accepted, not merely unaccused.',
+    scenario:
+      'The payslip repository appends through a payslip store it constructs inline, and that store is the very component the narrative names.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly dataDir: string) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    new PayslipStore(this.dataDir).append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'payslip_repository_impl',
+    expectFire: true,
+    scenario:
+      'The payslip repository narrates an append to the payslip store but constructs the cold-storage archive inline and appends to that instead.',
+    tree: payslipRepositoryTree([
+      'import { PayslipArchive } from \'./payslip-archive.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly dataDir: string) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    new PayslipArchive(this.dataDir).append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'A constructed class says where the CLASS was written, never that this call went there, so a landing read off one can accept a step but can never name where a call went instead: a miss stays "cannot say" and is reported as CALL_ORIGIN_UNRESOLVED.',
+    scenario:
+      'The payslip repository appends through an inline-constructed cold-storage archive while its narrative names the payslip store, so the followed class lands in a file that is not the target\'s.',
+    tree: payslipRepositoryTree([
+      'import { PayslipArchive } from \'./payslip-archive.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export class PayslipRepository {',
+      '  constructor(private readonly dataDir: string) {}',
+      '',
+      '  record(payslipId: string): void {',
+      '    new PayslipArchive(this.dataDir).append(payslipId);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
+  // The INHERITED-METHOD limit of the constructed receiver, recorded rather
+  // than discovered later. Following `new JournalWriter(…)` claims the module
+  // the CLASS was written in — never the module a method it INHERITS from a
+  // base was written in, which is free to live anywhere. So the reading
+  // reaches the derived class's file and stops there: what it cannot see
+  // stays a false NEGATIVE, and a possibility still never accuses.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'entry_recorder_impl',
+    expectFire: true,
+    scenario:
+      'The entry recorder constructs the payroll journal writer and appends through it, but append is inherited from the general-ledger writer in another module, which is where the narrative\'s target is realized.',
+    tree: ledgerJournalTree('ledger-writer'),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'The constructed class\'s own module is all the code states, so an inherited body it cannot see leaves the step unresolved — never accused of being missing, which is the whole of why this reading lives in the possible tier.',
+    scenario:
+      'The entry recorder appends through an inherited method of the journal writer it constructs, while its narrative names the general-ledger writer the base class lives in.',
+    tree: ledgerJournalTree('ledger-writer'),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'What the widened reading DOES claim is the constructed class\'s own module: the narrative names the journal writer, `new JournalWriter(...)` lands there, and the step is accepted — on where the class was written, never on a proof that the body is in that file.',
+    scenario:
+      'The entry recorder constructs the payroll journal writer and appends through it, and the journal writer is the component its narrative names.',
+    tree: ledgerJournalTree('journal-writer'),
+  }),
 ];
 
 /**
@@ -1312,4 +1437,135 @@ function sameNameTree(schedulerModule: string): import('../harness.js').FixtureT
   ].join('\n');
   tree.rules = { conformance: { sourceRoots: ['src'] } };
   return tree;
+}
+/**
+ * A payroll journal writer that INHERITS its append from a general-ledger
+ * writer in another module, and an entry recorder that constructs it inline.
+ * `target` picks which of the two the recorder's narrative names: the base
+ * module the method is really written in, or the derived module the
+ * constructed class is written in. The one fixture family where those are not
+ * the same file — which is exactly the limit of following a `new Class(…)`.
+ */
+function ledgerJournalTree(target: 'ledger-writer' | 'journal-writer'): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'accounting', description: 'General-ledger posting for the payroll runs.' }],
+    components: [
+      {
+        id: 'entry-recorder',
+        componentType: 'Orchestrator',
+        subsystem: 'accounting',
+        description: 'Records each payroll line as one journal entry on the run\'s open journal.',
+        dependsOn: ['journal-writer', 'ledger-writer'],
+      },
+      {
+        id: 'journal-writer',
+        componentType: 'Adapter',
+        subsystem: 'accounting',
+        description: 'The payroll journal\'s writer: general-ledger appends stamped with the run\'s journal id.',
+        dependsOn: ['ledger-writer'],
+      },
+      {
+        id: 'ledger-writer',
+        componentType: 'Adapter',
+        subsystem: 'accounting',
+        description: 'The append-only entry log of the general ledger.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ientry_recorder',
+        component: 'entry-recorder',
+        methods: [{ name: 'record', description: 'Record one payroll line as a journal entry.' }],
+      },
+      {
+        id: 'ijournal_writer',
+        component: 'journal-writer',
+        methods: [{ name: 'append', description: 'Append one entry to the run\'s payroll journal.' }],
+      },
+      {
+        id: 'iledger_writer',
+        component: 'ledger-writer',
+        methods: [{ name: 'append', description: 'Append one entry to the general ledger.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'entry_recorder_impl',
+        contract: 'ientry_recorder',
+        sourcePath: 'src/accounting/entry-recorder.ts',
+        methods: [
+          {
+            name: 'record',
+            narrative: [
+              {
+                stepNumber: 1,
+                type: 'call',
+                description: 'Append the payroll line as a journal entry.',
+                targetComponent: target,
+                targetMethod: 'append',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'journal_writer_impl',
+        contract: 'ijournal_writer',
+        sourcePath: 'src/accounting/journal-writer.ts',
+        methods: [
+          {
+            name: 'append',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Stamp the entry with the journal id and append it to the general ledger.' }],
+          },
+        ],
+      },
+      {
+        id: 'ledger_writer_impl',
+        contract: 'iledger_writer',
+        sourcePath: 'src/accounting/ledger-writer.ts',
+        methods: [
+          {
+            name: 'append',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Append the entry to the general ledger\'s open period.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/accounting/entry-recorder.ts': [
+        'import { JournalWriter } from \'./journal-writer.js\';',
+        '',
+        '/** Records each payroll line as one journal entry on the run\'s open journal. */',
+        'export class EntryRecorder {',
+        '  record(entry: string): void {',
+        '    new JournalWriter(\'2026-Q1\').append(entry);',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+      // The derived class declares NO append of its own: the body this call
+      // reaches lives in the BASE module, which the constructed class's name
+      // does not point at.
+      'src/accounting/journal-writer.ts': [
+        'import { LedgerWriter } from \'./ledger-writer.js\';',
+        '',
+        '/** The payroll journal\'s writer: general-ledger appends stamped with the run\'s journal id. */',
+        'export class JournalWriter extends LedgerWriter {',
+        '  constructor(private readonly journalId: string) {',
+        '    super();',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+      'src/accounting/ledger-writer.ts': [
+        '/** The append-only entry log of the general ledger. */',
+        'export class LedgerWriter {',
+        '  append(entry: string): void {',
+        '    // append the entry to the general ledger\'s open period',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
 }

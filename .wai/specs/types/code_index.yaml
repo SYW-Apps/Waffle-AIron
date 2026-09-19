@@ -64,13 +64,17 @@ methods:
     returns: Set<string>
     description: >-
       Every file the function a call site invokes CAN have been written in: the proven origins,
-      widened for a this.<field>.<method>() site by the modules that declare the field's declared
-      TYPE (its type-only or runtime import binding, else this file when it declares that name) —
-      the type says what a constructor-injected collaborator is, never which class ships the body,
-      so an interface's implementor is a possibility and not a fact. Empty for a field the file
-      annotates with nothing, exactly as the proven tier is. A widened answer may only ACCEPT a call
-      as realized; naming a file a call landed in stays the proven tier's word alone, since a
-      possibility can never accuse
+      widened for the two receivers the code writes down. A this.<field>.<method>() site widens by
+      the modules that declare the field's declared TYPE (its type-only or runtime import binding,
+      else this file when it declares that name); a new Class(...).<method>() site widens by the
+      module the CLASS NAME came from (its runtime import binding — a constructed class is a value,
+      never a type-only one — else this file when it declares that class). Both are possibilities
+      and not facts: a declared type says what a constructor-injected collaborator is and never
+      which class ships the body, and a constructed class says where the class was written and never
+      where a method it INHERITS from a base was. Empty for a field the file annotates with nothing
+      and for a class name it cannot place, exactly as the proven tier is. A widened answer may only
+      ACCEPT a call as realized; naming a file a call landed in stays the proven tier's word alone,
+      since a possibility can never accuse
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:08.829Z'
-updatedAt: '2026-09-19T16:49:02.186Z'
+updatedAt: '2026-09-19T17:34:48.594Z'

@@ -41,10 +41,15 @@ upgrading will see calls reported that previously passed, and `validate --ci` ca
   when that module declares `save` too, since the property could otherwise have been attached anywhere. Every landing
   is widened by what the module republishes, so a call through a barrel still lands where the function lives. A target
   that names no file of its own has nothing to resolve against and keeps the old name-membership answer.
-- **`CALL_ORIGIN_UNRESOLVED` (warning): the name IS called, from a site with no readable origin.** A member call
-  through a value — `this.store.save()`, `handle.save()` — carries no origin a pure model can read. That is a
-  different answer from *the call is missing*, and keeping the two apart is the point: **only what resolved may
-  accuse.** The step is neither proven realized nor accused, and the finding says so.
+- **`CALL_ORIGIN_UNRESOLVED` (warning): the name IS called, from a site written in a shape the reader cannot follow.**
+  A receiver holding a value the module assembled, a receiver with no name to record, an import from a PACKAGE
+  specifier: none of these carries an origin a pure model can read. That is a different answer from *the call is
+  missing*, and keeping the two apart is the point: **only what resolved may accuse.** The finding NAMES the shape it
+  could not follow (``written as `hostCore.loadProjectConfig(…)` ``) and asks for nothing. It reports what was **not
+  checked**, not what is wrong, and no working call is asked to be rewritten to suit the analysis: it is a coverage
+  hole, reported for the same reason `CONFORMANCE_DEGRADED` is, that a silently degraded gate is worse than a degraded
+  one. Its severity stays **warning**, which is what this tree's other two coverage-hole codes
+  (`CONFORMANCE_ANALYSIS_SKIPPED`, `CONFORMANCE_DEGRADED`) carry.
 - **`METHOD_BODY_NOT_FOUND` (warning): the symbol is a declaration, not an implementation.** At exact grade a method
   realized by a DECLARATION owes a function body as well, so a signature, an overload, an ambient or interface
   declaration or a plain value binding stops reading as an implementation. *Body* is what the model measures, not what
@@ -86,6 +91,34 @@ upgrading will see calls reported that previously passed, and `validate --ci` ca
   the target's file therefore leaves the step reported as `CALL_ORIGIN_UNRESOLVED`, exactly as before, and never as
   `CALL_STEP_UNREALIZED`. Measured on wairon's own tree: `CALL_ORIGIN_UNRESOLVED` 49 → 44 findings (50 → 45 steps), and the
   `CALL_STEP_UNREALIZED` set is unchanged finding for finding, and the whole tree gained no finding at all.
+- **A `new Class(…).<method>()` call is followed through the module its CLASS NAME came from.** The second receiver a
+  pure model can follow, and for the same reason: the code NAMES the class right there, and that name is bound to a
+  module. `new ApprovalRegistry(dataDir, store).create(request)` is good code — a collaborator built for one call — and
+  it was the commonest shape the reader could not read. It resolves through the class's RUNTIME import binding (a
+  constructed class is a value, never a type-only binding), else this file when it declares that class.
+  **Acceptance only, like the declared field type:** `possibleOriginsOf` answers it, `originOf` stays the proven tier a
+  finding names a landing from, and a constructed class that lands somewhere OTHER than the target's file leaves the
+  step reported as `CALL_ORIGIN_UNRESOLVED`, never as `CALL_STEP_UNREALIZED`.
+  **The limit, recorded rather than discovered later:** a constructed class says where the CLASS was written, never
+  where a method it INHERITS from a base was — and a base lives in whatever module it likes. So the reading reaches the
+  derived class's file and stops there, which is a false NEGATIVE and never an accusation; fixtures pin both halves of
+  that claim. Measured on wairon's own tree: `CALL_ORIGIN_UNRESOLVED` 44 → **6** findings (45 → 7 steps), with
+  `CALL_STEP_UNREALIZED`, `UNDECLARED_COLOCATED_CALL` and `METHOD_BODY_NOT_FOUND` unchanged finding for finding and the
+  whole tree gaining no finding at all. What survives is three named reader gaps and no author defect: a package
+  specifier (`@wairon/sdk`) the resolver does not map to a path, a receiver bound to a same-file `const` object, and a
+  plain `this.<method>()` self-call the model records no receiver name for.
+- **One author defect these checks exposed, repaired.** `spec_file_store_impl` declared `sourcePath: src/core/specs.ts`
+  while its methods carry `symbol: readYamlFile` / `writeYamlFile` / `listFilesRecursive` — declared in
+  `src/utils/yaml.ts` and `src/utils/fs.ts`, which `src/core/specs.ts` only imports and calls. The declaration tier
+  accepted it (an import binding anchors a declaration), and 21 narrative call steps across the tree were accused of
+  landing in the wrong module as a result. Each method now names the file that DECLARES its symbol, and those two files
+  leave `rules.conformance.unclaimed` — the ratchet working, and that list only shrinks.
+  **What it cost, measured:** `CALL_STEP_UNREALIZED` 42 → 26 findings (81 → 60 steps), and **26 new
+  `UNDECLARED_DEPENDENCY`** findings, because a method's `sourcePath` claims the whole FILE and those two are
+  general-purpose utility modules that nineteen other implementations import. That debt was always there; it was invisible
+  while the files sat on the unclaimed register. Declaring those edges would be a lie — the importers use `pathExists`
+  and `parseYaml`, not the spec file store — so the honest resolutions are to split the store's three symbols into
+  their own module, or to accept the coarse claim.
 
 ### `wairon lock-check`: refuse a merge whose specs were never approved (new, optional)
 

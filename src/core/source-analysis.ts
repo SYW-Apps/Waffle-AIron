@@ -363,11 +363,14 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
 
   /**
    * The dedup key of a call site: its shape, not its number of occurrences.
-   * The receiver is part of the shape, so `this.store.save()` and
-   * `getStore().save()` stay the two different questions they are.
+   * The receiver is part of the shape, so `this.store.save()`,
+   * `new Store().save()` and `getStore().save()` stay the three different
+   * questions they are.
    */
+  const receiverKey = (site: CallSiteFact): string =>
+    site.via ?? (site.field ? `this.${site.field}` : site.constructed ? `new ${site.constructed}` : '');
   const siteKey = (site: CallSiteFact): string =>
-    `${site.member ? 'm' : 'b'}:${site.via ?? (site.field ? `this.${site.field}` : '')}:${site.name}`;
+    `${site.member ? 'm' : 'b'}:${receiverKey(site)}:${site.name}`;
 
   const addBindingNames = (name: import('typescript').BindingName): void => {
     if (ts.isIdentifier(name)) declared.add(name.text);
@@ -463,9 +466,10 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
         // where it lands: a bare identifier resolves in this file's scope, a
         // member access through a plain identifier resolves through that
         // binding, a member access through `this.<field>` resolves through the
-        // type the class declares that field with, and a member access through
-        // anything else (`getStore().x()`) resolves nowhere without a type
-        // checker.
+        // type the class declares that field with, a member access on a
+        // freshly CONSTRUCTED value resolves through the class name the code
+        // names right there, and a member access through anything else
+        // (`getStore().x()`) resolves nowhere without a type checker.
         const callee = node.expression;
         if (ts.isIdentifier(callee)) addSite({ name: callee.text, member: false });
         else if (ts.isPropertyAccessExpression(callee)) {
@@ -474,6 +478,10 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
           if (ts.isIdentifier(receiver)) addSite({ name, member: true, via: receiver.text });
           else if (ts.isPropertyAccessExpression(receiver) && receiver.expression.kind === ts.SyntaxKind.ThisKeyword) {
             addSite({ name, member: true, field: receiver.name.text });
+          } else if (ts.isNewExpression(receiver) && ts.isIdentifier(receiver.expression)) {
+            // `new ApprovalRegistry(store).create()` — only a plainly named
+            // class, since `new ns.Registry()` is a property of a value again.
+            addSite({ name, member: true, constructed: receiver.expression.text });
           } else addSite({ name, member: true });
         }
       }
