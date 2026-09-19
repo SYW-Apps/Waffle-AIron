@@ -76,6 +76,8 @@ import { integrationSimDeclarationRule } from './conformance/integration-sim-dec
 import { integrationSimFileRule } from './conformance/integration-sim-file.js';
 import { integrationSimWiringRule } from './conformance/integration-sim-wiring.js';
 import { integrationSimCoverageRule } from './conformance/integration-sim-coverage.js';
+import { typeRealizationRule } from './conformance/type-realization.js';
+import { unclaimedSourceRule } from './conformance/unclaimed-source.js';
 import { couplingRule } from './heuristic/coupling-health.js';
 import { signatureLanguageBuiltinsRule } from './heuristic/signature-language-builtins.js';
 import { narrativeLanguageConstructsRule } from './heuristic/narrative-language-constructs.js';
@@ -254,6 +256,11 @@ export const SDD_RULES: SddRule[] = [
   integrationSimFileRule,
   integrationSimWiringRule,
   integrationSimCoverageRule,
+  // The data model's own claim on code, and the question no spec can ask
+  // from the spec side: which files are named by nothing at all. Last in
+  // the family because the second one reads what all the others named.
+  typeRealizationRule,
+  unclaimedSourceRule,
   couplingRule,
   // Target-language fit in two questions: what a CONTRACT may name, and what
   // a NARRATIVE may describe.

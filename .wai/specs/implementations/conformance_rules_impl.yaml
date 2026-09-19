@@ -837,6 +837,174 @@ methods:
           same-file helpers, set membership only (order and arguments are not checked)
         type: local
     symbol: check
+  - name: typeRealization
+    sourcePath: src/core/rules/conformance/type-realization.ts
+    narrative:
+      - stepNumber: 1
+        label: typeLoop
+        description: Judge each type that claims code
+        type: loop
+        loopKind: forEach
+        over: ctx.types
+        endStep: 12
+      - stepNumber: 2
+        description: >-
+          A type that names no sourcePath claims nothing, and a chained child's sourcePaths are
+          relative to its own root, so the child judges them in its own run: continue with the next
+          type
+        type: branch
+        condition: type.sourcePath is set and !ctx.isInChainedSubproject(type.subsystem)
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          code = ctx.codeIndex(); blocked = an empty set of the files whose status already stopped
+          them from realizing anything
+        type: local
+      - stepNumber: 4
+        label: fileLoop
+        description: Check the status of each distinct file the type names, once per file
+        type: loop
+        loopKind: forEach
+        over: type.sourceFiles() (its own sourcePath, then each method's)
+        endStep: 6
+      - stepNumber: 5
+        description: >-
+          An analyzed file realizes what it holds; a file the model knows nothing about is judged by
+          nobody here
+        type: branch
+        condition: facts = code.factsAt(ctx.codeModel.pathKey(file)) exists with a status other than analyzed
+        onFalseStep: 4
+      - stepNumber: 6
+        description: >-
+          Add the file to blocked and report the problem its status names, spec'd to type.id:
+          SOURCE_PATH_ESCAPES_ROOT (error) when escaped, MISSING_SOURCE_FILE (error) when missing,
+          CONFORMANCE_ANALYSIS_SKIPPED (warning) when unreadable — naming the file and, when it is a
+          method's own file rather than the type's, the methods that name it
+        type: local
+      - stepNumber: 7
+        description: >-
+          The declaration the claim promises: its symbol when the code-level name legitimately
+          differs, else the type's own name. The declaration tier alone would accept a file that
+          merely imports the name, which every consumer does
+        type: branch
+        condition: >-
+          facts = code.factsAt(ctx.codeModel.pathKey(type.sourcePath)) exists, the file is not in
+          blocked, and the names the file publishes do not hold type.symbol, else type.name —
+          published being facts.exportedNames at exact grade (empty when facts.reexportOnly, a
+          barrel declaring nothing of its own), else code.declarationsAt(that key), since only exact
+          analysis separates an export from a mention
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Report UNREALIZED_TYPE (warning; spec type.id) naming the type, the name looked for, the
+          file and the grade it was analyzed at: the claim points at code that does not hold the
+          declaration — correct the sourcePath, or bind the code-level name with symbol
+        type: local
+      - stepNumber: 9
+        label: methodLoop
+        description: Judge each pure method of the claim
+        type: loop
+        loopKind: forEach
+        over: type.methods
+        endStep: 12
+      - stepNumber: 10
+        description: file = the method's own sourcePath when it names one, else type.sourcePath
+        type: local
+      - stepNumber: 11
+        description: >-
+          A method is realized under its symbol when the code names it differently — a pure type
+          method is often a free function named after its type
+        type: branch
+        condition: >-
+          file is not in blocked, code.factsAt(ctx.codeModel.pathKey(file)) reports it analyzed, and
+          code.declarationsAt(that key) does not hold method.symbol, else method.name
+        onFalseStep: 9
+      - stepNumber: 12
+        description: >-
+          Report UNREALIZED_TYPE_METHOD (warning; spec type.id) naming the method, the name looked
+          for, the file and the grade it was analyzed at
+        type: local
+    symbol: check
+  - name: unclaimedSource
+    sourcePath: src/core/rules/conformance/unclaimed-source.ts
+    narrative:
+      - stepNumber: 1
+        description: walked = ctx.codeModel.rootFiles, the files the source-root walk found
+        type: local
+      - stepNumber: 2
+        description: A project that declares no source root opted out of the check
+        type: branch
+        condition: walked is empty
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report nothing: auditing the frozen list against a walk that found nothing would call
+          every entry stale for a reason the reader never chose. Silent means silent
+        type: return
+        outcome: void
+      - stepNumber: 4
+        description: >-
+          claimed = every file the specs name, as canonical keys: each implementation's
+          sourceFiles() and its simPath, then each type's sourceFiles()
+        type: local
+      - stepNumber: 5
+        description: >-
+          listed = the entries of the project's rules.conformance.unclaimed list, as canonical keys
+          — the frozen debt register
+        type: local
+      - stepNumber: 6
+        label: fileLoop
+        description: Judge each file the walk found
+        type: loop
+        loopKind: forEach
+        over: walked
+        endStep: 10
+      - stepNumber: 7
+        description: 'A file some spec names is designed code: continue with the next file'
+        type: branch
+        condition: claimed does not hold the file
+        onFalseStep: 6
+      - stepNumber: 8
+        description: >-
+          A pure re-export barrel declares nothing of its own and only republishes other modules, so
+          it has no code to claim. Only exact analysis proves that, and a weaker grade never takes
+          the exemption
+        type: branch
+        condition: the file's facts do not report reexportOnly
+        onFalseStep: 6
+      - stepNumber: 9
+        description: A listed file is debt already written down where a reviewer sees the whole list
+        type: branch
+        condition: listed does not hold the file
+        onFalseStep: 6
+      - stepNumber: 10
+        description: >-
+          Report UNCLAIMED_SOURCE_FILE (warning; no spec id — the finding is about a file no spec
+          names) naming the file: give it to a spec as a sourcePath, or carry it in
+          rules.conformance.unclaimed until it is designed
+        type: local
+      - stepNumber: 11
+        label: entryLoop
+        description: Audit the frozen list against what the walk found, so it can only shrink
+        type: loop
+        loopKind: forEach
+        over: listed
+        endStep: 13
+      - stepNumber: 12
+        description: 'Live debt — exactly what the list is for: continue with the next entry'
+        type: branch
+        condition: >-
+          the entry names a walked file that no spec claims and that is not a proven re-export
+          barrel
+        onTrueStep: 11
+        onFalseStep: 13
+      - stepNumber: 13
+        description: >-
+          Report STALE_UNCLAIMED_ENTRY (warning; no spec id) naming the entry: a spec now claims it,
+          it is a proven barrel, or the walk no longer finds it (deleted, renamed, excluded, or
+          outside the declared roots) — delete the entry, the list only shrinks
+        type: local
+    symbol: check
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-18T20:21:25.666Z'
+updatedAt: '2026-09-19T11:03:39.503Z'

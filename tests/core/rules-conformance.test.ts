@@ -684,6 +684,7 @@ describe('conformance degradation visibility', () => {
       projectType: 'backend',
       codeModel: {
         projectRoot: '/proj',
+        rootFiles: [],
         files: [{
           path: 'src/a.ts', status: 'analyzed', language: 'typescript', analysisGrade: 'pattern',
           declaredNames: [], anchoredNames: [], exportedNames: [], imports: [], reexports: [],
@@ -716,7 +717,7 @@ describe('buildCodeModel — analyzer grades', () => {
         "import { helper } from './b.js';",
         'export class Widget { spin(): void { helper(); } }',
       ].join('\n'));
-      const model = buildCodeModel([impl('src/a.ts')], dir);
+      const model = buildCodeModel([impl('src/a.ts')], [], dir);
       expect(model.files).toHaveLength(1);
       const facts = model.files[0];
       expect(facts.status).toBe('analyzed');
@@ -733,7 +734,7 @@ describe('buildCodeModel — analyzer grades', () => {
     const dir = mkTemp();
     try {
       fs.writeFileSync(path.join(dir, 'flow.py'), 'def run_flow():\n    pass\n\nclass FlowRunner:\n    pass\n');
-      const model = buildCodeModel([impl('flow.py')], dir);
+      const model = buildCodeModel([impl('flow.py')], [], dir);
       const facts = model.files[0];
       expect(facts.analysisGrade).toBe('pattern');
       expect(facts.declaredNames).toContain('run_flow');
@@ -745,7 +746,7 @@ describe('buildCodeModel — analyzer grades', () => {
     const dir = mkTemp();
     try {
       fs.writeFileSync(path.join(dir, 'prog.xyz'), 'PROCEDURE DoWork; BEGIN END;\n');
-      const model = buildCodeModel([impl('prog.xyz')], dir);
+      const model = buildCodeModel([impl('prog.xyz')], [], dir);
       const facts = model.files[0];
       expect(facts.analysisGrade).toBe('generic');
       expect(facts.declaredNames).toContain('DoWork');
@@ -756,7 +757,7 @@ describe('buildCodeModel — analyzer grades', () => {
     const dir = mkTemp();
     try {
       fs.writeFileSync(path.join(dir, 'blob.ts'), Buffer.from([0x00, 0x01, 0x02, 0xff]));
-      const model = buildCodeModel([impl('blob.ts')], dir);
+      const model = buildCodeModel([impl('blob.ts')], [], dir);
       expect(model.files[0].status).toBe('unreadable');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
@@ -768,7 +769,7 @@ describe('buildCodeModel — analyzer grades', () => {
       const filler = `public ${'x'.repeat(120)}\n`.repeat(12000);
       fs.writeFileSync(path.join(dir, 'gen.cs'), `${filler}public void DoWork() {}\n`);
       const started = Date.now();
-      const model = buildCodeModel([impl('gen.cs')], dir);
+      const model = buildCodeModel([impl('gen.cs')], [], dir);
       expect(Date.now() - started).toBeLessThan(5000);
       expect(model.files[0].analysisGrade).toBe('generic');
       expect(model.files[0].declaredNames).toContain('DoWork');
@@ -782,7 +783,7 @@ describe('buildCodeModel — analyzer grades', () => {
       fs.writeFileSync(path.join(dir, 'src', 'a.ts'), 'export function one(): void {}\n');
       const a = { ...impl('src/a.ts'), id: 'impl-a' };
       const b = { ...impl('src\\a.ts'), id: 'impl-b' };
-      const model = buildCodeModel([a, b], dir);
+      const model = buildCodeModel([a, b], [], dir);
       expect(model.files).toHaveLength(1);
       expect(model.files[0].path).toBe('src/a.ts');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -802,7 +803,7 @@ describe('buildCodeModel — analyzer grades', () => {
           { name: 'unlockSpecs', sourcePath: 'src/commands/unlock.ts', narrative: [] },
         ],
       };
-      const model = buildCodeModel([withMethodFiles], dir);
+      const model = buildCodeModel([withMethodFiles], [], dir);
       expect(model.files.map(f => f.path)).toEqual(['src/cli.ts', 'src/commands/lock.ts', 'src/commands/unlock.ts']);
       const lock = model.files.find(f => f.path === 'src/commands/lock.ts')!;
       expect(lock.status).toBe('analyzed');
@@ -816,7 +817,7 @@ describe('buildCodeModel — analyzer grades', () => {
     try {
       fs.writeFileSync(path.join(dir, 'lock.ts'), 'export function lockSpecs(): void {}\n');
       const pathless = { ...impl('lock.ts'), sourcePath: undefined, methods: [{ name: 'lockSpecs', sourcePath: 'lock.ts', narrative: [] }] };
-      const model = buildCodeModel([pathless], dir);
+      const model = buildCodeModel([pathless], [], dir);
       expect(model.files.map(f => f.path)).toEqual(['lock.ts']);
       expect(model.files[0].analysisGrade).toBe('exact');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -828,7 +829,7 @@ describe('buildCodeModel — analyzer grades', () => {
       fs.writeFileSync(path.join(dir, 'shared.ts'), 'export function one(): void {}\n');
       const a = { ...impl('shared.ts'), id: 'impl-a' };
       const b = { ...impl('shared.ts'), id: 'impl-b' };
-      const model = buildCodeModel([a, b], dir);
+      const model = buildCodeModel([a, b], [], dir);
       expect(model.files).toHaveLength(1);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
