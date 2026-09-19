@@ -9,7 +9,8 @@
  *    walked from every entrypoint — Portals, Observers, published components,
  *    declared lifecycle entrypoints, and invokedBy-declared methods — over
  *    call steps, register handoffs, and dispatch-table routing. Types are
- *    referenced by fields and signatures.
+ *    referenced by fields, contract signatures and other types' method
+ *    signatures — a type naming only ITSELF stays unused.
  *  - INVOKED_BY_UNDESCRIBED (warning): invokedBy caller prose missing or
  *    placeholder-thin — the entrypoint claim must stay reviewable.
  *  - INVOKED_BY_REDUNDANT (warning): invokedBy on a method the INTERNAL walk
@@ -1254,6 +1255,126 @@ export default [
           fields: [
             { name: 'carrier', type: 'string', description: 'Carrier identifier.' },
             { name: 'totalCents', type: 'number', description: 'Quoted price in cents.' },
+          ],
+        },
+      ],
+    },
+  }),
+
+  defineRuleFixture({
+    code: 'UNUSED_TYPE',
+    expectFire: false,
+    reason: 'A type method\'s signature names CarrierQuote, and a type method is a reference like any other signature.',
+    scenario:
+      'The rate shopper returns a LaneRateSheet whose own bestQuote method returns a CarrierQuote, so the quote type is named only by another type\'s method.',
+    tree: {
+      subsystems: [{ id: 'logistics', description: 'Carrier rate shopping for outbound parcels.' }],
+      components: [
+        {
+          id: 'rate-shopper',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
+          description: 'Fetches and compares carrier rate quotes for a shipping lane.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'irate_shopper',
+          component: 'rate-shopper',
+          methods: [
+            {
+              name: 'fetchQuotes',
+              description: 'Fetch current rate quotes from all connected carriers for a lane.',
+              params: [{ name: 'lane', type: 'string' }],
+              returns: 'LaneRateSheet',
+            },
+          ],
+        },
+      ],
+      types: [
+        {
+          id: 'lane-rate-sheet',
+          name: 'LaneRateSheet',
+          kind: 'value-object',
+          description: 'Every carrier offer collected for one shipping lane.',
+          fields: [{ name: 'lane', type: 'string', description: 'The shipping lane the offers were priced for.' }],
+          methods: [
+            {
+              name: 'bestQuote',
+              signature: 'bestQuote(): CarrierQuote',
+              returns: 'CarrierQuote',
+              description: 'The cheapest offer on the sheet.',
+            },
+          ],
+        },
+        {
+          id: 'carrier-quote',
+          name: 'CarrierQuote',
+          kind: 'value-object',
+          description: 'One carrier\'s priced offer for a shipping lane.',
+          fields: [
+            { name: 'carrier', type: 'string', description: 'Carrier identifier.' },
+            { name: 'totalCents', type: 'number', description: 'Quoted price in cents.' },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNUSED_TYPE',
+    severity: 'warning',
+    anchoredTo: 'carrier-quote',
+    expectFire: true,
+    scenario:
+      'CarrierQuote is named nowhere but its own cheaperThan comparison, so the only thing that needs the type is the type itself.',
+    tree: {
+      subsystems: [{ id: 'logistics', description: 'Carrier rate shopping for outbound parcels.' }],
+      components: [
+        {
+          id: 'rate-shopper',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
+          description: 'Fetches and compares carrier rate quotes for a shipping lane.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'irate_shopper',
+          component: 'rate-shopper',
+          methods: [
+            {
+              name: 'fetchQuotes',
+              description: 'Fetch current rate quotes from all connected carriers for a lane.',
+              params: [{ name: 'lane', type: 'string' }],
+              returns: 'LaneRateSheet',
+            },
+          ],
+        },
+      ],
+      types: [
+        {
+          id: 'lane-rate-sheet',
+          name: 'LaneRateSheet',
+          kind: 'value-object',
+          description: 'Every carrier offer collected for one shipping lane.',
+          fields: [{ name: 'lane', type: 'string', description: 'The shipping lane the offers were priced for.' }],
+        },
+        {
+          id: 'carrier-quote',
+          name: 'CarrierQuote',
+          kind: 'value-object',
+          description: 'One carrier\'s priced offer for a shipping lane.',
+          fields: [
+            { name: 'carrier', type: 'string', description: 'Carrier identifier.' },
+            { name: 'totalCents', type: 'number', description: 'Quoted price in cents.' },
+          ],
+          methods: [
+            {
+              name: 'cheaperThan',
+              signature: 'cheaperThan(other: CarrierQuote): boolean',
+              returns: 'boolean',
+              description: 'Whether this offer undercuts another.',
+            },
           ],
         },
       ],

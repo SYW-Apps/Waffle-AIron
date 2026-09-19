@@ -18,12 +18,5 @@ fields:
     description: 'The kind label a finding names it by: Subsystem, Component, Interface, Implementation or Type'
     optional: false
 methods: []
-lint:
-  allow:
-    - code: UNUSED_TYPE
-      reason: >-
-        Named only by the return of rule_context.specIds, and unused-types does not yet count
-        type-method signatures as references. Remove this allow once it does; the stale-allow audit
-        will flag it.
 createdAt: '2026-09-18T13:02:31.894Z'
-updatedAt: '2026-09-18T13:53:35.620Z'
+updatedAt: '2026-09-18T23:56:31.403Z'

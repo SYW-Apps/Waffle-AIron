@@ -684,18 +684,24 @@ methods:
           of every interface in ctx.interfaces, to markTypeReferenced
         type: local
       - stepNumber: 3
+        description: >-
+          Mark the types referenced by type methods: pass each ref of m.typeRefs(), for every method
+          m of every type t in ctx.types, to markTypeReferenced — except t itself, so a type named
+          only by its own methods stays unmarked, the way a function that only calls itself is
+        type: local
+      - stepNumber: 4
         label: types
         description: Judge each type against the recorded references
         type: loop
         loopKind: forEach
         over: the types t of ctx.types within scope (ctx.isSpecInScope(t.id))
-        endStep: 5
-      - stepNumber: 4
-        description: A type no field or signature names is unused
+        endStep: 6
+      - stepNumber: 5
+        description: A type no field, no interface signature and no other type's method names is unused
         type: branch
         condition: t.id was never recorded as referenced
-        onFalseStep: 3
-      - stepNumber: 5
+        onFalseStep: 4
+      - stepNumber: 6
         label: typesEnd
         description: >-
           Report UNUSED_TYPE (warning; draft context when the subsystem in ctx.subsystems whose id
@@ -840,4 +846,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-18T20:21:34.269Z'
+updatedAt: '2026-09-18T23:49:32.245Z'

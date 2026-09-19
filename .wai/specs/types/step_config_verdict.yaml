@@ -21,12 +21,5 @@ fields:
       structure.
     optional: false
 methods: []
-lint:
-  allow:
-    - code: UNUSED_TYPE
-      reason: >-
-        Named only by the return of method_implementation.stepConfigVerdict, and unused-types does
-        not yet count type-method signatures as references. Remove this allow once it does; the
-        stale-allow audit will flag it.
 createdAt: '2026-09-17T22:21:29.573Z'
-updatedAt: '2026-09-18T13:53:38.291Z'
+updatedAt: '2026-09-18T23:56:33.290Z'
