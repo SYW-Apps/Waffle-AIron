@@ -1,9 +1,9 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "1a2107dc4bc9c6cfe7dfad128bed8478d6109e07183ea1fe27981a45cd160702"
+    "digest": "fd244af00049f1894fb1510b91cf401db85cc00c1c23d1703cc451aa0bc0bca4"
   },
-  "lockedAt": "2026-09-19T12:48:36.880Z",
+  "lockedAt": "2026-09-19T13:30:04.536Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -288,7 +288,7 @@
     ".wai/specs/implementations/exposure_policy_orchestrator_impl.yaml": "f1a53c999253246ceb3ac5644496937cf611abf28f51066e0d354bfab81c98c0",
     ".wai/specs/implementations/extension_orchestrator_impl.yaml": "15c44d6f143704b16d1ece19f29552ea7d670c14d38d76209f84541f7890fc97",
     ".wai/specs/implementations/extension_rules_impl.yaml": "35341ab1c7265e93cd9717203d7a0c4d87cd2de69c08bf76ae9a50da6d61496e",
-    ".wai/specs/implementations/gate_identity_impl.yaml": "b918c546f8f84f26d4568a12d10f94b30a46bc0a2e413bab2424fa32a994ab94",
+    ".wai/specs/implementations/gate_identity_impl.yaml": "32fa5f197481bcd138ee78e35d9925aeb3f6625df1857dd7bd048378e38a29da",
     ".wai/specs/implementations/git_adapter_impl.yaml": "f6d3177af6db818a937696d15c41fec8c6a710bcbd0322b2ce4eb24df792ded5",
     ".wai/specs/implementations/git_backing_adapter_impl.yaml": "48c0246b12a90edb76237fbe398e5a85dcff55a989f461153b65d065c4376356",
     ".wai/specs/implementations/git_backing_index_impl.yaml": "1a990eb888138200cb3ea91c167164ef1ed163b663d790d0ca5d45ef6b760b6b",
@@ -432,7 +432,7 @@
     ".wai/specs/implementations/spec_loader_impl.yaml": "d09c25c98644b54e29b19a29cb94ff0e89cdf6452bf33dadd3df2a61263cdcad",
     ".wai/specs/implementations/spec_registry_impl.yaml": "414bcfd22cd6c5b7be678053a0def5489fc92e97a7352e69cf547465b855b953",
     ".wai/specs/implementations/spec_validator_impl.yaml": "762fb06ac02b6b5da80091ca24ac3f0346c7623a87887fe31d4e3afdab78e9b6",
-    ".wai/specs/implementations/state_hash_impl.yaml": "7e71f9e487fc87aa7558d6764a6dae346ebe7dc7b644e98505382254049f925a",
+    ".wai/specs/implementations/state_hash_impl.yaml": "5b853ef1efa98a8890e8e218b30418b1ae003fae77b49defa3ad8de5d917c7d2",
     ".wai/specs/implementations/surface_exchange_orchestrator_impl.yaml": "b23286426bac6285053c1c331a03954acd68369cfb1b3a95d7eaf5d8744c016e",
     ".wai/specs/implementations/surface_fs_adapter_impl.yaml": "9e147e1922619aee0edfafaf5081d769f4e265010bc68445c21a93e7d5c786a7",
     ".wai/specs/implementations/surface_index_impl.yaml": "400d6f890bbf596b44302f69cf0ae09355d6109faa7aa295b6d81ac1a00c33ce",
