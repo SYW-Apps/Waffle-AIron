@@ -26,12 +26,5 @@ methods:
     signature: 'successorsOf(stepNumber: number): number[]'
     returns: number[]
     description: The distinct existing step numbers flow can continue at from this step
-lint:
-  allow:
-    - code: UNUSED_TYPE
-      reason: >-
-        Named only by the return of method_implementation.stepGraph, and unused-types does not yet
-        count type-method signatures as references. Remove this allow once it does; the stale-allow
-        audit will flag it.
 createdAt: '2026-09-14T06:03:35.169Z'
-updatedAt: '2026-09-18T13:53:41.175Z'
+updatedAt: '2026-09-18T23:56:35.393Z'

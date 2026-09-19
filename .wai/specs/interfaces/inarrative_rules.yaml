@@ -125,9 +125,10 @@ methods:
     description: >-
       Rule narrative-step-config. The step configuration of L5 narratives: every flow step (branch,
       switch, loop, try, parallel, jump) carries the config its type requires and no simple step
-      carries flow config, "detach" (fire-and-forget) is legal on call/dispatch steps only, a
-      parallel body is covered by contiguous, ordered arms (>= 2), no two steps share a step number
-      or a label, and every jump field targets an existing step number in the same narrative.
+      carries flow config, "detach" (fire-and-forget) is legal on call/dispatch steps only, no step
+      carries a field foreign to its type, a parallel body is covered by contiguous, ordered arms
+      (>= 2), no two steps share a step number or a label, and every jump field targets an existing
+      step number in the same narrative.
     signature: 'narrativeStepConfig(ctx: RuleContext): void'
     returns: void
     params:
@@ -144,6 +145,9 @@ methods:
       - code: DUPLICATE_STEP_LABEL
         severity: error
         summary: Two steps in one narrative share a label — the symbolic anchor later deltas address by
+      - code: FOREIGN_STEP_FIELD
+        severity: warning
+        summary: Step carries a field its own type cannot have — a leftover of an edit, meaning nothing
   - name: narrativeReachability
     description: >-
       Rule narrative-reachability. Every step of an L5 narrative must be reachable from the first
@@ -304,4 +308,4 @@ methods:
           narrative
 status: complete
 createdAt: '2026-09-14T06:06:18.256Z'
-updatedAt: '2026-09-18T20:21:21.675Z'
+updatedAt: '2026-09-18T23:49:40.303Z'

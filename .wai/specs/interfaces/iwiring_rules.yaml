@@ -138,10 +138,11 @@ methods:
           remove it
   - name: unusedTypes
     description: >-
-      Rule unused-types. Flags types no field of any type and no interface method signature
-      references. References are matched through the type-reference grammar (generic arguments,
-      collections, qualified ids), and the declaring type's own generic parameters are left out — a
-      type parameter is not a reference to a type.
+      Rule unused-types. Flags types no field of any type, no interface method signature and no
+      other type's method signature references. References are matched through the type-reference
+      grammar (generic arguments, collections, qualified ids), and the declaring type's own generic
+      parameters are left out — a type parameter is not a reference to a type. A type named only by
+      its OWN methods stays unused, the way a function that only calls itself is.
     signature: 'unusedTypes(ctx: RuleContext): void'
     returns: void
     params:
@@ -151,7 +152,7 @@ methods:
     findings:
       - code: UNUSED_TYPE
         severity: warning
-        summary: Type never referenced by fields or signatures
+        summary: Type never referenced by fields, signatures or type methods
   - name: durabilityRoundTrip
     description: >-
       Rule durability-round-trip. A durable Store (persisted RAM projection) must carry
@@ -290,4 +291,4 @@ methods:
         summary: Topic is subscribed to but nothing in the tree emits it
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-09-18T20:21:22.417Z'
+updatedAt: '2026-09-18T23:49:06.912Z'

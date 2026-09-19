@@ -274,7 +274,6 @@ methods:
         condition: the requested format is openapi
         onTrueStep: 8
         onFalseStep: 16
-        outcome: SurfaceArtifact
       - stepNumber: 8
         description: >-
           Take the rendered per-portal document set from the export result (empty when the project
@@ -329,4 +328,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-11T12:03:31.491Z'
-updatedAt: '2026-07-24T09:47:12.744Z'
+updatedAt: '2026-09-19T00:03:41.754Z'

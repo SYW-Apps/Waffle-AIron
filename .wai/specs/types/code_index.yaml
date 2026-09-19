@@ -44,12 +44,5 @@ methods:
     description: >-
       The weak anchors of a file alone — string literals and property-access names, without the
       declarations — which is where a contract method's declared finding code must appear
-lint:
-  allow:
-    - code: UNUSED_TYPE
-      reason: >-
-        Named only by the return of rule_context.codeIndex, and unused-types does not yet count
-        type-method signatures as references. Remove this allow once it does; the stale-allow audit
-        will flag it.
 createdAt: '2026-09-18T00:21:08.829Z'
-updatedAt: '2026-09-18T13:53:18.182Z'
+updatedAt: '2026-09-18T23:56:15.262Z'

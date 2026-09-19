@@ -39,12 +39,5 @@ methods:
     signature: 'componentsAt(path: string): ComponentSpec[]'
     returns: ComponentSpec[]
     description: The components a file realizes, in the order their implementations named it
-lint:
-  allow:
-    - code: UNUSED_TYPE
-      reason: >-
-        Named only by the return of rule_context.realizationIndex, and unused-types does not yet
-        count type-method signatures as references. Remove this allow once it does; the stale-allow
-        audit will flag it.
 createdAt: '2026-09-18T00:21:17.484Z'
-updatedAt: '2026-09-18T13:53:27.902Z'
+updatedAt: '2026-09-18T23:56:25.742Z'

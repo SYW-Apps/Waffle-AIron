@@ -133,6 +133,13 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: retireSpecialists
+  - name: repairForeignStepFields
+    narrative:
+      - stepNumber: 1
+        description: Forward the narrative-step repair, planned or applied, to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: repairForeignStepFields
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T17:58:42.735Z'
+updatedAt: '2026-09-18T23:51:25.010Z'

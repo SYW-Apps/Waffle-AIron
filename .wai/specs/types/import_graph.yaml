@@ -40,12 +40,5 @@ methods:
     description: >-
       Every path reachable from a file by following traces transitively, the file itself included;
       traversal stops at a file the run did not analyze
-lint:
-  allow:
-    - code: UNUSED_TYPE
-      reason: >-
-        Named only by the return of rule_context.importGraph, and unused-types does not yet count
-        type-method signatures as references. Remove this allow once it does; the stale-allow audit
-        will flag it.
 createdAt: '2026-09-18T00:21:25.963Z'
-updatedAt: '2026-09-18T13:53:22.883Z'
+updatedAt: '2026-09-18T23:56:21.539Z'

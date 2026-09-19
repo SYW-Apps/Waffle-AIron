@@ -8,7 +8,7 @@ import {
   AI_PATHS,
 } from '../config/loader.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
-import { loadProjectConfig, projectConfigExists, retireSpecialists, readLockState } from './subsystem.js';
+import { loadProjectConfig, projectConfigExists, retireSpecialists, repairForeignStepFields, readLockState } from './subsystem.js';
 import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { backfillChainedSubprojectConfigs } from '../core/provision.js';
 import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
@@ -187,6 +187,29 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       }
     } catch (e) {
       line(tally, 'warn', `Could not plan Specialist retirement: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // ── Narrative steps ────────────────────────────────────────────────────
+    // Fields a step's own type cannot have, dry-run: each one named with the
+    // step it sits on. They configure nothing — what a retype left behind
+    // before the writer rebuilt retyped steps. Silent once none remain.
+    try {
+      const foreign = repairForeignStepFields(false);
+      if (foreign.length > 0) {
+        console.log(chalk.bold('Narrative steps'));
+        for (const repair of foreign) {
+          line(
+            tally,
+            'warn',
+            `${repair.implementation}.${repair.method} step ${repair.stepNumber} (${repair.stepType}) carries `
+            + `${repair.fields.join(', ')} — a ${repair.stepType} step cannot.`,
+          );
+        }
+        line(tally, 'warn', 'Run `wairon doctor --fix` to drop them (or give each step the type that carries them).');
+        logger.blank();
+      }
+    } catch (e) {
+      line(tally, 'warn', `Could not plan the narrative-step repair: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -438,6 +461,22 @@ async function applyFixes(): Promise<void> {
     }
   } catch (e) {
     console.log(`  ${icon('error')} Specialist retirement failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Drop every narrative-step field its own step type cannot have — the
+  // leftovers of retypes made before the writer rebuilt a retyped step. A
+  // mechanical repair like the filename migration: the field configures
+  // nothing, and no step's `type` is ever guessed at from it.
+  try {
+    const repairs = repairForeignStepFields(true);
+    if (repairs.length > 0) {
+      console.log(`  ${icon('ok')} Dropped foreign fields from ${repairs.length} narrative step(s):`);
+      for (const repair of repairs) {
+        console.log(`      ${repair.implementation}.${repair.method} step ${repair.stepNumber} (${repair.stepType}): ${repair.fields.join(', ')}`);
+      }
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} Narrative-step repair failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // Register / repair the MCP server. The install is now self-healing, so this

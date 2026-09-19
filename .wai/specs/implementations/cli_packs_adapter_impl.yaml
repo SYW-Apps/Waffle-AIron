@@ -280,8 +280,6 @@ methods:
           Install the materialized directory into the pack store via the core surface, recording the
           origin it came from.
         type: local
-        targetComponent: pack_store_adapter
-        targetMethod: installPackFromDirectory
       - stepNumber: 4
         description: >-
           Report what was installed (name, version, path, digest) and state plainly that it applies
@@ -608,4 +606,4 @@ lint:
         limitation at the workspace-package boundary.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-09-13T11:52:22.127Z'
+updatedAt: '2026-09-18T23:56:47.948Z'

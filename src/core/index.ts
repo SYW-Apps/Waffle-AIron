@@ -45,6 +45,8 @@ export { exportSpecTree, importSpecTree } from './treetransfer.js';
 export { renameComponent, renameMethod } from './provision.js';
 export { retireSpecialists } from './stereotype-migration.js';
 export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migration.js';
+export { repairForeignStepFields } from './narrative-repair.js';
+export type { ForeignFieldRepair } from './narrative-repair.js';
 
 // The approval (icore_portal captureApprovedSpecs / currentChildPins) — the
 // per-spec digests a lock RECORDS instead of writing statuses into the tree.

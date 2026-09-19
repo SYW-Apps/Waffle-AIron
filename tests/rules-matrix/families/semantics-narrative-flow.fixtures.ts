@@ -6,6 +6,8 @@
  * regions nest or stay disjoint and are entered through their header, try
  * bodies do not fall through into their handlers on the success path, and
  * backward jumps are only idiomatic as a continue to an enclosing loop header.
+ * A step also carries only the fields its own type defines — FOREIGN_STEP_FIELD
+ * reports the leftovers of an edit that changed a step's type.
  */
 import { defineRuleFixture } from '../harness.js';
 
@@ -65,6 +67,51 @@ export default [
       { stepNumber: 1, type: 'local', description: 'Look up the customs profile for the destination country.' },
       { stepNumber: 2, type: 'branch', description: 'Decide whether the destination requires customs documents.', condition: 'the destination requires customs documents', onTrueStep: 3, onFalseStep: 4 },
       { stepNumber: 3, type: 'local', description: 'Attach the generated customs documents to the parcel.' },
+      { stepNumber: 4, type: 'return', description: 'Report the declaration filed.', outcome: 'success' },
+    ]),
+  }),
+
+  // -------------------------------------------------------------------------
+  // FOREIGN_STEP_FIELD
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'FOREIGN_STEP_FIELD',
+    severity: 'warning',
+    anchoredTo: 'customs_clearance_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The document-requirement decision was once the filing return and still carries its "outcome", a field a branch step cannot have and nothing reads.',
+    tree: customsTree([
+      { stepNumber: 1, type: 'local', description: 'Look up the customs profile for the destination country.' },
+      { stepNumber: 2, type: 'branch', description: 'Decide whether the destination requires customs documents.', condition: 'the destination requires customs documents', onTrueStep: 3, onFalseStep: 4, outcome: 'declaration filed' },
+      { stepNumber: 3, type: 'local', description: 'Attach the generated customs documents to the parcel.' },
+      { stepNumber: 4, type: 'return', description: 'Report the declaration filed.', outcome: 'success' },
+    ]),
+  }),
+  defineRuleFixture({
+    code: 'FOREIGN_STEP_FIELD',
+    severity: 'warning',
+    anchoredTo: 'customs_clearance_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The embargo rejection was retyped from a call into a throw and kept both target fields, which a throw step cannot have and which name nothing it does.',
+    tree: customsTree([
+      { stepNumber: 1, type: 'local', description: 'Look up the customs profile for the destination country.' },
+      { stepNumber: 2, type: 'branch', description: 'Reject a destination under an active trade embargo.', condition: 'the destination is under an active trade embargo', onTrueStep: 3, onFalseStep: 4 },
+      { stepNumber: 3, type: 'throw', description: 'Refuse the declaration, naming the embargo.', error: 'Destination under trade embargo', targetComponent: 'customs-clearance-orchestrator', targetMethod: 'fileDeclaration' },
+      { stepNumber: 4, type: 'return', description: 'Report the declaration filed.', outcome: 'success' },
+    ]),
+  }),
+  defineRuleFixture({
+    code: 'FOREIGN_STEP_FIELD',
+    expectFire: false,
+    reason: 'Every field sits on the step type that carries it — "outcome" on the return, "error" on the throw, the arm targets on the branch.',
+    scenario:
+      'The customs narrative decides, refuses an embargoed destination and returns, each step carrying only the config its own type defines.',
+    tree: customsTree([
+      { stepNumber: 1, type: 'local', description: 'Look up the customs profile for the destination country.' },
+      { stepNumber: 2, type: 'branch', description: 'Reject a destination under an active trade embargo.', condition: 'the destination is under an active trade embargo', onTrueStep: 3, onFalseStep: 4 },
+      { stepNumber: 3, type: 'throw', description: 'Refuse the declaration, naming the embargo.', error: 'Destination under trade embargo' },
       { stepNumber: 4, type: 'return', description: 'Report the declaration filed.', outcome: 'success' },
     ]),
   }),

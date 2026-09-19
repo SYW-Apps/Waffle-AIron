@@ -11,7 +11,7 @@ export interface StepConfigProblem {
   /** The step the problem sits on; a duplicate label names the earlier step in its detail. */
   stepNumber: number;
   /** The finding code this problem maps to. */
-  code: 'DUPLICATE_STEP_LABEL' | 'MALFORMED_FLOW_STEP' | 'INVALID_STEP_JUMP';
+  code: 'DUPLICATE_STEP_LABEL' | 'MALFORMED_FLOW_STEP' | 'INVALID_STEP_JUMP' | 'FOREIGN_STEP_FIELD';
   /** The problem stated in full, ready to follow a rule's own location prefix. */
   detail: string;
 }
@@ -35,20 +35,111 @@ export interface StepConfigVerdict {
   sound: boolean;
 }
 
-/** The flow fields a step may carry; a simple step carrying any of them is malformed. */
-const FLOW_FIELDS = [
-  'condition', 'onTrueStep', 'onFalseStep', 'on', 'cases', 'defaultStep',
-  'loopKind', 'over', 'endStep', 'catches', 'finallyStep', 'branches', 'toStep',
-] as const;
+// ---------------------------------------------------------------------------
+// The per-type field table — ONE table, here, read by both sides.
+//
+// Two things need it, and they need the SAME answer: the writer, which
+// rebuilds a step against its new type when a delta changes `type`, and this
+// derivation, which judges what a stored step actually carries. It lives in
+// the model layer because it is behaviour of the step itself
+// (narrative_step.foreignFields) — a rule reaching into the writer for it
+// would invert the layering, and two copies would drift the moment a step type
+// gains a field.
+// ---------------------------------------------------------------------------
+
+/**
+ * The configuration each narrative step TYPE may carry, beyond what every step
+ * carries. This is the field set a retype rebuilds against, and the field set
+ * a stored step is judged against.
+ *
+ * Changing a step's `type` used to merge the new type's fields over the old
+ * step's and leave the rest standing, so a `branch` that became a `call` kept
+ * its `condition` and `onFalseStep`: a step the schema accepts, a write that
+ * reports success, and a MALFORMED_FLOW_STEP at the next validate, blamed on
+ * the narrative rather than on the edit that made it. The writer no longer
+ * leaves those behind; FOREIGN_STEP_FIELD reports the ones already written.
+ */
+export const STEP_TYPE_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  local:    [],
+  call:     ['targetComponent', 'targetMethod', 'auth', 'detach'],
+  register: ['targetComponent', 'targetMethod'],
+  dispatch: ['targetComponent', 'capability', 'auth', 'detach'],
+  branch:   ['condition', 'onTrueStep', 'onFalseStep'],
+  switch:   ['on', 'cases', 'defaultStep'],
+  loop:     ['loopKind', 'over', 'condition', 'endStep'],
+  try:      ['endStep', 'catches', 'finallyStep'],
+  parallel: ['endStep', 'branches'],
+  jump:     ['toStep'],
+  return:   ['outcome'],
+  throw:    ['error'],
+};
+
+/**
+ * What a step carries whatever its type — the human's own content. A retype
+ * keeps these: the author is changing HOW the step works, not what it is for,
+ * and re-typing a step should never cost them the sentence they wrote or the
+ * anchor other steps address it by.
+ */
+export const STEP_COMMON_FIELDS: readonly string[] = [
+  'stepNumber', 'label', 'description', 'type', 'assertsGuarantees', 'assertsInvariants',
+];
+
+/** The transient `*Label` twin of each jump-by-number field, resolved and dropped at write time. */
+export const STEP_LABEL_TWINS: Readonly<Record<string, string>> = {
+  onTrueStep: 'onTrueLabel', onFalseStep: 'onFalseLabel', defaultStep: 'defaultLabel',
+  endStep: 'endLabel', finallyStep: 'finallyLabel', toStep: 'toLabel',
+};
+
+/** Every field a step of this type may carry, including the transient label twins. */
+export function stepFieldsFor(type: string): Set<string> {
+  const own = STEP_TYPE_FIELDS[type] ?? [];
+  const allowed = new Set<string>([...STEP_COMMON_FIELDS, ...own]);
+  for (const field of own) {
+    const twin = STEP_LABEL_TWINS[field];
+    if (twin) allowed.add(twin);
+  }
+  return allowed;
+}
+
+/** The step types whose own fields ROUTE flow — the union of their fields is what a simple step may not carry. */
+const FLOW_STEP_TYPES = ['branch', 'switch', 'loop', 'try', 'parallel', 'jump'] as const;
+
+/** The flow fields a step may carry, derived from the one table; a simple step carrying any of them is malformed. */
+const FLOW_FIELDS: readonly string[] = [
+  ...new Set(FLOW_STEP_TYPES.flatMap(t => [...STEP_TYPE_FIELDS[t]])),
+];
+
+/** Whether a field is SET on a step: absent is unset, and so is an empty collection. */
+function isSet(step: NarrativeStep, field: string): boolean {
+  const v = (step as unknown as Record<string, unknown>)[field];
+  if (v === undefined || v === null) return false;
+  if (Array.isArray(v) && v.length === 0) return false;
+  return true;
+}
 
 /** The flow fields actually set on a step (an empty list counts as unset). */
 function flowConfigOn(step: NarrativeStep): string[] {
-  return FLOW_FIELDS.filter(f => {
-    const v = step[f];
-    if (v === undefined) return false;
-    if (Array.isArray(v) && v.length === 0) return false;
-    return true;
-  });
+  return FLOW_FIELDS.filter(f => isSet(step, f));
+}
+
+/**
+ * narrative_step.foreignFields — the fields this step carries that its own
+ * `type` cannot: everything set on it beyond the common fields and the ones
+ * its type adds. An unknown step type has no table, so nothing is foreign to
+ * it — the schema is what names that.
+ */
+export function narrativeStepForeignFields(step: NarrativeStep): string[] {
+  const type = step.type as string;
+  if (!Object.prototype.hasOwnProperty.call(STEP_TYPE_FIELDS, type)) return [];
+  const allowed = stepFieldsFor(type);
+  return Object.keys(step).filter(f => !allowed.has(f) && isSet(step, f));
+}
+
+/** "a", "a" and "b", "a", "b" and "c" — the fields named the way a sentence names them. */
+function listFields(fields: string[]): string {
+  const quoted = fields.map(f => `"${f}"`);
+  if (quoted.length === 1) return quoted[0];
+  return `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
 }
 
 /**
@@ -106,8 +197,14 @@ export function stepConfigVerdict(method: Pick<MethodImplementation, 'narrative'
   };
 
   for (const s of steps) {
+    // Foreign fields already named by a MALFORMED_FLOW_STEP below are not
+    // repeated as FOREIGN_STEP_FIELD: misplaced flow config and a misplaced
+    // "detach" are the same leftover, reported once, at the severity that
+    // already governs them.
+    const alreadyNamed = new Set<string>();
     if (s.detach && s.type !== 'call' && s.type !== 'dispatch') {
       malformed(s.stepNumber, `step ${s.stepNumber} (${s.type}) carries "detach" — fire-and-forget applies to call/dispatch steps only.`);
+      alreadyNamed.add('detach');
     }
     switch (s.type) {
       case 'local':
@@ -115,7 +212,10 @@ export function stepConfigVerdict(method: Pick<MethodImplementation, 'narrative'
       case 'register':
       case 'dispatch': {
         const extra = flowConfigOn(s);
-        if (extra.length) malformed(s.stepNumber, `step ${s.stepNumber} (${s.type}) carries flow config (${extra.join(', ')}) — use a flow step type instead.`);
+        if (extra.length) {
+          malformed(s.stepNumber, `step ${s.stepNumber} (${s.type}) carries flow config (${extra.join(', ')}) — use a flow step type instead.`);
+          for (const f of extra) alreadyNamed.add(f);
+        }
         break;
       }
       case 'branch':
@@ -158,6 +258,23 @@ export function stepConfigVerdict(method: Pick<MethodImplementation, 'narrative'
         if (s.toStep === undefined) malformed(s.stepNumber, `jump step ${s.stepNumber} requires "toStep".`);
         break;
       // return / throw need no config
+    }
+
+    // A field the step's own type cannot carry. It routes nothing and means
+    // nothing: it is what an edit that changed the step's type left behind,
+    // back when the writer merged the new type's fields over the old step
+    // instead of rebuilding it. Reported, never guessed at — only the author
+    // knows whether a local carrying a target was meant to be a call. It does
+    // NOT clear `sound`: dead configuration leaves the flow perfectly readable.
+    const foreign = narrativeStepForeignFields(s).filter(f => !alreadyNamed.has(f));
+    if (foreign.length) {
+      problems.push({
+        stepNumber: s.stepNumber,
+        code: 'FOREIGN_STEP_FIELD',
+        detail: `step ${s.stepNumber} (${s.type}) carries ${listFields(foreign)}, which a ${s.type} step cannot — `
+          + `left over from an edit that changed the step's type, configuring nothing. `
+          + '`wairon doctor --fix` drops them; give the step the type that carries them instead if that is what it does.',
+      });
     }
 
     for (const [field, target] of jumpFieldsOf(s)) {
