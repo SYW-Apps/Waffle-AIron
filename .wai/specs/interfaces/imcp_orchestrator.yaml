@@ -6,25 +6,39 @@ description: >-
 component: mcp_orchestrator
 methods:
   - name: initializeSystem
-    description: Persist the L0 system specification
-    signature: 'initializeSystem(spec: SystemSpec): void'
-    returns: void
+    description: >-
+      Persist the L0 system specification and answer with the receipt for it: which spec was written
+      and whether one already held that id.
+    signature: 'initializeSystem(spec: SystemSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
   - name: addSubsystem
-    description: Persist an L1 subsystem specification
-    signature: 'addSubsystem(spec: SubsystemSpec): void'
-    returns: void
+    description: >-
+      Persist an L1 subsystem specification and answer with the receipt for it: which spec was
+      written, at what status, whether one already held that id, and the child project directory a
+      chained subsystem scaffolded.
+    signature: 'addSubsystem(spec: SubsystemSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
   - name: addComponent
-    description: Verify the parent subsystem exists, then persist an L2 component specification
-    signature: 'addComponent(spec: ComponentSpec): void'
-    returns: void
+    description: >-
+      Verify the parent subsystem exists, then persist an L2 component specification and answer with
+      the receipt for it: which spec was written, at what status, and whether one already held that
+      id.
+    signature: 'addComponent(spec: ComponentSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
   - name: defineInterface
-    description: Verify the owning component exists, then persist an L3 interface specification
-    signature: 'defineInterface(spec: InterfaceSpec): void'
-    returns: void
+    description: >-
+      Verify the owning component exists, then persist an L3 interface specification and answer with
+      the receipt for it: which spec was written, at what status, and whether one already held that
+      id.
+    signature: 'defineInterface(spec: InterfaceSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
   - name: writeNarrative
-    description: Verify the contract interface exists, then persist an L4 implementation specification
-    signature: 'writeNarrative(spec: ImplementationSpec): void'
-    returns: void
+    description: >-
+      Verify the contract interface exists, then persist an L4 implementation specification and
+      answer with the receipt for it: which spec was written, at what status, and whether one
+      already held that id.
+    signature: 'writeNarrative(spec: ImplementationSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
   - name: validateTree
     description: Run the architecture-conformance gate and return the result
     signature: 'validateTree(): ValidationResult'
@@ -123,4 +137,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-17T19:22:27.469Z'
+updatedAt: '2026-09-19T07:49:35.512Z'

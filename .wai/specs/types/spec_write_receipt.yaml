@@ -1,0 +1,56 @@
+kind: value-object
+id: spec_write_receipt
+name: SpecWriteReceipt
+description: >-
+  What a create tool answers with, as data rather than as a sentence to be parsed: which spec it
+  wrote, at what status, and whether a spec already held that id. A create is an upsert, so "added"
+  and "re-authored in place" are different outcomes with the same call, and only this receipt tells
+  them apart without reading English.
+subsystem: sdd_mcp
+fields:
+  - name: kind
+    type: string
+    description: 'The spec kind written: subsystem, component, interface, implementation or type.'
+    optional: false
+  - name: id
+    type: string
+    description: The id the spec is stored under.
+    optional: false
+  - name: name
+    type: string
+    description: The spec's display name as written.
+    optional: false
+  - name: replacedExisting
+    type: boolean
+    description: >-
+      True when a spec already held this id and the call re-authored it in place rather than adding
+      one.
+    optional: false
+  - name: status
+    type: string | undefined
+    description: >-
+      The lifecycle status written — draft, design or complete. Absent for a type, which carries
+      none.
+    optional: true
+  - name: notices
+    type: string[]
+    description: >-
+      The notice lines the text answer lists, one per entry: what was carried forward, what a
+      restatement removed, what an omission cleared, and every gate warning the write raised.
+    optional: false
+  - name: scaffoldedProjectPath
+    type: string | undefined
+    description: >-
+      The child project directory a chained subsystem's create scaffolded; absent for every other
+      write.
+    optional: true
+  - name: staleServer
+    type: boolean | undefined
+    description: >-
+      True when the build on disk changed after this server started — the structured twin of the
+      text answer's STALE SERVER warning, so an agent reading only structured content still sees the
+      guard.
+    optional: true
+methods: []
+createdAt: '2026-09-19T07:48:15.465Z'
+updatedAt: '2026-09-19T07:48:15.665Z'

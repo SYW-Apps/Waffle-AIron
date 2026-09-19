@@ -9,6 +9,35 @@ import type { InterfaceSpec, MethodSignature, TypeSpec } from './specs.js';
 // heuristic — the validator's rules, the canvas and the surface projector all
 // read type references through it. Structured `params` on method signatures
 // replace the prose parsing wherever they are authored.
+//
+// WHAT A TYPE REFERENCE MAY SAY
+//
+// A type string is TOKENIZED, not parsed as a type expression: every identifier
+// it names is a reference that has to resolve, and `|`, `<>`, `[]`, `,` and
+// `()` are separators. One rule, so nothing needs special-casing:
+//
+//   Invoice                          a defined type, or a builtin
+//   billing::Invoice, billing.Invoice   the same, qualified
+//   Invoice | null                   a union — every member is a reference
+//   Invoice | undefined              (`null` and `undefined` are builtins)
+//   Invoice | Receipt                a union of two defined types: BOTH resolve
+//   Promise<Invoice | null>          a union inside a generic
+//   Map<string, Invoice | null>      …at any depth, through any generic
+//   Invoice[] | null                 arrays, either side of the bar
+//   (Invoice | null)[]               a parenthesized union, then an array
+//   Result<Invoice, Error> | null    generic arguments and a union together
+//
+// Spacing around the bar is not part of the grammar (`A|null` reads the same).
+// A union of string LITERALS — `'read' | 'write'` — names no type at all, and
+// so resolves to nothing rather than to a missing type. Trailing prose after a
+// dash, an em-dash or a colon, and a trailing parenthesized aside, are stripped
+// before tokenizing, so `Invoice | null — absent when unknown` still reads as
+// the union.
+//
+// tests/models/type-reference-unions.test.ts pins each of these shapes; a
+// migration that rewrites reference fields leaves them verbatim (a whole-string
+// remap never matches a union), which
+// tests/core/type-ref-migration-unions.test.ts pins in turn.
 // ---------------------------------------------------------------------------
 
 /** Language-agnostic builtin/primitive vocabulary accepted everywhere. */

@@ -614,7 +614,13 @@ export type Guarantee = z.infer<typeof GuaranteeSchema>;
  */
 export const MethodParamSchema = z.object({
   name: z.string(),
-  /** A primitive/builtin or a defined type id (qualified across subsystems, e.g. "billing.Invoice"). */
+  /**
+   * A primitive/builtin or a defined type id (qualified across subsystems, e.g.
+   * "billing.Invoice"), on its own or inside a generic, an array or a UNION:
+   * `Invoice | null`, `Promise<Invoice | null>`, `Invoice[] | null`. Every
+   * identifier the string names has to resolve — see the grammar on
+   * src/models/type-references.ts.
+   */
   type: z.string(),
   description: z.string().optional(),
   optional: z.boolean().optional(),
@@ -642,7 +648,9 @@ export const MethodSignatureSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
   description: z.string(),
   signature: z.string(), // e.g. "save(key: string, data: Buffer): Promise<void>"
-  returns: z.string(),   // e.g. "Promise<void>"
+  // e.g. "Promise<void>", or a union: "Invoice | null" — the commonest shape in
+  // any real tree. See the grammar on src/models/type-references.ts.
+  returns: z.string(),
   /** Structured parameters (authoritative for type checking when present). */
   params: z.array(MethodParamSchema).optional(),
   /** Concrete wire binding for this method when its component is a Portal (set via sdd_set_endpoints). */
@@ -1072,7 +1080,10 @@ export type TypeKind = z.infer<typeof TypeKindSchema>;
 
 export const TypeFieldSchema = z.object({
   name: z.string(),
-  type: z.string(), // a primitive, or another type id (qualified across subsystems, e.g. "billing.Invoice")
+  // A primitive, or another type id (qualified across subsystems, e.g.
+  // "billing.Invoice") — on its own or inside a generic, an array or a union
+  // ("Invoice[] | null"). See the grammar on src/models/type-references.ts.
+  type: z.string(),
   description: z.string().optional(),
   optional: z.boolean().default(false),
   /**

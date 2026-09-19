@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { captureBuildStamp, isBuildStale } from '../../src/mcp/server.js';
+import { captureBuildStamp, isBuildStale, markStale } from '../../src/mcp/server.js';
 
 // ---------------------------------------------------------------------------
 // Stale-server guard: a long-running MCP server whose build changed on disk
@@ -34,5 +34,32 @@ describe('MCP server build-freshness guard', () => {
     expect(isBuildStale(null)).toBe(false);
     // A stamp whose file has since vanished also stays quiet rather than crying wolf.
     expect(isBuildStale({ path: '/no/such/entry/file.js', mtimeMs: 1, size: 1 })).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // The warning has to reach BOTH channels.
+  //
+  // Now that tools answer with structuredContent as well, an agent reading only
+  // the structured half would never see the text banner — and this is the
+  // warning that twice stopped a stale process from silently stripping fields.
+  // -------------------------------------------------------------------------
+
+  it('marks a structured answer as stale as well as banner-ing the text block', () => {
+    const marked = markStale({
+      content: [{ type: 'text', text: 'Successfully added L2 Component Spec "Ledger" (ledger, Store).' }],
+      structuredContent: { kind: 'component', id: 'ledger', replacedExisting: false },
+    });
+    expect(marked.structuredContent).toEqual({
+      kind: 'component', id: 'ledger', replacedExisting: false, staleServer: true,
+    });
+    expect((marked.content as any)[0].text).toContain('STALE SERVER');
+    // Appended, never substituted: the sentence the caller expects comes first.
+    expect((marked.content as any)[0].text.startsWith('Successfully added')).toBe(true);
+  });
+
+  it('still banners a text-only answer, and invents no structured content for it', () => {
+    const marked = markStale({ content: [{ type: 'text', text: 'Successfully deleted component spec "ledger".' }] });
+    expect(marked.structuredContent).toBeUndefined();
+    expect((marked.content as any)[0].text).toContain('STALE SERVER');
   });
 });

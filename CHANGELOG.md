@@ -16,8 +16,9 @@ own step type cannot have. A scripted `sdd_update_spec` delta can also
 behave differently, where it was relying on a merge rule that was silently wrong
 (item 10), and a scripted call to a create tool that carries an unknown key
 inside a method, a param or a narrative step is now refused where it used to be
-stripped (item 12). Nothing here is purely additive, so `[minor]` would
-understate it.
+stripped (item 12). Nine `sdd_*` tools now declare an `outputSchema`, which
+changes what a conforming MCP client expects back from them (item 13). Nothing
+here is purely additive, so `[minor]` would understate it.
 
 ### A chained subproject is judged through its parent — never waved through
 
@@ -1686,6 +1687,97 @@ it had not done.
   long narrative, where the relocation rules are easier to read in a report than
   in a diff.
 
+### The tools answer with data, not only with English
+
+Every `sdd_*` tool answered through one text block, so an agent that wanted to
+know what a write DID had to parse a sentence. That is why the last several
+releases went into making those sentences trustworthy: prose was the only
+channel there was. The tools whose answer is already a structure now **declare
+an `outputSchema` and return `structuredContent`** beside the text, so a caller
+reads fields instead of English — and can see the shape on `tools/list` before
+it ever calls.
+
+- **The text block is unchanged.** Every sentence, every `NOTICE` block, every
+  JSON payload is byte for byte what it was; a client that understands no
+  structured content sees no difference at all. The notice block is now composed
+  from the same list the structure carries, so the two can never disagree about
+  what a write reported.
+- **The six create tools answer with a write receipt.**
+  `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_add_component`,
+  `sdd_define_interface`, `sdd_write_narrative` and `sdd_add_type` return
+  `{kind, id, name, replacedExisting, status?, notices[], scaffoldedProjectPath?}`.
+  A create is an upsert, so "added" and "re-authored in place" are two outcomes
+  of one call, and `replacedExisting` is the first time that is a field rather
+  than a verb in a sentence. `status` is the status the spec **actually holds**
+  after the write — which is also a fix: the boundary used to hand the store a
+  bare `draft` and let the store's no-demotion guard turn it back, so it did not
+  itself know what a restatement of a `complete` spec had written. It resolves
+  the stored status now and writes it as itself.
+- **`sdd_update_spec` returns the change report as data.** `SpecChangeReport`
+  was already a structure — `written`, `dryRun`, `changes[]`, `ineffective[]`,
+  `notices[]`, `summary` — and only the rendering was prose. Both channels now
+  carry the one report, so a script can branch on `written` or read `ineffective`
+  by path without matching on `NO EFFECT`.
+- **`sdd_validate_tree` returns findings as objects**, split into `errors` and
+  `warnings`, each with `code`, `severity`, `message`, `specId` and the
+  `draftContext` flag `--ci` waives on. The text block was already this JSON; what
+  is new is that the shape is DECLARED, so a client validates it on arrival
+  instead of trusting it.
+- **`sdd_get_spec` keeps the derived markers out of the spec.** Structured
+  content is `{kind, id, spec, partialResult?, variantGuidance?}` — the stored
+  spec under its own key, and the two derived, read-only markers beside it,
+  where nothing can mistake them for something stored and re-author them back.
+  The text block still folds them in, exactly as before.
+- **The stale-server warning reaches both channels.** When the build on disk
+  changes under a running server, the banner is appended to the text block as it
+  always was AND `staleServer: true` is set on the structured content. A guard
+  that has twice stopped a stale process from silently stripping fields is not
+  one to leave behind for readers who moved to the structured half.
+- **A refusal is still a refusal.** Per the MCP specification a tool declaring an
+  `outputSchema` owes `structuredContent` on every non-error result; an `isError`
+  result is exempt, in the SDK's server-side check and in its client-side one. So
+  a refusal answers exactly as it did — the message, `isError`, and no invented
+  report for a write that never happened.
+
+The remaining tools were left alone deliberately. `sdd_get_status` answers a
+prose dashboard that no structure exists behind yet, and `sdd_rename_component`,
+`sdd_rename_method`, `sdd_list_external_interfaces` and `sdd_get_agent_brief`
+already answer in JSON — declaring their shapes means hand-copying four rich
+types at the boundary, which is the drift the input side has a coverage test to
+prevent and the output side does not yet.
+
+### Type references: what a union may say, written down
+
+The tree holds well over a hundred type references containing a union, nearly
+all of them `T | null` returns, and it validates clean — so union handling
+worked. What was missing was any statement of WHICH shapes work, which is the
+same as not knowing whether the next one an author writes will.
+
+- **The grammar is documented where an author reads it**: on the `type` of a
+  parameter and of an entity field, and on a method's `returns`, in both the MCP
+  tool schemas and the canonical spec schema, with the full rule on
+  `src/models/type-references.ts`. A type string is TOKENIZED, not parsed as a
+  type expression — every identifier it names is a reference that must resolve,
+  and `|`, `<>`, `[]`, `,` and `()` are separators. That one rule is why a union
+  needs no special syntax: `Invoice | null`, `Invoice | Receipt` (both must
+  resolve), `Promise<Invoice | null>`, `Map<string, Invoice | null>`,
+  `Invoice[] | null`, `(Invoice | null)[]`, qualified members, and spacing that
+  does not matter. A union of string literals (`'read' | 'write'`) names no type
+  at all, and resolves to nothing rather than to a missing type. A parameter's
+  `optional` says the caller may OMIT it, which is a different contract from a
+  parameter that must be passed and may be passed as nothing — that one is
+  required, with a union for a type — and its description now says so, because
+  using `optional` for nullability is the mistake that started this.
+- **A migration leaves a union exactly as written.** The reference rewrites
+  behind `sdd_rename_component`, `sdd_rename_method`,
+  `sdd_externalize_subsystem` and `sdd_internalize_subsystem` remap a `type`
+  field as a WHOLE STRING, so a bare `invoice` is qualified to
+  `billing::invoice` while `invoice[] | null` is left verbatim. That is not a
+  dangling reference: a type reference matches by name as a suffix of the
+  qualified id, whichever namespace the naming spec sits in, so the unqualified
+  member still resolves. Both halves are now pinned by tests, against a
+  word-by-word rewrite that would edit inside the union.
+
 ### Fixes
 
 - **Re-authoring a subsystem quietly reopened it.** `saveSubsystemSpec` was the
@@ -1964,6 +2056,28 @@ it had not done.
       is the one place the shapes nest further than a boundary schema should
       restate. It now reports what it dropped instead, under `NO EFFECT` in the
       answer — read that list where you would have read a refusal.
+13. **MCP clients: nine tools now declare an `outputSchema`.**
+    `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_add_component`,
+    `sdd_define_interface`, `sdd_write_narrative`, `sdd_add_type`,
+    `sdd_update_spec`, `sdd_get_spec` and `sdd_validate_tree` return
+    `structuredContent` alongside the text block they always returned. **The text
+    block is unchanged**, so a client that ignores structured content needs no
+    action at all. What changes is what a CONFORMING client expects: per the MCP
+    specification a tool declaring an `outputSchema` must return structured
+    content on every non-error result, and an SDK client validates it on arrival.
+    - A client whose SDK predates structured output ignores the field entirely;
+      one that knows it will validate it. Either way, a proxy or gateway that
+      rewrites tool results must carry `structuredContent` through rather than
+      rebuilding the envelope from `content` alone.
+    - Reading the text block and parsing it still works everywhere, and is what
+      the wairon CLI and the hosted web interface do. Prefer the structured half
+      in new code: `sdd_update_spec` gives you `written`, `changes[]` and
+      `ineffective[]`; a create gives you `replacedExisting` and the `status`
+      actually written; `sdd_validate_tree` gives you findings as objects.
+    - `sdd_get_spec`'s structured answer is `{kind, id, spec, partialResult?,
+      variantGuidance?}` — the spec sits under `spec`, NOT at the top level as it
+      does in the text block, because the two derived markers belong beside it
+      and not inside it.
 
 ## v5.1.0 (from v5.0.1)
 
