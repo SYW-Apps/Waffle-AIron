@@ -18,9 +18,13 @@ methods:
       transport: Custom
       address: 'stdio json-rpc: server bootstrap (wairon mcp serve)'
   - name: sdd_initialize_system
-    description: 'Tool: initialize the L0 system specification'
-    signature: 'sdd_initialize_system(spec: SystemSpec): void'
-    returns: void
+    description: >-
+      Tool: initialize the L0 system specification. The answer carries the write receipt as
+      structured content beside the sentence, so a caller learns what was written without parsing
+      English; the sentence itself is unchanged, for a client that understands no structured
+      content.
+    signature: 'sdd_initialize_system(spec: SystemSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_initialize_system
@@ -30,9 +34,12 @@ methods:
       status, so a subsystem can be authored straight at design or complete instead of being born
       draft and needing a follow-up edit nobody remembers. An unstated status means draft for a new
       spec and the stored status for a re-authoring, and a stated status that would lower the stored
-      one is refused by name — reopening a frozen spec is an update, not a restatement.
-    signature: 'sdd_add_subsystem(spec: SubsystemSpec): void'
-    returns: void
+      one is refused by name — reopening a frozen spec is an update, not a restatement. The answer
+      carries the write receipt as structured content beside the sentence, so a caller learns the
+      status written and whether a spec already held that id without parsing English; the sentence
+      itself is unchanged.
+    signature: 'sdd_add_subsystem(spec: SubsystemSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_add_subsystem
@@ -42,9 +49,12 @@ methods:
       so a component can be authored straight at design or complete instead of being born draft and
       needing a follow-up edit nobody remembers. An unstated status means draft for a new spec and
       the stored status for a re-authoring, and a stated status that would lower the stored one is
-      refused by name — reopening a frozen spec is an update, not a restatement.
-    signature: 'sdd_add_component(spec: ComponentSpec): void'
-    returns: void
+      refused by name — reopening a frozen spec is an update, not a restatement. The answer carries
+      the write receipt as structured content beside the sentence, so a caller learns the status
+      written and whether a spec already held that id without parsing English; the sentence itself
+      is unchanged.
+    signature: 'sdd_add_component(spec: ComponentSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_add_component
@@ -55,8 +65,11 @@ methods:
       being born draft and needing a follow-up edit nobody remembers. An unstated status means draft
       for a new spec and the stored status for a re-authoring, and a stated status that would lower
       the stored one is refused by name — reopening a frozen spec is an update, not a restatement.
-    signature: 'sdd_define_interface(spec: InterfaceSpec): void'
-    returns: void
+      The answer carries the write receipt as structured content beside the sentence, so a caller
+      learns the status written and whether a spec already held that id without parsing English; the
+      sentence itself is unchanged.
+    signature: 'sdd_define_interface(spec: InterfaceSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_define_interface
@@ -67,14 +80,20 @@ methods:
       instead of being born draft and needing a follow-up edit nobody remembers. An unstated status
       means draft for a new spec and the stored status for a re-authoring, and a stated status that
       would lower the stored one is refused by name — reopening a frozen spec is an update, not a
-      restatement.
-    signature: 'sdd_write_narrative(spec: ImplementationSpec): void'
-    returns: void
+      restatement. The answer carries the write receipt as structured content beside the sentence,
+      so a caller learns the status written and whether a spec already held that id without parsing
+      English; the sentence itself is unchanged.
+    signature: 'sdd_write_narrative(spec: ImplementationSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_write_narrative
   - name: sdd_validate_tree
-    description: 'Tool: run the architecture-conformance gate over the spec tree'
+    description: >-
+      Tool: run the architecture-conformance gate over the spec tree. The answer carries the result
+      as structured content beside the JSON text block, under a schema the tool declares, so a
+      caller reads findings as objects it can filter by code and severity rather than as a payload
+      it must parse and trust.
     signature: 'sdd_validate_tree(): ValidationResult'
     returns: ValidationResult
     endpoint:
@@ -206,4 +225,4 @@ methods:
       address: mcp tools/call sdd_rename_method
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T00:30:12.529Z'
+updatedAt: '2026-09-19T07:49:59.630Z'
