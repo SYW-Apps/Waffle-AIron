@@ -50,5 +50,6 @@ fields:
     description: Consumer-facing description copied from the system public interface.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:10:56.643Z'
-updatedAt: '2026-07-08T21:10:56.679Z'
+updatedAt: '2026-09-19T11:07:14.921Z'

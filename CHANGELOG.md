@@ -246,6 +246,60 @@ the code.
   default), yet `init` wrote one regardless, and the next `wairon generate` removed it again. A project that opts in gets
   its agent files, the architect included, from `wairon generate`, rendered from the resolved topology.
 
+### Code nobody designed is visible: source roots, and a type that claims its file
+
+Every conformance rule starts from a spec and asks what the code does about it. A file no spec ever names is invisible
+to all of them — it cannot be unrealized, undeclared or unwired, because nothing points at it. That is the one gap a
+spec-driven gate cannot close from the spec side, and it is where a codebase drifts away from its design: 72 of the 259
+source files under wairon's own `src/` — 28% — were named by nothing, and nothing said so. Two changes close it, one
+from each side.
+
+- **A type claims code: `sourcePath` and `symbol`, on the type and on each of its methods.** A type named the data the
+  design is about and named no code, so the whole model layer was the one part of a tree that was asked nothing.
+  `sourcePath` makes it a claim, judged exactly as an implementation's is: the file must resolve to a readable file
+  inside the project root (`MISSING_SOURCE_FILE`, `SOURCE_PATH_ESCAPES_ROOT`, `CONFORMANCE_ANALYSIS_SKIPPED`, now
+  reported for a type's files too), and the file must publish the declaration or `UNREALIZED_TYPE` (warning) says so.
+  `symbol` binds the code-level name when it legitimately differs from the modelled one. Each pure method carries the
+  same two overrides, because a type's methods routinely live apart from its declaration and under other names — in
+  wairon's own tree `method_implementation` is declared in `src/models/specs.ts` while `stepConfigVerdict` lives in
+  `step-config.ts`, and `narrative_step.foreignFields` is realized by the free function `narrativeStepForeignFields`.
+  `UNREALIZED_TYPE_METHOD` (warning) reports a method that is in neither. `sdd_add_type` expresses all four fields.
+- **The type's declaration is checked at the EXPORT tier, its methods at the declaration tier.** A modelled type is part
+  of the design's published vocabulary, and the declaration tier would accept a file that merely *imports* the name —
+  which every consumer does, so any of them would satisfy the claim. A method is not: it is an interface member, a class
+  method or a free function at any nesting depth, which is exactly what the declaration tier holds. Only exact analysis
+  separates an export from a mention, so below exact grade the declaration tier is the floor for both and the grade
+  rides on the finding.
+- **`UNCLAIMED_SOURCE_FILE` (warning): a source file that no spec names.** A file under a declared source root that no
+  implementation `sourcePath`, method `sourcePath`, `simPath` or type `sourcePath` names, and that the frozen unclaimed
+  list does not carry.
+- **Opt-in, through `rules.conformance` in `.wai/project.yaml`.** `sourceRoots` names the paths holding this project's
+  own source (a directory is walked recursively, a file stands for itself; `node_modules` and dot-directories are never
+  descended into, and an absolute or parent-escaping root is refused by containment exactly as a `sourcePath` is).
+  `exclude` drops what inside them is not this project's code to claim — vendored libraries, generated output, a chained
+  subproject's own directory. A project that declares no root walks nothing and the check stays silent.
+- **`unclaimed` is a one-way debt register, not a suppression.** A `lint.allow` hides one finding behind one spec,
+  forever, where only a reader of that spec ever sees it. `rules.conformance.unclaimed` is the whole debt in one
+  reviewable place, and it is exactly the set of files that would otherwise fire: an entry that is now claimed, that is
+  a proven barrel, or that the walk no longer finds is `STALE_UNCLAIMED_ENTRY` (warning) and must be deleted. So the
+  list can only shrink, and a file that is neither claimed nor listed is reported the day it appears.
+- **A pure re-export barrel is exempt — as a rule, with a test.** A file whose every top-level statement re-exports
+  another module declares nothing of its own, so there is nothing in it for a spec to claim, and a type pointed at one
+  is `UNREALIZED_TYPE` for the same reason. The fact is measured at exact grade only, from the statement list, *before*
+  the barrel chase folds the republished names into `declaredNames` — after it, a barrel is indistinguishable from the
+  files it publishes. A weaker grade cannot tell a barrel from a file it failed to parse, so it never takes the
+  exemption.
+- **Nothing newly reports without opting in.** The new codes need a declared source root, and no project can have a
+  type `sourcePath` before this release, so an existing tree that upgrades and changes nothing validates exactly as it
+  did. The one behaviour a project sees after adopting the field: `sourcePath` and `symbol` are *expressed* by
+  `sdd_add_type`, so a restatement that omits them clears them and says so, like every other expressed field.
+- **Wairon's own tree claims its data model.** 175 types now name the file their declaration lives in, 18 pure methods
+  name their own file or code-level symbol, and `src` is a declared source root. That retires 14 of the 72 unclaimed
+  files — the model layer (`src/models/*.ts`), the type-holder modules (`src/core/rules/types.ts`, `src/git/types.ts`,
+  `src/producers/types.ts`, `src/server/types.ts`) and `src/server/openapiindex.ts`. Five are exempt as pure re-export
+  barrels, the vendored Cytoscape bundle under `src/templates/canvas` is excluded, and the remaining 53 are written
+  down in `rules.conformance.unclaimed` where the next wave can see all of them at once.
+
 ### The validator's rules are designed in the spec tree
 
 The validator's 43 rules existed only as code. The spec tree modelled the rule machinery but described the rules in one

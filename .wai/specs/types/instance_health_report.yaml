@@ -22,5 +22,6 @@ fields:
     description: Relevant usage snapshots visible to the caller.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-09T09:08:32.204Z'
-updatedAt: '2026-07-10T11:21:06.373Z'
+updatedAt: '2026-09-19T11:07:09.333Z'

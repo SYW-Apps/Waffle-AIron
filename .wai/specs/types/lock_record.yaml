@@ -75,5 +75,6 @@ invariants:
       At most one lock record exists per project: .wai/lock.json is the only lock location and every
       write replaces the prior record wholesale — there is no append path, so a stale lock can never
       coexist with a fresh one.
+sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-09-12T00:19:35.555Z'
+updatedAt: '2026-09-19T11:07:10.435Z'

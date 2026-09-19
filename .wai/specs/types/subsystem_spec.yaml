@@ -55,5 +55,7 @@ methods:
     signature: 'isDraft(): boolean'
     returns: boolean
     description: Whether the subsystem's status is draft or design
+    symbol: isDraftSubsystem
+sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-14T23:22:54.095Z'
+updatedAt: '2026-09-19T11:07:18.725Z'

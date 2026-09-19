@@ -46,5 +46,6 @@ fields:
       as a completed edit.
     optional: false
 methods: []
+sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-09-19T00:26:09.623Z'
+updatedAt: '2026-09-19T11:07:17.840Z'

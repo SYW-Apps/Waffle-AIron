@@ -1,0 +1,36 @@
+kind: value-object
+id: conformance_rule_config
+name: ConformanceRuleConfig
+description: >-
+  Where this project's own source code lives, and what of it is not yet claimed by a spec. Declaring
+  a source root is what opts a project into the unclaimed-source check: without one the walk finds
+  nothing and the check is silent, so upgrading wairon never floods an existing project. The
+  unclaimed list is a one-way debt register, not a suppression: every unclaimed file is written down
+  where a reviewer sees the whole list, an entry can only be deleted (by claiming the file), and a
+  file that is neither claimed nor listed is reported.
+fields:
+  - name: sourceRoots
+    type: string[]
+    description: >-
+      Project-relative paths holding this project's own source code; a directory is walked
+      recursively, a file names itself. Absolute or parent-escaping entries are refused by
+      containment, exactly as a sourcePath is.
+    optional: true
+  - name: exclude
+    type: string[]
+    description: >-
+      Paths inside a source root that are not this project's code to claim — vendored libraries,
+      generated output. A file at, or under, one of these is never walked, so it is neither reported
+      nor carried as debt.
+    optional: true
+  - name: unclaimed
+    type: string[]
+    description: >-
+      The files under the source roots that no spec names yet, frozen. A listed file is not
+      reported; an unlisted one is UNCLAIMED_SOURCE_FILE; an entry the walk no longer finds
+      unclaimed is STALE_UNCLAIMED_ENTRY, so the list can only shrink.
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-19T10:44:18.090Z'
+updatedAt: '2026-09-19T11:07:06.546Z'

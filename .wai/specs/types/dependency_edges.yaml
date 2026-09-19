@@ -25,5 +25,6 @@ fields:
       ends live, and unlicensed by the governing pack profile. Their target always resolved
     optional: false
 methods: []
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T01:06:31.002Z'
-updatedAt: '2026-09-18T23:56:19.952Z'
+updatedAt: '2026-09-19T11:07:06.799Z'

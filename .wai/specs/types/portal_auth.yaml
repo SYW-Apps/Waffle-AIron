@@ -60,5 +60,6 @@ fields:
     description: 'Any scheme: an illustrative format example of a valid credential/token.'
     optional: true
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-07-23T15:53:47.353Z'
-updatedAt: '2026-07-23T15:53:47.392Z'
+updatedAt: '2026-09-19T11:07:13.398Z'

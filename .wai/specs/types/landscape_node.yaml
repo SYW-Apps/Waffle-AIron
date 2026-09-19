@@ -42,5 +42,6 @@ fields:
       are omitted. An instance-admin sees every node actionable.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:32.757Z'
-updatedAt: '2026-07-15T23:27:34.313Z'
+updatedAt: '2026-09-19T11:07:09.970Z'

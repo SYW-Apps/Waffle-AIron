@@ -380,77 +380,87 @@ methods:
         targetComponent: conformance_rules
         targetMethod: integrationSimCoverage
       - stepNumber: 75
+        description: Register type-realization
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: typeRealization
+      - stepNumber: 76
+        description: Register unclaimed-source
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: unclaimedSource
+      - stepNumber: 77
         description: Register coupling-health
         type: register
         targetComponent: heuristic_rules
         targetMethod: couplingHealth
-      - stepNumber: 76
+      - stepNumber: 78
         description: Register signature-language-builtins
         type: register
         targetComponent: heuristic_rules
         targetMethod: signatureLanguageBuiltins
-      - stepNumber: 77
+      - stepNumber: 79
         description: Register narrative-language-constructs
         type: register
         targetComponent: heuristic_rules
         targetMethod: narrativeLanguageConstructs
-      - stepNumber: 78
+      - stepNumber: 80
         description: Register technology-binding
         type: register
         targetComponent: heuristic_rules
         targetMethod: technologyBinding
-      - stepNumber: 79
+      - stepNumber: 81
         description: Register technology-boundaries
         type: register
         targetComponent: heuristic_rules
         targetMethod: technologyBoundaries
-      - stepNumber: 80
+      - stepNumber: 82
         description: Register naming-conventions
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingConventions
-      - stepNumber: 81
+      - stepNumber: 83
         description: Register complexity-and-metadata
         type: register
         targetComponent: heuristic_rules
         targetMethod: complexityAndMetadata
-      - stepNumber: 82
+      - stepNumber: 84
         description: Register narrative-complexity
         type: register
         targetComponent: heuristic_rules
         targetMethod: narrativeComplexity
-      - stepNumber: 83
+      - stepNumber: 85
         description: Register naming-discipline
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingDiscipline
-      - stepNumber: 84
+      - stepNumber: 86
         description: Register method-cohesion
         type: register
         targetComponent: heuristic_rules
         targetMethod: methodCohesion
-      - stepNumber: 85
+      - stepNumber: 87
         description: Register pack-resolution
         type: register
         targetComponent: extension_rules
         targetMethod: packResolution
-      - stepNumber: 86
+      - stepNumber: 88
         description: Register pack-reproducibility
         type: register
         targetComponent: extension_rules
         targetMethod: packReproducibility
-      - stepNumber: 87
+      - stepNumber: 89
         description: Register lint-allows (the rule index later moves it after any pack rules)
         type: register
         targetComponent: integrity_rules
         targetMethod: lintAllows
-      - stepNumber: 88
+      - stepNumber: 90
         description: For each registered built-in rule, in that order
         type: loop
         loopKind: forEach
         over: the registered built-in rules
-        endStep: 89
-      - stepNumber: 89
+        endStep: 91
+      - stepNumber: 91
         label: append-builtin
         description: Append the rule to the store
         type: call
@@ -489,4 +499,4 @@ lint:
         ruleSequence reads. A new rule adds one step here, which is the point.
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-09-18T18:01:42.026Z'
+updatedAt: '2026-09-19T10:50:56.814Z'

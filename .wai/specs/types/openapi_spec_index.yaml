@@ -23,6 +23,7 @@ fields:
       publishes no portal).
     optional: false
 methods: []
+sourcePath: src/server/openapiindex.ts
 lint:
   allow:
     - code: UNUSED_TYPE
@@ -33,4 +34,4 @@ lint:
         referenced in the producing narratives/prose rather than as a field or method-signature
         type, so the used-by-signature check cannot see it.
 createdAt: '2026-07-24T09:45:00.858Z'
-updatedAt: '2026-07-24T09:45:05.790Z'
+updatedAt: '2026-09-19T11:07:11.666Z'

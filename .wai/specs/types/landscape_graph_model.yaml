@@ -23,5 +23,6 @@ fields:
     description: Scope used to generate the graph, such as an organization unit id, project id, or "instance".
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:44.223Z'
-updatedAt: '2026-07-08T21:11:44.257Z'
+updatedAt: '2026-09-19T11:07:09.884Z'

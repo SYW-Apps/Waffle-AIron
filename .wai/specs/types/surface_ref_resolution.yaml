@@ -31,5 +31,6 @@ methods:
       providers whose contracts disagree, and the remedy (name the provider, or remove the snapshot
       that no longer applies). Each rule that resolves references reports it under
       SURFACE_REF_AMBIGUOUS itself, so the finding reads the same on every kind of edge.
+sourcePath: src/models/surface-references.ts
 createdAt: '2026-09-14T06:03:40.298Z'
-updatedAt: '2026-09-18T01:09:45.230Z'
+updatedAt: '2026-09-19T11:07:19.202Z'

@@ -17,5 +17,6 @@ fields:
     description: Whether to recursively lock chained subprojects.
     optional: true
 methods: []
+sourcePath: src/commands/lock.ts
 createdAt: '2026-07-24T18:06:34.277Z'
-updatedAt: '2026-07-24T18:06:34.297Z'
+updatedAt: '2026-09-19T11:07:10.330Z'

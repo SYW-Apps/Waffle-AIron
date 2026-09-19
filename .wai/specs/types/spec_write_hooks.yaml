@@ -15,5 +15,6 @@ methods:
     description: >-
       Judge the fully merged spec immediately before it is persisted, and throw to refuse the write.
       Returns any notices to surface alongside the write's own.
+sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:13:19.876Z'
-updatedAt: '2026-09-18T21:13:19.886Z'
+updatedAt: '2026-09-19T11:07:18.165Z'

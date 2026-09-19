@@ -12,6 +12,7 @@ import {
   InterfaceSpecSchema,
   ImplementationSpecSchema,
   TypeSpecSchema,
+  TypeMethodSchema,
   MethodSignatureSchema,
   MethodImplementationSchema,
   NarrativeStepSchema,
@@ -132,6 +133,7 @@ const KINDS: Record<string, KindSpec> = {
       lint: 'per-spec warning suppression — an answer to a validator finding, so it is authored after validate',
       ext: 'opaque pack/tool data, never authored by hand',
     },
+    method: { schema: TypeMethodSchema, updateSpecOnly: {} },
   },
 };
 
@@ -444,6 +446,25 @@ describe('MCP write-tool schema field coverage', () => {
     const after = await getSpec('implementation', 'cov_runner_impl');
     expect(after.sourcePath).toBe('src/cov/runner.ts');
     expect(after.methods[0].sourcePath).toBe('src/cov/commands/run.ts');
+  }, 120_000);
+
+  it("a type's claim on code survives sdd_add_type — its own path and symbol, and each method's", async () => {
+    await call('sdd_add_type', {
+      kind: 'value-object', id: 'covrange', name: 'CovRange', subsystem: 'cov',
+      sourcePath: 'src/cov/range.ts',
+      symbol: 'CoverageRange',
+      fields: [{ name: 'from', type: 'i32' }],
+      methods: [{
+        name: 'width', signature: 'width(): i32', returns: 'i32',
+        sourcePath: 'src/cov/range-math.ts', symbol: 'coverageRangeWidth',
+      }],
+    });
+
+    const after = await getSpec('type', 'covrange');
+    expect(after.sourcePath).toBe('src/cov/range.ts');
+    expect(after.symbol).toBe('CoverageRange');
+    expect(after.methods[0].sourcePath).toBe('src/cov/range-math.ts');
+    expect(after.methods[0].symbol).toBe('coverageRangeWidth');
   }, 120_000);
 
   // dependencyClass is EXPRESSED by sdd_add_component, so it needs no

@@ -39,6 +39,7 @@ describe('code_model.pathKey', () => {
 describe('code_model.factsFor', () => {
   const model: CodeModel = {
     projectRoot: '/proj',
+    rootFiles: [],
     files: [facts('src/a.ts'), facts('src/b.ts', { status: 'missing' })],
   };
 
@@ -50,13 +51,13 @@ describe('code_model.factsFor', () => {
 
   it('answers undefined for a path the run did not analyze', () => {
     expect(factsFor(model, 'src/c.ts')).toBeUndefined();
-    expect(factsFor({ projectRoot: '', files: [] }, 'src/a.ts')).toBeUndefined();
+    expect(factsFor({ projectRoot: '', rootFiles: [], files: [] }, 'src/a.ts')).toBeUndefined();
   });
 
   it('compares stored paths by key too, and the later of two entries for one key answers', () => {
     const first = facts('./src/x.ts');
     const second = facts('src\\x.ts', { status: 'unreadable' });
-    expect(factsFor({ projectRoot: '', files: [first, second] }, 'src/x.ts')).toBe(second);
+    expect(factsFor({ projectRoot: '', rootFiles: [], files: [first, second] }, 'src/x.ts')).toBe(second);
   });
 });
 

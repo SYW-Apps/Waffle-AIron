@@ -22,5 +22,6 @@ fields:
     description: The problem stated in full, ready to follow a rule's own location prefix.
     optional: false
 methods: []
+sourcePath: src/models/step-config.ts
 createdAt: '2026-09-17T22:21:25.211Z'
-updatedAt: '2026-09-18T23:48:23.643Z'
+updatedAt: '2026-09-19T11:07:18.379Z'

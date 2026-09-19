@@ -15,5 +15,6 @@ fields:
     description: 'The project''s rule tuning: severity overrides, complexity caps and design depth'
     optional: true
 methods: []
+sourcePath: src/core/rules/gate-identity.ts
 createdAt: '2026-09-15T10:51:01.644Z'
-updatedAt: '2026-09-15T10:51:01.661Z'
+updatedAt: '2026-09-19T11:07:07.986Z'

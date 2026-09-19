@@ -18,5 +18,6 @@ fields:
     description: 'The kind label a finding names it by: Subsystem, Component, Interface, Implementation or Type'
     optional: false
 methods: []
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T13:02:31.894Z'
-updatedAt: '2026-09-18T23:56:31.403Z'
+updatedAt: '2026-09-19T11:07:17.981Z'

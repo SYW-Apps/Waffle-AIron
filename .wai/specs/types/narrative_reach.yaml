@@ -20,5 +20,6 @@ methods:
     signature: 'reachesMethod(compId: string, methodName: string): boolean'
     returns: boolean
     description: Whether the walk reached this method of this component
+sourcePath: src/core/rules/narrative-graph-projector.ts
 createdAt: '2026-09-14T06:03:48.859Z'
-updatedAt: '2026-09-14T06:03:48.869Z'
+updatedAt: '2026-09-19T11:07:11.467Z'

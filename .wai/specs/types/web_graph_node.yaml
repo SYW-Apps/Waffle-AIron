@@ -61,5 +61,6 @@ fields:
       node actionable. Carried through from LandscapeNode.actionable on the landscape tier.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-11T11:31:08.145Z'
-updatedAt: '2026-07-23T11:12:11.096Z'
+updatedAt: '2026-09-19T11:07:21.475Z'

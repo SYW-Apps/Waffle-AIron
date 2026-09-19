@@ -37,5 +37,6 @@ fields:
       worth surfacing rather than assuming.
     optional: false
 methods: []
+sourcePath: src/core/extensions.ts
 createdAt: '2026-07-29T19:43:44.384Z'
-updatedAt: '2026-07-29T19:43:44.609Z'
+updatedAt: '2026-09-19T11:07:12.265Z'

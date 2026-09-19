@@ -234,6 +234,78 @@ methods:
         summary: >-
           A narrative path has no sim:<component>.<method>[:<label>] anchor in the component's
           coverage-opted harness
+  - name: typeRealization
+    description: >-
+      Rule type-realization. Code↔spec Level 1 for the data model: a type that names a sourcePath is
+      claiming code, so every file it names — its own and each method's — must resolve to a real,
+      readable file inside the project root, its file must PUBLISH its declaration (an exported name
+      at exact grade, the declaration tier below it, under its `symbol` when the code-level name
+      differs from the type's name — and a pure re-export barrel publishes nothing of its own, so a
+      claim on one is never realized), and each of its pure methods must appear in its own file (the
+      method's sourcePath, else the type's) at the declaration tier, under the method's `symbol`,
+      else the method's name. A type that names no sourcePath claims nothing and is never reported.
+      Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker
+      analysis is visible, a file that escapes the root, is missing or could not be analyzed is
+      reported once and blocks only what it would have realized, and types under chained subsystems
+      (projectPath) validate standalone in their own project run.
+    signature: 'typeRealization(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNREALIZED_TYPE
+        severity: warning
+        summary: >-
+          A type names a sourcePath but its declaration is nowhere in that file — the claim points
+          at code that does not hold it
+      - code: UNREALIZED_TYPE_METHOD
+        severity: warning
+        summary: >-
+          A pure method of a claimed type is nowhere in its own source file (the method's
+          sourcePath, else the type's)
+      - code: MISSING_SOURCE_FILE
+        severity: error
+        summary: A source file a type or one of its methods names does not resolve to a file on disk
+      - code: SOURCE_PATH_ESCAPES_ROOT
+        severity: error
+        summary: >-
+          A source file a type or one of its methods names is absolute or escapes the project root
+          (containment refusal)
+      - code: CONFORMANCE_ANALYSIS_SKIPPED
+        severity: warning
+        summary: >-
+          A source file a type or one of its methods names could not be analyzed (binary/unreadable)
+          — what it would have realized was not checked
+  - name: unclaimedSource
+    description: >-
+      Rule unclaimed-source. Code↔spec Level 1, asked the other way round: every source file under
+      the project's declared source roots must be named by some spec — an implementation's
+      sourcePath, a method's, a simPath, or a type's — or be carried in the frozen
+      `rules.conformance.unclaimed` list. A pure re-export barrel declares nothing of its own and
+      only republishes other modules, so it has no code to claim and is exempt (exact grade only: a
+      weaker grade cannot tell a barrel from a file it failed to parse). Declaring no source roots
+      leaves the check silent, which is what makes it opt-in; the unclaimed list is a one-way debt
+      register, so an entry the walk no longer finds unclaimed must be deleted and the list can only
+      shrink.
+    signature: 'unclaimedSource(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNCLAIMED_SOURCE_FILE
+        severity: warning
+        summary: >-
+          A source file under a declared source root that no spec names and the frozen unclaimed
+          list does not carry — code nobody designed
+      - code: STALE_UNCLAIMED_ENTRY
+        severity: warning
+        summary: >-
+          An entry of the frozen unclaimed list names a file that is now claimed, or that the
+          source-root walk no longer finds — delete it, the list only shrinks
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-18T20:21:13.918Z'
+updatedAt: '2026-09-19T11:03:34.814Z'

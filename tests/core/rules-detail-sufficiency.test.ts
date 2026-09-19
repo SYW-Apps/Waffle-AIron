@@ -125,7 +125,7 @@ describe('buildCodeModel — per-function cyclomatic complexity (exact grade)', 
         'export const ternary = (x: number): number => x > 0 ? x : -x;',
         'export class Box { poke(n: number): number { if (n > 0) { return n; } return 0; } }',
       ].join('\n'));
-      const model = buildCodeModel([impl('a.ts')], dir);
+      const model = buildCodeModel([impl('a.ts')], [], dir);
       const fc = model.files[0].functionComplexity!;
       expect(model.files[0].analysisGrade).toBe('exact');
       expect(fc.branchy).toBe(11);
@@ -144,7 +144,7 @@ describe('buildCodeModel — per-function cyclomatic complexity (exact grade)', 
         '  return xs.filter(x => x > 0 ? true : false).map(innerNamed);', // callback ternary counts into outer
         '}',
       ].join('\n'));
-      const model = buildCodeModel([impl('a.ts')], dir);
+      const model = buildCodeModel([impl('a.ts')], [], dir);
       const fc = model.files[0].functionComplexity!;
       expect(fc.outer).toBe(2);       // 1 + callback ternary
       expect(fc.innerNamed).toBe(3);  // its own entry: 1 + two ifs
@@ -158,7 +158,7 @@ describe('buildCodeModel — per-function cyclomatic complexity (exact grade)', 
         'export const table = { handle: (x: number) => x > 0 ? 1 : 0 };',
         'export function shell(): void { const handle = (a: number, b: number) => (a && b) || (a > b ? a : b); handle(1, 2); }',
       ].join('\n'));
-      const model = buildCodeModel([impl('a.ts')], dir);
+      const model = buildCodeModel([impl('a.ts')], [], dir);
       expect(model.files[0].functionComplexity!.handle).toBe(4); // max(2, 1+3)
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
@@ -169,7 +169,7 @@ describe('buildCodeModel — per-function cyclomatic complexity (exact grade)', 
       fs.mkdirSync(path.join(dir, 'src'));
       fs.writeFileSync(path.join(dir, 'src', 'impl.ts'), BRANCHY_FN('branchy'));
       fs.writeFileSync(path.join(dir, 'src', 'index.ts'), "export * from './impl.js';\n");
-      const model = buildCodeModel([impl('src/index.ts')], dir);
+      const model = buildCodeModel([impl('src/index.ts')], [], dir);
       expect(model.files[0].functionComplexity!.branchy).toBe(11);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
@@ -178,7 +178,7 @@ describe('buildCodeModel — per-function cyclomatic complexity (exact grade)', 
     const dir = mkTemp();
     try {
       fs.writeFileSync(path.join(dir, 'flow.py'), 'def run_flow():\n    if True:\n        pass\n');
-      const model = buildCodeModel([impl('flow.py')], dir);
+      const model = buildCodeModel([impl('flow.py')], [], dir);
       expect(model.files[0].analysisGrade).toBe('pattern');
       expect(model.files[0].functionComplexity).toBeUndefined();
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }

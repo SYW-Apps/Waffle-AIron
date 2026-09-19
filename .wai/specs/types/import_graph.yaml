@@ -40,5 +40,6 @@ methods:
     description: >-
       Every path reachable from a file by following traces transitively, the file itself included;
       traversal stops at a file the run did not analyze
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:25.963Z'
-updatedAt: '2026-09-18T23:56:21.539Z'
+updatedAt: '2026-09-19T11:07:09.112Z'

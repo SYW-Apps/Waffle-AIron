@@ -663,7 +663,7 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
         'export function driver(specs: { load(): void }): void { helper(); specs.load(); }',
         'export function bystander(): void {}',
       ].join('\n'));
-      const model = buildCodeModel([impl('a.ts')], dir);
+      const model = buildCodeModel([impl('a.ts')], [], dir);
       const fc = model.files[0].functionCalls!;
       expect(fc.driver).toEqual(expect.arrayContaining(['helper', 'load']));
       expect(fc.bystander).toEqual([]);
@@ -705,7 +705,7 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
         'declare function inner(): void; declare function outerOnly(): void;',
         'export function outer(): void { function nested(): void { inner(); } nested(); outerOnly(); }',
       ].join('\n'));
-      const model = buildCodeModel([impl('a.ts')], dir);
+      const model = buildCodeModel([impl('a.ts')], [], dir);
       const fc = model.files[0].functionCalls!;
       expect(fc.outer).toEqual(expect.arrayContaining(['nested', 'outerOnly']));
       expect(fc.outer).not.toContain('inner');

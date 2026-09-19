@@ -3,10 +3,12 @@ import * as path from 'path';
 import { createRequire } from 'module';
 import {
   implementationSourceFiles,
+  typeSourceFiles,
   pathKey,
   type CodeModel,
   type ImplementationSpec,
   type SourceFileFacts,
+  type TypeSpec,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -28,7 +30,7 @@ import {
 // ---------------------------------------------------------------------------
 
 export function emptyCodeModel(): CodeModel {
-  return { files: [], projectRoot: '' };
+  return { files: [], projectRoot: '', rootFiles: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -307,6 +309,14 @@ interface ExactFacts {
   calls: Map<string, Set<string>>;
   /** Module-scope mutable (`let`/`var`) binding names. */
   mutableBindings: Set<string>;
+  /**
+   * The file declares nothing of its own: every top-level statement is an
+   * export-from, so it only republishes other modules. Read off the statement
+   * list rather than off `declared`, which by then holds the imported and
+   * re-exported names too — and which the barrel chase is about to fill with
+   * everything the barrel publishes.
+   */
+  reexportOnly: boolean;
 }
 
 function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFacts {
@@ -474,7 +484,13 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   };
   visit(sf);
 
-  return { declared, anchors, exported, imports, reexports, starExports, complexity, calls, mutableBindings };
+  // A pure re-export barrel, stated as what it IS: a file whose every
+  // top-level statement re-exports another module. Nothing is declared here,
+  // so there is nothing for a spec to claim.
+  const reexportOnly = sf.statements.length > 0
+    && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
+
+  return { declared, anchors, exported, imports, reexports, starExports, complexity, calls, mutableBindings, reexportOnly };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -554,27 +570,114 @@ function looksBinary(buffer: Buffer): boolean {
 }
 
 /**
+ * Every source file under the declared source roots, as canonical
+ * project-relative keys in walk order — the files no spec need name, which is
+ * the unclaimed-source rule's whole subject.
+ *
+ * Each root is resolved and containment-checked within projectRoot (an
+ * absolute or parent-escaping root is skipped, never walked), a directory is
+ * walked recursively and a file stands for itself, and a file counts as source
+ * when its extension names a language the analyzer knows. Directories named
+ * `node_modules` and directories whose name begins with a dot are never
+ * descended into, so a broad root cannot turn the walk pathological. A path
+ * at, or under, any `exclude` entry is left out entirely — vendored or
+ * generated code is neither analyzed nor carried as debt.
+ *
+ * Declaring no roots yields no files, which is what keeps the unclaimed-source
+ * check opt-in.
+ */
+function walkSourceRoots(
+  sourceRoots: readonly string[],
+  exclude: readonly string[],
+  projectRoot: string,
+): string[] {
+  const found: string[] = [];
+  const seen = new Set<string>();
+  const excluded = exclude.map(pathKey);
+  const isExcluded = (key: string): boolean =>
+    excluded.some(e => key === e || key.startsWith(`${e}/`));
+
+  const record = (absolute: string): void => {
+    const key = pathKey(path.relative(projectRoot, absolute));
+    if (seen.has(key) || isExcluded(key)) return;
+    if (!EXTENSION_LANGUAGE[path.extname(key).toLowerCase()]) return;
+    seen.add(key);
+    found.push(key);
+  };
+
+  const descend = (dir: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // an unreadable directory contributes nothing, and never aborts the run
+    }
+    for (const entry of entries.slice().sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+      const child = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+        if (isExcluded(pathKey(path.relative(projectRoot, child)))) continue;
+        descend(child);
+      } else if (entry.isFile()) {
+        record(child);
+      }
+    }
+  };
+
+  for (const root of sourceRoots) {
+    const key = pathKey(root);
+    if (path.isAbsolute(key) || path.normalize(key).split(path.sep)[0] === '..') continue;
+    const absolute = path.resolve(projectRoot, key);
+    if (path.relative(projectRoot, absolute).startsWith('..')) continue;
+    if (isExcluded(key)) continue;
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(absolute);
+    } catch {
+      continue; // a root that does not exist walks nothing
+    }
+    if (stat.isDirectory()) descend(absolute);
+    else if (stat.isFile()) record(absolute);
+  }
+  return found;
+}
+
+/**
  * Build the pure source-code model for a validation run: one SourceFileFacts
  * per distinct source path across the given implementations — each
  * implementation's sourcePath, each method's own sourcePath, and each simPath
- * — resolved and containment-checked within projectRoot, analyzed at the best
- * available grade. Deterministic over file contents; a single file's analysis
- * failure degrades that file to the generic scan, never aborts the run.
+ * — then each type's own and per-method sourcePath, then every file the
+ * source-root walk found; each resolved and containment-checked within
+ * projectRoot and analyzed at the best available grade. Deterministic over
+ * file contents; a single file's analysis failure degrades that file to the
+ * generic scan, never aborts the run.
  */
-export function buildCodeModel(implementations: ImplementationSpec[], projectRoot: string): CodeModel {
+export function buildCodeModel(
+  implementations: ImplementationSpec[],
+  types: TypeSpec[],
+  projectRoot: string,
+  sourceRoots: readonly string[] = [],
+  exclude: readonly string[] = [],
+): CodeModel {
   const files: SourceFileFacts[] = [];
   const seen = new Set<string>();
   const exactCache = new Map<string, ExactFacts | null>();
+  const rootFiles = walkSourceRoots(sourceRoots, exclude, projectRoot);
 
   // Every source file an implementation names (its own path, then each
   // method's), plus the simPath: the integration-conformance rule needs sim
-  // import graphs to prove the harness wires the real modules. Same
-  // containment, same tiers, same dedup (N:1).
+  // import graphs to prove the harness wires the real modules. Then every file
+  // a TYPE names, which claims code on the same terms. Then the walked root
+  // files, which no spec names yet and which the unclaimed-source rule judges
+  // — analyzed like any other file, since proving one a re-export barrel means
+  // reading it. Same containment, same tiers, same dedup (N:1).
   const declaredPaths: string[] = [];
   for (const impl of implementations) {
     declaredPaths.push(...implementationSourceFiles(impl));
     if (impl.simPath) declaredPaths.push(impl.simPath);
   }
+  for (const type of types) declaredPaths.push(...typeSourceFiles(type));
+  declaredPaths.push(...rootFiles);
   for (const declared of declaredPaths) {
     const sourcePath = pathKey(declared);
     if (seen.has(sourcePath)) continue;
@@ -634,6 +737,7 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
             functionComplexity: Object.fromEntries(facts.complexity),
             functionCalls: Object.fromEntries([...facts.calls].map(([k, v]) => [k, [...v]])),
             topLevelMutableBindings: [...facts.mutableBindings],
+            reexportOnly: facts.reexportOnly,
           };
         } catch {
           analyzed = analyzeGeneric(text);
@@ -652,5 +756,5 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
     files.push({ path: sourcePath, status: 'analyzed', language, ...analyzed });
   }
 
-  return { files, projectRoot };
+  return { files, projectRoot, rootFiles };
 }

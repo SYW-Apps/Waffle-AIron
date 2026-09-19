@@ -405,8 +405,14 @@ export function validateSddTree(
   // unresolved cross-tree/remote references validate against.
   const surfaceSnapshots = loadSurfaceSnapshots();
   // Source-code model (per-sourcePath declaration/export/import/anchor facts)
-  // — what structural conformance checks realization against.
-  const codeModel = buildCodeModel(implementations, getProjectRoot());
+  // — what structural conformance checks realization against. The declared
+  // source roots widen the walked set with the files no spec names yet, which
+  // is the unclaimed-source rule's whole subject; a project that declares none
+  // walks nothing and that rule stays silent.
+  const conformance = rules?.conformance;
+  const codeModel = buildCodeModel(
+    implementations, types, getProjectRoot(), conformance?.sourceRoots ?? [], conformance?.exclude ?? [],
+  );
 
   // As-complete mode: flip statuses on the freshly loaded instances — these
   // are the workspace cache's own objects, loaded after the cache clear above,

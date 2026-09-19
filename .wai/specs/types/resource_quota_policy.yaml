@@ -31,5 +31,6 @@ fields:
     description: 'Enforcement mode: "observe", "warn", or "block".'
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-09T09:08:07.406Z'
-updatedAt: '2026-07-09T09:08:07.447Z'
+updatedAt: '2026-09-19T11:07:16.189Z'

@@ -18,6 +18,14 @@ fields:
     type: string
     description: The root every source path was resolved and containment-checked against
     optional: false
+  - name: rootFiles
+    type: string[]
+    description: >-
+      Every source file the declared source-root walk found, as canonical keys in walk order — the
+      domain the unclaimed-source rule judges. Empty when the project declares no source roots,
+      which is what keeps that rule opt-in. Facts for these files live in files, like any other
+      analyzed path.
+    optional: false
 methods:
   - name: pathKey
     signature: 'pathKey(path: string): string'
@@ -31,5 +39,6 @@ methods:
     description: >-
       The facts entry for a source path, looked up by its canonical key; undefined when the run
       analyzed no such path
+sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-09-17T22:31:15.848Z'
+updatedAt: '2026-09-19T11:07:06.167Z'

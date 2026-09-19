@@ -30,5 +30,6 @@ fields:
       waive warnings that merely reflect declared, unfinished work.
     optional: true
 methods: []
+sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-12T13:08:51.001Z'
+updatedAt: '2026-09-19T11:07:20.350Z'

@@ -28,5 +28,6 @@ fields:
       would record.
     optional: false
 methods: []
+sourcePath: src/core/specs.ts
 createdAt: '2026-07-30T15:58:52.007Z'
-updatedAt: '2026-09-11T23:39:54.997Z'
+updatedAt: '2026-09-19T11:07:10.528Z'

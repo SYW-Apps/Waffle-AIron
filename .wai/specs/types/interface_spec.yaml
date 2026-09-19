@@ -41,5 +41,8 @@ methods:
     signature: 'genericParameters(): Set<string>'
     returns: Set<string>
     description: The generic parameters declared in its name
+    sourcePath: src/models/type-references.ts
+    symbol: interfaceGenericParameters
+sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-14T06:04:08.046Z'
+updatedAt: '2026-09-19T11:07:09.626Z'

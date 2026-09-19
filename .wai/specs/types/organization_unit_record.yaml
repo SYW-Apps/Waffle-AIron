@@ -66,5 +66,6 @@ fields:
       parents: company_a.it and company_b.it coexist.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:11.067Z'
-updatedAt: '2026-07-15T19:39:30.050Z'
+updatedAt: '2026-09-19T11:07:11.923Z'

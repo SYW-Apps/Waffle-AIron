@@ -74,5 +74,7 @@ methods:
     description: >-
       Whether two entries carry the same contract: the same backing component by local name, the
       same methods and the same dispatch table, so whichever judges an edge the verdict is the same
+    sourcePath: src/models/surface-references.ts
+sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:38.492Z'
-updatedAt: '2026-09-14T06:04:11.735Z'
+updatedAt: '2026-09-19T11:07:19.014Z'

@@ -112,6 +112,46 @@ export const ComplexityRuleConfigSchema = z.object({
 export type ComplexityRuleConfig = z.infer<typeof ComplexityRuleConfigSchema>;
 
 /**
+ * Where this project's own source code lives, and what of it no spec claims
+ * yet. Declaring a source root is what OPTS a project into the
+ * unclaimed-source check: with no root the walk finds nothing and the check is
+ * silent, so upgrading wairon never floods an existing project.
+ *
+ * `unclaimed` is a one-way debt register, not a suppression. A lint.allow
+ * hides one finding behind one spec, forever, and is read only by whoever
+ * opens that spec; this list is the WHOLE debt in one reviewable place, it
+ * can only be shortened (an entry the walk no longer finds unclaimed is
+ * STALE_UNCLAIMED_ENTRY), and a file that is neither claimed nor listed is
+ * reported. That is what makes "the list cannot grow silently" a property
+ * rather than a hope.
+ */
+export const ConformanceRuleConfigSchema = z.object({
+  /**
+   * Project-relative paths holding this project's own source code; a
+   * directory is walked recursively, a file names itself. Absolute or
+   * parent-escaping entries are refused by containment, exactly as a
+   * sourcePath is.
+   */
+  sourceRoots: z.array(z.string()).optional(),
+  /**
+   * Paths inside a source root that are not this project's code to claim —
+   * vendored libraries, generated output, a chained subproject's own
+   * directory (the child claims its files in its own run). A file at, or
+   * under, one of these is never walked, so it is neither reported nor
+   * carried as debt.
+   */
+  exclude: z.array(z.string()).optional(),
+  /**
+   * The files under the source roots that no spec names yet, frozen. A listed
+   * file is not reported; an unlisted one is UNCLAIMED_SOURCE_FILE; an entry
+   * that is now claimed, proven a barrel, or no longer found is
+   * STALE_UNCLAIMED_ENTRY.
+   */
+  unclaimed: z.array(z.string()).optional(),
+});
+export type ConformanceRuleConfig = z.infer<typeof ConformanceRuleConfigSchema>;
+
+/**
  * How deep this project (or subsystem, or pack profile) commits to DESIGNING.
  * The validator gates EXPECTATION checks by depth — nothing below the declared
  * depth is demanded to exist (no missing-narrative/-implementation/-endpoint
@@ -183,6 +223,9 @@ export const RulesConfigSchema = z.object({
 
   /** Dynamic structural complexity caps (method limit, step limit, dependency limit) */
   complexity: ComplexityRuleConfigSchema.optional(),
+
+  /** Where this project's own source lives and what of it no spec claims yet (see ConformanceRuleConfigSchema) */
+  conformance: ConformanceRuleConfigSchema.optional(),
 
   /** Project-default design depth (see DesignDepthSchema); subsystems may override. */
   designDepth: DesignDepthSchema.optional(),

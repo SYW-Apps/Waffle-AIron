@@ -53,5 +53,6 @@ fields:
       folded into instructions; carried structurally for programmatic consumers.
     optional: true
 methods: []
+sourcePath: src/models/agent.ts
 createdAt: '2026-08-08T11:11:36.097Z'
-updatedAt: '2026-08-08T11:11:36.108Z'
+updatedAt: '2026-09-19T11:07:04.753Z'

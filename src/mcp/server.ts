@@ -1934,6 +1934,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           signature: z.string(),
           returns: z.string().describe(TYPE_REF_GRAMMAR('The type the method answers with')),
           description: z.string().optional(),
+          sourcePath: z.string().optional().describe('Source file realizing this method when the type\'s own sourcePath does not hold it — a pure type method often lives apart from the declaration'),
+          symbol: z.string().optional().describe('Code-level name realizing this method when it differs from the method name, e.g. narrative_step.foreignFields realized by narrativeStepForeignFields'),
         }).strict()).optional().describe('Pure intrinsic methods only'),
         componentClass: z.string().optional().describe('Optional component id that implements or owns this logical entity'),
         invariants: z.array(z.object({
@@ -1943,17 +1945,19 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         database: z.string().optional().describe('Optional database id for table-schema types'),
         table: z.string().optional().describe('Optional database table name for table-schema types'),
         linkedEntity: z.string().optional().describe('Optional logical entity id represented by this table-schema type'),
+        sourcePath: z.string().optional().describe('Source file holding the declaration of this type (project-relative). Naming one turns the type into a claim on code: the file must resolve and the declaration must be anchored in it (UNREALIZED_TYPE)'),
+        symbol: z.string().optional().describe('Code-level name realizing the declaration when it differs from name, e.g. a type named "Invoice Line" declared as InvoiceLine'),
   };
   const typeInputFields = Object.keys(typeInput);
 
-  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature: string; returns: string; description?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string }>(server,
+  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature: string; returns: string; description?: string; sourcePath?: string; symbol?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string; sourcePath?: string; symbol?: string }>(server,
     'sdd_add_type',
     {
-      description: 'Define an entity or value-object type (the data components operate on). Entities are owned by a subsystem; shared value objects omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument. Re-defining an existing id REPLACES fields/methods/invariants (an omitted list is CLEARED, and a dropped member is reported); lint/ext are carried forward. The answer carries a write receipt as structured content beside the sentence — whether a spec already held the id, and the notices a restatement raised, each as its own entry. A type carries no lifecycle status, so the receipt states none.',
+      description: 'Define an entity or value-object type (the data components operate on). Entities are owned by a subsystem; shared value objects omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument. A type may also CLAIM code: sourcePath names the file holding its declaration (and each method may name its own), symbol binds the code-level name when it differs — the file must then resolve and the declaration must be anchored in it. Re-defining an existing id REPLACES fields/methods/invariants and restates sourcePath/symbol (an omitted list or path is CLEARED, and a dropped member is reported); lint/ext are carried forward. The answer carries a write receipt as structured content beside the sentence — whether a spec already held the id, and the notices a restatement raised, each as its own entry. A type carries no lifecycle status, so the receipt states none.',
       inputSchema: typeInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity }) => {
+    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity, sourcePath, symbol }) => {
       try {
         const { loadTypeSpec, saveTypeSpec } = requireSpecs();
         const now = new Date().toISOString();
@@ -1979,6 +1983,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           ...(database ? { database } : {}),
           ...(table ? { table } : {}),
           ...(linkedEntity ? { linkedEntity } : {}),
+          ...(sourcePath ? { sourcePath } : {}),
+          ...(symbol ? { symbol } : {}),
           createdAt: now,
           updatedAt: now,
         };

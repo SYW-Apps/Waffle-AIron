@@ -25,5 +25,6 @@ fields:
       interface details separately.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:55:00.785Z'
-updatedAt: '2026-07-08T21:55:00.794Z'
+updatedAt: '2026-09-19T11:07:15.016Z'

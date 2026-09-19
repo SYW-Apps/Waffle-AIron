@@ -27,5 +27,6 @@ fields:
       tree the spec-scoped built-ins are exactly intrinsic_rules' methods.
     optional: true
 methods: []
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:52.909Z'
-updatedAt: '2026-09-14T06:03:55.923Z'
+updatedAt: '2026-09-19T11:07:17.038Z'

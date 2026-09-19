@@ -29,5 +29,6 @@ fields:
     optional: false
 methods: []
 componentClass: instance_identity_repository
+sourcePath: src/server/types.ts
 createdAt: '2026-07-16T00:23:50.511Z'
-updatedAt: '2026-07-16T00:23:50.517Z'
+updatedAt: '2026-09-19T11:07:09.435Z'

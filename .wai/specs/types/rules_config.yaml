@@ -35,6 +35,13 @@ fields:
     type: DocumentationRuleConfig
     description: Documentation completeness rules applied by the linter
     optional: true
+  - name: conformance
+    type: ConformanceRuleConfig
+    description: >-
+      Where this project's own source lives and what of it no spec claims yet — the opt-in domain of
+      the unclaimed-source check
+    optional: true
 methods: []
+sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-06T20:47:37.237Z'
+updatedAt: '2026-09-19T11:07:16.763Z'

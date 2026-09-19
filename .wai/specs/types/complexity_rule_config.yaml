@@ -46,5 +46,6 @@ fields:
       the cognitive band only ever warns.
     optional: true
 methods: []
+sourcePath: src/models/project.ts
 createdAt: '2026-07-06T20:47:08.558Z'
-updatedAt: '2026-09-17T15:11:26.492Z'
+updatedAt: '2026-09-19T11:07:06.255Z'

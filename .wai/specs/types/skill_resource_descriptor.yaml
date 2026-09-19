@@ -30,5 +30,6 @@ fields:
     description: Whether hosted MCP should advertise this skill by default to connected agents.
     optional: false
 methods: []
+sourcePath: src/core/skills.ts
 createdAt: '2026-07-08T22:01:23.487Z'
-updatedAt: '2026-07-08T22:01:23.511Z'
+updatedAt: '2026-09-19T11:07:17.263Z'

@@ -83,6 +83,14 @@ fields:
       Module-scope let and var bindings; exact grade only — fuel for the hidden-state lint, which
       cannot see mutation of const-bound containers
     optional: true
+  - name: reexportOnly
+    type: boolean
+    description: >-
+      True when the file declares nothing of its own and every name it publishes comes from a
+      re-export — a pure re-export barrel, which has no code to claim. Exact grade only: a weaker
+      grade cannot tell a barrel from a file it failed to parse, so it leaves this unset rather than
+      guess.
+    optional: true
 methods:
   - name: resolveImport
     signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
@@ -92,5 +100,6 @@ methods:
       join it with this file's directory, then try the joined path, .js swapped for .ts or .tsx, the
       .ts, .tsx and .js extensions, and an index file; undefined for a bare package specifier or
       when nothing matches
+sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-09-14T23:22:48.290Z'
+updatedAt: '2026-09-19T11:07:17.368Z'

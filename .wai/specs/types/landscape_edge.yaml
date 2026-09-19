@@ -28,5 +28,6 @@ fields:
     description: Optional display label.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:38.806Z'
-updatedAt: '2026-07-08T21:11:38.839Z'
+updatedAt: '2026-09-19T11:07:09.800Z'

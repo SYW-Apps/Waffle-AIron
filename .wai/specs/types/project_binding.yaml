@@ -25,5 +25,6 @@ fields:
       plain project binding.
     optional: true
 methods: []
+sourcePath: src/server/projects.ts
 createdAt: '2026-07-24T20:50:13.159Z'
-updatedAt: '2026-07-24T20:50:13.178Z'
+updatedAt: '2026-09-19T11:07:14.044Z'

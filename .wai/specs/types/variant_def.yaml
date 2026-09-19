@@ -32,5 +32,6 @@ fields:
     description: 'Optional: only applies under the given architectural profile.'
     optional: true
 methods: []
+sourcePath: src/core/variants.ts
 createdAt: '2026-07-15T12:23:33.024Z'
-updatedAt: '2026-09-15T18:44:58.813Z'
+updatedAt: '2026-09-19T11:07:20.546Z'

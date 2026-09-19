@@ -39,5 +39,6 @@ fields:
       the project tier.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-11T11:31:14.595Z'
-updatedAt: '2026-07-11T11:31:14.641Z'
+updatedAt: '2026-09-19T11:07:21.370Z'

@@ -27,5 +27,6 @@ fields:
     description: ISO-8601 decision timestamp.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:53.391Z'
-updatedAt: '2026-07-09T15:43:11.166Z'
+updatedAt: '2026-09-19T11:07:05.155Z'

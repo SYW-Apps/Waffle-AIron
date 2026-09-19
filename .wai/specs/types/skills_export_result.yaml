@@ -18,5 +18,6 @@ fields:
     description: Target types that have no skills directory, and were skipped
     optional: false
 methods: []
+sourcePath: src/core/skills.ts
 createdAt: '2026-09-13T23:11:48.552Z'
-updatedAt: '2026-09-13T23:11:48.572Z'
+updatedAt: '2026-09-19T11:07:17.143Z'
