@@ -14,7 +14,10 @@ methods:
       for the built-in super-admin and local-developer subjects, stamp createdAt from the supplied
       timestamp, write the record atomically to instance.json (temp file + rename), swap it into the
       store, and return it. Fails by throwing on an unwritable data root; it never partially seeds.
+    calls:
+      - instance_identity_store.load
+      - instance_identity_store.replace
 detail: intent
 status: complete
 createdAt: '2026-07-16T00:24:41.756Z'
-updatedAt: '2026-07-16T07:27:54.706Z'
+updatedAt: '2026-09-19T21:26:57.083Z'

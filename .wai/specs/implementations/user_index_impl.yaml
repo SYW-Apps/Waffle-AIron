@@ -11,6 +11,8 @@ methods:
     intent: >-
       Return the store's record whose id matches exactly, or null when absent. Read-only over the
       store's current references; never fails on lookups — absence is a null result, not an error.
+    calls:
+      - user_store.load
     symbol: indexGetById
   - name: findByExternalSubject
     narrative: []
@@ -18,6 +20,8 @@ methods:
       Return the single record whose identity binding matches both the issuer and the external
       subject id exactly, or null when no user is bound to that provider identity. Comparison is
       exact and case-sensitive because provider subjects are opaque identifiers.
+    calls:
+      - user_store.load
     symbol: indexFindByExternalSubject
   - name: list
     narrative: []
@@ -27,6 +31,8 @@ methods:
       here: a user record carries no project reference of its own — project membership is a
       permission-grid question the identity orchestrator answers by intersecting this listing with
       the grid's direct assignments.
+    calls:
+      - user_store.load
     symbol: indexList
   - name: findByRecordOrSubjectId
     narrative: []
@@ -34,8 +40,10 @@ methods:
       Return the store's record whose id matches the record id exactly, else the record whose
       subject.userId matches (admin-created users diverge the two id spaces). Read-only over the
       store's current references; never fails on lookups — absence is a null result, not an error.
+    calls:
+      - user_store.load
     symbol: indexFindByRecordOrSubjectId
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:13.144Z'
-updatedAt: '2026-07-19T13:29:42.638Z'
+updatedAt: '2026-09-19T21:26:59.281Z'

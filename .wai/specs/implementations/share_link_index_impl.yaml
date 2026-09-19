@@ -10,15 +10,21 @@ methods:
       Loads the collection and returns the record whose tokenHash equals the given salted hash, or
       null when none matches. The hash comparison is the resolution seam; the raw token is never
       held.
+    calls:
+      - share_link_store.load
   - name: getById
     narrative: []
     intent: Loads the collection and returns the record with the given id, or null.
+    calls:
+      - share_link_store.load
   - name: listByProject
     narrative: []
     intent: >-
       Loads the collection and returns every record whose projectId matches, for the owner's
       management view.
+    calls:
+      - share_link_store.load
 detail: intent
 status: complete
 createdAt: '2026-07-18T09:26:27.444Z'
-updatedAt: '2026-07-18T10:10:40.574Z'
+updatedAt: '2026-09-19T21:26:58.890Z'

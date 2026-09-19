@@ -15,6 +15,8 @@ methods:
       token — then append it to the persisted request set via write-temp-then-rename, refresh the
       store with replaceAll, and return the stored request. Persistence failures leave the previous
       set intact and surface as storage errors.
+    calls:
+      - approval_store.replaceAll
   - name: decide
     narrative: []
     intent: >-
@@ -25,6 +27,8 @@ methods:
       refresh the store. Authorization — including the self-approval check that decidedBy differ
       from requestedBy — is enforced by the orchestrator, not here; the registry owns only the
       pending-and-unexpired state invariant and the decision stamping.
+    calls:
+      - approval_store.replaceAll
   - name: markCompleted
     narrative: []
     intent: >-
@@ -32,6 +36,8 @@ methods:
       completed only from an approved status (any other status is a validation error), then persist
       via write-temp-then-rename and refresh the store. Records that the approved privileged action
       has executed exactly once.
+    calls:
+      - approval_store.replaceAll
   - name: expirePending
     narrative: []
     intent: >-
@@ -39,7 +45,9 @@ methods:
       expired, rewrite the persisted set via write-temp-then-rename, refresh the store, and return
       the count flipped. A set with no overdue pending requests changes nothing and returns zero;
       persistence failures leave the previous set fully intact.
+    calls:
+      - approval_store.replaceAll
 detail: intent
 status: complete
 createdAt: '2026-07-09T19:31:03.633Z'
-updatedAt: '2026-07-09T19:33:04.745Z'
+updatedAt: '2026-09-19T21:26:56.555Z'

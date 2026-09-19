@@ -27,9 +27,11 @@ methods:
   - name: narrativeTargetReferences
     description: >-
       Rule narrative-target-references. A narrative call, dispatch or register step must name a
-      target component, and a target method unless it dispatches. A target this tree contains must
-      be a collaborator the calling component declares, must carry the named method on one of its
-      interfaces, and that method must declare every semantic guarantee the step asserts.
+      target component, and a target method unless it dispatches; a method's declared calls name the
+      same pair as one "<component>.<method>" reference, the spelling the conformance debt register
+      and a lint allow name a unit with. A target this tree contains must be a collaborator the
+      calling component declares, must carry the named method on one of its interfaces, and that
+      method must declare every semantic guarantee the entry asserts.
     signature: 'narrativeTargetReferences(ctx: RuleContext): void'
     returns: void
     params:
@@ -52,6 +54,9 @@ methods:
       - code: NARRATIVE_SEMANTIC_UNBACKED
         severity: warning
         summary: Narrative asserts a guarantee the called contract does not declare
+      - code: MALFORMED_DECLARED_CALL
+        severity: error
+        summary: Declared call that is not a "<component>.<method>" reference
   - name: crossTreeReferences
     description: >-
       Rule cross-tree-references. A narrative call, dispatch or register target that is not a
@@ -308,4 +313,4 @@ methods:
           narrative
 status: complete
 createdAt: '2026-09-14T06:06:18.256Z'
-updatedAt: '2026-09-18T23:49:40.303Z'
+updatedAt: '2026-09-19T21:38:41.394Z'

@@ -545,7 +545,13 @@ methods:
     } finally { proj.cleanup(); }
   });
 
-  it('unused-detection falls back to L2 edges for intent-level methods (no false UNUSED for their collaborators)', () => {
+  // -------------------------------------------------------------------------
+  // Declared calls: what a method whose narrative does not show its calls says
+  // it calls. There is NO fallback behind them - the walk takes the declared
+  // edges and nothing else - so the pair below is the whole behaviour: the same
+  // tree fires UNUSED_* without a declaration and is quiet with one.
+  // -------------------------------------------------------------------------
+  const declaredCallTree = (calls?: string) => {
     const proj = createTempProject();
     proj.component('portal-g', 'Portal', 'portalType: HTTP_API\ndependsOn: [adapter-g]');
     proj.component('adapter-g', 'Adapter', 'dependsOn: [orch-g]');
@@ -589,15 +595,15 @@ methods:
   - name: handle
     narrative:
       - { stepNumber: 1, description: forward through the adapter, type: call, targetComponent: adapter-g, targetMethod: forward }`);
-    // Adapter: calls-only stereotype default, EMPTY narrative — falls to the
-    // intent floor (passes via its L3 description) and must not orphan orch-g.
+    // Adapter: calls-only stereotype default, EMPTY narrative. Its declared
+    // calls - when it declares any - are the only edges it contributes.
     proj.writeSpec('implementation', 'impl-adapter-g', `schemaVersion: 1.0.0
 id: impl-adapter-g
 name: ImplAdapterG
 description: d
 contract: iadapter-g
 methods:
-  - name: forward`);
+  - name: forward${calls ?? ''}`);
     proj.writeSpec('implementation', 'impl-orch-g', `schemaVersion: 1.0.0
 id: impl-orch-g
 name: ImplOrchG
@@ -607,12 +613,40 @@ methods:
   - name: process
     narrative:
       - { stepNumber: 1, description: run the business logic, type: local }`);
+    return proj;
+  };
+
+  it('an empty-narrative method that declares its calls reaches exactly what it named', () => {
+    const proj = declaredCallTree('\n    calls: [orch-g.process]');
     proj.activate();
     try {
       const res = validateSddTree();
       expect(res.issues.filter(i => i.code === 'UNUSED_COMPONENT')).toHaveLength(0);
       expect(res.issues.filter(i => i.code === 'UNUSED_METHOD')).toHaveLength(0);
       expect(res.issues.filter(i => i.code === 'INTENT_FLOOR')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('an empty-narrative method that declares NO calls reaches nothing - the detail dial does not vouch for its collaborators', () => {
+    const proj = declaredCallTree();
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.filter(i => i.code === 'UNUSED_COMPONENT').map(i => i.specId)).toEqual(['orch-g']);
+      expect(res.issues.filter(i => i.code === 'INTENT_FLOOR')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a declared call is held to the call step\'s questions: parse, declared collaborator, method on the contract', () => {
+    const proj = declaredCallTree('\n    calls: [orch-g, orch-g.absent, stranger.process]');
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.filter(i => i.code === 'MALFORMED_DECLARED_CALL')).toHaveLength(1);
+      expect(res.issues.filter(i => i.code === 'INVALID_TARGET_METHOD_REFERENCE')).toHaveLength(1);
+      // "stranger" is no component of this tree: that is cross-tree-references'
+      // subject, exactly as it is for a call step.
+      expect(res.issues.filter(i => i.code === 'UNDECLARED_DEPENDENCY_CALL')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });

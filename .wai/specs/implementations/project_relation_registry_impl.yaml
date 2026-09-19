@@ -16,13 +16,17 @@ methods:
       write-temp-then-rename, refresh the store, and return the stored relation. Persistence
       failures leave the previous set intact. Public-surface validation and authorization are
       enforced by the orchestrator, not here.
+    calls:
+      - project_relation_store.replaceAll
   - name: remove
     narrative: []
     intent: >-
       Locate the relation by id and remove it from the persisted set (or mark it removed per
       retention policy), then persist via write-temp-then-rename and refresh the store. A missing id
       is a safe not-found; persistence failures leave the previous set intact.
+    calls:
+      - project_relation_store.replaceAll
 detail: intent
 status: complete
 createdAt: '2026-07-09T22:08:03.277Z'
-updatedAt: '2026-07-09T22:13:37.181Z'
+updatedAt: '2026-09-19T21:26:57.754Z'

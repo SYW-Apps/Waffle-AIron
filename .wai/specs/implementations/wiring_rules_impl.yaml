@@ -612,8 +612,9 @@ methods:
         label: declarationsEnd
         description: >-
           Report INVOKED_BY_REDUNDANT (warning; draft context when
-          ctx.isComponentDraft(intf.component) or intf.status is draft or design) on intf.id: the
-          declaration is stale
+          ctx.isComponentDraft(intf.component) or intf.status is draft or design) on intf.id, sited
+          at the method it names so an allow covers exactly that declaration: the declaration is
+          stale
         type: local
       - stepNumber: 9
         description: Without invokedBy seeds the full reach is baseWalk itself
@@ -665,7 +666,8 @@ methods:
         description: >-
           Report UNUSED_METHOD (warning; draft context when ctx.isComponentDraft(comp.id) or
           intf.status is draft or design) on intf.id, the interface declaring the method, as for the
-          invokedBy findings, naming the method and the component
+          invokedBy findings, naming the method and the component, and sited at that method so an
+          allow covers exactly the one it names and never its neighbours on the same interface
         type: local
     symbol: check
   - name: unusedTypes
@@ -846,4 +848,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-18T23:49:32.245Z'
+updatedAt: '2026-09-19T21:38:41.505Z'

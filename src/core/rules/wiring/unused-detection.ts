@@ -66,6 +66,8 @@ export const reachabilityRule: SddRule = {
             `Method "${m.name}" on component "${intf.component}" declares invokedBy (${m.invokedBy.kind}), but the internal narrative walk already reaches it — the declaration is stale; remove it.`,
             intf.id,
             isDraftCtx,
+            undefined,
+            { at: m.name },
           );
         }
       }
@@ -104,6 +106,10 @@ export const reachabilityRule: SddRule = {
               `Method "${m.name}" on component "${comp.id}" is defined but never called by any narrative step.`,
               intf.id,
               isDraftCtx,
+              undefined,
+              // The site is the method, so an allow covers exactly the one it
+              // names - never its neighbours on the same interface.
+              { at: m.name },
             );
           }
         }

@@ -11,9 +11,9 @@ methods:
       (routed through the target Portal's dispatch table) are always followed; every binding of a
       reached Portal's dispatch table and register-step handoffs are followed when the options
       enable them, which they do by default. A reached method with no implementation contributes
-      nothing; one whose narrative is empty and whose effective detail is below full reaches every
-      contract method of its component's dependsOn and owns instead. Pure: the same context, seeds
-      and options always give the same reach.
+      nothing; one whose narrative does not show its calls contributes the ones it DECLARES (its
+      `calls` references) and nothing else, so a collaborator the method does not name is not
+      reached. Pure: the same context, seeds and options always give the same reach.
     signature: 'walk(ctx: RuleContext, seeds: WalkSeed[], options?: WalkOptions): NarrativeReach'
     returns: NarrativeReach
     params:
@@ -60,4 +60,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-14T06:07:00.382Z'
-updatedAt: '2026-09-18T20:21:20.850Z'
+updatedAt: '2026-09-19T21:38:41.125Z'
