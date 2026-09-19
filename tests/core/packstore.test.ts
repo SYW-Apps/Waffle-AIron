@@ -237,6 +237,22 @@ describe('the legacy auto-load path still sees store-installed packs', () => {
     expect(refs).toEqual([path.join(store, 'appenser', '1.10.0')]);
   });
 
+  it('orders discovery by codepoint, not by the machine\'s collation', () => {
+    const store = tempStore();
+    // Discovery order IS load order, and load order decides which pack wins a
+    // doctrine collision — so it reaches both the verdict and the gate identity
+    // that digests the merged doctrine. "-" is U+002D and "_" is U+005F, so the
+    // codepoints put pack-b first; collations rank them the other way round,
+    // which would make the collision winner a property of the machine.
+    fs.writeFileSync(path.join(store, 'pack_a.yaml'), 'name: pack-a\nprofiles: {}\n');
+    fs.writeFileSync(path.join(store, 'pack-b.yaml'), 'name: pack-b\nprofiles: {}\n');
+
+    expect(discoverPacks(store)).toEqual([
+      path.join(store, 'pack-b.yaml'),
+      path.join(store, 'pack_a.yaml'),
+    ]);
+  });
+
   it('still discovers legacy flat files and unversioned directories', () => {
     const store = tempStore();
     fs.writeFileSync(path.join(store, 'flat.yaml'), 'name: flat\nprofiles: {}\n');

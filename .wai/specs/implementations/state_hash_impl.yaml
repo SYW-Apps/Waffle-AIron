@@ -37,16 +37,26 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadTypeSpecs
       - stepNumber: 7
-        description: Canonicalize the loaded specs (stable key ordering, normalized serialization)
+        description: >-
+          Put each loaded kind into identity order: by spec id, and for the duplicate-id case by
+          canonical content, compared by codepoint rather than by a locale-aware collation. The
+          loaders hand back whatever order the filesystem walked the spec files in, and that order
+          differs between platforms, so without this the same tree digests differently on each and a
+          lock taken on one machine reads stale on another. Only WHOLE specs are reordered: the
+          arrays inside a spec (narrative steps, params) are ordered by meaning, and sorting those
+          would hide a real design change from the digest.
         type: local
       - stepNumber: 8
-        description: Digest the canonical form into a StateId (algorithm and hex digest)
+        description: Canonicalize the ordered specs (stable key ordering, normalized serialization)
         type: local
       - stepNumber: 9
+        description: Digest the canonical form into a StateId (algorithm and hex digest)
+        type: local
+      - stepNumber: 10
         description: Return the StateId
         type: return
         outcome: StateId
     symbol: computeStateId
 status: complete
 createdAt: '2026-07-04T12:54:31.981Z'
-updatedAt: '2026-09-17T20:30:32.256Z'
+updatedAt: '2026-09-19T13:14:26.172Z'

@@ -15,6 +15,24 @@ export function canonicalize(value: unknown): string {
   return JSON.stringify(sortKeys(value));
 }
 
+/**
+ * The ONE string comparison an identity may sort by: ordinal, i.e. JavaScript's
+ * `<` on strings (UTF-16 code-unit order, which is code-point order for every
+ * character an id or a rule name can hold).
+ *
+ * `localeCompare` is the trap this exists to replace. It is locale- and
+ * ICU-dependent: it ignores or re-weights hyphens and underscores, and two
+ * machines running the same wairon on the same files can order the same names
+ * differently — so a digest taken over a localeCompare-sorted list is not an
+ * identity, it is an identity PER MACHINE. Ordinal order is fixed everywhere
+ * that JavaScript runs, which is exactly what a digest needs and exactly what a
+ * human-readable listing does not: display order may keep localeCompare.
+ */
+export function compareOrdinal(a: string, b: string): number {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
 function sortKeys(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(sortKeys);
   if (v && typeof v === 'object') {

@@ -14,7 +14,9 @@ import {
   collectPromotableSpecs,
   invalidateSpecCache,
   readLockState,
+  specPathsInScope,
 } from '../../src/core/specs.js';
+import { diffAgainstApproval } from '../../src/core/approval.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
 import { pinFamilySurfaces } from '../../src/core/surfaces.js';
 import { runLock } from '../../src/commands/lock.js';
@@ -366,4 +368,143 @@ describe('readLockState (the shared lock verdict)', () => {
     await runLock({ yes: true }, { valid: true, issues: [] });
     expect(readLockState(computeGateStateId()).state).toBe('locked');
   });
+});
+
+// ---------------------------------------------------------------------------
+// `wairon lock-check` — the merge gate (cli_lock_adapter.checkApproval, driven
+// through cli_runner.runLockCheck).
+//
+// Every case here runs the REAL CLI as a subprocess and asserts its EXIT CODE,
+// because the exit code IS the feature: a GitHub job fails on it and nothing
+// else. Asserting checkApproval()'s return value would leave the one thing CI
+// reads untested.
+//
+// The gate is OPTIONAL BY CONSTRUCTION, and these tests are what holds that:
+// only `stale` refuses at the default strictness, and `stale` cannot occur in a
+// project that never locked. An existing project upgrading into this command
+// therefore cannot suddenly fail.
+// ---------------------------------------------------------------------------
+
+describe('cli_runner.runLockCheck (real CLI): the approval merge gate', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  /** Run `wairon lock-check` for real and report code + streams (never throws). */
+  const check = (cwd: string, ...args: string[]): Promise<{ code: number; out: string }> =>
+    execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'lock-check', ...args], { cwd, timeout: 180_000 })
+      .then(
+        ({ stdout, stderr }) => ({ code: 0, out: `${stdout}${stderr}` }),
+        (e: Error & { code?: number; stdout?: string; stderr?: string }) =>
+          ({ code: typeof e.code === 'number' ? e.code : 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` }),
+      );
+
+  it('a repository with no spec tree says so and passes — it is not "unapproved"', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-bare-'));
+
+    const res = await check(rootDir);
+    expect(res.code, res.out).toBe(0);
+    expect(res.out).toContain('No SDD spec tree here');
+    // Never mistaken for a project that simply forgot to approve.
+    expect(res.out).not.toContain('lock.json is absent');
+  }, 180_000);
+
+  it('…and --strict refuses it, because --strict asks for an approved design', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-bare-'));
+
+    const res = await check(rootDir, '--strict');
+    expect(res.code, res.out).toBe(1);
+    expect(res.out).toContain('No SDD spec tree here');
+    expect(res.out).toContain('wairon init');
+  }, 180_000);
+
+  it('a tree nobody ever approved PASSES with a notice — the opt-in seam', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-unlocked-'));
+    buildLockableProject(rootDir);
+    setProjectRoot(null);
+    expect(fs.existsSync(path.join(rootDir, '.wai', 'lock.json'))).toBe(false);
+
+    const res = await check(rootDir);
+    expect(res.code, res.out).toBe(0);
+    expect(res.out).toContain('No approval on record');
+    // The notice has to say how to turn the gate on, or nobody ever does.
+    expect(res.out).toContain('wairon lock');
+    expect(res.out).toContain('--strict');
+  }, 180_000);
+
+  it('…and --strict turns that same tree into a failure', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-unlocked-'));
+    buildLockableProject(rootDir);
+    setProjectRoot(null);
+
+    const res = await check(rootDir, '--strict');
+    expect(res.code, res.out).toBe(1);
+    expect(res.out).toContain('No approval on record');
+  }, 180_000);
+
+  it('an approved tree passes, naming the approval it passed on', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-locked-'));
+    buildLockableProject(rootDir);
+    const record = await runLock({ yes: true }, { valid: true, issues: [] });
+    setProjectRoot(null);
+
+    for (const args of [[], ['--strict']]) {
+      const res = await check(rootDir, ...args);
+      expect(res.code, res.out).toBe(0);
+      expect(res.out).toContain('is the approved design');
+      // The evidence, not just the verdict: a CI log has to be readable later.
+      expect(res.out).toContain(record!.lockedAt);
+    }
+  }, 180_000);
+
+  it('a design that moved past its approval REFUSES, and names the remedy', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-stale-'));
+    buildLockableProject(rootDir);
+    await runLock({ yes: true }, { valid: true, issues: [] });
+
+    // The exact incident this exists for: the design changes on the branch and
+    // nobody re-approves it before the merge.
+    saveComponentSpec(component('late-orchestrator', 'core-sub'));
+    invalidateSpecCache();
+    setProjectRoot(null);
+
+    const res = await check(rootDir);
+    expect(res.code, res.out).toBe(1);
+    expect(res.out).toContain('The design changed after it was approved');
+    // A gate that fails without naming its fix gets bypassed rather than satisfied.
+    expect(res.out).toContain('wairon lock');
+    expect(res.out).toContain('.wai/lock.json');
+
+    // --strict cannot make it any more refused than it already is.
+    expect((await check(rootDir, '--strict')).code).toBe(1);
+  }, 180_000);
+
+  it('a whitespace-only edit does NOT refuse — the gate is on the design, not the bytes', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-whitespace-'));
+    buildLockableProject(rootDir);
+    await runLock({ yes: true }, { valid: true, issues: [] });
+
+    // Reformat a spec file without changing one thing it says.
+    const specFile = specPathsInScope('core-sub').find((p) => p.includes('gateway-portal'))!;
+    const before = fs.readFileSync(specFile, 'utf8');
+    fs.writeFileSync(specFile, `\n${before}\n\n`);
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+
+    // The per-spec CONTENT digest the same lock record carries has moved: this
+    // is precisely the case a content-digest gate would refuse, demanding a
+    // re-lock for an edit that changed no design. The gate StateId has not.
+    expect(diffAgainstApproval()!.changed).toContain(
+      path.relative(rootDir, specFile).split(path.sep).join('/'),
+    );
+    setProjectRoot(null);
+
+    const res = await check(rootDir);
+    expect(res.code, res.out).toBe(0);
+    expect(res.out).toContain('is the approved design');
+  }, 180_000);
 });

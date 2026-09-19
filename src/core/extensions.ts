@@ -7,6 +7,7 @@ import { readYamlFile } from '../utils/yaml.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { projectConfigRepository } from '../config/project-config.js';
 import { isNewerVersion } from '../utils/version.js';
+import { compareOrdinal } from '../utils/canonical-json.js';
 import type { SddRule } from './rules/types.js';
 import { RulesConfigSchema, type PackSelection } from '../models/project.js';
 // The store is a sibling adapter; both modules reach each other only inside
@@ -423,6 +424,11 @@ function latestVersionDir(nameDir: string): string | null {
  * version. Without this, a pack installed through `wairon pack install` would be
  * invisible to the legacy auto-load path — the doctrine would silently stop
  * applying, which is the one failure direction that must never happen quietly.
+ *
+ * The sort is ORDINAL, because this order is load order and load order decides
+ * which pack wins a collision — so it reaches both the verdict and the gate
+ * identity that digests the merged doctrine. A locale-aware comparison here
+ * would make the winner a property of the machine.
  */
 export function discoverPacks(dir: string): string[] {
   let entries: fs.Dirent[];
@@ -432,7 +438,7 @@ export function discoverPacks(dir: string): string[] {
     return [];
   }
   const refs: string[] = [];
-  for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const e of entries.sort((a, b) => compareOrdinal(a.name, b.name))) {
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
       if (packDirEntry(full)) refs.push(full);

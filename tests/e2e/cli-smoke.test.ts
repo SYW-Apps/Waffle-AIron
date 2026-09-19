@@ -62,6 +62,20 @@ describe('e2e CLI smoke (built binary on the journey-built project)', () => {
     expect(res.code, fullOutput(res)).toBe(0);
   });
 
+  // The approval gate, on the BUILT binary and in the order a repository meets
+  // it: nothing approved yet, then approved. The exit code is the whole
+  // feature — a GitHub job reads nothing else.
+  it('lock-check passes with a notice before anything is approved', async () => {
+    const res = await runCli(['lock-check'], proj.dir);
+    expect(res.code, fullOutput(res)).toBe(0);
+    expect(`${res.stdout}${res.stderr}`).toContain('No approval on record');
+  });
+
+  it('lock-check --strict refuses the same unapproved tree', async () => {
+    const res = await runCli(['lock-check', '--strict'], proj.dir);
+    expect(res.code, fullOutput(res)).toBe(1);
+  });
+
   it('lock --yes succeeds and writes .wai/lock.json with a stateId digest', async () => {
     const res = await runCli(['lock', '--yes'], proj.dir);
     expect(res.code, fullOutput(res)).toBe(0);
@@ -76,6 +90,14 @@ describe('e2e CLI smoke (built binary on the journey-built project)', () => {
     expect(typeof record.stateId?.digest).toBe('string');
     expect((record.stateId!.digest as string).length).toBeGreaterThan(0);
     expect(record.status).toBeDefined();
+  });
+
+  it('lock-check passes once the design is approved, at either strictness', async () => {
+    for (const args of [['lock-check'], ['lock-check', '--strict']]) {
+      const res = await runCli(args, proj.dir);
+      expect(res.code, fullOutput(res)).toBe(0);
+      expect(`${res.stdout}${res.stderr}`).toContain('is the approved design');
+    }
   });
 
   it('agent brief <id> prints a non-empty brief', async () => {

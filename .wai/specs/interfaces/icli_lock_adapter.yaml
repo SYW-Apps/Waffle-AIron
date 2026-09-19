@@ -1,9 +1,11 @@
 id: icli_lock_adapter
 name: CLI Lock Adapter Interface
 description: >-
-  Contract for the lock-record half of `wairon lock`: the commit-scoped lock record carrying the
-  approved spec content and the tree's gate identity. Callers gate on an as-complete validation
-  FIRST — this adapter never locks an invalid tree on its own authority.
+  Contract for the lock record: the commit-scoped record carrying the approved spec content and the
+  tree's gate identity, and the read-only verdict on whether that record still covers the design on
+  disk. Callers of the WRITE gate on an as-complete validation FIRST — this adapter never locks an
+  invalid tree on its own authority. The READ decides nothing about legality: a tree can be approved
+  and illegal, or legal and unapproved, and `wairon validate` answers the other question.
 component: cli_lock_adapter
 methods:
   - name: lockTree
@@ -19,6 +21,33 @@ methods:
         type: string
         description: Optional subsystem id narrowing the lock scope (matches the CLI --subsystem flag).
         optional: true
+  - name: checkApproval
+    description: >-
+      The verdict `wairon lock-check` exits on: obtain the tree's gate identity from the validator
+      and resolve the committed record against it, then turn the three honest lock states into one
+      decision.
+
+
+      The GATE identity, not the per-spec content digests the same record carries: the digests
+      answer "has this file changed since you approved it", so a whitespace-only edit would move
+      them and demand a re-lock. The gate identity hashes the parsed tree and the governing
+      doctrine, and answers "has the DESIGN changed" — the only question a merge gate is entitled to
+      refuse on.
+
+
+      `stale` refuses at every strictness. `unlocked` is the opt-in seam and passes with a notice
+      unless `strict` is asked for, so a project that never locks cannot start failing because it
+      upgraded. A repository with no spec tree is reported as such rather than crashing or being
+      mistaken for an unapproved one.
+    signature: 'checkApproval(strict: boolean): ApprovalCheck'
+    returns: ApprovalCheck
+    params:
+      - name: strict
+        type: boolean
+        description: >-
+          Whether the absence of an approval is itself a refusal. False (the default) passes an
+          unlocked or spec-tree-less repository with a notice.
+        optional: false
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-09-15T18:01:06.776Z'
+updatedAt: '2026-09-19T12:24:29.159Z'

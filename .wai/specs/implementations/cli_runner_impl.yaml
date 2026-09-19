@@ -1425,6 +1425,44 @@ methods:
         type: return
         outcome: reported
     detail: calls-only
+  - name: runLockCheck
+    narrative:
+      - stepNumber: 1
+        label: ask-adapter
+        description: >-
+          Ask the lock adapter for the approval verdict, passing --strict through. No
+          project-initialization assertion first: a repository with no .wai/ at all must be told so,
+          not met with an error about an uninitialized project.
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: checkApproval
+      - stepNumber: 2
+        label: print-verdict
+        description: >-
+          Print the verdict line — a success as an ordinary line, a refusal as an error, so the CI
+          log reads correctly at a glance.
+        type: local
+      - stepNumber: 3
+        label: decide
+        description: Did the verdict approve the tree?
+        type: branch
+        condition: the verdict approved
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        label: pass
+        description: 'Return normally, exiting zero: the merged design is the approved design.'
+        type: return
+        outcome: approved
+      - stepNumber: 5
+        label: refuse
+        description: >-
+          Exit non-zero so the job fails. The workflow fails the job; whether that BLOCKS the merge
+          is a branch-protection setting on the repository, which no workflow can declare for
+          itself.
+        type: return
+        outcome: refused
+    symbol: lockCheckCommand
 lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
@@ -1447,4 +1485,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-18T23:56:48.045Z'
+updatedAt: '2026-09-19T12:25:40.269Z'
