@@ -14,7 +14,10 @@ narratives or names the new readability checks judge, or a tree holding a case t
 fixed validator rules used to miss — including a narrative step carrying a field its
 own step type cannot have. A scripted `sdd_update_spec` delta can also
 behave differently, where it was relying on a merge rule that was silently wrong
-(item 10). Nothing here is purely additive, so `[minor]` would understate it.
+(item 10), and a scripted call to a create tool that carries an unknown key
+inside a method, a param or a narrative step is now refused where it used to be
+stripped (item 12). Nothing here is purely additive, so `[minor]` would
+understate it.
 
 ### A chained subproject is judged through its parent — never waved through
 
@@ -1627,8 +1630,74 @@ method's narrative. Two mechanisms close that honestly:
   declaration on a method the internal walk already reaches warns
   `INVOKED_BY_REDUNDANT` (stale — remove it).
 
+### The authoring tools say what they accepted
+
+A create could not say what level it was authoring at, a read could not ask for
+one method, and only the TOP level of a tool's input refused a key it did not
+know. Each gap ended the same way: a call that reported success over something
+it had not done.
+
+- **A create states its `status`.** `sdd_add_subsystem`, `sdd_add_component`,
+  `sdd_define_interface` and `sdd_write_narrative` take a `status` now, so a spec
+  authored at a level its author already considers settled is written at that
+  level instead of being born `draft` and needing a follow-up `sdd_update_spec`
+  that is easy to forget — and easy to forget once per spec across a whole tree.
+  Omitting it keeps exactly the old behaviour: `draft` for a new spec, and the
+  status already stored for a re-authoring. `sdd_initialize_system` and
+  `sdd_add_type` do NOT take one: the L0 and a type have no status field, and an
+  argument that could not be honoured is the kind of lie this release is about.
+- **No create lowers a stored status.** A stated status may raise a spec's level
+  or restate it; one that would take it backwards is refused by name, and nothing
+  is written. The store cannot make that call — it cannot tell a stated `draft`
+  from the default one — so the rule lives at the tool boundary, which knows what
+  the caller actually said. Reopening a frozen spec for revision is still
+  `sdd_update_spec`'s job, which sets the demotion deliberately and says so.
+- **`sdd_get_spec` can return one method.** Pass `methods: ["runJourney"]` and
+  only those come back; every other field of the spec is unchanged. A 45-method
+  implementation fetched whole to look at one of them is the read side of the
+  same waste a blind restatement is on the write side. A name the spec does not
+  declare is refused, with the names it does declare, so a typo never reads as a
+  method with no content — and a filtered answer carries a `partialResult`
+  marker naming how many methods it left out, because `sdd_define_interface` and
+  `sdd_write_narrative` REPLACE the method list and re-authoring from a partial
+  read would delete the rest.
+- **An unknown key nested inside a tool's input is refused by name.** The
+  top-level strictness that caught `dependson` stopped at the top level:
+  `methods: [{ "descriptoin": "…" }]` merged, was stripped by the writer schema,
+  and the tool answered "Successfully saved". Every SHAPED nested object in every
+  tool input is strict now — a method, a param, a narrative step, a finding, a
+  dispatch binding, an endpoint, a lifecycle entrypoint, a trusted link, a type
+  field, an invariant. **This is a breaking change** for a caller that was
+  sending an unknown nested key; see *Upgrading*.
+- **`sdd_update_spec`'s `delta` stays open — and names what had no effect.** It
+  is the one input that is deliberately permissive, because the shapes below it
+  nest further than any hand-copied schema at the boundary should restate. A
+  schema cannot help there, so the answer does: the change report carries an
+  `ineffective` list, printed under `NO EFFECT`, naming by path every key the
+  level's schema dropped (`methods.run.descriptoin`), every value the stored spec
+  already held, and every `unset` that removed nothing. A nested typo comes back
+  named instead of stripped in silence.
+- **`sdd_update_spec` takes `dryRun`.** It runs the whole write — the merge, the
+  renumbering, the label resolution, the comparison and the candidate gate — and
+  answers with the change report it would have produced, marked `DRY RUN`, with
+  `written: false`, nothing stamped and not one byte of the stored file moved.
+  The gate runs deliberately: an account of a write that would itself be refused
+  is not an account worth having. Worth doing before a delta that renumbers a
+  long narrative, where the relocation rules are easier to read in a report than
+  in a diff.
+
 ### Fixes
 
+- **Re-authoring a subsystem quietly reopened it.** `saveSubsystemSpec` was the
+  one saver without the no-demotion guard its four siblings have had all along,
+  and every create tool states `draft`, so `sdd_add_subsystem` on an existing id
+  wrote `draft` straight over a `complete` subsystem — taking its whole subtree
+  back into draft context, where draft-related findings are downgraded and
+  `--ci` waives them, with nothing in the answer saying so. A subsystem arriving
+  at `draft`, or without a status, now keeps the status already stored, exactly
+  as a component, an interface and an implementation do. A demotion the caller
+  states is still honoured: `sdd_update_spec` with an explicit `status` sets it,
+  and that path now passes the flag it always meant to.
 - **A write that changed nothing reported "Successfully updated".** `sdd_update_spec`
   answered with the same sentence whether a delta rewrote a narrative or landed
   nowhere at all, and re-stamped `updatedAt` on the way, so an edit that never
@@ -1881,6 +1950,20 @@ method's narrative. Two mechanisms close that honestly:
       only by another type's method no longer reports. Delete any `lint.allow` that
       was standing in for this — it now goes stale as `UNUSED_LINT_ALLOW`. A type
       named nowhere but its OWN methods still reports, deliberately.
+12. **Scripted authoring calls: an unknown key NESTED in a tool's input is now
+    refused.** Only the top level of an `sdd_*` tool's input was strict, so a key
+    the schema did not know inside a method, a param, a narrative step, a
+    finding, a dispatch binding, an endpoint, a lifecycle entrypoint, a trusted
+    link, a type field or an invariant was silently dropped and the call reported
+    success. Every shaped nested object is strict now, so the same call fails
+    with `Unrecognized key(s) in object` naming the key. Nothing you were writing
+    with such a key was ever reaching the spec — the refusal is the first time
+    you are told — but it arrives as a failure where there used to be none, so
+    re-run any generator that authors specs through MCP and fix what it names.
+    - `sdd_update_spec`'s `delta` is deliberately NOT strict and is unchanged: it
+      is the one place the shapes nest further than a boundary schema should
+      restate. It now reports what it dropped instead, under `NO EFFECT` in the
+      answer — read that list where you would have read a refusal.
 
 ## v5.1.0 (from v5.0.1)
 
