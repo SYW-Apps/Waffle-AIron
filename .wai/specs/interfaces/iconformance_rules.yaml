@@ -352,7 +352,10 @@ methods:
       another, that names a spec the tree does not hold, or that lists a unit no longer reported is
       STALE_CARRIED_FINDING, so the register only shrinks. The audit is silent in a run that could
       not have fired the findings at all: one that built no code model, the specs outside a scoped
-      run, and a code the project switched off.
+      run, and a code the project switched off. Nothing can check a reason for TRUTH — a stale entry
+      is one that stopped applying, never one that still applies for a reason that has become false
+      — so a reason group may declare its own classification provisional (`revisit`: what would
+      settle it), and every run counts those findings beside the kind totals.
     signature: 'carriedDebt(ctx: RuleContext): void'
     returns: void
     params:
@@ -373,4 +376,4 @@ methods:
           a unit that finding no longer reports — delete it, the register only shrinks
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-19T19:04:56.285Z'
+updatedAt: '2026-09-19T20:32:40.941Z'

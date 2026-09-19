@@ -26,7 +26,20 @@ fields:
     type: CarriedFinding[]
     description: The findings this reason explains.
     optional: false
+  - name: revisit
+    type: string
+    description: >-
+      This classification is PROVISIONAL, and this is what would settle it. A confident-sounding
+      'why' that is wrong is worse than a missing one: it reads as settled, so nobody looks again,
+      and nothing can check a reason for truth — a stale entry is one that stopped applying, never
+      one that still applies for a reason that has become false. Every run counts the findings in
+      the groups marked here beside the kind totals, so the uncertainty is as loud as the debt.
+      Deliberately a sentence, not a flag, and on the reason GROUP: what is provisional is the
+      reason, and a reader needs to know what to measure. There is no counterpart on lint.allow — an
+      entry here silences nothing, while a provisional allow would buy the silence and defer the
+      decision.
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-19T19:04:02.008Z'
-updatedAt: '2026-09-19T19:04:02.023Z'
+updatedAt: '2026-09-19T20:34:13.712Z'

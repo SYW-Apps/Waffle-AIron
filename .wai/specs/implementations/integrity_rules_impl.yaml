@@ -163,7 +163,7 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.lintAllows
-        endStep: 7
+        endStep: 15
       - stepNumber: 2
         description: 'Branch: does no registered rule emit a.code?'
         type: branch
@@ -175,19 +175,60 @@ methods:
       - stepNumber: 4
         description: Continue with the next lint allow (mirrors the source's continue).
         type: jump
-        toStep: 7
+        toStep: 15
       - stepNumber: 5
         label: laKnownCode
         description: 'Branch: did the allow match no finding this run?'
         type: branch
         condition: a.used is false
-        onFalseStep: 7
+        onFalseStep: 15
       - stepNumber: 6
         description: >-
-          Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code, and its stated
-          reason, as stale.
+          Ask ctx.sitesReported for what this run DID report of that code on that spec: the sites
+          its findings named, and whether any of them named none.
         type: local
       - stepNumber: 7
+        label: laSiteCheck
+        description: 'Branch: does the allow name a site for a code whose findings carry none?'
+        type: branch
+        condition: a.at is set and the run named no site, only unsited findings
+        onFalseStep: 10
+      - stepNumber: 8
+        description: Explain it as an allow that must not name a site at all — drop the `at`.
+        type: local
+      - stepNumber: 9
+        description: Go to the report with that explanation.
+        type: jump
+        toStep: 14
+      - stepNumber: 10
+        label: laSites
+        description: 'Branch: did that code fire at sites this allow does not name?'
+        type: branch
+        condition: the run named one or more sites
+        onFalseStep: 13
+      - stepNumber: 11
+        description: >-
+          Explain it as the wrong occurrence, listing the sites that did fire: retarget an allow
+          that names one, or give an `at` to an allow that names none — one per site, each with its
+          own reason.
+        type: local
+      - stepNumber: 12
+        description: Go to the report with that explanation.
+        type: jump
+        toStep: 14
+      - stepNumber: 13
+        label: laGone
+        description: >-
+          Explain it as a finding that did not fire at all this run — the stale allow, and the only
+          shape this audit used to know.
+        type: local
+      - stepNumber: 14
+        label: laReport
+        description: >-
+          Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code, the site it names if
+          it names one, its stated reason, and that explanation.
+        type: local
+      - stepNumber: 15
         label: laEnd
         description: Continue with the next lint allow.
         type: local
@@ -614,4 +655,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-18T20:21:30.958Z'
+updatedAt: '2026-09-19T20:33:59.429Z'

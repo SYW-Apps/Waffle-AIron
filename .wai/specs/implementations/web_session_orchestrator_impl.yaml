@@ -432,9 +432,12 @@ detail: full
 lint:
   allow:
     - code: UNREALIZED_DEPENDENCY
+      at: web_session_orchestrator -> audit_repository
       reason: >-
-        policy_repository/audit_repository gating lands with web UI slices 2–3 (in flight) — the
-        declared edges are design-ahead, not stale.
+        audit_repository gating lands with web UI slices 2-3 (in flight) — the declared edge is
+        design-ahead, not stale. (The previous, spec-wide allow also named policy_repository; that
+        edge stopped firing and the prose kept claiming it, which is what a site-precise allow makes
+        impossible.)
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-09-18T16:54:33.073Z'
+updatedAt: '2026-09-19T20:28:41.729Z'

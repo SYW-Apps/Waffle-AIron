@@ -219,7 +219,24 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     } finally { proj.cleanup(); }
   });
 
-  it('lint.allow silences the warning per spec', () => {
+  it('a lint.allow naming the import edge silences that crossing', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.component('store-b', 'Store');
+    proj.wire('orch-a', 'src/a.ts', 'lint:\n  allow:\n    - code: UNDECLARED_DEPENDENCY\n      at: src/a.ts -> src/b.ts\n      reason: documented exception for the test\n');
+    proj.wire('store-b', 'src/b.ts');
+    proj.source('src/a.ts', body('orcha', "import { runstoreb } from './b.js';\nrunstoreb();\n"));
+    proj.source('src/b.ts', body('storeb'));
+    proj.activate();
+    try {
+      expect(depIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  // The crossing is a SITE, so a spec-wide allow no longer covers it: one file
+  // grows import edges, and an allow written for the first one would silence
+  // every later crossing nobody ever decided on.
+  it('a spec-wide allow naming no edge does not silence a crossing', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator');
     proj.component('store-b', 'Store');
@@ -229,7 +246,11 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/b.ts', body('storeb'));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree())).toHaveLength(0);
+      const issues = validateSddTree();
+      expect(depIssues(issues).map(i => i.code)).toContain('UNDECLARED_DEPENDENCY');
+      const stale = issues.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW');
+      expect(stale).toHaveLength(1);
+      expect(stale[0].message).toContain('src/a.ts -> src/b.ts');
     } finally { proj.cleanup(); }
   });
 });

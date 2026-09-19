@@ -874,7 +874,10 @@ function identityKeyOf(field: string, item: unknown): string | null {
     case 'emits':
     case 'subscribesTo':       return `${String(o.topic)} ${o.event === undefined ? '' : String(o.event)}`;
     case 'trustedLinks':       return str(o.subsystem);
-    case 'allow':              return str(o.code);       // lint.allow
+    // lint.allow: an allow is one decision about one OCCURRENCE, so several
+    // may share a code on one spec, each naming its own site. Keyed by code
+    // alone a delta for one site would overwrite its neighbours.
+    case 'allow':              return `${String(o.code)} ${o.at === undefined ? '' : String(o.at)}`;
     case 'findings':           return str(o.code);       // an interface method's findings
     case 'invariants':         return str(o.id);
     case 'patterns':           return str(o.id);
@@ -990,7 +993,7 @@ function identityFieldsOf(field: string): string[] {
     case 'emits':
     case 'subscribesTo':       return ['topic', 'event'];
     case 'trustedLinks':       return ['subsystem'];
-    case 'allow':
+    case 'allow':              return ['code', 'at'];
     case 'findings':           return ['code'];
     case 'invariants':
     case 'patterns':           return ['id'];

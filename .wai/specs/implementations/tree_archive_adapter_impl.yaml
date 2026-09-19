@@ -157,13 +157,14 @@ methods:
 lint:
   allow:
     - code: UNREALIZED_DEPENDENCY
+      at: tree_archive_adapter -> sdk_portal
       reason: >-
-        tree_archive_adapter imports the published @wairon/sdk surface (`import * as sdkPortal from
-        '@wairon/sdk'`), but sdd_sdk is a SEPARATE npm workspace package (its sourcePaths are
+        tree_archive_adapter imports the published @wairon/sdk surface (import * as sdkPortal from
+        '@wairon/sdk'), but sdd_sdk is a SEPARATE npm workspace package (its sourcePaths are
         sdk/src/*). The Level-2 dependency analyzer resolves only RELATIVE specifiers against the
         mapped source files, so a legitimate cross-package import of the published portal reads as
-        unrealized — the same analyzer limitation already acknowledged on host_sdk_adapter_impl. The
-        edge is real and correct.
+        unrealized. The edge is real and correct — an analyzer limitation at the workspace-package
+        boundary, in src/core/treetransfer.ts.
 status: complete
 createdAt: '2026-08-12T17:25:38.862Z'
-updatedAt: '2026-08-12T18:28:00.572Z'
+updatedAt: '2026-09-19T20:28:41.639Z'

@@ -169,6 +169,14 @@ rules:
           Paying it means pointing each spec at the module that holds the code, or narrating the
           target the code actually reaches. Either way an author's edit, not a limit of the
           reader.
+        revisit: >-
+          Challenge the first shape hardest: "the thin core adapter components are realized by the
+          file that CONSUMES the core API". If that is true the fix is to point each adapter spec
+          at the module that holds the code, and every finding here is real drift. If those
+          adapters instead MODEL the consumption itself - a component whose whole job is to reach
+          the core API from this file - then the specs are right, the narratives name the wrong
+          target, and part of this group is a different finding than it claims. Nobody has
+          measured which, and 46 findings ride on the answer.
         findings:
           - code: CALL_STEP_UNREALIZED
             spec: authoring_orchestrator_impl
@@ -1102,5 +1110,81 @@ rules:
             at: 'listPatterns'
             covers:
               - '1:core_portal.loadProjectExtensions'
+      # 5 finding(s), 9 unit(s).
+      - kind: drift
+        why: >-
+          A narrative names one loader or store call per data kind, and the realized method does
+          not make it. The data arrives already loaded from the collaborator one hop out
+          (renderDiagram and buildGraphModel both reach spec data through buildCanvasModel in
+          src/core/canvas.ts), or it is derived from a kind the method does load (projectGraph
+          reads each component's own subsystem field and never calls loadSubsystemSpecs), or the
+          call belongs to the facade rather than the member (surface_registry.hydrateFromFiles
+          parses and returns snapshots; the repository seats them). The finding is right: the step
+          names a call this method does not make. Paying it means narrating the call the code
+          actually makes - an author's edit, not a limit of the reader. It is carried here rather
+          than allowed on the spec because unpaid narrative debt is exactly what it is: every
+          allow these five replace said so in its own words ("reconcile", "overclaimed"), while an
+          allow claims a finding is wrong by design and is meant to outlive everybody.
+        findings:
+          - code: CALL_STEP_UNREALIZED
+            spec: architecture_diagrams_impl
+            at: 'render'
+            covers:
+              - '6:spec_loader.loadTypeSpecs'
+          - code: CALL_STEP_UNREALIZED
+            spec: architecture_diagrams_impl
+            at: 'buildGraphModel'
+            covers:
+              - '1:spec_loader.loadSystemSpec'
+              - '2:spec_loader.loadSubsystemSpecs'
+              - '3:spec_loader.loadComponentSpecs'
+              - '4:spec_loader.loadInterfaceSpecs'
+              - '5:spec_loader.loadTypeSpecs'
+          - code: CALL_STEP_UNREALIZED
+            spec: spec_doc_pages_impl
+            at: 'project'
+            covers:
+              - '5:producer_core_adapter.loadImplementationSpecs'
+          - code: CALL_STEP_UNREALIZED
+            spec: spec_doc_pages_impl
+            at: 'projectGraph'
+            covers:
+              - '1:producer_core_adapter.loadSubsystemSpecs'
+          - code: CALL_STEP_UNREALIZED
+            spec: surface_registry_impl
+            at: 'hydrateFromFiles'
+            covers:
+              - '3:surface_store.put'
+      # 2 finding(s), 2 unit(s).
+      - kind: unreadable
+        why: >-
+          The MCP server's two skill-resource forwarders DO call the portal's methods at runtime.
+          src/mcp/server.ts imports them RENAMED - "listResources as coreListSkillResources" and
+          "readResource as coreReadSkillResource", from src/core/skills.ts, which realizes
+          skills_portal - and forwards each one to one. The callee name at the call site is
+          therefore the local alias, while the forward check looks for the target method's own
+          name, so the call is reported as absent. Nothing here is overclaimed and nothing is
+          wired wrong; what is missing is either a per-method symbol on the spec or an import
+          rename the reader follows.
+        revisit: >-
+          Prove which of the two it is before anybody acts on it: the aliased binding the reader
+          cannot follow (then this is unreadable and the fix belongs in the reader), or a step
+          pointed at the wrong component (skills_portal and skill_resources are both realized by
+          src/core/skills.ts - then it is drift and the fix is one narrative edit). The
+          classification these two entries replace - "skill resources are served from the embedded
+          exported skill set inside the MCP server, not by calling the skills portal at runtime" -
+          was measured FALSE in this wave: the forwarders do call core at runtime. A reason that
+          confident and that wrong is the reason to distrust this one until somebody checks it.
+        findings:
+          - code: CALL_STEP_UNREALIZED
+            spec: mcp_skills_adapter_impl
+            at: 'listResources'
+            covers:
+              - '1:skills_portal.listResources'
+          - code: CALL_STEP_UNREALIZED
+            spec: mcp_skills_adapter_impl
+            at: 'readResource'
+            covers:
+              - '1:skills_portal.readResource'
 createdAt: '2026-06-10T20:23:10.714Z'
 updatedAt: '2026-06-10T20:23:10.714Z'

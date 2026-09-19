@@ -167,12 +167,42 @@ export type TrustedLink = z.infer<typeof TrustedLinkSchema>;
  * (a human can still re-tune codes globally via rules.sddRuleSeverity in
  * project.yaml). Same philosophy as trustedLinks: the exception becomes
  * reviewable spec — reason required, stale allows are flagged.
+ *
+ * An allow covers EXACTLY the finding it names, and `at`/`covers` are how it
+ * names one. They are the conformance debt register's vocabulary on purpose —
+ * the same words (FindingParts: the site inside the spec, and the units an
+ * aggregating finding wears one message for) for the same idea, because a
+ * second vocabulary for "which occurrence" would be the worse outcome. A rule
+ * that reports a site fires once PER SITE, and one coarse allow used to
+ * silence every one of them: measured on wairon's own tree, 32 allows
+ * suppressed 46 findings, so 14 occurrences — 30% — were invisible even to the
+ * allow that named them.
  */
 export const LintAllowSchema = z.object({
   /** The issue code being allowed (see `wairon rules list`). */
   code: z.string(),
+  /**
+   * The SITE inside this spec the allow covers, named exactly as the finding
+   * names it (a contract method, an import edge "from -> to", a declared edge
+   * "component -> target"). A finding that names a site is covered ONLY by an
+   * allow naming that same site; a finding that names none is covered only by
+   * an allow that names none either.
+   */
+  at: z.string().min(1).optional(),
+  /**
+   * The units of an AGGREGATING finding this allow covers — the steps of one
+   * CALL_STEP_UNREALIZED, the crossings of one UNDECLARED_COLOCATED_CALL —
+   * each named the way the finding's own message names it. The allow silences
+   * the finding only when it lists EVERY unit reported, so a unit nobody
+   * decided on surfaces on the day it appears instead of inheriting a decision
+   * taken about its neighbours. Meaningless without `at`, and refused there.
+   */
+  covers: z.array(z.string()).optional(),
   /** Why this finding is acceptable here (e.g. "dispatcher — fan-out is the point"). */
   reason: z.string().min(1),
+}).refine(a => !a.covers?.length || !!a.at, {
+  message: '`covers` names the units of ONE finding, so it needs the `at` that says which finding — add the site, or drop covers.',
+  path: ['covers'],
 });
 export type LintAllow = z.infer<typeof LintAllowSchema>;
 
