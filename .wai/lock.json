@@ -1,14 +1,14 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "7f01e24e6d14ea4b5392140a1f4cc31d83abad22803d3754eb174406f90ea3ab"
+    "digest": "3b158b199b577d53a1f01ffbcd786368b21a8713deebaf738c5211d3e9cd766a"
   },
-  "lockedAt": "2026-09-19T07:29:20.330Z",
+  "lockedAt": "2026-09-19T09:40:58.548Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "5.1.1-dev.36",
+  "validatorVersion": "5.1.1-dev.37",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -552,8 +552,8 @@
     ".wai/specs/interfaces/ilock_store.yaml": "bd42300472f4da49cb06afaf698a1393a731e3a57ed6285c9e09696590349414",
     ".wai/specs/interfaces/imcp_authoring_adapter.yaml": "93b9ac8bf7398c1f1c8028ef0660332ec5e32950bcc1b052a95b26e12a438007",
     ".wai/specs/interfaces/imcp_core_adapter.yaml": "d9053956726aa1644852d87310b6657a4ea53293a6c41dbb0adfd79516935f3b",
-    ".wai/specs/interfaces/imcp_orchestrator.yaml": "1deb8b56c8fbe0e671be56f58e47fcd2f77b0867df9657df0096d809b0f33596",
-    ".wai/specs/interfaces/imcp_portal.yaml": "576f2602a8d429ebe8a2531328d656c8582c306c088509fd009cdc1967ee8c89",
+    ".wai/specs/interfaces/imcp_orchestrator.yaml": "bf3a0b52825658ac43ffbb0a5c92db5d70df3250b6eea1fff763cc4acf60358a",
+    ".wai/specs/interfaces/imcp_portal.yaml": "00665cd428d351caa55205a992fe5797d2728bc2c5bd05104326ded452a05ab2",
     ".wai/specs/interfaces/imcp_server.yaml": "3370acce1adbbc5d2f7affdc6530a8fbe8cc2fc1826fbcd8daad23a184959450",
     ".wai/specs/interfaces/imcp_skills_adapter.yaml": "cd42d03e7dc1b6622127cc78f69165a758d86c78fa734c732a182e2e57c34616",
     ".wai/specs/interfaces/imcp_surfaces_adapter.yaml": "3e23d0df40fcf4dd3a616a45f080f7197bee964571b2a546b17bc89285a7bebe",
@@ -879,6 +879,7 @@
     ".wai/specs/types/spec_id.yaml": "746f3a730826fd61936b53b190a2216ed9b8fec7d9c6d86a73d60241cd6ad8c6",
     ".wai/specs/types/spec_rename.yaml": "2b100fa8fef44c31d7d2f488ceefb2dbbab2fa5f6644935309e4f21f40852fdf",
     ".wai/specs/types/spec_write_hooks.yaml": "e2d028d75ce6a325c8bfaac0b4ec4989e462edeeaaf5ca38d0fd00db0d3ec533",
+    ".wai/specs/types/spec_write_receipt.yaml": "4eb3de4fe3cf5badc994fa66489a74b762f42de89e7db4c4d77c12bbdc85984e",
     ".wai/specs/types/specialist_retirement.yaml": "363d4fa03ec1eba6e577d903d86643eb0ac38db9c75d5235eb7ce0eae80bafa2",
     ".wai/specs/types/specialist_retype.yaml": "602bf7559195fca0faeee49dadafe676488c9b79f20c8491abf5e3f4f3562c9d",
     ".wai/specs/types/state_id.yaml": "6171e1758120d658bb32fbcd8d54acaca578bd69cd8475971d1310ab6f17d509",
