@@ -1100,6 +1100,130 @@ methods:
           or move the code so the boundary is real
         type: local
     symbol: check
+  - name: carriedDebt
+    sourcePath: src/core/rules/conformance/carried-debt.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          carried = ctx.carriedFindings, the conformance debt register flattened to one entry per
+          carried finding, each holding its reason group's kind and why
+        type: local
+      - stepNumber: 2
+        description: A project that declares no debt has nothing to audit
+        type: branch
+        condition: carried is empty
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Report nothing
+        type: return
+        outcome: void
+      - stepNumber: 4
+        label: legality
+        description: >-
+          Legality first, and whatever the run saw: a code that may not be carried is wrong even in
+          a run that judged no code at all
+        type: loop
+        loopKind: forEach
+        over: carried
+        endStep: 7
+      - stepNumber: 5
+        description: 'A carryable code is the register''s whole domain: continue with the next entry'
+        type: branch
+        condition: ctx.carryableIssueCodes holds the entry's code
+        onTrueStep: 4
+        onFalseStep: 6
+      - stepNumber: 6
+        description: >-
+          why = ctx.knownIssueCodes holds the code ? that code is not CARRYABLE, because the
+          register holds measured code↔spec debt and a doctrine, soundness or configuration finding
+          says the design is illegal rather than unfinished : no registered rule emits that code
+        type: local
+      - stepNumber: 7
+        description: >-
+          Report UNCARRYABLE_FINDING (error; no spec id, so no lint allow can reach it) naming the
+          code, the spec, the site and why: remove the entry, or declare the code carryable on the
+          rule that emits it
+        type: local
+      - stepNumber: 8
+        description: A run that built no code model could not have fired one conformance finding
+        type: branch
+        condition: ctx.codeModel.files is empty
+        onFalseStep: 10
+      - stepNumber: 9
+        description: 'Report nothing: every entry would read as stale for a reason the reader never chose'
+        type: return
+        outcome: void
+      - stepNumber: 10
+        description: known = every spec id in the tree; addressed = the spec, code and site keys already judged
+        type: local
+      - stepNumber: 11
+        label: audit
+        description: Audit each entry against what the run actually saw, so the register can only shrink
+        type: loop
+        loopKind: forEach
+        over: carried
+        endStep: 22
+      - stepNumber: 12
+        description: >-
+          A silence the project itself chose, and a spec this run never reached, are not debts
+          anyone paid: continue with the next entry
+        type: branch
+        condition: >-
+          the entry's code is carryable, the project did not switch that code off, and its spec is
+          in this run's scope
+        onTrueStep: 13
+        onFalseStep: 11
+      - stepNumber: 13
+        description: Only the first entry for a finding can ever match, so a repeat carries nothing
+        type: branch
+        condition: addressed already holds the entry's spec, code and site
+        onTrueStep: 14
+        onFalseStep: 16
+      - stepNumber: 14
+        description: >-
+          Report STALE_CARRIED_FINDING (warning; no spec id) naming the repeat: delete it and merge
+          its units into the one entry
+        type: local
+      - stepNumber: 15
+        description: Continue with the next entry
+        type: jump
+        toStep: 11
+      - stepNumber: 16
+        description: Record the entry's spec, code and site in addressed
+        type: local
+      - stepNumber: 17
+        description: An entry no finding matched carries nothing
+        type: branch
+        condition: the entry fired this run
+        onTrueStep: 20
+        onFalseStep: 18
+      - stepNumber: 18
+        description: >-
+          Report STALE_CARRIED_FINDING (warning; no spec id) naming the entry with its kind and
+          reason: no such finding fired, so the debt is paid or the spec no longer reaches that site
+          — or the tree holds no such spec at all. Delete the entry; the register only shrinks
+        type: local
+      - stepNumber: 19
+        description: Continue with the next entry
+        type: jump
+        toStep: 11
+      - stepNumber: 20
+        description: paid = the entry's covers the live finding did not report
+        type: local
+      - stepNumber: 21
+        description: >-
+          An entry that lists exactly what fired is the register doing its job: continue with the
+          next entry
+        type: branch
+        condition: paid is empty
+        onTrueStep: 11
+        onFalseStep: 22
+      - stepNumber: 22
+        description: >-
+          Report STALE_CARRIED_FINDING (warning; no spec id) naming the paid units: that much of the
+          debt is paid, so delete those lines from the entry's covers; the register only shrinks
+        type: local
+    symbol: check
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-19T17:44:22.513Z'
+updatedAt: '2026-09-19T19:06:23.841Z'

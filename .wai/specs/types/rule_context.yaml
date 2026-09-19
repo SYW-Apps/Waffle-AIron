@@ -124,6 +124,20 @@ fields:
       Every code a registered rule or declarative assertion can report, gathered by the validator
       for the lint-allow audit
     optional: false
+  - name: carriedFindings
+    type: CarriedFindingEntry[]
+    description: >-
+      The conformance debt register (rules.conformance.carried), flattened to one entry per carried
+      finding and carrying its reason group's kind and why. Carrying happens inside addIssue — after
+      the lint allows, so an allow and an entry can never both claim one finding — and the
+      carried-debt rule audits these entries at the end of the run.
+    optional: false
+  - name: carryableIssueCodes
+    type: Set<string>
+    description: >-
+      Every issue code a registered rule declares CARRYABLE, gathered by the validator — what the
+      debt register's entries are checked against.
+    optional: false
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -161,14 +175,15 @@ methods:
   - name: addIssue
     signature: >-
       addIssue(defaultSeverity: string, code: string, message: string, specId?: string,
-      isDraftContext?: boolean, surfaceResolved?: boolean): void
+      isDraftContext?: boolean, surfaceResolved?: boolean, parts?: FindingParts): void
     returns: void
     description: >-
       Record a finding in the run's issue sink, the context's one effectful method. It drops
       findings outside the scope, applies the project's severity overrides (off drops the finding),
       downgrades completeness findings in draft context, lets a matching lint allow silence a
-      warning, and keeps a finding resolved against a surface snapshot at full strength in a chained
-      subproject.
+      warning, lets a matching debt-register entry carry a warning whose every unit it lists (naming
+      back any unit it does not), and keeps a finding resolved against a surface snapshot at full
+      strength in a chained subproject.
   - name: isInChainedSubproject
     signature: 'isInChainedSubproject(subsystemId: string): boolean'
     returns: boolean
@@ -277,4 +292,4 @@ methods:
       rule that accuses
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-19T11:07:16.943Z'
+updatedAt: '2026-09-19T19:04:25.085Z'

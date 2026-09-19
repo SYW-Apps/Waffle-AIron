@@ -84,7 +84,7 @@ export const methodRealizationRule: SddRule = {
     'Code↔spec Level 1: every L3 contract method must be realized in its own source file (the method\'s sourcePath, else the implementation\'s) at its conformance tier — declared | anchored | off; Portals default to anchored, everything else to declared, and a per-method `symbol` maps an intent-language name onto the code name. A method realized by a DECLARATION owes a function BODY as well: at exact grade one must be reachable under the symbol, here or through the imports and republications this file forwards it by, so a signature, an ambient or interface declaration or a plain value binding stops reading as an implementation (METHOD_BODY_NOT_FOUND). Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. Methods whose file escapes the root, is missing or could not be analyzed are left to source-file-linkage, and implementations under chained subsystems (projectPath) validate standalone in their own project run.',
   codes: [
     { code: 'UNREALIZED_METHOD', defaultSeverity: 'warning', summary: 'An L3 contract method has no anchor in its own source file (the method\'s sourcePath, else the implementation\'s) at the required conformance tier' },
-    { code: 'METHOD_BODY_NOT_FOUND', defaultSeverity: 'warning', summary: 'The method symbol IS declared in its own source file, but the file holds no function-like body under it — a signature, an ambient or interface declaration, a value binding, an imported or re-exported name' },
+    { code: 'METHOD_BODY_NOT_FOUND', defaultSeverity: 'warning', summary: 'The method symbol IS declared in its own source file, but the file holds no function-like body under it — a signature, an ambient or interface declaration, a value binding, an imported or re-exported name', carryable: true },
   ],
 
   check(ctx: RuleContext): void {
@@ -131,6 +131,10 @@ export const methodRealizationRule: SddRule = {
             `Method ${bodyLabel} of contract "${impl.contract}" is declared in "${file}" but has no function body there — a signature, an ambient or interface declaration, a value binding, or a name this file only imports or re-exports. Every deeper check reads a body (the realized calls of Level 3, the measured complexity of the detail dial), so this method is judged on its name alone. Point the sourcePath at the file that implements it, map the code name via a per-method SYMBOL, or dial this method to "off".`,
             impl.id,
             draft,
+            undefined,
+            // One method, one indivisible fact: nothing here aggregates, so
+            // the site alone is the whole identity.
+            { at: method.name },
           );
           continue;
         }

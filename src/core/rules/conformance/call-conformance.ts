@@ -147,9 +147,9 @@ export const callConformanceRule: SddRule = {
   description:
     'Code↔spec Level 3: the narrative `call` step ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. Forward: every `call` step must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls, and resolved against every file the call CAN have reached: a `this.<field>.<method>()` receiver followed through the field\'s DECLARED TYPE, a `new Class(...).<method>()` receiver through the module its CLASS NAME came from. A matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which NAMES the shape it could not follow and asks for nothing — a coverage hole in the reader, reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a degraded one. A finding names a landing only from the PROVEN tier so that widening what a call reached can accept a step but never accuse one, and a target that names no file of its own falls back to name membership. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the narrative must declare it (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper is no modelled method and is never reported. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are skipped, the conformance dial (off) skips, and weaker analysis grades never guess.',
   codes: [
-    { code: 'CALL_STEP_UNREALIZED', defaultSeverity: 'warning', summary: 'Narrative call step realized by no call that resolves to the target method\'s own source file — the call is absent, or it lands in another module' },
-    { code: 'CALL_ORIGIN_UNRESOLVED', defaultSeverity: 'warning', summary: 'Narrative call step whose target name IS called, but only from call sites written in a shape this analysis cannot resolve to a file — the step was not checked, and is neither proven realized nor accused' },
-    { code: 'UNDECLARED_COLOCATED_CALL', defaultSeverity: 'warning', summary: 'The realized function calls a modelled method of another component living in the same source file, and no narrative step declares that call' },
+    { code: 'CALL_STEP_UNREALIZED', defaultSeverity: 'warning', summary: 'Narrative call step realized by no call that resolves to the target method\'s own source file — the call is absent, or it lands in another module', carryable: true },
+    { code: 'CALL_ORIGIN_UNRESOLVED', defaultSeverity: 'warning', summary: 'Narrative call step whose target name IS called, but only from call sites written in a shape this analysis cannot resolve to a file — the step was not checked, and is neither proven realized nor accused', carryable: true },
+    { code: 'UNDECLARED_COLOCATED_CALL', defaultSeverity: 'warning', summary: 'The realized function calls a modelled method of another component living in the same source file, and no narrative step declares that call', carryable: true },
   ],
   check(ctx: RuleContext) {
     const code = ctx.codeIndex();
@@ -265,6 +265,10 @@ export const callConformanceRule: SddRule = {
           `Method "${implMethod.name}" in implementation "${impl.id}": ${unrealized.length} narrative call step(s) are realized by no call of the function "${fnSymbol}" in "${file}" that resolves to the target's own source file — ${unrealized.map(describeMiss).join('; ')}. Callees are closed over the named helpers the function calls, and each call site is resolved through this file's import bindings (order, arguments and conditions are not checked). Realize the calls, fix the narrative, or map code names via per-method symbols on the targets.`,
           impl.id,
           entry.draftContext,
+          undefined,
+          // A step, named by its number and its target: what the register
+          // carries is ONE unresolved step, never "this method's call steps".
+          { at: implMethod.name, covers: unrealized.map(m => `${m.step}:${m.target}`) },
         );
       }
       if (unresolved.length) {
@@ -274,6 +278,8 @@ export const callConformanceRule: SddRule = {
           `Method "${implMethod.name}" in implementation "${impl.id}": ${unresolved.length} narrative call step(s) ARE called by name inside the function "${fnSymbol}" in "${file}", but every site calling them is written in a shape this analysis cannot resolve to a file — ${unresolved.map(describeMiss).join('; ')}. What resolves is a name bound to a module of THIS project: a bare or namespaced call through such an import binding, a \`this.<field>\` receiver whose declared type names one, a \`new Class(…)\` receiver whose class does. What does not: an import from a PACKAGE specifier, a receiver holding a value the module assembled, a receiver this model records no name for. This reports what was not checked, not what is wrong — the step is neither proven realized nor accused of being missing, and no working call is asked to be rewritten to suit the reader.`,
           impl.id,
           entry.draftContext,
+          undefined,
+          { at: implMethod.name, covers: unresolved.map(m => `${m.step}:${m.target}`) },
         );
       }
 
@@ -303,6 +309,11 @@ export const callConformanceRule: SddRule = {
           `Method "${implMethod.name}" in implementation "${impl.id}": the function "${fnSymbol}" in "${file}" calls ${crossings.size} modelled method(s) of OTHER components living in that same file, and no narrative step declares the call — ${detail}. Sharing a file does not make the hop internal: it crosses a component boundary nothing imports, so no file-level check can see it. Narrate the call, or move the code so the boundary is real.`,
           impl.id,
           entry.draftContext,
+          undefined,
+          // The crossings themselves. Keyed by method alone, a 24th crossing
+          // would ride into a register entry written for 23 - so each one is
+          // named, and one nobody carried fires on the day it appears.
+          { at: implMethod.name, covers: [...crossings.keys()] },
         );
       }
     }

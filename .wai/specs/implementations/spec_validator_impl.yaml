@@ -117,7 +117,9 @@ methods:
         description: >-
           Gather the known issue codes of every registered rule and declarative assertion for the
           rule context, so the lint-allows rule validates lint.allow references against every code
-          the active rules can report (UNKNOWN_LINT_ALLOW_CODE)
+          the active rules can report (UNKNOWN_LINT_ALLOW_CODE), and keep the subset the rules
+          declare CARRYABLE as the closed set the conformance debt register's entries are checked
+          against (UNCARRYABLE_FINDING)
         type: call
         targetComponent: rule_repository
         targetMethod: knownIssueCodes
@@ -459,4 +461,4 @@ methods:
         outcome: ParentResolution
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-18T17:52:36.131Z'
+updatedAt: '2026-09-19T19:06:59.258Z'

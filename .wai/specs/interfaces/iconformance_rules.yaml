@@ -337,6 +337,40 @@ methods:
         summary: >-
           An entry of the frozen unclaimed list names a file that is now claimed, or that the
           source-root walk no longer finds — delete it, the list only shrinks
+  - name: carriedDebt
+    description: >-
+      Rule carried-debt. The conformance debt register (`rules.conformance.carried`) holds the
+      code↔spec findings this tree carries as declared, classified debt — `unclaimed`'s one-way
+      shape, for findings about code a spec does name. It is not a second lint.allow: an allow says
+      a finding is wrong here by design, an entry here says the finding is right and unpaid, and
+      each entry states which of the three kinds it is (drift: spec and code disagree; undecided:
+      the fix waits on a modelling decision nobody has taken; unreadable: the analysis cannot follow
+      the shape the code is written in) and why. Only a code a rule declares CARRYABLE may appear,
+      and naming any other is an error, so the register can never widen into general-purpose
+      suppression. An entry carries a finding only when it lists EVERY unit that finding reports, so
+      an aggregating finding cannot grow behind it; an entry that matched nothing, that duplicates
+      another, that names a spec the tree does not hold, or that lists a unit no longer reported is
+      STALE_CARRIED_FINDING, so the register only shrinks. The audit is silent in a run that could
+      not have fired the findings at all: one that built no code model, the specs outside a scoped
+      run, and a code the project switched off.
+    signature: 'carriedDebt(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNCARRYABLE_FINDING
+        severity: error
+        summary: >-
+          The conformance debt register names an issue code no rule emits, or one no rule declares
+          carryable — the register holds measured code↔spec debt, never a design rule somebody wants
+          quiet
+      - code: STALE_CARRIED_FINDING
+        severity: warning
+        summary: >-
+          An entry of the conformance debt register carries a finding that no longer fires, or lists
+          a unit that finding no longer reports — delete it, the register only shrinks
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-19T17:44:16.625Z'
+updatedAt: '2026-09-19T19:04:56.285Z'

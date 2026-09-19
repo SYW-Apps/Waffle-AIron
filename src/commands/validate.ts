@@ -183,6 +183,24 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     }
   }
 
+  // The conformance debt register, said out loud on every run. A suppression
+  // is silent by nature — that is what makes it rot — so the count of what
+  // this tree carries, and which of it is debt rather than a limit, is
+  // printed whether or not anything else was reported.
+  const carried = projectConfig.rules?.conformance?.carried ?? [];
+  if (carried.length > 0) {
+    const findings = carried.flatMap(g => g.findings ?? []);
+    const units = findings.reduce((n, f) => n + (f.covers?.length ?? 1), 0);
+    const perKind = (kind: string): number =>
+      carried.filter(g => g.kind === kind).reduce((n, g) => n + (g.findings?.length ?? 0), 0);
+    logger.blank();
+    logger.info(chalk.yellow(
+      `Conformance debt register: ${findings.length} finding(s) over ${units} unit(s) carried — `
+      + `${perKind('drift')} drift, ${perKind('undecided')} undecided, ${perKind('unreadable')} unreadable `
+      + '(`rules.conformance.carried`). Drift and undecided are owed; unreadable is what the analysis cannot follow.',
+    ));
+  }
+
   logger.blank();
 
   // Draft-related warnings are surfaced above but excluded from the --ci
