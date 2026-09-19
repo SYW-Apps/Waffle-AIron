@@ -61,6 +61,80 @@ a human is actually answering:
 `--yes` skips the confirmation (for CI); `--subsystem`
 limits the scope.
 
+### `wairon lock-check [--strict]`
+The **merge gate**. One question, one exit code: *is the design in this working
+tree the design that was approved?* It compares the tree's gate identity against
+the one recorded in the committed `.wai/lock.json`.
+
+| What it finds | Default | `--strict` |
+| --- | --- | --- |
+| **`locked`** — the approval still covers this design | pass (0) | pass (0) |
+| **`stale`** — the design moved past its approval | **fail (1)** | **fail (1)** |
+| **`unlocked`** — nothing was ever approved | pass, with a notice (0) | **fail (1)** |
+| no `.wai/specs` in this directory at all | pass, saying so (0) | **fail (1)** |
+
+**It is optional by construction.** Only `stale` refuses by default, and `stale`
+cannot happen in a project that never locked — so adding this to an existing
+repository's CI cannot make it start failing. `--strict` is what turns "never
+approved" into a failure, and a project has to ask for it.
+
+It is **not** `wairon validate`. Validate asks whether the design is *legal* and
+runs the whole rule set to answer; this asks whether it is *approved* and reads
+one JSON file, which is why it is safe to run on every pull request. The two are
+independent — a tree can be approved and illegal, or legal and unapproved — so
+run both.
+
+It gates on the **gate identity** (the hashed parsed tree plus the governing
+doctrine), not on the per-spec content digests the same lock record carries.
+Those answer "has this file changed since you approved it": a whitespace-only
+edit moves them, and a gate that demands a re-lock for reformatting is one people
+learn to bypass.
+
+**What it proves:** that the design in the commit being merged is the design that
+was approved. **What it does not prove:** *who* approved. `lockedBy` is a claim,
+not an attestation — anyone who can run the CLI can write a lock record. Pull
+request review is what establishes who reviewed; this establishes that the thing
+merging is the thing that was reviewed.
+
+#### Using it in GitHub Actions
+
+This repository publishes it as a **reusable workflow**. Add one job to your own
+workflow:
+
+```yaml
+# .github/workflows/ci.yml in YOUR repository
+on: [pull_request]
+
+jobs:
+  approved-design:
+    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v5.1.0
+```
+
+With inputs (all optional):
+
+```yaml
+  approved-design:
+    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v5.1.0
+    with:
+      working-directory: packages/api   # where the .wai/ tree lives (default: .)
+      wairon-version: '5.1.0'           # version or npm dist-tag (default: latest)
+      strict: false                     # fail when nothing was approved (default: false)
+      node-version: '20'                # (default: '20')
+      runs-on: ubuntu-latest            # (default: ubuntu-latest)
+```
+
+Pin `@<ref>` to a **tag**, never to `main` or `dev`. A moving branch means the
+check that gates your merges can change under you between two runs of the same
+commit — and this one decides whether code merges.
+
+On a `pull_request` event the default checkout is the merge commit, so what the
+gate judges is literally the design that would land.
+
+**A failing job does not block a merge on its own.** A workflow can only fail;
+making a failing job stop a merge is a branch-protection / ruleset setting on
+your repository ("Require status checks to pass" → add this job). No workflow
+can declare that for itself.
+
 ### `wairon doctor [--fix]`
 Health check: flags stale generated guides/skills, an unregistered MCP server,
 and spec-tree issues. `--fix` regenerates stale in-project guides/context/skills

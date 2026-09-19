@@ -1,0 +1,20 @@
+kind: value-object
+id: lock_check_options
+name: LockCheckOptions
+description: >-
+  Flags of the `wairon lock-check` merge gate. One flag, and it is the whole opt-in seam: without it
+  the gate refuses only a design that moved past its own approval, which no unapproved project can
+  do.
+subsystem: sdd_cli
+fields:
+  - name: strict
+    type: boolean
+    description: >-
+      Treat a repository that was never approved — or that carries no spec tree at all — as a
+      failure rather than a notice. Off by default, so importing the gate cannot make an existing
+      project's CI start failing.
+    optional: true
+methods: []
+sourcePath: src/commands/lock.ts
+createdAt: '2026-09-19T12:25:29.023Z'
+updatedAt: '2026-09-19T12:25:29.035Z'

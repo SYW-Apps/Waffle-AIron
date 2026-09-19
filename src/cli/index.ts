@@ -11,8 +11,8 @@ import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import { runAliasesList, runAliasesEnable, runAliasesDisable } from '../commands/aliases.js';
 import { runInit } from '../commands/init.js';
 import { runGenerate } from '../commands/generate.js';
-import { runLock as lockTree } from '../commands/lock.js';
-import type { LockOptions } from '../commands/lock.js';
+import { runLock as lockTree, checkApproval } from '../commands/lock.js';
+import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete } from '../commands/validate.js';
 import { assertProjectInitialized, loadRegistry, AI_PATHS } from '../config/loader.js';
 import { pathExists, writeFile, getProjectRoot } from '../utils/fs.js';
@@ -259,6 +259,51 @@ async function statusCommand(opts: { subsystem?: string; recursive?: boolean }):
   }
   await runStatus({ subsystem: opts.subsystem, recursive: opts.recursive });
 }
+
+// ---------------------------------------------------------------------------
+// lock-check (cli_runner.runLockCheck)
+//
+// The merge gate, and deliberately NOT a flag on `validate`. Two reasons:
+//
+//  1. It asks a different question. `validate` asks whether the design is
+//     LEGAL; this asks whether it is APPROVED. They are independent — a tree
+//     can be approved and illegal, or legal and unapproved — so folding them
+//     into one exit code makes a single red check mean two unrelated things.
+//  2. It costs a fraction as much. `validate` runs the whole rule set over the
+//     whole tree; this loads the tree, hashes it, and reads one committed JSON
+//     file. A consumer importing the reusable workflow runs it on every pull
+//     request, and should not have to pay for the validator to learn whether
+//     someone approved the design.
+//
+// Local only, with no attached-checkout routing: the subject is the design in
+// the commit being merged, which is on disk here. A hosted project's lock is
+// `wairon host lock`.
+// ---------------------------------------------------------------------------
+
+/** cli_runner.runLockCheck — print the approval verdict and exit on it. */
+async function lockCheckCommand(opts: LockCheckOptions): Promise<void> {
+  // No assertProjectInitialized(): a repository with no .wai/ at all must be
+  // told exactly that, not met with an error about an uninitialized project.
+  const verdict = checkApproval(opts.strict === true);
+
+  // Print BEFORE deciding — the log carries the verdict whichever way it goes.
+  if (!verdict.approved) logger.error(verdict.message);
+  else if (verdict.state === 'locked') logger.success(verdict.message);
+  else logger.info(verdict.message);
+
+  if (verdict.approved) return;
+  // Exit non-zero so the job fails. Whether that BLOCKS a merge is a branch
+  // protection setting on the repository — no workflow can declare it.
+  process.exit(1);
+}
+
+program
+  .command('lock-check')
+  .description('Merge gate: is the design in this working tree the design that was approved? Compares the tree\'s gate identity against the committed .wai/lock.json. Exits 1 when the design moved past its approval; passes with a notice when the project never locked, unless --strict.')
+  .option('--strict', 'also fail when nothing was ever approved, or when there is no spec tree at all')
+  .action(async (opts) => {
+    await lockCheckCommand(opts);
+  });
 
 program
   .command('lock')

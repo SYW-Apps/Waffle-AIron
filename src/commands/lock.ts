@@ -10,6 +10,9 @@ import {
   writeLockRecord,
   specPathsInScope,
   loadSubsystemSpecs,
+  loadSystemSpec,
+  readLockState,
+  describeApprover,
   type LockRecord,
 } from '../core/index.js';
 import { getProjectRoot } from '../utils/fs.js';
@@ -36,6 +39,102 @@ export interface LockOptions {
   subsystem?: string;
   /** Whether to recursively lock subprojects. */
   recursive?: boolean | number;
+}
+
+/** Flags of the `wairon lock-check` merge gate (cli_lock_adapter LockCheckOptions). */
+export interface LockCheckOptions {
+  /**
+   * Treat a repository that was never approved — or that carries no spec tree
+   * at all — as a failure rather than a notice. Off by default: that default
+   * is the whole reason importing the gate cannot make an existing project's
+   * CI start failing.
+   */
+  strict?: boolean;
+}
+
+/** The four things `wairon lock-check` can find. */
+export type ApprovalState = 'no-tree' | 'unlocked' | 'locked' | 'stale';
+
+/** The verdict `wairon lock-check` prints and exits on (cli_lock_adapter ApprovalCheck). */
+export interface ApprovalCheck {
+  state: ApprovalState;
+  /** Whether the check passes. False exits non-zero. */
+  approved: boolean;
+  /** The verdict phrased for a CI log — and, when it refuses, the remedy. */
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// cli_lock_adapter.checkApproval — the merge gate's verdict
+//
+// The question is narrow and worth stating: "is the design in this working
+// tree the design a human approved?". It is NOT "is this design legal" —
+// `wairon validate` answers that, and the two are independent: a tree can be
+// approved and illegal (approved before a doctrine change), or legal and
+// unapproved.
+//
+// It is decided from the GATE StateId, never from the per-spec content digests
+// the same lock record carries. The two are kept deliberately (see
+// approval.ts): the content digest answers "has this FILE changed since you
+// approved it", the gate identity hashes the PARSED tree plus the governing
+// doctrine and answers "has the DESIGN changed". A merge gate on the content
+// digest would demand a re-lock after a whitespace-only edit, and a gate people
+// learn to bypass is worse than no gate at all.
+//
+// Optional by construction. Only `stale` refuses at the default strictness, and
+// `stale` is unreachable in a project that never locked — `readLockState`
+// returns `unlocked` when there is no record, and `unlocked` passes. So a
+// project that upgrades into a wairon carrying this command, or imports the
+// reusable workflow without asking for `--strict`, cannot start failing on it.
+// ---------------------------------------------------------------------------
+
+export function checkApproval(strict: boolean): ApprovalCheck {
+  // A repository with no spec tree must be TOLD so. Judged as "never approved"
+  // it would fail every strict consumer that simply has no design yet, and the
+  // message would send them looking for a lock record instead of a tree.
+  if (!loadSystemSpec()) {
+    return {
+      state: 'no-tree',
+      approved: !strict,
+      message: strict
+        ? 'No SDD spec tree here (.wai/specs) — and --strict asks for an approved design, so this is a failure. '
+          + 'Run `wairon init` to start one, or drop --strict.'
+        : 'No SDD spec tree here (.wai/specs) — there is no design to approve, so nothing is gated.',
+    };
+  }
+
+  const lock = readLockState(computeGateStateId());
+  const record = lock.record;
+
+  switch (lock.state) {
+    case 'locked':
+      return {
+        state: 'locked',
+        approved: true,
+        message: 'The design in this tree is the approved design — '
+          + `approved ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}.`,
+      };
+    case 'stale':
+      return {
+        state: 'stale',
+        approved: false,
+        message: 'The design changed after it was approved '
+          + `(the approval on record is ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}). `
+          + 'Nothing says a human has seen what is about to merge. '
+          + 'Fix: run `wairon lock` on this branch and commit the updated .wai/lock.json.',
+      };
+    default:
+      return {
+        state: 'unlocked',
+        approved: !strict,
+        message: strict
+          ? 'No approval on record (.wai/lock.json is absent), and --strict asks for one. '
+            + 'Run `wairon lock` and commit the record.'
+          : 'No approval on record (.wai/lock.json is absent) — this project has not opted into the '
+            + 'approval gate, so nothing is gated. Run `wairon lock` and commit the record to turn it '
+            + 'on, or pass --strict to fail here instead.',
+      };
+  }
 }
 
 /**

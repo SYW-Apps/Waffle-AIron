@@ -272,6 +272,32 @@ methods:
       and retiring Specialists into Orchestrators.
     signature: 'runDoctor(options: { fix?: boolean }): Promise<void>'
     returns: Promise<void>
+  - name: runLockCheck
+    description: >-
+      `wairon lock-check`: the merge gate. Ask the lock adapter whether the design in this working
+      tree is still the design the human approved, print the verdict, and exit non-zero when it is
+      not.
+
+
+      Deliberately NOT a flag on `wairon validate`. Validate answers a different question — is this
+      design legal — and answers it by running the whole rule set over the whole tree; a consumer
+      importing the reusable workflow runs this on every pull request and pays only for loading the
+      tree, hashing it and reading one committed JSON file. Overloading validate's exit code would
+      also make one red check mean two unrelated things.
+
+
+      It is optional by construction: only `stale` refuses by default, and `stale` cannot occur in a
+      project that never locked. `--strict` is what turns "never approved" into a failure, and a
+      project has to ask for it.
+    signature: 'runLockCheck(options: LockCheckOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: options
+        type: LockCheckOptions
+        description: >-
+          CLI flags: --strict (treat a repository with no approval, or no spec tree at all, as a
+          failure rather than a notice).
+        optional: false
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-15T18:44:58.960Z'
+updatedAt: '2026-09-19T12:25:31.864Z'

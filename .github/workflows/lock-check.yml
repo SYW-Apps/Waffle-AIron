@@ -1,0 +1,95 @@
+name: Approved design (wairon lock-check)
+
+# Reusable workflow: refuse a merge whose SPECS were never approved.
+#
+# In spec-driven development a human approves a design by running `wairon lock`,
+# which records a gate identity for the parsed spec tree in the committed
+# .wai/lock.json. Nothing checks that record at merge time, so an approval taken
+# AFTER the merge leaves the default branch holding specs nobody said yes to —
+# silently. This workflow makes that visible.
+#
+# Import it from any repository:
+#
+#   jobs:
+#     approved-design:
+#       uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v5.1.0
+#
+# Pin @<ref> to a TAG, never to `main` or `dev`. A moving branch means the check
+# gating your merges can change under you between two runs of the same commit —
+# and this is a workflow that decides whether code merges.
+#
+# WHAT IT PROVES: that the design in the commit being merged is the design that
+# was approved. On a `pull_request` event the default checkout is the merge
+# commit, so that is literally what is judged.
+#
+# WHAT IT DOES NOT PROVE: WHO approved. `lockedBy` on the record is a claim, not
+# an attestation; a lock record can be written by anyone who can run the CLI.
+# Pull-request review is what establishes who reviewed — this establishes that
+# the thing merging is the thing reviewed.
+#
+# It also does not BLOCK a merge on its own. A workflow can only fail a job;
+# making a failing job stop a merge is a branch-protection / ruleset setting on
+# the repository ("Require status checks to pass"), which no workflow can
+# declare for itself. Add this job's name there once you want it enforced.
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: 'Directory holding the .wai/ tree to check (default: the repository root).'
+        type: string
+        required: false
+        default: '.'
+      wairon-version:
+        description: 'Version or npm dist-tag of @wairon/cli to install (e.g. "latest", "5.1.0", "beta").'
+        type: string
+        required: false
+        default: 'latest'
+      strict:
+        description: >-
+          Also fail when nothing was ever approved, or when there is no spec tree at all.
+          Default false: a project that never runs `wairon lock` passes with a notice, so
+          importing this workflow cannot make an existing repository start failing.
+        type: boolean
+        required: false
+        default: false
+      node-version:
+        description: 'Node.js version used to install and run the CLI.'
+        type: string
+        required: false
+        default: '20'
+      runs-on:
+        description: 'Runner label for the job (e.g. "ubuntu-latest", or a self-hosted label).'
+        type: string
+        required: false
+        default: 'ubuntu-latest'
+
+jobs:
+  lock-check:
+    name: Approved design
+    runs-on: ${{ inputs.runs-on }}
+
+    steps:
+      # The default checkout: on `pull_request` this is the merge commit, which
+      # is the design that would actually land. That is the subject of the gate.
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      # No `npm ci` and no build: the check needs the CLI, not the consumer's
+      # toolchain. Installing one package is most of why this runs in seconds.
+      - name: Install @wairon/cli
+        run: |
+          npm install --global "@wairon/cli@${{ inputs.wairon-version }}"
+          wairon --version
+
+      # Reads the spec tree, hashes it together with the governing doctrine, and
+      # compares that gate identity against the committed lock record. It does
+      # NOT run the conformance validator — that is `wairon validate`, a
+      # different question (is this design legal) and a much larger job.
+      - name: Is the merged design the approved design?
+        working-directory: ${{ inputs.working-directory }}
+        run: wairon lock-check ${{ inputs.strict && '--strict' || '' }}

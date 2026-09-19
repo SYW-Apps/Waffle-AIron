@@ -2,8 +2,8 @@ id: cli_lock_adapter_impl
 name: CLI Lock Adapter Implementation
 description: >-
   Forwards the lock mechanics to the published portals: the tree's gate identity from the validator
-  portal, and the commit-scoped lock record write to the core portal. Realized by the existing
-  runLock command module.
+  portal, the commit-scoped lock record write to the core portal, and the read-only approval verdict
+  that compares the two. Realized by the existing lock command module.
 contract: icli_lock_adapter
 sourcePath: src/commands/lock.ts
 methods:
@@ -28,6 +28,81 @@ methods:
         type: return
         outcome: LockRecord
     symbol: runLock
+  - name: checkApproval
+    narrative:
+      - stepNumber: 1
+        label: load-system
+        description: >-
+          Ask the core portal for the L0 system spec. A repository with no .wai/specs tree holds no
+          design to approve, and must be told so — judged as "unapproved" it would start failing
+          every strict consumer that merely has no tree yet.
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        label: tree-present
+        description: Is there a spec tree at all?
+        type: branch
+        condition: the system spec loaded
+        onTrueStep: 4
+        onFalseStep: 3
+      - stepNumber: 3
+        label: verdict-no-tree
+        description: >-
+          No tree: report that this repository carries no spec tree, approved unless strict was
+          asked for.
+        type: return
+        outcome: no-tree
+      - stepNumber: 4
+        label: gate-identity
+        description: >-
+          Obtain the tree's gate identity as it stands NOW from the validator portal — the hashed
+          parsed tree plus the governing doctrine, which is what "has the design changed" means. The
+          per-spec content digests the same record carries are deliberately not consulted: they
+          would move on a whitespace-only edit.
+        type: call
+        targetComponent: validator_portal
+        targetMethod: computeGateStateId
+      - stepNumber: 5
+        label: resolve-lock
+        description: >-
+          Resolve the committed record against that identity through the core portal, the one
+          authority on the question: unlocked, locked or stale.
+        type: call
+        targetComponent: core_portal
+        targetMethod: readLockState
+      - stepNumber: 6
+        label: dispatch-state
+        description: Turn the state into the decision.
+        type: switch
+        'on': the resolved lock state
+        cases:
+          - value: locked
+            step: 7
+          - value: stale
+            step: 8
+        defaultStep: 9
+      - stepNumber: 7
+        label: verdict-locked
+        description: >-
+          The approval still covers this design: pass, naming who approved it and when so the log
+          carries the evidence.
+        type: return
+        outcome: locked
+      - stepNumber: 8
+        label: verdict-stale
+        description: >-
+          The design moved past the approval: refuse at every strictness, naming the remedy — re-run
+          the lock and commit the updated record.
+        type: return
+        outcome: stale
+      - stepNumber: 9
+        label: verdict-unlocked
+        description: >-
+          Never approved: the opt-in seam. Pass with a notice by default so an upgrading project
+          cannot suddenly fail, and refuse only when strict was asked for.
+        type: return
+        outcome: unlocked
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-09-15T17:56:08.160Z'
+updatedAt: '2026-09-19T12:24:52.397Z'

@@ -175,6 +175,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |
 | `wairon lock [-y]` | Validate the tree as-complete and freeze it (generates the implementer agents) |
+| `wairon lock-check [--strict]` | Merge gate: is the design in this tree the design that was approved? Importable as a [reusable workflow](.github/workflows/lock-check.yml) |
 | `wairon mcp serve \| install \| status` | The wairon MCP server (`sdd_*` tools) |
 | `wairon serve [--port] [--data-dir] [--no-auth]` | Self-host: HTTP MCP for many isolated projects + admin plane |
 | `wairon host project \| key \| lock \| promote` | Administer the hosting server (projects, keys, state-scoped lock/promote) |

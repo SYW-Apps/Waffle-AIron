@@ -56,6 +56,21 @@ jobs:
       - name: Architecture conformance gate
         run: node dist/cli/index.js validate --ci
 
+      # Dogfood the approval gate too — the thing .github/workflows/lock-check.yml
+      # offers to other repositories, run here against the CLI THIS commit builds
+      # rather than the published one (a released binary would be testing a
+      # different wairon than the one under review).
+      #
+      # Six times in this programme the lock was taken after the pull request had
+      # already merged, leaving dev holding specs nobody approved. This step is
+      # what makes that visible: it fails when the spec tree moved past the
+      # approval recorded in .wai/lock.json, and the fix is to run `wairon lock`
+      # on the branch and commit the record BEFORE merging.
+      #
+      # Not --strict: only a design that moved past its own approval fails here.
+      - name: Approved-design gate
+        run: node dist/cli/index.js lock-check
+
   docker-build:
     name: Build Docker image (no push)
     runs-on: ubuntu-latest

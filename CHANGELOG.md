@@ -20,6 +20,58 @@ stripped (item 12). Nine `sdd_*` tools now declare an `outputSchema`, which
 changes what a conforming MCP client expects back from them (item 13). Nothing
 here is purely additive, so `[minor]` would understate it.
 
+### `wairon lock-check`: refuse a merge whose specs were never approved (new, optional)
+
+A human approves a design by running `wairon lock`, which records a gate identity
+for the parsed spec tree in the committed `.wai/lock.json`. Nothing checked that
+record at merge time. Six times in this programme the approval was taken *after*
+the pull request had already merged, leaving the default branch holding specs
+nobody had said yes to — silently, because there was no gate to notice.
+
+- **`wairon lock-check`** answers one question and exits on it: *is the design in
+  this working tree the design that was approved?* Three states, three verdicts:
+  `locked` passes; `stale` — the design moved past its approval — **fails**,
+  naming the remedy (`wairon lock`, then commit the record); `unlocked` — nothing
+  was ever approved — passes with a notice. A repository with no `.wai/specs` at
+  all says exactly that and passes, rather than being reported as unapproved.
+  `--strict` turns those last two into failures.
+- **Optional by construction.** Only `stale` refuses at the default strictness,
+  and `stale` cannot occur in a project that never locked. An existing project
+  upgrading into this release therefore cannot start failing on it, and neither
+  can one that imports the workflow below without asking for `--strict`.
+- **Not a flag on `validate`, deliberately.** `validate` asks whether the design
+  is LEGAL; this asks whether it is APPROVED, and the two are independent — a
+  tree can be approved and illegal, or legal and unapproved. Folding them into
+  one exit code would make a single red check mean two unrelated things. It is
+  also about three times faster on wairon's own tree (0.5s against 1.6s): it
+  loads the tree, hashes it and reads one JSON file, where `validate` runs the
+  whole rule set.
+- **It gates on the gate identity, not on the per-spec content digests** the same
+  record carries. Those answer "has this file changed since you approved it", so
+  a whitespace-only edit would move them; the gate identity hashes the parsed
+  tree plus the governing doctrine and answers "has the DESIGN changed". A merge
+  gate that demands a re-lock for reformatting is a gate people learn to bypass.
+- **A reusable GitHub workflow any repository can import**, since this one is
+  public. One line in your own workflow:
+
+  ```yaml
+  jobs:
+    approved-design:
+      uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v5.1.0
+  ```
+
+  Inputs: `working-directory`, `wairon-version`, `strict`, `node-version` and
+  `runs-on`, all with defaults. Pin `@<ref>` to a **tag**, never to `main` or
+  `dev` — a moving branch means the check gating your merges can change under
+  you between two runs of the same commit. wairon's own CI runs the same check
+  on itself, against the CLI that commit builds.
+- **What it does not prove: WHO approved.** `lockedBy` is a claim, not an
+  attestation — anyone who can run the CLI can write a lock record. Pull-request
+  review is what establishes who reviewed; this establishes that the thing
+  merging is the thing that was reviewed. It also cannot block a merge by
+  itself: a workflow can only fail a job, and making a failing job stop a merge
+  is a branch-protection setting on the repository.
+
 ### A chained subproject is judged through its parent — never waved through
 
 Validated from its own root, a chained child could not fail its gate for anything
@@ -2132,6 +2184,18 @@ same as not knowing whether the next one an author writes will.
       variantGuidance?}` — the spec sits under `spec`, NOT at the top level as it
       does in the text block, because the two derived markers belong beside it
       and not inside it.
+14. **`wairon lock-check` is OPTIONAL — nothing starts failing because you
+    upgraded.** It is a new command and a new reusable workflow; no existing
+    command changed, no CI step is added to your repository by installing this
+    release, and nothing runs it unless you ask. If you do adopt it, adopt it in
+    this order, because item 2 above means **every** project reads as *stale*
+    until it is re-locked:
+    1. Run `wairon lock` and commit `.wai/lock.json` on your default branch.
+    2. Add the workflow to your pull-request CI (see the feature entry above for
+       the one-liner) and leave `strict` at its default `false`.
+    3. Only once your team is re-locking as part of normal review, turn on
+       `strict: true` and/or add the job to branch protection as a required
+       status check. Neither is something the workflow can decide for itself.
 
 ## v5.1.0 (from v5.0.1)
 

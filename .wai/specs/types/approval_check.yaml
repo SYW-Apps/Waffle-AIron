@@ -1,0 +1,40 @@
+kind: value-object
+id: approval_check
+name: ApprovalCheck
+description: >-
+  The verdict `wairon lock-check` renders and exits on: whether the design in this working tree is
+  the design the human approved. It is decided from the GATE identity (the hashed parsed tree plus
+  the governing doctrine), never from the per-spec content digests, because the content digests
+  answer "has this file changed" — a whitespace-only edit would move them and demand a re-lock, and
+  a merge gate people learn to bypass is worse than no gate.
+
+
+  Held apart from LockStatus, which reports three states and no decision: this type carries the
+  DECISION a CI step needs, which depends on the strictness the caller asked for as well as on the
+  state. An unlocked project is a pass by default and a refusal under --strict; the state alone
+  cannot say which.
+subsystem: sdd_cli
+fields:
+  - name: state
+    type: string
+    description: >-
+      no-tree (no .wai/specs in this repository) | unlocked (a tree nobody ever approved) | locked
+      (the approval still covers this design) | stale (the design moved past the approval).
+    optional: false
+  - name: approved
+    type: boolean
+    description: >-
+      Whether the check passes. False exits non-zero. `stale` is false at every strictness;
+      `no-tree` and `unlocked` are true unless the caller asked for --strict; `locked` is always
+      true.
+    optional: false
+  - name: message
+    type: string
+    description: >-
+      The verdict phrased for a CI log: what was found, and — when it refuses — the command that
+      fixes it. A gate that fails without naming its remedy gets bypassed rather than satisfied.
+    optional: false
+methods: []
+sourcePath: src/commands/lock.ts
+createdAt: '2026-09-19T12:23:49.978Z'
+updatedAt: '2026-09-19T12:23:50.205Z'
