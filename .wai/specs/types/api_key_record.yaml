@@ -59,5 +59,6 @@ fields:
     description: ISO-8601 revocation timestamp when the token has been revoked instead of hard-deleted.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-09-15T21:02:36.162Z'
+updatedAt: '2026-09-19T11:07:05.070Z'

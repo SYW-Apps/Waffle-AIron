@@ -16,5 +16,6 @@ fields:
     description: The property that must hold, stated precisely enough to test against
     optional: false
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-09-14T23:23:23.163Z'
-updatedAt: '2026-09-14T23:23:23.170Z'
+updatedAt: '2026-09-19T11:07:09.714Z'

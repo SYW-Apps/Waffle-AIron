@@ -30,5 +30,6 @@ fields:
     optional: true
 methods: []
 componentClass: cli_mcp_adapter
+sourcePath: src/commands/mcp.ts
 createdAt: '2026-08-12T18:41:27.528Z'
-updatedAt: '2026-08-12T18:41:27.535Z'
+updatedAt: '2026-09-19T11:07:06.878Z'

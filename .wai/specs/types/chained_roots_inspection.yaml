@@ -18,5 +18,6 @@ fields:
       the project that declares it, absolute, ../-escaping, or through a link.
     optional: false
 methods: []
+sourcePath: src/core/specs.ts
 createdAt: '2026-09-12T17:38:03.363Z'
-updatedAt: '2026-09-12T17:38:03.374Z'
+updatedAt: '2026-09-19T11:07:05.922Z'

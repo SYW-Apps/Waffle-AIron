@@ -59,5 +59,6 @@ fields:
       assumption.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-23T11:23:30.795Z'
-updatedAt: '2026-07-24T23:30:17.264Z'
+updatedAt: '2026-09-19T11:07:14.235Z'

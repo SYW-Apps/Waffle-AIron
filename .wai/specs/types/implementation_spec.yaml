@@ -79,5 +79,7 @@ methods:
       Every source file this implementation names — its own sourcePath and each method's —
       deduplicated, in declaration order. The simPath harness is not a source file of the
       implementation and is not included.
+    symbol: implementationSourceFiles
+sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-14T23:22:50.601Z'
+updatedAt: '2026-09-19T11:07:09.020Z'

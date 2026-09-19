@@ -43,5 +43,6 @@ fields:
       subject resolves the Principal directly, with permissionSubject resolved live).
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T22:00:22.213Z'
-updatedAt: '2026-07-15T23:15:40.048Z'
+updatedAt: '2026-09-19T11:07:21.687Z'

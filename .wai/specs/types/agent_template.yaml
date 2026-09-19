@@ -16,5 +16,6 @@ fields:
     description: The raw instruction body with {{variable}} placeholders, before rendering.
     optional: false
 methods: []
+sourcePath: src/models/agent.ts
 createdAt: '2026-08-08T11:11:38.921Z'
-updatedAt: '2026-08-08T11:11:39.048Z'
+updatedAt: '2026-09-19T11:07:04.979Z'

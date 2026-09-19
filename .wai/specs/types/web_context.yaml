@@ -24,5 +24,6 @@ fields:
       and renders the single local project only. Absent/false in the hosted multi-tenant UI.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-11T11:31:20.576Z'
-updatedAt: '2026-09-17T20:35:56.640Z'
+updatedAt: '2026-09-19T11:07:21.265Z'

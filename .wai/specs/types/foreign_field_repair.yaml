@@ -26,5 +26,6 @@ fields:
     description: The foreign fields, in the order the step declared them
     optional: false
 methods: []
+sourcePath: src/core/narrative-repair.ts
 createdAt: '2026-09-18T23:50:31.848Z'
-updatedAt: '2026-09-18T23:50:31.959Z'
+updatedAt: '2026-09-19T11:07:07.888Z'

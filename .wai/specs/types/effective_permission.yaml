@@ -25,5 +25,6 @@ fields:
     description: The ancestor-chain scope whose setting won.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:33.560Z'
-updatedAt: '2026-07-15T20:25:33.607Z'
+updatedAt: '2026-09-19T11:07:07.394Z'

@@ -37,5 +37,6 @@ fields:
       unit's name.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-15T19:39:37.500Z'
-updatedAt: '2026-07-15T19:39:37.559Z'
+updatedAt: '2026-09-19T11:07:20.160Z'

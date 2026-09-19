@@ -32,5 +32,6 @@ fields:
       never relaxable; the deny half is a forbid-edge declarative assertion. Defaults to none.
     optional: false
 methods: []
+sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:56:48.916Z'
-updatedAt: '2026-09-14T23:23:40.701Z'
+updatedAt: '2026-09-19T11:07:13.863Z'

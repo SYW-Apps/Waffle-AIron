@@ -16,5 +16,6 @@ fields:
     description: Whether the plan was written; false for a dry run
     optional: false
 methods: []
+sourcePath: src/core/stereotype-migration.ts
 createdAt: '2026-09-15T10:51:11.075Z'
-updatedAt: '2026-09-15T10:51:11.085Z'
+updatedAt: '2026-09-19T11:07:17.479Z'

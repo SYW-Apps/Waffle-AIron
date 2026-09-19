@@ -59,5 +59,77 @@ rules:
     - portal
     - orchestrator
   enforceReproducibility: true
+  # Where wairon's own source lives, and what of it no spec claims yet.
+  # Declaring a source root is what opts a project into UNCLAIMED_SOURCE_FILE:
+  # a project that declares none walks nothing and the check stays silent.
+  conformance:
+    sourceRoots:
+      - src
+    exclude:
+      # The vendored Cytoscape bundle shipped with the canvas template. Not
+      # ours to claim, and never will be, so it does not belong in a list
+      # that only shrinks.
+      - src/templates/canvas
+    # The debt register, frozen. Every file here is source wairon ships and
+    # no spec names — F17, written down where a reviewer sees the whole list
+    # instead of discovering it one file at a time. It can only SHRINK: claim
+    # a file with a sourcePath and delete its line, and an entry that is
+    # already claimed, a proven re-export barrel, or gone is reported
+    # (STALE_UNCLAIMED_ENTRY). A file that is neither claimed nor listed is
+    # reported the day it appears, which is the whole point.
+    unclaimed:
+      - src/commands/aliases.ts
+      - src/commands/diagram.ts
+      - src/commands/domains.ts
+      - src/commands/execution.ts
+      - src/commands/status.ts
+      - src/config/defaults.ts
+      - src/config/loader.ts
+      - src/config/userconfig.ts
+      - src/core/approval.ts
+      - src/core/approver.ts
+      - src/core/budget_policy.ts
+      - src/core/canvas-layout.ts
+      - src/core/canvas.ts
+      - src/core/context.ts
+      - src/core/demo-seed.ts
+      - src/core/detection.ts
+      - src/core/diagram-export.ts
+      - src/core/domains.ts
+      - src/core/execution_profile.ts
+      - src/core/narrative-labels.ts
+      - src/core/rules/doctrine/stereotype-terms.ts
+      - src/core/rules/extension/declared-assertion.ts
+      - src/core/rules/index.ts
+      - src/core/rules/narrative/completed-step-graph.ts
+      - src/core/rules/read-model.ts
+      - src/core/rules/wiring/invariant-ref.ts
+      - src/core/stamp.ts
+      - src/exporters/base.ts
+      - src/exporters/claude.ts
+      - src/exporters/custom.ts
+      - src/exporters/gemini.ts
+      - src/exporters/generate.ts
+      - src/exporters/registry.ts
+      - src/index.ts
+      - src/models/domain.ts
+      - src/models/execution.ts
+      - src/models/template.ts
+      - src/server/errors.ts
+      - src/server/httpio.ts
+      - src/server/migration.ts
+      - src/server/realtime.ts
+      - src/server/swagger.ts
+      - src/server/websocket.ts
+      - src/utils/ai-guide.ts
+      - src/utils/canonical-json.ts
+      - src/utils/download.ts
+      - src/utils/errors.ts
+      - src/utils/filenames.ts
+      - src/utils/filteredCheckbox.ts
+      - src/utils/fs.ts
+      - src/utils/logger.ts
+      - src/utils/version.ts
+      - src/utils/yaml.ts
 createdAt: '2026-06-10T20:23:10.714Z'
 updatedAt: '2026-06-10T20:23:10.714Z'

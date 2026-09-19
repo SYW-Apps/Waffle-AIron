@@ -14,5 +14,6 @@ fields:
     description: Intrinsic advisories such as MISSING_DURABILITY; surfaced, never blocking
     optional: false
 methods: []
+sourcePath: src/core/rules/candidate.ts
 createdAt: '2026-09-14T06:03:51.301Z'
-updatedAt: '2026-09-14T06:03:51.312Z'
+updatedAt: '2026-09-19T11:07:05.841Z'

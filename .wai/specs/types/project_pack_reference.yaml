@@ -23,5 +23,6 @@ fields:
     description: Architectural profile ids the project selected in its recorded profile selection, if any.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-10T12:35:57.474Z'
-updatedAt: '2026-07-10T12:35:57.480Z'
+updatedAt: '2026-09-19T11:07:14.434Z'

@@ -35,5 +35,6 @@ fields:
       project never commits noise.
     optional: true
 methods: []
+sourcePath: src/git/types.ts
 createdAt: '2026-07-04T16:31:25.752Z'
-updatedAt: '2026-07-16T15:23:56.524Z'
+updatedAt: '2026-09-19T11:07:08.077Z'

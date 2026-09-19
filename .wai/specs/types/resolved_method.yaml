@@ -38,5 +38,6 @@ fields:
       implementation rather than once per method
     optional: false
 methods: []
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T13:02:39.452Z'
-updatedAt: '2026-09-18T23:56:29.876Z'
+updatedAt: '2026-09-19T11:07:16.097Z'

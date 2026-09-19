@@ -39,5 +39,6 @@ methods:
     signature: 'componentsAt(path: string): ComponentSpec[]'
     returns: ComponentSpec[]
     description: The components a file realizes, in the order their implementations named it
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:17.484Z'
-updatedAt: '2026-09-18T23:56:25.742Z'
+updatedAt: '2026-09-19T11:07:15.132Z'

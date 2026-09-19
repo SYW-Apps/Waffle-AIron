@@ -64,5 +64,6 @@ fields:
       "Wairon - <displayName or id>" when omitted.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-07-08T22:04:21.517Z'
+updatedAt: '2026-09-19T11:07:08.577Z'

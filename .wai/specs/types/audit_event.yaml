@@ -62,5 +62,6 @@ fields:
       bodies.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T19:34:52.040Z'
-updatedAt: '2026-07-08T19:34:52.073Z'
+updatedAt: '2026-09-19T11:07:05.419Z'

@@ -44,5 +44,6 @@ fields:
       authorization is expressed through the permission rules over this subject.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-09-15T21:02:59.667Z'
+updatedAt: '2026-09-19T11:07:13.494Z'

@@ -29,5 +29,6 @@ fields:
     description: 'The server-global tier it resolved from: "instance" or "image".'
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-22T17:27:36.292Z'
-updatedAt: '2026-09-17T16:42:15.475Z'
+updatedAt: '2026-09-19T11:07:16.003Z'

@@ -36,5 +36,6 @@ fields:
     optional: true
 methods: []
 componentClass: tree_transfer_orchestrator
+sourcePath: src/core/treetransfer.ts
 createdAt: '2026-08-12T17:23:45.971Z'
-updatedAt: '2026-08-12T17:23:45.979Z'
+updatedAt: '2026-09-19T11:07:19.988Z'

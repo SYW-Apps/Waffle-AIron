@@ -19,5 +19,6 @@ fields:
     description: Qualified unit/project id the role applies within; absent = instance-wide.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:21.004Z'
-updatedAt: '2026-07-15T20:25:21.056Z'
+updatedAt: '2026-09-19T11:07:16.535Z'

@@ -26,5 +26,6 @@ methods:
     signature: 'successorsOf(stepNumber: number): number[]'
     returns: number[]
     description: The distinct existing step numbers flow can continue at from this step
+sourcePath: src/models/step-graph.ts
 createdAt: '2026-09-14T06:03:35.169Z'
-updatedAt: '2026-09-18T23:56:35.393Z'
+updatedAt: '2026-09-19T11:07:18.615Z'

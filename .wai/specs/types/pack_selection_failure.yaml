@@ -26,5 +26,6 @@ fields:
       which versions ARE installed.
     optional: false
 methods: []
+sourcePath: src/core/extensions.ts
 createdAt: '2026-07-30T11:24:59.575Z'
-updatedAt: '2026-07-30T11:24:59.673Z'
+updatedAt: '2026-09-19T11:07:12.656Z'

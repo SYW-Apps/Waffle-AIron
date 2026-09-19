@@ -48,5 +48,7 @@ methods:
       Whether the named provider published this snapshot: its projectName, or the last :: segment of
       it (a sibling's snapshot is keyed <systemName>::<subsystemId>, so a reference names a sibling
       by its subsystem id)
+    sourcePath: src/models/surface-references.ts
+sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-09-14T06:04:09.920Z'
+updatedAt: '2026-09-19T11:07:19.332Z'

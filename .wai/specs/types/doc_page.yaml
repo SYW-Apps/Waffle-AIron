@@ -19,5 +19,6 @@ fields:
     description: Nested child pages
     optional: false
 methods: []
+sourcePath: src/producers/types.ts
 createdAt: '2026-07-04T17:29:15.489Z'
-updatedAt: '2026-07-04T17:29:15.502Z'
+updatedAt: '2026-09-19T11:07:07.284Z'

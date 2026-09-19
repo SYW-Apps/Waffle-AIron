@@ -12,5 +12,6 @@ fields:
     description: The external parent page/board the wairon subsection is written under
     optional: false
 methods: []
+sourcePath: src/producers/types.ts
 createdAt: '2026-07-04T17:29:12.484Z'
-updatedAt: '2026-07-04T17:29:12.498Z'
+updatedAt: '2026-09-19T11:07:13.690Z'

@@ -62,5 +62,6 @@ fields:
       the snapshot itself.
     optional: false
 methods: []
+sourcePath: src/core/surfaces.ts
 createdAt: '2026-07-24T17:53:32.174Z'
-updatedAt: '2026-09-12T17:36:20.838Z'
+updatedAt: '2026-09-19T11:07:07.684Z'

@@ -19,5 +19,6 @@ fields:
     description: What flows on this edge
     optional: true
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-09-14T23:23:17.286Z'
-updatedAt: '2026-09-14T23:23:17.295Z'
+updatedAt: '2026-09-19T11:07:07.489Z'

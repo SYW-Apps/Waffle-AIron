@@ -16,5 +16,6 @@ fields:
     description: Human-readable name of the API/portal, shown when listing the available APIs.
     optional: false
 methods: []
+sourcePath: src/server/openapiindex.ts
 createdAt: '2026-07-24T09:44:54.242Z'
-updatedAt: '2026-07-24T09:44:54.257Z'
+updatedAt: '2026-09-19T11:07:11.752Z'

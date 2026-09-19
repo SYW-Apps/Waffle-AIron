@@ -25,5 +25,6 @@ fields:
     description: What this lifecycle flow establishes or tears down
     optional: true
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T18:47:29.021Z'
-updatedAt: '2026-07-10T18:47:29.161Z'
+updatedAt: '2026-09-19T11:07:10.145Z'

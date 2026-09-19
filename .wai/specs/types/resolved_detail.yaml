@@ -16,5 +16,6 @@ fields:
       type's default
     optional: false
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-09-14T06:03:29.922Z'
-updatedAt: '2026-09-18T23:56:27.937Z'
+updatedAt: '2026-09-19T11:07:15.914Z'

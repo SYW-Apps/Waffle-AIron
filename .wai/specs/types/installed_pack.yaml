@@ -46,5 +46,6 @@ fields:
     description: Absolute path of the installed pack directory (<store>/<name>/<version>/).
     optional: false
 methods: []
+sourcePath: src/core/packstore.ts
 createdAt: '2026-07-29T17:41:22.256Z'
-updatedAt: '2026-07-29T17:41:22.269Z'
+updatedAt: '2026-09-19T11:07:09.204Z'

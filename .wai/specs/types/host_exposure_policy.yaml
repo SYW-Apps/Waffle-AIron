@@ -56,5 +56,6 @@ fields:
       reporting is served over HTTP.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:28.871Z'
-updatedAt: '2026-07-10T11:21:07.205Z'
+updatedAt: '2026-09-19T11:07:08.842Z'

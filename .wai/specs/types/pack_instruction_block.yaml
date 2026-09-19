@@ -28,5 +28,6 @@ fields:
       heading.
     optional: true
 methods: []
+sourcePath: src/core/extensions.ts
 createdAt: '2026-07-29T10:47:52.530Z'
-updatedAt: '2026-07-29T10:47:52.677Z'
+updatedAt: '2026-09-19T11:07:12.375Z'

@@ -275,5 +275,6 @@ methods:
       conformance rule paid before it could examine anything, and plumbing in all of them. The
       conformance dial and the exact-grade test are not applied — that stance stays written in the
       rule that accuses
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-18T13:02:44.557Z'
+updatedAt: '2026-09-19T11:07:16.943Z'

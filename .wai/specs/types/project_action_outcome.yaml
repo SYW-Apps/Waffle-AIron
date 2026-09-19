@@ -33,5 +33,6 @@ fields:
     description: The lock record, present when a project:lock completed.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-16T00:08:34.090Z'
-updatedAt: '2026-09-11T23:39:46.959Z'
+updatedAt: '2026-09-19T11:07:13.956Z'

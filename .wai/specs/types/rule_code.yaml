@@ -19,5 +19,6 @@ fields:
     description: One-line description of what the code flags.
     optional: false
 methods: []
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:14.460Z'
-updatedAt: '2026-07-14T18:56:14.511Z'
+updatedAt: '2026-09-19T11:07:16.854Z'

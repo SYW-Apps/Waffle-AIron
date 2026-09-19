@@ -26,5 +26,6 @@ fields:
       actionable.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:37.511Z'
-updatedAt: '2026-07-15T20:25:37.560Z'
+updatedAt: '2026-09-19T11:07:20.871Z'

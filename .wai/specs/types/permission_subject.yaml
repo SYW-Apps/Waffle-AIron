@@ -35,5 +35,6 @@ fields:
       subject's userId, so aliases only carry legacy rows.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:25.002Z'
-updatedAt: '2026-09-15T21:02:55.103Z'
+updatedAt: '2026-09-19T11:07:13.109Z'

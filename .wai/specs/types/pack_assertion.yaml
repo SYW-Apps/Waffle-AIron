@@ -41,5 +41,6 @@ fields:
       transport[], pathPattern (endpoint-shape).
     optional: true
 methods: []
+sourcePath: src/core/extensions.ts
 createdAt: '2026-07-18T22:42:18.586Z'
-updatedAt: '2026-07-18T22:42:18.673Z'
+updatedAt: '2026-09-19T11:07:12.093Z'

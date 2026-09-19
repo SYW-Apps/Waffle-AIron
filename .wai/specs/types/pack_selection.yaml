@@ -40,5 +40,6 @@ fields:
       repos that must be self-sufficient.
     optional: true
 methods: []
+sourcePath: src/models/project.ts
 createdAt: '2026-07-29T18:53:30.799Z'
-updatedAt: '2026-07-29T18:53:30.817Z'
+updatedAt: '2026-09-19T11:07:12.567Z'

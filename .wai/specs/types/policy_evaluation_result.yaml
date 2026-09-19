@@ -59,5 +59,6 @@ fields:
       left alone.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:58:56.094Z'
-updatedAt: '2026-07-24T23:30:21.280Z'
+updatedAt: '2026-09-19T11:07:13.293Z'

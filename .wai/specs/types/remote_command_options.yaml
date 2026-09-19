@@ -46,5 +46,6 @@ fields:
     optional: true
 methods: []
 componentClass: cli_runner
+sourcePath: src/commands/remote.ts
 createdAt: '2026-08-12T18:33:33.586Z'
-updatedAt: '2026-08-12T18:43:10.285Z'
+updatedAt: '2026-09-19T11:07:15.438Z'

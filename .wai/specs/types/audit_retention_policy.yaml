@@ -37,5 +37,6 @@ fields:
       secrets, and full spec contents.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T19:34:42.339Z'
-updatedAt: '2026-07-08T19:34:42.369Z'
+updatedAt: '2026-09-19T11:07:05.595Z'

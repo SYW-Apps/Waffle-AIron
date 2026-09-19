@@ -18,5 +18,6 @@ fields:
     description: Written output path when one was requested.
     optional: true
 methods: []
+sourcePath: src/core/surfaces.ts
 createdAt: '2026-07-11T09:48:49.299Z'
-updatedAt: '2026-07-11T09:48:49.355Z'
+updatedAt: '2026-09-19T11:07:19.113Z'

@@ -32,5 +32,6 @@ fields:
     description: Identity that refreshed or approved the snapshot, when available.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:02.889Z'
-updatedAt: '2026-07-08T21:11:02.929Z'
+updatedAt: '2026-09-19T11:07:14.641Z'

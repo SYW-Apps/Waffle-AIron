@@ -34,5 +34,6 @@ fields:
     description: Human-readable quota observations, warnings, or blocking reasons.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-09T09:08:18.133Z'
-updatedAt: '2026-07-09T09:08:18.171Z'
+updatedAt: '2026-09-19T11:07:16.283Z'

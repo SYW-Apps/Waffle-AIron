@@ -35,5 +35,6 @@ fields:
     description: Server-facing userinfo endpoint used as a fallback verification path.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-13T18:23:18.078Z'
-updatedAt: '2026-07-13T18:23:18.132Z'
+updatedAt: '2026-09-19T11:07:14.826Z'

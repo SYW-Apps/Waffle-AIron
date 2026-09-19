@@ -23,5 +23,6 @@ methods:
     signature: 'ownerOf(memberId: string): string | undefined'
     returns: string | undefined
     description: The pattern that owns a member block, or none when no legal claim was made on it
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:32.070Z'
-updatedAt: '2026-09-18T23:56:23.448Z'
+updatedAt: '2026-09-19T11:07:12.010Z'

@@ -44,5 +44,6 @@ methods:
     description: >-
       The weak anchors of a file alone — string literals and property-access names, without the
       declarations — which is where a contract method's declared finding code must appear
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:08.829Z'
-updatedAt: '2026-09-18T23:56:15.262Z'
+updatedAt: '2026-09-19T11:07:06.085Z'

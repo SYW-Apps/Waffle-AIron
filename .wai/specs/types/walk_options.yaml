@@ -20,5 +20,6 @@ fields:
       registering a read at init does not run it at boot.
     optional: true
 methods: []
+sourcePath: src/core/rules/narrative-graph-projector.ts
 createdAt: '2026-09-14T06:03:45.606Z'
-updatedAt: '2026-09-14T06:03:45.614Z'
+updatedAt: '2026-09-19T11:07:21.059Z'

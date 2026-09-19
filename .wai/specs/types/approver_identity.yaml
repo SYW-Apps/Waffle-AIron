@@ -23,5 +23,6 @@ fields:
     description: '"git" | "hosted" | "os" | "legacy" — how the identity was established.'
     optional: false
 methods: []
+sourcePath: src/core/lockfile.ts
 createdAt: '2026-09-12T00:19:23.550Z'
-updatedAt: '2026-09-12T00:19:23.567Z'
+updatedAt: '2026-09-19T11:07:05.335Z'
