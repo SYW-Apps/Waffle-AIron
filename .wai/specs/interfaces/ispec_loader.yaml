@@ -20,7 +20,10 @@ methods:
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
     returns: SubsystemSpec | null
   - name: saveSubsystemSpec
-    description: Saves a subsystem specification
+    description: >-
+      Saves a subsystem specification. A spec arriving at draft, or without a status, keeps the
+      status already stored, so re-authoring one never quietly reopens a frozen subsystem; a
+      deliberate demotion is stated by the caller and honoured.
     signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
     returns: void
   - name: loadComponentSpecs
@@ -32,7 +35,9 @@ methods:
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
     returns: ComponentSpec | null
   - name: saveComponentSpec
-    description: Saves a component specification
+    description: >-
+      Saves a component specification. A spec arriving at draft, or without a status, keeps the
+      status already stored unless the caller states the demotion.
     signature: 'saveComponentSpec(spec: ComponentSpec): void'
     returns: void
   - name: loadInterfaceSpecs
@@ -44,7 +49,9 @@ methods:
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
     returns: InterfaceSpec | null
   - name: saveInterfaceSpec
-    description: Saves an interface specification
+    description: >-
+      Saves an interface specification. A spec arriving at draft, or without a status, keeps the
+      status already stored unless the caller states the demotion.
     signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
     returns: void
   - name: loadImplementationSpecs
@@ -56,7 +63,9 @@ methods:
     signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
     returns: ImplementationSpec | null
   - name: saveImplementationSpec
-    description: Saves an implementation specification
+    description: >-
+      Saves an implementation specification. A spec arriving at draft, or without a status, keeps
+      the status already stored unless the caller states the demotion.
     signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
     returns: void
   - name: loadTypeSpecs
@@ -127,4 +136,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T17:38:19.025Z'
+updatedAt: '2026-09-19T00:29:56.134Z'

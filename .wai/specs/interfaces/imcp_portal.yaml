@@ -25,28 +25,49 @@ methods:
       transport: Custom
       address: mcp tools/call sdd_initialize_system
   - name: sdd_add_subsystem
-    description: 'Tool: add an L1 subsystem under the system boundary'
+    description: >-
+      Tool: add an L1 subsystem under the system boundary. The input may state the spec's lifecycle
+      status, so a subsystem can be authored straight at design or complete instead of being born
+      draft and needing a follow-up edit nobody remembers. An unstated status means draft for a new
+      spec and the stored status for a re-authoring, and a stated status that would lower the stored
+      one is refused by name — reopening a frozen spec is an update, not a restatement.
     signature: 'sdd_add_subsystem(spec: SubsystemSpec): void'
     returns: void
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_add_subsystem
   - name: sdd_add_component
-    description: 'Tool: add an L2 component under a subsystem'
+    description: >-
+      Tool: add an L2 component under a subsystem. The input may state the spec's lifecycle status,
+      so a component can be authored straight at design or complete instead of being born draft and
+      needing a follow-up edit nobody remembers. An unstated status means draft for a new spec and
+      the stored status for a re-authoring, and a stated status that would lower the stored one is
+      refused by name — reopening a frozen spec is an update, not a restatement.
     signature: 'sdd_add_component(spec: ComponentSpec): void'
     returns: void
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_add_component
   - name: sdd_define_interface
-    description: 'Tool: define an L3 interface contract for a component'
+    description: >-
+      Tool: define an L3 interface contract for a component. The input may state the spec's
+      lifecycle status, so a contract can be authored straight at design or complete instead of
+      being born draft and needing a follow-up edit nobody remembers. An unstated status means draft
+      for a new spec and the stored status for a re-authoring, and a stated status that would lower
+      the stored one is refused by name — reopening a frozen spec is an update, not a restatement.
     signature: 'sdd_define_interface(spec: InterfaceSpec): void'
     returns: void
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_define_interface
   - name: sdd_write_narrative
-    description: 'Tool: write an L4 implementation spec with L5 method narratives'
+    description: >-
+      Tool: write an L4 implementation spec with L5 method narratives. The input may state the
+      spec's lifecycle status, so an implementation can be authored straight at design or complete
+      instead of being born draft and needing a follow-up edit nobody remembers. An unstated status
+      means draft for a new spec and the stored status for a re-authoring, and a stated status that
+      would lower the stored one is refused by name — reopening a frozen spec is an update, not a
+      restatement.
     signature: 'sdd_write_narrative(spec: ImplementationSpec): void'
     returns: void
     endpoint:
@@ -185,4 +206,4 @@ methods:
       address: mcp tools/call sdd_rename_method
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T19:22:35.839Z'
+updatedAt: '2026-09-19T00:30:12.529Z'

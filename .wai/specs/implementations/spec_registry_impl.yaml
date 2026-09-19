@@ -24,9 +24,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces for the target mount, stamp updatedAt (unless preserved
-          for a mechanical re-save), and re-parse through the writer schema — a refusal aborts the
-          save
+          Qualify ids, relativize namespaces for the target mount, keep the stored status when the
+          spec arrives at draft or without one so a re-author never quietly reopens a frozen
+          subsystem, stamp updatedAt (unless preserved for a mechanical re-save), and re-parse
+          through the writer schema — a refusal aborts the save
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its subsystem spec path through the file store
@@ -37,9 +38,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces, stamp updatedAt (unless preserved for a mechanical
-          re-save), re-parse through the writer schema, and collect placement notices for layout
-          decisions the caller should see
+          Qualify ids, relativize namespaces, keep the stored status when the spec arrives at draft
+          or without one unless the caller states the demotion, stamp updatedAt (unless preserved
+          for a mechanical re-save), re-parse through the writer schema, and collect placement
+          notices for layout decisions the caller should see
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its component spec path through the file store
@@ -50,8 +52,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces, stamp updatedAt (unless preserved for a mechanical
-          re-save), re-parse through the writer schema, and collect placement notices
+          Qualify ids, relativize namespaces, keep the stored status when the spec arrives at draft
+          or without one unless the caller states the demotion, stamp updatedAt (unless preserved
+          for a mechanical re-save), re-parse through the writer schema, and collect placement
+          notices
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its interface spec path through the file store
@@ -62,12 +66,14 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces, stamp updatedAt (unless preserved for a mechanical
-          re-save), re-parse through the writer schema, and collect placement notices. A chained
-          subproject's implementation keeps its file paths (sourcePath, each method's sourcePath,
-          simPath) relative to that subproject's root: a path written relative to this root that
-          lands inside the mounted child is re-expressed against the child root, and any other path
-          is taken as already child-relative and kept verbatim, so load → save stays a fixpoint
+          Qualify ids, relativize namespaces, keep the stored status when the spec arrives at draft
+          or without one unless the caller states the demotion, stamp updatedAt (unless preserved
+          for a mechanical re-save), re-parse through the writer schema, and collect placement
+          notices. A chained subproject's implementation keeps its file paths (sourcePath, each
+          method's sourcePath, simPath) relative to that subproject's root: a path written relative
+          to this root that lands inside the mounted child is re-expressed against the child root,
+          and any other path is taken as already child-relative and kept verbatim, so load → save
+          stays a fixpoint
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its implementation spec path through the file store
@@ -109,4 +115,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-09-13T20:56:43.762Z'
+updatedAt: '2026-09-19T00:29:46.442Z'

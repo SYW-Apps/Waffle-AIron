@@ -10,23 +10,31 @@ methods:
     signature: 'saveSystemSpec(spec: SystemSpec): void'
     returns: void
   - name: saveSubsystemSpec
-    description: Validates and persists a subsystem specification.
+    description: >-
+      Validates and persists a subsystem specification. A spec arriving at draft, or without a
+      status, keeps the status already stored, so re-authoring one never quietly reopens a frozen
+      subsystem; a deliberate demotion is stated by the caller and honoured.
     signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
     returns: void
   - name: saveComponentSpec
-    description: Validates and persists a component specification, returning placement notices.
+    description: >-
+      Validates and persists a component specification, returning placement notices. A spec arriving
+      at draft, or without a status, keeps the status already stored unless the caller states the
+      demotion.
     signature: 'saveComponentSpec(spec: ComponentSpec): void'
     returns: void
   - name: saveInterfaceSpec
-    description: Validates and persists an interface specification, returning placement notices.
+    description: >-
+      Validates and persists an interface specification, returning placement notices. A spec
+      arriving at draft, or without a status, keeps the status already stored unless the caller
+      states the demotion.
     signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
     returns: void
   - name: saveImplementationSpec
     description: >-
-      Validates and persists an implementation specification, returning placement notices. A
-      namespaced implementation that lives in a chained subproject is written with its file paths
-      (sourcePath, each method's sourcePath, simPath) relative to that subproject's root — a path
-      given relative to this root that lands inside the child is re-expressed against it.
+      Validates and persists an implementation specification, returning placement notices. A spec
+      arriving at draft, or without a status, keeps the status already stored unless the caller
+      states the demotion.
     signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
     returns: void
   - name: dryRunSerializeSpecs
@@ -52,4 +60,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-09-13T20:55:48.675Z'
+updatedAt: '2026-09-19T00:30:02.797Z'

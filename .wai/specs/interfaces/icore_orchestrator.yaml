@@ -427,17 +427,24 @@ methods:
       that a restated label or description does not match, or that would leave a region body
       standing without its header, honours `unset` and `[]` at each level, and resolves symbolic
       label references against the merged numbering, a label in the delta replacing the stored
-      number it twins. Compares the result with what is stored and writes NOTHING when they match.
-      The caller's hooks, when given, judge the merged spec at the last point before anything
-      reaches disk.
+      number it twins. Names every path the delta carried that the write did not act on — one the
+      level's schema drops at a depth the permissive delta cannot refuse, or one whose value the
+      stored spec already held. Compares the result with what is stored and writes NOTHING when they
+      match. A dry run runs the whole write, the caller's judgement included, and answers with the
+      report it would have produced without persisting it. The caller's hooks, when given, judge the
+      merged spec at the last point before anything reaches disk.
     signature: >-
-      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks):
-      SpecChangeReport
+      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?:
+      boolean): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: delta
         type: SpecDelta
         description: The partial change to merge, shaped like the spec, carrying the delta's own verbs
+      - name: dryRun
+        type: boolean
+        description: Report what the delta would do and write nothing
+        optional: true
   - name: repairForeignStepFields
     description: >-
       Plan, and with apply write, the repair of narrative steps carrying a field their own type
@@ -455,4 +462,4 @@ methods:
         description: Write the repair; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T23:50:39.741Z'
+updatedAt: '2026-09-19T00:27:05.220Z'

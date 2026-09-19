@@ -9,9 +9,12 @@ description: >-
   takes over the jumps aimed at its number; and the `*Label` twin of every jump field
   (`onFalseLabel`, `toLabel`, …), resolved against step labels after the merge, where a label
   REPLACES the stored number it twins rather than contradicting it. `[]` clears the array it names.
-  A key that is neither a field nor a marker at its depth, and a marker the merge does not recognise
-  — a non-boolean `remove`, an unknown `action`, a `captureJumps` outside an insert — have no effect
-  at all, and refuse the write rather than reporting a success it did not perform.
+  A TOP-LEVEL key that is neither a field nor a marker, and a marker the merge does not recognise —
+  a non-boolean `remove`, an unknown `action`, a `captureJumps` outside an insert — have no effect
+  at all, and refuse the write rather than reporting a success it did not perform. Deeper down the
+  delta stays deliberately open, because the shapes nest further than any schema here should
+  restate; a key the level's schema drops there is named back in the change report's ineffective
+  list instead, so a nested typo still comes back named rather than stripped in silence.
 fields:
   - name: patch
     type: object
@@ -29,4 +32,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-09-18T21:41:16.851Z'
-updatedAt: '2026-09-18T22:58:13.897Z'
+updatedAt: '2026-09-19T00:30:20.782Z'

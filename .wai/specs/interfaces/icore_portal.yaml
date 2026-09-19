@@ -443,16 +443,17 @@ methods:
   - name: updateSpec
     description: >-
       Published write: apply a partial delta to one stored spec of any level and persist the result,
-      answering with exactly what changed. Refuses a spec that does not exist, a mis-selected kind
-      on the singleton L0, and a delta key the level's canonical schema does not know. Compares the
-      result with what is stored and writes NOTHING when they match. The caller's hooks, when given,
-      judge the merged spec at the last point before anything reaches disk — which is how the
-      authoring seam gates a write from above without the store ever calling the rule engine that
-      reads it. A mechanical write passes no hooks and stays ungated. Routed through the core
-      orchestrator.
+      answering with exactly what changed and with every path the delta named that changed nothing.
+      Refuses a spec that does not exist, a mis-selected kind on the singleton L0, and a delta key
+      the level's canonical schema does not know. Compares the result with what is stored and writes
+      NOTHING when they match. A dry run runs the whole write and answers with the report it would
+      have produced, leaving the stored bytes untouched. The caller's hooks, when given, judge the
+      merged spec at the last point before anything reaches disk — which is how the authoring seam
+      gates a write from above without the store ever calling the rule engine that reads it. A
+      mechanical write passes no hooks and stays ungated. Routed through the core orchestrator.
     signature: >-
-      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks):
-      SpecChangeReport
+      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?:
+      boolean): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -470,6 +471,10 @@ methods:
           The authoring caller's write-boundary judgement; a mechanical write passes none and stays
           ungated
         optional: true
+      - name: dryRun
+        type: boolean
+        description: Report what the delta would do and write nothing
+        optional: true
   - name: repairForeignStepFields
     description: >-
       Forward to core_orchestrator.repairForeignStepFields: plan, and with apply write, the removal
@@ -482,4 +487,4 @@ methods:
         description: Write the repair; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T23:51:14.050Z'
+updatedAt: '2026-09-19T00:26:58.238Z'
