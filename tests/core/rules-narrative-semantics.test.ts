@@ -474,7 +474,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('store-a.put');
-      expect(found[0].message).toContain('set membership');
+      expect(found[0].message).toContain('resolves to the target');
     } finally { proj.cleanup(); }
   });
 
@@ -655,7 +655,11 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
     createdAt: '2026-07-18T10:00:00Z', updatedAt: '2026-07-18T10:00:00Z',
   });
 
-  it('collects direct identifier and property-access callees per named function', () => {
+  /** The callee names of one named function-like, off its recorded call sites. */
+  const calleeNames = (facts: { functionCallSites?: Record<string, { name: string }[]> }, fn: string): string[] =>
+    (facts.functionCallSites ?? {})[fn].map((s) => s.name);
+
+  it('collects direct identifier and property-access call sites per named function, each carrying its shape', () => {
     const dir = mkTemp();
     try {
       fs.writeFileSync(path.join(dir, 'a.ts'), [
@@ -664,9 +668,15 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
         'export function bystander(): void {}',
       ].join('\n'));
       const model = buildCodeModel([impl('a.ts')], [], dir);
-      const fc = model.files[0].functionCalls!;
-      expect(fc.driver).toEqual(expect.arrayContaining(['helper', 'load']));
-      expect(fc.bystander).toEqual([]);
+      const sites = model.files[0].functionCallSites!;
+      expect(calleeNames(model.files[0], 'driver')).toEqual(expect.arrayContaining(['helper', 'load']));
+      // Shape is the fact a name alone would lose: `helper()` resolves through
+      // this file's import binding, `specs.load()` through its receiver.
+      expect(sites.driver).toEqual(expect.arrayContaining([
+        { name: 'helper', member: false },
+        { name: 'load', member: true, via: 'specs' },
+      ]));
+      expect(sites.bystander).toEqual([]);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -706,10 +716,9 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
         'export function outer(): void { function nested(): void { inner(); } nested(); outerOnly(); }',
       ].join('\n'));
       const model = buildCodeModel([impl('a.ts')], [], dir);
-      const fc = model.files[0].functionCalls!;
-      expect(fc.outer).toEqual(expect.arrayContaining(['nested', 'outerOnly']));
-      expect(fc.outer).not.toContain('inner');
-      expect(fc.nested).toEqual(['inner']);
+      expect(calleeNames(model.files[0], 'outer')).toEqual(expect.arrayContaining(['nested', 'outerOnly']));
+      expect(calleeNames(model.files[0], 'outer')).not.toContain('inner');
+      expect(calleeNames(model.files[0], 'nested')).toEqual(['inner']);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

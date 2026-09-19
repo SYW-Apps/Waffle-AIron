@@ -15,6 +15,7 @@ import {
   CodeModel,
   SourceFileFacts,
   SurfaceRefResolution,
+  CallSiteFact,
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
@@ -87,6 +88,22 @@ export interface CodeIndex {
   anchorsAt(path: string): ReadonlySet<string>;
   /** The weak anchors alone — string literals and property-access names — which is where a declared finding code must appear. */
   findingAnchorsAt(path: string): ReadonlySet<string>;
+  /**
+   * The files the function a call site invokes can have been WRITTEN in,
+   * resolved against the closed path set, or EMPTY when a pure model cannot
+   * say — which is an answer of its own and never a denial.
+   *
+   * `from` is the file the site was read in (a carried site names its own).
+   * Four shapes resolve: a bare call on an import binding lands in the module
+   * that binding came from; a bare call on a locally declared name lands in
+   * that file; a member call through a NAMESPACE import binding lands in that
+   * module; and every landing is widened by the modules it republishes, so a
+   * call through a barrel still lands where the function lives. Everything
+   * else — a member call through a value, a receiver that is not a plain
+   * identifier, a specifier outside the closed set, a name with no binding at
+   * all — resolves to nothing.
+   */
+  originOf(site: CallSiteFact, from: string): ReadonlySet<string>;
 }
 
 /**

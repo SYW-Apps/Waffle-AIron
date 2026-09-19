@@ -1,0 +1,39 @@
+kind: value-object
+id: call_site_fact
+name: CallSiteFact
+description: >-
+  One call SITE SHAPE inside a named function-like: the invoked name together with how the call was
+  written. Shape is what a pure model can honestly say about a call's ORIGIN — with no type checker,
+  save(x), ledger.save(x) and this.store.save(x) are three different questions, and collapsing them
+  onto the name "save" is what let a call into an unrelated module count as realizing a narrative
+  step. Sites are deduplicated per shape, never counted: the checks that read them ask where a call
+  could land, never how often it was written.
+subsystem: sdd_validator
+fields:
+  - name: name
+    type: string
+    description: 'The invoked name: the identifier of a bare call, the property name of a member call'
+    optional: false
+  - name: member
+    type: boolean
+    description: >-
+      True when the call was written as a member access (receiver.name(...)) rather than as a bare
+      identifier
+    optional: false
+  - name: via
+    type: string
+    description: >-
+      The receiver identifier — set only when the receiver is a plain identifier (specs.save() gives
+      "specs"), never for a longer chain or an expression
+    optional: true
+  - name: from
+    type: string
+    description: >-
+      The file this site was READ in, set only when it is not the file these facts describe — a
+      re-export barrel carries the sites of the function it publishes, and their bare names and
+      receivers resolve in that file's scope, never in the barrel's
+    optional: true
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-09-19T15:29:49.702Z'
+updatedAt: '2026-09-19T15:29:49.715Z'

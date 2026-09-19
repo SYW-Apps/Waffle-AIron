@@ -25,6 +25,13 @@
  *    string-literal occurrences; `off` skips method checks; a per-method
  *    `symbol` maps the intent-language contract name to the code-level name
  *    and is authoritative when given.
+ *  - METHOD_BODY_NOT_FOUND (warning): the method's symbol IS a declaration of
+ *    its own source file, but the file holds no function-like body under it —
+ *    a signature, an ambient or interface declaration, a value binding. Only
+ *    exact grade measures bodies, so only exact grade asks; a weak
+ *    string-literal anchor claims no function and is never asked about; and a
+ *    body reachable through the imports and republications the file forwards
+ *    the name by IS the implementation (N:1 identity forwarding).
  *  - UNREALIZED_FINDING (warning): a finding code a contract method declares
  *    does not appear as a string literal in the method's source file (the
  *    method's sourcePath, else the implementation's). Methods at the `off`
@@ -1182,6 +1189,62 @@ export default [
       '',
     ].join('\n')),
   }),
+  // -------------------------------------------------------------------------
+  // METHOD_BODY_NOT_FOUND — the symbol is there, the implementation is not
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'METHOD_BODY_NOT_FOUND',
+    severity: 'warning',
+    anchoredTo: 'invoice_store_impl',
+    expectFire: true,
+    scenario:
+      'The invoice store spec still points at the header module that only declares the persistence contract, after the driver that implements persistInvoice moved to its own file.',
+    tree: invoiceStoreTree({
+      'src/billing/invoice-store.ts': [
+        '// The contract every storage driver must satisfy. The driver that',
+        '// implements it lives in invoice-store-sql.ts.',
+        'export interface InvoiceStore {',
+        '  persistInvoice(invoiceId: string): void;',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
+  defineRuleFixture({
+    code: 'METHOD_BODY_NOT_FOUND',
+    expectFire: false,
+    reason: 'The method\'s source file holds a function body under the symbol, which is the implementation the spec claims.',
+    scenario:
+      'The invoice store module declares persistInvoice as an exported function that upserts the invoice row.',
+    tree: invoiceStoreTree({
+      'src/billing/invoice-store.ts': [
+        'export function persistInvoice(invoiceId: string): void {',
+        '  // upsert the invoice row',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
+  defineRuleFixture({
+    code: 'METHOD_BODY_NOT_FOUND',
+    expectFire: false,
+    reason:
+      'A re-export republishes the driver\'s function under the claimed name, so the body is reachable through the forwarding hop — the N:1 identity forwarding Level 1 blesses, not a missing implementation.',
+    scenario:
+      'The invoice store module republishes persistInvoice from the SQL driver module beside it, forwarding the name rather than writing a second body.',
+    tree: invoiceStoreTree({
+      'src/billing/invoice-store.ts': [
+        'export { persistInvoice } from \'./invoice-store-sql.js\';',
+        '',
+      ].join('\n'),
+      'src/billing/invoice-store-sql.ts': [
+        'export function persistInvoice(invoiceId: string): void {',
+        '  // upsert the invoice row through the SQL driver',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
 ];
 
 /**
@@ -1283,5 +1346,46 @@ function refundOrchestratorTree(opts: {
       },
     ],
     files: opts.files,
+  };
+}
+
+/**
+ * An invoice store whose persistInvoice contract method is realized in
+ * src/billing/invoice-store.ts; only what that module (and any file beside it)
+ * contains varies.
+ */
+function invoiceStoreTree(files: Record<string, string>): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'billing', description: 'Invoicing and payment collection for placed orders.' }],
+    components: [
+      {
+        id: 'invoice-store',
+        componentType: 'Store',
+        subsystem: 'billing',
+        durability: 'durable',
+        description: 'Holds every issued invoice and persists it.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'iinvoice_store',
+        component: 'invoice-store',
+        methods: [{ name: 'persistInvoice', description: 'Persist one issued invoice.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'invoice_store_impl',
+        contract: 'iinvoice_store',
+        sourcePath: 'src/billing/invoice-store.ts',
+        methods: [
+          {
+            name: 'persistInvoice',
+            intent: 'Upsert the invoice row transactionally; on conflict the newer revision wins and the caller is told of the replacement.',
+          },
+        ],
+      },
+    ],
+    files,
   };
 }

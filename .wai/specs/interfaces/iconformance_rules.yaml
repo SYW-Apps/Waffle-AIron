@@ -53,11 +53,14 @@ methods:
       Rule method-realization. Code↔spec Level 1: every L3 contract method must be realized in its
       own source file (the method's sourcePath, else the implementation's) at its conformance tier —
       declared | anchored | off; Portals default to anchored, everything else to declared, and a
-      per-method `symbol` maps an intent-language name onto the code name. Findings carry the
-      analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible.
-      Methods whose file escapes the root, is missing or could not be analyzed are left to
-      source-file-linkage, and implementations under chained subsystems (projectPath) validate
-      standalone in their own project run.
+      per-method `symbol` maps an intent-language name onto the code name. A method realized by a
+      DECLARATION owes a function BODY as well: at exact grade one must be reachable under the
+      symbol, here or through the imports and republications this file forwards it by, so a
+      signature, an ambient or interface declaration or a plain value binding stops reading as an
+      implementation (METHOD_BODY_NOT_FOUND). Findings carry the analysis grade (exact AST | pattern
+      table | generic scan) so weaker analysis is visible. Methods whose file escapes the root, is
+      missing or could not be analyzed are left to source-file-linkage, and implementations under
+      chained subsystems (projectPath) validate standalone in their own project run.
     signature: 'methodRealization(ctx: RuleContext): void'
     returns: void
     params:
@@ -70,6 +73,12 @@ methods:
         summary: >-
           An L3 contract method has no anchor in its own source file (the method's sourcePath, else
           the implementation's) at the required conformance tier
+      - code: METHOD_BODY_NOT_FOUND
+        severity: warning
+        summary: >-
+          The method symbol IS declared in its own source file, but the file holds no function-like
+          body under it — a signature, an ambient or interface declaration, a value binding, an
+          imported or re-exported name
   - name: findingRealization
     description: >-
       Rule finding-realization. Code↔spec Level 1: every finding code an L3 contract method declares
@@ -93,14 +102,19 @@ methods:
           string literal nor as a property-access name (below exact grade, any identifier counts)
   - name: callConformance
     description: >-
-      Rule call-conformance. Code↔spec Level 3 (opener): every narrative `call` step of an
-      exactly-analyzed method must be realized as a call in the realized function, read from the
-      method's own source file (its sourcePath, else the implementation's) — the target method's
-      contract name or its per-method symbol override must appear among the function's callees,
-      closed transitively over same-file named helpers. Set membership only: order, arguments, and
-      conditions are deliberately unverified, and dispatch steps (runtime-table routed) are skipped.
-      Respects the conformance dial (off skips) and fires only at exact analysis grade — weaker
-      grades never guess.
+      Rule call-conformance. Code↔spec Level 3: the narrative `call` step ↔ realized call relation,
+      judged both ways against the method's own source file (its sourcePath, else the
+      implementation's), at exact analysis grade only. Forward: every `call` step must be realized
+      by a call whose callee RESOLVES TO one of the target method's own source files — the target's
+      contract name or a per-method `symbol` override, closed transitively over the named helpers
+      the realized function calls; a matching call whose origin a pure model cannot resolve is
+      reported apart as CALL_ORIGIN_UNRESOLVED rather than accused of being missing, and a target
+      that names no file of its own falls back to name membership. Converse: a call that resolves to
+      a modelled method of ANOTHER component in the SAME file crosses a component boundary while
+      looking local, so the narrative must declare it (UNDECLARED_COLOCATED_CALL) — a same-file
+      private helper is no modelled method and is never reported. Order, arguments and conditions
+      stay unverified, dispatch steps (runtime-table routed) are skipped, the conformance dial (off)
+      skips, and weaker analysis grades never guess.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -111,8 +125,18 @@ methods:
       - code: CALL_STEP_UNREALIZED
         severity: warning
         summary: >-
-          Narrative call step whose target method name (or symbol) never appears among the realized
-          function's callees in the method's source file (exact grade, set membership)
+          Narrative call step realized by no call that resolves to the target method's own source
+          file — the call is absent, or it lands in another module
+      - code: CALL_ORIGIN_UNRESOLVED
+        severity: warning
+        summary: >-
+          Narrative call step whose target name IS called, but only from call sites a pure model
+          cannot resolve to any file — neither proven realized nor accused
+      - code: UNDECLARED_COLOCATED_CALL
+        severity: warning
+        summary: >-
+          The realized function calls a modelled method of another component living in the same
+          source file, and no narrative step declares that call
   - name: hiddenState
     description: >-
       Rule hidden-state. The fields-vs-Store criterion, statically approximated: module-scope
@@ -308,4 +332,4 @@ methods:
           source-root walk no longer finds — delete it, the list only shrinks
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-19T11:03:34.814Z'
+updatedAt: '2026-09-19T15:32:16.195Z'

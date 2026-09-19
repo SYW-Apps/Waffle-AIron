@@ -5,8 +5,10 @@ import {
   implementationSourceFiles,
   typeSourceFiles,
   pathKey,
+  type CallSiteFact,
   type CodeModel,
   type ImplementationSpec,
+  type ImportBindingFact,
   type SourceFileFacts,
   type TypeSpec,
 } from '../models/index.js';
@@ -303,10 +305,25 @@ interface ExactFacts {
   reexports: Set<string>;
   /** Relative export-* specifiers to chase for barrel re-exports. */
   starExports: string[];
+  /**
+   * Named re-exports (export { a as b } from './x.js'), each carrying the
+   * name it is published UNDER and the name it is published FROM. A barrel
+   * republishes these exactly as it republishes a star export, so the chase
+   * carries their bodies too: the two forms differ in spelling, never in what
+   * the barrel publishes.
+   */
+  namedReexports: { exported: string; local: string; from: string }[];
   /** Cyclomatic complexity per named function-like (max across same-named). */
   complexity: Map<string, number>;
-  /** Direct callee names per named function-like (union across same-named). */
-  calls: Map<string, Set<string>>;
+  /**
+   * Direct call SITES per named function-like, keyed by their shape signature
+   * (union across same-named), so `save(x)` and `ledger.save(x)` stay two
+   * facts. A function-like with a body always gets a map, empty when it calls
+   * nothing — see SourceFileFacts.functionCallSites.
+   */
+  calls: Map<string, Map<string, CallSiteFact>>;
+  /** Runtime (value) import bindings by local name. */
+  importBindings: Map<string, ImportBindingFact>;
   /** Module-scope mutable (`let`/`var`) binding names. */
   mutableBindings: Set<string>;
   /**
@@ -327,9 +344,14 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const imports = new Set<string>();
   const reexports = new Set<string>();
   const starExports: string[] = [];
+  const namedReexports: { exported: string; local: string; from: string }[] = [];
   const complexity = new Map<string, number>();
-  const calls = new Map<string, Set<string>>();
+  const calls = new Map<string, Map<string, CallSiteFact>>();
+  const importBindings = new Map<string, ImportBindingFact>();
   const mutableBindings = new Set<string>();
+
+  /** The dedup key of a call site: its shape, not its number of occurrences. */
+  const siteKey = (site: CallSiteFact): string => `${site.member ? 'm' : 'b'}:${site.via ?? ''}:${site.name}`;
 
   const addBindingNames = (name: import('typescript').BindingName): void => {
     if (ts.isIdentifier(name)) declared.add(name.text);
@@ -376,9 +398,10 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // complexity (decision points + 1) AND direct callee names. Nested NAMED
   // function-likes are excluded — they get their own entries — while
   // anonymous callbacks count into the enclosing function.
-  const collectFunctionFacts = (fn: import('typescript').Node & { body?: import('typescript').Node }): { score: number; callees: Set<string> } => {
+  const collectFunctionFacts = (fn: import('typescript').Node & { body?: import('typescript').Node }): { score: number; callees: Map<string, CallSiteFact> } => {
     let score = 1;
-    const callees = new Set<string>();
+    const callees = new Map<string, CallSiteFact>();
+    const addSite = (site: CallSiteFact): void => { callees.set(siteKey(site), site); };
     const count = (node: import('typescript').Node): void => {
       if (namedFunctionName(node) !== undefined) return;
       if (ts.isIfStatement(node) || ts.isConditionalExpression(node)
@@ -393,9 +416,19 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
           score++;
         }
       } else if (ts.isCallExpression(node)) {
+        // The call's SHAPE is the whole of what a pure model can say about
+        // where it lands: a bare identifier resolves in this file's scope, a
+        // member access through a plain identifier resolves through that
+        // binding, and a member access through anything else (`this.store.x()`,
+        // `getStore().x()`) resolves nowhere without a type checker.
         const callee = node.expression;
-        if (ts.isIdentifier(callee)) callees.add(callee.text);
-        else if (ts.isPropertyAccessExpression(callee)) callees.add(callee.name.text);
+        if (ts.isIdentifier(callee)) addSite({ name: callee.text, member: false });
+        else if (ts.isPropertyAccessExpression(callee)) {
+          const receiver = callee.expression;
+          addSite(ts.isIdentifier(receiver)
+            ? { name: callee.name.text, member: true, via: receiver.text }
+            : { name: callee.name.text, member: true });
+        }
       }
       ts.forEachChild(node, count);
     };
@@ -411,9 +444,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     if (fnName && (node as { body?: import('typescript').Node }).body) {
       const facts = collectFunctionFacts(node as { body?: import('typescript').Node } & import('typescript').Node);
       complexity.set(fnName, Math.max(complexity.get(fnName) ?? 0, facts.score));
-      const set = calls.get(fnName) ?? new Set<string>();
-      for (const c of facts.callees) set.add(c);
-      calls.set(fnName, set);
+      const sites = calls.get(fnName) ?? new Map<string, CallSiteFact>();
+      for (const [key, site] of facts.callees) sites.set(key, site);
+      calls.set(fnName, sites);
     }
     if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)
       || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isModuleDeclaration(node)) {
@@ -446,11 +479,23 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       // Type-only imports never form a dependency edge (type coupling is
       // allowed by default) — but their bindings still anchor declarations.
       const typeOnly = clause?.isTypeOnly ?? false;
-      if (!typeOnly && ts.isStringLiteral(node.moduleSpecifier)) imports.add(node.moduleSpecifier.text);
-      if (clause?.name) declared.add(clause.name.text);
+      const spec = ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : undefined;
+      if (!typeOnly && spec) imports.add(spec);
+      // A binding records where the name came from only when the import is a
+      // RUNTIME one: a type binding can never be a call origin. A per-element
+      // `type` marker excludes that element alone.
+      const bind = (name: string, namespace: boolean, imported?: string, elementTypeOnly = false): void => {
+        declared.add(name);
+        if (typeOnly || elementTypeOnly || !spec) return;
+        const fact: ImportBindingFact = { from: spec };
+        if (namespace) fact.namespace = true;
+        if (imported && imported !== name) fact.imported = imported;
+        importBindings.set(name, fact);
+      };
+      if (clause?.name) bind(clause.name.text, false);
       if (clause?.namedBindings) {
-        if (ts.isNamespaceImport(clause.namedBindings)) declared.add(clause.namedBindings.name.text);
-        else for (const el of clause.namedBindings.elements) declared.add(el.name.text);
+        if (ts.isNamespaceImport(clause.namedBindings)) bind(clause.namedBindings.name.text, true);
+        else for (const el of clause.namedBindings.elements) bind(el.name.text, false, el.propertyName?.text, el.isTypeOnly);
       }
     } else if (ts.isExportDeclaration(node)) {
       const spec = node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : undefined;
@@ -459,6 +504,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
         for (const el of node.exportClause.elements) {
           declared.add(el.name.text);
           exported.add(el.name.text);
+          if (spec && !node.isTypeOnly && !el.isTypeOnly) {
+            namedReexports.push({ exported: el.name.text, local: (el.propertyName ?? el.name).text, from: spec });
+          }
         }
       } else if (!node.exportClause && spec) {
         starExports.push(spec);
@@ -490,7 +538,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
 
-  return { declared, anchors, exported, imports, reexports, starExports, complexity, calls, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, mutableBindings, reexportOnly };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -512,11 +560,70 @@ function resolveRelativeModule(fromFile: string, specifier: string): string | nu
 }
 
 /**
- * Chase `export *` barrels: merge the (transitive) exported names of every
- * relative star-export target into the facts, so a pure re-export barrel like
- * core_portal's index.ts realizes the names it publishes.
+ * The facts of one relative re-export target, chased and cached — or null when
+ * the specifier does not resolve, escapes the project, or cannot be read.
  */
-function chaseStarExports(
+function reexportTarget(
+  ts: TsModule,
+  filePath: string,
+  specifier: string,
+  projectRoot: string,
+  visited: Set<string>,
+  exactCache: Map<string, ExactFacts | null>,
+): { path: string; facts: ExactFacts } | null {
+  const target = resolveRelativeModule(filePath, specifier);
+  // containment: never chase outside the analyzed project
+  if (!target || path.relative(projectRoot, target).startsWith('..')) return null;
+  let targetFacts = exactCache.get(target);
+  if (targetFacts === undefined) {
+    try {
+      targetFacts = walkExact(ts, fs.readFileSync(target, 'utf8'), target);
+    } catch {
+      targetFacts = null;
+    }
+    exactCache.set(target, targetFacts);
+  }
+  if (!targetFacts) return null;
+  if (!visited.has(target)) {
+    visited.add(target);
+    chaseReexports(ts, targetFacts, target, projectRoot, visited, exactCache);
+  }
+  return { path: target, facts: targetFacts };
+}
+
+/**
+ * Carry one republished name's measured BODY — its complexity and its call
+ * sites — from the module that wrote it onto the barrel that publishes it, so
+ * the detail dial and the call-realization checks see through the hop. The
+ * sites keep the file they were READ in: their bare names and receivers
+ * resolve in the real module's scope, never in the barrel's.
+ */
+function carryBody(
+  facts: ExactFacts,
+  target: ExactFacts,
+  targetPath: string,
+  local: string,
+  exported: string,
+  projectRoot: string,
+): void {
+  const score = target.complexity.get(local);
+  if (score !== undefined) facts.complexity.set(exported, Math.max(facts.complexity.get(exported) ?? 0, score));
+  const targetCalls = target.calls.get(local);
+  if (!targetCalls) return;
+  const carriedFrom = pathKey(path.relative(projectRoot, targetPath));
+  const sites = facts.calls.get(exported) ?? new Map<string, CallSiteFact>();
+  for (const [key, site] of targetCalls) sites.set(carriedFrom + '|' + key, { ...site, from: site.from ?? carriedFrom });
+  facts.calls.set(exported, sites);
+}
+
+/**
+ * Chase re-export barrels: merge the (transitive) exported names of every
+ * relative star-export target into the facts, and carry the measured body of
+ * every name a barrel republishes — star or named alike — so a pure re-export
+ * barrel like core_portal's index.ts realizes the names it publishes. The two
+ * spellings republish the same way, so they are chased the same way.
+ */
+function chaseReexports(
   ts: TsModule,
   facts: ExactFacts,
   filePath: string,
@@ -524,38 +631,17 @@ function chaseStarExports(
   visited: Set<string>,
   exactCache: Map<string, ExactFacts | null>,
 ): void {
+  for (const re of facts.namedReexports) {
+    const target = reexportTarget(ts, filePath, re.from, projectRoot, visited, exactCache);
+    if (target) carryBody(facts, target.facts, target.path, re.local, re.exported, projectRoot);
+  }
   for (const spec of facts.starExports) {
-    const target = resolveRelativeModule(filePath, spec);
-    if (!target || visited.has(target)) continue;
-    // containment: never chase outside the analyzed project
-    if (path.relative(projectRoot, target).startsWith('..')) continue;
-    visited.add(target);
-
-    let targetFacts = exactCache.get(target);
-    if (targetFacts === undefined) {
-      try {
-        targetFacts = walkExact(ts, fs.readFileSync(target, 'utf8'), target);
-      } catch {
-        targetFacts = null;
-      }
-      exactCache.set(target, targetFacts);
-    }
-    if (!targetFacts) continue;
-    chaseStarExports(ts, targetFacts, target, projectRoot, visited, exactCache);
-    for (const name of targetFacts.exported) {
+    const target = reexportTarget(ts, filePath, spec, projectRoot, visited, exactCache);
+    if (!target) continue;
+    for (const name of target.facts.exported) {
       facts.exported.add(name);
       facts.declared.add(name);
-      // A pure re-export barrel realizes the function it publishes — carry the
-      // real function's complexity and callees onto the barrel so the
-      // detail-sufficiency and call-realization checks see through the hop.
-      const c = targetFacts.complexity.get(name);
-      if (c !== undefined) facts.complexity.set(name, Math.max(facts.complexity.get(name) ?? 0, c));
-      const targetCalls = targetFacts.calls.get(name);
-      if (targetCalls) {
-        const set = facts.calls.get(name) ?? new Set<string>();
-        for (const callee of targetCalls) set.add(callee);
-        facts.calls.set(name, set);
-      }
+      carryBody(facts, target.facts, target.path, name, name, projectRoot);
     }
   }
 }
@@ -726,7 +812,7 @@ export function buildCodeModel(
       if (ts) {
         try {
           const facts = walkExact(ts, text, absolute);
-          chaseStarExports(ts, facts, absolute, projectRoot, new Set([absolute]), exactCache);
+          chaseReexports(ts, facts, absolute, projectRoot, new Set([absolute]), exactCache);
           analyzed = {
             analysisGrade: 'exact',
             declaredNames: [...facts.declared],
@@ -735,7 +821,8 @@ export function buildCodeModel(
             imports: [...facts.imports],
             reexports: [...facts.reexports],
             functionComplexity: Object.fromEntries(facts.complexity),
-            functionCalls: Object.fromEntries([...facts.calls].map(([k, v]) => [k, [...v]])),
+            functionCallSites: Object.fromEntries([...facts.calls].map(([k, v]) => [k, [...v.values()]])),
+            importBindings: Object.fromEntries(facts.importBindings),
             topLevelMutableBindings: [...facts.mutableBindings],
             reexportOnly: facts.reexportOnly,
           };

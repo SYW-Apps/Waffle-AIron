@@ -11,6 +11,55 @@ import * as path from 'path';
 export type AnalysisGrade = 'exact' | 'pattern' | 'generic';
 export type SourceFileStatus = 'analyzed' | 'missing' | 'escaped' | 'unreadable';
 
+/**
+ * One runtime (value) import binding a file makes: the module specifier a
+ * local name came from, and whether it was bound as a whole NAMESPACE.
+ *
+ * The namespace flag separates the two readings of `x.save()`. For a namespace
+ * import (`import * as specs from './specs.js'`), `specs.save` IS that
+ * module's own export, so the call site resolves to the module. For a named or
+ * default binding, `db.save` is a property of a VALUE that module handed over,
+ * and where that property's function was written is beyond a pure model — so
+ * it resolves to nothing rather than to the module.
+ *
+ * Type-only imports are never recorded: a type binding cannot be a call origin.
+ */
+export interface ImportBindingFact {
+  /** The module specifier the binding came from, exactly as written. */
+  from: string;
+  /** True for `import * as name from …` — the only binding whose property calls are that module's own exports. */
+  namespace?: boolean;
+  /** The name the module publishes it under, set only when the import renamed it (`import { save as store }`). */
+  imported?: string;
+}
+
+/**
+ * One call SITE SHAPE inside a named function-like: the invoked name together
+ * with how the call was written. Shape is what a pure model can honestly say
+ * about a call's ORIGIN — with no type checker, `save(x)`, `ledger.save(x)`
+ * and `this.store.save(x)` are three different questions, and collapsing them
+ * onto the name "save" is what let a call into an unrelated module count as
+ * realizing a narrative step.
+ *
+ * Sites are deduplicated per shape, never counted: the checks that read them
+ * ask where a call could land, never how often it was written.
+ */
+export interface CallSiteFact {
+  /** The invoked name: the identifier of a bare call, the property name of a member call. */
+  name: string;
+  /** True when the call was written as a member access (`receiver.name(…)`). */
+  member: boolean;
+  /** The receiver identifier — set only when the receiver is a plain identifier (`specs.save()` → "specs"). */
+  via?: string;
+  /**
+   * The file this site was READ in, set only when it is not the file these
+   * facts describe — a pure re-export barrel carries the sites of the function
+   * it publishes. A carried site's bare names and receivers resolve in that
+   * file's scope, never in the barrel's.
+   */
+  from?: string;
+}
+
 export interface SourceFileFacts {
   /** Project-relative resolved source path (many implementations may share it, N:1). */
   path: string;
@@ -45,13 +94,26 @@ export interface SourceFileFacts {
    */
   functionComplexity?: Record<string, number>;
   /**
-   * Direct callee names per named function-like: identifiers and property
-   * names invoked as calls inside the function body (nested NAMED functions
-   * excluded — they carry their own entries; anonymous callbacks included).
-   * EXACT grade only. Same-named functions union their sets. Fuel for the
-   * call-step realization check (Level 3).
+   * Direct call sites per named function-like: every call written inside the
+   * function body, with its shape (see CallSiteFact) — nested NAMED functions
+   * excluded (they carry their own entries), anonymous callbacks included.
+   * EXACT grade only. Same-named functions union their sites.
+   *
+   * A function-like WITH A BODY always gets an entry, empty when it calls
+   * nothing; a name with NO entry has no body in this file to read — a bare
+   * declaration, an overload signature, an ambient declaration, an interface
+   * member, a plain value binding or an imported name. That difference is the
+   * whole of hasFunctionBody, which is why an empty entry is never dropped.
+   *
+   * Fuel for the call-step realization checks (Level 3).
    */
-  functionCalls?: Record<string, string[]>;
+  functionCallSites?: Record<string, CallSiteFact[]>;
+  /**
+   * Runtime (value) import bindings by local name (see ImportBindingFact).
+   * EXACT grade only — a weaker grade sees module specifiers but never which
+   * local name they bound.
+   */
+  importBindings?: Record<string, ImportBindingFact>;
   /**
    * Module-scope mutable bindings (`let`/`var` at the top level of the file).
    * EXACT grade only. The static approximation of held state a logic
@@ -105,6 +167,52 @@ export function factsFor(model: CodeModel, sourcePath: string): SourceFileFacts 
     if (pathKey(model.files[i].path) === key) return model.files[i];
   }
   return undefined;
+}
+
+/**
+ * Own-property record lookup. Callee, function and binding names include
+ * things like "toString" and "constructor", which a bare index would resolve
+ * to Object.prototype members (functions — not arrays, not records), so every
+ * read of a name-keyed facts record goes through this.
+ */
+function ownEntry<T>(record: Record<string, T> | undefined, key: string): T | undefined {
+  return record && Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
+}
+
+/**
+ * source_file_facts.importBindingOf — the runtime import binding a file makes
+ * under a local name, or undefined when the name is not an import of this
+ * file (it is local, global, or bound type-only).
+ */
+export function importBindingOf(facts: SourceFileFacts, name: string): ImportBindingFact | undefined {
+  return ownEntry(facts.importBindings, name);
+}
+
+/**
+ * source_file_facts.callSitesOf — the call sites written inside one named
+ * function-like, or undefined when the file holds no BODY under that name.
+ * The two answers are different findings and must never be collapsed: an
+ * empty array is a body that calls nothing, undefined is nothing to read.
+ */
+export function callSitesOf(facts: SourceFileFacts, fn: string): CallSiteFact[] | undefined {
+  return ownEntry(facts.functionCallSites, fn);
+}
+
+/**
+ * source_file_facts.hasFunctionBody — whether the file holds a function-like
+ * BODY under a name, as the model measured it: a function, method or accessor
+ * declaration, or a function/arrow initializer bound to a named slot. A name
+ * the file declares WITHOUT one — an overload signature, an ambient
+ * declaration, an interface or type member, a plain value binding, an import
+ * binding, a re-export specifier — answers false, because there is no body
+ * there to read.
+ *
+ * Only exact grade measures bodies at all, so a file analyzed below it always
+ * answers false; a caller that would ACCUSE on the answer must check the grade
+ * itself rather than read "no body" into "not measured".
+ */
+export function hasFunctionBody(facts: SourceFileFacts, symbol: string): boolean {
+  return callSitesOf(facts, symbol) !== undefined;
 }
 
 /**

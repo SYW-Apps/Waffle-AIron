@@ -1,10 +1,12 @@
 import {
   implementationSourceFiles,
+  importBindingOf,
   isPattern,
   isRetired,
   methodSourceFile,
   pathKey,
   resolveImport,
+  type CallSiteFact,
   type CodeModel,
   type ComponentSpec,
   type ImplementationSpec,
@@ -87,15 +89,79 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
     return built;
   };
 
+  // What a module REPUBLISHES, transitively and itself included: a call
+  // resolved to a barrel lands in the file the barrel re-exports from, so the
+  // hop is part of resolution rather than something each reader re-walks.
+  const republished = new Map<string, ReadonlySet<string>>();
+  const republishedFrom = (path: string): ReadonlySet<string> => {
+    const cached = republished.get(path);
+    if (cached) return cached;
+    const out = new Set<string>([path]);
+    const queue = [path];
+    while (queue.length) {
+      const from = queue.pop()!;
+      const f = facts.get(from);
+      if (f?.status !== 'analyzed') continue;
+      for (const specifier of f.reexports) {
+        const to = resolveImport(from, specifier, paths);
+        if (to && !out.has(to)) { out.add(to); queue.push(to); }
+      }
+    }
+    republished.set(path, out);
+    return out;
+  };
+
+  const NO_ORIGIN: ReadonlySet<string> = new Set<string>();
+  const originOf = (site: CallSiteFact, from: string): ReadonlySet<string> => {
+    // A carried site names the file it was READ in; its names resolve in that
+    // file's scope, never in the barrel that republished it.
+    const scope = pathKey(site.from ?? from);
+    const f = facts.get(scope);
+    // Only exact grade records bindings at all, so a weaker grade has nothing
+    // to resolve WITH — and an empty answer says exactly that.
+    if (f?.status !== 'analyzed' || f.analysisGrade !== 'exact') return NO_ORIGIN;
+    const landing = (specifier: string): ReadonlySet<string> => {
+      const to = resolveImport(scope, specifier, paths);
+      return to ? republishedFrom(to) : NO_ORIGIN;
+    };
+    if (!site.member) {
+      const binding = importBindingOf(f, site.name);
+      if (binding) return landing(binding.from);
+      // Declared here and imported from nowhere: the function is this file's
+      // own. Anything else is a global, an ambient or an injected name.
+      return declarationsAt(scope).has(site.name) ? republishedFrom(scope) : NO_ORIGIN;
+    }
+    // `ns.save()` is that module's own export whenever `ns` is a NAMESPACE
+    // binding: its properties are that module's exports, nothing else.
+    if (!site.via) return NO_ORIGIN;
+    const receiver = importBindingOf(f, site.via);
+    if (!receiver) return NO_ORIGIN;
+    if (receiver.namespace) return landing(receiver.from);
+    // Through a VALUE the module handed over (`hostCore.renderDiagram()`) the
+    // property could have been attached anywhere, so the module alone is not
+    // an answer — it becomes one only when that module declares the invoked
+    // name as well (the object literal's own key, the function it holds).
+    // Where it does not, the value was assembled elsewhere and this resolves
+    // to nothing rather than to the nearest module in sight.
+    const through = landing(receiver.from);
+    for (const candidate of through) {
+      if (declarationsAt(candidate).has(site.name)) return through;
+    }
+    return NO_ORIGIN;
+  };
+
+  const declarationsAt = (path: string): ReadonlySet<string> =>
+    namesAt(declarations, pathKey(path), f => new Set([...f.declaredNames, ...f.exportedNames]));
+
   return {
     paths,
     exactPaths,
     factsAt: (path) => facts.get(pathKey(path)),
-    declarationsAt: (path) =>
-      namesAt(declarations, pathKey(path), f => new Set([...f.declaredNames, ...f.exportedNames])),
+    declarationsAt,
     anchorsAt: (path) =>
       namesAt(anchors, pathKey(path), f => new Set([...f.declaredNames, ...f.exportedNames, ...f.anchoredNames])),
     findingAnchorsAt: (path) => namesAt(findingAnchors, pathKey(path), f => new Set(f.anchoredNames)),
+    originOf,
   };
 }
 

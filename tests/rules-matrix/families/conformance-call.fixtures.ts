@@ -5,15 +5,27 @@
  * Documented intent pinned here (rule description + module doc comment +
  * the narrative step-type vocabulary in src/models/specs.ts):
  *  - CALL_STEP_UNREALIZED (warning): every narrative `call` step of an
- *    exactly-analyzed method must appear among the callees of the realized
+ *    exactly-analyzed method must be realized by a call of the realized
  *    function in the method's own source file (its sourcePath, else the
- *    implementation's) — matched by the target method's contract name OR any per-method
+ *    implementation's) that RESOLVES TO one of the target method's own source
+ *    files — matched by the target method's contract name OR any per-method
  *    `symbol` override a target-side implementation declares, closed
- *    transitively over same-file named helpers (extract-helper refactors stay
- *    clean). Set membership only; order/arguments/conditions unverified.
+ *    transitively over the named helpers the function calls (extract-helper
+ *    refactors stay clean). A target naming no file of its own falls back to
+ *    name membership. Order/arguments/conditions stay unverified.
  *    `register` steps are a reachability edge, "never an invocation"
  *    (step-type vocabulary), so they are exempt — only `call` steps are held
  *    to realization.
+ *  - CALL_ORIGIN_UNRESOLVED (warning): the target's name IS called inside the
+ *    realized function, but only from call sites a pure model cannot resolve
+ *    to any file — a member call through a value (`this.store.save()`). A
+ *    distinct answer from "the call is missing": the step is neither proven
+ *    realized nor accused, because only what resolved may accuse.
+ *  - UNDECLARED_COLOCATED_CALL (warning): the realized function calls a
+ *    modelled method of ANOTHER component living in the same source file, and
+ *    no narrative step declares that call — a boundary crossing that nothing
+ *    imports, which the file-level checks structurally cannot see. A call to a
+ *    same-file PRIVATE helper is no modelled method and is never reported.
  */
 import { defineRuleFixture } from '../harness.js';
 
@@ -629,6 +641,197 @@ export default [
       ].join('\n'),
     }),
   }),
+  // -------------------------------------------------------------------------
+  // CALL_ORIGIN_UNRESOLVED — the name IS called, from a site with no readable
+  // origin: a different answer from "the call is missing", and never an
+  // accusation
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'shipment_scheduler_impl',
+    expectFire: true,
+    scenario:
+      'The shipment scheduler holds its carrier adapter as a constructor-injected field and quotes through this.carrier.fetchQuotes, so nothing in the module says which file that function was written in.',
+    tree: injectedSchedulerTree([
+      'export class ShipmentScheduler {',
+      '  private readonly carrier: { fetchQuotes(parcelId: string): number[] };',
+      '',
+      '  constructor(carrier: { fetchQuotes(parcelId: string): number[] }) {',
+      '    this.carrier = carrier;',
+      '  }',
+      '',
+      '  scheduleShipment(parcelId: string): void {',
+      '    const quotes = this.carrier.fetchQuotes(parcelId);',
+      '    this.pickCheapest(quotes);',
+      '  }',
+      '',
+      '  private pickCheapest(quotes: number[]): number {',
+      '    return Math.min(...quotes);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'A namespace import binding\'s properties ARE that module\'s own exports, so carrierQuotes.fetchQuotes resolves to the adapter\'s source file and the step is proven realized instead of left unreadable.',
+    scenario:
+      'The shipment scheduler imports the carrier quote adapter as a namespace and quotes through carrierQuotes.fetchQuotes.',
+    tree: injectedSchedulerTree([
+      'import * as carrierQuotes from \'./carrier-quote-adapter.js\';',
+      '',
+      'export class ShipmentScheduler {',
+      '  scheduleShipment(parcelId: string): void {',
+      '    const quotes = carrierQuotes.fetchQuotes(parcelId);',
+      '    this.pickCheapest(quotes);',
+      '  }',
+      '',
+      '  private pickCheapest(quotes: number[]): number {',
+      '    return Math.min(...quotes);',
+      '  }',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
+  // UNDECLARED_COLOCATED_CALL — the converse direction: a call that crosses a
+  // component boundary inside one file, which no file-level check can see
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_COLOCATED_CALL',
+    severity: 'warning',
+    anchoredTo: 'shipment_scheduler_impl',
+    expectFire: true,
+    scenario:
+      'The dispatch desk module holds both the shipment scheduler and the carrier quote adapter, and the scheduler quotes through the adapter\'s function without a narrative step saying so.',
+    tree: dispatchDeskTree({
+      schedulerNarrative: [
+        { stepNumber: 1, type: 'local', description: 'Pick the cheapest quote that meets the delivery window.' },
+      ],
+      module: [
+        'export function scheduleShipment(parcelId: string): void {',
+        '  const quotes = fetchQuotes(parcelId);',
+        '  bookCheapest(parcelId, quotes);',
+        '}',
+        '',
+        'export function fetchQuotes(parcelId: string): number[] {',
+        '  return [12.5, 14.0];',
+        '}',
+        '',
+        'function bookCheapest(parcelId: string, quotes: number[]): void {',
+        '  // hand the cheapest quote to the chosen carrier',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
+  defineRuleFixture({
+    code: 'UNDECLARED_COLOCATED_CALL',
+    expectFire: false,
+    reason: 'The narrative declares the call to the colocated adapter method, which is the whole of what the converse direction asks for.',
+    scenario:
+      'The dispatch desk scheduler quotes through the colocated carrier quote adapter and narrates that call as a call step.',
+    tree: dispatchDeskTree({
+      schedulerNarrative: [
+        {
+          stepNumber: 1,
+          type: 'call',
+          description: 'Fetch carrier quotes for the parcel.',
+          targetComponent: 'carrier-quote-adapter',
+          targetMethod: 'fetchQuotes',
+        },
+        { stepNumber: 2, type: 'local', description: 'Pick the cheapest quote that meets the delivery window.' },
+      ],
+      module: [
+        'export function scheduleShipment(parcelId: string): void {',
+        '  const quotes = fetchQuotes(parcelId);',
+        '  bookCheapest(parcelId, quotes);',
+        '}',
+        '',
+        'export function fetchQuotes(parcelId: string): number[] {',
+        '  return [12.5, 14.0];',
+        '}',
+        '',
+        'function bookCheapest(parcelId: string, quotes: number[]): void {',
+        '  // hand the cheapest quote to the chosen carrier',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
+  defineRuleFixture({
+    code: 'UNDECLARED_COLOCATED_CALL',
+    expectFire: false,
+    reason:
+      'A same-file PRIVATE helper is no modelled method of any component, so reporting it would turn every rule\'s internal factoring into a finding — only a call to a colocated MODELLED method crosses a boundary.',
+    scenario:
+      'The dispatch desk scheduler calls only its own private rate-table helpers, leaving the colocated carrier quote adapter alone.',
+    tree: dispatchDeskTree({
+      schedulerNarrative: [
+        { stepNumber: 1, type: 'local', description: 'Book the parcel against the standing rate table.' },
+      ],
+      module: [
+        'export function scheduleShipment(parcelId: string): void {',
+        '  const rate = standingRate(parcelId);',
+        '  bookCheapest(parcelId, [rate]);',
+        '}',
+        '',
+        'function standingRate(parcelId: string): number {',
+        '  return 13.25;',
+        '}',
+        '',
+        'export function fetchQuotes(parcelId: string): number[] {',
+        '  return [12.5, 14.0];',
+        '}',
+        '',
+        'function bookCheapest(parcelId: string, quotes: number[]): void {',
+        '  // hand the cheapest quote to the chosen carrier',
+        '}',
+        '',
+      ].join('\n'),
+    }),
+  }),
+
+  // -------------------------------------------------------------------------
+  // CALL_STEP_UNREALIZED — the call resolves, but into another module: the
+  // same-named function the name-only check used to accept
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    severity: 'warning',
+    anchoredTo: 'shipment_scheduler_impl',
+    expectFire: true,
+    scenario:
+      'The shipment scheduler imports fetchQuotes from the archived rate-table module instead of the carrier quote adapter its narrative names, so the call lands in a different file altogether.',
+    tree: sameNameTree([
+      'import { fetchQuotes } from \'./rate-table-archive.js\';',
+      '',
+      'export function scheduleShipment(parcelId: string): void {',
+      '  fetchQuotes(parcelId);',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'The call resolves to the carrier quote adapter\'s own source file, which is what realizing the step means — the identically named archive function beside it never enters into it.',
+    scenario:
+      'The shipment scheduler imports fetchQuotes from the carrier quote adapter, while an identically named function also sits in the archived rate-table module.',
+    tree: sameNameTree([
+      'import { fetchQuotes } from \'./carrier-quote-adapter.js\';',
+      '',
+      'export function scheduleShipment(parcelId: string): void {',
+      '  fetchQuotes(parcelId);',
+      '}',
+      '',
+    ].join('\n')),
+  }),
 ];
 
 /**
@@ -711,4 +914,165 @@ function shipmentCommandTree(modules: { schedulerModule: string; commandModule: 
       ].join('\n'),
     },
   };
+}
+
+/**
+ * A shipment scheduler whose narrative quotes through the carrier quote
+ * adapter beside it; only the scheduler module's text varies. Used for the
+ * call-ORIGIN cases, where the question is not whether the name is called but
+ * whether the call site says where it lands.
+ */
+function injectedSchedulerTree(schedulerModule: string): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'fulfillment', description: 'Parcel scheduling and carrier hand-off.' }],
+    components: [
+      {
+        id: 'shipment-scheduler',
+        componentType: 'Orchestrator',
+        subsystem: 'fulfillment',
+        description: 'Plans each parcel pickup and books the cheapest eligible carrier.',
+        dependsOn: ['carrier-quote-adapter'],
+      },
+      {
+        id: 'carrier-quote-adapter',
+        componentType: 'Adapter',
+        subsystem: 'fulfillment',
+        description: 'Wraps the external carrier rate APIs behind one quote interface.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ishipment_scheduler',
+        component: 'shipment-scheduler',
+        methods: [{ name: 'scheduleShipment', description: 'Book the cheapest eligible carrier for a parcel.' }],
+      },
+      {
+        id: 'icarrier_quote_adapter',
+        component: 'carrier-quote-adapter',
+        methods: [{ name: 'fetchQuotes', description: 'Fetch current rate quotes from all connected carriers.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'shipment_scheduler_impl',
+        contract: 'ishipment_scheduler',
+        sourcePath: 'src/fulfillment/shipment-scheduler.ts',
+        methods: [
+          {
+            name: 'scheduleShipment',
+            narrative: [
+              {
+                stepNumber: 1,
+                type: 'call',
+                description: 'Fetch carrier quotes for the parcel.',
+                targetComponent: 'carrier-quote-adapter',
+                targetMethod: 'fetchQuotes',
+              },
+              { stepNumber: 2, type: 'local', description: 'Pick the cheapest quote that meets the delivery window.' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'carrier_quote_adapter_impl',
+        contract: 'icarrier_quote_adapter',
+        sourcePath: 'src/fulfillment/carrier-quote-adapter.ts',
+        methods: [
+          {
+            name: 'fetchQuotes',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Call each connected carrier rate API and merge the quotes.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/fulfillment/shipment-scheduler.ts': schedulerModule,
+      'src/fulfillment/carrier-quote-adapter.ts': [
+        'export function fetchQuotes(parcelId: string): number[] {',
+        '  return [12.5, 14.0];',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}
+
+/**
+ * A dispatch desk where the shipment scheduler and the carrier quote adapter
+ * are realized in ONE module — the colocation the converse direction exists
+ * for. The scheduler's narrative and the shared module's text vary.
+ */
+function dispatchDeskTree(opts: {
+  schedulerNarrative: Record<string, unknown>[];
+  module: string;
+}): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'fulfillment', description: 'Parcel scheduling and carrier hand-off.' }],
+    components: [
+      {
+        id: 'shipment-scheduler',
+        componentType: 'Orchestrator',
+        subsystem: 'fulfillment',
+        description: 'Plans each parcel pickup and books the cheapest eligible carrier.',
+        dependsOn: ['carrier-quote-adapter'],
+      },
+      {
+        id: 'carrier-quote-adapter',
+        componentType: 'Adapter',
+        subsystem: 'fulfillment',
+        description: 'Wraps the external carrier rate APIs behind one quote interface.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ishipment_scheduler',
+        component: 'shipment-scheduler',
+        methods: [{ name: 'scheduleShipment', description: 'Book the cheapest eligible carrier for a parcel.' }],
+      },
+      {
+        id: 'icarrier_quote_adapter',
+        component: 'carrier-quote-adapter',
+        methods: [{ name: 'fetchQuotes', description: 'Fetch current rate quotes from all connected carriers.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'shipment_scheduler_impl',
+        contract: 'ishipment_scheduler',
+        sourcePath: 'src/fulfillment/dispatch-desk.ts',
+        methods: [{ name: 'scheduleShipment', narrative: opts.schedulerNarrative }],
+      },
+      {
+        id: 'carrier_quote_adapter_impl',
+        contract: 'icarrier_quote_adapter',
+        sourcePath: 'src/fulfillment/dispatch-desk.ts',
+        methods: [
+          {
+            name: 'fetchQuotes',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Call each connected carrier rate API and merge the quotes.' }],
+          },
+        ],
+      },
+    ],
+    files: { 'src/fulfillment/dispatch-desk.ts': opts.module },
+  };
+}
+
+/**
+ * A shipment scheduler beside TWO modules exporting a function called
+ * fetchQuotes: the carrier quote adapter its narrative names, and an archived
+ * rate-table module no spec claims. Only the scheduler module's text varies —
+ * which of the two it imports is the whole question.
+ */
+function sameNameTree(schedulerModule: string): import('../harness.js').FixtureTree {
+  const tree = injectedSchedulerTree(schedulerModule);
+  tree.files!['src/fulfillment/rate-table-archive.ts'] = [
+    '// Last year\'s frozen rate table, kept for reconciliation only.',
+    'export function fetchQuotes(parcelId: string): number[] {',
+    '  return [19.9];',
+    '}',
+    '',
+  ].join('\n');
+  tree.rules = { conformance: { sourceRoots: ['src'] } };
+  return tree;
 }
