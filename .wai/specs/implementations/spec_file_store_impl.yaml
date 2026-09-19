@@ -1,12 +1,16 @@
 id: spec_file_store_impl
 name: Spec File Store Implementation
 description: >-
-  Raw YAML file I/O over the shared yaml/fs utilities (readYamlFile, writeYamlFile, listFiles,
-  listFilesRecursive) as imported and used by the spec workspace.
+  Raw YAML file I/O over the shared yaml/fs utilities as the spec workspace imports and uses them.
+  Each method names the file that actually DECLARES its symbol — readYamlFile and writeYamlFile in
+  src/utils/yaml.ts, listFilesRecursive in src/utils/fs.ts — rather than src/core/specs.ts, which
+  only imports and calls them; findChainingParent is the one method written in the workspace module
+  itself.
 contract: ispec_file_store
 sourcePath: src/core/specs.ts
 methods:
   - name: read
+    sourcePath: src/utils/yaml.ts
     narrative: []
     detail: intent
     intent: >-
@@ -15,6 +19,7 @@ methods:
       malformed YAML.
     symbol: readYamlFile
   - name: write
+    sourcePath: src/utils/yaml.ts
     narrative: []
     detail: intent
     intent: >-
@@ -22,6 +27,7 @@ methods:
       directories as needed; filesystem failures propagate to the caller.
     symbol: writeYamlFile
   - name: listTree
+    sourcePath: src/utils/fs.ts
     narrative: []
     detail: intent
     intent: >-
@@ -67,4 +73,4 @@ methods:
     intent: ''
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-07-24T18:06:44.579Z'
+updatedAt: '2026-09-19T17:41:52.104Z'
