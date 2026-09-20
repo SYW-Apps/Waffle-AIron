@@ -1,0 +1,31 @@
+id: iclaude_exporter
+name: Claude Agent File Exporter Interface
+description: >-
+  The Exporter shape, bound to Claude's file format. Four targets reach it; an option decides
+  whether the execution budget is emitted, which is the only behavioural difference between them.
+component: claude_exporter
+methods:
+  - name: export
+    description: >-
+      Write the agent's file in Claude's format — frontmatter naming the agent and its owned paths,
+      the rendered instructions beneath, and the wairon-managed banner that marks the file as
+      generated. Answers `unchanged` without touching the file when it already holds exactly this.
+    signature: 'export(ctx: ExportContext): ExportResult'
+    returns: ExportResult
+    params:
+      - name: ctx
+        type: ExportContext
+        description: The agent, its rendered instructions, and the target this write is for
+  - name: outputPath
+    description: Where this write would land, without rendering or writing anything.
+    signature: 'outputPath(ctx: ExportContext): string'
+    returns: string
+    params:
+      - name: ctx
+        type: ExportContext
+        description: The agent and target, less the rendered instructions
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T19:45:32.850Z'
+updatedAt: '2026-09-20T19:45:32.864Z'

@@ -1,0 +1,28 @@
+kind: value-object
+id: generate_options
+name: GenerateOptions
+description: >-
+  What one generate run may vary. Every field narrows or suspends the run rather than changing what
+  a file contains — the same agents and targets always produce the same bytes, and these decide only
+  which of them are written this time.
+fields:
+  - name: projectRoot
+    type: string
+    description: The root output paths resolve within; the bound project when omitted.
+    optional: true
+  - name: filterTargets
+    type: string[]
+    description: Write only these targets; all configured ones when omitted.
+    optional: true
+  - name: filterDomainIds
+    type: string[]
+    description: Write only agents belonging to these domains.
+    optional: true
+  - name: dryRun
+    type: boolean
+    description: Compute everything and write nothing, so a caller can see what a run would do.
+    optional: true
+methods: []
+sourcePath: src/exporters/generate.ts
+createdAt: '2026-09-20T19:47:54.250Z'
+updatedAt: '2026-09-20T19:47:54.260Z'

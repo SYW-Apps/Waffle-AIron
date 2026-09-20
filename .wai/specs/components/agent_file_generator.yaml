@@ -1,0 +1,17 @@
+id: agent_file_generator
+name: Agent File Generator
+description: >-
+  Turning a registry of agents into files on disk, for every target a project configures. It renders
+  each agent's instructions once and hands the result to whichever exporter serves each target, so
+  the rendering happens in the core and the formatting happens at the edge — the split `base.ts`
+  describes in prose and nothing enforced until now. It also answers which paths it OWNS without
+  writing any of them, which is what lets `wairon generate` report or prune its own output without
+  rendering a thing.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - exporter_resolver
+status: complete
+createdAt: '2026-09-20T19:45:25.916Z'
+updatedAt: '2026-09-20T19:45:25.932Z'

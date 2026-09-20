@@ -1,0 +1,31 @@
+kind: value-object
+id: exporter
+name: Exporter
+description: >-
+  The shape every agent-file exporter implements: a target type it serves, a file it would write,
+  and the write itself. Modelled as a type rather than as one contract with several implementations
+  because that is what the code is — three classes implementing one TypeScript interface — and
+  because no contract in this tree has more than one implementation; the vendor-swap seam here binds
+  `technologies` on a single implementation instead. Each exporter is its own Adapter with its own
+  contract, and this type is what makes them interchangeable to the resolver.
+fields:
+  - name: targetType
+    type: string
+    description: The target name this exporter serves, as a project's `targets` configuration spells it.
+    optional: false
+methods:
+  - name: export
+    signature: 'export(ctx: ExportContext): ExportResult'
+    returns: ExportResult
+    description: >-
+      Write the agent's file for this target and answer where it landed, what it holds, and whether
+      it was already that.
+  - name: outputPath
+    signature: 'outputPath(ctx: ExportContext): string'
+    returns: string
+    description: >-
+      Where this exporter would write, without writing — what `wairon generate` uses to know which
+      files it owns, so it can report or prune them without rendering anything.
+sourcePath: src/exporters/base.ts
+createdAt: '2026-09-20T19:44:56.246Z'
+updatedAt: '2026-09-20T19:44:56.258Z'

@@ -1,0 +1,25 @@
+kind: value-object
+id: export_result
+name: ExportResult
+description: >-
+  What one exporter wrote, and whether it needed to. `unchanged` is the load-bearing field: `wairon
+  generate` runs over every agent and every target, and a run that rewrote nothing should say so
+  rather than report work it did not do. It also keeps file timestamps still, which is what lets a
+  watcher or a build cache trust the output.
+fields:
+  - name: outputPath
+    type: string
+    description: Where the file landed, absolute.
+    optional: false
+  - name: content
+    type: string
+    description: What was written, or what is already there when nothing changed.
+    optional: false
+  - name: unchanged
+    type: boolean
+    description: True when the file already held exactly this content and was left alone.
+    optional: false
+methods: []
+sourcePath: src/exporters/base.ts
+createdAt: '2026-09-20T19:44:47.691Z'
+updatedAt: '2026-09-20T19:44:47.704Z'

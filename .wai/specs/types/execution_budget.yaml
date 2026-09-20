@@ -1,0 +1,21 @@
+kind: value-object
+id: execution_budget
+name: ExecutionBudget
+description: >-
+  What an agent is allowed to spend: which model tier it runs on and how much effort it may use. Two
+  fields rather than a number because the two are not interchangeable — a cheap model thinking hard
+  and an expensive model answering quickly are different trades, and a caller choosing between them
+  needs to say which.
+fields:
+  - name: modelTier
+    type: string
+    description: The model tier this agent runs on.
+    optional: false
+  - name: effort
+    type: string
+    description: How much effort it may spend within that tier.
+    optional: false
+methods: []
+sourcePath: src/models/execution.ts
+createdAt: '2026-09-20T19:47:48.244Z'
+updatedAt: '2026-09-20T19:47:48.255Z'

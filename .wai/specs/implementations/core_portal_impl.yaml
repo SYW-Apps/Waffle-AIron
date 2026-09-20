@@ -528,6 +528,20 @@ methods:
         type: call
         targetComponent: approval_comparison
         targetMethod: settledSpecPaths
+  - name: generateAll
+    narrative:
+      - stepNumber: 1
+        description: Forward to the agent file generator
+        type: call
+        targetComponent: agent_file_generator
+        targetMethod: generateAll
+  - name: resolveExpectedOutputPaths
+    narrative:
+      - stepNumber: 1
+        description: Forward to the agent file generator's path enumeration, which writes nothing
+        type: call
+        targetComponent: agent_file_generator
+        targetMethod: resolveExpectedOutputPaths
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T18:13:56.098Z'
+updatedAt: '2026-09-20T19:49:23.700Z'

@@ -1,0 +1,20 @@
+kind: value-object
+id: generate_summary
+name: GenerateSummary
+description: >-
+  What one agent's generate produced across every target: the agent, and one result per target
+  written. Kept per agent rather than flattened so a caller can report "this agent, these files" —
+  which is the shape `wairon generate` prints and the shape a failure has to be attributed in.
+fields:
+  - name: agent
+    type: AgentRecord
+    description: The agent these results are for.
+    optional: false
+  - name: results
+    type: ExportResult[]
+    description: One result per target written, each saying where it landed and whether it changed.
+    optional: false
+methods: []
+sourcePath: src/exporters/generate.ts
+createdAt: '2026-09-20T19:47:59.413Z'
+updatedAt: '2026-09-20T19:47:59.425Z'

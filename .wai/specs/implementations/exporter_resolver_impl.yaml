@@ -1,0 +1,43 @@
+id: exporter_resolver_impl
+name: Exporter Resolver Implementation
+description: >-
+  src/exporters/registry.ts. A module-level Map built once at load, mapping seven target names onto
+  three exporter instances. `registerExporter` is exported beside it and called by nothing in src or
+  tests — recorded here rather than left for the next reader to discover.
+contract: iexporter_resolver
+sourcePath: src/exporters/registry.ts
+methods:
+  - name: getExporter
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the target's type, whether it arrived as a bare name or as a configuration object
+          carrying one
+        type: local
+      - stepNumber: 2
+        description: >-
+          Look the type up in the fixed table: claude, cursor, copilot and codex resolve to the
+          Claude exporter (only claude emitting a budget), gemini and agy to the Gemini exporter,
+          custom to the custom one. A plain table read, not a dispatch — nothing is routed through a
+          Portal and no capability is resolved at runtime; the three exporters are constructed once
+          at module load and handed out by name
+        type: local
+      - stepNumber: 3
+        description: Decide whether the target is one this build serves
+        type: branch
+        condition: no exporter is registered for that type
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse by name rather than defaulting — writing one tool's format into another tool's path
+          is worse than writing nothing
+        type: throw
+        error: unknown export target
+      - stepNumber: 5
+        description: Answer with the exporter
+        type: return
+        outcome: resolved
+status: complete
+createdAt: '2026-09-20T19:46:35.234Z'
+updatedAt: '2026-09-20T19:48:29.036Z'

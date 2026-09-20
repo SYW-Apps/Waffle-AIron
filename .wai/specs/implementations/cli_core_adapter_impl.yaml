@@ -147,6 +147,20 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: renderDiagram
+  - name: generateAll
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal's generation
+        type: call
+        targetComponent: core_portal
+        targetMethod: generateAll
+  - name: resolveExpectedOutputPaths
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal's path enumeration
+        type: call
+        targetComponent: core_portal
+        targetMethod: resolveExpectedOutputPaths
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T16:42:34.863Z'
+updatedAt: '2026-09-20T19:49:38.372Z'

@@ -1,0 +1,45 @@
+id: iagent_file_generator
+name: Agent File Generator Interface
+description: >-
+  Writing agent files for the targets a project configures, and saying which files those are. The
+  two questions are separate because `wairon generate` needs the second without paying for the
+  first: it prunes and reports files it owns before deciding to render anything.
+component: agent_file_generator
+methods:
+  - name: generateAll
+    description: Do that for every agent in the registry, answering one summary per agent.
+    signature: >-
+      generateAll(agents: AgentRecord[], config: ProjectConfig, options?: GenerateOptions):
+      GenerateSummary[]
+    returns: GenerateSummary[]
+    params:
+      - name: agents
+        type: AgentRecord[]
+        description: Every agent to write
+      - name: config
+        type: ProjectConfig
+        description: The project's configuration, which names the targets
+      - name: options
+        type: GenerateOptions
+        description: What this run may vary
+        optional: true
+  - name: resolveExpectedOutputPaths
+    description: >-
+      Every path this generator would write for these agents and targets, without rendering or
+      writing any of them. This is how `wairon generate` knows which files are its own — a file
+      under a target directory that is not in this set was not written by wairon, and deleting it
+      would be destroying somebody else's work.
+    signature: 'resolveExpectedOutputPaths(agents: AgentRecord[], config: ProjectConfig): Set<string>'
+    returns: Set<string>
+    params:
+      - name: agents
+        type: AgentRecord[]
+        description: The agents whose outputs to enumerate
+      - name: config
+        type: ProjectConfig
+        description: The project's configuration, which names the targets
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T19:46:03.367Z'
+updatedAt: '2026-09-20T19:50:39.229Z'

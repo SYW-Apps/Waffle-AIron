@@ -625,6 +625,41 @@ methods:
         type: string
         description: The project root; the bound project when omitted
         optional: true
+  - name: generateAll
+    description: >-
+      Write every agent's file for every target the project configures, answering one summary per
+      agent. Published here because `wairon generate` is an sdd_cli command and the generator is an
+      sdd_core component — the CLI importing the exporters module directly is the crossing this
+      Portal exists to prevent.
+    signature: >-
+      generateAll(agents: AgentRecord[], config: ProjectConfig, options?: GenerateOptions):
+      GenerateSummary[]
+    returns: GenerateSummary[]
+    params:
+      - name: agents
+        type: AgentRecord[]
+        description: Every agent to write
+      - name: config
+        type: ProjectConfig
+        description: The project's configuration, which names the targets
+      - name: options
+        type: GenerateOptions
+        description: What this run may vary
+        optional: true
+  - name: resolveExpectedOutputPaths
+    description: >-
+      Every path a generate run would write for these agents and targets, without rendering or
+      writing any of them — how the command knows which files are wairon's own before it prunes or
+      reports.
+    signature: 'resolveExpectedOutputPaths(agents: AgentRecord[], config: ProjectConfig): Set<string>'
+    returns: Set<string>
+    params:
+      - name: agents
+        type: AgentRecord[]
+        description: The agents whose outputs to enumerate
+      - name: config
+        type: ProjectConfig
+        description: The project's configuration
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T18:13:52.090Z'
+updatedAt: '2026-09-20T19:49:19.159Z'
