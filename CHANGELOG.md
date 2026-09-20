@@ -78,6 +78,17 @@ same threshold — and it would have cost an AST parse of every test file on eve
 write. As shipped, wairon's own 265-file suite costs about 0.15s per gated write,
 and only when `testRoots` is declared.
 
+Sharing that pattern also found a latent defect in the pattern-grade analyzer.
+`matchAll` CLONES a regex together with its `lastIndex`, and the export-marker
+scan drives those same shared patterns with `exec`, which leaves an offset
+behind on a match — so the next file scanned with that pattern started part way
+in. On two Rust files where the first held an exported declaration, the second
+file's declarations came back EMPTY. Only projects at pattern grade were ever
+affected (a language with no exact analyzer, or a TypeScript project where the
+compiler module cannot be resolved at all), which is why nothing had reported
+it. The scan now hands each pattern back the way it found it.
+
+
 ### `sdd_move_methods` — a move that says where the methods CAN live
 
 Splitting a component meant re-sending two contracts and two narratives by hand,

@@ -252,6 +252,11 @@ function analyzeWithPatterns(text: string, patterns: LanguagePatterns): Omit<Sou
       for (const re of patterns.declarations) {
         re.lastIndex = 0;
         const m = re.exec(line);
+        // Hand the pattern back the way it was found. These tables are shared
+        // module state, and `matchAll` CLONES the regex together with its
+        // lastIndex — so an offset left here by a successful exec silently
+        // skips the head of the next file scanned with the same pattern.
+        re.lastIndex = 0;
         if (m?.[1]) exported.add(m[1]);
       }
     }

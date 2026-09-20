@@ -19,7 +19,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { findTestsReferencing } from '../../src/core/source-analysis.js';
+import { buildCodeModel, findTestsReferencing } from '../../src/core/source-analysis.js';
 import { findTestsReferencing as findThroughValidator } from '../../src/core/validation.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
@@ -229,6 +229,35 @@ describe('findTestsReferencing — what it refuses to walk', () => {
     write(root, 'tests/.cache/cached.test.ts', "import { runBilling } from '../src/billing.js';");
 
     expect(findTestsReferencing([{ name: 'runBilling' }], root, ['tests'])).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The pattern tables are shared module state
+//
+// This search reuses the JS table's named-import clause rather than forking it,
+// which is only safe while those patterns are stateless between files. They
+// were not: `matchAll` CLONES a regex together with its `lastIndex`, and the
+// export-marker scan drives the same patterns with `exec`, which leaves one
+// behind on a match. The next file scanned with that pattern then starts part
+// way in. Pinned on RUST, where the pattern grade is reachable — for TypeScript
+// the exact analyzer always wins here, so the same defect would sit untested.
+// ---------------------------------------------------------------------------
+
+describe('the shared declaration patterns carry no offset between files', () => {
+  it('reads a declaration at the head of a file scanned after an exported one', () => {
+    const root = tempProject();
+    // `pub fn` matches the export marker, so the declaration pattern is exec'd
+    // and left pointing past "fn alpha_one" — index 16.
+    write(root, 'src/a.rs', 'pub fn alpha_one() {}\n');
+    // Whose declaration sits before index 16, and disappears if the offset rides.
+    write(root, 'src/b.rs', 'fn beta_two() {}\n');
+
+    const model = buildCodeModel([], [], root, ['src']);
+    const b = model.files.find(f => f.path === 'src/b.rs');
+
+    expect(b?.analysisGrade).toBe('pattern');
+    expect(b?.declaredNames).toContain('beta_two');
   });
 });
 
