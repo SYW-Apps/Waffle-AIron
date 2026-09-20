@@ -119,6 +119,19 @@ fields:
       never be a call ORIGIN — and exactly what a declared field type is resolved through, which is
       why it is kept apart rather than folded in
     optional: true
+  - name: localTypes
+    type: Record<string, string[]>
+    description: >-
+      The type names a locally BOUND name is DECLARED with, by name — read off function and method
+      parameters and off variable declarations that carry an annotation, which is where a module
+      that wires its collaborators as closures writes down what each one is; exact grade only. Keyed
+      by name across the whole file, as fieldTypes is: the facts cannot say which function a call
+      site sits in, and a receiver is as often a parameter of an ENCLOSING function as of the one
+      that calls it — a closure captures it. Same-named bindings therefore keep every declared type,
+      and a wider answer only ever widens what a call may have reached. A binding the file annotates
+      with nothing records nothing, and so does one annotated with anything but a plain type
+      reference: what an initializer INFERS is not what the code declares
+    optional: true
 methods:
   - name: resolveImport
     signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
@@ -165,6 +178,13 @@ methods:
       The module specifier a NAME was imported from, whether the import was type-only or a runtime
       one, since a declared type may be spelled either way; undefined when the file imports no such
       name, which leaves the name local, global or ambient
+  - name: localTypesOf
+    signature: 'localTypesOf(name: string): string[]'
+    returns: string[]
+    description: >-
+      The type names a locally bound name is declared with, or EMPTY when the file binds no such
+      name, annotates it with nothing, or was analyzed below exact grade — the empty answer being
+      what keeps an unannotated receiver from becoming a guess, exactly as it is for a field
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-09-19T16:48:42.556Z'
+updatedAt: '2026-09-20T10:41:25.932Z'

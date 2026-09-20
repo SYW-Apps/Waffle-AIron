@@ -113,20 +113,23 @@ methods:
       transitively over the named helpers the realized function calls, and resolved against every
       file the call CAN have reached: a `this.<field>.<method>()` receiver followed through the
       field's DECLARED TYPE, a `new Class(...).<method>()` receiver through the module its CLASS
-      NAME came from. A matching call whose origin a pure model cannot resolve is reported apart as
-      CALL_ORIGIN_UNRESOLVED, which NAMES the shape it could not follow and asks for nothing — a
-      coverage hole in the reader, reported for the reason CONFORMANCE_DEGRADED is: a silently
-      degraded gate is worse than a degraded one. A finding names a landing only from the PROVEN
-      tier so that widening what a call reached can accept a claim but never accuse one, and a
-      target that names no file of its own falls back to name membership. Converse: a call that
-      resolves to a modelled method of ANOTHER component in the SAME file crosses a component
-      boundary while looking local, so the method must claim it — in a step or in `calls`
-      (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper
-      is no modelled method and is never reported. A method that claims nothing at all is judged in
-      neither direction: what it leaves unsaid is UNUSED_*'s subject. Order, arguments and
-      conditions stay unverified, dispatch steps (runtime-table routed) are no claim about a call
-      site, a malformed declared reference is MALFORMED_DECLARED_CALL's finding and names no target
-      here, the conformance dial (off) skips, and weaker analysis grades never guess.
+      NAME came from, and a plain `<name>.<method>()` receiver through the type the file ANNOTATES
+      that name with — a parameter's, or an annotated variable's, which is how a module that wires
+      its collaborators as closures writes every one of its calls. A matching call whose origin a
+      pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which NAMES the shape
+      it could not follow and asks for nothing — a coverage hole in the reader, reported for the
+      reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a degraded one. A
+      finding names a landing only from the PROVEN tier so that widening what a call reached can
+      accept a claim but never accuse one, and a target that names no file of its own falls back to
+      name membership. Converse: a call that resolves to a modelled method of ANOTHER component in
+      the SAME file crosses a component boundary while looking local, so the method must claim it —
+      in a step or in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a
+      same-file private helper is no modelled method and is never reported. A method that claims
+      nothing at all is judged in neither direction: what it leaves unsaid is UNUSED_*'s subject.
+      Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are no
+      claim about a call site, a malformed declared reference is MALFORMED_DECLARED_CALL's finding
+      and names no target here, the conformance dial (off) skips, and weaker analysis grades never
+      guess.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -382,4 +385,4 @@ methods:
           a unit that finding no longer reports — delete it, the register only shrinks
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-20T09:44:37.115Z'
+updatedAt: '2026-09-20T10:41:25.688Z'

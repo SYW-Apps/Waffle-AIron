@@ -333,6 +333,14 @@ interface ExactFacts {
    * `this` was.
    */
   fieldTypes: Map<string, Set<string>>;
+  /**
+   * The type names each locally BOUND name is declared with — a parameter's
+   * annotation, and an annotated variable declaration's. Same-named bindings
+   * union, because the file cannot say which function a call site sits in,
+   * and a receiver is as often a parameter of an ENCLOSING function as of the
+   * one that calls it.
+   */
+  localTypes: Map<string, Set<string>>;
   /** Module-scope mutable (`let`/`var`) binding names. */
   mutableBindings: Set<string>;
   /**
@@ -359,6 +367,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const importBindings = new Map<string, ImportBindingFact>();
   const typeOnlyBindings = new Map<string, string>();
   const fieldTypes = new Map<string, Set<string>>();
+  const localTypes = new Map<string, Set<string>>();
   const mutableBindings = new Set<string>();
 
   /**
@@ -414,6 +423,22 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     fieldTypes.set(field, named);
   };
 
+  // What the code DECLARES a locally bound name to be: a parameter's
+  // annotation, and an annotated variable declaration's. Only a plainly named
+  // binding is recorded — a destructured one binds the type's PROPERTIES and
+  // not the type — and only where the annotation names a type outright, the
+  // same reading recordFieldType takes.
+  const recordLocalType = (
+    name: import('typescript').BindingName,
+    type: import('typescript').TypeNode | undefined,
+  ): void => {
+    const typeName = typeReferenceName(type);
+    if (!typeName || !ts.isIdentifier(name)) return;
+    const named = localTypes.get(name.text) ?? new Set<string>();
+    named.add(typeName);
+    localTypes.set(name.text, named);
+  };
+
   const hasExportModifier = (node: import('typescript').Node): boolean => {
     const mods = (node as { modifiers?: readonly import('typescript').ModifierLike[] }).modifiers;
     return !!mods?.some(m => m.kind === ts.SyntaxKind.ExportKeyword);
@@ -465,7 +490,8 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
         // The call's SHAPE is the whole of what a pure model can say about
         // where it lands: a bare identifier resolves in this file's scope, a
         // member access through a plain identifier resolves through that
-        // binding, a member access through `this.<field>` resolves through the
+        // binding, or else through the type the file annotates that name
+        // with, a member access through `this.<field>` resolves through the
         // type the class declares that field with, a member access on a
         // freshly CONSTRUCTED value resolves through the class name the code
         // names right there, and a member access through anything else
@@ -511,6 +537,11 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     else if (ts.isParameter(node) && node.parent && ts.isConstructorDeclaration(node.parent) && isParameterProperty(node)) {
       recordFieldType(node.name, node.type);
     }
+    // And what it declares a locally BOUND name to be: the receiver shape a
+    // module that wires its collaborators as closures is written in. A
+    // constructor parameter property is both, and is recorded as both — inside
+    // the constructor body the same name IS the parameter.
+    if (ts.isParameter(node) || ts.isVariableDeclaration(node)) recordLocalType(node.name, node.type);
     if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)
       || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isModuleDeclaration(node)) {
       const name = node.name && ts.isIdentifier(node.name) ? node.name.text : undefined;
@@ -604,7 +635,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, mutableBindings, reexportOnly };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -891,6 +922,7 @@ export function buildCodeModel(
             importBindings: Object.fromEntries(facts.importBindings),
             typeOnlyBindings: Object.fromEntries(facts.typeOnlyBindings),
             fieldTypes: Object.fromEntries([...facts.fieldTypes].map(([k, v]) => [k, [...v]])),
+            localTypes: Object.fromEntries([...facts.localTypes].map(([k, v]) => [k, [...v]])),
             topLevelMutableBindings: [...facts.mutableBindings],
             reexportOnly: facts.reexportOnly,
           };

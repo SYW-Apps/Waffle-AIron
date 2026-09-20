@@ -51,12 +51,15 @@ methods:
           the module each TYPE-ONLY binding came from, kept apart because a type binding can never
           be a call origin though it is what a declared type resolves through, the type names each
           instance FIELD is declared with from class property declarations and constructor parameter
-          properties, an unannotated field recording nothing since an inferred type is not a
-          declared one, the call SITES of each named function-like with the shape each call was
-          written in — a bare name, a plain-identifier receiver, the this.<field> receiver whose
-          declared type can be followed, or the new Class(...) receiver whose class name can be —
-          and, before any republication is folded in, whether the file declared nothing of its own
-          and only re-exported, which is what makes it a pure re-export barrel
+          properties, the type names each locally BOUND name is declared with from parameters and
+          annotated variable declarations, both recording nothing where the declaration names no
+          type outright, since an inferred type is not a declared one and a destructured binding
+          binds the type's properties rather than the type, the call SITES of each named
+          function-like with the shape each call was written in — a bare name, a plain-identifier
+          receiver, the this.<field> receiver whose declared type can be followed, or the new
+          Class(...) receiver whose class name can be — and, before any republication is folded in,
+          whether the file declared nothing of its own and only re-exported, which is what makes it
+          a pure re-export barrel
         type: local
       - stepNumber: 6
         label: chaseReexports
@@ -81,4 +84,4 @@ methods:
         outcome: CodeModel
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-09-19T17:34:57.412Z'
+updatedAt: '2026-09-20T10:41:26.137Z'
