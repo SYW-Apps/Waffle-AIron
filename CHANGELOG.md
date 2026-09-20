@@ -69,7 +69,9 @@ already one list in two halves, and the half that goes stale is the one nobody
 reads: `calls` entries were missing from it entirely, so `sdd_rename_method` had
 been leaving a dangling `<component>.<oldName>` behind since `calls` shipped.
 Writing the move found it; the move needed the same six kinds the rename
-retargets, and only five were there.
+retargets, and only five were there. It does not fail quietly — `validate`
+reports INVALID_TARGET_METHOD_REFERENCE as an error — but the only way back was
+to find and edit every entry by hand.
 
 The other cost was the plan itself. `Array.prototype.filter` hands back the SAME
 element objects, so a plan built as `{...clone(spec), methods: spec.methods.filter(…)}`

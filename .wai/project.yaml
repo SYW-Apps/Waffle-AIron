@@ -424,6 +424,11 @@ rules:
             covers:
               - 'authoring_core_adapter.loadProjectConfig'
           - code: UNDECLARED_COLOCATED_CALL
+            spec: authoring_portal_impl
+            at: 'moveMethods'
+            covers:
+              - 'authoring_core_adapter.loadProjectConfig'
+          - code: UNDECLARED_COLOCATED_CALL
             spec: cli_runner_impl
             at: 'runRemote'
             covers:
@@ -1102,6 +1107,14 @@ rules:
             covers:
               - '16:spec_loader.saveComponentSpec'
               - '1:spec_loader.loadComponentSpec'
+          - code: CALL_ORIGIN_UNRESOLVED
+            spec: core_orchestrator_impl
+            at: 'moveMethods'
+            covers:
+              - '1:spec_loader.loadComponentSpec'
+              - '5:spec_loader.loadInterfaceSpecs'
+              - '7:spec_loader.loadImplementationSpecs'
+              - '15:spec_loader.saveImplementationSpec'
           - code: CALL_ORIGIN_UNRESOLVED
             spec: host_sdk_adapter_impl
             at: 'extractArchive'
