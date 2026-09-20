@@ -47,6 +47,29 @@ methods:
           Answer with what the delta would do and write nothing; the report carries dryRun true and
           written false
         optional: true
+  - name: moveMethods
+    description: >-
+      Move methods between components through the gate, as one all-or-nothing write. Answers with
+      what moved, every reference re-pointed to follow it, and on a refusal the rule that fired plus
+      the cheapest legal home. A partial move is the failure worth preventing here: it leaves
+      callers pointing at a method that is no longer where they say it is. Routed to the gated
+      workflow.
+    signature: 'moveMethods(from: string, to: string, methods: string[], dryRun?: boolean): MethodMoveReport'
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component id the methods currently belong to
+      - name: to
+        type: string
+        description: The component id that should receive them
+      - name: methods
+        type: string[]
+        description: The method names to move
+      - name: dryRun
+        type: boolean
+        description: Answer with what the move would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:41:27.211Z'
-updatedAt: '2026-09-19T00:26:35.504Z'
+updatedAt: '2026-09-20T12:02:35.811Z'

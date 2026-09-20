@@ -1296,6 +1296,108 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveTypeSpec
+  - name: moveMethods
+    narrative:
+      - stepNumber: 1
+        description: Load the source component spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: >-
+          Check what the caller named: the source and target both exist and differ, every named
+          method is declared on the source contract, no name is already declared on the target, and
+          neither component sits inside a chained subproject
+        type: local
+      - stepNumber: 3
+        description: Decide whether the request itself is answerable
+        type: branch
+        condition: any of those checks failed
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse before the first write, naming which check failed — a mistyped id must read as a
+          mistyped id, never as a rule refusing the design
+        type: throw
+        error: unmovable request
+      - stepNumber: 5
+        description: >-
+          Load the interfaces of both components, so the contract entries to move and the names
+          already declared on the target are both in hand
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 6
+        description: >-
+          Build the plan in memory: the contract entries that leave the source interface and arrive
+          on the target's, the implementation entries that travel with them carrying narrative,
+          sourcePath, symbol, detail, intent, calls and findings, and the dependencies the moved
+          narratives call that the target does not have yet
+        type: local
+      - stepNumber: 7
+        description: >-
+          Load every implementation to find the references that name the old home: narrative call,
+          register and dispatch steps, dispatch-table bindings, lifecycle entrypoints and `calls`
+          entries. Prose and wire endpoint addresses are recorded as mentions and left alone — a
+          move must not silently re-address an RPC
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 8
+        description: Decide whether a judgement was injected
+        type: branch
+        condition: the caller passed write hooks
+        onTrueStep: 9
+        onFalseStep: 13
+      - stepNumber: 9
+        description: >-
+          Judge the resulting source and target components at the write boundary; the hook throws to
+          refuse
+        type: local
+      - stepNumber: 10
+        description: Decide on the judgement
+        type: branch
+        condition: the hook refused the resulting target
+        onTrueStep: 11
+        onFalseStep: 13
+      - stepNumber: 11
+        description: >-
+          Enumerate the other components of the source's subsystem as candidate homes and ask the
+          hook to assess each without throwing, recording the dependencies each would have to add
+          and the rule codes that would refuse it
+        type: local
+      - stepNumber: 12
+        description: >-
+          Answer with the refusal: the rule codes, and the candidates ranked cheapest legal home
+          first with the requested target among them so its shortfall reads beside the rest. Nothing
+          has reached disk
+        type: return
+        outcome: refused
+      - stepNumber: 13
+        description: Decide whether the caller wanted the write
+        type: branch
+        condition: the caller asked for a dry run
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Answer with the edits the move would have made and write nothing
+        type: return
+        outcome: previewed
+      - stepNumber: 15
+        description: >-
+          Write every edit in the plan — both contracts, both implementations, and each referencing
+          implementation — restoring the ones already written if any write fails, because a
+          half-moved method leaves callers naming a home it no longer has
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 16
+        description: >-
+          Answer with what moved, how many references followed it, and the prose still naming the
+          old home
+        type: return
+        outcome: moved
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T23:04:53.760Z'
+updatedAt: '2026-09-20T12:05:45.327Z'

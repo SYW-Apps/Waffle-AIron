@@ -1,8 +1,8 @@
 import type { ComponentSpec } from '../models/specs.js';
 import type { RulesConfig } from '../models/project.js';
 import {
-  saveComponentSpec, updateSpec,
-  type SpecChangeReport, type SpecWriteHooks, type WritableSpecKind,
+  saveComponentSpec, updateSpec, moveMethods as coreMoveMethods,
+  type MethodMoveReport, type SpecChangeReport, type SpecWriteHooks, type WritableSpecKind,
 } from './specs.js';
 import { validateComponentCandidate } from './validation.js';
 import { formatCandidateRefusal, type CandidateVerdict } from './rules/candidate.js';
@@ -102,4 +102,81 @@ export function updateSpecGated(
   dryRun?: boolean,
 ): SpecChangeReport {
   return updateSpec(kind, id, delta, componentCandidateGate(), dryRun);
+}
+
+/**
+ * The write-boundary judgement for a METHOD MOVE, with both halves.
+ *
+ * `gate` refuses the resulting components at the write boundary exactly as the
+ * candidate gate does. `assess` answers the same question about a candidate
+ * home WITHOUT throwing, so the store — which holds the tree and can enumerate
+ * the candidates — can rank them instead of driving a search on caught
+ * exceptions.
+ *
+ * Beyond the intrinsic rules it reads the project's dependency ceiling, because
+ * that is the rule a move actually trips: a method moves with the collaborators
+ * its narrative calls, and the natural home is regularly the component that
+ * cannot afford them. The SOURCE is exempt from the ceiling — a component that
+ * already exceeds it must still be able to give methods away, and refusing that
+ * would lock exactly the component this feature exists to relieve.
+ */
+export function methodMoveGate(source: string): SpecWriteHooks {
+  // The config read sits HERE, in the builder's own body, so the orchestrator's
+  // step 1 (authoring_core_adapter.loadProjectConfig) is a call this file's
+  // reader can actually see. Hiding it inside the returned closures — the shape
+  // componentCandidateGate uses, which claims no config read — would leave that
+  // step claiming a call nothing realizes.
+  const bound = candidateOptions();
+  return {
+    gate: (kind, merged) => {
+      if (kind !== 'component') return;
+      const { codes, verdict, ceiling } = judgeMoveHome(merged as ComponentSpec, source, bound);
+      if (codes.length === 0) return noticesFrom(verdict);
+      throw new Error(
+        `${codes.join(', ')} refuses "${(merged as ComponentSpec).id}" as the home for these methods. `
+        + (verdict.errors.length
+          ? formatCandidateRefusal(verdict)
+          : `It would reach ${(merged as ComponentSpec).dependsOn?.length ?? 0} dependencies against a ceiling of ${ceiling}.`),
+      );
+    },
+    assess: (kind, merged) => (kind === 'component' ? judgeMoveHome(merged as ComponentSpec, source, bound).codes : []),
+  };
+}
+
+/**
+ * The rule codes that refuse one component as a home for the moved methods,
+ * with the verdict they came from — the one judgement both halves of the hook
+ * answer with, so `gate` and `assess` can never disagree about the same spec.
+ */
+function judgeMoveHome(
+  component: ComponentSpec,
+  source: string,
+  options: { rules?: RulesConfig; projectType?: string },
+): { codes: string[]; verdict: CandidateVerdict; ceiling?: number } {
+  const ceiling = options.rules?.complexity?.maxComponentDependencies;
+  const verdict = validateComponentCandidate(component, options);
+  const codes = verdict.errors.map((e) => e.code);
+  if (component.id !== source && ceiling !== undefined && (component.dependsOn?.length ?? 0) > ceiling) {
+    codes.push('EXCESSIVE_DEPENDENCIES');
+  }
+  return { codes: [...new Set(codes)], verdict, ceiling };
+}
+
+/**
+ * Move methods from one component to another as ONE gated write.
+ *
+ * The judgement is the point. A rename changes identity and can stay
+ * mechanical; a move changes which component owns behaviour, which is exactly
+ * what the stereotype and dependency rules judge. On a refusal nothing is
+ * written and the report names the rule plus where the methods could live
+ * instead — because a refusal that only names the rule leaves the caller to
+ * search for a legal home by hand, which is the hand labour this replaces.
+ */
+export function moveMethods(
+  from: string,
+  to: string,
+  methods: string[],
+  dryRun?: boolean,
+): MethodMoveReport {
+  return coreMoveMethods(from, to, methods, methodMoveGate(from), dryRun);
 }

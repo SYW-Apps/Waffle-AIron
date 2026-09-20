@@ -478,6 +478,47 @@ methods:
       - name: spec
         type: TypeSpec
         description: The type to persist
+  - name: moveMethods
+    description: >-
+      Move contract methods from one component to another, and every reference with them. Each
+      method leaves the source component's interface and arrives on the target's, carrying its
+      signature, params, returns, guarantees and endpoint binding unchanged; its implementation
+      entry moves with it, carrying narrative, sourcePath, symbol, detail, intent, calls and
+      findings. Narrative call, register and dispatch steps naming the old home, dispatch-table
+      bindings, lifecycle entrypoints and `calls` entries are retargeted to the new one. Prose is
+      never rewritten and a wire endpoint keeps its address — moving a method between components
+      must not silently re-address an RPC; both are reported as mentions. Every edit is computed
+      before the first is written, and a write that fails restores the ones already made, because a
+      half-moved method leaves callers naming a home it no longer has. The caller's judgement runs
+      as a write hook on the resulting components at the last point before anything reaches disk,
+      which is where a move that breaks a dependency rule is refused. Refuses, before the first
+      write: a component or method that does not exist, a method name already declared on the
+      target, a source and target that are the same component, and a component inside a chained
+      subproject (move it from that project's root). A lock goes stale as with any edit.
+    signature: >-
+      moveMethods(from: string, to: string, methods: string[], hooks?: SpecWriteHooks, dryRun?:
+      boolean): MethodMoveReport
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component id the methods currently belong to
+      - name: to
+        type: string
+        description: The component id that should receive them
+      - name: methods
+        type: string[]
+        description: The method names to move; every one must be declared on the source component's contract
+      - name: hooks
+        type: SpecWriteHooks
+        description: The judgement to run on the resulting components at the write boundary
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: >-
+          Run the whole move, hook included, and answer with the report it would have produced
+          without writing
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T23:04:53.623Z'
+updatedAt: '2026-09-20T12:04:17.647Z'

@@ -1,0 +1,45 @@
+kind: value-object
+id: method_move_candidate
+name: MethodMoveCandidate
+description: >-
+  One component considered as a home for a set of moved methods, and what putting them there would
+  cost. Produced when a move is refused: a refusal that only says which rule fired leaves the caller
+  to work out where the methods CAN live, which is the search this type answers. Ranked by
+  `newDependencies` length, so the cheapest legal home is first.
+fields:
+  - name: component
+    type: string
+    description: The candidate component's id.
+    optional: false
+  - name: legal
+    type: boolean
+    description: True when the methods could move here with no rule refusing it.
+    optional: false
+  - name: newDependencies
+    type: string[]
+    description: >-
+      The dependencies this component does not have yet but the moved methods call. Empty when it
+      already reaches everything they need — the cheapest possible home.
+    optional: false
+  - name: dependencyCount
+    type: number
+    description: >-
+      What this component's dependency count would become after the move, counting
+      `newDependencies`.
+    optional: false
+  - name: dependencyLimit
+    type: number
+    description: >-
+      The project's `maxComponentDependencies` at the time of the answer, so `dependencyCount` can
+      be read without looking up the config.
+    optional: false
+  - name: refusals
+    type: string[]
+    description: >-
+      The rule codes that would refuse the move into this component. Empty exactly when `legal` is
+      true.
+    optional: false
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-09-20T12:02:07.039Z'
+updatedAt: '2026-09-20T12:05:50.951Z'

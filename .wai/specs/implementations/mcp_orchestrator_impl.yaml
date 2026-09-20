@@ -489,7 +489,29 @@ methods:
           omission cleared. A type carries no lifecycle status, so the receipt states none
         type: local
     symbol: sdd_add_type
+  - name: moveMethods
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Verify the source component exists, so a mistyped id reads as a mistyped id rather than as
+          a rule refusing the design
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: Verify the target component exists the same way
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpec
+      - stepNumber: 3
+        description: >-
+          Hand the move to the authoring client adapter, which reaches the gate: the move is judged
+          as a whole and refused before anything reaches disk
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: moveMethods
+    symbol: sdd_move_methods
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-19T23:07:19.472Z'
+updatedAt: '2026-09-20T12:06:09.818Z'

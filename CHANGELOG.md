@@ -26,6 +26,60 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### `sdd_move_methods` — a move that says where the methods CAN live
+
+Splitting a component meant re-sending two contracts and two narratives by hand,
+then deep-comparing against HEAD to prove nothing else had moved. D2b paid that
+three times.
+
+`renameMethod` and `renameComponent` are mechanical and live ungated on
+`sdd_core`. A move is not: it changes which component OWNS behaviour, which is
+exactly what the stereotype and dependency rules judge. So core gained the
+mechanical lift-and-retarget beside `renameMethod`, and the gate injects its
+judgement as a write hook the way `updateSpecGated` does. Each method leaves the
+source contract and arrives on the target's carrying signature, params, returns,
+guarantees and endpoint binding; its implementation entry travels with it
+carrying narrative, sourcePath, symbol, detail, intent, calls and findings. The
+target gains the dependencies the moved narratives call.
+
+**The refusal is the feature.** When a rule refuses the move, nothing is written
+and the report ranks the candidate homes cheapest-legal-first — the requested
+target among them, so its shortfall reads beside the others. That is the hand
+labour it replaces: when #88 moved five methods out of `web_admin_orchestrator`,
+both natural homes were refused by `maxComponentDependencies` (11 and 12 against
+a ceiling of 10), and working that out was done by eye over a graph the tool
+already held. The SOURCE is exempt from that ceiling: a component that already
+exceeds it must still be able to give methods away, or the feature locks exactly
+the component it exists to relieve.
+
+`SpecWriteHooks` gains `assess`. `gate` throws to refuse, which cannot answer
+"would this be legal" without driving a search on caught exceptions — a search
+whose control flow is a throw per candidate, where a bug in the gate is
+indistinguishable from a refusal. The store holds the tree and enumerates the
+candidates; the gate holds the judgement; neither can answer alone.
+
+What it deliberately does not touch: prose, and a published wire address. Moving
+a method between components must not silently re-address an RPC, so both are
+reported as `mentions` instead.
+
+**What it cost to learn.** The reference-field table — which fields of which
+spec kind name another spec — now lives once, in `core/specs.ts`, and both the
+rename (walking files) and the move (walking the typed store) drive it. It was
+already one list in two halves, and the half that goes stale is the one nobody
+reads: `calls` entries were missing from it entirely, so `sdd_rename_method` had
+been leaving a dangling `<component>.<oldName>` behind since `calls` shipped.
+Writing the move found it; the move needed the same six kinds the rename
+retargets, and only five were there. It does not fail quietly — `validate`
+reports INVALID_TARGET_METHOD_REFERENCE as an error — but the only way back was
+to find and edit every entry by hand.
+
+The other cost was the plan itself. `Array.prototype.filter` hands back the SAME
+element objects, so a plan built as `{...clone(spec), methods: spec.methods.filter(…)}`
+shares its methods with the snapshot a failed write has to restore — and the
+reference sweep, which rewrites in place, then quietly edits both. The atomicity
+test caught it: a failed write restored specs that had already been mutated
+through the snapshot. Copy first, filter the copy.
+
 ### The implement and delegate skills carry the conventions the work taught
 
 A delegated change kept going wrong in the same ways, and each brief patched the

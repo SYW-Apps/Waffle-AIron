@@ -26,6 +26,15 @@ methods:
         type: call
         targetComponent: authoring_orchestrator
         targetMethod: updateSpecGated
+  - name: moveMethods
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the move to the gated workflow, which judges it as a whole and writes all of it or
+          none of it
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: moveMethods
 status: complete
 createdAt: '2026-09-18T21:43:28.738Z'
-updatedAt: '2026-09-18T21:51:08.039Z'
+updatedAt: '2026-09-20T12:06:02.659Z'

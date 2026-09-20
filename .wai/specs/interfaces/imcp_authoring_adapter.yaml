@@ -40,6 +40,27 @@ methods:
         type: boolean
         description: Answer with what the delta would do and write nothing
         optional: true
+  - name: moveMethods
+    description: >-
+      Forward the sdd_move_methods request to the authoring portal's gate: the move is judged as a
+      whole and refused before anything reaches disk, and a dry run runs that same move and answers
+      with the report it would have produced without writing.
+    signature: 'moveMethods(from: string, to: string, methods: string[], dryRun?: boolean): MethodMoveReport'
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component id the methods currently belong to
+      - name: to
+        type: string
+        description: The component id that should receive them
+      - name: methods
+        type: string[]
+        description: The method names to move
+      - name: dryRun
+        type: boolean
+        description: Answer with what the move would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:42:03.998Z'
-updatedAt: '2026-09-19T22:56:26.373Z'
+updatedAt: '2026-09-20T12:02:40.458Z'

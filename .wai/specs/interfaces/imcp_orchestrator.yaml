@@ -245,6 +245,28 @@ methods:
       - name: spec
         type: TypeSpec
         description: The type as the tool's arguments describe it
+  - name: moveMethods
+    description: >-
+      The sdd_move_methods workflow: verify both components exist, then hand the move to the
+      authoring gate, which judges it as a whole and writes all of it or none of it. The
+      verification is here rather than in the gate because a mistyped component id should read as a
+      mistyped id, not as a rule refusing the design.
+    signature: 'moveMethods(from: string, to: string, methods: string[], dryRun?: boolean): MethodMoveReport'
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component id the methods currently belong to
+      - name: to
+        type: string
+        description: The component id that should receive them
+      - name: methods
+        type: string[]
+        description: The method names to move
+      - name: dryRun
+        type: boolean
+        description: Answer with what the move would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-19T23:07:19.222Z'
+updatedAt: '2026-09-20T12:03:09.303Z'

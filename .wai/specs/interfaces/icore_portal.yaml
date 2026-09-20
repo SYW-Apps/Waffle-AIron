@@ -501,6 +501,32 @@ methods:
       - name: spec
         type: TypeSpec
         description: The type to persist
+  - name: moveMethods
+    description: >-
+      Forward to core_orchestrator.moveMethods: move contract methods to another component, carrying
+      their implementations and retargeting every reference to them
+    signature: >-
+      moveMethods(from: string, to: string, methods: string[], hooks?: SpecWriteHooks, dryRun?:
+      boolean): MethodMoveReport
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component id the methods currently belong to
+      - name: to
+        type: string
+        description: The component id that should receive them
+      - name: methods
+        type: string[]
+        description: The method names to move
+      - name: hooks
+        type: SpecWriteHooks
+        description: The judgement to run on the resulting components at the write boundary
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Report what the move would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T23:04:53.869Z'
+updatedAt: '2026-09-20T12:04:21.862Z'

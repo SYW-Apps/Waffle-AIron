@@ -367,6 +367,34 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_add_type
+  - name: sdd_move_methods
+    description: >-
+      Tool: move contract methods from one component to another, carrying each method's narrative,
+      calls and bindings, and re-pointing every reference that named the old home. One
+      all-or-nothing gated write: if a rule refuses the move, nothing is written and the report
+      names the rule plus where these methods could live instead, cheapest legal home first. A dry
+      run runs the whole move, gate included, and reports what it would have done.
+    signature: >-
+      sdd_move_methods(from: string, to: string, methods: string[], dryRun?: boolean):
+      MethodMoveReport
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component the methods belong to (namespaced if needed)
+      - name: to
+        type: string
+        description: The component that should receive them (namespaced if needed)
+      - name: methods
+        type: string[]
+        description: The method names to move; every one must exist on the source contract
+      - name: dryRun
+        type: boolean
+        description: Answer with what the move would do and write nothing
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_move_methods
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T23:12:59.258Z'
+updatedAt: '2026-09-20T12:03:14.416Z'

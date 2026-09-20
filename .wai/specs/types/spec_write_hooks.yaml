@@ -15,6 +15,15 @@ methods:
     description: >-
       Judge the fully merged spec immediately before it is persisted, and throw to refuse the write.
       Returns any notices to surface alongside the write's own.
+  - name: assess
+    signature: 'assess(kind: string, merged: object): string[]'
+    returns: string[]
+    description: >-
+      Judge a spec the same way `gate` does but answer with the rule codes instead of throwing, so a
+      caller can ask whether a shape WOULD be legal without attempting the write. This exists for
+      the move's alternatives search: the store holds the tree and can enumerate candidate homes,
+      the gate holds the judgement, and neither can answer alone. Using `gate` for the same question
+      would mean driving a search on caught exceptions.
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:13:19.876Z'
-updatedAt: '2026-09-19T11:07:18.165Z'
+updatedAt: '2026-09-20T12:04:44.906Z'

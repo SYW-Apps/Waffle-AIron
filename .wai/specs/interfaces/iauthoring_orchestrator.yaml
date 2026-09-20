@@ -44,6 +44,34 @@ methods:
         type: boolean
         description: Answer with what the delta would do and write nothing
         optional: true
+  - name: moveMethods
+    description: >-
+      Move methods from one component to another as one gated write: lift each method's contract and
+      its implementation (narrative, calls, sourcePath, technologies) onto the target, re-point
+      every reference that named the old home, and judge the RESULT before anything reaches disk.
+      The judgement is the point — a rename changes identity and can stay mechanical, but a move
+      changes which component owns behaviour, which is exactly what the stereotype and dependency
+      rules judge. On a refusal nothing is written and the report names the rule plus where the
+      methods could live instead, because a refusal that only names the rule leaves the caller to
+      search for a legal home by hand.
+    signature: 'moveMethods(from: string, to: string, methods: string[], dryRun?: boolean): MethodMoveReport'
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component id the methods currently belong to
+      - name: to
+        type: string
+        description: The component id that should receive them
+      - name: methods
+        type: string[]
+        description: The method names to move; every one must exist on the source contract
+      - name: dryRun
+        type: boolean
+        description: >-
+          Run the whole move, gate included, and answer with the report it would have produced
+          without touching disk
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-09-19T00:26:47.326Z'
+updatedAt: '2026-09-20T12:02:29.818Z'

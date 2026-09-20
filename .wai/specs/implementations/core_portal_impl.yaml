@@ -435,6 +435,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: saveTypeSpec
+  - name: moveMethods
+    narrative:
+      - stepNumber: 1
+        description: Forward the move to the orchestrator, which computes every edit before writing any of them
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: moveMethods
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T23:04:53.984Z'
+updatedAt: '2026-09-20T12:05:04.530Z'
