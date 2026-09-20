@@ -6,12 +6,17 @@ description: >-
   the rendering happens in the core and the formatting happens at the edge — the split `base.ts`
   describes in prose and nothing enforced until now. It also answers which paths it OWNS without
   writing any of them, which is what lets `wairon generate` report or prune its own output without
-  rendering a thing.
+  rendering a thing. It reaches the template source and the brief composer directly rather than
+  through `core_portal`: the Portal re-exports THIS component for the CLI, so going back through it
+  would close a cycle, and a component reaching through its own subsystem's Portal is backwards even
+  when the cycle is inert.
 subsystem: sdd_core
 componentType: Orchestrator
 owns: []
 dependsOn:
   - exporter_resolver
+  - template_source_adapter
+  - agent_resolver
 status: complete
 createdAt: '2026-09-20T19:45:25.916Z'
-updatedAt: '2026-09-20T19:45:25.932Z'
+updatedAt: '2026-09-20T20:04:13.290Z'

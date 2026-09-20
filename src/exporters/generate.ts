@@ -1,7 +1,12 @@
 import * as path from 'path';
 import { AgentRecord } from '../models/agent.js';
 import { ProjectConfig, TargetConfig } from '../models/project.js';
-import { loadTemplate, composeAgentBrief } from '../core/index.js';
+// Taken from the modules that hold them, not from ../core/index.js. Routing the
+// CLI through the Portal means the barrel now re-exports THIS file, so reaching
+// back through the barrel would close a cycle. A component reaching through its
+// own subsystem's Portal is backwards even when the cycle is inert.
+import { loadTemplate } from '../core/templates.js';
+import { composeAgentBrief } from '../core/agent_resolver.js';
 import { deriveExecutionProfile } from '../core/execution_profile.js';
 import { resolveBudget } from '../core/budget_policy.js';
 import { getProjectRoot } from '../utils/fs.js';
