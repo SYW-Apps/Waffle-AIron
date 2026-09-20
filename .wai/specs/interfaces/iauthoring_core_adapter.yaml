@@ -55,6 +55,37 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: moveMethods
+    description: >-
+      Move methods between two components through the core's mechanical lift-and-retarget, with the
+      caller's judgement passed in as the write hook the store runs on the resulting components
+      before anything reaches disk. The store holds the tree, so it is the store that enumerates
+      candidate homes when the move is refused and asks the hook to assess each; the seam still
+      reads no spec of its own. A dry run is forwarded too. Forwarded to the core portal.
+    signature: >-
+      moveMethods(from: string, to: string, methods: string[], hooks?: SpecWriteHooks, dryRun?:
+      boolean): MethodMoveReport
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component id the methods currently belong to
+      - name: to
+        type: string
+        description: The component id that should receive them
+      - name: methods
+        type: string[]
+        description: The method names to move
+      - name: hooks
+        type: SpecWriteHooks
+        description: >-
+          The judgement to run on the resulting components, and to assess candidate homes with on a
+          refusal
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Report what the move would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:41:49.125Z'
-updatedAt: '2026-09-19T00:26:52.045Z'
+updatedAt: '2026-09-20T12:04:50.408Z'

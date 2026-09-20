@@ -170,6 +170,13 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: addType
+  - name: sdd_move_methods
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the tool call to the move workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: moveMethods
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T23:07:19.580Z'
+updatedAt: '2026-09-20T12:06:12.396Z'

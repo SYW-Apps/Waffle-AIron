@@ -1,0 +1,86 @@
+kind: value-object
+id: method_move_report
+name: MethodMoveReport
+description: >-
+  The answer to a method move: what moved, every reference that was re-pointed to follow it, and —
+  when a rule refused the move — which rule and where the methods could live instead. A move is
+  several gated writes at once (both contracts, both implementations, and every caller whose steps
+  name the old home), so `edits` carries one SpecChangeReport per spec touched rather than one flat
+  change list. Either all of them land or none do: a partial move leaves callers pointing at a
+  method that is no longer there.
+fields:
+  - name: moved
+    type: boolean
+    description: >-
+      True only when the methods now live on `to` and every edit reached disk. False for a refusal
+      and for a dry run alike; `refusals` and `dryRun` tell those apart.
+    optional: false
+  - name: from
+    type: string
+    description: The component the methods were taken from.
+    optional: false
+  - name: to
+    type: string
+    description: The component asked to receive them.
+    optional: false
+  - name: methods
+    type: string[]
+    description: The method names the caller asked to move, in the order given.
+    optional: false
+  - name: edits
+    type: SpecChangeReport[]
+    description: >-
+      One report per spec the move touched: the two contracts, the two implementations, and every
+      caller implementation whose steps or `calls` named the old home. Empty when the move was
+      refused.
+    optional: false
+  - name: repointed
+    type: number
+    description: >-
+      How many references were re-pointed to follow the methods, across every kind that names a
+      component: narrative `call`, `register` and `dispatch` steps by their targetComponent,
+      dispatch-table bindings, lifecycle entrypoints, and `calls` entries by their
+      `<component>.<method>` string. The same set `sdd_rename_method` retargets — a move that covers
+      fewer leaves a dangling reference the validator will find later.
+    optional: false
+  - name: refusals
+    type: string[]
+    description: >-
+      The rule codes that refused the move, each with what it judged. Empty exactly when nothing
+      refused it; a non-empty list means nothing reached disk.
+    optional: false
+  - name: alternatives
+    type: MethodMoveCandidate[]
+    description: >-
+      Where these methods could live instead, cheapest legal home first, including `to` itself so
+      its shortfall can be read beside the others. Populated only on a refusal.
+    optional: false
+  - name: notices
+    type: string[]
+    description: >-
+      What the caller should know but nothing refused: the source component left with no methods, a
+      status that differs between the two homes, a moved method whose narrative is empty.
+    optional: false
+  - name: summary
+    type: string
+    description: >-
+      One line for people, naming what moved where and how many references followed it, or which
+      rule refused it and the cheapest home that would not.
+    optional: false
+  - name: dryRun
+    type: boolean
+    description: >-
+      True when the caller asked what the move would do and nothing was written. The whole move
+      runs, gate included, so a dry run answers with the same edits and refusals a real one would.
+    optional: false
+  - name: mentions
+    type: string[]
+    description: >-
+      Ids of the specs whose prose still names the old home, and wire endpoint bindings that keep
+      it. Nothing here was rewritten: a move never edits prose and never changes a published wire
+      address, so this is the list a human still has to read.
+    optional: false
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-09-20T12:02:20.127Z'
+updatedAt: '2026-09-20T12:05:49.238Z'
