@@ -64,7 +64,7 @@ export function listSpecFiles(specsDir: string): string[] {
  * (`paths.specsDir`), so the boundary cannot be derived from the path and the
  * store is the one component that must never read project.yaml to find it.
  */
-export function remove(filePath: string, specsRoot: string): boolean {
+export function removeSpecFile(filePath: string, specsRoot: string): boolean {
   if (!fs.existsSync(filePath)) return false;
   fs.unlinkSync(filePath);
   pruneEmptyDirs(path.dirname(filePath), path.resolve(specsRoot));

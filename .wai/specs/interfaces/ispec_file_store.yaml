@@ -39,18 +39,26 @@ methods:
   - name: remove
     description: >-
       Delete the spec document at the given path and prune the parent directories the deletion left
-      empty, stopping at the specs root. Answers false when there was no file there, so a caller can
-      tell "deleted" from "was never there" without a separate existence check. This is here because
-      the component claims to be the single file-I/O face of the spec repository: while deletes
-      unlinked files directly from the workspace, that claim was false and the one place the storage
-      format is chosen did not know when a document stopped existing.
-    signature: 'remove(specPath: string): boolean'
+      empty, stopping before the specs root so the root itself survives an emptied tree. Answers
+      false when there was no file there, so a caller can tell "deleted" from "was never there"
+      without a separate existence check. The root is a PARAMETER, not something the store works
+      out: `paths.specsDir` is configurable and this component never reads `project.yaml`, so a
+      store left to infer the boundary would delete the specs directory itself. This method is here
+      because the component claims to be the single file-I/O face of the spec repository: while
+      deletes unlinked files directly from the workspace, that claim was false and the one place the
+      storage format is chosen did not know when a document stopped existing.
+    signature: 'remove(specPath: string, specsRoot: string): boolean'
     returns: boolean
     params:
       - name: specPath
         type: string
         description: The spec document's path, resolved by the caller as for read and write
+      - name: specsRoot
+        type: string
+        description: >-
+          The specs directory the prune stops before; the caller resolves it, because the store
+          reads no project configuration of its own
     effect: write
 status: complete
 createdAt: '2026-07-18T22:57:53.287Z'
-updatedAt: '2026-09-20T14:27:28.536Z'
+updatedAt: '2026-09-20T14:54:09.702Z'

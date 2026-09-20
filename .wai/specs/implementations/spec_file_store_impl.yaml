@@ -85,13 +85,14 @@ methods:
         type: local
       - stepNumber: 2
         description: >-
-          Unlink the document, then prune each parent directory the deletion left empty, stopping at
-          the specs root so the root itself is never removed
+          Unlink the document, then prune each parent directory the deletion left empty, stopping
+          before the specs root the caller passed so the root survives an emptied tree
         type: local
       - stepNumber: 3
         description: Answer that a document was removed
         type: return
         outcome: removed
+    symbol: removeSpecFile
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-09-20T14:28:48.978Z'
+updatedAt: '2026-09-20T14:54:13.474Z'

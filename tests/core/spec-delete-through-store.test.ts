@@ -14,7 +14,7 @@ import {
   getImplementationPath, getTypePath,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
-import { remove } from '../../src/core/spec-files.js';
+import { removeSpecFile } from '../../src/core/spec-files.js';
 import type {
   SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, TypeSpec,
 } from '../../src/models/index.js';
@@ -209,13 +209,13 @@ describe('spec_file_store.remove', () => {
     fs.writeFileSync(path.join(deep, 'doc.yaml'), 'id: doc\n');
     fs.writeFileSync(path.join(specsRoot, 'a', 'keep.yaml'), 'id: keep\n');
 
-    expect(remove(path.join(deep, 'doc.yaml'), specsRoot)).toBe(true);
+    expect(removeSpecFile(path.join(deep, 'doc.yaml'), specsRoot)).toBe(true);
     expect(fs.existsSync(deep)).toBe(false);
     expect(fs.existsSync(path.join(specsRoot, 'a', 'b'))).toBe(false);
     // `a` still holds keep.yaml, so the walk stops there.
     expect(fs.existsSync(path.join(specsRoot, 'a'))).toBe(true);
 
-    expect(remove(path.join(specsRoot, 'a', 'keep.yaml'), specsRoot)).toBe(true);
+    expect(removeSpecFile(path.join(specsRoot, 'a', 'keep.yaml'), specsRoot)).toBe(true);
     expect(fs.existsSync(path.join(specsRoot, 'a'))).toBe(false);
     expect(fs.existsSync(specsRoot)).toBe(true);
   });
@@ -225,7 +225,7 @@ describe('spec_file_store.remove', () => {
     const specsRoot = path.join(root, 'specs');
     fs.mkdirSync(path.join(specsRoot, 'a'), { recursive: true });
 
-    expect(remove(path.join(specsRoot, 'a', 'ghost.yaml'), specsRoot)).toBe(false);
+    expect(removeSpecFile(path.join(specsRoot, 'a', 'ghost.yaml'), specsRoot)).toBe(false);
     expect(fs.existsSync(path.join(specsRoot, 'a'))).toBe(true);
   });
 });

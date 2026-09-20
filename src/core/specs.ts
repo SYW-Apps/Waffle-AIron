@@ -9,7 +9,7 @@ import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile } from '../utils/yaml.js';
-import { listSpecFiles, readSpecFile, remove, writeSpecFile } from './spec-files.js';
+import { listSpecFiles, readSpecFile, removeSpecFile, writeSpecFile } from './spec-files.js';
 // TYPE-ONLY, and it has to be: the report NAMES the tests a write invalidated,
 // while the search that finds them belongs to the validator. A runtime import
 // here would be the store reaching into the rule engine that already reads it
@@ -2279,7 +2279,7 @@ export class SpecWorkspace {
 
   deleteSubsystemSpec(id: string): boolean {
     const p = this.getSubsystemPath(id);
-    if (!remove(p, this.paths.specsDir())) return false;
+    if (!removeSpecFile(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
@@ -2365,7 +2365,7 @@ export class SpecWorkspace {
 
   deleteComponentSpec(id: string): boolean {
     const p = this.getComponentPath(id);
-    if (!remove(p, this.paths.specsDir())) return false;
+    if (!removeSpecFile(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
@@ -2512,7 +2512,7 @@ export class SpecWorkspace {
 
   deleteInterfaceSpec(id: string): boolean {
     const p = this.getInterfacePath(id);
-    if (!remove(p, this.paths.specsDir())) return false;
+    if (!removeSpecFile(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
@@ -2577,7 +2577,7 @@ export class SpecWorkspace {
 
   deleteImplementationSpec(id: string): boolean {
     const p = this.getImplementationPath(id);
-    if (!remove(p, this.paths.specsDir())) return false;
+    if (!removeSpecFile(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
@@ -2643,7 +2643,7 @@ export class SpecWorkspace {
   deleteTypeSpec(id: string): boolean {
     const spec = this.loadTypeSpec(id);
     const p = this.getTypePath(id, spec?.subsystem, spec?.group);
-    if (!remove(p, this.paths.specsDir())) return false;
+    if (!removeSpecFile(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
@@ -2677,7 +2677,7 @@ export class SpecWorkspace {
 
   deleteGroupSpec(id: string): boolean {
     const p = this.getGroupPath(id);
-    if (!remove(p, this.paths.specsDir())) return false;
+    if (!removeSpecFile(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
