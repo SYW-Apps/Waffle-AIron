@@ -551,6 +551,34 @@ methods:
         type: call
         targetComponent: agent_resolver
         targetMethod: loadRegistry
+  - name: resolveDomains
+    narrative:
+      - stepNumber: 1
+        description: Forward to the topology repository's facade
+        type: call
+        targetComponent: topology_repository
+        targetMethod: resolve
+  - name: addDomain
+    narrative:
+      - stepNumber: 1
+        description: Forward to the topology repository's facade
+        type: call
+        targetComponent: topology_repository
+        targetMethod: addFreeStanding
+  - name: removeDomain
+    narrative:
+      - stepNumber: 1
+        description: Forward to the topology repository's facade
+        type: call
+        targetComponent: topology_repository
+        targetMethod: removeFreeStanding
+  - name: detectDomainCandidates
+    narrative:
+      - stepNumber: 1
+        description: Forward to the domain detector, which proposes and never registers
+        type: call
+        targetComponent: domain_detector
+        targetMethod: detectCandidates
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T21:24:42.707Z'
+updatedAt: '2026-09-20T22:09:28.442Z'

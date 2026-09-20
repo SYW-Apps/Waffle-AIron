@@ -669,6 +669,49 @@ methods:
     signature: 'loadRegistry(): Registry'
     returns: Registry
     params: []
+  - name: resolveDomains
+    description: Every domain this project has, derived from subsystems and registered free-standing alike.
+    signature: 'resolveDomains(): Domain[]'
+    returns: Domain[]
+    params: []
+  - name: addDomain
+    description: >-
+      Register a domain the spec tree does not imply, and persist it. Refuses an id that already
+      exists in either kind.
+    signature: 'addDomain(domain: Domain): void'
+    returns: void
+    params:
+      - name: domain
+        type: Domain
+        description: The domain to register
+  - name: removeDomain
+    description: Unregister a free-standing domain. A derived one is removed by removing its subsystem.
+    signature: 'removeDomain(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+        description: The domain id to unregister
+  - name: detectDomainCandidates
+    description: >-
+      Which directories look like domains nobody has registered yet. Proposals only — nothing here
+      writes.
+    signature: >-
+      detectDomainCandidates(projectRoot: string, trackedPaths?: Set<string>, trackedIds?:
+      Set<string>): DetectedDomainCandidate[]
+    returns: DetectedDomainCandidate[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The repository root to scan
+      - name: trackedPaths
+        type: Set<string>
+        description: Paths already claimed by a registered domain
+        optional: true
+      - name: trackedIds
+        type: Set<string>
+        description: Domain ids already in use
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T21:24:38.924Z'
+updatedAt: '2026-09-20T22:09:23.365Z'

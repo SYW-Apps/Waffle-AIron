@@ -1,0 +1,17 @@
+id: domain_detector
+name: Domain Detector
+description: >-
+  Proposing domains a repository looks like it has, by reading its directory structure — workspace
+  packages, service directories, anything that walks like a scoped area. It only ever PROPOSES:
+  `wairon domains scan` shows candidates and a human decides, because a directory that looks like a
+  domain and a domain somebody wants are different things and only one of them belongs in the
+  configuration. It is told what is already tracked so it does not offer the same area twice, and it
+  derives ids from paths, prefixing a parent directory where a bare name would collide.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+status: complete
+createdAt: '2026-09-20T22:06:26.823Z'
+updatedAt: '2026-09-20T22:06:26.834Z'

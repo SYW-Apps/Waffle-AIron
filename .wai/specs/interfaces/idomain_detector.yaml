@@ -1,0 +1,35 @@
+id: idomain_detector
+name: Domain Detector Interface
+description: >-
+  One question: which directories in this repository look like domains nobody has registered yet.
+  Proposals only — nothing here writes.
+component: domain_detector
+methods:
+  - name: detectCandidates
+    description: >-
+      Scan the repository for directories that look like scoped areas and answer those not already
+      tracked. Takes what is tracked rather than reading it, so the caller decides what "already
+      registered" means and this stays pure. Where a bare directory name would collide with another
+      candidate, the parent directory is prepended to make the id unique — `shared` under `packages`
+      becomes `packages-shared` rather than silently losing one of the two.
+    signature: >-
+      detectCandidates(projectRoot: string, trackedPaths?: Set<string>, trackedIds?: Set<string>):
+      DetectedDomainCandidate[]
+    returns: DetectedDomainCandidate[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The repository root to scan
+      - name: trackedPaths
+        type: Set<string>
+        description: Paths already claimed by a registered domain, so they are not proposed again
+        optional: true
+      - name: trackedIds
+        type: Set<string>
+        description: Domain ids already in use, so a candidate never proposes one that would collide
+        optional: true
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T22:06:35.500Z'
+updatedAt: '2026-09-20T22:06:35.512Z'

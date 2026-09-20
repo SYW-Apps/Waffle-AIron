@@ -12,7 +12,9 @@ dependsOn:
   - project_config_repository
   - approval_comparison
   - agent_file_generator
+  - topology_repository
+  - domain_detector
 portalType: Custom
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T19:49:28.135Z'
+updatedAt: '2026-09-20T22:09:31.783Z'

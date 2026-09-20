@@ -1,0 +1,76 @@
+id: itopology_repository
+name: Topology Repository Interface
+description: >-
+  One door to the agent topology: the domains registered in it and the configuration file holding
+  them. Consumers depend on this rather than on the members, which is what makes it a Repository
+  instead of two modules with a label — before it existed, callers reached `domains.ts` and
+  `loader.ts` directly and each had to know which of the two answered what.
+component: topology_repository
+methods:
+  - name: resolve
+    description: Every domain this project has, derived and registered alike.
+    signature: 'resolve(): Domain[]'
+    returns: Domain[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: find
+    description: The domain with this id, or nothing.
+    signature: 'find(id: string): Domain | undefined'
+    returns: Domain | undefined
+    params:
+      - name: id
+        type: string
+        description: The domain id to look for
+    guarantees:
+      - idempotent
+  - name: listFreeStanding
+    description: Only the domains the configuration registers — the set that can be added to and removed from.
+    signature: 'listFreeStanding(): Domain[]'
+    returns: Domain[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: deriveFromSubsystems
+    description: The domains the spec tree implies, one per subsystem.
+    signature: 'deriveFromSubsystems(): Domain[]'
+    returns: Domain[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: addFreeStanding
+    description: Register a domain the spec tree does not imply, and persist it. Refuses a duplicate id.
+    signature: 'addFreeStanding(domain: Domain): void'
+    returns: void
+    params:
+      - name: domain
+        type: Domain
+        description: The domain to register
+  - name: removeFreeStanding
+    description: Unregister a free-standing domain and persist the removal.
+    signature: 'removeFreeStanding(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+        description: The domain id to unregister
+  - name: loadConfig
+    description: >-
+      The topology configuration as the file holds it, for callers that want the document rather
+      than the domains in it.
+    signature: 'loadConfig(): TopologyConfig'
+    returns: TopologyConfig
+    params: []
+    guarantees:
+      - idempotent
+  - name: saveConfig
+    description: Write the topology configuration back.
+    signature: 'saveConfig(config: TopologyConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: TopologyConfig
+        description: The configuration to persist
+status: complete
+createdAt: '2026-09-20T22:05:40.864Z'
+updatedAt: '2026-09-20T22:05:40.875Z'

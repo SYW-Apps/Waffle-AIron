@@ -1,0 +1,17 @@
+id: domain_registry
+name: Domain Registry
+description: >-
+  The domains a project declares, held in the topology configuration: which exist, which one owns a
+  path, and adding or removing the free-standing ones. Two sources meet here and only one of them is
+  registered — a domain that binds to a subsystem is DERIVED from the spec tree and cannot be added
+  or removed by hand, while a free-standing domain is a decision about the repository's shape and
+  lives in the configuration. Conflating them is how a derived domain would get written into a file
+  and then drift from the tree it came from.
+subsystem: sdd_core
+componentType: Registry
+owns: []
+dependsOn:
+  - topology_store
+status: complete
+createdAt: '2026-09-20T22:01:24.004Z'
+updatedAt: '2026-09-20T22:01:24.015Z'
