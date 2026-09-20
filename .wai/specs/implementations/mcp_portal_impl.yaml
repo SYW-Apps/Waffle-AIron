@@ -177,6 +177,43 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: moveMethods
+  - name: sdd_delete_spec
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the tool call to the delete workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: deleteSpec
+  - name: advertiseHostedTools
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Decide whether this server advertises the hosted surface at all — the local stdio server
+          started without it publishes none of these
+        type: branch
+        condition: the server was created with hosted tools enabled
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Register each hosted and landscape tool as a discovery entry bound to a handler that
+          answers 'dispatched by the hosting data plane before reaching this server, unavailable
+          outside a hosted request' — the entry exists so the tool can be FOUND, and the hosting
+          request orchestrator is what executes it
+        type: local
+      - stepNumber: 3
+        description: Done; the tool list now carries what this server can advertise
+        type: return
+        outcome: advertised
+  - name: getProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's resolved configuration through the config repository, answering
+          null when it has none
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: getProjectConfig
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T12:06:12.396Z'
+updatedAt: '2026-09-20T14:32:01.313Z'

@@ -2336,9 +2336,20 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   } catch { /* chaining detection must never break server startup */ }
 
   // ── Hosted data-plane tool ADVERTISEMENT (discovery only) ─────────────────
-  // Execution is intercepted upstream by the hosting request orchestrator;
-  // these registrations make the tools visible in tools/list so agents can
-  // find them. The handlers only fire outside a hosted request.
+  advertiseHostedTools(server, options);
+
+  return server;
+}
+
+// ---------------------------------------------------------------------------
+// mcp_portal.advertiseHostedTools — ONE method for the sixteen sdd_host_* and
+// sdd_landscape_* entries, because publishing a discovery list is one job.
+// Execution is intercepted upstream by the hosting request orchestrator, which
+// owns their contracts; these registrations exist so an MCP client can FIND the
+// tools, and the stub handler only fires outside a hosted request, where they
+// are unsupported by design. The local stdio server advertises none of them.
+// ---------------------------------------------------------------------------
+function advertiseHostedTools(server: McpServer, options: McpServerOptions): void {
   if (options.hostedTools) {
     const hostedStub = (): CallToolResult =>
       errText('This hosted tool is dispatched by the hosting data plane before reaching the MCP server; it is unavailable outside a hosted request.');
@@ -2428,8 +2439,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       },
     }, hostedStub);
   }
-
-  return server;
 }
 
 // ---------------------------------------------------------------------------

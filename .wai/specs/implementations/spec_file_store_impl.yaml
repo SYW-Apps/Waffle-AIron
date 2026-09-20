@@ -76,6 +76,23 @@ methods:
         outcome: 'null'
     detail: full
     intent: ''
+  - name: remove
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer false when nothing is at the path — a delete of what was never there is not an
+          error, and the caller is entitled to tell the two apart
+        type: local
+      - stepNumber: 2
+        description: >-
+          Unlink the document, then prune each parent directory the deletion left empty, stopping
+          before the specs root the caller passed so the root survives an emptied tree
+        type: local
+      - stepNumber: 3
+        description: Answer that a document was removed
+        type: return
+        outcome: removed
+    symbol: removeSpecFile
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-09-19T18:25:35.344Z'
+updatedAt: '2026-09-20T14:54:13.474Z'

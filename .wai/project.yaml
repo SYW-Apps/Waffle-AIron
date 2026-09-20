@@ -489,6 +489,31 @@ rules:
             covers:
               - 'spec_registry.invalidateCache'
           - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'deleteSubsystemSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'deleteComponentSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'deleteInterfaceSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'deleteImplementationSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'deleteTypeSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
             spec: credential_repository_impl
             at: 'create'
             covers:
@@ -844,6 +869,31 @@ rules:
             covers:
               - 'spec_registry.invalidateCache'
           - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'deleteSubsystemSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'deleteComponentSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'deleteInterfaceSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'deleteImplementationSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'deleteTypeSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
             spec: spec_validator_impl
             at: 'resolveThroughParent'
             covers:
@@ -1036,6 +1086,7 @@ rules:
               - 'mcp_orchestrator.moveSubsystemProject'
               - 'mcp_orchestrator.renameComponent'
               - 'mcp_orchestrator.renameMethod'
+              - 'mcp_portal.advertiseHostedTools'
               - 'mcp_portal.readResource'
               - 'mcp_skills_adapter.listResources'
               - 'mcp_skills_adapter.readResource'

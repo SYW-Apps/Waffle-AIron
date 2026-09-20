@@ -26,6 +26,54 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### A delete goes through the store that calls itself the only one touching disk
+
+C6, the code half. `spec_file_store` describes itself as "the single file-I/O
+face of the spec repository" and says outright that it "is the only spec-tree
+component that touches the disk". The five `delete*Spec` methods unlinked files
+themselves, so both sentences were false: the one place the spec tree's storage
+format is chosen never learned that a document had stopped existing. The store
+gains `remove` — unlink, then prune each parent directory the deletion emptied,
+stopping at the specs root — and the chain runs facade → registry → store, the
+same shape a save already had.
+
+`remove` answers **false when there was nothing there**, so a caller can tell
+"deleted" from "was never there" without a second existence check, and the
+delete methods invalidate the index cache only when something actually went.
+
+**The specs root is a parameter, and that is the finding.** The narrative asks
+`remove` to stop at the specs root; the contract declares `remove(specPath)`.
+The store cannot derive that boundary: `paths.specsDir` is configurable and the
+component's own description forbids it to read `project.yaml` to find out. So
+the code ships `remove(specPath, specsRoot)` and the contract is one param
+short. No rule checks arity — Level 1 realization reads a symbol and a body, not
+a signature — which is exactly why it is written down here instead of being
+carried silently in the code.
+
+**`advertiseHostedTools`** is now one named function rather than sixteen `reg`
+calls inline in `createMcpServer`, so the method the specs model has something
+to bind to. Identical behaviour, and it turned out to be untested behaviour: the
+switch deciding whether a LOCAL stdio server offers an agent sixteen tools that
+can only ever answer "unavailable outside a hosted request" had no test at all.
+It has one now, both ways.
+
+**What it cost to learn.** Extracting that function opened the finding it
+closed. `src/mcp/server.ts` realizes methods of eleven components, and
+`createMcpServer` is `mcp_server.create`; naming the hosted block gives it a
+23rd colocated crossing on a debt entry written for 22. In a file that holds
+that many components, extracting a function is not a refactor — it is a new
+component boundary, and the register has to be told. The ten delete-path
+crossings the pass leaves behind are the save path's shape exactly, twelve
+entries of which that register already carries: `invalidateSpecCache` is
+`spec_registry`'s method, and the facade and the orchestrator forward to it
+through functions of the same name in the same file. Nothing in the code can
+separate them while one module realizes all three.
+
+Verified unchanged by the same pass: `sdd_move_subsystem_project` takes
+`subsystem` (the contract was the broken half), the declared `ValidationOptions`
+matches the interface in `src/core/validation.ts` field for field, and
+`getProjectConfig` already runs portal → orchestrator → adapter.
+
 ### A write names the tests it just invalidated
 
 F25: eight hosted tests encoded behaviour the committed specs had changed.

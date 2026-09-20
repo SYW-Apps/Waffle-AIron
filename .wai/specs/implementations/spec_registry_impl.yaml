@@ -120,6 +120,80 @@ methods:
         type: call
         targetComponent: spec_file_store
         targetMethod: write
+  - name: deleteSubsystemSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Qualify the id and resolve the subsystem's document path the same way a save would, so a
+          delete addresses exactly the file a write created
+        type: local
+      - stepNumber: 2
+        description: >-
+          Remove the document through the file store, which prunes the directories the deletion
+          emptied
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: remove
+      - stepNumber: 3
+        description: Invalidate the index cache when something was removed, and answer whether it was
+        type: return
+        outcome: removed
+  - name: deleteComponentSpec
+    narrative:
+      - stepNumber: 1
+        description: Qualify the id and resolve the component's document path
+        type: local
+      - stepNumber: 2
+        description: Remove the document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: remove
+      - stepNumber: 3
+        description: Invalidate the index cache when something was removed, and answer whether it was
+        type: return
+        outcome: removed
+  - name: deleteInterfaceSpec
+    narrative:
+      - stepNumber: 1
+        description: Qualify the id and resolve the interface's document path
+        type: local
+      - stepNumber: 2
+        description: Remove the document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: remove
+      - stepNumber: 3
+        description: Invalidate the index cache when something was removed, and answer whether it was
+        type: return
+        outcome: removed
+  - name: deleteImplementationSpec
+    narrative:
+      - stepNumber: 1
+        description: Qualify the id and resolve the implementation's document path
+        type: local
+      - stepNumber: 2
+        description: Remove the document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: remove
+      - stepNumber: 3
+        description: Invalidate the index cache when something was removed, and answer whether it was
+        type: return
+        outcome: removed
+  - name: deleteTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Qualify the id and resolve the type's document path
+        type: local
+      - stepNumber: 2
+        description: Remove the document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: remove
+      - stepNumber: 3
+        description: Invalidate the index cache when something was removed, and answer whether it was
+        type: return
+        outcome: removed
 lint:
   allow:
     - code: UNNARRATED_COMPLEXITY
@@ -130,4 +204,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-09-19T23:04:53.118Z'
+updatedAt: '2026-09-20T14:33:20.227Z'
