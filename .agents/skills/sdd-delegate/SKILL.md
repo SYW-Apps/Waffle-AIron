@@ -43,6 +43,8 @@ You are the **Delegation Orchestrator**. Your job is to hand scoped work to a fo
 6. **Review & integrate**:
    - Read the report, verify the write fence was respected, and continue orchestrating — or delegate the next scoped task.
 
+This flow is transport-agnostic: it works identically over local stdio and the hosted data plane — the tools and `wairon-agent://` resources are the same surface.
+
 ## What goes in the brief — and what must not
 
 A brief that re-types the working conventions is a brief that will one day omit
@@ -74,5 +76,3 @@ Point the subagent at that skill and spend the brief on what only you know:
   only successes has not been read until you have looked for that section.
 * **Verify the write fence and the gate numbers yourself** before you build the
   next delegation on top of this one.
-
-This flow is transport-agnostic: it works identically over local stdio and the hosted data plane — the tools and `wairon-agent://` resources are the same surface.

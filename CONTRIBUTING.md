@@ -22,7 +22,7 @@ Most tools that write files emit LF, which turns a three-line change into a
 whole-file diff. After any scripted or tool-driven write, normalise the file back
 to CRLF and confirm `git diff --stat` shows only the lines you meant.
 
-Two obvious ways to check for carriage returns both lie:
+Most obvious ways to check for carriage returns lie, including one that wraps the correct check:
 
 | Command | What it actually does |
 |---|---|
@@ -30,6 +30,7 @@ Two obvious ways to check for carriage returns both lie:
 | `grep $'\r' f` | Passes a real CR byte — but grep opens the file in text mode here and strips CR before matching, so it reports **0** on a genuinely CRLF file. |
 | `grep -Uc $'\r' f` | Correct. `-U` suppresses the text conversion, so the CR survives to the match. |
 | `file f` | Correct. Says `with CRLF line terminators`, or says nothing about them. |
+| `x=$(grep -Uc $'\r' f)` | Lies, even though the command inside it is the correct one. Capturing it collapses the lone-CR argument to an empty pattern, which matches every line, so what comes back is the file's **line count** whatever its endings are. Run the check unwrapped, or put the CR in a variable first (`CR=$'\r'; grep -Uc "$CR" f`). |
 
 Byte counts show it too: a CRLF file loses exactly one byte per line when it is
 flattened, so `wc -c` before and after a rewrite is evidence.
