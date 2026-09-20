@@ -60,6 +60,24 @@ methods:
         description: The canvas model to export
     guarantees:
       - idempotent
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      at: buildDrawioXml
+      reason: >-
+        The finding is correct and accepted, not disputed: no narrative calls this, and none
+        honestly can. `spec_canvas.render` embeds this function by SERIALIZING ITS SOURCE into the
+        rendered page (`canvas.ts:447`, `buildDrawioXml.toString()`), so the download button runs it
+        in the reader's browser, against a layout they rearranged, long after the rendering process
+        exited. The dependency on this component is real and declared; the caller is simply a
+        different runtime. A call step would claim an in-process call that does not happen, which is
+        the one thing worse than this allow.
+    - code: UNUSED_METHOD
+      at: buildExcalidrawScene
+      reason: >-
+        Same seam as buildDrawioXml: serialized into the page rather than called, and run by the
+        browser for the Excalidraw download. See `spec_canvas_impl.render` step 3, which states the
+        mechanism rather than inventing a call to hide it.
 status: complete
 createdAt: '2026-09-20T16:39:20.510Z'
-updatedAt: '2026-09-20T16:39:20.522Z'
+updatedAt: '2026-09-20T18:50:00.671Z'
