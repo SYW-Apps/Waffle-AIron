@@ -26,6 +26,31 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### The implement and delegate skills carry the conventions the work taught
+
+A delegated change kept going wrong in the same ways, and each brief patched the
+last incident by hand. Whatever the brief-writer forgot, the subagent never knew.
+The conventions now ship with the tool instead of being remembered per task.
+
+`sdd-implement` gains a **Working conventions** section: never hand-edit what a
+tool owns, read every write back before believing it, prove a behaviour by revert
+and restore from a snapshot rather than `git checkout` (which discards work the
+task never named), measure before repairing, leave untracked paths alone, and
+treat the approval as the human's to give. Each one closes with the incident that
+produced it, because a convention without its cost reads as a preference and gets
+dropped under pressure.
+
+`sdd-delegate` gains **What goes in the brief — and what must not**: a brief that
+re-types the conventions is a brief that will one day omit one. Point the subagent
+at the skill and spend the brief on what only the delegator knows — the exact base
+commit, the write fence, what has already been measured. It also gains **Receiving
+the report**: a report that lists only successes has not been read until you have
+looked for what it did not do.
+
+No new skill was added. A skill loads when its description matches the task, and
+"conventions" describes no task — a sixth skill would have been a file nobody
+opens at the moment it was needed.
+
 ### A method declares the calls it makes
 
 A method whose narrative shows no steps used to reach **every contract method of its component's `dependsOn` and
