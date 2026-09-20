@@ -25,8 +25,22 @@ methods:
       the result names the root it was resolved through. A credential narrowed to the child alone
       never reaches the parent this way. When no usable parent is reachable, uncovered references
       fall back to the standalone verdict.
-    signature: 'validateSddTree(): ValidationResult'
+    signature: 'validateSddTree(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          What this run may vary: rules, project type, subsystem scope, chained depth, pre-loaded
+          packs, full strictness, and cross-tree suppression. A bare RulesConfig is accepted for
+          callers that only override severities
+        optional: true
+      - name: projectType
+        type: string
+        description: >-
+          The project type whose doctrine applies, when it is not carried on the options; defaults
+          to backend
+        optional: true
   - name: validateRegistry
     description: Validates legacy/resolved Agent registry constraints
     signature: 'validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult'
@@ -38,9 +52,22 @@ methods:
   - name: validateAsComplete
     description: >-
       Run full SDD tree validation at full strictness, treating every spec as complete (no draft
-      severity relaxation) and mutating nothing. Returns the as-complete results.
-    signature: 'validateAsComplete(): ValidationResult'
+      severity relaxation) and mutating nothing. The strictness flip happens inside the run, because
+      invalidating the spec cache would discard any status set beforehand. Returns the as-complete
+      results.
+    signature: 'validateAsComplete(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          What this run may vary; `treatAllAsComplete` is set by this method and not the caller's to
+          unset
+        optional: true
+      - name: projectType
+        type: string
+        description: The project type whose doctrine applies; defaults to backend
+        optional: true
   - name: listRules
     description: >-
       Return the active conformance rule set — the built-in rules plus the loaded programmatic pack
@@ -123,4 +150,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T13:26:32.400Z'
+updatedAt: '2026-09-20T14:27:03.842Z'

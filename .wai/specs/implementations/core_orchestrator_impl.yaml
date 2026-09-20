@@ -1398,6 +1398,41 @@ methods:
           old home
         type: return
         outcome: moved
+  - name: deleteSubsystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Delete the subsystem's document through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteSubsystemSpec
+  - name: deleteComponentSpec
+    narrative:
+      - stepNumber: 1
+        description: Delete the component's document through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteComponentSpec
+  - name: deleteInterfaceSpec
+    narrative:
+      - stepNumber: 1
+        description: Delete the interface's document through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteInterfaceSpec
+  - name: deleteImplementationSpec
+    narrative:
+      - stepNumber: 1
+        description: Delete the implementation's document through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteImplementationSpec
+  - name: deleteTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Delete the type's document through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteTypeSpec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T12:05:45.327Z'
+updatedAt: '2026-09-20T14:30:15.834Z'

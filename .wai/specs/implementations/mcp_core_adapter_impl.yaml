@@ -186,7 +186,42 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: saveTypeSpec
+  - name: deleteSubsystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: deleteSubsystemSpec
+  - name: deleteComponentSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: deleteComponentSpec
+  - name: deleteInterfaceSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: deleteInterfaceSpec
+  - name: deleteImplementationSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: deleteImplementationSpec
+  - name: deleteTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: deleteTypeSpec
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T23:04:54.220Z'
+updatedAt: '2026-09-20T14:29:08.288Z'

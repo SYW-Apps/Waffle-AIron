@@ -99,26 +99,53 @@ methods:
       address: mcp tools/call sdd_write_narrative
   - name: sdd_validate_tree
     description: >-
-      Tool: run the architecture-conformance gate over the spec tree. The answer carries the result
-      as structured content beside the JSON text block, under a schema the tool declares, so a
-      caller reads findings as objects it can filter by code and severity rather than as a payload
-      it must parse and trust.
-    signature: 'sdd_validate_tree(): ValidationResult'
+      Tool: validate the SDD tree and answer with every finding. Optionally narrowed to one
+      subsystem, and optionally descending into chained subprojects.
+    signature: 'sdd_validate_tree(subsystem?: string, recursive?: boolean): ValidationResult'
     returns: ValidationResult
+    params:
+      - name: subsystem
+        type: string
+        description: Validate only this subsystem's slice of the tree; omitted validates all of it
+        optional: true
+      - name: recursive
+        type: boolean
+        description: Descend into chained subprojects mounted under this tree
+        optional: true
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_validate_tree
   - name: sdd_get_status
-    description: 'Tool: completeness status dashboard of the spec tree'
-    signature: 'sdd_get_status(): string'
+    description: >-
+      Tool: the spec tree as a structure, with each level's completeness. Optionally narrowed to one
+      subsystem, and optionally descending into chained subprojects.
+    signature: 'sdd_get_status(subsystem?: string, recursive?: boolean): string'
     returns: string
+    params:
+      - name: subsystem
+        type: string
+        description: Report only this subsystem's slice of the tree; omitted reports all of it
+        optional: true
+      - name: recursive
+        type: boolean
+        description: Descend into chained subprojects mounted under this tree
+        optional: true
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_get_status
   - name: sdd_move_subsystem_project
-    description: 'Tool: relocate an external subsystem''s subproject directory and update its projectPath link'
-    signature: 'sdd_move_subsystem_project(subsystemId: string, newProjectPath: string): void'
+    description: >-
+      Tool: relocate an external subsystem's subproject directory on disk and update its projectPath
+      link.
+    signature: 'sdd_move_subsystem_project(subsystem: string, newProjectPath: string): void'
     returns: void
+    params:
+      - name: subsystem
+        type: string
+        description: The external L1 subsystem id to relocate
+      - name: newProjectPath
+        type: string
+        description: The new relative path for the subproject directory
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_move_subsystem_project
@@ -395,6 +422,50 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_move_methods
+  - name: sdd_delete_spec
+    description: >-
+      Tool: delete a specification document from the spec tree and prune the parent directories the
+      deletion left empty. Answers whether a document was actually removed — a spec that was not
+      there is reported as such rather than as a failure. Deleting a spec other specs still
+      reference leaves the tree invalid by design: the validator is what says so, and this tool does
+      not refuse on its behalf.
+    signature: 'sdd_delete_spec(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: 'The kind of spec to delete: subsystem, component, interface, implementation or type'
+      - name: id
+        type: string
+        description: The id of the spec to delete (namespaced if needed)
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_delete_spec
+  - name: advertiseHostedTools
+    description: >-
+      Publish the hosted data plane's tools in this server's tool list without being able to execute
+      any of them. Sixteen `sdd_host_*` and `sdd_landscape_*` tools are registered here so an agent
+      can DISCOVER them; execution is intercepted upstream by the hosting request orchestrator,
+      which owns their contracts, and a handler reached outside a hosted request answers that it is
+      unavailable rather than doing anything. Modelled as one method rather than sixteen because
+      publishing a discovery list is one job — sixteen portal methods would claim this component
+      executes work it never touches, and would duplicate the hosted orchestrator's contract to say
+      it.
+    signature: 'advertiseHostedTools(): void'
+    returns: void
+    params: []
+  - name: getProjectConfig
+    description: >-
+      Tool: the bound project's configuration as it was resolved — the rule severities, project type
+      and paths a validate or a write will actually use. Answers null when the project has none,
+      rather than assuming defaults, so a caller can tell an unconfigured project from a
+      default-configured one.
+    signature: 'getProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    endpoint:
+      transport: Custom
+      address: mcp tools/call getProjectConfig
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T12:03:14.416Z'
+updatedAt: '2026-09-20T14:31:55.119Z'

@@ -163,6 +163,46 @@ methods:
       - name: spec
         type: TypeSpec
         description: The type to persist
+  - name: deleteSubsystemSpec
+    description: Calls deleteSubsystemSpec on core portal
+    signature: 'deleteSubsystemSpec(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The subsystem id
+  - name: deleteComponentSpec
+    description: Calls deleteComponentSpec on core portal
+    signature: 'deleteComponentSpec(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The component id
+  - name: deleteInterfaceSpec
+    description: Calls deleteInterfaceSpec on core portal
+    signature: 'deleteInterfaceSpec(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The interface id
+  - name: deleteImplementationSpec
+    description: Calls deleteImplementationSpec on core portal
+    signature: 'deleteImplementationSpec(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The implementation id
+  - name: deleteTypeSpec
+    description: Calls deleteTypeSpec on core portal
+    signature: 'deleteTypeSpec(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The type id
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T23:04:54.104Z'
+updatedAt: '2026-09-20T14:28:21.161Z'

@@ -4,9 +4,27 @@ description: Inbound Portal contract for validator subsystem.
 component: validator_portal
 methods:
   - name: validateSddTree
-    description: Performs full SDD tree validation
-    signature: 'validateSddTree(): ValidationResult'
+    description: >-
+      Validate the SDD tree and answer with every finding. What the run judges is not fixed: the
+      options carry the rules and project type to judge with, an optional subsystem to narrow to,
+      how deep to descend into chained subprojects, pre-loaded extension packs, whether to judge at
+      full strictness, and whether to suppress cross-tree findings. Passing nothing validates the
+      whole tree on the project's own configuration.
+    signature: 'validateSddTree(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          What this run may vary; a bare RulesConfig is accepted here too, for callers that only
+          override severities
+        optional: true
+      - name: projectType
+        type: string
+        description: >-
+          The project type whose doctrine applies, when it is not carried on the options; defaults
+          to backend
+        optional: true
   - name: validateRegistry
     description: Validates registry
     signature: 'validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult'
@@ -17,10 +35,23 @@ methods:
     returns: ValidationResult
   - name: validateAsComplete
     description: >-
-      Run the conformance gate at full strictness, treating every spec as complete (no draft
-      severity relaxation) without mutating any spec. The as-complete gate a lock requires.
-    signature: 'validateAsComplete(): ValidationResult'
+      Validate at full strictness: every spec is judged as though complete, so the completeness
+      rules that relax while a spec is draft apply as errors. This is the gate behind `wairon lock`,
+      and it is `validateSddTree` with `treatAllAsComplete` set — named separately because a gate
+      that a caller can accidentally run in the relaxed mode is not a gate.
+    signature: 'validateAsComplete(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          What this run may vary; `treatAllAsComplete` is set by this method and not the caller's to
+          unset
+        optional: true
+      - name: projectType
+        type: string
+        description: The project type whose doctrine applies; defaults to backend
+        optional: true
   - name: listRules
     description: >-
       List the active conformance rule set (built-ins plus loaded pack rules) for `wairon rules
@@ -78,4 +109,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T13:26:36.413Z'
+updatedAt: '2026-09-20T14:26:44.497Z'

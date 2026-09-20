@@ -267,6 +267,29 @@ methods:
         type: boolean
         description: Answer with what the move would do and write nothing
         optional: true
+  - name: deleteSpec
+    description: >-
+      The sdd_delete_spec workflow: choose the delete for the named kind and answer whether a
+      document was actually removed. A spec that was not there answers false rather than throwing,
+      so a repeated delete is not an error — but the caller is told which of the two happened,
+      because "deleted" and "was never there" are different answers to the same request.
+    signature: 'deleteSpec(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's id (namespaced if needed)
+  - name: getProjectConfig
+    description: >-
+      The getProjectConfig workflow: answer with the bound project's resolved configuration, or null
+      when it has none. Null is an answer, not a failure — an unconfigured project and a
+      default-configured one are different states and the caller is entitled to tell them apart.
+    signature: 'getProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-20T12:03:09.303Z'
+updatedAt: '2026-09-20T14:32:14.809Z'

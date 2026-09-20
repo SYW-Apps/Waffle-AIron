@@ -527,6 +527,48 @@ methods:
         type: boolean
         description: Report what the move would do and write nothing
         optional: true
+  - name: deleteSubsystemSpec
+    description: 'Forward to the spec loader: delete a subsystem''s spec document. False when it was not there.'
+    signature: 'deleteSubsystemSpec(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The subsystem id
+  - name: deleteComponentSpec
+    description: 'Forward to the spec loader: delete a component''s spec document. False when it was not there.'
+    signature: 'deleteComponentSpec(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The component id
+  - name: deleteInterfaceSpec
+    description: 'Forward to the spec loader: delete an interface''s spec document. False when it was not there.'
+    signature: 'deleteInterfaceSpec(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The interface id
+  - name: deleteImplementationSpec
+    description: >-
+      Forward to the spec loader: delete an implementation's spec document. False when it was not
+      there.
+    signature: 'deleteImplementationSpec(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The implementation id
+  - name: deleteTypeSpec
+    description: 'Forward to the spec loader: delete a type''s spec document. False when it was not there.'
+    signature: 'deleteTypeSpec(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The type id
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T12:04:21.862Z'
+updatedAt: '2026-09-20T14:28:14.781Z'

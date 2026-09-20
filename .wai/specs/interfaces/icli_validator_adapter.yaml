@@ -4,9 +4,20 @@ description: Adapter contract for the CLI to run validations.
 component: cli_validator_adapter
 methods:
   - name: validateSddTree
-    description: Calls validateSddTree on the validator portal
-    signature: 'validateSddTree(): ValidationResult'
+    description: >-
+      Forward the tree validation to the validator portal, carrying what the command line asked to
+      vary: a --subsystem scope, a chained depth, the project's rules and type.
+    signature: 'validateSddTree(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: What this run may vary, as the command's flags resolved it
+        optional: true
+      - name: projectType
+        type: string
+        description: The project type whose doctrine applies; defaults to backend
+        optional: true
   - name: validateRegistry
     description: Calls validateRegistry on the validator portal
     signature: 'validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult'
@@ -19,8 +30,17 @@ methods:
     description: >-
       Forward the as-complete conformance gate to the validator portal: validate the tree as if
       every spec were already complete — the dry-run `wairon lock` refuses to freeze on.
-    signature: 'validateAsComplete(): ValidationResult'
+    signature: 'validateAsComplete(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: What this run may vary; full strictness is the gate's own and not the caller's to unset
+        optional: true
+      - name: projectType
+        type: string
+        description: The project type whose doctrine applies; defaults to backend
+        optional: true
   - name: runValidation
     description: >-
       The whole `wairon validate` workflow over the LOCAL tree: run the registry, project-config and
@@ -40,4 +60,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T10:52:08.149Z'
+updatedAt: '2026-09-20T14:27:09.684Z'

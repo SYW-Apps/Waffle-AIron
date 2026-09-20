@@ -511,7 +511,67 @@ methods:
         targetComponent: mcp_authoring_adapter
         targetMethod: moveMethods
     symbol: sdd_move_methods
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: Choose the delete for the named kind
+        type: switch
+        'on': the spec kind
+        cases:
+          - value: subsystem
+            step: 2
+          - value: component
+            step: 3
+          - value: interface
+            step: 4
+          - value: implementation
+            step: 5
+          - value: type
+            step: 6
+        defaultStep: 7
+      - stepNumber: 2
+        description: Delete the subsystem's document
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: deleteSubsystemSpec
+      - stepNumber: 3
+        description: Delete the component's document
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: deleteComponentSpec
+      - stepNumber: 4
+        description: Delete the interface's document
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: deleteInterfaceSpec
+      - stepNumber: 5
+        description: Delete the implementation's document
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: deleteImplementationSpec
+      - stepNumber: 6
+        description: Delete the type's document
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: deleteTypeSpec
+      - stepNumber: 7
+        description: >-
+          Answer whether a document was actually removed — false says the spec was not there, which
+          is not a failure but is not a deletion either
+        type: return
+        outcome: answered
+    symbol: sdd_delete_spec
+  - name: getProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core client adapter; a project with
+          none answers null rather than throwing
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+    symbol: getProjectConfig
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-20T12:06:09.818Z'
+updatedAt: '2026-09-20T14:32:17.761Z'

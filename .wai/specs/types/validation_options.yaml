@@ -1,0 +1,55 @@
+kind: value-object
+id: validation_options
+name: ValidationOptions
+description: >-
+  What a validation run is allowed to vary. The contract used to read `validateSddTree():
+  ValidationResult` with the description "Performs full SDD tree validation" — six words for a
+  function with seven switches, three of which change whether a finding is an error or does not fire
+  at all. A reader could not have learned from the design that the lock gate and an ordinary
+  validate are the same function called differently.
+fields:
+  - name: rules
+    type: RulesConfig
+    description: >-
+      The rule severities and thresholds to judge with. Omitted, the project's own configuration is
+      read.
+    optional: true
+  - name: projectType
+    type: string
+    description: The project type whose doctrine applies; defaults to backend.
+    optional: true
+  - name: scopeSubsystem
+    type: string
+    description: Narrow the run to one subsystem's slice of the tree. Omitted, the whole tree is judged.
+    optional: true
+  - name: recursive
+    type: boolean | number
+    description: >-
+      Whether to descend into chained subprojects, and how deep. True descends all the way; a number
+      bounds it.
+    optional: true
+  - name: extensions
+    type: LoadedExtensions
+    description: >-
+      Pre-loaded extension packs, for the programmatic-wrapper path. Omitted, the packs the project
+      declares are loaded, which is how CLI and MCP callers get pack rules, profiles and languages
+      without passing anything.
+    optional: true
+  - name: treatAllAsComplete
+    type: boolean
+    description: >-
+      Judge at full strictness: every spec is treated as complete, so the completeness rules that
+      relax while a spec is draft apply as errors. This is the as-complete gate behind `wairon
+      lock`. The flip must happen INSIDE the run, because invalidating the spec cache discards any
+      status set beforehand.
+    optional: true
+  - name: crossTree
+    type: '''off'''
+    description: >-
+      Suppress the findings that can only be judged across a chained tree boundary, for a run that
+      cannot see the other side.
+    optional: true
+methods: []
+sourcePath: src/core/validation.ts
+createdAt: '2026-09-20T14:26:35.723Z'
+updatedAt: '2026-09-20T14:26:35.733Z'

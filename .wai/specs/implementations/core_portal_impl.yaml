@@ -442,6 +442,43 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: moveMethods
+  - name: deleteSubsystemSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the delete to the core orchestrator — a delete is a write, and a Portal never
+          reaches a write-effect method directly
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: deleteSubsystemSpec
+  - name: deleteComponentSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward the delete to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: deleteComponentSpec
+  - name: deleteInterfaceSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward the delete to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: deleteInterfaceSpec
+  - name: deleteImplementationSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward the delete to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: deleteImplementationSpec
+  - name: deleteTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward the delete to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: deleteTypeSpec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T12:05:04.530Z'
+updatedAt: '2026-09-20T14:30:21.806Z'
