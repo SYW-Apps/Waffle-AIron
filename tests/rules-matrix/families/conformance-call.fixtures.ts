@@ -18,9 +18,17 @@
  *    to realization.
  *  - CALL_ORIGIN_UNRESOLVED (warning): the target's name IS called inside the
  *    realized function, but only from call sites a pure model cannot resolve
- *    to any file — a member call through a value (`this.store.save()`). A
- *    distinct answer from "the call is missing": the step is neither proven
- *    realized nor accused, because only what resolved may accuse.
+ *    to any file — a member call through a value the module assembled, or
+ *    through a name it never writes down the type of. A distinct answer from
+ *    "the call is missing": the step is neither proven realized nor accused,
+ *    because only what resolved may accuse. Three receivers ARE followed past
+ *    the value they hold, each through a NAME the code writes down:
+ *    `this.<field>` through the type the class declares the field with,
+ *    `new Class(...)` through the module its class name came from, and a
+ *    plain `<name>.<method>()` through the type the file ANNOTATES that name
+ *    with — a parameter's, or an annotated variable's. All three may only
+ *    ACCEPT a call; a landing a finding names still comes from what was
+ *    proven.
  *  - UNDECLARED_COLOCATED_CALL (warning): the realized function calls a
  *    modelled method of ANOTHER component living in the same source file, and
  *    no narrative step declares that call — a boundary crossing that nothing
@@ -1078,6 +1086,247 @@ export default [
       'The entry recorder constructs the payroll journal writer and appends through it, and the journal writer is the component its narrative names.',
     tree: ledgerJournalTree('journal-writer'),
   }),
+
+  // -------------------------------------------------------------------------
+  // CALL_ORIGIN_UNRESOLVED - a receiver that is a plain NAME, followed through
+  // the type the file ANNOTATES it with: a parameter's annotation, or an
+  // annotated variable's. A module that wires its collaborators as closures
+  // (`payslipRepositoryOver(store)`) writes every call it makes this way, and
+  // the name it calls through is one the file said what it is. The same tier
+  // as the other two: it may ACCEPT a call, and it must never accuse one.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'The parameter\'s annotation declares what the collaborator IS, so store.append is followed through the PayslipStore binding to the store\'s own source file — the call site does say where it can land.',
+    scenario:
+      'The payslip repository is built as a closure over its store, taking it as a typed parameter and appending the payslip through store.append.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade over a given store: one recorded payslip per employee, per run. */',
+      'export function payslipRepositoryOver(store: PayslipStore) {',
+      '  return {',
+      '    record(payslipId: string): void {',
+      '      store.append(payslipId);',
+      '    },',
+      '  };',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'Following the parameter\'s declared type lands the call in the store\'s own source file, which is what realizing the step means — the step is accepted, not merely unaccused.',
+    scenario:
+      'The payslip repository appends through the store it was handed as a typed parameter, and that store is the very component the narrative names.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade over a given store: one recorded payslip per employee, per run. */',
+      'export function payslipRepositoryOver(store: PayslipStore) {',
+      '  return {',
+      '    record(payslipId: string): void {',
+      '      store.append(payslipId);',
+      '    },',
+      '  };',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'An annotated variable declares what it holds exactly as a parameter does, so the local store is followed through the PayslipStore annotation to the store\'s own source file.',
+    scenario:
+      'The payslip repository opens the store for the run into a local binding it annotates, and appends the payslip through that binding.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export function record(payslipId: string): void {',
+      '  const store: PayslipStore = currentPayslipStore();',
+      '  store.append(payslipId);',
+      '}',
+      '',
+      '/** The store of the open pay run. */',
+      'function currentPayslipStore(): PayslipStore {',
+      '  return new PayslipStore();',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'The annotated local lands the call in the store\'s own source file, so the step is realized — a variable the code says the type of is as good a name to follow as a parameter.',
+    scenario:
+      'The payslip repository appends through an annotated local binding holding the open run\'s store, which is the component its narrative names.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export function record(payslipId: string): void {',
+      '  const store: PayslipStore = currentPayslipStore();',
+      '  store.append(payslipId);',
+      '}',
+      '',
+      '/** The store of the open pay run. */',
+      'function currentPayslipStore(): PayslipStore {',
+      '  return new PayslipStore();',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'payslip_repository_impl',
+    expectFire: true,
+    scenario:
+      'The payslip repository opens the store into an unannotated local binding, so store.append names a value the module never says the type of.',
+    tree: payslipRepositoryTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade: one recorded payslip per employee, per run. */',
+      'export function record(payslipId: string): void {',
+      '  const store = currentPayslipStore();',
+      '  store.append(payslipId);',
+      '}',
+      '',
+      '/** The store of the open pay run. */',
+      'function currentPayslipStore(): PayslipStore {',
+      '  return new PayslipStore();',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
+  // The no-accusation property again, for the annotated receiver: a parameter
+  // whose type resolves SOMEWHERE ELSE leaves the step unresolved. Widening
+  // what a call may have reached can accept a step; it may never turn "I
+  // cannot say" into "it landed there".
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'payslip_repository_impl',
+    expectFire: true,
+    scenario:
+      'The payslip repository narrates an append to the payslip store but is wired over the cold-storage archive, taking it as a parameter typed as the archive.',
+    tree: payslipRepositoryTree([
+      'import { PayslipArchive } from \'./payslip-archive.js\';',
+      '',
+      '/** The pay-run facade over a given archive: one recorded payslip per employee, per run. */',
+      'export function payslipRepositoryOver(archive: PayslipArchive) {',
+      '  return {',
+      '    record(payslipId: string): void {',
+      '      archive.append(payslipId);',
+      '    },',
+      '  };',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'An annotation says what a collaborator IS, never which file ships the body, so a landing read off one can accept a step but can never name where a call went instead: a miss stays "cannot say" and is reported as CALL_ORIGIN_UNRESOLVED.',
+    scenario:
+      'The payslip repository appends through a parameter typed as the cold-storage archive while its narrative names the payslip store, so the followed type lands in a file that is not the target\'s.',
+    tree: payslipRepositoryTree([
+      'import { PayslipArchive } from \'./payslip-archive.js\';',
+      '',
+      '/** The pay-run facade over a given archive: one recorded payslip per employee, per run. */',
+      'export function payslipRepositoryOver(archive: PayslipArchive) {',
+      '  return {',
+      '    record(payslipId: string): void {',
+      '      archive.append(payslipId);',
+      '    },',
+      '  };',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
+  // The CROSS-FILE limit of the annotated receiver, recorded rather than
+  // discovered later. An annotation names where the TYPE was written, never
+  // where the body was: a parameter typed with a contract declared in a module
+  // of its own lands on that contract's module, and the implementing class's
+  // file is never reached. So the call stays unresolved though it really is
+  // the store's - a false NEGATIVE, and a possibility still never accuses.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    severity: 'warning',
+    anchoredTo: 'payslip_repository_impl',
+    expectFire: true,
+    scenario:
+      'The payslip repository takes its store as the payslip-rows contract, which is declared in a module of its own, while the class implementing it lives in the store module the narrative names.',
+    tree: payslipContractTree([
+      'import type { PayslipRows } from \'./payslip-rows.js\';',
+      '',
+      '/** The pay-run facade over any payslip rows: one recorded payslip per employee, per run. */',
+      'export function payslipRepositoryOver(rows: PayslipRows) {',
+      '  return {',
+      '    record(payslipId: string): void {',
+      '      rows.append(payslipId);',
+      '    },',
+      '  };',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'The contract module is all the annotation states, so a body it cannot see leaves the step unresolved — never accused of being missing, which is the whole of why this reading lives in the possible tier.',
+    scenario:
+      'The payslip repository appends through a parameter typed as the payslip-rows contract while its narrative names the store that implements it in another module.',
+    tree: payslipContractTree([
+      'import type { PayslipRows } from \'./payslip-rows.js\';',
+      '',
+      '/** The pay-run facade over any payslip rows: one recorded payslip per employee, per run. */',
+      'export function payslipRepositoryOver(rows: PayslipRows) {',
+      '  return {',
+      '    record(payslipId: string): void {',
+      '      rows.append(payslipId);',
+      '    },',
+      '  };',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'What the widened reading DOES claim is the module the annotation names: typed with the store CLASS, the same call lands in the store\'s own file and is accepted — the limit is which module a type name leads to, never annotations as such.',
+    scenario:
+      'The payslip repository in the same two-module tree takes its store as the concrete store class instead of the payslip-rows contract, and appends through it.',
+    tree: payslipContractTree([
+      'import { PayslipStore } from \'./payslip-store.js\';',
+      '',
+      '/** The pay-run facade over a given store: one recorded payslip per employee, per run. */',
+      'export function payslipRepositoryOver(store: PayslipStore) {',
+      '  return {',
+      '    record(payslipId: string): void {',
+      '      store.append(payslipId);',
+      '    },',
+      '  };',
+      '}',
+      '',
+    ].join('\n')),
+  }),
   // -------------------------------------------------------------------------
   // A DECLARED call is a claim about the code, exactly as a `call` step is.
   // A method whose narrative shows no steps reaches its collaborators through
@@ -1809,6 +2058,113 @@ function ledgerJournalTree(target: 'ledger-writer' | 'journal-writer'): import('
         'export class LedgerWriter {',
         '  append(entry: string): void {',
         '    // append the entry to the general ledger\'s open period',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}
+
+/**
+ * The payslip repository wired as a CLOSURE over its store, with the store's
+ * CONTRACT declared in a module of its own beside the class that implements
+ * it; only the repository module's text varies. The one family where the file
+ * a parameter's TYPE is written in and the file its BODY is written in are
+ * different files — which is exactly the limit of following an annotated
+ * receiver.
+ */
+function payslipContractTree(repositoryModule: string): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'payroll', description: 'Pay runs, payslip records and their retention.' }],
+    components: [
+      {
+        id: 'payslip-repository',
+        componentType: 'Repository',
+        subsystem: 'payroll',
+        description: 'The pay-run facade over the payslip rows of the open run.',
+        owns: ['payslip-store'],
+      },
+      {
+        id: 'payslip-store',
+        componentType: 'Store',
+        subsystem: 'payroll',
+        durability: 'read-through',
+        description: 'The authoritative payslip rows of every open pay run.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ipayslip_repository',
+        component: 'payslip-repository',
+        methods: [{ name: 'record', description: 'Record one employee\'s payslip for the open pay run.' }],
+      },
+      {
+        id: 'ipayslip_store',
+        component: 'payslip-store',
+        methods: [{ name: 'append', description: 'Append one payslip row to the open pay run.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'payslip_repository_impl',
+        contract: 'ipayslip_repository',
+        sourcePath: 'src/payroll/payslip-repository.ts',
+        methods: [
+          {
+            name: 'record',
+            narrative: [
+              {
+                stepNumber: 1,
+                type: 'call',
+                description: 'Append the payslip row to the open pay run.',
+                targetComponent: 'payslip-store',
+                targetMethod: 'append',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'payslip_store_impl',
+        contract: 'ipayslip_store',
+        sourcePath: 'src/payroll/payslip-store.ts',
+        methods: [
+          {
+            name: 'append',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Write the payslip row into the open pay run.' }],
+          },
+        ],
+      },
+    ],
+    types: [
+      {
+        id: 'payslip-rows',
+        kind: 'value-object',
+        name: 'PayslipRows',
+        subsystem: 'payroll',
+        description: 'The contract every holder of payslip rows answers: one append per recorded payslip.',
+        sourcePath: 'src/payroll/payslip-rows.ts',
+      },
+    ],
+    files: {
+      'src/payroll/payslip-repository.ts': repositoryModule,
+      // The CONTRACT, in a module of its own: what the parameter is annotated
+      // with, and never where a body that answers it is written.
+      'src/payroll/payslip-rows.ts': [
+        '/** The contract every holder of payslip rows answers. */',
+        'export interface PayslipRows {',
+        '  append(payslipId: string): void;',
+        '}',
+        '',
+      ].join('\n'),
+      'src/payroll/payslip-store.ts': [
+        'import type { PayslipRows } from \'./payslip-rows.js\';',
+        '',
+        '/** The authoritative payslip rows of every open pay run. */',
+        'export class PayslipStore implements PayslipRows {',
+        '  append(payslipId: string): void {',
+        '    // persist the payslip row',
         '  }',
         '}',
         '',

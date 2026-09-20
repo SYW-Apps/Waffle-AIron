@@ -49,21 +49,27 @@ export interface CallSiteFact {
   name: string;
   /** True when the call was written as a member access (`receiver.name(…)`). */
   member: boolean;
-  /** The receiver identifier — set only when the receiver is a plain identifier (`specs.save()` → "specs"). */
+  /**
+   * The receiver identifier — set only when the receiver is a plain identifier
+   * (`specs.save()` → "specs"). The one receiver that can be PROVEN, when the
+   * name is a namespace import binding and its properties are that module's
+   * own exports — and otherwise a receiver to follow past the value it holds,
+   * through the type the file ANNOTATES the name with.
+   */
   via?: string;
   /**
    * The instance FIELD the receiver is — set only when the call was written
    * `this.<field>.name(…)` (`this.store.save()` → "store"), and never together
-   * with `via`. The one receiver a pure model can follow past the value it
-   * holds, because the class DECLARES what the field is; what that type
-   * resolves to is a POSSIBLE origin, never a proven one, since the declared
-   * type says what a collaborator is and not which class ships the body.
+   * with `via`. A receiver a pure model can follow past the value it holds,
+   * because the class DECLARES what the field is; what that type resolves to
+   * is a POSSIBLE origin, never a proven one, since the declared type says
+   * what a collaborator is and not which class ships the body.
    */
   field?: string;
   /**
    * The CLASS the receiver was constructed from — set only when the call was
    * written `new Class(…).name(…)` (`new ApprovalRegistry(store).create()` →
-   * "ApprovalRegistry"), and never together with `via` or `field`. The second
+   * "ApprovalRegistry"), and never together with `via` or `field`. Another
    * receiver a pure model can follow, because the code NAMES the class it
    * built. Like a declared field type it is a POSSIBLE origin and never a
    * proven one: a method the class INHERITS is written in its base's module,
@@ -146,6 +152,23 @@ export interface SourceFileFacts {
    * the code declares, and a guess is not a fact.
    */
   fieldTypes?: Record<string, string[]>;
+  /**
+   * The type names a LOCALLY BOUND name is DECLARED with, by name — read off
+   * function and method parameters and off variable declarations that carry
+   * an annotation, which is where a module that wires its collaborators as
+   * closures writes down what each one is. EXACT grade only.
+   *
+   * Keyed by name across the WHOLE file, as `fieldTypes` is: the facts cannot
+   * say which function a call site sits in, and a receiver is as often a
+   * parameter of an ENCLOSING function as of the one that calls it — a
+   * closure captures it, which is the shape this records at all. Same-named
+   * bindings therefore keep EVERY declared type, and a wider answer only ever
+   * widens what a call may have reached. A binding the file annotates with
+   * nothing records nothing, and so does one annotated with anything but a
+   * plain type reference: what an initializer INFERS is not what the code
+   * declares, and a guess is not a fact.
+   */
+  localTypes?: Record<string, string[]>;
   /**
    * The module specifier each TYPE-ONLY import binding came from, by local
    * name. EXACT grade only.
@@ -230,8 +253,8 @@ export function importBindingOf(facts: SourceFileFacts, name: string): ImportBin
   return ownEntry(facts.importBindings, name);
 }
 
-/** The empty answer a field the file annotates with nothing gives. */
-const NO_FIELD_TYPES: string[] = [];
+/** The empty answer a name the file annotates with nothing gives. */
+const NO_DECLARED_TYPES: string[] = [];
 
 /**
  * source_file_facts.fieldTypesOf — the type names an instance field is
@@ -240,7 +263,18 @@ const NO_FIELD_TYPES: string[] = [];
  * keeps an unresolvable field from becoming a guess.
  */
 export function fieldTypesOf(facts: SourceFileFacts, field: string): string[] {
-  return ownEntry(facts.fieldTypes, field) ?? NO_FIELD_TYPES;
+  return ownEntry(facts.fieldTypes, field) ?? NO_DECLARED_TYPES;
+}
+
+/**
+ * source_file_facts.localTypesOf — the type names a locally bound name is
+ * DECLARED with, or EMPTY when the file binds no such name, annotates it with
+ * nothing, or was analyzed below exact grade. The empty answer is what keeps
+ * an unannotated receiver from becoming a guess, exactly as it does for a
+ * field.
+ */
+export function localTypesOf(facts: SourceFileFacts, name: string): string[] {
+  return ownEntry(facts.localTypes, name) ?? NO_DECLARED_TYPES;
 }
 
 /**

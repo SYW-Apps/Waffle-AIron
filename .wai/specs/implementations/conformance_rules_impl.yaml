@@ -1034,7 +1034,8 @@ methods:
           matching = the sites whose name is in accepted. reached = the union of
           code.possibleOriginsOf(site, file) over matching — every file each matching call CAN have
           been written in, a this.<field>.<method>() receiver followed through the field's declared
-          type and a new Class(...).<method>() receiver through the module its class name came from.
+          type, a new Class(...).<method>() receiver through the module its class name came from,
+          and a plain <name>.<method>() receiver through the type the file annotates that name with.
           landed = the union of code.originOf(site, file) over the same sites — the files a call
           PROVABLY lands in, empty where a pure model cannot say, and the only tier a finding may
           name a landing from: widening what a call reached can accept a claim, it must never accuse
@@ -1239,4 +1240,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-20T09:45:54.340Z'
+updatedAt: '2026-09-20T10:41:26.239Z'

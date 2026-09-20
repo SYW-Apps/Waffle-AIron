@@ -64,17 +64,23 @@ methods:
     returns: Set<string>
     description: >-
       Every file the function a call site invokes CAN have been written in: the proven origins,
-      widened for the two receivers the code writes down. A this.<field>.<method>() site widens by
+      widened for the three receivers the code writes down. A this.<field>.<method>() site widens by
       the modules that declare the field's declared TYPE (its type-only or runtime import binding,
       else this file when it declares that name); a new Class(...).<method>() site widens by the
       module the CLASS NAME came from (its runtime import binding — a constructed class is a value,
-      never a type-only one — else this file when it declares that class). Both are possibilities
-      and not facts: a declared type says what a constructor-injected collaborator is and never
-      which class ships the body, and a constructed class says where the class was written and never
-      where a method it INHERITS from a base was. Empty for a field the file annotates with nothing
-      and for a class name it cannot place, exactly as the proven tier is. A widened answer may only
-      ACCEPT a call as realized; naming a file a call landed in stays the proven tier's word alone,
-      since a possibility can never accuse
+      never a type-only one — else this file when it declares that class); a plain <name>.<method>()
+      site widens by the modules that declare the type the file ANNOTATES that name with — a
+      parameter's annotation or an annotated variable declaration's, resolved exactly as a field's
+      declared type is, which is how a module that wires its collaborators as closures writes every
+      call it makes. All three are possibilities and not facts: a declared type says what a
+      collaborator is and never which class ships the body, a constructed class says where the class
+      was written and never where a method it INHERITS from a base was, and an annotated name is
+      read per FILE, so same-named bindings in different functions union their declared types. What
+      a type name LEADS TO is the question and what it expands to is not, so an alias is never
+      unwrapped. Empty for a field or a name the file annotates with nothing and for a class name it
+      cannot place, exactly as the proven tier is. A widened answer may only ACCEPT a call as
+      realized; naming a file a call landed in stays the proven tier's word alone, since a
+      possibility can never accuse
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:08.829Z'
-updatedAt: '2026-09-19T17:34:48.594Z'
+updatedAt: '2026-09-20T10:41:25.822Z'

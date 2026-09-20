@@ -4,6 +4,7 @@ import {
   importBindingOf,
   isPattern,
   isRetired,
+  localTypesOf,
   methodSourceFile,
   pathKey,
   resolveImport,
@@ -168,8 +169,8 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
 
   /**
    * The same question, asked one tier weaker: every file the callee CAN have
-   * been written in. Two receivers are followed, and both are followed through
-   * a NAME the code writes down rather than through a value it holds.
+   * been written in. Three receivers are followed, and every one of them
+   * through a NAME the code writes down rather than through a value it holds.
    *
    *   `this.<field>.save()`  through the TYPE the class declares that field
    *                          with — its import binding (type-only or runtime
@@ -181,20 +182,37 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
    *                          constructed class is a value and a type-only
    *                          binding could never have built one — else this
    *                          file when it declares that class.
+   *   `store.save()`         through the type the file ANNOTATES that name
+   *                          with — a parameter's, or an annotated variable
+   *                          declaration's — resolved exactly as a field's
+   *                          declared type is. A module that wires its
+   *                          collaborators as closures (`storeOver(adapter,
+   *                          root)`) writes every one of its calls this way,
+   *                          and the name it calls through is a plain
+   *                          identifier the file declared what it is.
    *
-   * Both are POSSIBILITIES and not facts. A declared type says what a
-   * constructor-injected collaborator IS, never which class ships the body, so
-   * an interface's implementor may live anywhere; a constructed class says
-   * where the CLASS was written, never where a method it INHERITS was, and a
-   * base class lives in whatever module it likes. Which is why this tier is
-   * separate rather than folded into originOf — a rule may ACCEPT a call on
-   * it, and must never accuse one on it. A field the file annotates with
-   * nothing, and a class name it cannot place, resolve to nothing, exactly as
-   * the proven tier does.
+   * All three are POSSIBILITIES and not facts. A declared type says what a
+   * collaborator IS, never which class ships the body, so an interface's
+   * implementor may live anywhere; a constructed class says where the CLASS
+   * was written, never where a method it INHERITS was, and a base class lives
+   * in whatever module it likes. The annotated name adds one more reason:
+   * these facts are keyed per FILE, so same-named bindings in different
+   * functions union their declared types and the answer is wider still. Which
+   * is why this tier is separate rather than folded into originOf — a rule may
+   * ACCEPT a call on it, and must never accuse one on it. A field or a name
+   * the file annotates with nothing, and a class name it cannot place, resolve
+   * to nothing, exactly as the proven tier does.
+   *
+   * What it deliberately does not do is follow the annotation's own
+   * DECLARATION: the name leads to the module that declares it, and whether
+   * that declaration is an interface, a class or a `Pick<…>` alias is not
+   * read. Where the type is written is the question; what it expands to is
+   * not, and expanding it would be inference rather than a record of what the
+   * code says.
    */
   const possibleOriginsOf = (site: CallSiteFact, from: string): ReadonlySet<string> => {
     const proven = originOf(site, from);
-    if (!site.field && !site.constructed) return proven;
+    if (!site.field && !site.constructed && !site.via) return proven;
     const resolved = scopeOf(site, from);
     if (!resolved) return proven;
     const { path: scope, facts: f } = resolved;
@@ -206,10 +224,15 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
         : declarationsAt(scope).has(name) ? republishedFrom(scope) : NO_ORIGIN;
       for (const candidate of landings) out.add(candidate);
     };
-    if (site.field) {
-      for (const typeName of fieldTypesOf(f, site.field)) widenThrough(typeName, typeBindingOf(f, typeName));
-    }
+    /** A declared type name, followed wherever it was written down. */
+    const widenThroughType = (typeName: string): void => widenThrough(typeName, typeBindingOf(f, typeName));
+    if (site.field) for (const typeName of fieldTypesOf(f, site.field)) widenThroughType(typeName);
     if (site.constructed) widenThrough(site.constructed, importBindingOf(f, site.constructed)?.from);
+    // A receiver that is a plain identifier the file ANNOTATED. It is asked
+    // on top of whatever originOf already proved through an import binding of
+    // the same name, never instead of it: both readings are things the file
+    // writes down, and this tier's question is what a call CAN have reached.
+    if (site.via) for (const typeName of localTypesOf(f, site.via)) widenThroughType(typeName);
     return out;
   };
 
