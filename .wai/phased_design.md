@@ -477,6 +477,57 @@ Measured on wairon own tree after D1 (1061 narratives): 777 linear, 211 simple, 
 - [ ] User config and update channels, download, logger, errors, HTTP helpers
 - [ ] The React app (`web/src`), with the generated canvas engine claimed under `conformance: off` — or a decision, recorded in the standard with its reason, that UI is outside SDD
 
+## Reported defects (external report, 2026-09-20) — triaged, slotted, not a new track
+
+A user report against a 2026-09-17 build. Triaged against dev before planning: some of it is already
+fixed, one item is the reverse of what was filed, and the rest slot into tracks that already exist.
+Nothing here reorders the roadmap.
+
+**Already fixed on dev — no work.**
+- `sdd_write_narrative` resetting a complete implementation to draft. PROVEN by probe on 2026-09-20:
+  restating a narrative over a `complete` implementation returned `complete`, preserved, with a notice
+  naming what it replaced. `saveImplementationSpec` carries the no-demotion guard its siblings have.
+  Their build predates the fix.
+
+**Filed as a defect, but the stripping is intended — the REAL bug is next to it.**
+- `sdd_update_spec` stripping a subproject prefix from `sourcePath` is the resolve-through-parent model
+  working: a child’s source paths are its own and are stored relative to the child root. Their census of
+  90-prefixed vs 2-stripped measures how much of their tree predates that change.
+- [ ] **But `sdd_get_status` prints that same child-relative path as `(File Missing!)`** — if child-relative
+  is right, the status reader is resolving against the parent root. NOT reproduced here; needs a chained
+  tree. This is the item with a user actively working around it the wrong way (double-prefixing, which
+  defeats the normalisation and bakes a wrong path in), so it is the one worth reproducing first.
+
+**Into the doctrine and authoring-UX track** (below) — all are the same species this programme exists for:
+a write that succeeds and says nothing true.
+- [ ] `lint.allow` on an error-severity code is inert in BOTH directions: it cannot silence (deliberate,
+  and right) and it is never flagged unused, because the matcher marks it used precisely so staleness will
+  not fire (`src/core/rules/index.ts:534`). The line sits in the spec looking like a decision, forever.
+  Reporter’s proposal is the right shape: `LINT_ALLOW_ON_ERROR`, naming the code and saying allows cannot
+  suppress errors. CONFIRMED still present on dev.
+- [ ] `unset` silently no-ops on a member path (`{"unset": ["methods.<name>"]}`) — `unset` is a known key so
+  the unknown-key guard never fires, and A1’s "no effect" report does not cover it.
+- [ ] A method name that does not exist is INSERTED rather than refused, so a typo grows a fourth method
+  carrying your narrative and reports success; caught only downstream as `UNEXPECTED_IMPLEMENTATION_METHOD`.
+- [ ] `sdd_add_component` drops an existing `lint.allow` on upsert — the tool expresses no `lint` field.
+  Same family as the `variant` gap found in C6: the create tools do not express everything a component has.
+- [ ] `sdd_add_type` accepts a type with zero fields.
+
+**Into Track D / chained subsystems** — needs a tree we do not have here:
+- [ ] Writing through a chained tree’s collapsed root subsystem id (child root id == the parent’s chaining
+  entry id) reads the MERGED parent+child view and writes it into the child file, injecting the parent’s
+  `parentSystem` and `projectPath`. Their three-segment workaround is sound. NOT reproduced here.
+- [ ] That same collapsed subsystem can express no `trustedLinks` value at all: a bare target resolves one
+  level too high, and the identifier schema refuses any `::`-qualified spelling.
+- [ ] `wairon doctor --fix` aborts a whole pass on one bad `subsystem:` value (a `::` in a directory name is
+  illegal on Windows); it dropped 193 good repairs for one bad spec. Per-spec skip-and-report.
+- [ ] Doctor and `sdd_validate_tree` do not read the same tree — doctor reported a self-referential ref the
+  validator returned zero findings for. "0 errors" is not "clean" while that is true.
+
+**Cheapest item on the whole list**, and it would have caught the report’s own 1a in August:
+- [ ] `sdd_validate_tree` does not report an unresolvable `sourcePath`, though `sdd_get_status` already
+  computes exactly that signal.
+
 ## Doctrine and authoring-UX track (NEXT, after chained-subsystems stage 2) — decisions from Robbe 2026-09-13
 - [x] **Authoring friction left over from 2a-0:** moved into the friction-fix programme (PR A–C) above.
 - [x] **Specialist is the last resort:** superseded on 2026-09-15 by the doctrine PR in the friction programme above. Specialist retires: logic is an Orchestrator whose variant declares its dependency class, and wairon's 28 Specialists migrate.
