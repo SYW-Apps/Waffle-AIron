@@ -524,6 +524,14 @@ a write that succeeds and says nothing true.
 - [ ] Doctor and `sdd_validate_tree` do not read the same tree — doctor reported a self-referential ref the
   validator returned zero findings for. "0 errors" is not "clean" while that is true.
 
+**Found by Track D itself, same family as the above:**
+- [ ] An adapter may export forwarders its contract never named and nothing reports it — `cli_core_adapter`
+  publishes seven, `host_core_adapter` the same, zero findings either way. F62 in the other direction:
+  realization is checked contract-to-code, never code-to-contract. Closing BOTH directions is one rule pass
+  over facts the analyzer already has at exact grade.
+- [ ] `icli_core_adapter` is six methods short of the command it serves: `wairon diagram` has `--all`,
+  `--sequence` and `--subsystem`, `DiagramOptions` models all three, and the contract names none of them.
+
 **Cheapest item on the whole list**, and it would have caught the report’s own 1a in August:
 - [ ] `sdd_validate_tree` does not report an unresolvable `sourcePath`, though `sdd_get_status` already
   computes exactly that signal.

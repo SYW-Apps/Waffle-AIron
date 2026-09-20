@@ -37,8 +37,10 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadTypeSpecs
       - stepNumber: 7
-        description: Build the architecture, type ERD, and database canvas model from the loaded specs
-        type: local
+        description: Build the architecture, type ERD and database canvas model from the loaded specs
+        type: call
+        targetComponent: spec_canvas
+        targetMethod: build
       - stepNumber: 8
         description: Dispatch on the requested format
         type: switch
@@ -55,10 +57,12 @@ methods:
         defaultStep: 17
       - stepNumber: 9
         description: >-
-          Render the self-contained interactive canvas HTML, including styled line-routing controls,
-          padded obstacle-aware curved edge routing, per-edge orthogonal lanes, and the
-          resizable/collapsible details sidebar
-        type: local
+          Draw the model as a single self-contained page — markup, styles and the interaction engine
+          embedded, including line-routing controls, obstacle-aware curved edges, per-edge
+          orthogonal lanes and the resizable details sidebar — so it opens from disk with no server
+        type: call
+        targetComponent: spec_canvas
+        targetMethod: render
       - stepNumber: 10
         description: Return the canvas HTML
         type: return
@@ -71,15 +75,19 @@ methods:
         type: return
         outcome: mermaid
       - stepNumber: 13
-        description: Render the draw.io / diagrams.net XML
-        type: local
+        description: Arrange the model and encode it as draw.io XML
+        type: call
+        targetComponent: diagram_codec
+        targetMethod: generateDrawioXml
       - stepNumber: 14
         description: Return the draw.io XML
         type: return
         outcome: drawio
       - stepNumber: 15
-        description: Render the Excalidraw scene JSON
-        type: local
+        description: Arrange the model and encode it as an Excalidraw scene
+        type: call
+        targetComponent: diagram_codec
+        targetMethod: generateExcalidrawScene
       - stepNumber: 16
         description: Return the Excalidraw scene
         type: return
@@ -160,4 +168,4 @@ lint:
         above, in the same refactor.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-09-19T20:28:40.882Z'
+updatedAt: '2026-09-20T18:29:18.745Z'

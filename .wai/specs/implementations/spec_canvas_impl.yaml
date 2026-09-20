@@ -1,0 +1,59 @@
+id: spec_canvas_impl
+name: Spec Canvas Implementation
+description: >-
+  src/core/canvas.ts. Two exported functions over ~4,600 lines: the model projection is the first
+  few hundred, and the rest is the engine the rendered page embeds. scripts/gen-canvas-engine.mjs
+  reads that same text to emit web/src/canvas/*, so the React app and the exported page share one
+  implementation by construction rather than by discipline.
+contract: ispec_canvas
+sourcePath: src/core/canvas.ts
+methods:
+  - name: build
+    narrative:
+      - stepNumber: 1
+        description: Load the system, subsystems, components, interfaces and types of the bound tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: >-
+          Emit a node per spec with its level and containment, and an edge per dependency and
+          ownership between the nodes emitted
+        type: local
+      - stepNumber: 3
+        description: >-
+          Mark each node the passed-in findings name, so the canvas shows a judgement it did not
+          make
+        type: local
+      - stepNumber: 4
+        description: Answer with the model
+        type: return
+        outcome: built
+    symbol: buildCanvasModel
+  - name: render
+    narrative:
+      - stepNumber: 1
+        description: Serialize the model into the page as data
+        type: local
+      - stepNumber: 2
+        description: >-
+          Embed the styles, the markup skeleton and the interaction engine alongside it, so the page
+          needs no server and no network to open — the same text scripts/gen-canvas-engine.mjs
+          extracts for the React app
+        type: local
+      - stepNumber: 3
+        description: >-
+          Embed the codec's two encoders by SERIALIZING THEIR SOURCE into the page rather than
+          calling them: the download buttons run them in the browser, against a layout the reader
+          has rearranged, long after this process has exited. The dependency on diagram_codec is
+          real and the encoders are genuinely used — just by a different runtime, which is why no
+          call step can name it
+        type: local
+      - stepNumber: 4
+        description: Answer with the complete page
+        type: return
+        outcome: rendered
+    symbol: renderCanvasHtml
+status: complete
+createdAt: '2026-09-20T16:38:14.590Z'
+updatedAt: '2026-09-20T18:30:04.627Z'

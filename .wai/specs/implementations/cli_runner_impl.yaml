@@ -1463,6 +1463,21 @@ methods:
         type: return
         outcome: refused
     symbol: lockCheckCommand
+  - name: runDiagram
+    sourcePath: src/commands/diagram.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Render the requested format through the core client adapter, which crosses into sdd_core
+          the way every other command does
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 2
+        description: Write the artifact to the requested path and report where it landed
+        type: return
+        outcome: written
+    symbol: runDiagram
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -1507,4 +1522,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-19T20:32:04.783Z'
+updatedAt: '2026-09-20T16:42:39.240Z'

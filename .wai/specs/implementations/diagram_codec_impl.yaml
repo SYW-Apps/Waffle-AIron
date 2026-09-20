@@ -1,0 +1,66 @@
+id: diagram_codec_impl
+name: Diagram Codec Implementation
+description: >-
+  src/core/diagram-export.ts. The two encoders share a shape table so a component type draws the
+  same in both formats; the two generate* wrappers are one line each, arranging with nothing
+  collapsed before encoding.
+contract: idiagram_codec
+sourcePath: src/core/diagram-export.ts
+methods:
+  - name: buildDrawioXml
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Emit a container cell per subsystem at the box the layout gave it, and a pattern container
+          for each component type that holds members
+        type: local
+      - stepNumber: 2
+        description: >-
+          Emit a cell per visible component in its own box, drawing a retired stereotype as a plain
+          box in the retired colour rather than dropping it
+        type: local
+      - stepNumber: 3
+        description: >-
+          Emit an edge per dependency between emitted cells, and wrap the whole thing as a draw.io
+          document
+        type: return
+        outcome: encoded
+  - name: buildExcalidrawScene
+    narrative:
+      - stepNumber: 1
+        description: Emit a rectangle per subsystem and per pattern container at the boxes the layout gave them
+        type: local
+      - stepNumber: 2
+        description: >-
+          Emit a rectangle and a label per visible component, using the same shape and colour table
+          the draw.io encoding uses so both formats draw the same picture
+        type: local
+      - stepNumber: 3
+        description: Emit an arrow per dependency and wrap the elements as an Excalidraw scene
+        type: return
+        outcome: encoded
+  - name: generateDrawioXml
+    narrative:
+      - stepNumber: 1
+        description: Arrange the model with nothing collapsed
+        type: call
+        targetComponent: diagram_layout
+        targetMethod: arrange
+      - stepNumber: 2
+        description: Encode the arranged graph as draw.io XML
+        type: return
+        outcome: exported
+  - name: generateExcalidrawScene
+    narrative:
+      - stepNumber: 1
+        description: Arrange the model with nothing collapsed
+        type: call
+        targetComponent: diagram_layout
+        targetMethod: arrange
+      - stepNumber: 2
+        description: Encode the arranged graph as an Excalidraw scene
+        type: return
+        outcome: exported
+status: complete
+createdAt: '2026-09-20T16:39:30.487Z'
+updatedAt: '2026-09-20T16:39:30.494Z'

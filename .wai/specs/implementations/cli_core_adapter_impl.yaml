@@ -140,6 +140,13 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: repairForeignStepFields
+  - name: renderDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal's diagram rendering
+        type: call
+        targetComponent: core_portal
+        targetMethod: renderDiagram
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T23:51:25.010Z'
+updatedAt: '2026-09-20T16:42:34.863Z'

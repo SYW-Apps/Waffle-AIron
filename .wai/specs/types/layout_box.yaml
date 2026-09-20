@@ -1,0 +1,28 @@
+kind: value-object
+id: layout_box
+name: LayoutBox
+description: >-
+  One rectangle in absolute coordinates. Absolute rather than relative to its container, because two
+  encoders of different formats have to place it identically and neither should have to re-derive a
+  parent chain to do so.
+fields:
+  - name: x
+    type: number
+    description: Left edge.
+    optional: false
+  - name: 'y'
+    type: number
+    description: Top edge.
+    optional: false
+  - name: w
+    type: number
+    description: Width.
+    optional: false
+  - name: h
+    type: number
+    description: Height.
+    optional: false
+methods: []
+sourcePath: src/core/canvas-layout.ts
+createdAt: '2026-09-20T16:40:36.926Z'
+updatedAt: '2026-09-20T16:40:37.119Z'

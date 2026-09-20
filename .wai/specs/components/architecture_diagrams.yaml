@@ -9,8 +9,10 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - spec_loader
+  - spec_canvas
+  - diagram_codec
 dependencyClass: read
 variant: projector
 status: complete
 createdAt: '2026-07-04T15:59:06.200Z'
-updatedAt: '2026-09-15T20:46:01.767Z'
+updatedAt: '2026-09-20T16:39:54.688Z'

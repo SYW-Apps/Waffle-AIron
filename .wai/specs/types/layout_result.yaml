@@ -1,0 +1,24 @@
+kind: value-object
+id: layout_result
+name: LayoutResult
+description: >-
+  Where everything ended up: a box for every visible component and a box for every subsystem
+  container, the latter carrying whether it is collapsed so an encoder can draw the header without
+  drawing what is inside.
+fields:
+  - name: boxes
+    type: Record<string, LayoutBox>
+    description: >-
+      Absolute box per visible component, including members placed inside the pattern that owns
+      them, keyed by component id.
+    optional: false
+  - name: subs
+    type: Record<string, LayoutBox>
+    description: >-
+      Absolute box per subsystem container, keyed by subsystem id, each also carrying whether it is
+      collapsed.
+    optional: false
+methods: []
+sourcePath: src/core/canvas-layout.ts
+createdAt: '2026-09-20T16:40:42.601Z'
+updatedAt: '2026-09-20T16:40:42.613Z'
