@@ -56,6 +56,26 @@ methods:
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
+  - name: findTestsReferencing
+    description: >-
+      Published: the tests that encode a given set of methods, so a write that changes or deletes
+      one can say which tests it just invalidated.
+    signature: >-
+      findTestsReferencing(methods: MethodImplementation[], projectRoot: string, testRoots:
+      string[]): TestsToRevisit[]
+    returns: TestsToRevisit[]
+    params:
+      - name: methods
+        type: MethodImplementation[]
+        description: The methods to look for
+      - name: projectRoot
+        type: string
+        description: The root the test roots are resolved within
+      - name: testRoots
+        type: string[]
+        description: Project-relative test directories; empty answers empty
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T21:44:13.584Z'
+updatedAt: '2026-09-20T13:26:36.413Z'

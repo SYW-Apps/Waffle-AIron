@@ -459,6 +459,15 @@ methods:
           nothing when no usable parent was reachable
         type: return
         outcome: ParentResolution
+  - name: findTestsReferencing
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the methods and the declared test roots to the source analyzer, which walks them
+          under the same containment rules as the source walk
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: findTestsReferencing
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-19T19:06:59.258Z'
+updatedAt: '2026-09-20T13:27:03.407Z'
