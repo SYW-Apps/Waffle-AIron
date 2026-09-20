@@ -3,52 +3,42 @@ name: Domain Registry Implementation
 description: >-
   src/core/domains.ts. Every write is read-modify-write through the store: load the configuration,
   change the domains array, save it back. Nothing is cached between calls, so two commands in one
-  process cannot disagree about what is registered.
+  process cannot disagree about what is registered. The reads moved to `domain_index` — what is left
+  here is only what changes the file.
 contract: idomain_registry
 sourcePath: src/core/domains.ts
 methods:
-  - name: resolve
+  - name: removeFreeStanding
     narrative:
       - stepNumber: 1
-        description: Derive the subsystem-bound domains from the spec tree
-        type: local
+        description: Read the configuration as it stands
+        type: call
+        targetComponent: topology_store
+        targetMethod: loadConfig
       - stepNumber: 2
-        description: Read the registered free-standing domains from the configuration
-        type: call
-        targetComponent: topology_store
-        targetMethod: loadConfig
+        description: Decide whether this id names something the configuration actually registers
+        type: branch
+        condition: the registered set holds a domain with this id
+        onTrueStep: 4
+        onFalseStep: 3
       - stepNumber: 3
-        description: Answer both kinds as one list — the distinction matters to a writer, not to a reader
-        type: return
-        outcome: resolved
-    symbol: resolveDomains
-  - name: find
-    narrative:
-      - stepNumber: 1
-        description: Resolve every domain and answer the one with this id, or nothing
-        type: return
-        outcome: found
-    symbol: findDomain
-  - name: listFreeStanding
-    narrative:
-      - stepNumber: 1
         description: >-
-          Read the configuration and answer the domains it registers — the writable set, and only
-          that
+          Refuse by name. A derived domain is not in the registered set, and answering "removed" for
+          one would be a lie the caller could not detect — the message says the domain is
+          subsystem-backed and comes from the spec tree, so the caller knows where to change it
+          instead
+        type: throw
+        error: not a free-standing domain
+      - stepNumber: 4
+        description: Drop the domain from the registered set and write the configuration back
         type: call
         targetComponent: topology_store
-        targetMethod: loadConfig
-    symbol: listFreeStandingDomains
-  - name: deriveFromSubsystems
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Read the subsystems this layer declares and emit one domain per subsystem, bound to it and
-          owning its path. Derived on every call, never stored, so a renamed subsystem cannot leave
-          a stale domain behind
+        targetMethod: saveConfig
+      - stepNumber: 5
+        description: Done
         type: return
-        outcome: derived
-    symbol: deriveSubsystemDomains
+        outcome: unregistered
+    symbol: removeFreeStandingDomain
   - name: addFreeStanding
     narrative:
       - stepNumber: 1
@@ -57,15 +47,16 @@ methods:
         targetComponent: topology_store
         targetMethod: loadConfig
       - stepNumber: 2
-        description: Decide whether the id is free
+        description: Decide whether the registered set already answers to this id
         type: branch
-        condition: a domain with this id already exists, derived or registered
+        condition: a registered domain with this id already exists
         onTrueStep: 3
         onFalseStep: 4
       - stepNumber: 3
         description: >-
-          Refuse by name — two domains answering to one id makes every later lookup ambiguous, and
-          the caller can see which kind already holds it
+          Refuse by name — two registered domains answering to one id makes every later lookup
+          ambiguous. This guards only the set this component owns; a collision with a
+          subsystem-derived domain is caught above, because seeing it needs the spec tree too
         type: throw
         error: duplicate domain id
       - stepNumber: 4
@@ -78,26 +69,6 @@ methods:
         type: return
         outcome: registered
     symbol: addFreeStandingDomain
-  - name: removeFreeStanding
-    narrative:
-      - stepNumber: 1
-        description: Read the configuration as it stands
-        type: call
-        targetComponent: topology_store
-        targetMethod: loadConfig
-      - stepNumber: 2
-        description: >-
-          Drop the domain with this id from the registered set and write the configuration back. A
-          derived domain is not in that set, so asking to remove one changes nothing rather than
-          pretending to
-        type: call
-        targetComponent: topology_store
-        targetMethod: saveConfig
-      - stepNumber: 3
-        description: Done
-        type: return
-        outcome: unregistered
-    symbol: removeFreeStandingDomain
 status: complete
 createdAt: '2026-09-20T22:02:08.143Z'
-updatedAt: '2026-09-20T22:02:08.149Z'
+updatedAt: '2026-09-20T22:43:54.193Z'

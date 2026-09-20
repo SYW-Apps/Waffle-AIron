@@ -1,0 +1,18 @@
+id: domain_curator
+name: Domain Curator
+description: >-
+  Registering a domain into the project's topology, and taking one back out. It exists because the
+  check a registration needs cannot be made where the write happens: refusing an id the spec tree
+  already answers to takes both the derived domains and the registered ones, and a Registry may
+  reach only its own Store. So the decision is made here, over the projector, and only then handed
+  to the repository to persist. This is also the workflow step the standard asks for between a
+  Portal and a write — the portal calls this, never the facade's writes directly.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - domain_projector
+  - topology_repository
+status: complete
+createdAt: '2026-09-20T22:44:14.383Z'
+updatedAt: '2026-09-20T22:45:25.213Z'

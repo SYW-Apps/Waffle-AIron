@@ -1,56 +1,10 @@
 id: idomain_registry
 name: Domain Registry Interface
 description: >-
-  Reading and registering domains. The read answers both kinds — derived and free-standing — because
-  a caller asking "what domains are there" wants all of them; the writes touch only the
-  free-standing ones, because a derived domain has no existence apart from the subsystem it came
-  from.
+  What a project registers into its topology by hand. Only the free-standing domains are here: the
+  derived ones belong to the spec tree, and the read that spans both is `idomain_index`.
 component: domain_registry
 methods:
-  - name: resolve
-    description: >-
-      Every domain this project has: those derived from subsystems in the spec tree, and those
-      registered free-standing in the configuration. One list, because the difference matters to
-      whoever writes a domain and not at all to whoever reads one.
-    signature: 'resolve(): Domain[]'
-    returns: Domain[]
-    params: []
-    guarantees:
-      - idempotent
-    effect: read
-  - name: find
-    description: The domain with this id, or nothing. Searches both kinds.
-    signature: 'find(id: string): Domain | undefined'
-    returns: Domain | undefined
-    params:
-      - name: id
-        type: string
-        description: The domain id to look for
-    guarantees:
-      - idempotent
-    effect: read
-  - name: listFreeStanding
-    description: >-
-      Only the domains the configuration registers — the ones that can be added and removed.
-      Separate from `resolve` because these are the writable set, and a caller about to remove one
-      must not be handed a derived domain it cannot remove.
-    signature: 'listFreeStanding(): Domain[]'
-    returns: Domain[]
-    params: []
-    guarantees:
-      - idempotent
-    effect: read
-  - name: deriveFromSubsystems
-    description: >-
-      The domains the spec tree implies: one per subsystem, bound to it. Derived on every call
-      rather than stored, so a subsystem renamed in the tree cannot leave a stale domain behind in a
-      file.
-    signature: 'deriveFromSubsystems(): Domain[]'
-    returns: Domain[]
-    params: []
-    guarantees:
-      - idempotent
-    effect: read
   - name: addFreeStanding
     description: >-
       Register a domain the spec tree does not imply, and persist it. Refuses an id that already
@@ -76,4 +30,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-09-20T22:01:53.106Z'
-updatedAt: '2026-09-20T22:01:53.117Z'
+updatedAt: '2026-09-20T22:41:10.990Z'

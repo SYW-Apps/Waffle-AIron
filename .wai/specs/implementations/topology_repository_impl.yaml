@@ -2,40 +2,12 @@ id: topology_repository_impl
 name: Topology Repository Implementation
 description: >-
   src/core/topology.ts — a facade and nothing else. Every method is one forward to the member that
-  owns the work: the domains to the registry, the file to the store. It holds no logic of its own by
+  owns the work: the writes to the registry, the file to the store. It holds no logic of its own by
   construction, which is what a Repository facade is for; anything that needed a decision would
-  belong in a member instead.
+  belong in a member instead, and the moment one appears here the pattern has been misread.
 contract: itopology_repository
 sourcePath: src/core/topology.ts
 methods:
-  - name: resolve
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the domain registry
-        type: call
-        targetComponent: domain_registry
-        targetMethod: resolve
-  - name: find
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the domain registry
-        type: call
-        targetComponent: domain_registry
-        targetMethod: find
-  - name: listFreeStanding
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the domain registry
-        type: call
-        targetComponent: domain_registry
-        targetMethod: listFreeStanding
-  - name: deriveFromSubsystems
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the domain registry
-        type: call
-        targetComponent: domain_registry
-        targetMethod: deriveFromSubsystems
   - name: addFreeStanding
     narrative:
       - stepNumber: 1
@@ -57,13 +29,6 @@ methods:
         type: call
         targetComponent: topology_store
         targetMethod: loadConfig
-  - name: saveConfig
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the store
-        type: call
-        targetComponent: topology_store
-        targetMethod: saveConfig
 status: complete
 createdAt: '2026-09-20T22:05:50.977Z'
-updatedAt: '2026-09-20T22:05:50.985Z'
+updatedAt: '2026-09-20T22:44:59.495Z'

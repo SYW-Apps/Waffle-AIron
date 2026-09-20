@@ -554,24 +554,28 @@ methods:
   - name: resolveDomains
     narrative:
       - stepNumber: 1
-        description: Forward to the topology repository's facade
+        description: >-
+          Forward to the domain projector, which answers across the spec tree and the configuration
+          alike
         type: call
-        targetComponent: topology_repository
+        targetComponent: domain_projector
         targetMethod: resolve
   - name: addDomain
     narrative:
       - stepNumber: 1
-        description: Forward to the topology repository's facade
+        description: >-
+          Forward to the domain curator, which decides whether the id is free before anything is
+          persisted
         type: call
-        targetComponent: topology_repository
-        targetMethod: addFreeStanding
+        targetComponent: domain_curator
+        targetMethod: register
   - name: removeDomain
     narrative:
       - stepNumber: 1
-        description: Forward to the topology repository's facade
+        description: Forward to the domain curator — the portal does not reach the repository's writes directly
         type: call
-        targetComponent: topology_repository
-        targetMethod: removeFreeStanding
+        targetComponent: domain_curator
+        targetMethod: unregister
   - name: detectDomainCandidates
     narrative:
       - stepNumber: 1
@@ -581,4 +585,4 @@ methods:
         targetMethod: detectCandidates
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T22:09:28.442Z'
+updatedAt: '2026-09-20T22:45:20.221Z'
