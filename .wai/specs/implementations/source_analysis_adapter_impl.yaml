@@ -82,6 +82,50 @@ methods:
           root-file list the unclaimed-source rule judges
         type: return
         outcome: CodeModel
+  - name: findTestsReferencing
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve each declared test root within the project root and refuse an absolute or
+          parent-escaping one rather than walking it, on the same containment terms as the source
+          walk; declaring none answers empty without reading a file
+        type: local
+      - stepNumber: 2
+        description: >-
+          Walk those roots for test files, skipping node_modules and dot-directories, and read each
+          one
+        type: local
+      - stepNumber: 3
+        description: >-
+          For each method take the name to search for: its `symbol` when it declares one, otherwise
+          its own name
+        type: local
+      - stepNumber: 4
+        description: >-
+          Collect the test files that IMPORT that name — a binding, not a coincidence — and
+          separately those that only mention it, which is how a test driving the method through a
+          portal shows up
+        type: local
+      - stepNumber: 5
+        description: Decide whether the bare name discriminates
+        type: branch
+        condition: the mention count exceeds a tenth of the walked test files
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Withhold the mention list and mark it indiscriminate: a name like `project` or `status`
+          matches most of the suite, and a list that long is not an answer
+        type: local
+      - stepNumber: 7
+        description: >-
+          Answer with one entry per method that any test names, carrying the imported and mentioned
+          lists and why a list was withheld. A method nothing references contributes no entry — an
+          entry whose every list is empty is not an answer, and the report field it feeds promises
+          to be empty when nothing references them. A withheld mention list still counts as naming,
+          because saying the name is too common IS the answer
+        type: return
+        outcome: found
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-09-20T10:41:26.137Z'
+updatedAt: '2026-09-20T14:04:01.606Z'

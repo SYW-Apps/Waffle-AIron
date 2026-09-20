@@ -70,6 +70,14 @@ rules:
       # ours to claim, and never will be, so it does not belong in a list
       # that only shrinks.
       - src/templates/canvas
+    # Where this project keeps its tests. Declaring them is what lets a gated
+    # write name the tests it just invalidated (F25) - a spec pass that changes
+    # a contract and says nothing is how a brief comes to promise green tests it
+    # has already broken. Separate from sourceRoots on purpose: tests are not
+    # code the specs claim, and listing them there would make every test file an
+    # UNCLAIMED_SOURCE_FILE.
+    testRoots:
+      - tests
     # The debt register, frozen. Every file here is source wairon ships and
     # no spec names — F17, written down where a reviewer sees the whole list
     # instead of discovering it one file at a time. It can only SHRINK: claim
@@ -188,7 +196,8 @@ rules:
             spec: authoring_orchestrator_impl
             at: 'updateSpecGated'
             covers:
-              - '2:authoring_core_adapter.updateSpec'
+              - '3:authoring_core_adapter.updateSpec'
+              - '5:authoring_validator_adapter.findTestsReferencing'
           - code: CALL_STEP_UNREALIZED
             spec: cli_host_adapter_impl
             at: 'createProject'
@@ -421,6 +430,11 @@ rules:
           - code: UNDECLARED_COLOCATED_CALL
             spec: authoring_portal_impl
             at: 'addComponent'
+            covers:
+              - 'authoring_core_adapter.loadProjectConfig'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: authoring_portal_impl
+            at: 'updateSpecGated'
             covers:
               - 'authoring_core_adapter.loadProjectConfig'
           - code: UNDECLARED_COLOCATED_CALL

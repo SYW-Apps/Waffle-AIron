@@ -55,6 +55,13 @@ methods:
         type: call
         targetComponent: spec_validator
         targetMethod: computeGateStateId
+  - name: findTestsReferencing
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator's test search
+        type: call
+        targetComponent: spec_validator
+        targetMethod: findTestsReferencing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T17:55:55.213Z'
+updatedAt: '2026-09-20T13:27:06.380Z'

@@ -15,6 +15,15 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: validateComponentCandidate
+  - name: findTestsReferencing
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the search to the validator portal; an empty test-root list answers empty rather
+          than throwing, because naming the tests must never be the thing that fails a write
+        type: call
+        targetComponent: validator_portal
+        targetMethod: findTestsReferencing
 status: complete
 createdAt: '2026-09-18T21:13:03.714Z'
-updatedAt: '2026-09-18T21:43:57.830Z'
+updatedAt: '2026-09-20T13:27:09.859Z'

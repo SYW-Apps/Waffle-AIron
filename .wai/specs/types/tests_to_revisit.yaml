@@ -1,0 +1,50 @@
+kind: value-object
+id: tests_to_revisit
+name: TestsToRevisit
+description: >-
+  The tests that encode one method a write just changed or deleted. Two lists rather than one,
+  because the two ways of finding them fail in opposite directions and merging them would hide which
+  is which. Measured on this tree over 264 test files and 695 methods: matching an imported symbol
+  is precise (worst case 111 files, and those are genuinely used everywhere) but misses 382 methods
+  entirely, because a test driving a method through a portal never imports it; matching the bare
+  name finds those but drowns on ordinary words — `project` matched 187 test files, `status` 122,
+  `read` 112. A list that long is not an answer, so when the name matches more than a tenth of the
+  suite the mention list is withheld and `indiscriminate` says why rather than printing noise.
+fields:
+  - name: method
+    type: string
+    description: The contract method the write changed or deleted.
+    optional: false
+  - name: symbol
+    type: string
+    description: >-
+      The code-level name searched for: the method's `symbol` when it declares one, otherwise its
+      name.
+    optional: false
+  - name: imported
+    type: string[]
+    description: >-
+      Test files that import that name. The high-confidence list: an import is a binding, not a
+      coincidence. Matched by name alone — the search is not given the module the implementation
+      names, so a same-named import from elsewhere counts. Both sides of a renamed import are
+      searched.
+    optional: false
+  - name: mentioned
+    type: string[]
+    description: >-
+      Test files that name the symbol without importing it — usually a test driving the method
+      through a portal or a helper. Lower confidence, and empty when `indiscriminate` is true.
+    optional: false
+  - name: indiscriminate
+    type: boolean
+    description: >-
+      True when the bare name matched more than a tenth of the walked test files, so mentioning it
+      carries no signal and `mentioned` was withheld. Saying the name is too common is an answer;
+      listing 187 files is not. The threshold is a proportion with no floor, so on a suite of ten
+      files or fewer every mention is withheld — the mention half is a large-suite instrument by
+      construction, and the `imported` list is never withheld.
+    optional: false
+methods: []
+sourcePath: src/core/source-analysis.ts
+createdAt: '2026-09-20T13:25:41.354Z'
+updatedAt: '2026-09-20T14:03:57.354Z'

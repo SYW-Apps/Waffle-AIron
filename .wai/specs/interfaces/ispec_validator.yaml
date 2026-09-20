@@ -101,6 +101,26 @@ methods:
           This project's own rule severities; each rule is judged at the stricter of the parent's
           and these
         optional: true
+  - name: findTestsReferencing
+    description: >-
+      Find the tests that encode a given set of methods, resolving the project's declared test roots
+      before handing the walk to the source analyzer. A project that declares none answers empty.
+    signature: >-
+      findTestsReferencing(methods: MethodImplementation[], projectRoot: string, testRoots:
+      string[]): TestsToRevisit[]
+    returns: TestsToRevisit[]
+    params:
+      - name: methods
+        type: MethodImplementation[]
+        description: The methods to look for
+      - name: projectRoot
+        type: string
+        description: The root the test roots are resolved within
+      - name: testRoots
+        type: string[]
+        description: Project-relative test directories; empty answers empty
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-18T17:50:48.296Z'
+updatedAt: '2026-09-20T13:26:32.400Z'

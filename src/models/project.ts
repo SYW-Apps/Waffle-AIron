@@ -224,6 +224,17 @@ export const ConformanceRuleConfigSchema = z.object({
    */
   exclude: z.array(z.string()).optional(),
   /**
+   * Project-relative directories holding this project's TESTS. Declaring none
+   * means no test scan and no `testsToRevisit` on any write — opt-in on the
+   * same terms as `sourceRoots`, so a project that never asked for it never
+   * pays for it.
+   *
+   * Separate from `sourceRoots` deliberately: tests are not code the specs are
+   * expected to claim, and putting them there would make every test file an
+   * UNCLAIMED_SOURCE_FILE.
+   */
+  testRoots: z.array(z.string()).optional(),
+  /**
    * The files under the source roots that no spec names yet, frozen. A listed
    * file is not reported; an unlisted one is UNCLAIMED_SOURCE_FILE; an entry
    * that is now claimed, proven a barrel, or no longer found is

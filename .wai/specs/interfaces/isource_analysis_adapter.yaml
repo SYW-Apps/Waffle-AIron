@@ -59,6 +59,37 @@ methods:
           Paths inside those roots that are not this project's code to claim — vendored libraries,
           generated output, a chained subproject's own directory
         optional: true
+  - name: findTestsReferencing
+    description: >-
+      Find the tests that encode a given set of methods. Walks the declared test roots on the same
+      containment terms as the source walk — each root resolved and checked within the project root,
+      an absolute or parent-escaping root refused rather than walked, node_modules and
+      dot-directories skipped — and for each method searches for its `symbol`, or its name when it
+      declares none. A test file that IMPORTS that name is reported as `imported`; one that merely
+      names it is reported as `mentioned`, unless the name matched more than a tenth of the walked
+      test files, in which case the mention list is withheld and `indiscriminate` is set. Declaring
+      no test roots walks nothing and answers empty, which is what keeps this opt-in. Deterministic
+      over file contents; an unreadable test file is skipped, never fatal.
+    signature: >-
+      findTestsReferencing(methods: MethodImplementation[], projectRoot: string, testRoots:
+      string[]): TestsToRevisit[]
+    returns: TestsToRevisit[]
+    params:
+      - name: methods
+        type: MethodImplementation[]
+        description: >-
+          The methods to look for; each contributes its `symbol` when it declares one, otherwise its
+          name
+      - name: projectRoot
+        type: string
+        description: The root every test root is resolved and containment-checked within
+      - name: testRoots
+        type: string[]
+        description: >-
+          Project-relative directories holding the project's tests; empty means no walk and an empty
+          answer
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-09-19T10:58:40.081Z'
+updatedAt: '2026-09-20T13:26:28.373Z'

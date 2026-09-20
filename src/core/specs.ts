@@ -10,6 +10,11 @@ import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { listSpecFiles, readSpecFile, writeSpecFile } from './spec-files.js';
+// TYPE-ONLY, and it has to be: the report NAMES the tests a write invalidated,
+// while the search that finds them belongs to the validator. A runtime import
+// here would be the store reaching into the rule engine that already reads it
+// — the cycle `authoring` exists to keep open.
+import type { TestsToRevisit } from './source-analysis.js';
 import {
   SystemSpec,
   SystemSpecSchema,
@@ -862,6 +867,17 @@ export interface SpecChangeReport {
   notices: string[];
   /** One line for people. */
   summary: string;
+  /**
+   * The tests that encode a method this write changed or deleted, one entry per
+   * such method. Empty when the write touched no method, when the project
+   * declares no test roots, or when nothing references them.
+   *
+   * This is what a spec pass never said: eight hosted tests once encoded
+   * behaviour a committed spec had changed, and a brief that said "keep
+   * existing tests green" collided with the spec because nothing listed them.
+   * The write that creates the collision is the one that reports it.
+   */
+  testsToRevisit: TestsToRevisit[];
 }
 
 /**
@@ -3725,6 +3741,7 @@ export class SpecWorkspace {
         changes,
         ineffective,
         notices,
+        testsToRevisit: [],
         summary: `No change to ${kind} "${id}" — the delta matches what is stored, so nothing ${dryRun ? 'would be' : 'was'} written.`,
       };
     }
@@ -3749,6 +3766,7 @@ export class SpecWorkspace {
         changes,
         ineffective,
         notices,
+        testsToRevisit: [],
         summary: `Dry run on ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'} would be made. Nothing was written.`,
       };
     }
@@ -3778,6 +3796,10 @@ export class SpecWorkspace {
       changes,
       ineffective,
       notices,
+      // The store never searches for tests: it holds the tree and knows
+      // nothing about the rule engine that reads code. The GATED write above
+      // it fills this in, which is also the only write path a human drives.
+      testsToRevisit: [],
       summary: `Updated ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'}.`,
     };
   }
@@ -4353,6 +4375,7 @@ function moveChangeReports(edits: MoveEdit[], dryRun: boolean): SpecChangeReport
       changes,
       ineffective: [],
       notices: [] as string[],
+      testsToRevisit: [] as TestsToRevisit[],
       summary: `${dryRun ? 'Would move' : 'Moved'} into ${edit.kind} "${edit.id}": `
         + `${changes.length} change${changes.length === 1 ? '' : 's'}.`,
     }));

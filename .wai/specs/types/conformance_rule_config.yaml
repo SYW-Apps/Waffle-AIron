@@ -41,7 +41,16 @@ fields:
       finding only when it lists every unit that finding reports, and an entry that stops applying
       is STALE_CARRIED_FINDING, so the register only shrinks.
     optional: true
+  - name: testRoots
+    type: string[]
+    description: >-
+      Project-relative directories holding this project's tests. Declaring none means no test scan
+      and no `testsToRevisit` on any write — opt-in on the same terms as `sourceRoots`, so a project
+      that never asked for it never pays for it. Separate from `sourceRoots` deliberately: tests are
+      not code the specs are expected to claim, and putting them in `sourceRoots` would make every
+      test file an UNCLAIMED_SOURCE_FILE.
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-19T10:44:18.090Z'
-updatedAt: '2026-09-19T19:03:56.236Z'
+updatedAt: '2026-09-20T13:26:01.819Z'

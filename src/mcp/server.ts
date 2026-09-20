@@ -320,6 +320,20 @@ function renderChangeReport(report: SpecChangeReport): string {
     lines.push('', 'NO EFFECT:', ...report.ineffective.map(i => `- ${i}`));
   }
   if (report.notices.length) lines.push('', 'NOTICE:', ...report.notices.map(n => `- ${n}`));
+  // The tests this write just invalidated. A structured field nobody renders
+  // is a field nobody reads, and the whole point is that the change which
+  // creates the collision is the one that says so.
+  if (report.testsToRevisit.length) {
+    lines.push('', 'TESTS TO REVISIT:');
+    for (const entry of report.testsToRevisit) {
+      lines.push(`- ${entry.method} (searched as "${entry.symbol}")`);
+      if (entry.imported.length) lines.push(`  imports it: ${entry.imported.join(', ')}`);
+      if (entry.mentioned.length) lines.push(`  names it: ${entry.mentioned.join(', ')}`);
+      if (entry.indiscriminate) {
+        lines.push('  names it: withheld — the bare name matches more than a tenth of the suite, so the list carries no signal.');
+      }
+    }
+  }
   return lines.join('\n');
 }
 
@@ -405,6 +419,17 @@ const specChangeReportOutput = {
   ),
   notices: z.array(z.string()).describe('Store placement notices, gate warnings and delta notices.'),
   summary: z.string().describe('One line for people.'),
+  testsToRevisit: z.array(z.object({
+    method: z.string().describe('The contract method this write changed or deleted.'),
+    symbol: z.string().describe('The code-level name searched for: the method\'s `symbol` when it declares one, else its name.'),
+    imported: z.array(z.string()).describe('Test files that IMPORT that symbol — the high-confidence list, because an import is a binding and not a coincidence.'),
+    mentioned: z.array(z.string()).describe('Test files that name the symbol without importing it — usually a test driving it through a portal. Empty when `indiscriminate` is true.'),
+    indiscriminate: z.boolean().describe('True when the bare name matched more than a tenth of the test suite, so the mention list was withheld as noise.'),
+  })).describe(
+    'The tests that encode a method this write changed or deleted, one entry per such method. Empty when the '
+    + 'write touched no method, when the project declares no `rules.conformance.testRoots`, or when nothing '
+    + 'references them. Read it before promising that existing tests still pass.',
+  ),
   ...staleServerOutput,
 } satisfies Record<keyof SpecChangeReport | keyof typeof staleServerOutput, z.ZodTypeAny>;
 

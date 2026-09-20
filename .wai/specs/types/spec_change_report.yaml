@@ -45,7 +45,17 @@ fields:
       already held. Named rather than stripped, because a key silently dropped is how a typo reads
       as a completed edit.
     optional: false
+  - name: testsToRevisit
+    type: TestsToRevisit[]
+    description: >-
+      The tests that encode a method this write changed or deleted, one entry per such method. Empty
+      when the write touched no method, when the project declares no test roots, or when nothing
+      references them. This is what a spec pass never said: eight hosted tests once encoded
+      behaviour a committed spec had changed, and a brief that said "keep existing tests green"
+      collided with the spec because nothing listed them. The write that creates the collision is
+      the one that reports it.
+    optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-09-19T11:07:17.840Z'
+updatedAt: '2026-09-20T13:25:45.629Z'
