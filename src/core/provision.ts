@@ -22,6 +22,13 @@ import {
   invalidateSpecCache,
   assertContainedProjectPath,
   rebaseReference,
+  // The ONE reference-field table (see core/specs.ts). A rename drives it
+  // over raw files, a move over the typed store; the list of where a spec
+  // names another spec is written once so neither can go stale alone.
+  specKind,
+  rewriteSpecRefs,
+  type RefPosition,
+  type SpecRefKind,
 } from './specs.js';
 import { aiPathsAt } from '../config/loader.js';
 import { projectConfigRepository, projectConfigRepositoryAt } from '../config/project-config.js';
@@ -550,14 +557,9 @@ function buildRenameMap(subsystemId: string, externalize: boolean): Map<string, 
  * register or dispatch step names on a component — so a method reference is
  * only ever read together with the component holding it.
  */
-type RefPosition = 'component' | 'entity-class' | 'auth-source' | 'interface' | 'type' | 'method';
-
-/** The `auth.from` prefix that makes a credential source a component reference. */
-const COMPONENT_AUTH_SOURCE = 'component:';
-
 /** A spec a reference rewrite changed, by kind and id; the L0 system spec's id is "system". */
 interface RewrittenSpec {
-  kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
+  kind: SpecRefKind;
   id: string;
 }
 
@@ -603,34 +605,14 @@ function componentIdsUnder(dir: string): Set<string> {
   }
   return ids;
 }
-
-/**
- * What a spec file holds, read from its shape as the loader reads it;
- * undefined for a file holding no spec at all. The order is the loader's: a
- * component and a subsystem are recognized before an interface, whose
- * `component` field a component spec would otherwise answer to.
- */
-function specKind(raw: any): RewrittenSpec['kind'] | undefined {
-  if ('componentType' in raw) return 'component';
-  if ('parentSystem' in raw) return 'subsystem';
-  if ('vision' in raw) return 'system';
-  if ('component' in raw && Array.isArray(raw.methods)) return 'interface';
-  if ('contract' in raw && Array.isArray(raw.methods)) return 'implementation';
-  if ('kind' in raw && Array.isArray(raw.fields)) return 'type';
-  return undefined;
-}
-
 /**
  * Rewrite the reference fields of every spec under `specsDir` through `remap`,
- * skipping `excludeDir`, and return the specs it rewrote. The fields: a
- * component's dependsOn, owns and dispatch components; a subsystem's lifecycle
- * entrypoints and published interfaces; the system's published interfaces; an
- * interface's component and method parameter types; an implementation's
- * contract, narrative targets and narrative `component:` auth sources; an
- * entity's componentClass and field types. A method position is read with the
- * component it hangs off — a dispatch binding's and a lifecycle entrypoint's
- * method, and a narrative step's targetMethod — so a remap can retarget the
- * method of ONE component.
+ * skipping `excludeDir`, and return the specs it rewrote.
+ *
+ * WHICH fields hold a reference is not decided here: that is the one table in
+ * core/specs.ts (`rewriteSpecRefs`), so the rename walking files and the move
+ * walking the typed store cannot drift apart. This is the file half — read,
+ * rewrite, persist what changed.
  */
 function rewriteRefFields(
   specsDir: string,
@@ -647,97 +629,10 @@ function rewriteRefFields(
       continue;
     }
     if (!raw || typeof raw !== 'object') continue;
-    let changed = false;
-
-    /** Rewrite `holder[key]` in place when it holds a reference. */
-    const rewrite = (holder: any, key: string | number, position: RefPosition): void => {
-      const ref = holder?.[key];
-      if (typeof ref !== 'string') return;
-      const next = remap(ref, position);
-      if (next !== ref) {
-        holder[key] = next;
-        changed = true;
-      }
-    };
-    /** Rewrite the method name at `holder[key]`, read against the component `owner` names. */
-    const rewriteMethod = (holder: any, key: string, owner: unknown): void => {
-      const name = holder?.[key];
-      if (typeof name !== 'string' || typeof owner !== 'string') return;
-      const next = remap(name, 'method', owner);
-      if (next !== name) {
-        holder[key] = next;
-        changed = true;
-      }
-    };
-    /** The entries of a list field; none when the field holds no list. */
-    const entries = (list: unknown): any[] => (Array.isArray(list) ? list : []);
-    /** Rewrite each reference a list field holds. */
-    const rewriteEach = (list: unknown, position: RefPosition): void => {
-      entries(list).forEach((_, i) => rewrite(list, i, position));
-    };
-    /** A published interface names the component realizing it and, optionally, its contract. */
-    const rewritePublished = (list: unknown): void => {
-      for (const published of entries(list)) {
-        rewrite(published, 'component', 'component');
-        rewrite(published, 'interface', 'interface');
-      }
-    };
-
     const kind = specKind(raw);
-    if (kind === 'component') {
-      rewriteEach(raw.dependsOn, 'component');
-      rewriteEach(raw.owns, 'component');
-      // A Portal's dispatch table carries component refs of its own, each with
-      // the method that component serves the capability with. The method is read
-      // against the component as written, before the component itself moves.
-      for (const binding of entries(raw.dispatch)) {
-        rewriteMethod(binding, 'method', binding?.component);
-        rewrite(binding, 'component', 'component');
-      }
-    } else if (kind === 'subsystem') {
-      // Lifecycle entrypoints name components (same-subsystem by rule, but
-      // rewrite defensively so a legacy/misdeclared tree can't silently dangle
-      // across a migration) and the method the runtime invokes at that phase.
-      for (const entrypoint of entries(raw.lifecycle)) {
-        rewriteMethod(entrypoint, 'method', entrypoint?.component);
-        rewrite(entrypoint, 'component', 'component');
-      }
-      rewritePublished(raw.publicInterfaces);
-    } else if (kind === 'system') {
-      rewritePublished(raw.publicInterfaces);
-    } else if (kind === 'interface') {
-      rewrite(raw, 'component', 'component');
-      for (const method of raw.methods) {
-        for (const param of entries(method?.params)) rewrite(param, 'type', 'type');
-      }
-    } else if (kind === 'implementation') {
-      rewrite(raw, 'contract', 'interface');
-      for (const method of raw.methods) {
-        for (const step of entries(method?.narrative)) {
-          // A call, register or dispatch step names the method on its target.
-          rewriteMethod(step, 'targetMethod', step?.targetComponent);
-          rewrite(step, 'targetComponent', 'component');
-          // A credential source names its component after the component: prefix.
-          const source = step?.auth?.from;
-          if (typeof source === 'string' && source.startsWith(COMPONENT_AUTH_SOURCE)) {
-            const id = source.slice(COMPONENT_AUTH_SOURCE.length);
-            const next = remap(id, 'auth-source');
-            if (next !== id) {
-              step.auth.from = `${COMPONENT_AUTH_SOURCE}${next}`;
-              changed = true;
-            }
-          }
-        }
-      }
-    } else if (kind === 'type') {
-      rewrite(raw, 'componentClass', 'entity-class');
-      for (const field of raw.fields) rewrite(field, 'type', 'type');
-    }
-
-    if (changed && kind) {
-      writeYamlFile(file, raw);
-      rewritten.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
-    }
+    if (!rewriteSpecRefs(raw, remap) || !kind) continue;
+    writeYamlFile(file, raw);
+    rewritten.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
   }
   return rewritten;
 }

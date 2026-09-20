@@ -25,7 +25,7 @@ type Step = {
   capability?: string;
 };
 type MethodDef = { name: string; endpoint?: Record<string, unknown> };
-type MethodImpl = { name: string; steps?: Step[]; symbol?: string; sourcePath?: string; detail?: string; intent?: string };
+type MethodImpl = { name: string; steps?: Step[]; calls?: string[]; symbol?: string; sourcePath?: string; detail?: string; intent?: string };
 
 const sub = (id: string, over: Partial<SubsystemSpec> = {}): SubsystemSpec => ({
   id, name: id, description: `subsystem ${id}`, parentSystem: 'books-sys',
@@ -145,17 +145,22 @@ function books(): string {
   write('components/books_orch.yaml', comp('books_orch', 'books', 'Orchestrator', {
     dependsOn: ['ledger', 'mailer'], description: 'posts entries, and its own prose names no method',
   }));
-  write('interfaces/ibooks_orch.yaml', intf('ibooks_orch', 'books_orch', ['run']));
-  write('implementations/books_orch_impl.yaml', impl('books_orch_impl', 'ibooks_orch', [{
-    name: 'run',
-    steps: [
-      { type: 'call', targetComponent: 'ledger', targetMethod: 'post' },
-      { type: 'register', targetComponent: 'ledger', targetMethod: 'post' },
-      { type: 'dispatch', targetComponent: 'books_portal', capability: 'ledger.post' },
-      { type: 'call', targetComponent: 'ledger', targetMethod: 'close' },
-      { type: 'call', targetComponent: 'mailer', targetMethod: 'post' },
-    ],
-  }]));
+  write('interfaces/ibooks_orch.yaml', intf('ibooks_orch', 'books_orch', ['run', 'tally']));
+  write('implementations/books_orch_impl.yaml', impl('books_orch_impl', 'ibooks_orch', [
+    {
+      name: 'run',
+      steps: [
+        { type: 'call', targetComponent: 'ledger', targetMethod: 'post' },
+        { type: 'register', targetComponent: 'ledger', targetMethod: 'post' },
+        { type: 'dispatch', targetComponent: 'books_portal', capability: 'ledger.post' },
+        { type: 'call', targetComponent: 'ledger', targetMethod: 'close' },
+        { type: 'call', targetComponent: 'mailer', targetMethod: 'post' },
+      ],
+    },
+    // The narrative-less spelling of a call: `calls` names the same pair in one
+    // string, and is a reference to the method exactly as a step is.
+    { name: 'tally', detail: 'intent', calls: ['ledger.post', 'ledger.close', 'mailer.post'] },
+  ]));
   write('components/mailer.yaml', comp('mailer', 'books', 'Adapter'));
   write('interfaces/imailer.yaml', intf('imailer', 'mailer', ['post']));
   write('implementations/mailer_impl.yaml', impl('mailer_impl', 'imailer', [{ name: 'post', steps: [{ type: 'local' }] }]));
@@ -270,6 +275,16 @@ describe('renameMethod', () => {
         ['call', 'ledger', 'close'],
         ['call', 'mailer', 'post'],
       ]);
+  });
+
+  it('retargets a `calls` entry naming it, which is the same reference written in one string', () => {
+    root = books();
+
+    renameMethod('ledger', 'post', 'append');
+
+    // Only the entry naming THIS component and THIS method: the ledger's other
+    // method and another component's method of the same name stay as they are.
+    expect(method(root, 'books_orch_impl', 'tally').calls).toEqual(['ledger.append', 'ledger.close', 'mailer.post']);
   });
 
   it("retargets the moved implementation's own call into the component, in the same pass", () => {

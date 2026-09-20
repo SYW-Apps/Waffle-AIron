@@ -29,6 +29,11 @@ import {
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
   splitNamespace,
+  // One `calls` entry read apart into the component it names and the method on
+  // it, so the reference table below can rewrite either half.
+  parseDeclaredCall,
+  MethodSignature,
+  MethodImplementation,
   // The ONE per-type step-field table (models/step-config.ts). The writer
   // rebuilds a retyped step against it; the narrative-step-config rule judges
   // a stored step against the same table, so neither can drift from the other.
@@ -788,6 +793,22 @@ export interface SpecWriteHooks {
     kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
     merged: Record<string, any>,
   ): string[] | void;
+  /**
+   * Judge a spec the same way `gate` does but ANSWER with the rule codes
+   * instead of throwing, so a caller can ask whether a shape WOULD be legal
+   * without attempting the write.
+   *
+   * This exists for the move's alternatives search. The store holds the tree
+   * and can enumerate candidate homes; the gate holds the judgement; neither
+   * can answer "where could these methods live" alone. Driving that search
+   * through `gate` would mean running it on caught exceptions — a search whose
+   * control flow is a throw per candidate, where a genuine bug in the gate is
+   * indistinguishable from a refusal.
+   */
+  assess?(
+    kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+    merged: Record<string, any>,
+  ): string[];
 }
 
 /** The kinds `updateSpec` addresses — every level of the tree. */
@@ -841,6 +862,258 @@ export interface SpecChangeReport {
   notices: string[];
   /** One line for people. */
   summary: string;
+}
+
+/**
+ * One component considered as a home for a set of moved methods, and what
+ * putting them there would cost (method_move_candidate).
+ *
+ * Produced when a move is refused: a refusal that only says which rule fired
+ * leaves the caller to work out where the methods CAN live, which is the search
+ * this type answers. Ranked by `newDependencies` length, so the cheapest legal
+ * home is first.
+ */
+export interface MethodMoveCandidate {
+  /** The candidate component's id. */
+  component: string;
+  /** True when the methods could move here with no rule refusing it. */
+  legal: boolean;
+  /**
+   * The dependencies this component does not have yet but the moved methods
+   * call. Empty when it already reaches everything they need — the cheapest
+   * possible home.
+   */
+  newDependencies: string[];
+  /** What this component's dependency count would become after the move, counting `newDependencies`. */
+  dependencyCount: number;
+  /**
+   * The project's `maxComponentDependencies` at the time of the answer, so
+   * `dependencyCount` can be read without looking up the config.
+   */
+  dependencyLimit: number;
+  /** The rule codes that would refuse the move into this component. Empty exactly when `legal` is true. */
+  refusals: string[];
+}
+
+/**
+ * The answer to a method move (method_move_report): what moved, every reference
+ * that was re-pointed to follow it, and — when a rule refused the move — which
+ * rule and where the methods could live instead.
+ *
+ * A move is several gated writes at once (both contracts, both implementations,
+ * the target component, and every caller whose steps name the old home), so
+ * `edits` carries one SpecChangeReport per spec touched rather than one flat
+ * change list. Either all of them land or none do: a partial move leaves callers
+ * pointing at a method that is no longer there.
+ */
+export interface MethodMoveReport {
+  /**
+   * True only when the methods now live on `to` and every edit reached disk.
+   * False for a refusal and for a dry run alike; `refusals` and `dryRun` tell
+   * those apart.
+   */
+  moved: boolean;
+  /** The component the methods were taken from. */
+  from: string;
+  /** The component asked to receive them. */
+  to: string;
+  /** The method names the caller asked to move, in the order given. */
+  methods: string[];
+  /** One report per spec the move touched. Empty when the move was refused. */
+  edits: SpecChangeReport[];
+  /**
+   * How many references were re-pointed to follow the methods, across every
+   * kind that names a component: narrative `call`, `register` and `dispatch`
+   * steps by their targetComponent, dispatch-table bindings, lifecycle
+   * entrypoints, and `calls` entries by their `<component>.<method>` string.
+   */
+  repointed: number;
+  /**
+   * The rule codes that refused the move, each with what it judged. Empty
+   * exactly when nothing refused it; a non-empty list means nothing reached disk.
+   */
+  refusals: string[];
+  /**
+   * Where these methods could live instead, cheapest legal home first,
+   * including `to` itself so its shortfall can be read beside the others.
+   * Populated only on a refusal.
+   */
+  alternatives: MethodMoveCandidate[];
+  /** What the caller should know but nothing refused. */
+  notices: string[];
+  /** One line for people. */
+  summary: string;
+  /** True when the caller asked what the move would do and nothing was written. */
+  dryRun: boolean;
+  /**
+   * Ids of the specs whose prose still names the old home, and wire endpoint
+   * bindings that keep it. Nothing here was rewritten.
+   */
+  mentions: string[];
+}
+
+// ---------------------------------------------------------------------------
+// The reference-field table — ONE list of where a spec names another spec.
+//
+// A component id and a method name are not written in one place. They sit in a
+// component's dependsOn, owns and dispatch table; a subsystem's lifecycle
+// entrypoints and published interfaces; the system's published interfaces; an
+// interface's component and parameter types; an implementation's contract, its
+// narrative targets, its `component:` credential sources and its `calls`
+// entries; and an entity's componentClass and field types.
+//
+// Every operation that MOVES an identity has to walk that list, and the list is
+// the part that goes stale: a kind added here and missed there leaves a dangling
+// reference nobody finds until a later validate. So it is written once, and the
+// operations differ only in their remap. `renameComponent` and `renameMethod`
+// (core/provision.ts) drive it over raw files; `moveMethods` drives it over the
+// typed store, because a move must be able to compute every edit before writing
+// any of them.
+// ---------------------------------------------------------------------------
+
+/** Where in a spec a reference sits, which is what decides how a remap should read it. */
+export type RefPosition = 'component' | 'entity-class' | 'auth-source' | 'interface' | 'type' | 'method';
+
+/** The `auth.from` prefix that makes a credential source a component reference. */
+export const COMPONENT_AUTH_SOURCE = 'component:';
+
+/** The level a spec file holds. */
+export type SpecRefKind = 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
+
+/**
+ * What a spec object holds, read from its shape as the loader reads it;
+ * undefined for an object holding no spec at all. The order is the loader's: a
+ * component and a subsystem are recognized before an interface, whose
+ * `component` field a component spec would otherwise answer to.
+ */
+export function specKind(raw: any): SpecRefKind | undefined {
+  if ('componentType' in raw) return 'component';
+  if ('parentSystem' in raw) return 'subsystem';
+  if ('vision' in raw) return 'system';
+  if ('component' in raw && Array.isArray(raw.methods)) return 'interface';
+  if ('contract' in raw && Array.isArray(raw.methods)) return 'implementation';
+  if ('kind' in raw && Array.isArray(raw.fields)) return 'type';
+  return undefined;
+}
+
+/**
+ * Rewrite every reference field of ONE spec object, in place, through `remap`;
+ * answers whether anything changed.
+ *
+ * A method position is read with the component it hangs off — a dispatch
+ * binding's and a lifecycle entrypoint's method, a narrative step's
+ * targetMethod, and the method half of a `calls` entry — so a remap can
+ * retarget the method of exactly one component. A component position is read
+ * the same way round, with the method it serves where there is one, so a remap
+ * can move exactly the methods it is moving and leave that component's other
+ * references alone. Both halves are read as the spec WROTE them, before either
+ * is rewritten.
+ */
+export function rewriteSpecRefs(
+  raw: any,
+  remap: (ref: string, position: RefPosition, owner?: string) => string,
+): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  let changed = false;
+
+  /** Rewrite `holder[key]` in place when it holds a reference. */
+  const rewrite = (holder: any, key: string | number, position: RefPosition, owner?: string): void => {
+    const ref = holder?.[key];
+    if (typeof ref !== 'string') return;
+    const next = remap(ref, position, owner);
+    if (next !== ref) {
+      holder[key] = next;
+      changed = true;
+    }
+  };
+  /** Rewrite the method name at `holder[key]`, read against the component `owner` names. */
+  const rewriteMethod = (holder: any, key: string, owner: unknown): void => {
+    const name = holder?.[key];
+    if (typeof name !== 'string' || typeof owner !== 'string') return;
+    const next = remap(name, 'method', owner);
+    if (next !== name) {
+      holder[key] = next;
+      changed = true;
+    }
+  };
+  /** A component/method pair, rewritten as one: the method against the component, then the component against the method. */
+  const rewritePair = (holder: any, componentKey: string, methodKey: string): void => {
+    const component = holder?.[componentKey];
+    const method = holder?.[methodKey];
+    rewriteMethod(holder, methodKey, component);
+    rewrite(holder, componentKey, 'component', typeof method === 'string' ? method : undefined);
+  };
+  /** The entries of a list field; none when the field holds no list. */
+  const entries = (list: unknown): any[] => (Array.isArray(list) ? list : []);
+  /** Rewrite each reference a list field holds. */
+  const rewriteEach = (list: unknown, position: RefPosition): void => {
+    entries(list).forEach((_, i) => rewrite(list, i, position));
+  };
+  /** A published interface names the component realizing it and, optionally, its contract. */
+  const rewritePublished = (list: unknown): void => {
+    for (const published of entries(list)) {
+      rewrite(published, 'component', 'component');
+      rewrite(published, 'interface', 'interface');
+    }
+  };
+
+  const kind = specKind(raw);
+  if (kind === 'component') {
+    rewriteEach(raw.dependsOn, 'component');
+    rewriteEach(raw.owns, 'component');
+    // A Portal's dispatch table carries component refs of its own, each with
+    // the method that component serves the capability with.
+    for (const binding of entries(raw.dispatch)) rewritePair(binding, 'component', 'method');
+  } else if (kind === 'subsystem') {
+    // Lifecycle entrypoints name components (same-subsystem by rule, but
+    // rewrite defensively so a legacy/misdeclared tree can't silently dangle
+    // across a migration) and the method the runtime invokes at that phase.
+    for (const entrypoint of entries(raw.lifecycle)) rewritePair(entrypoint, 'component', 'method');
+    rewritePublished(raw.publicInterfaces);
+  } else if (kind === 'system') {
+    rewritePublished(raw.publicInterfaces);
+  } else if (kind === 'interface') {
+    rewrite(raw, 'component', 'component');
+    for (const method of entries(raw.methods)) {
+      for (const param of entries(method?.params)) rewrite(param, 'type', 'type');
+    }
+  } else if (kind === 'implementation') {
+    rewrite(raw, 'contract', 'interface');
+    for (const method of entries(raw.methods)) {
+      for (const step of entries(method?.narrative)) {
+        // A call, register or dispatch step names the method on its target.
+        rewritePair(step, 'targetComponent', 'targetMethod');
+        // A credential source names its component after the component: prefix.
+        const source = step?.auth?.from;
+        if (typeof source === 'string' && source.startsWith(COMPONENT_AUTH_SOURCE)) {
+          const id = source.slice(COMPONENT_AUTH_SOURCE.length);
+          const next = remap(id, 'auth-source');
+          if (next !== id) {
+            step.auth.from = `${COMPONENT_AUTH_SOURCE}${next}`;
+            changed = true;
+          }
+        }
+      }
+      // `calls` is the narrative-less spelling of a call, and names the same
+      // pair in one string. A reference that reads differently is still a
+      // reference: left out of this table it dangles exactly as a step would.
+      entries(method?.calls).forEach((entry: unknown, i: number) => {
+        if (typeof entry !== 'string') return;
+        const call = parseDeclaredCall(entry);
+        if (!call) return;
+        const component = remap(call.compId, 'component', call.methodName);
+        const name = remap(call.methodName, 'method', call.compId);
+        if (component === call.compId && name === call.methodName) return;
+        method.calls[i] = `${component}.${name}`;
+        changed = true;
+      });
+    }
+  } else if (kind === 'type') {
+    rewrite(raw, 'componentClass', 'entity-class');
+    for (const field of entries(raw.fields)) rewrite(field, 'type', 'type');
+  }
+
+  return changed;
 }
 
 /** A value as a change report shows it: compact, and never a wall of YAML. */
@@ -3508,6 +3781,598 @@ export class SpecWorkspace {
       summary: `Updated ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'}.`,
     };
   }
+
+  // -------------------------------------------------------------------------
+  // Method move (icore_orchestrator.moveMethods)
+  //
+  // A rename changes a NAME and can stay mechanical. A move changes which
+  // component OWNS behaviour, which is exactly what the stereotype and
+  // dependency rules judge — so the mechanics live here and the judgement
+  // arrives as an injected hook, for the same reason `gate` does: this module
+  // must not import the rule engine.
+  //
+  // It is several writes at once: both contracts, both implementations, the
+  // target component (which gains the dependencies the moved narratives call),
+  // and every caller whose steps, dispatch bindings, lifecycle entrypoints or
+  // `calls` entries name the old home. Every edit is computed before the first
+  // is written and a failed write restores the ones already made, because a
+  // half-moved method leaves callers naming a home it no longer has.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Move contract methods from one component to another, and every reference
+   * with them.
+   *
+   * Each method leaves the source component's contract and arrives on the
+   * target's, carrying its signature, params, returns, guarantees and endpoint
+   * binding unchanged; its implementation entry travels with it, carrying
+   * narrative, sourcePath, symbol, detail, intent, calls and findings. Prose is
+   * never rewritten and a wire endpoint keeps its address — moving a method
+   * between components must not silently re-address an RPC — so both are
+   * reported as mentions instead.
+   *
+   * Refuses before the first write (`unmovable request`): a component or method
+   * that does not exist, a method name already declared on the target, a source
+   * and target that are the same component, and a component inside a chained
+   * subproject.
+   */
+  moveMethods(
+    from: string,
+    to: string,
+    methods: string[],
+    hooks?: SpecWriteHooks,
+    dryRun = false,
+  ): MethodMoveReport {
+    // Step 1: the source component.
+    const source = this.loadComponentSpec(from);
+
+    // Step 2: what the caller named.
+    const complaint = this.unmovableRequest(source, from, to, methods);
+
+    // Steps 3-4: refuse before the first write, naming which check failed — a
+    // mistyped id must read as a mistyped id, never as a rule refusing the design.
+    if (complaint) throw new Error(`unmovable request: ${complaint}`);
+
+    // Step 5: the interfaces of both components.
+    const contracts = this.loadInterfaceSpecs();
+
+    // Step 6: the plan, built entirely in memory.
+    const plan = this.planMethodMove(source as ComponentSpec, to, methods, contracts);
+
+    // Step 7: every reference that names the old home, re-pointed to follow the
+    // methods; prose and wire addresses recorded and left alone.
+    const repointed = this.repointToNewHome(from, to, methods, plan);
+    const mentions = this.moveMentions(from, plan);
+
+    // Step 8: a judgement was injected.
+    if (hooks) {
+      // Step 9: judge the resulting source and target at the write boundary.
+      const verdict = judgeMoveResult(hooks, plan);
+      plan.notices.push(...verdict.notices);
+
+      // Step 10: the hook refused.
+      if (verdict.refusals.length > 0) {
+        // Step 11: where these methods COULD live, asked without throwing.
+        const alternatives = this.rankMoveHomes(hooks, from, to, plan);
+        // Step 12: the refusal. Nothing has reached disk.
+        return {
+          moved: false, from, to, methods, edits: [], repointed: 0,
+          refusals: verdict.refusals, alternatives, notices: plan.notices,
+          summary: refusedMoveSummary(from, to, methods, verdict.refusals, alternatives),
+          dryRun, mentions,
+        };
+      }
+    }
+
+    // Step 13: the caller wanted the write.
+    if (dryRun) {
+      // Step 14: the edits it would have made, and not one byte moved.
+      const edits = moveChangeReports([...plan.edits.values()], true);
+      return {
+        moved: false, from, to, methods, edits, repointed,
+        refusals: [], alternatives: [], notices: plan.notices,
+        summary: `Dry run: moving ${namedMethods(methods)} from "${from}" to "${to}" would touch `
+          + `${edits.length} spec${edits.length === 1 ? '' : 's'} and re-point ${repointed} reference${repointed === 1 ? '' : 's'}. Nothing was written.`,
+        dryRun: true, mentions,
+      };
+    }
+
+    // Step 15: write every edit, restoring the ones already written if one fails.
+    const edits = this.writeMoveEdits([...plan.edits.values()]);
+
+    // Step 16: what moved, how many references followed it, and what still
+    // names the old home.
+    return {
+      moved: true, from, to, methods, edits, repointed,
+      refusals: [], alternatives: [], notices: plan.notices,
+      summary: `Moved ${namedMethods(methods)} from "${from}" to "${to}": ${edits.length} spec`
+        + `${edits.length === 1 ? '' : 's'} written, ${repointed} reference${repointed === 1 ? '' : 's'} re-pointed`
+        + `${mentions.length ? `, ${mentions.length} still naming the old home in prose or on the wire` : ''}.`,
+      dryRun: false, mentions,
+    };
+  }
+
+  /**
+   * Why this move cannot be attempted at all, or null when the request is
+   * answerable. Every check here is about what the CALLER named, so its answer
+   * is a mistake to correct — never a rule refusing the design.
+   */
+  private unmovableRequest(
+    source: ComponentSpec | null,
+    from: string,
+    to: string,
+    methods: string[],
+  ): string | null {
+    const chained = [from, to].find((id) => id.includes('::'));
+    if (chained) {
+      return `"${chained}" lives in a chained subproject; move its methods from that project's own root.`;
+    }
+    if (!source) return `no component has the id "${from}".`;
+    if (!this.loadComponentSpec(to)) return `no component has the id "${to}".`;
+    if (from === to) return `"${from}" is both the source and the target; a method cannot move to where it already lives.`;
+    if (methods.length === 0) return 'no method names were given.';
+
+    const contracts = this.loadInterfaceSpecs();
+    const ofSource = contracts.filter((i) => i.component === from);
+    const ofTarget = contracts.filter((i) => i.component === to);
+
+    for (const name of methods) {
+      const declaring = ofSource.filter((i) => i.methods.some((m) => m.name === name));
+      if (declaring.length === 0) return `no contract of "${from}" declares the method "${name}".`;
+      if (declaring.length > 1) {
+        return `${declaring.map((i) => `"${i.id}"`).join(' and ')} both declare "${name}" on "${from}" — `
+          + 'a move has to know which contract the method leaves, so split or rename them first.';
+      }
+    }
+    const taken = methods.filter((name) => ofTarget.some((i) => i.methods.some((m) => m.name === name)));
+    if (taken.length > 0) {
+      return `"${to}" already declares ${namedMethods(taken)}.`;
+    }
+
+    const receiving = this.moveTargetContract(to, ofTarget);
+    if (typeof receiving === 'string') return receiving;
+
+    // A method whose implementation entry has nowhere to arrive would lose its
+    // narrative on the way. Saying so beats dropping it.
+    const travelling = this.loadImplementationSpecs().some((impl) =>
+      ofSource.some((i) => i.id === impl.contract) && impl.methods.some((m) => methods.includes(m.name)));
+    if (travelling && !this.loadImplementationSpecs().some((i) => i.contract === receiving.id)) {
+      return `no implementation realizes "${receiving.id}", so the moved methods' narratives would have nowhere to arrive.`;
+    }
+    return null;
+  }
+
+  /** The contract of `to` that receives the methods, or why that cannot be decided. */
+  private moveTargetContract(to: string, ofTarget: InterfaceSpec[]): InterfaceSpec | string {
+    if (ofTarget.length === 0) return `"${to}" declares no contract, so the methods would have nowhere to arrive.`;
+    if (ofTarget.length === 1) return ofTarget[0];
+    const named = ofTarget.find((i) => i.id === `i${to}` || i.id.endsWith(`::i${to}`));
+    return named ?? `"${to}" declares ${ofTarget.length} contracts and none is named "i${to}", `
+      + 'so which one receives the methods is not decidable.';
+  }
+
+  /**
+   * The whole move as staged edits, computed before anything is written: the
+   * contract entries that leave the source and arrive on the target, the
+   * implementation entries that travel with them, and the dependencies the
+   * moved narratives call that the target does not have yet.
+   */
+  private planMethodMove(
+    source: ComponentSpec,
+    to: string,
+    methods: string[],
+    contracts: InterfaceSpec[],
+  ): MethodMovePlan {
+    const target = this.loadComponentSpec(to) as ComponentSpec;
+    const receiving = this.moveTargetContract(to, contracts.filter((i) => i.component === to)) as InterfaceSpec;
+    const implementations = this.loadImplementationSpecs();
+    const plan: MethodMovePlan = {
+      edits: new Map(), source, target, reach: [], newDependencies: [], wireBound: [], notices: [],
+    };
+
+    const arriving: MethodSignature[] = [];
+    const travelling: MethodImplementation[] = [];
+
+    for (const contract of contracts.filter((i) => i.component === source.id)) {
+      const leaving = contract.methods.filter((m) => methods.includes(m.name));
+      if (leaving.length === 0) continue;
+      arriving.push(...cloneSpec(leaving));
+      // The copy is filtered, never the stored array: `filter` hands back the
+      // SAME element objects, so a plan built that way shares its methods with
+      // the snapshot a failed write has to restore — and the sweep below, which
+      // rewrites in place, would quietly edit both.
+      const remaining = cloneSpec(contract);
+      remaining.methods = remaining.methods.filter((m) => !methods.includes(m.name));
+      this.stageMoveEdit(plan, 'interface', contract.id, contract, remaining);
+      if (contract.methods.length === leaving.length) {
+        plan.notices.push(`"${contract.id}" is left with no methods — "${source.id}" no longer declares anything on it.`);
+      }
+      for (const impl of implementations.filter((i) => i.contract === contract.id)) {
+        const moving = impl.methods.filter((m) => methods.includes(m.name));
+        if (moving.length === 0) continue;
+        travelling.push(...cloneSpec(moving));
+        const kept = cloneSpec(impl);
+        kept.methods = kept.methods.filter((m) => !methods.includes(m.name));
+        this.stageMoveEdit(plan, 'implementation', impl.id, impl, kept);
+      }
+    }
+
+    this.stageMoveEdit(plan, 'interface', receiving.id, receiving, {
+      ...cloneSpec(receiving),
+      methods: [...cloneSpec(receiving.methods), ...arriving],
+    });
+    if (arriving.some((m) => m.endpoint)) plan.wireBound.push(receiving.id);
+    if (receiving.status !== undefined && receiving.status !== statusOfContracts(contracts, source.id)) {
+      plan.notices.push(`"${receiving.id}" is ${receiving.status} where the methods came from a ${statusOfContracts(contracts, source.id)} contract — the status of a moved method is the status of its new home.`);
+    }
+    for (const entry of travelling) {
+      if ((entry.narrative ?? []).length === 0 && !entry.intent) {
+        plan.notices.push(`"${entry.name}" moves with an empty narrative and no intent — nothing followed it but its name.`);
+      }
+    }
+
+    const targetImpl = implementations.find((i) => i.contract === receiving.id);
+    if (travelling.length > 0 && targetImpl) {
+      this.stageMoveEdit(plan, 'implementation', targetImpl.id, targetImpl, {
+        ...cloneSpec(targetImpl),
+        methods: [...cloneSpec(targetImpl.methods), ...travelling],
+      });
+    }
+
+    // What the moved methods reach once they live on the target. A call back
+    // into a method moving with them lands in the same component, so it is
+    // reach nobody has to declare.
+    plan.reach = reachOf(travelling, source.id, new Set(methods)).filter((id) => id !== to);
+    const held = new Set([...(target.dependsOn ?? []), ...(target.owns ?? [])]);
+    plan.newDependencies = plan.reach.filter((id) => !held.has(id) && id !== to);
+
+    // Both components are judged as the move leaves them, so both are staged
+    // even when the move changes neither — an edit that diffs to nothing is
+    // never written.
+    this.stageMoveEdit(plan, 'component', source.id, source, cloneSpec(source));
+    this.stageMoveEdit(plan, 'component', target.id, target, {
+      ...cloneSpec(target),
+      dependsOn: [...(target.dependsOn ?? []), ...plan.newDependencies],
+    });
+    return plan;
+  }
+
+  /** Stage one spec's rewrite, keeping the version it started from as the snapshot a failed write restores. */
+  private stageMoveEdit(plan: MethodMovePlan, kind: WritableSpecKind, id: string, before: any, after: any): void {
+    plan.edits.set(`${kind}:${id}`, { kind, id, before, after });
+  }
+
+  /**
+   * Re-point every reference that names the old home, through the one
+   * reference-field table, and answer with how many followed.
+   *
+   * A reference is only re-pointed when it names BOTH the old home and a method
+   * that is moving: another method of the same component, and another
+   * component's method of the same name, stay exactly where they point.
+   */
+  private repointToNewHome(from: string, to: string, methods: string[], plan: MethodMovePlan): number {
+    const moved = new Set(methods);
+    let repointed = 0;
+    const remap = (ref: string, position: RefPosition, owner?: string): string => {
+      if (position !== 'component' || ref !== from || !owner || !moved.has(owner)) return ref;
+      repointed += 1;
+      return to;
+    };
+
+    for (const { kind, id, spec } of this.everySpecInTree()) {
+      const staged = plan.edits.get(`${kind}:${id}`);
+      const subject = staged ? staged.after : cloneSpec(spec);
+      if (!rewriteSpecRefs(subject, remap)) continue;
+      if (staged) continue;
+      if (id.includes('::')) {
+        // A chained subproject is written from its own root, never from here.
+        plan.notices.push(`"${id}" lives in a chained subproject and still names "${from}" — re-point it from that project's own root.`);
+        repointed -= 1;
+        continue;
+      }
+      this.stageMoveEdit(plan, kind, id, spec, subject);
+    }
+
+    plan.notices.push(...this.callersOwingADependency(to, plan));
+    return repointed;
+  }
+
+  /**
+   * The components that now reach the new home without declaring it. The move
+   * re-points the reference; it never edits another component's dependency
+   * list, because a dependency nobody judged is exactly what the gate exists to
+   * prevent.
+   */
+  private callersOwingADependency(to: string, plan: MethodMovePlan): string[] {
+    const contracts = this.loadInterfaceSpecs();
+    const owing = new Set<string>();
+    for (const edit of plan.edits.values()) {
+      const owner = edit.kind === 'component'
+        ? edit.id
+        : contracts.find((i) => i.id === (edit.after as ImplementationSpec).contract)?.component;
+      if (!owner || owner === to) continue;
+      const component = owner === plan.target.id ? plan.target : this.loadComponentSpec(owner);
+      if (!component) continue;
+      const held = new Set([...(component.dependsOn ?? []), ...(component.owns ?? [])]);
+      if (!held.has(to)) owing.add(owner);
+    }
+    return [...owing].map((id) =>
+      `"${id}" now reaches "${to}" but does not declare it — add the dependency, or the call is undeclared.`);
+  }
+
+  /**
+   * Where these methods could live instead, cheapest legal home first, with the
+   * requested target among them so its shortfall reads beside the others.
+   *
+   * The store enumerates, because the store holds the tree; the hook judges,
+   * because the gate holds the judgement. `assess` answers rather than throws,
+   * so this is a search and not a sequence of caught exceptions.
+   */
+  private rankMoveHomes(hooks: SpecWriteHooks, from: string, to: string, plan: MethodMovePlan): MethodMoveCandidate[] {
+    const limit = this.dependencyLimit();
+    const pool = this.loadComponentSpecs().filter((c) => c.subsystem === plan.source.subsystem && c.id !== from);
+    if (!pool.some((c) => c.id === to)) pool.push(plan.target);
+    return pool
+      .map((candidate) => weighMoveHome(hooks, candidate, plan.reach, limit))
+      .sort((a, b) => Number(b.legal) - Number(a.legal)
+        || a.newDependencies.length - b.newDependencies.length
+        || a.component.localeCompare(b.component));
+  }
+
+  /**
+   * The project's `maxComponentDependencies`, so a candidate's dependency count
+   * can be read without looking up the config. A project that sets none is read
+   * against the same default the coupling-health rule applies.
+   */
+  private dependencyLimit(): number {
+    try {
+      return projectConfigRepository.load()?.rules?.complexity?.maxComponentDependencies ?? DEFAULT_DEPENDENCY_LIMIT;
+    } catch {
+      return DEFAULT_DEPENDENCY_LIMIT;
+    }
+  }
+
+  /** Every spec in the bound tree, with the kind and id a staged edit addresses it by. */
+  private *everySpecInTree(): Generator<{ kind: WritableSpecKind; id: string; spec: any }> {
+    const system = this.loadSystemSpec();
+    if (system) yield { kind: 'system', id: system.name, spec: system };
+    for (const spec of this.loadSubsystemSpecs()) yield { kind: 'subsystem', id: spec.id, spec };
+    for (const spec of this.loadComponentSpecs()) yield { kind: 'component', id: spec.id, spec };
+    for (const spec of this.loadInterfaceSpecs()) yield { kind: 'interface', id: spec.id, spec };
+    for (const spec of this.loadImplementationSpecs()) yield { kind: 'implementation', id: spec.id, spec };
+    for (const spec of this.loadTypeSpecs()) yield { kind: 'type', id: spec.id, spec };
+  }
+
+  /**
+   * What still names the old home once the move is written, every one of it
+   * left exactly as it was: the specs whose prose carries the id, and the
+   * receiving contract whose moved methods keep their wire address. A move
+   * never edits prose and never re-addresses an RPC.
+   */
+  private moveMentions(from: string, plan: MethodMovePlan): string[] {
+    const mentions = new Set<string>(plan.wireBound);
+    const named = new RegExp(`(?<![A-Za-z0-9_])${from}(?![A-Za-z0-9_])`);
+    for (const { kind, id, spec } of this.everySpecInTree()) {
+      if (namesInProse(spec, named)) mentions.add(kind === 'system' ? 'system' : id);
+    }
+    return [...mentions];
+  }
+
+  /**
+   * Write every staged edit, restoring the ones already written if one fails.
+   *
+   * The snapshots are the versions the plan started from, so a restore puts the
+   * authored content back exactly; only `updatedAt` reads as touched, because
+   * the store stamps every write it accepts. Nothing invalidates the cache
+   * here: every save does it already, and a second call would only be a hop
+   * across a component boundary that no narrative claims.
+   */
+  private writeMoveEdits(edits: MoveEdit[]): SpecChangeReport[] {
+    const reports = moveChangeReports(edits, false);
+    const written: MoveEdit[] = [];
+    try {
+      for (const report of reports) {
+        const edit = edits.find((e) => e.kind === report.kind && e.id === report.id) as MoveEdit;
+        report.notices.push(...this.saveMovedSpec(edit.kind, edit.after));
+        written.push(edit);
+      }
+    } catch (e) {
+      for (const edit of [...written].reverse()) {
+        try {
+          this.saveMovedSpec(edit.kind, edit.before);
+        } catch {
+          // A restore that cannot be written is the one thing this cannot fix;
+          // the throw below names how far the write got.
+        }
+      }
+      throw new Error(
+        `move-write-failed: ${String((e as Error)?.message ?? e)} — `
+        + `${written.length} edit${written.length === 1 ? '' : 's'} already written ${written.length === 1 ? 'was' : 'were'} restored, so nothing moved.`,
+      );
+    }
+    return reports;
+  }
+
+  /** Persist one moved spec through the store's own writer, and answer with its placement notices. */
+  private saveMovedSpec(kind: WritableSpecKind, spec: any): string[] {
+    const opts: SaveSpecOptions = { allowStatusDemotion: true };
+    switch (kind) {
+      case 'system':         this.saveSystemSpec(spec); return [];
+      case 'subsystem':      this.saveSubsystemSpec(spec, opts); return [];
+      case 'component':      return this.saveComponentSpec(spec, opts);
+      case 'interface':      return this.saveInterfaceSpec(spec, opts);
+      case 'implementation': return this.saveImplementationSpec(spec, opts);
+      case 'type':           return this.saveTypeSpec(spec);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Method move — the pure half
+// ---------------------------------------------------------------------------
+
+/** The dependency ceiling read when a project declares none; the coupling-health rule's own default. */
+const DEFAULT_DEPENDENCY_LIMIT = 8;
+
+/**
+ * The fields a mention is read from — a spec's prose, wherever it nests: every
+ * description, a method's intent, a finding's summary, and a narrative step's
+ * own text. A signature, a symbol and a capability are not prose: the move
+ * either carries them or leaves them by design.
+ */
+const PROSE_FIELDS = new Set([
+  'description', 'intent', 'summary', 'condition', 'over', 'outcome', 'error', 'note', 'caller',
+]);
+
+/** One spec the move rewrites, with the version it started from — the snapshot a failed write restores. */
+interface MoveEdit {
+  kind: WritableSpecKind;
+  id: string;
+  before: any;
+  after: any;
+}
+
+/** The whole move, computed before anything is written. */
+interface MethodMovePlan {
+  /** Every spec the move rewrites, keyed `<kind>:<id>`. */
+  edits: Map<string, MoveEdit>;
+  /** The source component as it stands. */
+  source: ComponentSpec;
+  /** The target component as it stands. */
+  target: ComponentSpec;
+  /** The components the moved methods reach once they live on their new home. */
+  reach: string[];
+  /** The dependencies the target does not have yet but the moved methods call. */
+  newDependencies: string[];
+  /** Contract ids whose moved methods keep a wire address. */
+  wireBound: string[];
+  notices: string[];
+}
+
+/** A spec copied so the plan can rewrite it without touching what the cache holds. */
+function cloneSpec<T>(spec: T): T {
+  return JSON.parse(JSON.stringify(spec)) as T;
+}
+
+/** Several method names as one readable list. */
+function namedMethods(methods: string[]): string {
+  return methods.map((m) => `"${m}"`).join(', ');
+}
+
+/** The status the source component's contracts carry, for the note about two homes disagreeing. */
+function statusOfContracts(contracts: InterfaceSpec[], component: string): SpecStatus | undefined {
+  return contracts.find((i) => i.component === component)?.status;
+}
+
+/**
+ * The components a set of moved implementation entries reaches — narrative
+ * call, register and dispatch targets, and `calls` entries. A reference back
+ * into a method moving WITH them lands in the same component, so it is reach
+ * nobody has to declare.
+ */
+function reachOf(entries: MethodImplementation[], from: string, moved: Set<string>): string[] {
+  const reach = new Set<string>();
+  for (const entry of entries) {
+    for (const step of entry.narrative ?? []) {
+      const target = (step as { targetComponent?: string }).targetComponent;
+      const method = (step as { targetMethod?: string }).targetMethod;
+      if (!target) continue;
+      if (target === from && method && moved.has(method)) continue;
+      reach.add(target);
+    }
+    for (const call of entry.calls ?? []) {
+      const parsed = parseDeclaredCall(call);
+      if (!parsed) continue;
+      if (parsed.compId === from && moved.has(parsed.methodName)) continue;
+      reach.add(parsed.compId);
+    }
+  }
+  return [...reach].sort();
+}
+
+/** Whether any prose field this value nests names the old home. */
+function namesInProse(value: unknown, named: RegExp): boolean {
+  if (Array.isArray(value)) return value.some((v) => namesInProse(v, named));
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value as Record<string, unknown>).some(([key, nested]) => (typeof nested === 'string'
+    ? PROSE_FIELDS.has(key) && named.test(nested)
+    : namesInProse(nested, named)));
+}
+
+/** Judge the resulting source and target components; the hook throws to refuse. */
+function judgeMoveResult(hooks: SpecWriteHooks, plan: MethodMovePlan): { refusals: string[]; notices: string[] } {
+  const refusals: string[] = [];
+  const notices: string[] = [];
+  for (const resulting of [plan.edits.get(`component:${plan.source.id}`), plan.edits.get(`component:${plan.target.id}`)]) {
+    if (!resulting) continue;
+    try {
+      const raised = hooks.gate?.('component', resulting.after);
+      if (raised?.length) notices.push(...raised);
+    } catch (e) {
+      // The codes, not the exception: `assess` answers the same question the
+      // gate just refused, and a refusal that names only its message cannot be
+      // read beside a candidate's.
+      const codes = hooks.assess?.('component', resulting.after) ?? [];
+      refusals.push(...(codes.length ? codes : [String((e as Error)?.message ?? e)]));
+    }
+  }
+  return { refusals: [...new Set(refusals)], notices };
+}
+
+/** One candidate home, and what putting the methods there would cost. */
+function weighMoveHome(
+  hooks: SpecWriteHooks,
+  candidate: ComponentSpec,
+  reach: string[],
+  dependencyLimit: number,
+): MethodMoveCandidate {
+  const held = new Set([...(candidate.dependsOn ?? []), ...(candidate.owns ?? [])]);
+  const newDependencies = reach.filter((id) => id !== candidate.id && !held.has(id));
+  const resulting = { ...candidate, dependsOn: [...(candidate.dependsOn ?? []), ...newDependencies] };
+  const refusals = hooks.assess?.('component', resulting) ?? [];
+  return {
+    component: candidate.id,
+    legal: refusals.length === 0,
+    newDependencies,
+    dependencyCount: resulting.dependsOn.length,
+    dependencyLimit,
+    refusals,
+  };
+}
+
+/** One change report per staged edit that actually changes something. */
+function moveChangeReports(edits: MoveEdit[], dryRun: boolean): SpecChangeReport[] {
+  return edits
+    .map((edit) => ({ edit, changes: specChanges(edit.before, edit.after) }))
+    .filter(({ changes }) => changes.length > 0)
+    .map(({ edit, changes }) => ({
+      kind: edit.kind,
+      id: edit.id,
+      written: !dryRun,
+      dryRun,
+      changes,
+      ineffective: [],
+      notices: [] as string[],
+      summary: `${dryRun ? 'Would move' : 'Moved'} into ${edit.kind} "${edit.id}": `
+        + `${changes.length} change${changes.length === 1 ? '' : 's'}.`,
+    }));
+}
+
+/** The one line a refusal reads by: which rule fired, and the cheapest home that would not. */
+function refusedMoveSummary(
+  from: string,
+  to: string,
+  methods: string[],
+  refusals: string[],
+  alternatives: MethodMoveCandidate[],
+): string {
+  const cheapest = alternatives.find((c) => c.legal);
+  return `Refused: moving ${namedMethods(methods)} from "${from}" to "${to}" is refused by `
+    + `${refusals.join(', ')}. Nothing was written. `
+    + (cheapest
+      ? `The cheapest legal home is "${cheapest.component}" (${cheapest.newDependencies.length} new dependenc`
+        + `${cheapest.newDependencies.length === 1 ? 'y' : 'ies'}, ${cheapest.dependencyCount} of ${cheapest.dependencyLimit}).`
+      : `No component of this subsystem can take them as they stand — ${alternatives.length} were weighed.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -3919,4 +4784,20 @@ export function updateSpec(
   dryRun?: boolean,
 ): SpecChangeReport {
   return current().updateSpec(kind, id, delta, hooks, dryRun);
+}
+
+/**
+ * icore_orchestrator.moveMethods — move contract methods from one component to
+ * another in the bound tree, and every reference with them. All-or-nothing: a
+ * failed write restores what it already wrote, because a half-moved method
+ * leaves callers naming a home it no longer has.
+ */
+export function moveMethods(
+  from: string,
+  to: string,
+  methods: string[],
+  hooks?: SpecWriteHooks,
+  dryRun?: boolean,
+): MethodMoveReport {
+  return current().moveMethods(from, to, methods, hooks, dryRun);
 }

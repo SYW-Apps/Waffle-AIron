@@ -51,7 +51,7 @@ import { resolveDomains } from '../core/domains.js';
 // The gated authoring seam — shared by every access path (see core/authoring.ts).
 // Statically imported for the same reason as the core adapters below: it reads
 // the request-scoped project root at CALL time.
-import { addComponent, updateSpecGated } from '../core/authoring.js';
+import { addComponent, updateSpecGated, moveMethods } from '../core/authoring.js';
 import type { SpecChange, SpecChangeReport } from '../core/specs.js';
 import type { ComponentSpec } from '../models/specs.js';
 // Statically imported for the same reason as the skills adapter: these read the
@@ -1489,6 +1489,36 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // mcp_orchestrator.renameMethod: resolve the id in the bound tree,
         // rename through the core adapter, and return the report as the result.
         return json(renameMethod(qualifiedComponentId(id), method, newName, pinSymbol));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ from: string; to: string; methods: string[]; dryRun?: boolean }>(server,
+    'sdd_move_methods',
+    {
+      description: 'Move contract methods from one component to another, carrying each method\'s narrative, calls and bindings, and re-pointing every reference that named the old home: narrative call/register/dispatch steps, dispatch-table bindings, lifecycle entrypoints and `calls` entries. The target gains the dependencies the moved narratives call. ONE all-or-nothing gated write: if a rule refuses the move nothing is written and the report names the rule plus where these methods could live instead, cheapest legal home first, with the requested target among them so its shortfall reads beside the others. Prose is never rewritten and a wire endpoint keeps its address — moving a method between components must not silently re-address an RPC; both are reported as mentions. Refuses before the first write (unmovable request): a component or method that does not exist, a method name already declared on the target, a source and target that are the same component, and a component inside a chained subproject (move it from that project\'s own root). A dry run runs the whole move, gate included, and reports what it would have done.',
+      inputSchema: {
+        from: z.string().describe('The component the methods belong to (namespaced if needed)'),
+        to: z.string().describe('The component that should receive them (namespaced if needed)'),
+        methods: z.array(z.string()).describe('The method names to move; every one must exist on the source contract'),
+        dryRun: z.boolean().optional().describe('Answer with what the move would do and write nothing'),
+      },
+    },
+    ({ from, to, methods, dryRun }) => {
+      try {
+        // mcp_orchestrator.moveMethods steps 1-2: both components are resolved
+        // and read HERE, so a mistyped id reads as a mistyped id rather than as
+        // a rule refusing the design.
+        const { loadComponentSpec } = requireSpecs();
+        const source = qualifiedComponentId(from);
+        const target = qualifiedComponentId(to);
+        if (!loadComponentSpec(source)) return errText(`no component has the id "${from}".`);
+        if (!loadComponentSpec(target)) return errText(`no component has the id "${to}".`);
+        // Step 3: hand it to the authoring gate, which judges the move as a
+        // whole and writes all of it or none of it.
+        return json(moveMethods(source, target, methods, dryRun));
       } catch (e) {
         return errText(String(e));
       }
