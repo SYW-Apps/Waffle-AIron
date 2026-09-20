@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { aiPathsAt } from '../config/loader.js';
+import { aiPathsAt } from '../config/paths.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { listFilesRecursive } from '../utils/fs.js';
 import { resolveContainedProjectPath } from './adapters.js';

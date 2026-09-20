@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
-import { assertProjectInitialized } from '../config/loader.js';
+import { assertProjectInitialized } from '../config/paths.js';
 import {
   exportSurface,
   importSurface,

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, AI_PATHS } from '../config/loader.js';
+import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
 import { ensureDir } from '../utils/fs.js';
 // Every sdd_core call goes through cli_core_adapter, never a core module
 // directly — the same boundary `wairon lock` and `wairon status` were taught.

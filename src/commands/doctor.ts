@@ -4,9 +4,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
-import {
-  AI_PATHS,
-} from '../config/loader.js';
+import { AI_PATHS } from '../config/paths.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import { loadProjectConfig, projectConfigExists, retireSpecialists, repairForeignStepFields, readLockState } from './subsystem.js';
 import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../utils/fs.js';

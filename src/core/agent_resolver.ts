@@ -1,7 +1,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { AgentBrief, AgentRecord } from '../models/agent.js';
-import { AI_PATHS, loadTopologyConfig } from '../config/loader.js';
+import { loadTopologyConfig } from '../config/loader.js';
+import { AI_PATHS } from '../config/paths.js';
 import { projectConfigRepository } from '../config/project-config.js';
 import { getProjectRoot, pathExists } from '../utils/fs.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';

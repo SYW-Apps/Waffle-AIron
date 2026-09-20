@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
-import { aiPathsAt, WaiPaths } from '../config/loader.js';
+import { aiPathsAt, WaiPaths } from '../config/paths.js';
 import { projectConfigRepository } from '../config/project-config.js';
 import type { ProjectConfig, PackSelection, ProjectProfileSelection } from '../models/project.js';
 import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';

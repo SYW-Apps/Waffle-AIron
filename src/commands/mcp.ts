@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, isProjectInitialized } from '../config/loader.js';
+import { assertProjectInitialized, isProjectInitialized } from '../config/paths.js';
 import { loadProjectConfig } from '../core/index.js';
 import { aiDir } from '../utils/fs.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';

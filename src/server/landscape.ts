@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
-import { AI_PATHS } from '../config/loader.js';
+import { AI_PATHS } from '../config/paths.js';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';

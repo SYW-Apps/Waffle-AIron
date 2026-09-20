@@ -45,6 +45,7 @@ import {
 import { resolveChainingParent, loadComponentSpecs } from '../core/specs.js';
 import * as specsModule from '../core/specs.js';
 import * as loaderModule from '../config/loader.js';
+import * as pathsModule from '../config/paths.js';
 import * as validationModule from '../core/validation.js';
 import * as provisionModule from '../core/provision.js';
 import { resolveDomains } from '../core/domains.js';
@@ -95,7 +96,7 @@ export function statusFamilyContext(): string {
     if (parent) {
       let parentName: string | undefined;
       try {
-        const system = readYamlFile(loaderModule.aiPathsAt(parent.parentRoot).specsSystem()) as { name?: unknown } | null;
+        const system = readYamlFile(pathsModule.aiPathsAt(parent.parentRoot).specsSystem()) as { name?: unknown } | null;
         if (typeof system?.name === 'string') parentName = system.name;
       } catch { /* the parent's name stays unknown */ }
       lines.push(

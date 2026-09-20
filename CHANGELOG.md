@@ -26,6 +26,41 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### A path convention that belongs to nobody
+
+`src/config/loader.ts` held two things with nothing to do with each other:
+where the `.wai/` directory keeps its files, and the topology this project
+stores in it. The first is `WaiPaths`, `aiPathsAt`, `AI_PATHS`,
+`isProjectInitialized` and `assertProjectInitialized` — resolved by nineteen
+modules across every subsystem. The second is `loadRegistry`,
+`loadTopologyConfig` and `saveTopologyConfig`, which is one job: the durable
+file state `topology_store` now claims.
+
+They are split. The path helpers move to `src/config/paths.ts` unchanged and
+every import site follows them; `loader.ts` keeps the three store functions
+and resolves its own file locations through the new module like everybody
+else. No exported name changed, and `src/config/index.ts` republishes both
+halves, so the library surface is the surface it was.
+
+**Why a split and not nineteen declared edges.** A spec that claims
+`loader.ts` makes every importer of that file owe a declared `dependsOn` to
+`topology_store`, and the validator said so: 19 `UNDECLARED_DEPENDENCY`
+findings naming `src/config/loader.ts` as the target, raised on components
+whose entire business with it was resolving a path. Nineteen arrows that all
+say "this one resolves paths" tell a reader nothing. `src/utils/fs.ts` is the
+precedent — forty-eight importers, deliberately unclaimed, zero findings — and
+`paths.ts` joins it there. The tree goes from 24 warnings to 7. Two of the 19
+survive, and they are the two that were never about paths: `agent_resolver`
+and `cli_runner` call the store itself, which is an edge somebody has to
+decide about rather than one the split can dissolve.
+
+**The halves are held apart by a test.**
+`tests/config/paths-split.test.ts` reads both files and fails if a path helper
+drifts back into `loader.ts`, or if any module under `src/` or `tests/` starts
+taking one out of `loader.ts` again. It is a source scan on literal strings,
+because the split it guards is a fact about file contents and nothing else
+would notice it going wrong.
+
 ### `wairon generate` asks for the agent files instead of writing them itself
 
 The fifth instance of the same crossing in two days, and the smallest.
