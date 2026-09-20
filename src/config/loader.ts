@@ -1,9 +1,6 @@
 import { pathExists } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
-import {
-  Registry,
-  createEmptyRegistry,
-  TopologyConfig,
+import {  TopologyConfig,
   TopologyConfigSchema,
   createEmptyTopologyConfig,
 } from '../models/index.js';
@@ -19,16 +16,6 @@ import { AI_PATHS, assertProjectInitialized } from './paths.js';
  * resolveAgentTopology(), never read from a hand-maintained agents.json.
  * Returns an empty registry when no system spec exists yet.
  */
-export function loadRegistry(): Registry {
-  assertProjectInitialized();
-  if (!pathExists(AI_PATHS.specsSystem())) return createEmptyRegistry();
-  const { resolveAgentTopology } = require('../core/agent_resolver.js') as typeof import('../core/agent_resolver.js');
-  return {
-    schemaVersion: '1.0.0',
-    agents: resolveAgentTopology(),
-    updatedAt: new Date().toISOString(),
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Topology config (free-standing domains) — .wai/topology.yaml

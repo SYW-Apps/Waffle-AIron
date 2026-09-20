@@ -31,9 +31,15 @@ const PATH_EXPORTS = [
   'export function assertProjectInitialized(',
 ] as const;
 
-/** The exported declarations that are the topology store's own job. */
+/**
+ * The exported declarations that are the topology store's own job.
+ *
+ * loadRegistry is NOT among them: it read no file, it called the resolver and
+ * wrapped the result, so it moved to core/agent_resolver.ts where the
+ * derivation lives. A store that must reach an orchestrator to answer is not
+ * storing anything.
+ */
 const STORE_EXPORTS = [
-  'export function loadRegistry(',
   'export function loadTopologyConfig(',
   'export function saveTopologyConfig(',
 ] as const;

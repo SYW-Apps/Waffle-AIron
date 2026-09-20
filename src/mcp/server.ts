@@ -22,7 +22,7 @@ import type { ProjectConfig } from '../models/project.js';
 // mcp_core_adapter's project configuration read (icore_portal loadProjectConfig,
 // null when the project has none) and the renames (icore_portal
 // renameComponent / renameMethod). STATIC, not lazily required: same reasoning
-// as requireLoader below — a static binding stays correct per bound project, and
+// as requireValidation below — a static binding stays correct per bound project, and
 // a lazy require of a relative path does not resolve under the test runner or
 // inside the bundled hosted server.
 import {
@@ -44,7 +44,6 @@ import {
 } from '../core/skills.js';
 import { resolveChainingParent, loadComponentSpecs } from '../core/specs.js';
 import * as specsModule from '../core/specs.js';
-import * as loaderModule from '../config/loader.js';
 import * as pathsModule from '../config/paths.js';
 import * as validationModule from '../core/validation.js';
 import * as provisionModule from '../core/provision.js';
@@ -64,6 +63,9 @@ import {
   composeAgentBrief as coreComposeAgentBrief,
   resolveAgentTopology as coreResolveAgentTopology,
 } from '../core/agent_resolver.js';
+// Through the Portal, not the module: the registry shape this server hands to
+// the registry validator is sdd_core's to publish, and icore_portal names it.
+import { loadRegistry as coreLoadRegistry } from '../core/index.js';
 import { describeBudget } from '../core/budget_policy.js';
 import type { AgentBrief, AgentRecord } from '../models/agent.js';
 import {
@@ -120,10 +122,6 @@ export function statusFamilyContext(): string {
 // AND inside the bundled hosted server (the bundle's directory has no such
 // file). Every sdd_* tool built on them then answered "Cannot find module"
 // instead of running.
-function requireLoader() {
-  return loaderModule;
-}
-
 function requireValidation() {
   return validationModule;
 }
@@ -1108,8 +1106,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ domainId }) => {
       try {
-        const { loadRegistry } = requireLoader();
-        const registry = loadRegistry();
+        const registry = coreLoadRegistry();
         const agents = domainId
           ? registry.agents.filter((a) => a.domainRoot === domainId)
           : registry.agents;
@@ -1136,8 +1133,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ id }) => {
       try {
-        const { loadRegistry } = requireLoader();
-        const registry = loadRegistry();
+        const registry = coreLoadRegistry();
         const agent = registry.agents.find((a) => a.id === id);
         if (!agent) return errText(`Agent "${id}" not found.`);
         return json(agent);
@@ -1154,7 +1150,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     () => {
       try {
-        // Static import (see requireLoader): a lazy require never resolves in
+        // Static import (see requireValidation): a lazy require never resolves in
         // the bundled server, so listDomains failed there instead of answering.
         return json(resolveDomains());
       } catch (e) {
@@ -1173,9 +1169,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ subsystem }) => {
       try {
-        const { loadRegistry } = requireLoader();
         const { validateRegistry } = requireValidation();
-        let registry = loadRegistry();
+        let registry = coreLoadRegistry();
         if (subsystem) {
           registry = {
             ...registry,

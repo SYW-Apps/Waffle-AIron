@@ -59,6 +59,14 @@ methods:
         targetMethod: load
       - stepNumber: 9
         description: >-
+          Read the declared domains from the topology store, so a domain the repository declares but
+          the spec tree does not model still gets an owner — domains are a superset of subsystems,
+          which is the whole reason this read exists
+        type: call
+        targetComponent: topology_store
+        targetMethod: loadConfig
+      - stepNumber: 10
+        description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
           and ONE delegating owner per chained subproject (projectPath) that routes work into the
           subproject without enumerating its internals; component implementers only when
@@ -121,6 +129,21 @@ methods:
           readPaths, domainRoot, template)
         type: return
         outcome: brief composed
+  - name: loadRegistry
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse unless the project is initialized, and answer an empty registry when the tree holds
+          no system spec — a project that has not been designed yet has no agents, which is an
+          answer rather than a failure
+        type: local
+      - stepNumber: 2
+        description: >-
+          Derive the agent topology from the spec tree and wrap it in the Registry shape, stamped
+          with the time it was derived
+        type: return
+        outcome: derived
+    symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-13T20:55:46.970Z'
+updatedAt: '2026-09-20T21:25:28.313Z'

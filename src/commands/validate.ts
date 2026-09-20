@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { loadRegistry } from '../config/loader.js';
+import { loadRegistry } from '../core/agent_resolver.js';
 import { assertProjectInitialized } from '../config/paths.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import { loadProjectConfig } from '../core/index.js';

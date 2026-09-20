@@ -8,28 +8,6 @@ description: >-
 contract: itopology_store
 sourcePath: src/config/loader.ts
 methods:
-  - name: loadRegistry
-    narrative:
-      - stepNumber: 1
-        description: Resolve where the registry lives under the bound root, through the shared path helper
-        type: local
-      - stepNumber: 2
-        description: Decide whether this project holds one
-        type: branch
-        condition: the spec tree's system file is absent
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Answer an empty registry — an uninitialized project is a state a bootstrap command has to
-          be able to ask about, not a failure to catch
-        type: return
-        outcome: empty
-      - stepNumber: 4
-        description: Derive the agents from the spec tree and answer with them
-        type: return
-        outcome: loaded
-    symbol: loadRegistry
   - name: loadConfig
     narrative:
       - stepNumber: 1
@@ -62,4 +40,4 @@ methods:
     symbol: saveTopologyConfig
 status: complete
 createdAt: '2026-09-20T20:40:41.586Z'
-updatedAt: '2026-09-20T21:01:42.860Z'
+updatedAt: '2026-09-20T21:20:45.885Z'

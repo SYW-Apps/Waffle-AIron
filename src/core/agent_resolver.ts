@@ -2,7 +2,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { AgentBrief, AgentRecord } from '../models/agent.js';
 import { loadTopologyConfig } from '../config/loader.js';
-import { AI_PATHS } from '../config/paths.js';
+import { AI_PATHS, assertProjectInitialized } from '../config/paths.js';
+import { Registry, createEmptyRegistry } from '../models/registry.js';
 import { projectConfigRepository } from '../config/project-config.js';
 import { getProjectRoot, pathExists } from '../utils/fs.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
@@ -536,5 +537,25 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     variantGuidance: record.variantGuidance || undefined,
     profile: budget ? profile : undefined,
     budget,
+  };
+}
+
+/**
+ * The derived agent topology in the Registry shape callers expect.
+ *
+ * There is no registry FILE: the agents come from the spec tree, and this is
+ * resolveAgentTopology() wrapped for callers that still speak Registry. It
+ * lived in config/loader.ts until the topology store was modelled, which is
+ * why that file had to lazily require THIS one - a store calling an
+ * orchestrator, through a require that existed only to break the cycle it
+ * created. Derivation belongs with the deriver.
+ */
+export function loadRegistry(): Registry {
+  assertProjectInitialized();
+  if (!pathExists(AI_PATHS.specsSystem())) return createEmptyRegistry();
+  return {
+    schemaVersion: '1.0.0',
+    agents: resolveAgentTopology(),
+    updatedAt: new Date().toISOString(),
   };
 }

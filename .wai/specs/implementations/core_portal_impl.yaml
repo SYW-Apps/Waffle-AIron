@@ -542,6 +542,15 @@ methods:
         type: call
         targetComponent: agent_file_generator
         targetMethod: resolveExpectedOutputPaths
+  - name: loadRegistry
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Re-export the derived registry — the same function published under this surface, so the
+          call resolves by identity
+        type: call
+        targetComponent: agent_resolver
+        targetMethod: loadRegistry
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T19:49:23.700Z'
+updatedAt: '2026-09-20T21:24:42.707Z'
