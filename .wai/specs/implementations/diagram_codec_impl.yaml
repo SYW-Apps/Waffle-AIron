@@ -45,7 +45,7 @@ methods:
         description: Arrange the model with nothing collapsed
         type: call
         targetComponent: diagram_layout
-        targetMethod: computeLayout
+        targetMethod: arrange
       - stepNumber: 2
         description: Encode the arranged graph as draw.io XML
         type: return
@@ -56,7 +56,7 @@ methods:
         description: Arrange the model with nothing collapsed
         type: call
         targetComponent: diagram_layout
-        targetMethod: computeLayout
+        targetMethod: arrange
       - stepNumber: 2
         description: Encode the arranged graph as an Excalidraw scene
         type: return

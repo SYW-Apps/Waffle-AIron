@@ -42,10 +42,18 @@ methods:
           extracts for the React app
         type: local
       - stepNumber: 3
+        description: >-
+          Embed the codec's two encoders by SERIALIZING THEIR SOURCE into the page rather than
+          calling them: the download buttons run them in the browser, against a layout the reader
+          has rearranged, long after this process has exited. The dependency on diagram_codec is
+          real and the encoders are genuinely used — just by a different runtime, which is why no
+          call step can name it
+        type: local
+      - stepNumber: 4
         description: Answer with the complete page
         type: return
         outcome: rendered
     symbol: renderCanvasHtml
 status: complete
 createdAt: '2026-09-20T16:38:14.590Z'
-updatedAt: '2026-09-20T16:38:14.599Z'
+updatedAt: '2026-09-20T18:30:04.627Z'

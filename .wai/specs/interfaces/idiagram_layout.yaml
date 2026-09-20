@@ -6,13 +6,13 @@ description: >-
   boxes, which is what lets two exporters of different formats produce the same picture.
 component: diagram_layout
 methods:
-  - name: computeLayout
+  - name: arrange
     description: >-
       Place every visible component and every subsystem container in absolute coordinates, laying
       members out inside the pattern that owns them and wrapping rows at a fixed maximum width. A
       collapsed container contributes its header only and hides what it holds, so collapsing changes
       the arrangement rather than merely hiding part of it.
-    signature: 'computeLayout(model: LayoutModel, collapsed: Record<string, boolean>): LayoutResult'
+    signature: 'arrange(model: LayoutModel, collapsed: Record<string, boolean>): LayoutResult'
     returns: LayoutResult
     params:
       - name: model
@@ -25,4 +25,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T16:38:35.933Z'
-updatedAt: '2026-09-20T16:38:35.949Z'
+updatedAt: '2026-09-20T18:28:50.067Z'

@@ -7,7 +7,7 @@ description: >-
 contract: idiagram_layout
 sourcePath: src/core/canvas-layout.ts
 methods:
-  - name: computeLayout
+  - name: arrange
     narrative:
       - stepNumber: 1
         description: >-
@@ -37,6 +37,7 @@ methods:
         description: Answer with absolute boxes for every visible component and every subsystem container
         type: return
         outcome: laid out
+    symbol: computeLayout
 status: complete
 createdAt: '2026-09-20T16:38:44.364Z'
-updatedAt: '2026-09-20T16:38:44.373Z'
+updatedAt: '2026-09-20T18:28:50.185Z'
