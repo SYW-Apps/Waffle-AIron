@@ -16,7 +16,10 @@ import { AdminAuthError, LockValidationError } from '../server/admin.js';
 import { startHostServer } from '../server/http.js';
 import { registerLocalDevProject, existingProjectRoot } from '../server/projects.js';
 import { runWithProjectRoot } from '../utils/fs.js';
-import { buildCanvasModel } from '../core/canvas.js';
+// The demo census crosses into sdd_core through cli_core_adapter, like every
+// other sdd_core call the CLI makes — `../core/canvas.js` was this file
+// reaching past the Portal into another subsystem's module.
+import { buildCanvasDataModel } from './subsystem.js';
 import { seedDemoTree } from '../core/demo-seed.js';
 import { upsertIdentityProviderRecord } from '../server/policy.js';
 import { setSecret } from '../utils/secrets.js';
@@ -419,7 +422,7 @@ export async function runHostDemo(options: HostOptions = {}): Promise<void> {
 
     const summary = runWithProjectRoot(rec.rootPath, () => {
       seedDemoTree();
-      const model = buildCanvasModel();
+      const model = buildCanvasDataModel();
       return {
         subsystems: model.subsystems.length,
         components: model.components.length,

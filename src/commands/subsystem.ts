@@ -22,6 +22,7 @@ import {
   ensureProjectInitialized as coreEnsureProjectInitialized,
   listDirectChainedSubprojects as coreListDirectChainedSubprojects,
   defaultPackSelections as coreDefaultPackSelections,
+  renderDiagram as coreRenderDiagram,
 } from '../core/index.js';
 import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
 import type { ForeignFieldRepair, SpecialistRetirement, TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
@@ -144,6 +145,45 @@ export function defaultPackSelections(): PackSelection[] {
 export function readLockState(current: StateId): LockStatus {
   return coreReadLockState(current);
 }
+
+// cli_core_adapter.renderDiagram — 1:1 forward: the spec tree rendered into one
+// of the four formats (canvas | mermaid | drawio | excalidraw) and handed back
+// as the artifact string, for the command to write wherever it was asked to.
+//
+// `wairon diagram` used to build the artifact itself, out of ../core/canvas.js,
+// ../core/diagram-export.js, ../core/diagram.js and ../core/validation.js — four
+// sdd_core modules reached from a command, past the Portal that already publishes
+// exactly this call. It is the fourth time that crossing has been found in two
+// days (movedChildren, diffSize and settledSpecPaths were the first three), and
+// it closes the same way every time: the boundary is crossed HERE, once.
+export function renderDiagram(format: string): string {
+  return coreRenderDiagram(format);
+}
+
+// The rest of the diagram surface `wairon diagram` needs, republished by
+// identity rather than wrapped.
+//
+// These are NOT on icli_core_adapter: the contract names renderDiagram alone,
+// because runDiagram's narrative models only the four-format path. The command
+// also has --all, --sequence and --subsystem — scopes DiagramOptions models as
+// fields while no method takes them — and those need generateDiagramSet,
+// generateSequenceDiagram, generateComponentDiagram and the set's index. That
+// gap belongs in the spec, and it is reported rather than papered over; what is
+// NOT open to interpretation is where the crossing happens, and it happens here,
+// on the one component whose whole job is to cross into sdd_core.
+//
+// buildCanvasDataModel is the model as DATA, the JSON sibling of
+// renderDiagram('canvas'): `wairon host demo` counts what it just seeded rather
+// than drawing it, and a count is not an artifact.
+export {
+  generateComponentDiagram,
+  generateSequenceDiagram,
+  generateDiagramSet,
+  diagramSetIndex,
+  toMarkdown,
+  loadSpecGraph,
+  buildCanvasDataModel,
+} from '../core/index.js';
 
 interface SubsystemAddOptions {
   projectPath?: string;

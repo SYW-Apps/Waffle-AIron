@@ -26,6 +26,58 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### `wairon diagram` asks for an artifact instead of assembling one
+
+The fourth instance of the same crossing in two days, and the largest.
+`src/commands/diagram.ts` imported `../core/canvas.js`,
+`../core/diagram-export.js`, `../core/diagram.js` and `../core/validation.js`
+— four sdd_core modules reached straight from a command — and built every
+artifact itself: load the tree into a canvas model, run the validator for the
+issue overlay, hand the model to an encoder, write the string. `core_portal`
+has published `renderDiagram(format)` the whole time, and the hosting server
+has been reaching it through `host_core_adapter` for months.
+
+`cli_core_adapter` now realizes `renderDiagram`, and the command asks for
+`canvas`, `mermaid`, `drawio` or `excalidraw` and writes what comes back.
+`wairon host demo` was making the same reach — `buildCanvasModel` out of the
+canvas module, to count the tree it had just seeded — and now counts through
+`buildCanvasDataModel` on that same adapter. What the command keeps is what a
+command is for: which format was asked for, where the file lands, and what to
+say about it afterwards.
+
+**One keyword was a cycle.** `src/core/diagram-export.ts` imported
+`CanvasModel` — an interface, erased at compile time — with a plain `import`.
+`canvas.ts` imports the two encoders as real values, because it serializes
+their *source* into the rendered page so the download buttons run them in the
+browser against a layout the reader has rearranged. Read together, those two
+edges drew a cycle between `spec_canvas` and `diagram_codec` where the code has
+an arrow. `import type` deletes the half that was never there.
+
+**What it cost to learn.** `renderDiagram(format)` is the four-format path and
+nothing else, and `wairon diagram` is not: `--all` writes the whole set,
+`--sequence` draws one narrative, `--subsystem` draws one slice. `DiagramOptions`
+models all three as fields and no contract method takes any of them, so the
+adapter republishes `generateDiagramSet`, `generateSequenceDiagram`,
+`generateComponentDiagram`, `toMarkdown`, `diagramSetIndex` and `loadSpecGraph`
+beside the one method `icli_core_adapter` names. The crossing is now in the
+right place and the contract is six methods short of the command it serves —
+written down here rather than declared away, because an adapter export that no
+contract names is a gap somebody can still read, and a contract method with no
+narrative behind it is not.
+
+Two smaller prices, both paid on purpose. `--all` asks for three formats by
+name instead of sharing one model between two encoders, so it builds the canvas
+model three times rather than twice — one extra tree load for a command that
+already writes a directory. And the command's own fallback is gone: it used to
+run the validator with defaults when the project had no configuration, where
+the core answers no findings at all. `assertProjectInitialized()` refuses a
+project without a configuration on the line above, so that branch had never
+run.
+
+Warnings 10 → 2, and the two left are the serialization seam the specs already
+describe: nothing *calls* `buildDrawioXml` or `buildExcalidrawScene`, because
+the page carries their text to a runtime that starts after this process exits.
+
 ### The approval is reached through the portal that already claimed to publish it
 
 `src/core/index.ts` has said for a while that the approval is "published on the

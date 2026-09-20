@@ -1,4 +1,10 @@
-import { CanvasModel } from './canvas.js';
+// Type-only, and it has to say so: `CanvasModel` is an interface, so a plain
+// `import` here compiles to nothing yet still reads as a runtime edge
+// diagram_codec → spec_canvas. Together with the real edge in the other
+// direction (canvas.ts imports these encoders as VALUES, to serialize their
+// source into the page) that made the import graph show a cycle where the code
+// has none. One keyword is the difference between a cycle and an arrow.
+import type { CanvasModel } from './canvas.js';
 import { computeLayout, LayoutResult } from './canvas-layout.js';
 
 // ---------------------------------------------------------------------------

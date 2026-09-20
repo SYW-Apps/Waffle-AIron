@@ -3,27 +3,31 @@ import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, AI_PATHS } from '../config/loader.js';
 import { ensureDir } from '../utils/fs.js';
+// Every sdd_core call goes through cli_core_adapter, never a core module
+// directly — the same boundary `wairon lock` and `wairon status` were taught.
+// renderDiagram is the whole of the four-format path; the scoped Mermaid and
+// the --all set come through the adapter too.
 import {
+  renderDiagram,
   generateComponentDiagram,
   generateSequenceDiagram,
   generateDiagramSet,
   toMarkdown,
   diagramSetIndex,
   loadSpecGraph,
-} from '../core/diagram.js';
-import { buildCanvasModel, renderCanvasHtml } from '../core/canvas.js';
-import { generateDrawioXml, generateExcalidrawScene } from '../core/diagram-export.js';
-import { validateSddTree } from '../core/validation.js';
-import { loadProjectConfig } from './subsystem.js';
+} from './subsystem.js';
 import { WaironError } from '../utils/errors.js';
 
 // ---------------------------------------------------------------------------
 // diagram command
 //
-// Living documentation derived from the spec tree: Mermaid component diagrams
-// (system-wide or per subsystem) and sequence diagrams from L5 narratives.
-// Stage 1 of the visualization plan — the interactive canvas builds on the
-// same graph extraction.
+// Living documentation derived from the spec tree: the interactive canvas,
+// Mermaid component diagrams (system-wide or per subsystem), sequence diagrams
+// from L5 narratives, and the two editable exchange formats.
+//
+// This file decides WHAT was asked for and WHERE it lands. It does not build
+// artifacts: which encoder runs, and against which model, is sdd_core's, and
+// the CLI asks for it by name through the core adapter.
 // ---------------------------------------------------------------------------
 
 export interface DiagramOptions {
@@ -62,20 +66,10 @@ function applyFormat(options: DiagramOptions): DiagramOptions {
   };
 }
 
-function collectIssues() {
-  try {
-    const config = loadProjectConfig();
-    if (config) return validateSddTree({ rules: config.rules, projectType: config.projectType }).issues;
-  } catch {
-    // fall through to the defaults, as for a missing configuration
-  }
-  return validateSddTree().issues;
-}
-
-function writeCanvas(dest: string): void {
-  const model = buildCanvasModel(collectIssues());
+/** Write one rendered artifact, creating the directory it lands in. */
+function writeArtifact(dest: string, content: string): void {
   ensureDir(path.dirname(path.resolve(dest)));
-  fs.writeFileSync(dest, renderCanvasHtml(model), 'utf-8');
+  fs.writeFileSync(dest, content, 'utf-8');
 }
 
 function parseSequenceRef(ref: string): { component: string; method: string } {
@@ -92,9 +86,11 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
   assertProjectInitialized();
   const options = applyFormat(rawOptions);
 
+  // Step 1: render the requested format through the core client adapter.
+  // Step 2: write the artifact where it was asked for and say where it landed.
   if (options.canvas && !options.all) {
     const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
-    writeCanvas(dest);
+    writeArtifact(dest, renderDiagram('canvas'));
     logger.success(`Interactive canvas written to ${dest}`);
     logger.info('Open it in a browser — fully self-contained (works offline).');
     return;
@@ -102,8 +98,7 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
 
   if (options.drawio && !options.all) {
     const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'architecture.drawio');
-    ensureDir(path.dirname(path.resolve(dest)));
-    fs.writeFileSync(dest, generateDrawioXml(buildCanvasModel()), 'utf-8');
+    writeArtifact(dest, renderDiagram('drawio'));
     logger.success(`draw.io diagram written to ${dest}`);
     logger.info('Open with draw.io / diagrams.net (or import into tools that accept the format).');
     return;
@@ -111,8 +106,7 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
 
   if (options.excalidraw && !options.all) {
     const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'architecture.excalidraw');
-    ensureDir(path.dirname(path.resolve(dest)));
-    fs.writeFileSync(dest, generateExcalidrawScene(buildCanvasModel()), 'utf-8');
+    writeArtifact(dest, renderDiagram('excalidraw'));
     logger.success(`Excalidraw scene written to ${dest}`);
     logger.info('Open with excalidraw.com or the VS Code extension.');
     return;
@@ -124,7 +118,7 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
     || !!options.sequence;
   if (!options.all && !options.sequence && !wantsMermaid) {
     const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
-    writeCanvas(dest);
+    writeArtifact(dest, renderDiagram('canvas'));
     logger.success(`Interactive canvas written to ${dest}`);
     logger.info('Open it in a browser — fully self-contained (works offline). Other formats: --format mermaid|drawio|excalidraw.');
     return;
@@ -138,17 +132,14 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
       return;
     }
     for (const file of files) {
-      const dest = path.join(outDir, file.relPath);
-      ensureDir(path.dirname(dest));
-      fs.writeFileSync(dest, toMarkdown(file), 'utf-8');
+      writeArtifact(path.join(outDir, file.relPath), toMarkdown(file));
     }
-    writeCanvas(path.join(outDir, 'canvas.html'));
-    const exportModel = buildCanvasModel();
-    fs.writeFileSync(path.join(outDir, 'architecture.drawio'), generateDrawioXml(exportModel), 'utf-8');
-    fs.writeFileSync(path.join(outDir, 'architecture.excalidraw'), generateExcalidrawScene(exportModel), 'utf-8');
+    writeArtifact(path.join(outDir, 'canvas.html'), renderDiagram('canvas'));
+    writeArtifact(path.join(outDir, 'architecture.drawio'), renderDiagram('drawio'));
+    writeArtifact(path.join(outDir, 'architecture.excalidraw'), renderDiagram('excalidraw'));
     const graph = loadSpecGraph();
     const indexPath = path.join(outDir, 'README.md');
-    fs.writeFileSync(indexPath, diagramSetIndex(files, graph.systemName), 'utf-8');
+    writeArtifact(indexPath, diagramSetIndex(files, graph.systemName));
     logger.success(`Generated ${files.length} diagram(s) + interactive canvas.html + index into ${outDir}`);
     for (const file of files.slice(0, 12)) {
       logger.info(`  ${file.relPath}`);
@@ -157,7 +148,9 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
     return;
   }
 
-  // Mermaid — like every other format, written to a file.
+  // Mermaid — like every other format, written to a file. The system-wide
+  // diagram IS renderDiagram('mermaid'); a scope narrows it to one subsystem or
+  // to one narrative, which no format string can carry.
   let mermaid: string;
   let title: string;
   let defaultDest: string;
@@ -172,17 +165,16 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
     title = `${options.subsystem} — components`;
     defaultDest = path.join(diagramsDir, 'subsystems', `${options.subsystem.replace(/::/g, '--')}.md`);
   } else {
-    mermaid = generateComponentDiagram();
+    mermaid = renderDiagram('mermaid');
     title = 'Component architecture';
     defaultDest = path.join(diagramsDir, 'system.md');
   }
 
   const dest = options.out ?? defaultDest;
-  ensureDir(path.dirname(path.resolve(dest)));
   const content = dest.endsWith('.mmd')
     ? `${mermaid}\n`
     : toMarkdown({ relPath: dest, title, mermaid });
-  fs.writeFileSync(dest, content, 'utf-8');
+  writeArtifact(dest, content);
   logger.success(`Mermaid diagram written to ${dest}`);
   logger.info('Renders on GitHub/IDE previews; use a .mmd --out path for raw Mermaid.');
 }
