@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, loadRegistry } from '../config/loader.js';
+import { loadRegistry } from '../core/agent_resolver.js';
+import { assertProjectInitialized } from '../config/paths.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import { loadProjectConfig } from '../core/index.js';
 import type { CarriedDebt } from '../models/project.js';
@@ -162,7 +163,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   }
 
   // --- SDD Spec Tree ---
-  const { AI_PATHS: sddPaths } = require('../config/loader.js') as typeof import('../config/loader.js');
+  const { AI_PATHS: sddPaths } = require('../config/paths.js') as typeof import('../config/paths.js');
   const { pathExists: sddPathExists } = require('../utils/fs.js') as typeof import('../utils/fs.js');
   if (sddPathExists(sddPaths.specsSystem())) {
     logger.header('SDD Architectural Specs');

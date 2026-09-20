@@ -3,7 +3,7 @@ import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { fromProjectRoot } from '../utils/fs.js';
 import { filteredCheckbox } from '../utils/filteredCheckbox.js';
-import { assertProjectInitialized } from '../config/loader.js';
+import { assertProjectInitialized } from '../config/paths.js';
 import { detectDomainCandidates } from '../core/detection.js';
 import {
   resolveDomains,

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, AI_PATHS } from '../config/loader.js';
+import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 // Every sdd_core call goes through the core adapter, never a core module
 // directly — generation included: generateAll and resolveExpectedOutputPaths

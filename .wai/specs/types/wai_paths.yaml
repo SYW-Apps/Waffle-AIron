@@ -1,0 +1,107 @@
+kind: value-object
+id: wai_paths
+name: WaiPaths
+description: >-
+  Every location wairon addresses inside one project, derived from its root. Held as a set of
+  resolvers rather than strings so that a caller holding it still resolves against the root it asked
+  for — a parent reading a chained child's layout must not accidentally get its own. This is the one
+  place the on-disk shape of a wairon project is written down; everything else asks.
+
+
+  It deliberately names NO source file. The resolver that produces it lives in `src/config/paths.ts`
+  and belongs to no component: nineteen modules use it, it holds no state and decides nothing, and
+  claiming it would make nineteen components declare an edge that says only "this one resolves
+  paths". `src/utils/fs.ts` is the precedent — forty-eight importers, unclaimed, zero findings. The
+  shape is worth designing; the function that builds it is a convention, and this type is how the
+  convention stays findable without being owned.
+fields:
+  - name: root
+    type: string
+    description: The project root everything else resolves within.
+    optional: false
+  - name: projectConfig
+    type: string
+    description: The project's own configuration file.
+    optional: false
+  - name: topologyConfig
+    type: string
+    description: The agent topology configuration.
+    optional: false
+  - name: specsDir
+    type: string
+    description: The spec tree's root directory.
+    optional: false
+  - name: specsSystem
+    type: string
+    description: The L0 system spec, whose presence is what makes a directory a wairon project.
+    optional: false
+  - name: specsSubsystemsDir
+    type: string
+    description: Where L1 subsystem specs live.
+    optional: false
+  - name: specsComponentsDir
+    type: string
+    description: Where L2 component specs live.
+    optional: false
+  - name: specsInterfacesDir
+    type: string
+    description: Where L3 interface specs live.
+    optional: false
+  - name: specsImplementationsDir
+    type: string
+    description: Where L4 implementation specs live.
+    optional: false
+  - name: specsTypesDir
+    type: string
+    description: Where type specs live.
+    optional: false
+  - name: templatesDir
+    type: string
+    description: Project-local agent templates.
+    optional: false
+  - name: rulesDir
+    type: string
+    description: Project-local rule configuration.
+    optional: false
+  - name: docsDir
+    type: string
+    description: Generated documentation output.
+    optional: false
+  - name: generatedDir
+    type: string
+    description: Generated artifacts other than docs.
+    optional: false
+  - name: contextDir
+    type: string
+    description: The generated AI context directory.
+    optional: false
+  - name: contextProjectMd
+    type: string
+    description: The generated project context guide.
+    optional: false
+  - name: contextArchitectureMd
+    type: string
+    description: The generated architecture context guide.
+    optional: false
+  - name: contextDomainsMd
+    type: string
+    description: The generated domains context guide.
+    optional: false
+  - name: contextWaironGuideMd
+    type: string
+    description: The generated wairon usage guide.
+    optional: false
+methods: []
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Referenced by no contract on purpose, and the finding is correct rather than disputed. This
+        type exists to write down the on-disk shape of a wairon project — the one thing nineteen
+        modules agree on — while the function that builds it belongs to no component, because a path
+        convention is not a responsibility. A contract referencing it would have to belong to
+        something, and making that something a component was tried and measured: nineteen components
+        needed an edge to it. Deleting the type instead would leave the layout undesigned, which is
+        the state Track D exists to end.
+createdAt: '2026-09-20T20:41:18.293Z'
+updatedAt: '2026-09-20T21:02:31.722Z'

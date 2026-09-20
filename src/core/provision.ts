@@ -30,7 +30,7 @@ import {
   type RefPosition,
   type SpecRefKind,
 } from './specs.js';
-import { aiPathsAt } from '../config/loader.js';
+import { aiPathsAt } from '../config/paths.js';
 import { projectConfigRepository, projectConfigRepositoryAt } from '../config/project-config.js';
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';

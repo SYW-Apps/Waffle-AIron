@@ -8,7 +8,7 @@ import type {
   TreeExtractionResult,
   TreeRootSource,
 } from '@wairon/sdk';
-import { aiPathsAt } from '../config/loader.js';
+import { aiPathsAt } from '../config/paths.js';
 import { getProjectRoot, pathExists, listFilesRecursive } from '../utils/fs.js';
 import { loadSystemSpec, inspectChainedRoots, invalidateSpecCache } from './specs.js';
 import type { ChainedRootSkipReason } from './specs.js';

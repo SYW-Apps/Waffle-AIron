@@ -92,7 +92,6 @@ rules:
       - src/commands/execution.ts
       - src/commands/status.ts
       - src/config/defaults.ts
-      - src/config/loader.ts
       - src/config/userconfig.ts
       - src/core/budget_policy.ts
       - src/core/context.ts
@@ -109,7 +108,6 @@ rules:
       - src/core/rules/wiring/invariant-ref.ts
       - src/core/stamp.ts
       - src/index.ts
-      - src/models/domain.ts
       - src/server/errors.ts
       - src/server/httpio.ts
       - src/server/migration.ts
@@ -127,6 +125,12 @@ rules:
       # are utilities many modules use. Carried here rather than left on a spec
       # that does not hold them.
       - src/utils/fs.ts
+      # Split out of config/loader.ts so that file could be one job. Kept
+      # unclaimed ON PURPOSE: nineteen modules resolve paths through it, it
+      # holds no state and decides nothing, and modelling it as a component
+      # was tried and measured - nineteen components then needed a declared
+      # edge saying only "this one resolves paths". Same shape as fs.ts above.
+      - src/config/paths.ts
       - src/utils/logger.ts
       - src/utils/version.ts
       - src/utils/yaml.ts
@@ -425,9 +429,6 @@ rules:
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
             at: 'moveSubsystemProject'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'resolveAgentTopology'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
             at: 'saveImplementationSpec'
@@ -1071,7 +1072,6 @@ rules:
               - 'mcp_core_adapter.loadSubsystemSpecs'
               - 'mcp_core_adapter.loadSystemSpec'
               - 'mcp_core_adapter.loadTypeSpec'
-              - 'mcp_core_adapter.resolveAgentTopology'
               - 'mcp_core_adapter.saveImplementationSpec'
               - 'mcp_core_adapter.saveInterfaceSpec'
               - 'mcp_core_adapter.saveSubsystemSpec'

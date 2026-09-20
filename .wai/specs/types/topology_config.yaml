@@ -1,0 +1,21 @@
+kind: value-object
+id: topology_config
+name: TopologyConfig
+description: >-
+  The domains a project declares, and the schema version they were written under. Kept beside the
+  registry rather than inside it because domains outlive the agents in them: a domain's path and
+  identity are a decision about the repository's shape, while the agents within it are derived from
+  the spec tree and regenerated.
+fields:
+  - name: schemaVersion
+    type: string
+    description: The version this configuration was written under, so a migration can tell what it is reading.
+    optional: false
+  - name: domains
+    type: Domain[]
+    description: The declared domains, each with its id and the path it owns.
+    optional: false
+methods: []
+sourcePath: src/models/domain.ts
+createdAt: '2026-09-20T20:41:24.411Z'
+updatedAt: '2026-09-20T20:41:24.420Z'

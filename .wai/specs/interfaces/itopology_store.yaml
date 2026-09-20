@@ -1,0 +1,48 @@
+id: itopology_store
+name: Topology Store Interface
+description: >-
+  Reading and writing the topology configuration a project holds. Read-through on every access: two
+  callers reading in one command must see the same bytes the disk holds. An absent file reads as
+  empty rather than throwing — an uninitialized project is a state, not a failure.
+
+
+  It does NOT answer the agent registry. `loadRegistry` was declared here first and the code
+  disagreed: it read no file at all, it called the resolver and wrapped the result. A store that has
+  to reach an orchestrator to answer is not storing anything, and the lazy `require` that made it
+  compile existed only to break the cycle it created.
+component: topology_store
+methods:
+  - name: loadConfig
+    description: >-
+      The topology configuration beside the registry — the domains and their roots. An empty
+      configuration when the project has none.
+    signature: 'loadConfig(): TopologyConfig'
+    returns: TopologyConfig
+    params: []
+    guarantees:
+      - idempotent
+    effect: read
+  - name: saveConfig
+    description: >-
+      Write the topology configuration back, creating its directory when the project has not held
+      one before.
+    signature: 'saveConfig(config: TopologyConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: TopologyConfig
+        description: The configuration to persist
+    effect: write
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      at: saveConfig
+      reason: >-
+        Called twice from src/core/domains.ts, which no spec names yet — the domains area is the
+        next Track D slice and this clears the moment it is modelled. The finding is correct as
+        stated: no NARRATIVE reaches it, because the only caller has no narrative. Dropping it from
+        the contract instead would be wrong: unlike loadRegistry, this really is the store's own
+        job, and a store that can only be read is not one.
+status: complete
+createdAt: '2026-09-20T20:40:21.029Z'
+updatedAt: '2026-09-20T21:26:21.113Z'

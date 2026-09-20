@@ -4,7 +4,7 @@ import { parseYaml, readYamlFile } from '../utils/yaml.js';
 import { TemplateNotFoundError } from '../utils/errors.js';
 import { Template, TemplateSchema } from '../models/template.js';
 import { AgentTemplate } from '../models/agent.js';
-import { AI_PATHS } from '../config/loader.js';
+import { AI_PATHS } from '../config/paths.js';
 import { globalTemplatesDir as resolveGlobalDir } from '../config/defaults.js';
 
 // ---------------------------------------------------------------------------

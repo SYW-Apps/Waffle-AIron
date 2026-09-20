@@ -20,7 +20,7 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: resolveAgentTopology
-    symbol: loadRegistry
+    symbol: coreLoadRegistry
   - name: saveSystemSpec
     narrative:
       - stepNumber: 1
@@ -224,4 +224,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T14:29:08.288Z'
+updatedAt: '2026-09-20T21:23:36.040Z'

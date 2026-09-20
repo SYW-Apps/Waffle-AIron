@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized } from '../config/loader.js';
+import { assertProjectInitialized } from '../config/paths.js';
 import { pathExists, fromProjectRoot } from '../utils/fs.js';
 import {
   loadSystemSpec,

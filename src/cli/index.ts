@@ -14,7 +14,7 @@ import { runGenerate } from '../commands/generate.js';
 import { runLock as lockTree, checkApproval } from '../commands/lock.js';
 import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete } from '../commands/validate.js';
-import { assertProjectInitialized, loadRegistry, AI_PATHS } from '../config/loader.js';
+import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
 import { pathExists, writeFile, getProjectRoot } from '../utils/fs.js';
 import { runList } from '../commands/list.js';
 import { runShow } from '../commands/show.js';
@@ -63,6 +63,7 @@ import {
   runSubsystemInternalize,
   composeAgentBrief,
   loadProjectConfig,
+  resolveAgentTopology,
 } from '../commands/subsystem.js';
 import { describeBudget } from '../core/budget_policy.js';
 import { showExecution, setExecutionTier } from '../commands/execution.js';
@@ -711,7 +712,7 @@ async function runAgent(action: string, id: string): Promise<void> {
       // Starting content: the agent's (subsystem-derived) description. The
       // spec-derived facts themselves stay OUT of the file — they are inferred
       // live on every brief composition.
-      const description = loadRegistry().agents.find((a) => a.id === id)?.description ?? brief.name;
+      const description = resolveAgentTopology().find((a) => a.id === id)?.description ?? brief.name;
       writeFile(guidancePath, [
         `<!-- Project guidance for agent "${id}" — user-owned; wairon never regenerates or prunes this file.`,
         '     Spec-derived facts (ownership, paths, workflow) are inferred LIVE from the spec tree on every',

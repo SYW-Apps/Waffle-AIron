@@ -12,7 +12,7 @@ import {
   externalizeSubsystem,
 } from '../../src/core/provision.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { isProjectInitialized, aiPathsAt } from '../../src/config/loader.js';
+import { isProjectInitialized, aiPathsAt } from '../../src/config/paths.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------

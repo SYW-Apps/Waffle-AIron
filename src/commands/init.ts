@@ -19,7 +19,7 @@ import {
   writeRootGuideDelegator,
 } from '../utils/ai-guide.js';
 import { writeYamlFile } from '../utils/yaml.js';
-import { AI_PATHS } from '../config/loader.js';
+import { AI_PATHS } from '../config/paths.js';
 import {
   createProjectConfig,
   projectConfigExists,

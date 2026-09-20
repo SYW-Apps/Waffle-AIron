@@ -3,7 +3,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
-import { assertProjectInitialized } from '../config/loader.js';
+import { assertProjectInitialized } from '../config/paths.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { exportSpecTree, importSpecTree } from './subsystem.js';
 import { detectHostedMcpSource } from './mcp.js';

@@ -32,6 +32,17 @@ methods:
       - name: agentId
         type: string
         description: The resolved agent id (e.g. sdd_core-owner, system-architect).
+  - name: loadRegistry
+    description: >-
+      The derived agent topology in the Registry shape older callers expect. There is no registry
+      FILE — the agents come from the spec tree — so this is `resolveAgentTopology` wrapped, and it
+      belongs here rather than in a store for exactly that reason: it derives, it does not read. An
+      uninitialized project answers an empty registry rather than throwing.
+    signature: 'loadRegistry(): Registry'
+    returns: Registry
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-08-08T12:43:28.063Z'
+updatedAt: '2026-09-20T21:20:50.445Z'
