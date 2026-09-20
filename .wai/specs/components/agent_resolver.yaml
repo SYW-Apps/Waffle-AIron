@@ -12,7 +12,7 @@ dependsOn:
   - variant_registry_adapter
   - template_source_adapter
   - project_config_repository
-  - topology_store
+  - topology_repository
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-20T21:23:44.273Z'
+updatedAt: '2026-09-20T22:05:54.437Z'

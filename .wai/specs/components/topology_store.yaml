@@ -1,37 +1,28 @@
 id: topology_store
 name: Topology Store
 description: >-
-  The agent topology a project holds on disk: the registry of agents and the topology configuration
-  beside it. Durable file state, read through on every access rather than cached — `wairon generate`
-  and the MCP server both read it, and a stale copy would generate agent files from a topology the
-  tree no longer has. A project with neither file reads as empty rather than failing, because an
-  uninitialized project is a legitimate state and the commands that bootstrap one have to be able to
-  ask.
+  The topology configuration a project holds on disk. Durable file state, read through on every
+  access rather than cached — `wairon generate` and the MCP server both read it, and a stale copy
+  would generate agent files from a topology the tree no longer has. A project with no file reads as
+  empty rather than failing, because an uninitialized project is a legitimate state and the commands
+  that bootstrap one have to be able to ask.
 
 
-  It resolves its own file locations through the project's path helper, which belongs to NO
-  component on purpose: `aiPathsAt` is used by nineteen modules and is a shared convention rather
-  than a responsibility, exactly as the YAML and directory helpers under `spec_file_store` are.
-  Modelling it as a component was tried and measured — it made nineteen components need a declared
-  edge to it, which is an arrow that says "everything resolves paths" and tells a reader nothing.
-  `src/utils/fs.ts` is the precedent: forty-eight importers, deliberately unclaimed, zero findings.
+  It is now a member of `topology_repository` rather than standalone. It was standalone while the
+  only operations were read-the-file and write-the-file, with an allow saying the shape would be
+  revisited when a member earned it; `domain_registry` earned it. The store keeps exactly its own
+  job — bytes on disk — and knows nothing about what a domain is.
+
+
+  It resolves its file locations through the project's path helper, which belongs to NO component on
+  purpose: `aiPathsAt` is used by nineteen modules and is a shared convention rather than a
+  responsibility, exactly as the YAML and directory helpers under `spec_file_store` are.
+  `src/utils/fs.ts` is the precedent — forty-eight importers, deliberately unclaimed, zero findings.
 subsystem: sdd_core
 componentType: Store
 owns: []
 dependsOn: []
 durability: read-through
-lint:
-  allow:
-    - code: UNOWNED_STORE
-      reason: >-
-        Deliberately standalone, and the condition is not perfectly met — saying so rather than
-        claiming it is. The sanctioned lightweight form asks for workflow-layer consumers only; four
-        of the six here are (cli entry, validate, the MCP server, the registry model) but
-        `agent_resolver` and `domains` are components. A Repository over two read-through files with
-        no Registry and no Index to own would be three components of ceremony for a pair of reads,
-        and the doctrine's own warning against folding state into a consumer is the failure this
-        avoids. The right time to revisit is when something needs to query this topology rather than
-        load it whole — an Index would earn the Repository, and nothing needs one today.
 status: complete
 createdAt: '2026-09-20T20:39:52.665Z'
-updatedAt: '2026-09-20T21:01:34.593Z'
+updatedAt: '2026-09-20T22:01:37.164Z'

@@ -34,15 +34,7 @@ methods:
         description: The configuration to persist
     effect: write
 lint:
-  allow:
-    - code: UNUSED_METHOD
-      at: saveConfig
-      reason: >-
-        Called twice from src/core/domains.ts, which no spec names yet — the domains area is the
-        next Track D slice and this clears the moment it is modelled. The finding is correct as
-        stated: no NARRATIVE reaches it, because the only caller has no narrative. Dropping it from
-        the contract instead would be wrong: unlike loadRegistry, this really is the store's own
-        job, and a store that can only be read is not one.
+  allow: []
 status: complete
 createdAt: '2026-09-20T20:40:21.029Z'
-updatedAt: '2026-09-20T21:26:21.113Z'
+updatedAt: '2026-09-20T22:41:59.522Z'

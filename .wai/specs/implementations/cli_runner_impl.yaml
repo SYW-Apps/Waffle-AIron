@@ -1487,6 +1487,80 @@ methods:
         type: return
         outcome: written
     symbol: runDiagram
+  - name: runDomainsList
+    sourcePath: src/commands/domains.ts
+    narrative:
+      - stepNumber: 1
+        description: Ask the core adapter for every domain, derived and registered alike
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveDomains
+      - stepNumber: 2
+        description: >-
+          Print them, marking which came from a subsystem and which was registered by hand — the
+          difference decides whether a reader can remove one
+        type: return
+        outcome: listed
+    symbol: runDomainsList
+  - name: runDomainsScan
+    sourcePath: src/commands/domains.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the domains already registered, so the scan knows what is taken
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveDomains
+      - stepNumber: 2
+        description: Ask the detector which directories look like domains, handing it the tracked paths and ids
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: detectDomainCandidates
+      - stepNumber: 3
+        description: Decide what the caller asked for
+        type: branch
+        condition: the run was asked to register the candidates
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Register each untracked candidate
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: addDomain
+      - stepNumber: 5
+        description: Print the candidates, showing the already-covered ones too rather than omitting them
+        type: return
+        outcome: scanned
+    symbol: runDomainsScan
+  - name: runDomainsAdd
+    sourcePath: src/commands/domains.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Register the domain through the core adapter, which refuses an id that already exists in
+          either kind
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: addDomain
+      - stepNumber: 2
+        description: Report what was registered and where it points
+        type: return
+        outcome: added
+    symbol: runDomainsAdd
+  - name: runDomainsRemove
+    sourcePath: src/commands/domains.ts
+    narrative:
+      - stepNumber: 1
+        description: Unregister the domain through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: removeDomain
+      - stepNumber: 2
+        description: >-
+          Report the removal, or say plainly that a derived domain is removed by removing its
+          subsystem
+        type: return
+        outcome: removed
+    symbol: runDomainsRemove
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -1531,4 +1605,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T19:49:58.205Z'
+updatedAt: '2026-09-20T22:08:34.971Z'

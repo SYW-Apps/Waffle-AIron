@@ -1,0 +1,74 @@
+id: domain_registry_impl
+name: Domain Registry Implementation
+description: >-
+  src/core/domains.ts. Every write is read-modify-write through the store: load the configuration,
+  change the domains array, save it back. Nothing is cached between calls, so two commands in one
+  process cannot disagree about what is registered. The reads moved to `domain_projector` — what is
+  left here is only what changes the file.
+contract: idomain_registry
+sourcePath: src/core/domains.ts
+methods:
+  - name: removeFreeStanding
+    narrative:
+      - stepNumber: 1
+        description: Read the configuration as it stands
+        type: call
+        targetComponent: topology_store
+        targetMethod: loadConfig
+      - stepNumber: 2
+        description: Decide whether this id names something the configuration actually registers
+        type: branch
+        condition: the registered set holds a domain with this id
+        onTrueStep: 4
+        onFalseStep: 3
+      - stepNumber: 3
+        description: >-
+          Refuse by name. A derived domain is not in the registered set, and answering "removed" for
+          one would be a lie the caller could not detect — the message says the domain is
+          subsystem-backed and comes from the spec tree, so the caller knows where to change it
+          instead
+        type: throw
+        error: not a free-standing domain
+      - stepNumber: 4
+        description: Drop the domain from the registered set and write the configuration back
+        type: call
+        targetComponent: topology_store
+        targetMethod: saveConfig
+      - stepNumber: 5
+        description: Done
+        type: return
+        outcome: unregistered
+    symbol: removeFreeStandingDomain
+  - name: addFreeStanding
+    narrative:
+      - stepNumber: 1
+        description: Read the configuration as it stands
+        type: call
+        targetComponent: topology_store
+        targetMethod: loadConfig
+      - stepNumber: 2
+        description: Decide whether the registered set already answers to this id
+        type: branch
+        condition: a registered domain with this id already exists
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Refuse by name — two registered domains answering to one id makes every later lookup
+          ambiguous. This guards only the set this component owns; a collision with a
+          subsystem-derived domain is caught above, because seeing it needs the spec tree too
+        type: throw
+        error: duplicate domain id
+      - stepNumber: 4
+        description: Append the domain and write the configuration back
+        type: call
+        targetComponent: topology_store
+        targetMethod: saveConfig
+      - stepNumber: 5
+        description: Done
+        type: return
+        outcome: registered
+    symbol: addFreeStandingDomain
+status: complete
+createdAt: '2026-09-20T22:02:08.143Z'
+updatedAt: '2026-09-20T23:03:07.222Z'

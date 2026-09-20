@@ -1,0 +1,36 @@
+kind: value-object
+id: detected_domain_candidate
+name: DetectedDomainCandidate
+description: >-
+  A directory the detector thinks could be a domain, and what it would be called if somebody said
+  yes. Everything here is a suggestion — the id and name are derived from the path and a human is
+  expected to change either. `alreadyTracked` is carried rather than filtered out so `wairon domains
+  scan` can SHOW what is already covered instead of silently omitting it, which is the difference
+  between a scan that reassures and one that looks like it missed something.
+fields:
+  - name: suggestedId
+    type: string
+    description: An id derived from the path, parent-prefixed where a bare name would collide.
+    optional: false
+  - name: suggestedName
+    type: string
+    description: A display name derived from the path.
+    optional: false
+  - name: path
+    type: string
+    description: The directory, relative to the project root.
+    optional: false
+  - name: type
+    type: DomainType
+    description: What kind of area this looks like.
+    optional: false
+  - name: alreadyTracked
+    type: boolean
+    description: >-
+      Whether a registered domain already covers this path — shown rather than hidden, so a scan can
+      say "this one is handled" instead of appearing to have missed it.
+    optional: false
+methods: []
+sourcePath: src/models/domain.ts
+createdAt: '2026-09-20T22:07:14.140Z'
+updatedAt: '2026-09-20T22:07:14.155Z'

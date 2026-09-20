@@ -1,0 +1,51 @@
+id: domain_projector_impl
+name: Domain Projector Implementation
+description: >-
+  src/core/domain_projector.ts. Nothing is cached: both halves are read on every call, so two
+  commands in one process cannot disagree about what exists. The spec-tree half goes through the
+  spec repository's facade and the registered half through the topology repository's, which is what
+  keeps this a read over two published surfaces rather than a component reaching into two stores.
+contract: idomain_projector
+sourcePath: src/core/domain_projector.ts
+methods:
+  - name: resolve
+    narrative:
+      - stepNumber: 1
+        description: Project the subsystem-bound domains out of the spec tree
+        type: call
+        targetComponent: domain_projector
+        targetMethod: deriveFromSubsystems
+      - stepNumber: 2
+        description: Read the configuration and take the free-standing domains it registers
+        type: call
+        targetComponent: topology_repository
+        targetMethod: loadConfig
+      - stepNumber: 3
+        description: Answer both kinds as one list — the distinction matters to a writer, not to a reader
+        type: return
+        outcome: resolved
+    symbol: resolveDomains
+  - name: deriveFromSubsystems
+    narrative:
+      - stepNumber: 1
+        description: Read the subsystems this layer declares
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 2
+        description: >-
+          Read the components, so each domain can own the paths of the components under its
+          subsystem as well as the subsystem's own
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 3
+        description: >-
+          Emit one domain per subsystem, bound to it and owning those paths. Projected on every call
+          and never stored, so a renamed subsystem cannot leave a stale domain behind
+        type: return
+        outcome: derived
+    symbol: deriveSubsystemDomains
+status: complete
+createdAt: '2026-09-20T22:44:42.166Z'
+updatedAt: '2026-09-20T22:45:24.388Z'

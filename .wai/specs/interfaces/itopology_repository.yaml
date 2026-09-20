@@ -1,0 +1,41 @@
+id: itopology_repository
+name: Topology Repository Interface
+description: >-
+  One door to the agent topology: the configuration file that holds it, and the free-standing
+  domains registered in it. Consumers depend on this rather than on the members, which is what makes
+  it a Repository instead of two modules with a label — before it existed, callers reached
+  `domains.ts` and `loader.ts` directly and each had to know which of the two answered what. It
+  publishes what crosses the boundary and nothing else, and it deliberately does not answer "what
+  domains exist": that spans the spec tree as well, so it is `idomain_projector`'s question.
+component: topology_repository
+methods:
+  - name: addFreeStanding
+    description: Register a domain the spec tree does not imply, and persist it. Refuses a duplicate id.
+    signature: 'addFreeStanding(domain: Domain): void'
+    returns: void
+    params:
+      - name: domain
+        type: Domain
+        description: The domain to register
+    effect: write
+  - name: removeFreeStanding
+    description: Unregister a free-standing domain and persist the removal.
+    signature: 'removeFreeStanding(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+        description: The domain id to unregister
+    effect: write
+  - name: loadConfig
+    description: >-
+      The topology configuration as the file holds it, for callers that want the document rather
+      than the domains in it.
+    signature: 'loadConfig(): TopologyConfig'
+    returns: TopologyConfig
+    params: []
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T22:05:40.864Z'
+updatedAt: '2026-09-20T23:03:41.724Z'

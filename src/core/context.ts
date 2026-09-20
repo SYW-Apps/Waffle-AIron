@@ -2,9 +2,14 @@ import { aiDir, writeFile, writeFileIfChanged, readFileOrNull, pathExists } from
 import { GLOBAL_GUIDE_BODY } from '../utils/ai-guide.js';
 import { versionStamp } from './stamp.js';
 // STATIC: the lazy require this replaced was documented as breaking a circular
-// dependency, but domains.ts imports nothing from here — there is no cycle to
-// break, and the lazy form does not resolve once the module is bundled.
-import { resolveDomains } from './domains.js';
+// dependency, but the projector imports nothing from here — there is no cycle
+// to break, and the lazy form does not resolve once the module is bundled.
+//
+// Through the projector, not ./domains.js or ./topology.js: "which domains
+// exist" spans the spec tree as well as the configuration, so it is neither the
+// registry's question nor the facade's. Both of those answer half of it, which
+// is exactly why a consumer must not be the place the two halves are joined.
+import { resolveDomains } from './domain_projector.js';
 import { projectConfigRepository } from '../config/project-config.js';
 
 // ---------------------------------------------------------------------------
@@ -109,9 +114,10 @@ export function renderDomainsDoc(): string {
  * awareness. Contains: project context + domain map + wairon usage guide.
  */
 export function renderWaironGuide(): string {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { resolveDomains } = require('./domains.js') as typeof import('./domains.js');
-
+  // The same static import `renderDomainsDoc` uses. This site kept a lazy
+  // `require` after that one went static, so the two renderers reached the same
+  // answer by two different mechanisms — and the lazy one does not resolve in a
+  // bundle at all.
   const domains = resolveDomains();
 
   let projectName = 'this project';

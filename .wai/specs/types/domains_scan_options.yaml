@@ -1,0 +1,17 @@
+kind: value-object
+id: domains_scan_options
+name: DomainsScanOptions
+description: >-
+  What `wairon domains scan` was asked to do. One flag, and it is the whole difference between
+  showing and deciding: a scan proposes, `--add` registers. Kept as a flag on the scan rather than a
+  separate command because the candidates are the same either way, and splitting them would mean
+  detecting twice.
+fields:
+  - name: add
+    type: boolean
+    description: Register every untracked candidate rather than only listing them.
+    optional: true
+methods: []
+sourcePath: src/commands/domains.ts
+createdAt: '2026-09-20T22:10:20.893Z'
+updatedAt: '2026-09-20T22:10:20.902Z'

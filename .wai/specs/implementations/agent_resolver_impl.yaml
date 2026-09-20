@@ -59,11 +59,11 @@ methods:
         targetMethod: load
       - stepNumber: 9
         description: >-
-          Read the declared domains from the topology store, so a domain the repository declares but
-          the spec tree does not model still gets an owner — domains are a superset of subsystems,
-          which is the whole reason this read exists
+          Read the declared domains through the topology repository's facade, so a domain the
+          repository declares but the spec tree does not model still gets an owner — domains are a
+          superset of subsystems, which is the whole reason this read exists
         type: call
-        targetComponent: topology_store
+        targetComponent: topology_repository
         targetMethod: loadConfig
       - stepNumber: 10
         description: >-
@@ -146,4 +146,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T21:25:28.313Z'
+updatedAt: '2026-09-20T22:05:59.127Z'

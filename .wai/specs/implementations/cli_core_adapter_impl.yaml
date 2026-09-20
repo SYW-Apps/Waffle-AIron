@@ -161,6 +161,34 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: resolveExpectedOutputPaths
+  - name: resolveDomains
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: resolveDomains
+  - name: addDomain
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: addDomain
+  - name: removeDomain
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: removeDomain
+  - name: detectDomainCandidates
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: detectDomainCandidates
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T19:49:38.372Z'
+updatedAt: '2026-09-20T22:09:37.344Z'

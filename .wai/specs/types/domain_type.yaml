@@ -1,0 +1,21 @@
+kind: value-object
+id: domain_type
+name: DomainType
+description: >-
+  How a domain came to be recognised. Three of the four are things the detector can see on disk — a
+  submodule declared in .gitmodules, a directory holding its own .git, a package root with a
+  manifest — and the fourth, `manual`, is the one a human asserted. Keeping them distinct is what
+  lets a scan re-derive its own proposals without ever second-guessing a domain somebody added on
+  purpose.
+fields:
+  - name: value
+    type: string
+    description: >-
+      One of: git-submodule (declared in .gitmodules), git-repo (a directory holding its own .git),
+      package-root (a manifest such as package.json, pyproject.toml, Cargo.toml or go.mod), or
+      manual (added by a person rather than detected).
+    optional: false
+methods: []
+sourcePath: src/models/domain.ts
+createdAt: '2026-09-20T22:07:36.599Z'
+updatedAt: '2026-09-20T22:07:36.612Z'

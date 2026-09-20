@@ -212,6 +212,51 @@ methods:
       - name: config
         type: ProjectConfig
         description: The project's configuration
+  - name: resolveDomains
+    description: >-
+      Calls resolve on the topology repository: every domain this project has, derived and
+      registered alike.
+    signature: 'resolveDomains(): Domain[]'
+    returns: Domain[]
+    params: []
+  - name: addDomain
+    description: >-
+      Calls addFreeStanding on the topology repository: register a domain the spec tree does not
+      imply.
+    signature: 'addDomain(domain: Domain): void'
+    returns: void
+    params:
+      - name: domain
+        type: Domain
+        description: The domain to register
+  - name: removeDomain
+    description: 'Calls removeFreeStanding on the topology repository: unregister a free-standing domain.'
+    signature: 'removeDomain(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+        description: The domain id to unregister
+  - name: detectDomainCandidates
+    description: >-
+      Calls the domain detector: which directories look like domains nobody has registered.
+      Proposals only.
+    signature: >-
+      detectDomainCandidates(projectRoot: string, trackedPaths?: Set<string>, trackedIds?:
+      Set<string>): DetectedDomainCandidate[]
+    returns: DetectedDomainCandidate[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The repository root to scan
+      - name: trackedPaths
+        type: Set<string>
+        description: Paths already claimed by a registered domain
+        optional: true
+      - name: trackedIds
+        type: Set<string>
+        description: Domain ids already in use
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T19:49:34.485Z'
+updatedAt: '2026-09-20T22:08:08.677Z'

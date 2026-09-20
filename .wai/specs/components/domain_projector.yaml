@@ -1,0 +1,20 @@
+id: domain_projector
+name: Domain Projector
+description: >-
+  What domains this project has, answered across the two places domains come from: the subsystems
+  the spec tree declares, and the free-standing domains the configuration registers. Combining two
+  sources is why this is workflow rather than a member of the topology repository — a Store,
+  Registry or Index reaches its own store, a backend Adapter or pure logic, and nothing here would
+  be legal inside that boundary. The derived half is projected on every call and never stored, so a
+  renamed subsystem cannot leave a stale domain behind. Declared `read`, so the component that
+  answers what exists provably cannot change it.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - spec_loader
+  - topology_repository
+dependencyClass: read
+status: complete
+createdAt: '2026-09-20T22:44:08.938Z'
+updatedAt: '2026-09-20T22:45:22.690Z'

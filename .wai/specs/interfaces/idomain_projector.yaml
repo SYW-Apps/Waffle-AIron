@@ -1,0 +1,29 @@
+id: idomain_projector
+name: Domain Projector Interface
+description: >-
+  The read that spans both sources. A caller asking what domains exist asks here; a caller that only
+  wants the registered set can read the configuration through the repository, because that half is a
+  stored fact rather than a projection.
+component: domain_projector
+methods:
+  - name: resolve
+    description: >-
+      Every domain this project has, derived and registered alike. The distinction matters to
+      whoever writes a domain and not at all to whoever reads one.
+    signature: 'resolve(): Domain[]'
+    returns: Domain[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: deriveFromSubsystems
+    description: >-
+      Only the domains the spec tree implies — one per subsystem, bound to it, owning the
+      subsystem's path and every component path under it. Projected on every call, never stored.
+    signature: 'deriveFromSubsystems(): Domain[]'
+    returns: Domain[]
+    params: []
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T22:44:20.640Z'
+updatedAt: '2026-09-20T22:45:23.504Z'

@@ -1,0 +1,33 @@
+id: idomain_curator
+name: Domain Curator Interface
+description: >-
+  The two changes a project can make to its own domain topology. Both refuse rather than report a
+  success they did not achieve: a domain the spec tree owns cannot be registered over, and one it
+  derives cannot be taken out here.
+component: domain_curator
+methods:
+  - name: register
+    description: >-
+      Register a domain the spec tree does not imply, and persist it. Refuses an id anything already
+      answers to, derived or registered.
+    signature: 'register(domain: Domain): void'
+    returns: void
+    params:
+      - name: domain
+        type: Domain
+        description: The domain to register
+    effect: write
+  - name: unregister
+    description: >-
+      Take a free-standing domain back out and persist the removal. Refuses an id the spec tree
+      derives, which is not this file's to remove.
+    signature: 'unregister(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+        description: The domain id to unregister
+    effect: write
+status: complete
+createdAt: '2026-09-20T22:44:25.051Z'
+updatedAt: '2026-09-20T23:03:42.532Z'

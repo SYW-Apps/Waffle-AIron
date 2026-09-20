@@ -1,0 +1,35 @@
+id: domain_detector_impl
+name: Domain Detector Implementation
+description: >-
+  src/core/detection.ts. A directory walk with a candidate map keyed by id, which is where the
+  collision handling lives — two directories proposing the same bare name both survive,
+  distinguished by their parent, rather than one overwriting the other in the map.
+contract: idomain_detector
+sourcePath: src/core/detection.ts
+methods:
+  - name: detectCandidates
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the repository for directories that look like scoped areas — workspace packages,
+          service directories — skipping node_modules, dot-directories and anything the exclude list
+          names
+        type: local
+      - stepNumber: 2
+        description: >-
+          Drop any whose path a registered domain already claims, so a scan after an add does not
+          re-offer what was just taken
+        type: local
+      - stepNumber: 3
+        description: >-
+          Derive an id from each path, prefixing the parent directory where a bare name would
+          collide with another candidate or an id already in use
+        type: local
+      - stepNumber: 4
+        description: Answer the candidates — proposals for a human to accept or ignore, never registrations
+        type: return
+        outcome: detected
+    symbol: detectDomainCandidates
+status: complete
+createdAt: '2026-09-20T22:06:43.474Z'
+updatedAt: '2026-09-20T22:06:43.482Z'

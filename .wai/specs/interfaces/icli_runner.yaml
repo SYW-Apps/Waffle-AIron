@@ -310,6 +310,49 @@ methods:
       - name: options
         type: DiagramOptions
         description: The requested format and where to write the artifact
+  - name: runDomainsList
+    description: >-
+      `wairon domains list`: show every domain this project has, derived and registered alike,
+      saying which is which — a reader deciding whether they can remove one needs to know it came
+      from a subsystem.
+    signature: 'runDomainsList(): Promise<void>'
+    returns: Promise<void>
+    params: []
+  - name: runDomainsScan
+    description: >-
+      `wairon domains scan`: show the directories that look like domains nobody has registered,
+      including the ones already covered so the answer reassures rather than appearing to have
+      missed them. Proposes only; `--add` is what registers.
+    signature: 'runDomainsScan(options?: DomainsScanOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: options
+        type: DomainsScanOptions
+        description: Whether to register the candidates rather than only show them
+        optional: true
+  - name: runDomainsAdd
+    description: >-
+      `wairon domains add`: register a free-standing domain. The id and the path each derive from
+      the other when only one is given. Refuses an id a subsystem already derives, because the
+      derived one would win every lookup and the added one would sit in the file doing nothing.
+    signature: 'runDomainsAdd(options?: DomainsAddOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: options
+        type: DomainsAddOptions
+        description: The path and id to register
+        optional: true
+  - name: runDomainsRemove
+    description: >-
+      `wairon domains remove`: unregister a free-standing domain. A derived one cannot be removed
+      here — the way to remove it is to remove its subsystem, and saying so is more useful than a
+      silent no-op.
+    signature: 'runDomainsRemove(id: string): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: id
+        type: string
+        description: The domain id to unregister
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T16:41:28.161Z'
+updatedAt: '2026-09-20T22:10:43.901Z'

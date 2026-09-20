@@ -1,0 +1,16 @@
+id: domain_registry
+name: Domain Registry
+description: >-
+  The free-standing domains a project registers: adding one and removing one, read-modify-write
+  through the store. It guards the integrity of the set it owns — no two registered domains may
+  answer to one id — and nothing beyond it. A domain that binds to a subsystem is DERIVED from the
+  spec tree and is not registry business at all: refusing an id the spec tree already answers to
+  needs both sources at once, which is workflow, and `domain_curator` does it before it calls here.
+subsystem: sdd_core
+componentType: Registry
+owns: []
+dependsOn:
+  - topology_store
+status: complete
+createdAt: '2026-09-20T22:01:24.004Z'
+updatedAt: '2026-09-20T22:43:46.069Z'

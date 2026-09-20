@@ -1,80 +1,47 @@
-import * as path from 'path';
+// ---------------------------------------------------------------------------
+// The free-standing domains a project registers — `domain_registry`, and
+// nothing but the writes.
+//
+// Every write is read-modify-write through the store: load the configuration,
+// change the domains array, save it back. Nothing is cached between calls, so
+// two commands in one process cannot disagree about what is registered.
+//
+// It guards the integrity of the set it OWNS — no two registered domains may
+// answer to one id — and nothing beyond it. A domain that binds to a subsystem
+// is DERIVED from the spec tree and is not registry business at all: refusing
+// an id the spec tree already answers to needs both sources at once, which is
+// workflow, and `domain_curator` does it before it calls here. That is why this
+// file no longer names ./specs.js — a Registry reaches its own Store, a backend
+// Adapter or pure logic, and the spec tree is none of the three.
+//
+// The reads moved out with it, to `domain_projector`. What is left here is only
+// what changes the file.
+// ---------------------------------------------------------------------------
+
 import { Domain } from '../models/domain.js';
 import { loadTopologyConfig, saveTopologyConfig } from '../config/loader.js';
-import {
-  loadSubsystemSpecs,
-  loadComponentSpecs,
-  getSubsystemPath,
-  getComponentPath,
-} from './specs.js';
 import { WaironError } from '../utils/errors.js';
 
-// ---------------------------------------------------------------------------
-// Domain resolution
-//
-// A domain is a unit of agent ownership. Domains come from two sources:
-//   - Spec-backed:  derived 1:1 from L1 subsystems (boundTo = subsystem id).
-//   - Free-standing: declared in .wai/topology.yaml for cross-cutting scopes.
-//
-// resolveDomains() returns both. Only free-standing domains are mutable.
-// ---------------------------------------------------------------------------
-
-function rel(p: string): string {
-  return path.relative(process.cwd(), p).replace(/\\/g, '/');
-}
-
-/** Domains derived from L1 subsystems (spec-backed). */
-export function deriveSubsystemDomains(): Domain[] {
-  const subsystems = loadSubsystemSpecs();
-  const components = loadComponentSpecs();
-
-  return subsystems.map((sub) => {
-    const ownedPaths = [
-      rel(getSubsystemPath(sub.id)),
-      ...components
-        .filter((c) => c.subsystem === sub.id)
-        .map((c) => rel(getComponentPath(c.id, sub.id))),
-    ];
-    return {
-      id: sub.id,
-      name: sub.name,
-      description: sub.description,
-      boundTo: sub.id,
-      ownedPaths,
-    };
-  });
-}
-
-/** Free-standing domains declared in .wai/topology.yaml. */
-export function listFreeStandingDomains(): Domain[] {
-  return loadTopologyConfig().domains;
-}
-
-/** All domains: spec-backed (derived) + free-standing. */
-export function resolveDomains(): Domain[] {
-  return [...deriveSubsystemDomains(), ...listFreeStandingDomains()];
-}
-
-export function findDomain(id: string): Domain | undefined {
-  return resolveDomains().find((d) => d.id === id);
-}
-
-// ---------------------------------------------------------------------------
-// Free-standing domain mutation (the only authored part of the topology)
-// ---------------------------------------------------------------------------
-
+/**
+ * Register a domain the spec tree does not imply, and persist it. Refuses an id
+ * the registered set already holds — two registered domains answering to one id
+ * makes every later lookup ambiguous. A collision with a subsystem-derived
+ * domain is caught above, because seeing it needs the spec tree too.
+ */
 export function addFreeStandingDomain(domain: Domain): void {
   const config = loadTopologyConfig();
   if (config.domains.some((d) => d.id === domain.id)) {
     throw new WaironError(`A free-standing domain "${domain.id}" already exists in .wai/topology.yaml.`);
   }
-  if (deriveSubsystemDomains().some((d) => d.id === domain.id)) {
-    throw new WaironError(`Domain id "${domain.id}" collides with a subsystem-derived domain.`);
-  }
   config.domains.push(domain);
   saveTopologyConfig(config);
 }
 
+/**
+ * Unregister a free-standing domain and persist the removal. A derived domain
+ * is not in the registered set, and answering "removed" for one would be a lie
+ * the caller could not detect — so the message says where to change it instead.
+ */
 export function removeFreeStandingDomain(id: string): void {
   const config = loadTopologyConfig();
   const idx = config.domains.findIndex((d) => d.id === id);

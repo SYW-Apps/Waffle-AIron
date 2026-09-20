@@ -26,6 +26,148 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### Combining two sources is workflow, not registry work
+
+`src/core/domains.ts` realizes `domain_registry`, and it also derived domains
+from the spec tree — so it imported `src/core/specs.ts`. The validator refused
+that, and it was right to: a Store, Registry or Index may reach its own Store, a
+backend Adapter or pure logic, and the spec tree is none of the three. The fix
+is not a wider rule. Answering "what domains exist" reads the spec tree AND the
+topology configuration, and combining two sources is workflow, so it does not
+belong inside the Repository at all.
+
+**Two Orchestrators now sit above the facade.** `src/core/domain_projector.ts`
+(`dependencyClass: read`, so the component that answers what exists provably
+cannot change it) holds `resolveDomains` and `deriveSubsystemDomains`, moved out
+of the registry unchanged. It reaches each half through the surface that
+publishes it — the spec tree through `./specs.js`, the configuration through
+`./topology.js` and never `../config/loader.js`, which would recreate the same
+violation one component further out. `src/core/domain_curator.ts` holds the two
+writes: it asks the projector what ids are taken, refuses a clash by name, and
+only then hands the domain to the facade to persist.
+
+**Each half of the id check is now caught where it can be seen.** The registry's
+duplicate check guards only the set it owns — two registered domains answering
+to one id — because that is the half a Store-bound component can answer. The
+collision with a subsystem-derived domain is the half that lives in no file, and
+the curator catches it before the call ever reaches the registry. The two
+refusals say different things on purpose: one sends the caller to the spec tree,
+the other to `.wai/topology.yaml`, and a caller that cannot tell them apart does
+not know which file to open.
+
+**The facade sheds five methods.** `resolve`, `find`, `listFreeStanding` and
+`deriveFromSubsystems` went with the reads they were forwarding; `saveConfig`
+went because no caller outside the registry ever wanted it. `topology_repository`
+publishes `addFreeStanding`, `removeFreeStanding` and `loadConfig`, and a facade
+method published for no consumer is a surface somebody has to keep true.
+
+**The Portal's writes go to the curator, not the facade.** `resolveDomains` on
+`src/core/index.ts` forwards to the projector; `addDomain` and `removeDomain`
+forward to `domain_curator`. A Portal that reaches a write-effect facade method
+is the shortcut the standard names by code — and here it is not ceremony, because
+the id check a registration needs cannot be made where the write happens.
+
+`itopology_repository` now tags those two methods `effect: write`, which is what
+makes that rule enforce anything: `PORTAL_WRITE_SHORTCUT` judges tagged methods
+only, and the facade carried no tag, so the old shape validated clean. Measured
+by pointing `addDomain` back at the facade with the tags in place — it fails as
+an error now, where before it passed in silence.
+
+**This narrows the public library surface further.** `findDomain`,
+`listFreeStandingDomains` and `deriveSubsystemDomains` are gone from
+`src/core/domains.ts` entirely, and `addFreeStandingDomain` and
+`removeFreeStandingDomain` are all that remain of it. The reads live on the
+projector under the same names; the operations `core_portal` names are all still
+published from the package entry, unchanged.
+
+**What the tests hold.** `tests/core/domain-workflow.test.ts` covers the
+projector across both sources (including a project with no configuration file at
+all, where the derived half must still answer) and both of the curator's
+refusals, proving the messages differ and that a refusal never reaches the write.
+`tests/core/topology-repository.test.ts` keeps the facade and the registry, and
+asserts the registry accepts a subsystem-derived id when called alone — not a
+hole, but the shape of the split stated out loud, so nobody later "fixes" it by
+teaching the Registry to read the spec tree again.
+
+### The topology has one face, and the domains commands use it
+
+`topology_store` was deliberately standalone while the only operations were
+read-the-file and write-the-file, with an allow saying the shape would be
+revisited when a member earned it. `domain_registry` earned it: registering a
+domain and unregistering one are registry work, and the doctrine names Store and
+Registry as a Repository's members precisely so neither ends up doing the
+other's job.
+
+`src/core/topology.ts` is that Repository's facade — every method one forward
+and nothing else: the writes to `src/core/domains.ts`, the file to
+`src/config/loader.ts`. It holds no logic by construction; anything that needed
+a decision would belong in a member instead, and the decision that turned up is
+why the reads left again (see the section above). **Consumers now depend on the
+facade rather than on the two modules**, which is the whole of what makes it a
+Repository rather than two modules with a label: `agent_resolver` reads the
+configuration through it, `context` resolves domains through the projector that
+reads it, and the MCP server's `listDomains` goes through the core Portal like
+every other sdd_core call that server makes.
+
+**The two kinds of domain stay apart, deliberately.** A subsystem-bound domain
+is DERIVED from the spec tree on every call and lives in no file; a free-standing
+one is a decision about the repository's shape and lives in the configuration.
+Registering refuses an id either kind already holds — the collision the file
+cannot see is the one a check reading only `.wai/topology.yaml` would let through
+— and `removeFreeStanding` cannot reach a derived domain at all, because the way
+to remove one is to remove its subsystem.
+
+### `wairon domains` asks for the topology instead of reaching into it
+
+The sixth instance of the same crossing. `src/commands/domains.ts` imported
+`resolveDomains`, `addFreeStandingDomain`, `removeFreeStandingDomain` and
+`findDomain` out of `../core/domains.js`, and `detectDomainCandidates` out of
+`../core/detection.js` — sdd_cli reaching into two sdd_core modules — while
+`core_portal` names all four operations on its contract. `movedChildren`,
+`diffSize` and `settledSpecPaths` out of `./approval.js`, the four core modules
+`wairon diagram` built its artifacts out of, and the generator `wairon generate`
+wrote through were the first five, and it closes the way it always does: the
+boundary is crossed once, on `cli_core_adapter`.
+
+**The Portal stops star-exporting a member.** `src/core/index.ts` had
+`export * from './domains.js'`, republishing the whole raw surface of a
+component the Portal names four operations of — and letting every consumer keep
+depending on the member. It now publishes `resolveDomains`, `addDomain` and
+`removeDomain` as stated forwards — to the projector and the curator, per the
+section above — and `detectDomainCandidates`
+stays a star export of `./detection.js` because the detector is its own
+component, published by identity rather than wrapped. **This narrows the public
+library surface**: `findDomain`, `listFreeStandingDomains`,
+`deriveSubsystemDomains`, `addFreeStandingDomain` and `removeFreeStandingDomain`
+no longer come out of the package entry. Nothing in `src` or the tests imported
+them from there, and the operations the Portal names are all still published.
+
+**A lookup is not a second read.** The command's `findDomain` call is now one
+`resolveDomains().find(…)` at the call site rather than a method on the adapter:
+a published read that answers a subset of another published read is how two
+spellings of "which domains are there" start to disagree.
+
+**Namespace bindings, because a rename hides the call.**
+`import * as topology from './topology.js'` in `agent_resolver.ts`, and
+`import * as projector` / `import * as curator` in `core/index.ts`, so each call
+SITE says `topology.loadConfig()` or `curator.registerDomain(…)`. An `as` rename
+compiles to the same thing, but the name
+a reader — and the conformance analysis, which reads the invoked name — sees at
+the call is the local one, so the renamed form says nothing about which contract
+method was reached.
+
+**What the tests hold.** `tests/core/topology-repository.test.ts` proves each
+method reaches the member that owns the work (spied, so a method wired to the
+wrong member cannot accidentally look right), that the facade answers what the
+store answers unmocked, and the refusals it still owns — a duplicate registered
+id, a derived id it cannot remove — with the derived domain unchanged and the
+configuration file never rewritten. `tests/commands/domains-boundary.test.ts`
+walks the whole route Portal → curator → facade → registry with call-through
+spies, because a Portal write that reached the facade directly would still pass
+every assertion about the file; and it adds the assertion no type-check can
+make: the import SITE, read as literal lines rather than a pattern, because an
+escaped regex has quietly matched nothing here four times.
+
 ### A path convention that belongs to nobody
 
 `src/config/loader.ts` held two things with nothing to do with each other:
