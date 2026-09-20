@@ -1,7 +1,13 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { AgentBrief, AgentRecord } from '../models/agent.js';
-import { loadTopologyConfig } from '../config/loader.js';
+// The topology configuration, through the Repository facade that owns it —
+// never ../config/loader.js, which is one of its members. The narrative says
+// topology_repository.loadConfig, and a namespace binding is what lets the call
+// SITE say `loadConfig` too: an `as` rename compiles to the same thing, but the
+// name a reader (and the conformance analysis) sees at the call is the local
+// one, so the renamed form hides which contract method was reached.
+import * as topology from './topology.js';
 import { AI_PATHS, assertProjectInitialized } from '../config/paths.js';
 import { Registry, createEmptyRegistry } from '../models/registry.js';
 import { projectConfigRepository } from '../config/project-config.js';
@@ -448,7 +454,7 @@ export function resolveAgentTopology(): AgentRecord[] {
 
   // 4. Free-standing domain owners (declared in .wai/topology.yaml)
   const now = new Date().toISOString();
-  for (const dom of loadTopologyConfig().domains) {
+  for (const dom of topology.loadConfig().domains) {
     agents.push({
       id: `${dom.id}-owner`,
       name: `${dom.name ?? dom.id} Owner`,

@@ -25,6 +25,10 @@ import {
   renderDiagram as coreRenderDiagram,
   generateAll as coreGenerateAll,
   resolveExpectedOutputPaths as coreResolveExpectedOutputPaths,
+  resolveDomains as coreResolveDomains,
+  addDomain as coreAddDomain,
+  removeDomain as coreRemoveDomain,
+  detectDomainCandidates as coreDetectDomainCandidates,
 } from '../core/index.js';
 import type { GenerateOptions, GenerateSummary } from '../core/index.js';
 import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
@@ -32,6 +36,8 @@ import type { ForeignFieldRepair, SpecialistRetirement, TreeExportResult, TreeIm
 import type {
   AgentBrief,
   AgentRecord,
+  DetectedDomainCandidate,
+  Domain,
   PackSelection,
   ProjectConfig,
   SubsystemSpec,
@@ -212,6 +218,46 @@ export function resolveExpectedOutputPaths(
   config: ProjectConfig,
 ): Set<string> {
   return coreResolveExpectedOutputPaths(agents, config);
+}
+
+// cli_core_adapter.resolveDomains / addDomain / removeDomain /
+// detectDomainCandidates — 1:1 forwards to the core portal, backing the whole
+// `wairon domains` family: read every domain (derived and registered alike),
+// register a free-standing one, unregister one, and propose the directories
+// nobody has registered yet.
+//
+// `wairon domains` used to call resolveDomains, addFreeStandingDomain,
+// removeFreeStandingDomain and findDomain straight out of ../core/domains.js,
+// and detectDomainCandidates out of ../core/detection.js — sdd_cli reaching
+// into two sdd_core modules, past the Portal that publishes exactly these
+// calls. It is the sixth time that crossing has been found (movedChildren,
+// diffSize and settledSpecPaths out of ./approval.js, the four modules `wairon
+// diagram` built its artifacts out of, and the generator `wairon generate`
+// wrote through were the first five), and it closes the way it always does:
+// here, on the one component whose whole job is to cross into sdd_core.
+//
+// There is no `findDomain` on the contract and none is wanted: a lookup is one
+// `resolveDomains().find(…)` at the call site, and publishing a second read
+// that answers a subset of the first is how two spellings of "which domains are
+// there" start to disagree.
+export function resolveDomains(): Domain[] {
+  return coreResolveDomains();
+}
+
+export function addDomain(domain: Domain): void {
+  coreAddDomain(domain);
+}
+
+export function removeDomain(id: string): void {
+  coreRemoveDomain(id);
+}
+
+export function detectDomainCandidates(
+  projectRoot: string,
+  trackedPaths?: Set<string>,
+  trackedIds?: Set<string>,
+): DetectedDomainCandidate[] {
+  return coreDetectDomainCandidates(projectRoot, trackedPaths, trackedIds);
 }
 
 interface SubsystemAddOptions {

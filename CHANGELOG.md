@@ -26,6 +26,79 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### The topology has one face, and the domains commands use it
+
+`topology_store` was deliberately standalone while the only operations were
+read-the-file and write-the-file, with an allow saying the shape would be
+revisited when a member earned it. `domain_registry` earned it: add, remove and
+resolve are registry work, and the doctrine names Store and Registry as a
+Repository's members precisely so neither ends up doing the other's job.
+
+`src/core/topology.ts` is that Repository's facade — eight methods, each one
+forward and nothing else: the domains to `src/core/domains.ts`, the file to
+`src/config/loader.ts`. It holds no logic by construction; anything that needed
+a decision would belong in a member instead. **Consumers now depend on the
+facade rather than on the two modules**, which is the whole of what makes it a
+Repository rather than two modules with a label: `agent_resolver` reads the
+configuration through it, `context` resolves domains through it, and the MCP
+server's `listDomains` goes through the core Portal like every other sdd_core
+call that server makes.
+
+**The two kinds of domain stay apart, deliberately.** A subsystem-bound domain
+is DERIVED from the spec tree on every call and lives in no file; a free-standing
+one is a decision about the repository's shape and lives in the configuration.
+`addFreeStanding` refuses an id either kind already holds — the collision the
+file cannot see is the one a check reading only `.wai/topology.yaml` would let
+through — and `removeFreeStanding` cannot reach a derived domain at all, because
+the way to remove one is to remove its subsystem.
+
+### `wairon domains` asks for the topology instead of reaching into it
+
+The sixth instance of the same crossing. `src/commands/domains.ts` imported
+`resolveDomains`, `addFreeStandingDomain`, `removeFreeStandingDomain` and
+`findDomain` out of `../core/domains.js`, and `detectDomainCandidates` out of
+`../core/detection.js` — sdd_cli reaching into two sdd_core modules — while
+`core_portal` names all four operations on its contract. `movedChildren`,
+`diffSize` and `settledSpecPaths` out of `./approval.js`, the four core modules
+`wairon diagram` built its artifacts out of, and the generator `wairon generate`
+wrote through were the first five, and it closes the way it always does: the
+boundary is crossed once, on `cli_core_adapter`.
+
+**The Portal stops star-exporting a member.** `src/core/index.ts` had
+`export * from './domains.js'`, republishing the whole raw surface of a
+component the Portal names four operations of — and letting every consumer keep
+depending on the member. It now publishes `resolveDomains`, `addDomain` and
+`removeDomain` as stated forwards to the facade, and `detectDomainCandidates`
+stays a star export of `./detection.js` because the detector is its own
+component, published by identity rather than wrapped. **This narrows the public
+library surface**: `findDomain`, `listFreeStandingDomains`,
+`deriveSubsystemDomains`, `addFreeStandingDomain` and `removeFreeStandingDomain`
+no longer come out of the package entry. Nothing in `src` or the tests imported
+them from there, and the operations the Portal names are all still published.
+
+**A lookup is not a second read.** The command's `findDomain` call is now one
+`resolveDomains().find(…)` at the call site rather than a method on the adapter:
+a published read that answers a subset of another published read is how two
+spellings of "which domains are there" start to disagree.
+
+**Namespace bindings, because a rename hides the call.**
+`import * as topology from './topology.js'` in `core/index.ts` and
+`agent_resolver.ts`, so each call SITE says `topology.resolve()` and
+`topology.loadConfig()`. An `as` rename compiles to the same thing, but the name
+a reader — and the conformance analysis, which reads the invoked name — sees at
+the call is the local one, so the renamed form says nothing about which contract
+method was reached.
+
+**What the tests hold.** `tests/core/topology-repository.test.ts` proves each
+method reaches the member that owns the work (spied, so a method wired to the
+wrong member cannot accidentally look right), that the facade answers what each
+member answers unmocked, and both refusals — a duplicate free-standing id, an id
+a subsystem derives — with the derived domain unchanged and the configuration
+file never rewritten. `tests/commands/domains-boundary.test.ts` adds the
+assertion no type-check can make: the import SITE, read as literal lines rather
+than a pattern, because an escaped regex has quietly matched nothing here four
+times.
+
 ### A path convention that belongs to nobody
 
 `src/config/loader.ts` held two things with nothing to do with each other:

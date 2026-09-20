@@ -1,8 +1,9 @@
 import { projectConfigRepository } from '../config/project-config.js';
 import type { ProjectConfig } from '../models/project.js';
+import type { Domain } from '../models/domain.js';
+import * as topology from './topology.js';
 
 export * from './detection.js';
-export * from './domains.js';
 export * from './templates.js';
 export * from './validation.js';
 export * from './extensions.js';
@@ -55,6 +56,36 @@ export type { GenerateOptions, GenerateSummary } from '../exporters/generate.js'
 // forwards to the tree transfer orchestrator, stated explicitly for the same
 // anchored conformance check.
 export { exportSpecTree, importSpecTree } from './treetransfer.js';
+
+// The agent topology (icore_portal resolveDomains / addDomain / removeDomain) —
+// 1:1 forwards to the topology Repository's facade in ./topology.js, which is
+// the only thing this Portal knows about the domains.
+//
+// This file used to `export * from './domains.js'`, republishing the whole raw
+// surface of a member — `findDomain`, `listFreeStandingDomains`,
+// `deriveSubsystemDomains` and the two mutators — from a Portal that names four
+// domain operations on its contract. A star export says nothing about which of
+// those the Portal means, and it let every consumer keep depending on the
+// member rather than on the facade, which is the difference between a
+// Repository and two modules with a label. `detectDomainCandidates` stays a
+// star export from ./detection.js: the detector is its own component, published
+// by identity rather than wrapped.
+//
+// The facade is bound as a namespace so each call SITE names the contract
+// method it reaches — `topology.resolve()`, not a renamed `resolveTopologyDomains()`
+// that reads like a second implementation and tells neither a reader nor the
+// conformance analysis which method was called.
+export function resolveDomains(): Domain[] {
+  return topology.resolve();
+}
+
+export function addDomain(domain: Domain): void {
+  topology.addFreeStanding(domain);
+}
+
+export function removeDomain(id: string): void {
+  topology.removeFreeStanding(id);
+}
 
 // Component rename, contract-method rename and Specialist retirement
 // (icore_portal renameComponent / renameMethod / retireSpecialists) — pure 1:1

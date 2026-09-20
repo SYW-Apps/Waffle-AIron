@@ -2,9 +2,13 @@ import { aiDir, writeFile, writeFileIfChanged, readFileOrNull, pathExists } from
 import { GLOBAL_GUIDE_BODY } from '../utils/ai-guide.js';
 import { versionStamp } from './stamp.js';
 // STATIC: the lazy require this replaced was documented as breaking a circular
-// dependency, but domains.ts imports nothing from here — there is no cycle to
+// dependency, but the topology imports nothing from here — there is no cycle to
 // break, and the lazy form does not resolve once the module is bundled.
-import { resolveDomains } from './domains.js';
+//
+// Through the Repository facade, not ./domains.js: the registry is a member of
+// topology_repository, and a consumer that names the member instead of the
+// facade is why the pair needed one.
+import { resolve as resolveDomains } from './topology.js';
 import { projectConfigRepository } from '../config/project-config.js';
 
 // ---------------------------------------------------------------------------
@@ -110,9 +114,9 @@ export function renderDomainsDoc(): string {
  */
 export function renderWaironGuide(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { resolveDomains } = require('./domains.js') as typeof import('./domains.js');
+  const { resolve } = require('./topology.js') as typeof import('./topology.js');
 
-  const domains = resolveDomains();
+  const domains = resolve();
 
   let projectName = 'this project';
   try {

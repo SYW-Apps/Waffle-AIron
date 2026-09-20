@@ -47,7 +47,10 @@ import * as specsModule from '../core/specs.js';
 import * as pathsModule from '../config/paths.js';
 import * as validationModule from '../core/validation.js';
 import * as provisionModule from '../core/provision.js';
-import { resolveDomains } from '../core/domains.js';
+// Through the core Portal, like every other sdd_core call this server makes —
+// ../core/domains.js is a member of the topology Repository, and naming it here
+// reached two subsystems deep for a read the Portal already publishes.
+import { resolveDomains } from '../core/index.js';
 // The gated authoring seam — shared by every access path (see core/authoring.ts).
 // Statically imported for the same reason as the core adapters below: it reads
 // the request-scoped project root at CALL time.

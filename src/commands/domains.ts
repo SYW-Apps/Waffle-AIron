@@ -4,13 +4,16 @@ import { logger } from '../utils/logger.js';
 import { fromProjectRoot } from '../utils/fs.js';
 import { filteredCheckbox } from '../utils/filteredCheckbox.js';
 import { assertProjectInitialized } from '../config/paths.js';
-import { detectDomainCandidates } from '../core/detection.js';
+// Every sdd_core call goes through cli_core_adapter, never a core module
+// directly: these four used to be imported from ../core/domains.js and
+// ../core/detection.js, which is sdd_cli reaching past the Portal that
+// publishes them.
 import {
   resolveDomains,
-  addFreeStandingDomain,
-  removeFreeStandingDomain,
-  findDomain,
-} from '../core/domains.js';
+  addDomain,
+  removeDomain,
+  detectDomainCandidates,
+} from './subsystem.js';
 import { Domain, DomainSchema } from '../models/domain.js';
 
 // ---------------------------------------------------------------------------
@@ -20,6 +23,25 @@ import { Domain, DomainSchema } from '../models/domain.js';
 //   - subsystem-derived (boundTo set) — read-only, from the spec tree
 //   - free-standing — authored in .wai/topology.yaml (scan / add / remove)
 // ---------------------------------------------------------------------------
+
+/** What `wairon domains scan` was asked to do: propose, or propose and register. */
+export interface DomainsScanOptions {
+  /** Register every untracked candidate rather than only listing them. */
+  add?: boolean;
+}
+
+/**
+ * What `wairon domains add` was given. Both fields are optional because either
+ * can be derived from the other — an id from a path, a path from an id — and the
+ * id travels INSIDE the options rather than as a positional argument, because
+ * neither of the two is the one the command is really about.
+ */
+export interface DomainsAddOptions {
+  /** The directory the domain owns, relative to the project root. */
+  path?: string;
+  /** The id to register it under; derived from the path when omitted. */
+  id?: string;
+}
 
 // ---- list ------------------------------------------------------------------
 
@@ -55,7 +77,7 @@ function printDomain(domain: Domain): void {
 
 // ---- scan ------------------------------------------------------------------
 
-export async function runDomainsScan(options: { add?: boolean } = {}): Promise<void> {
+export async function runDomainsScan(options: DomainsScanOptions = {}): Promise<void> {
   assertProjectInitialized();
   const projectRoot = fromProjectRoot();
   const existing = resolveDomains();
@@ -113,7 +135,7 @@ export async function runDomainsScan(options: { add?: boolean } = {}): Promise<v
     });
 
     try {
-      addFreeStandingDomain(domain);
+      addDomain(domain);
       logger.success(`Added free-standing domain: ${domain.id} (${candidate.path})`);
       added++;
     } catch (err: unknown) {
@@ -130,7 +152,7 @@ export async function runDomainsScan(options: { add?: boolean } = {}): Promise<v
 
 // ---- add (manual) ----------------------------------------------------------
 
-export async function runDomainsAdd(options: { path?: string; id?: string } = {}): Promise<void> {
+export async function runDomainsAdd(options: DomainsAddOptions = {}): Promise<void> {
   assertProjectInitialized();
 
   const { domainId, domainName, domainPath, ownedPathsRaw } = await inquirer.prompt<{
@@ -177,7 +199,7 @@ export async function runDomainsAdd(options: { path?: string; id?: string } = {}
     ownedPaths,
   });
 
-  addFreeStandingDomain(domain);
+  addDomain(domain);
 
   logger.success(`Free-standing domain "${domain.id}" added to .wai/topology.yaml.`);
   logger.info('Run `wairon generate` to produce its owner agent.');
@@ -188,7 +210,10 @@ export async function runDomainsAdd(options: { path?: string; id?: string } = {}
 export async function runDomainsRemove(id: string): Promise<void> {
   assertProjectInitialized();
 
-  const domain = findDomain(id);
+  // One read, not a second lookup published beside it: `findDomain` on the
+  // adapter would answer a subset of what `resolveDomains` already answers, and
+  // two spellings of "which domains are there" eventually disagree.
+  const domain = resolveDomains().find((d) => d.id === id);
   if (!domain) {
     logger.error(`Domain "${id}" not found.`);
     process.exit(1);
@@ -214,6 +239,6 @@ export async function runDomainsRemove(id: string): Promise<void> {
     return;
   }
 
-  removeFreeStandingDomain(id);
+  removeDomain(id);
   logger.success(`Domain "${id}" removed. Run \`wairon generate\` to refresh agent files.`);
 }
