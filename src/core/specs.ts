@@ -9,7 +9,7 @@ import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile } from '../utils/yaml.js';
-import { listSpecFiles, readSpecFile, writeSpecFile } from './spec-files.js';
+import { listSpecFiles, readSpecFile, remove, writeSpecFile } from './spec-files.js';
 // TYPE-ONLY, and it has to be: the report NAMES the tests a write invalidated,
 // while the search that finds them belongs to the validator. A runtime import
 // here would be the store reaching into the rule engine that already reads it
@@ -689,19 +689,6 @@ function moveComponentFolder(fromDir: string, toDir: string): boolean {
   ensureDir(path.dirname(toDir));
   fs.renameSync(fromDir, toDir);
   return true;
-}
-
-/** Helper to clean up empty parent directories up to the given specs root. */
-function cleanEmptyDirs(filePath: string, specsRoot: string): void {
-  let dir = path.dirname(filePath);
-  while (dir !== specsRoot && dir.startsWith(specsRoot)) {
-    if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) {
-      fs.rmdirSync(dir);
-      dir = path.dirname(dir);
-    } else {
-      break;
-    }
-  }
 }
 
 /**
@@ -2292,9 +2279,7 @@ export class SpecWorkspace {
 
   deleteSubsystemSpec(id: string): boolean {
     const p = this.getSubsystemPath(id);
-    if (!fs.existsSync(p)) return false;
-    fs.unlinkSync(p);
-    cleanEmptyDirs(p, path.resolve(this.paths.specsDir()));
+    if (!remove(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
@@ -2380,9 +2365,7 @@ export class SpecWorkspace {
 
   deleteComponentSpec(id: string): boolean {
     const p = this.getComponentPath(id);
-    if (!fs.existsSync(p)) return false;
-    fs.unlinkSync(p);
-    cleanEmptyDirs(p, path.resolve(this.paths.specsDir()));
+    if (!remove(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
@@ -2529,9 +2512,7 @@ export class SpecWorkspace {
 
   deleteInterfaceSpec(id: string): boolean {
     const p = this.getInterfacePath(id);
-    if (!fs.existsSync(p)) return false;
-    fs.unlinkSync(p);
-    cleanEmptyDirs(p, path.resolve(this.paths.specsDir()));
+    if (!remove(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
@@ -2596,9 +2577,7 @@ export class SpecWorkspace {
 
   deleteImplementationSpec(id: string): boolean {
     const p = this.getImplementationPath(id);
-    if (!fs.existsSync(p)) return false;
-    fs.unlinkSync(p);
-    cleanEmptyDirs(p, path.resolve(this.paths.specsDir()));
+    if (!remove(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
@@ -2664,9 +2643,7 @@ export class SpecWorkspace {
   deleteTypeSpec(id: string): boolean {
     const spec = this.loadTypeSpec(id);
     const p = this.getTypePath(id, spec?.subsystem, spec?.group);
-    if (!fs.existsSync(p)) return false;
-    fs.unlinkSync(p);
-    cleanEmptyDirs(p, path.resolve(this.paths.specsDir()));
+    if (!remove(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }
@@ -2700,9 +2677,7 @@ export class SpecWorkspace {
 
   deleteGroupSpec(id: string): boolean {
     const p = this.getGroupPath(id);
-    if (!fs.existsSync(p)) return false;
-    fs.unlinkSync(p);
-    cleanEmptyDirs(p, path.resolve(this.paths.specsDir()));
+    if (!remove(p, this.paths.specsDir())) return false;
     invalidateSpecCache();
     return true;
   }

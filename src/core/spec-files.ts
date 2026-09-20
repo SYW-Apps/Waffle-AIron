@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 
@@ -13,10 +15,10 @@ import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 // utility modules whole and made nineteen unrelated importers read as
 // consumers of a Repository-private Store.
 //
-// So the store is these three functions and nothing else: every read, write
-// and walk of a spec document goes through here, and the format — YAML, with
-// `.yaml` on disk — is chosen here once. Callers above this line address spec
-// documents by path; callers below it know nothing about specs.
+// So the store is these four functions and nothing else: every read, write,
+// walk and DELETE of a spec document goes through here, and the format — YAML,
+// with `.yaml` on disk — is chosen here once. Callers above this line address
+// spec documents by path; callers below it know nothing about specs.
 //
 // Path resolution is deliberately NOT here. A spec path is resolved by the
 // caller (AI_PATHS / aiPathsAt), because the store reads spec documents out of
@@ -49,4 +51,32 @@ export function writeSpecFile(filePath: string, document: unknown): void {
  */
 export function listSpecFiles(specsDir: string): string[] {
   return listFilesRecursive(specsDir, SPEC_FILE_EXTENSION);
+}
+
+/**
+ * Delete the spec document at `filePath` and prune the parent directories the
+ * deletion emptied, stopping at `specsRoot` so the root itself survives an
+ * emptied tree. Answers false when there was no document there, so a caller can
+ * tell "deleted" from "was never there" without a second existence check.
+ *
+ * `specsRoot` is a parameter for the same reason a path is: the store is
+ * PATH-ADDRESSED, not root-bound, and the specs directory is configurable
+ * (`paths.specsDir`), so the boundary cannot be derived from the path and the
+ * store is the one component that must never read project.yaml to find it.
+ */
+export function remove(filePath: string, specsRoot: string): boolean {
+  if (!fs.existsSync(filePath)) return false;
+  fs.unlinkSync(filePath);
+  pruneEmptyDirs(path.dirname(filePath), path.resolve(specsRoot));
+  return true;
+}
+
+/** Remove each empty directory from `dir` upward, stopping before `specsRoot`. */
+function pruneEmptyDirs(dir: string, specsRoot: string): void {
+  let at = dir;
+  while (at !== specsRoot && at.startsWith(specsRoot)) {
+    if (!fs.existsSync(at) || fs.readdirSync(at).length > 0) return;
+    fs.rmdirSync(at);
+    at = path.dirname(at);
+  }
 }
