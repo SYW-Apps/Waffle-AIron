@@ -1,0 +1,65 @@
+id: topology_store_impl
+name: Topology Store Implementation
+description: >-
+  src/config/loader.ts, after the path helpers move out to src/config/paths.ts. One job: read and
+  write the topology this project holds. It resolves its file locations through the shared path
+  helper, which belongs to no component — so that resolution is a local step, not a call across a
+  boundary.
+contract: itopology_store
+sourcePath: src/config/loader.ts
+methods:
+  - name: loadRegistry
+    narrative:
+      - stepNumber: 1
+        description: Resolve where the registry lives under the bound root, through the shared path helper
+        type: local
+      - stepNumber: 2
+        description: Decide whether this project holds one
+        type: branch
+        condition: the spec tree's system file is absent
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Answer an empty registry — an uninitialized project is a state a bootstrap command has to
+          be able to ask about, not a failure to catch
+        type: return
+        outcome: empty
+      - stepNumber: 4
+        description: Derive the agents from the spec tree and answer with them
+        type: return
+        outcome: loaded
+    symbol: loadRegistry
+  - name: loadConfig
+    narrative:
+      - stepNumber: 1
+        description: Resolve where the topology configuration lives, through the shared path helper
+        type: local
+      - stepNumber: 2
+        description: Decide whether one is there
+        type: branch
+        condition: the file is absent
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer an empty configuration
+        type: return
+        outcome: empty
+      - stepNumber: 4
+        description: Read and parse it, answering what it holds
+        type: return
+        outcome: loaded
+    symbol: loadTopologyConfig
+  - name: saveConfig
+    narrative:
+      - stepNumber: 1
+        description: Resolve where it belongs, through the shared path helper
+        type: local
+      - stepNumber: 2
+        description: Create the wairon directory if the project has not held one, then write the configuration
+        type: return
+        outcome: saved
+    symbol: saveTopologyConfig
+status: complete
+createdAt: '2026-09-20T20:40:41.586Z'
+updatedAt: '2026-09-20T21:01:42.860Z'

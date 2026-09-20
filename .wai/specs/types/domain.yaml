@@ -1,0 +1,40 @@
+kind: value-object
+id: domain
+name: Domain
+description: >-
+  A scoped area of a repository with its own agents — a package, a service, a sub-project. Domains
+  are a superset of subsystems: one usually binds to a subsystem in the spec tree, but a domain can
+  stand free where a repository has an area the design does not model as a subsystem, which is why
+  `boundTo` is optional rather than required.
+fields:
+  - name: id
+    type: string
+    description: Unique within the project; lowercase alphanumeric with dashes or underscores.
+    optional: false
+  - name: name
+    type: string
+    description: Display name.
+    optional: true
+  - name: description
+    type: string
+    description: What this domain is responsible for.
+    optional: true
+  - name: boundTo
+    type: string
+    description: >-
+      The spec node it binds to — a subsystem id in the common case, or a component id. Omitted
+      means the domain is free-standing, which is what makes domains a superset of subsystems rather
+      than a view of them.
+    optional: true
+  - name: ownedPaths
+    type: string[]
+    description: Glob patterns the domain's agents are responsible for.
+    optional: true
+  - name: path
+    type: string
+    description: The domain's directory, relative to the project root.
+    optional: true
+methods: []
+sourcePath: src/models/domain.ts
+createdAt: '2026-09-20T20:42:00.586Z'
+updatedAt: '2026-09-20T20:42:00.595Z'

@@ -1,0 +1,43 @@
+id: itopology_store
+name: Topology Store Interface
+description: >-
+  Reading and writing the agent topology a project holds. Read-through on every access: two callers
+  reading in one command must see the same bytes the disk holds, and a cached registry is how a
+  generate run writes agent files for a topology that changed underneath it. An absent file reads as
+  empty rather than throwing — an uninitialized project is a state, not a failure.
+component: topology_store
+methods:
+  - name: loadRegistry
+    description: >-
+      The agents this project declares, as the registry file holds them. An empty registry when the
+      project has none, so a caller can bootstrap without catching.
+    signature: 'loadRegistry(): Registry'
+    returns: Registry
+    params: []
+    guarantees:
+      - idempotent
+    effect: read
+  - name: loadConfig
+    description: >-
+      The topology configuration beside the registry — the domains and their roots. An empty
+      configuration when the project has none.
+    signature: 'loadConfig(): TopologyConfig'
+    returns: TopologyConfig
+    params: []
+    guarantees:
+      - idempotent
+    effect: read
+  - name: saveConfig
+    description: >-
+      Write the topology configuration back, creating its directory when the project has not held
+      one before.
+    signature: 'saveConfig(config: TopologyConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: TopologyConfig
+        description: The configuration to persist
+    effect: write
+status: complete
+createdAt: '2026-09-20T20:40:21.029Z'
+updatedAt: '2026-09-20T20:42:10.048Z'
