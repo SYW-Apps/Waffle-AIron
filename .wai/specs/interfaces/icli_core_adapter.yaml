@@ -179,6 +179,39 @@ methods:
       - name: format
         type: string
         description: canvas, mermaid, drawio or excalidraw
+  - name: generateAll
+    description: >-
+      Calls generateAll on core portal: write every agent's file for every configured target. The
+      CLI reaches generation through here rather than importing the exporters module, which is
+      another subsystem's.
+    signature: >-
+      generateAll(agents: AgentRecord[], config: ProjectConfig, options?: GenerateOptions):
+      GenerateSummary[]
+    returns: GenerateSummary[]
+    params:
+      - name: agents
+        type: AgentRecord[]
+        description: Every agent to write
+      - name: config
+        type: ProjectConfig
+        description: The project's configuration
+      - name: options
+        type: GenerateOptions
+        description: What this run may vary
+        optional: true
+  - name: resolveExpectedOutputPaths
+    description: >-
+      Calls resolveExpectedOutputPaths on core portal: which files a generate run would own, without
+      writing any.
+    signature: 'resolveExpectedOutputPaths(agents: AgentRecord[], config: ProjectConfig): Set<string>'
+    returns: Set<string>
+    params:
+      - name: agents
+        type: AgentRecord[]
+        description: The agents whose outputs to enumerate
+      - name: config
+        type: ProjectConfig
+        description: The project's configuration
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T16:42:31.028Z'
+updatedAt: '2026-09-20T19:49:34.485Z'

@@ -62,61 +62,70 @@ methods:
         description: Did the spec tree resolve any agent?
         type: branch
         condition: at least one agent resolved from the spec tree
-        onFalseStep: 8
+        onFalseStep: 9
       - stepNumber: 4
         description: >-
           Generate the agent outputs for the configured target engines when agent files are
-          materialized, and prune stale managed agent files against the full resolved topology (also
-          under a domain scope)
-        type: local
+          materialized
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: generateAll
       - stepNumber: 5
+        description: >-
+          Ask which files a generate run owns, so stale managed agent files can be pruned against
+          the full resolved topology (also under a domain scope) without deleting something wairon
+          never wrote
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveExpectedOutputPaths
+      - stepNumber: 6
         description: Re-export the SDD skills when the spec tree exists
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Re-inject the local AI guides for the configuration's active targets
           (project_config.activeTargetTypes)
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Continue with the cascade
         type: jump
-        toStep: 9
-      - stepNumber: 8
+        toStep: 10
+      - stepNumber: 9
         description: 'Warn that no agent resolved from the spec tree: define subsystems and components first'
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Is the cascade off for this run?
         type: branch
         condition: the run is scoped to a domain or root, a dry run, or --no-recurse
-        onFalseStep: 11
-      - stepNumber: 10
+        onFalseStep: 12
+      - stepNumber: 11
         description: Stop after this layer
         type: return
         outcome: this layer generated
-      - stepNumber: 11
+      - stepNumber: 12
         description: List this project's direct chained subprojects
         type: call
         targetComponent: cli_core_adapter
         targetMethod: listDirectChainedSubprojects
-      - stepNumber: 12
+      - stepNumber: 13
         description: Generate each subproject's layer in its own root
         type: loop
         loopKind: forEach
         over: each direct chained subproject
-        endStep: 14
-      - stepNumber: 13
+        endStep: 15
+      - stepNumber: 14
         description: Complete the subproject's bootstrap without overwriting it
         type: call
         targetComponent: cli_core_adapter
         targetMethod: ensureProjectInitialized
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Generate the subproject's layer and its own subprojects by running this command bound to
           the subproject root
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: Every layer is generated
         type: return
         outcome: every layer generated
@@ -1522,4 +1531,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T16:42:39.240Z'
+updatedAt: '2026-09-20T19:49:58.205Z'

@@ -23,7 +23,10 @@ import {
   listDirectChainedSubprojects as coreListDirectChainedSubprojects,
   defaultPackSelections as coreDefaultPackSelections,
   renderDiagram as coreRenderDiagram,
+  generateAll as coreGenerateAll,
+  resolveExpectedOutputPaths as coreResolveExpectedOutputPaths,
 } from '../core/index.js';
+import type { GenerateOptions, GenerateSummary } from '../core/index.js';
 import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
 import type { ForeignFieldRepair, SpecialistRetirement, TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
 import type {
@@ -184,6 +187,32 @@ export {
   loadSpecGraph,
   buildCanvasDataModel,
 } from '../core/index.js';
+
+// cli_core_adapter.generateAll / resolveExpectedOutputPaths — 1:1 forwards to
+// the core portal: write every agent's file for every configured target, and
+// say which paths such a run would own without writing any of them.
+//
+// `wairon generate` used to call both straight out of ../exporters/generate.js
+// — sdd_cli reaching into an sdd_core module, past the Portal that publishes
+// exactly these two calls. It is the fifth time that crossing has been found in
+// two days (movedChildren, diffSize, settledSpecPaths and the four modules
+// `wairon diagram` built its artifacts out of were the first four), and it
+// closes the way it always does: here, on the one component whose whole job is
+// to cross into sdd_core.
+export function generateAll(
+  agents: AgentRecord[],
+  config: ProjectConfig,
+  options?: GenerateOptions,
+): GenerateSummary[] {
+  return coreGenerateAll(agents, config, options);
+}
+
+export function resolveExpectedOutputPaths(
+  agents: AgentRecord[],
+  config: ProjectConfig,
+): Set<string> {
+  return coreResolveExpectedOutputPaths(agents, config);
+}
 
 interface SubsystemAddOptions {
   projectPath?: string;

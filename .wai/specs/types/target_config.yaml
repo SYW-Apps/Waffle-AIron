@@ -1,0 +1,28 @@
+kind: value-object
+id: target_config
+name: TargetConfig
+description: >-
+  One place a project wants its agent files written. Either a built-in target naming a tool wairon
+  ships an exporter for, or a custom one naming a directory and file shape for a tool it does not.
+  `enabled` exists so a target can be turned off without being deleted — a project that stops using
+  a tool usually wants the configuration back later, and deleting it loses the output directory it
+  was writing to.
+fields:
+  - name: type
+    type: string
+    description: >-
+      The tool this target writes for: claude, gemini, agy, cursor, copilot or codex for a built-in,
+      or the custom target's own name.
+    optional: false
+  - name: outputDir
+    type: string
+    description: Where the generated files land, relative to the project root.
+    optional: false
+  - name: enabled
+    type: boolean
+    description: Whether this target is written on a generate run; true unless the project says otherwise.
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-20T19:47:35.866Z'
+updatedAt: '2026-09-20T19:47:35.878Z'

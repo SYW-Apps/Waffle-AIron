@@ -1,0 +1,19 @@
+id: gemini_exporter
+name: Gemini Agent File Exporter
+description: >-
+  Writes an agent's file in the format Gemini's CLI reads. Serves the `gemini` and `agy` targets,
+  which are the same tool under two names.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn: []
+lint:
+  allow:
+    - code: UNUSED_COMPONENT
+      reason: >-
+        Reached polymorphically through `exporter_resolver.getExporter`, same seam as
+        claude_exporter. No call step can name which exporter a given target resolves to; that is
+        what makes adding a target a new Adapter rather than a change to the generator.
+status: complete
+createdAt: '2026-09-20T19:45:10.345Z'
+updatedAt: '2026-09-20T19:50:54.002Z'

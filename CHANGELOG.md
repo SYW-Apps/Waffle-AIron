@@ -26,6 +26,53 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### `wairon generate` asks for the agent files instead of writing them itself
+
+The fifth instance of the same crossing in two days, and the smallest.
+`src/commands/generate.ts` imported `generateAll` and
+`resolveExpectedOutputPaths` out of `../exporters/generate.js` — sdd_cli
+reaching into an sdd_core module — while `core_portal` publishes both calls and
+`cli_core_adapter` exists to make that hop once. `movedChildren`, `diffSize`
+and `settledSpecPaths` out of `./approval.js`, and the four core modules
+`wairon diagram` built its artifacts out of, were the first four.
+
+`cli_core_adapter` now realizes `generateAll` and `resolveExpectedOutputPaths`,
+the core Portal republishes the generator by identity, and the command keeps
+what a command is for: which agents are in scope, when to prune, and what to
+say about it afterwards. The files it writes are the same files.
+
+**The path enumeration travels with the write.** `resolveExpectedOutputPaths`
+renders nothing and touches no file, and `generate` needs it *before* it
+decides to render anything: it is how a reconcile knows which files under a
+target directory are wairon's own, and pruning one that is not is destroying
+somebody else's work. A caller that can be handed a summary from the Portal has
+to be able to ask it for the paths too, or it is back to importing the module.
+
+**The barrel now points at a module that points back.**
+`src/exporters/generate.ts` takes `loadTemplate` and `composeAgentBrief` from
+`../core/index.js`, so republishing it from that barrel closes a loop — inside
+sdd_core, between a Portal and a component it already declares as a dependency.
+Both halves are function declarations used at call time and neither runs
+anything at module scope, so the cycle is inert. It is written down because a
+loop that works is the kind that gets discovered by something unrelated
+breaking.
+
+**Two things found, and deliberately left.** `registerExporter` — the plugin
+seam on `src/exporters/registry.ts` — is called by nothing in `src` or in the
+tests; it stays exported and stays unwired, because whether that seam is a plan
+or a leftover is not this change's call to make. And `generateAgent` is on no
+contract: nothing outside its own module calls it, so it is the generator's
+internal step rather than a published method, and it stays exported in code and
+absent from the surface.
+
+**The assertion a type-check cannot make.** `../exporters/generate.js` and
+`./subsystem.js` both compile, so the only thing that says which side of the
+boundary the command is on is the import SITE.
+`tests/commands/generate-boundary.test.ts` reads it as a literal line — not a
+pattern; an escaped regex has quietly matched nothing here three times — beside
+the behaviour tests that prove the adapter answers what the generator answers,
+and that a real `generate` run writes exactly the set the adapter says it owns.
+
 ### `wairon diagram` asks for an artifact instead of assembling one
 
 The fourth instance of the same crossing in two days, and the largest.

@@ -3,14 +3,18 @@ import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, AI_PATHS } from '../config/loader.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
+// Every sdd_core call goes through the core adapter, never a core module
+// directly — generation included: generateAll and resolveExpectedOutputPaths
+// came straight out of ../exporters/generate.js until this import moved.
 import {
   loadProjectConfig,
   resolveAgentTopology,
   listDirectChainedSubprojects,
   ensureProjectInitialized,
+  generateAll,
+  resolveExpectedOutputPaths,
 } from './subsystem.js';
 import { exportSddSkills } from './skills.js';
-import { generateAll, resolveExpectedOutputPaths } from '../exporters/generate.js';
 import { WAIRON_MANAGED_MARKER } from '../exporters/base.js';
 import { hasContext, syncContextFiles } from '../core/context.js';
 import { getProjectRoot, runWithProjectRoot, pathExists } from '../utils/fs.js';

@@ -33,6 +33,24 @@ export { loadProjectExtensions } from './extensions.js';
 // conformance check.
 export { composeAgentBrief } from './agent_resolver.js';
 
+// Agent FILE generation (icore_portal generateAll / resolveExpectedOutputPaths)
+// — pure 1:1 forwards to the agent file generator, published here because
+// `wairon generate` is an sdd_cli command and the generator is an sdd_core
+// component: the command importing ../exporters/generate.js directly is exactly
+// the crossing this Portal exists to prevent. That reach has now been found
+// five times in two days — movedChildren, diffSize and settledSpecPaths out of
+// ./approval.js, and the four core modules `wairon diagram` was building its
+// artifacts out of, were the first four — and it closes the same way every
+// time: the boundary is crossed HERE, once, by identity.
+//
+// The path enumeration is published beside the write for the reason the
+// contract separates them: `generate` needs to know which files it owns before
+// it decides to render anything, and a caller that can be handed a summary from
+// here must be able to ask for the paths from here, or it is back to importing
+// the module.
+export { generateAll, resolveExpectedOutputPaths } from '../exporters/generate.js';
+export type { GenerateOptions, GenerateSummary } from '../exporters/generate.js';
+
 // Spec-tree transfer (icore_portal exportSpecTree / importSpecTree) — pure 1:1
 // forwards to the tree transfer orchestrator, stated explicitly for the same
 // anchored conformance check.

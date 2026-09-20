@@ -1,0 +1,46 @@
+id: gemini_exporter_impl
+name: Gemini Agent File Exporter Implementation
+description: >-
+  src/exporters/gemini.ts. Serves the `gemini` and `agy` targets, which are one tool under two
+  names.
+contract: igemini_exporter
+sourcePath: src/exporters/gemini.ts
+methods:
+  - name: export
+    narrative:
+      - stepNumber: 1
+        description: Resolve where this target's file belongs
+        type: local
+      - stepNumber: 2
+        description: >-
+          Compose the file in Gemini's shape, carrying the wairon-managed banner so it is
+          recognisable as generated, then the rendered instructions
+        type: local
+      - stepNumber: 3
+        description: Decide whether anything needs writing
+        type: branch
+        condition: the file already holds exactly this content
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Leave it alone and answer unchanged
+        type: return
+        outcome: unchanged
+      - stepNumber: 5
+        description: Create the parent directory if needed and write the file
+        type: local
+      - stepNumber: 6
+        description: Answer with where it landed and what it holds
+        type: return
+        outcome: written
+  - name: outputPath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the target's output directory against the project root and name the file for the
+          agent, without rendering or writing anything
+        type: return
+        outcome: resolved
+status: complete
+createdAt: '2026-09-20T19:46:19.734Z'
+updatedAt: '2026-09-20T19:46:19.742Z'

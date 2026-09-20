@@ -1,0 +1,24 @@
+id: iexporter_resolver
+name: Exporter Resolver Interface
+description: >-
+  One question: which exporter serves this target. Answering it is the only thing that knows the
+  seven-names-to-three-formats mapping, so adding a target is an entry here and a new Adapter, and
+  nothing in the generator changes.
+component: exporter_resolver
+methods:
+  - name: getExporter
+    description: >-
+      The exporter that serves the given target, whether the target is named as a bare string or as
+      a configuration object. Refuses an unknown target by name rather than falling back to a
+      default — writing one tool's format into another tool's path is worse than writing nothing.
+    signature: 'getExporter(target: TargetConfig): Exporter'
+    returns: Exporter
+    params:
+      - name: target
+        type: TargetConfig
+        description: The configured target, as a name or as an object carrying one
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T19:45:51.195Z'
+updatedAt: '2026-09-20T19:45:51.206Z'

@@ -11,7 +11,8 @@ dependsOn:
   - tree_transfer_orchestrator
   - project_config_repository
   - approval_comparison
+  - agent_file_generator
 portalType: Custom
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T15:21:17.276Z'
+updatedAt: '2026-09-20T19:49:28.135Z'
