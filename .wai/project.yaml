@@ -188,7 +188,8 @@ rules:
             spec: authoring_orchestrator_impl
             at: 'updateSpecGated'
             covers:
-              - '2:authoring_core_adapter.updateSpec'
+              - '3:authoring_core_adapter.updateSpec'
+              - '5:authoring_validator_adapter.findTestsReferencing'
           - code: CALL_STEP_UNREALIZED
             spec: cli_host_adapter_impl
             at: 'createProject'
@@ -421,6 +422,11 @@ rules:
           - code: UNDECLARED_COLOCATED_CALL
             spec: authoring_portal_impl
             at: 'addComponent'
+            covers:
+              - 'authoring_core_adapter.loadProjectConfig'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: authoring_portal_impl
+            at: 'updateSpecGated'
             covers:
               - 'authoring_core_adapter.loadProjectConfig'
           - code: UNDECLARED_COLOCATED_CALL

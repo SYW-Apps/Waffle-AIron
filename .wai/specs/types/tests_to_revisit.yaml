@@ -24,8 +24,10 @@ fields:
   - name: imported
     type: string[]
     description: >-
-      Test files that import that symbol from the module the implementation names. The
-      high-confidence list: an import is a binding, not a coincidence.
+      Test files that import that name. The high-confidence list: an import is a binding, not a
+      coincidence. Matched by name alone — the search is not given the module the implementation
+      names, so a same-named import from elsewhere counts. Both sides of a renamed import are
+      searched.
     optional: false
   - name: mentioned
     type: string[]
@@ -36,11 +38,13 @@ fields:
   - name: indiscriminate
     type: boolean
     description: >-
-      True when the bare name matched more than a tenth of the test files, so mentioning it carries
-      no signal and `mentioned` was withheld. Saying the name is too common is an answer; listing
-      187 files is not.
+      True when the bare name matched more than a tenth of the walked test files, so mentioning it
+      carries no signal and `mentioned` was withheld. Saying the name is too common is an answer;
+      listing 187 files is not. The threshold is a proportion with no floor, so on a suite of ten
+      files or fewer every mention is withheld — the mention half is a large-suite instrument by
+      construction, and the `imported` list is never withheld.
     optional: false
 methods: []
 sourcePath: src/core/source-analysis.ts
 createdAt: '2026-09-20T13:25:41.354Z'
-updatedAt: '2026-09-20T13:25:41.366Z'
+updatedAt: '2026-09-20T14:03:57.354Z'

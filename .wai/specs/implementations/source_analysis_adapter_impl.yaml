@@ -119,10 +119,13 @@ methods:
         type: local
       - stepNumber: 7
         description: >-
-          Answer with one entry per method, carrying the imported and mentioned lists and why a list
-          was withheld
+          Answer with one entry per method that any test names, carrying the imported and mentioned
+          lists and why a list was withheld. A method nothing references contributes no entry — an
+          entry whose every list is empty is not an answer, and the report field it feeds promises
+          to be empty when nothing references them. A withheld mention list still counts as naming,
+          because saying the name is too common IS the answer
         type: return
         outcome: found
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-09-20T13:27:00.427Z'
+updatedAt: '2026-09-20T14:04:01.606Z'

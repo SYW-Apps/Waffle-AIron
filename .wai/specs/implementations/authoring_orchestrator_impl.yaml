@@ -80,7 +80,11 @@ methods:
         description: >-
           Find the tests that encode those methods, so the write that creates the collision is the
           one that reports it — a spec pass that changes a contract and says nothing is how a brief
-          comes to promise green tests it has already broken
+          comes to promise green tests it has already broken. The method names come from the change
+          report's own paths, which covers a rewrite and a removal alike, and a `symbol` is taken
+          from the delta when it carries one: a method whose symbol was set by an earlier write and
+          not restated is searched by its contract name, because the report does not carry the
+          merged spec to read it back from
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
@@ -123,4 +127,4 @@ methods:
         outcome: reported
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-09-20T13:27:18.838Z'
+updatedAt: '2026-09-20T14:04:07.952Z'
