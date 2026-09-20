@@ -95,8 +95,6 @@ rules:
       - src/config/defaults.ts
       - src/config/loader.ts
       - src/config/userconfig.ts
-      - src/core/approval.ts
-      - src/core/approver.ts
       - src/core/budget_policy.ts
       - src/core/canvas-layout.ts
       - src/core/canvas.ts

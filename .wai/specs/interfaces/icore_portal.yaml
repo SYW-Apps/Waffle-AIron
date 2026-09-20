@@ -199,14 +199,19 @@ methods:
         type: tree_import_options
   - name: currentChildPins
     description: >-
-      The approved StateId of every chained child mounted under this root, keyed by mount id. A
-      child with no approval of its own contributes no pin — a parent can only record a decision the
-      child's owner actually made.
-    signature: 'currentChildPins(mounts: SubsystemSpec[]): Record<string, string>'
+      The approved StateId of every chained child mounted under this root, keyed by mount id — what
+      an approval records so a later check can tell whether a child moved. A child with no approval
+      of its own contributes no entry.
+    signature: 'currentChildPins(mounts: SubsystemSpec[], root?: string): Record<string, string>'
     returns: Record<string, string>
     params:
       - name: mounts
         type: SubsystemSpec[]
+        description: The subsystem specs whose projectPath mounts a chained child
+      - name: root
+        type: string
+        description: The parent project root; the bound project when omitted
+        optional: true
   - name: captureApprovedSpecs
     description: >-
       Capture the CURRENT spec tree as approved: one content digest per spec file, keyed by path
@@ -569,6 +574,44 @@ methods:
       - name: id
         type: string
         description: The type id
+  - name: diffAgainstApproval
+    description: >-
+      What differs between this tree and the approval on record: which specs were added, changed or
+      removed, and which are untouched. Null when the project was never approved — a different
+      answer from approved and drifted.
+    signature: 'diffAgainstApproval(root?: string): ApprovalDiff | null'
+    returns: ApprovalDiff | null
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+  - name: approvalRecord
+    description: The approval record this project carries, or null when it has none.
+    signature: 'approvalRecord(root?: string): LockRecord | null'
+    returns: LockRecord | null
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+  - name: movedChildren
+    description: >-
+      Which chained children sit at a different pin than the approval recorded, each with the pin it
+      was approved at and the pin it is at now — null when the child no longer has an approval of
+      its own. Published here for the same reason the rest of the approval surface is: the local
+      lock and the hosted admin plane both approve through this Portal, and a caller reaching past
+      it into the approval module crosses a subsystem boundary the architecture does not allow.
+    signature: 'movedChildren(mounts: SubsystemSpec[], root?: string): ChildPinDrift[]'
+    returns: ChildPinDrift[]
+    params:
+      - name: root
+        type: string
+        description: The parent project root; the bound project when omitted
+        optional: true
+      - name: mounts
+        type: SubsystemSpec[]
+        description: The subsystem specs whose projectPath mounts a chained child
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T14:28:14.781Z'
+updatedAt: '2026-09-20T15:24:17.152Z'

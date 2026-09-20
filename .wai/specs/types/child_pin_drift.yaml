@@ -1,0 +1,25 @@
+kind: value-object
+id: child_pin_drift
+name: ChildPinDrift
+description: >-
+  One chained child that sits at a different pin than the approval recorded. Carries both pins
+  rather than a boolean, because a parent deciding whether to re-lock needs to see what it was
+  approved at and what it is now — and because `now` being absent is its own answer: the child no
+  longer has an approval of its own, which is a different problem from having moved.
+fields:
+  - name: id
+    type: string
+    description: The mount id — the parent subsystem the child is mounted as.
+    optional: false
+  - name: pinned
+    type: string
+    description: The pin the parent's approval recorded for this child.
+    optional: false
+  - name: now
+    type: string | null
+    description: The pin the child is at now, or null when the child no longer carries an approval of its own.
+    optional: false
+methods: []
+sourcePath: src/core/approval.ts
+createdAt: '2026-09-20T15:24:25.361Z'
+updatedAt: '2026-09-20T15:24:25.373Z'

@@ -1,0 +1,92 @@
+id: iapproval_comparison
+name: Approval Comparison Interface
+description: >-
+  The approval's arithmetic over a spec tree: what the tree digests to now, what the record says it
+  digested to when it was approved, and the difference. Every read defaults to the bound project
+  root, so a caller that has one tree passes nothing. Nothing here throws on an unapproved project —
+  a tree with no record answers null, because "never approved" and "approved and drifted" are
+  different answers and a caller has to tell them apart.
+component: approval_comparison
+methods:
+  - name: captureApprovedSpecs
+    description: Build the per-spec digest map to write into an approval record, for the tree as it stands.
+    signature: 'captureApprovedSpecs(root?: string): Record<string, string>'
+    returns: Record<string, string>
+    params:
+      - name: root
+        type: string
+        description: The project root being approved; the bound project when omitted
+        optional: true
+  - name: diffAgainstApproval
+    description: >-
+      What differs between the tree as it stands and the approval on record: which specs were added,
+      which changed, which were removed, and which are untouched. Null when the project has no
+      record at all — never approved is not the same as approved and drifted.
+    signature: 'diffAgainstApproval(root?: string): ApprovalDiff | null'
+    returns: ApprovalDiff | null
+    params:
+      - name: root
+        type: string
+        description: The project root to compare; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
+  - name: approvalRecord
+    description: The approval record this project carries, or null when it has none.
+    signature: 'approvalRecord(root?: string): LockRecord | null'
+    returns: LockRecord | null
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
+  - name: settledSpecPaths
+    description: >-
+      The spec paths the approval on record covers, as a set for membership tests. Null when there
+      is no record.
+    signature: 'settledSpecPaths(root?: string): Set<string> | null'
+    returns: Set<string> | null
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
+  - name: currentChildPins
+    description: >-
+      The approved StateId of every chained child mounted under this root, keyed by mount id. A
+      child with no approval of its own contributes no entry.
+    signature: 'currentChildPins(mounts: SubsystemSpec[], root?: string): Record<string, string>'
+    returns: Record<string, string>
+    params:
+      - name: root
+        type: string
+        description: The parent project root; the bound project when omitted
+        optional: true
+      - name: mounts
+        type: SubsystemSpec[]
+        description: The subsystem specs whose projectPath mounts a chained child
+  - name: movedChildren
+    description: >-
+      Which chained children sit at a different pin than the approval recorded, each with the pin it
+      was approved at and the pin it is at now. A parent's approval covers the children it mounted,
+      so a child that moved is drift the parent has to know about even when no spec file of the
+      parent changed.
+    signature: 'movedChildren(mounts: SubsystemSpec[], root?: string): ChildPinDrift[]'
+    returns: ChildPinDrift[]
+    params:
+      - name: root
+        type: string
+        description: The parent project root; the bound project when omitted
+        optional: true
+      - name: mounts
+        type: SubsystemSpec[]
+        description: The subsystem specs whose projectPath mounts a chained child
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T15:19:05.602Z'
+updatedAt: '2026-09-20T15:24:31.161Z'
