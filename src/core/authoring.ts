@@ -1,12 +1,13 @@
-import type { ComponentSpec } from '../models/specs.js';
+import type { ComponentSpec, MethodImplementation } from '../models/specs.js';
 import type { RulesConfig } from '../models/project.js';
 import {
   saveComponentSpec, updateSpec, moveMethods as coreMoveMethods,
   type MethodMoveReport, type SpecChangeReport, type SpecWriteHooks, type WritableSpecKind,
 } from './specs.js';
-import { validateComponentCandidate } from './validation.js';
+import { validateComponentCandidate, findTestsReferencing } from './validation.js';
 import { formatCandidateRefusal, type CandidateVerdict } from './rules/candidate.js';
 import { loadProjectConfig } from './index.js';
+import { getProjectRoot } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // The AUTHORING seam — gated spec writes, shared by every access path.
@@ -32,7 +33,12 @@ import { loadProjectConfig } from './index.js';
 // still be repaired.
 // ---------------------------------------------------------------------------
 
-/** The project's severity overrides, so `sddRuleSeverity` disarms a gate exactly as it disarms validate. */
+/**
+ * The project's configuration, as the settings a write is judged and reported
+ * with: the severity overrides (so `sddRuleSeverity` disarms a gate exactly as
+ * it disarms validate), the project type, and — through `rules.conformance` —
+ * the test roots a change report searches.
+ */
 function candidateOptions(): { rules?: RulesConfig; projectType?: string } {
   try {
     const config = loadProjectConfig();
@@ -57,11 +63,13 @@ function noticesFrom(verdict: CandidateVerdict): string[] {
  * resulting componentType, and it is the resulting componentType that decides
  * whether a field belongs.
  */
-export function componentCandidateGate(): SpecWriteHooks {
+export function componentCandidateGate(
+  options: { rules?: RulesConfig; projectType?: string } = candidateOptions(),
+): SpecWriteHooks {
   return {
     gate: (kind, merged) => {
       if (kind !== 'component') return;
-      const verdict = validateComponentCandidate(merged as ComponentSpec, candidateOptions());
+      const verdict = validateComponentCandidate(merged as ComponentSpec, options);
       if (verdict.errors.length) throw new Error(formatCandidateRefusal(verdict));
       return noticesFrom(verdict);
     },
@@ -94,6 +102,11 @@ export function addComponent(candidate: ComponentSpec): string[] {
  * it would have produced without touching disk — so "what will this delta do to
  * a 200-step narrative" is a question that can be asked before it is answered
  * by the file.
+ *
+ * A write that changed or deleted a METHOD also names the tests that encode it,
+ * when the project declares test roots. The change that creates the collision
+ * is the one that reports it: a spec pass that rewrites a contract and says
+ * nothing is how a brief comes to promise green tests it has already broken.
  */
 export function updateSpecGated(
   kind: WritableSpecKind,
@@ -101,7 +114,52 @@ export function updateSpecGated(
   delta: Record<string, any>,
   dryRun?: boolean,
 ): SpecChangeReport {
-  return updateSpec(kind, id, delta, componentCandidateGate(), dryRun);
+  // Step 1: the bound project's configuration — the severities and project
+  // type the judgement uses, and the test roots the report searches. A project
+  // that has none is judged on the defaults and searches nothing.
+  const bound = candidateOptions();
+  // Step 2: the judgement as a write hook over those same settings.
+  const gate = componentCandidateGate(bound);
+  // Step 3: apply the delta with the hook injected, so the judgement runs on
+  // the merged spec at the last point before anything reaches disk.
+  const report = updateSpec(kind, id, delta, gate, dryRun);
+
+  // Step 4: did this write invalidate any test?
+  const testRoots = bound.rules?.conformance?.testRoots ?? [];
+  const changed = changedMethods(report, delta);
+  if (changed.length > 0 && testRoots.length > 0) {
+    // Step 5.
+    report.testsToRevisit = findTestsReferencing(changed, getProjectRoot(), testRoots);
+  }
+
+  // Step 6.
+  return report;
+}
+
+/**
+ * The methods this write changed or deleted — the search's subject.
+ *
+ * The change report addresses them by PATH (`methods.<name>`, and everything
+ * under it), which is the one place both a rewritten method and a deleted one
+ * appear. The delta is where a code-level `symbol` for one of them is written,
+ * so it supplies that; a symbol the delta does not restate is not knowable
+ * from the report alone, and the search falls back to the contract name —
+ * exactly what it does for a method that declares no symbol at all.
+ */
+function changedMethods(
+  report: SpecChangeReport,
+  delta: Record<string, any>,
+): Pick<MethodImplementation, 'name' | 'symbol'>[] {
+  const named = new Set<string>();
+  for (const change of report.changes) {
+    const [field, name] = change.path.split('.');
+    if (field === 'methods' && name) named.add(name);
+  }
+  const written: Record<string, any>[] = Array.isArray(delta?.methods) ? delta.methods : [];
+  return [...named].map(name => ({
+    name,
+    symbol: written.find(m => m?.name === name)?.symbol,
+  }));
 }
 
 /**

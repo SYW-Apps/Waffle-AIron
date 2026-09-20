@@ -78,12 +78,38 @@ function projectPackSelections(): PackSelection[] {
 }
 import { loadProjectVariants } from './variants.js';
 import { loadSurfaceSnapshots, loadMountSurfaceSnapshots } from './surfaces.js';
-import { buildCodeModel } from './source-analysis.js';
+import {
+  buildCodeModel,
+  findTestsReferencing as findTestsUnderRoots,
+  type TestsToRevisit,
+} from './source-analysis.js';
 import { findChainingParent, resolveChainingParent } from './specs.js';
 import { getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import * as path from 'path';
 import { settledSpecPaths } from './approval.js';
-import type { SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec } from '../models/index.js';
+import type {
+  SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, MethodImplementation,
+} from '../models/index.js';
+
+export type { TestsToRevisit };
+
+/**
+ * ispec_validator/ivalidator_portal.findTestsReferencing — the tests that
+ * encode a given set of methods, so a write that changes or deletes one can
+ * say which tests it just invalidated.
+ *
+ * The walk itself belongs to the source analyzer, which already owns this
+ * subsystem's only source-code I/O and the containment rules a root is held
+ * to. A project that declares no test roots answers empty rather than
+ * throwing: naming the tests must never be the thing that fails a write.
+ */
+export function findTestsReferencing(
+  methods: ReadonlyArray<Pick<MethodImplementation, 'name' | 'symbol'>>,
+  projectRoot: string,
+  testRoots: readonly string[] = [],
+): TestsToRevisit[] {
+  return findTestsUnderRoots(methods, projectRoot, testRoots);
+}
 
 /**
  * Reference-RESOLUTION failures: the only findings whose verdict is

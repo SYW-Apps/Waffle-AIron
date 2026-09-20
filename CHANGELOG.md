@@ -26,6 +26,58 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### A write names the tests it just invalidated
+
+F25: eight hosted tests encoded behaviour the committed specs had changed.
+Nothing in the spec pass listed them, so a brief that said "keep existing tests
+green" collided with the spec it was built on, and the collision surfaced in the
+implementation wave rather than in the write that caused it. A gated
+`sdd_update_spec` that changes or deletes a METHOD now answers with
+`testsToRevisit`: the tests that encode it, one entry per method, in the change
+report and on the tool's output schema. The change that creates the collision is
+the one that reports it.
+
+**Two lists, and the measurement is why.** The proposal said "search by symbol",
+which is a claim about an INSTRUMENT, so it was measured on this tree first —
+264 test files, 695 distinct method symbols:
+
+```
+imported symbol   0 hits: 382   1-3: 265   11+: 18   worst 111 (invalidateSpecCache)
+bare name         0 hits: 262   1-3: 317   11+: 59   worst 187 (project)
+```
+
+An import is a BINDING, not a coincidence, and its worst cases are functions
+genuinely used everywhere. But it misses 382 of 695 methods outright, because a
+test driving a method through a portal never imports it. The bare name finds
+exactly those and then drowns: `project` matched 187 of 264 files, `status` 122,
+`read` 112. Neither is honest alone, and merged they would hide which evidence
+was found — so `TestsToRevisit` carries `imported` and `mentioned` apart, and
+withholds the mention list above **a tenth of the walked suite**, with
+`indiscriminate` saying why. Saying a name is too common is an answer; printing
+187 paths is not. The threshold is a PROPORTION, so on a suite of ten files or
+fewer every mention is withheld — the mention half is a large-suite instrument,
+by construction.
+
+**`rules.conformance.testRoots` is its own opt-in setting**, deliberately not
+part of `sourceRoots`: tests are not code the specs are expected to claim, and
+putting them there would make every test file an `UNCLAIMED_SOURCE_FILE`.
+Declaring none walks nothing and answers empty. The search also answers empty
+rather than throwing when a root escapes the project root, when a test file
+cannot be read, or when a project has no configuration at all — naming the tests
+must never be the thing that fails a write.
+
+**What it cost to learn.** The walk was already written. `buildCodeModel` had
+root resolution with containment checks and the node_modules/dot-directory skip,
+and the JS pattern table already had the named-import clause; the honest change
+was to give both readers the same `walkDeclaredRoots` and the same import-clause
+pattern rather than a second walker that would eventually disagree about what a
+root may reach. What the search does NOT reuse is the exact-AST grade, and that
+is the measurement talking: the numbers above were taken with a read-and-scan,
+so an AST pass would have been a differently calibrated instrument wearing the
+same threshold — and it would have cost an AST parse of every test file on every
+write. As shipped, wairon's own 265-file suite costs about 0.15s per gated write,
+and only when `testRoots` is declared.
+
 ### `sdd_move_methods` — a move that says where the methods CAN live
 
 Splitting a component meant re-sending two contracts and two narratives by hand,

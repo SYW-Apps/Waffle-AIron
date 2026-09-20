@@ -9,6 +9,7 @@ import {
   type CodeModel,
   type ImplementationSpec,
   type ImportBindingFact,
+  type MethodImplementation,
   type SourceFileFacts,
   type TypeSpec,
 } from '../models/index.js';
@@ -60,6 +61,16 @@ interface LanguagePatterns {
 
 const C_FAMILY_COMMENTS = { lineComments: ['//'], blockComments: [['/*', '*/']] as [string, string][] };
 
+/**
+ * One `import { … }` clause, captured as its comma-separated binding body.
+ *
+ * Shared by the pattern-table declaration scan (where a named import binding
+ * is a declaration this file makes) and by the test search (where it is the
+ * high-confidence half of "does this test encode that method"). One pattern,
+ * because two would drift and the second would be the one nobody checked.
+ */
+const NAMED_IMPORT_BINDINGS_RE = /\bimport\s*\{([^}]*)\}/g;
+
 const JS_PATTERNS: LanguagePatterns = {
   ...C_FAMILY_COMMENTS,
   declarations: [
@@ -69,7 +80,7 @@ const JS_PATTERNS: LanguagePatterns = {
     /([A-Za-z_$][\w$]*)\s*[:=]\s*(?:async\s+)?(?:function\b|\()/g,
     /(?:^|\s)(?:public|private|protected|static|async|get|set)\s+([A-Za-z_$][\w$]*)\s*\(/g,
     // named import bindings realize forwarding adapters
-    /\bimport\s*\{([^}]*)\}/g,
+    NAMED_IMPORT_BINDINGS_RE,
   ],
   imports: [
     /\b(?:import|export)\b[^'"\n]*['"]([^'"]+)['"]/g,
@@ -179,6 +190,29 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * The identifiers one captured clause binds.
+ *
+ * A named-import body carries several, comma-separated, and a RENAMED one
+ * (`save as put`) carries two names for one binding: the name the module
+ * publishes and the name this file writes. `localOnly` keeps just the second —
+ * what a declaration-tier anchor is, and what the pattern tables have always
+ * recorded — while the test search keeps both, because either spelling is the
+ * symbol somebody searched for. Every other pattern captures a single name,
+ * for which this is the identity.
+ */
+function boundNames(captured: string, localOnly: boolean): string[] {
+  const names: string[] = [];
+  for (const piece of captured.split(',')) {
+    const sides = piece.split(' as ');
+    for (const side of localOnly ? sides.slice(-1) : sides) {
+      const name = side.trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(name)) names.push(name);
+    }
+  }
+  return names;
+}
+
 function collectStrings(text: string): Set<string> {
   const anchors = new Set<string>();
   for (const m of text.matchAll(STRING_RE)) {
@@ -203,10 +237,7 @@ function analyzeWithPatterns(text: string, patterns: LanguagePatterns): Omit<Sou
       const captured = m[1];
       if (!captured) continue;
       // A named-import capture ("a, b as c") carries multiple bindings.
-      for (const piece of captured.split(',')) {
-        const name = (piece.includes(' as ') ? piece.split(' as ')[1] : piece).trim();
-        if (name && /^[A-Za-z_$][\w$]*$/.test(name)) declared.add(name);
-      }
+      for (const name of boundNames(captured, true)) declared.add(name);
     }
   }
   for (const re of patterns.imports) {
@@ -753,24 +784,30 @@ function looksBinary(buffer: Buffer): boolean {
 }
 
 /**
- * Every source file under the declared source roots, as canonical
- * project-relative keys in walk order — the files no spec need name, which is
- * the unclaimed-source rule's whole subject.
+ * Every file under a declared set of roots, as canonical project-relative keys
+ * in walk order.
+ *
+ * ONE walk serves both root lists this adapter reads. For `sourceRoots` the
+ * answer is the files no spec need name, which is the unclaimed-source rule's
+ * whole subject; for `testRoots` it is the suite a write searches for the
+ * tests it just invalidated. The containment terms are the same on purpose,
+ * and a second walker would have been the one that eventually stopped agreeing
+ * about what a root may reach.
  *
  * Each root is resolved and containment-checked within projectRoot (an
  * absolute or parent-escaping root is skipped, never walked), a directory is
- * walked recursively and a file stands for itself, and a file counts as source
- * when its extension names a language the analyzer knows. Directories named
+ * walked recursively and a file stands for itself, and a file counts when its
+ * extension names a language the analyzer knows. Directories named
  * `node_modules` and directories whose name begins with a dot are never
  * descended into, so a broad root cannot turn the walk pathological. A path
  * at, or under, any `exclude` entry is left out entirely — vendored or
  * generated code is neither analyzed nor carried as debt.
  *
- * Declaring no roots yields no files, which is what keeps the unclaimed-source
- * check opt-in.
+ * Declaring no roots yields no files, which is what keeps both readers of this
+ * walk opt-in.
  */
-function walkSourceRoots(
-  sourceRoots: readonly string[],
+function walkDeclaredRoots(
+  roots: readonly string[],
   exclude: readonly string[],
   projectRoot: string,
 ): string[] {
@@ -807,7 +844,7 @@ function walkSourceRoots(
     }
   };
 
-  for (const root of sourceRoots) {
+  for (const root of roots) {
     const key = pathKey(root);
     if (path.isAbsolute(key) || path.normalize(key).split(path.sep)[0] === '..') continue;
     const absolute = path.resolve(projectRoot, key);
@@ -845,7 +882,7 @@ export function buildCodeModel(
   const files: SourceFileFacts[] = [];
   const seen = new Set<string>();
   const exactCache = new Map<string, ExactFacts | null>();
-  const rootFiles = walkSourceRoots(sourceRoots, exclude, projectRoot);
+  const rootFiles = walkDeclaredRoots(sourceRoots, exclude, projectRoot);
 
   // Every source file an implementation names (its own path, then each
   // method's), plus the simPath: the integration-conformance rule needs sim
@@ -944,4 +981,140 @@ export function buildCodeModel(
   }
 
   return { files, projectRoot, rootFiles };
+}
+
+// ---------------------------------------------------------------------------
+// The tests a write just invalidated (isource_analysis_adapter.findTestsReferencing)
+//
+// Measured on this tree before it was designed, over 264 test files and 695
+// distinct method symbols, because "search by symbol" is a claim about an
+// instrument and it was worth checking which one:
+//
+//   imported symbol   0 hits: 382   1-3: 265   11+: 18   worst 111
+//   bare name         0 hits: 262   1-3: 317   11+: 59   worst 187
+//
+// An import is a BINDING, not a coincidence, and its worst cases are functions
+// genuinely used everywhere. But it misses 382 methods outright, because a test
+// driving a method through a portal never imports it. The bare name finds those
+// and then drowns: `project` matched 187 of 264 files, `status` 122, `read` 112.
+//
+// So two lists, labelled, never one merged — and a name that matches more than
+// a tenth of the suite has its mention list WITHHELD with a reason, because
+// saying the name is too common is an answer and printing 187 paths is not.
+// ---------------------------------------------------------------------------
+
+/**
+ * The tests that encode one method a write just changed or deleted
+ * (tests_to_revisit).
+ *
+ * Two lists rather than one because the two ways of finding them fail in
+ * OPPOSITE directions, and merging them would hide which is which — see the
+ * measurement above.
+ */
+export interface TestsToRevisit {
+  /** The contract method the write changed or deleted. */
+  method: string;
+  /** The code-level name searched for: the method's `symbol` when it declares one, else its name. */
+  symbol: string;
+  /** Test files that IMPORT that symbol. The high-confidence list. */
+  imported: string[];
+  /**
+   * Test files that name the symbol without importing it — usually a test
+   * driving the method through a portal or a helper. Empty when
+   * `indiscriminate` is true.
+   */
+  mentioned: string[];
+  /**
+   * True when the bare name matched more than a tenth of the walked test files,
+   * so mentioning it carries no signal and `mentioned` was withheld.
+   */
+  indiscriminate: boolean;
+}
+
+/** What one walked test file says about the names a search is looking for. */
+interface TestFileNames {
+  /** Canonical project-relative path, as the answer names it. */
+  path: string;
+  /** Names bound by a named-import clause — both sides of a rename. */
+  imports: Set<string>;
+  /** Every word-boundary identifier in the file: the universal floor, exactly as the generic grade reads one. */
+  words: Set<string>;
+}
+
+/**
+ * The declared test roots, walked and read. An unreadable or binary file is
+ * SKIPPED rather than fatal: naming the tests must never be the thing that
+ * fails a write.
+ */
+function readTestFiles(testRoots: readonly string[], projectRoot: string): TestFileNames[] {
+  const scanned: TestFileNames[] = [];
+  for (const key of walkDeclaredRoots(testRoots, [], projectRoot)) {
+    let text: string;
+    try {
+      const buffer = fs.readFileSync(path.resolve(projectRoot, key));
+      if (looksBinary(buffer)) continue;
+      text = buffer.toString('utf8');
+    } catch {
+      continue;
+    }
+    const imports = new Set<string>();
+    for (const m of text.matchAll(NAMED_IMPORT_BINDINGS_RE)) {
+      for (const name of boundNames(m[1] ?? '', false)) imports.add(name);
+    }
+    const words = new Set<string>();
+    for (const m of text.matchAll(IDENTIFIER_RE)) words.add(m[0]);
+    scanned.push({ path: key, imports, words });
+  }
+  return scanned;
+}
+
+/**
+ * Find the tests that encode a given set of methods.
+ *
+ * Walks the declared test roots on the SOURCE walk's own containment terms —
+ * an absolute or parent-escaping root is refused rather than walked,
+ * node_modules and dot-directories are skipped — and searches each method's
+ * `symbol`, or its name when it declares none. A file that imports that name
+ * is `imported`; one that merely names it is `mentioned`, unless the name
+ * matched more than a tenth of the walked files, in which case the mention
+ * list is withheld and `indiscriminate` says why.
+ *
+ * Declaring no test roots walks nothing and answers empty, which is what keeps
+ * this opt-in. A method nothing references contributes no entry: the answer is
+ * the tests to revisit, and an entry naming none is not one.
+ */
+export function findTestsReferencing(
+  methods: ReadonlyArray<Pick<MethodImplementation, 'name' | 'symbol'>>,
+  projectRoot: string,
+  testRoots: readonly string[] = [],
+): TestsToRevisit[] {
+  // Steps 1-2: resolve and walk the declared roots, and read what they hold.
+  const scanned = readTestFiles(testRoots, projectRoot);
+  if (scanned.length === 0) return [];
+
+  // A tenth of the WALKED suite, so the threshold scales with the project
+  // rather than with a number somebody once picked for theirs.
+  const indiscriminateAbove = scanned.length / 10;
+
+  const found: TestsToRevisit[] = [];
+  for (const method of methods) {
+    // Step 3: the name to search for.
+    const symbol = method.symbol ?? method.name;
+    // Step 4: the binding and the bare mention, kept apart.
+    const imported = scanned.filter(f => f.imports.has(symbol)).map(f => f.path);
+    const mentioned = scanned.filter(f => !f.imports.has(symbol) && f.words.has(symbol)).map(f => f.path);
+    // Steps 5-6: a name like `project` or `status` matches most of the suite,
+    // and a list that long is not an answer.
+    const indiscriminate = mentioned.length > indiscriminateAbove;
+    if (imported.length === 0 && mentioned.length === 0) continue;
+    // Step 7.
+    found.push({
+      method: method.name,
+      symbol,
+      imported,
+      mentioned: indiscriminate ? [] : mentioned,
+      indiscriminate,
+    });
+  }
+  return found;
 }
