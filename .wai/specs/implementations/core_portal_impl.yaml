@@ -253,8 +253,12 @@ methods:
   - name: currentChildPins
     narrative:
       - stepNumber: 1
-        description: Forward chained-child pin resolution (re-export)
-        type: local
+        description: >-
+          Re-export the child-pin read — this Portal method and the comparison component's function
+          are the same function, so the call resolves by identity
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: currentChildPins
   - name: captureApprovedSpecs
     narrative:
       - stepNumber: 1
@@ -515,6 +519,15 @@ methods:
         type: call
         targetComponent: approval_comparison
         targetMethod: movedChildren
+  - name: settledSpecPaths
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Re-export the settled-path read — the same function published under this surface, so the
+          call resolves by identity
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: settledSpecPaths
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T15:24:54.094Z'
+updatedAt: '2026-09-20T18:13:56.098Z'

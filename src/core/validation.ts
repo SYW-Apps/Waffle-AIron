@@ -86,7 +86,7 @@ import {
 import { findChainingParent, resolveChainingParent } from './specs.js';
 import { getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import * as path from 'path';
-import { settledSpecPaths } from './approval.js';
+import { settledSpecPaths } from './index.js';
 import type {
   SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, MethodImplementation,
 } from '../models/index.js';

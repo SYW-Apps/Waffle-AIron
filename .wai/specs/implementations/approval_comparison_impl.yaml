@@ -12,17 +12,20 @@ methods:
   - name: captureApprovedSpecs
     narrative:
       - stepNumber: 1
-        description: List every spec file under the tree's specs directory
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadComponentSpecs
+        description: >-
+          Walk the tree's spec files and digest each one's raw text, normalizing CRLF to LF first
+          and keying by the path relative to the project root, so the same commit digests equally on
+          any platform. The raw read goes straight to disk rather than through the spec file store —
+          digesting needs bytes, and the store's read parses; that bypass is known debt, not a
+          design
+        type: local
       - stepNumber: 2
         description: >-
-          Read each file, normalize CRLF to LF and hash the content, keying by the path relative to
-          the project root so the same commit digests equally on any platform — the same reason the
-          gate identity had to be made reproducible. An approval records exactly what a later check
-          recomputes, so capture and compare run the same arithmetic
-        type: local
+          Read the record already on file, so a scoped approval carries forward the digests it is
+          not re-capturing rather than dropping them
+        type: call
+        targetComponent: lock_store
+        targetMethod: read
       - stepNumber: 3
         description: Answer with the digest map to write into the record
         type: return
@@ -30,10 +33,10 @@ methods:
   - name: diffAgainstApproval
     narrative:
       - stepNumber: 1
-        description: Read the approval record this project carries
+        description: Read the approval record under the given root
         type: call
         targetComponent: lock_store
-        targetMethod: read
+        targetMethod: readAt
       - stepNumber: 2
         description: Decide whether there is anything to compare against
         type: branch
@@ -59,17 +62,19 @@ methods:
   - name: approvalRecord
     narrative:
       - stepNumber: 1
-        description: Read the approval record, answering null when the project carries none
+        description: >-
+          Read the approval record under the given root, answering null when the project carries
+          none
         type: call
         targetComponent: lock_store
-        targetMethod: read
+        targetMethod: readAt
   - name: settledSpecPaths
     narrative:
       - stepNumber: 1
-        description: Read the approval record
+        description: Read the approval record under the given root
         type: call
         targetComponent: lock_store
-        targetMethod: read
+        targetMethod: readAt
       - stepNumber: 2
         description: >-
           Answer the record's covered paths as a set for membership tests, or null when there is no
@@ -79,13 +84,18 @@ methods:
   - name: currentChildPins
     narrative:
       - stepNumber: 1
-        description: Find the chained subprojects mounted under this tree
-        type: call
-        targetComponent: spec_loader
-        targetMethod: listChainedRoots
-      - stepNumber: 2
-        description: Pin each child at its current gate state id, keyed by the subsystem id it mounts as
+        description: >-
+          Take the mounts the caller passed and keep those whose projectPath mounts a chained child.
+          The caller supplies them rather than this method discovering them, which is what the
+          signature says and why nothing here walks for roots
         type: local
+      - stepNumber: 2
+        description: >-
+          Read each child's own approval record under its mounted root, keyed by the subsystem id it
+          mounts as; a child with no approval contributes no entry
+        type: call
+        targetComponent: lock_store
+        targetMethod: readAt
       - stepNumber: 3
         description: Answer with the pin map
         type: return
@@ -93,10 +103,10 @@ methods:
   - name: movedChildren
     narrative:
       - stepNumber: 1
-        description: Read the approval record for the pins it covers
+        description: Read the parent's approval record for the child pins it covers
         type: call
         targetComponent: lock_store
-        targetMethod: read
+        targetMethod: readAt
       - stepNumber: 2
         description: >-
           Compare each child's current pin against the recorded one, and answer the subsystem ids
@@ -106,4 +116,4 @@ methods:
         outcome: moved
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-09-20T15:22:52.957Z'
+updatedAt: '2026-09-20T18:13:06.937Z'

@@ -612,6 +612,19 @@ methods:
       - name: mounts
         type: SubsystemSpec[]
         description: The subsystem specs whose projectPath mounts a chained child
+  - name: settledSpecPaths
+    description: >-
+      The spec paths the approval on record covers, as a set for membership tests; null when there
+      is no record. Published here because the validator needs it to tell an approved spec from an
+      unapproved one, and the validator reaching into the approval module directly would cross a
+      subsystem boundary the Portal exists to be.
+    signature: 'settledSpecPaths(root?: string): Set<string> | null'
+    returns: Set<string> | null
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T15:24:17.152Z'
+updatedAt: '2026-09-20T18:13:52.090Z'

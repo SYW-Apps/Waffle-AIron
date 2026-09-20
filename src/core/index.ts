@@ -71,6 +71,10 @@ export {
   diffAgainstApproval,
   movedChildren,
   diffSize,
+  // The validator needs it to tell an approved spec from an unapproved one, and
+  // was importing it straight from ./approval.js - the same reach past this
+  // Portal that movedChildren and diffSize were making.
+  settledSpecPaths,
 } from './approval.js';
 export type { ApprovalDiff, ChildPinDrift } from './approval.js';
 // Who to record as the approver on a machine with no wairon account — resolved

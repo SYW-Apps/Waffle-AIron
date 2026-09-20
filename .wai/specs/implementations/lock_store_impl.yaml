@@ -24,6 +24,14 @@ methods:
       Serializes the LockRecord and writes it atomically to .wai/lock.json for the bound project,
       overwriting any prior record.
     symbol: writeLockRecord
+  - name: readAt
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read and parse the lock record under the given root, answering null when the file is
+          absent or unreadable — a missing approval is an answer, not a failure
+        type: local
+    symbol: readLockRecordAt
 status: complete
 createdAt: '2026-07-04T12:53:38.524Z'
-updatedAt: '2026-09-17T16:34:44.649Z'
+updatedAt: '2026-09-20T18:12:48.544Z'

@@ -493,6 +493,15 @@ describe('the approval, published on core_portal', () => {
     }
   });
 
+  it('is how the VALIDATOR reaches it too — sdd_validator does not import the module', () => {
+    // The third instance of the same crossing: validation.ts took
+    // settledSpecPaths straight out of ./approval.js, which is sdd_validator
+    // reaching into an sdd_core module rather than through the Portal. Same
+    // assertion a type-check cannot make - both spellings compile.
+    const source = fs.readFileSync(path.join(REPO_ROOT, 'src/core/validation.ts'), 'utf8');
+    expect(source).not.toContain("import { settledSpecPaths } from './approval.js'");
+    expect(source).toContain("import { settledSpecPaths } from './index.js'");
+  });
   it('is how the commands reach it — neither imports the module', () => {
     // The one assertion a type-check cannot make: both imports compile either
     // way, so only the import SITE says which side of the boundary the command
