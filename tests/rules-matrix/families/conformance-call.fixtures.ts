@@ -1078,7 +1078,254 @@ export default [
       'The entry recorder constructs the payroll journal writer and appends through it, and the journal writer is the component its narrative names.',
     tree: ledgerJournalTree('journal-writer'),
   }),
+  // -------------------------------------------------------------------------
+  // A DECLARED call is a claim about the code, exactly as a `call` step is.
+  // A method whose narrative shows no steps reaches its collaborators through
+  // `calls`, and the reachability walk takes those edges — so until this rule
+  // read them, a declaration bought reachability the code never earned. Same
+  // question, same verdict; a finding says "declared call" where it would have
+  // said "step 3", because that is the whole of the difference.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    severity: 'warning',
+    anchoredTo: 'restock_planner_impl',
+    expectFire: true,
+    scenario:
+      'The restock planner writes no narrative steps and declares its calls instead, naming the supplier catalogue\'s lead times — but the planner function reads a stale local lead-time table and never calls the catalogue.',
+    tree: restockPlannerTree(false),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: false,
+    reason:
+      'The declared call is realized: the planner function invokes leadTimes through the import binding that resolves to the supplier catalogue\'s own source file, which is everything the declaration claims.',
+    scenario:
+      'The restock planner declares a call to the supplier catalogue\'s lead times, and the planner function calls leadTimes on the catalogue module.',
+    tree: restockPlannerTree(true),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'A realized declaration is ACCEPTED, not merely unread: the call resolves to a file, so the honest "I could not follow this" answer must stay silent — otherwise every verified declaration would be reported as unchecked.',
+    scenario:
+      'The restock planner\'s declared call to the supplier catalogue is written as a bare call on an import binding, the one shape this analysis resolves outright.',
+    tree: restockPlannerTree(true),
+  }),
+  // -------------------------------------------------------------------------
+  // The converse direction asks the same question of a declaring method. A
+  // method that shows no steps still SAYS what it calls, in `calls` — so a
+  // colocated crossing missing from that list is exactly as undeclared as one
+  // missing from a narrative, and the remedy is the list it belongs in.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_COLOCATED_CALL',
+    severity: 'warning',
+    anchoredTo: 'shipment_scheduler_impl',
+    expectFire: true,
+    scenario:
+      'The dispatch desk module holds both the shipment scheduler and the carrier quote adapter; the scheduler declares its quote call but also surcharges through the adapter without listing that one.',
+    tree: declaredCallDeskTree(['carrier-quote-adapter.fetchQuotes']),
+  }),
+  defineRuleFixture({
+    code: 'UNDECLARED_COLOCATED_CALL',
+    expectFire: false,
+    reason:
+      'Both colocated crossings are in the method\'s declared `calls`, which is where a narrative-less method says what it calls — the converse direction asks that the hop be written down, not that it be written down as a step.',
+    scenario:
+      'The dispatch desk scheduler declares both of the colocated carrier quote adapter calls it makes, quotes and surcharges alike.',
+    tree: declaredCallDeskTree(['carrier-quote-adapter.fetchQuotes', 'carrier-quote-adapter.fetchSurcharges']),
+  }),
 ];
+
+/**
+ * The dispatch desk again — scheduler and carrier quote adapter in ONE module
+ * — but with a scheduler that shows no steps and declares its calls instead.
+ * Only the declaration varies: the module always quotes AND surcharges
+ * through the colocated adapter.
+ */
+function declaredCallDeskTree(declaredCalls: string[]): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'fulfillment', description: 'Parcel scheduling and carrier hand-off.' }],
+    components: [
+      {
+        id: 'shipment-scheduler',
+        componentType: 'Orchestrator',
+        subsystem: 'fulfillment',
+        description: 'Plans each parcel pickup and books the cheapest eligible carrier.',
+        dependsOn: ['carrier-quote-adapter'],
+      },
+      {
+        id: 'carrier-quote-adapter',
+        componentType: 'Adapter',
+        subsystem: 'fulfillment',
+        description: 'Wraps the external carrier rate APIs behind one quote interface.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ishipment_scheduler',
+        component: 'shipment-scheduler',
+        methods: [{ name: 'scheduleShipment', description: 'Book the cheapest eligible carrier for a parcel.' }],
+      },
+      {
+        id: 'icarrier_quote_adapter',
+        component: 'carrier-quote-adapter',
+        methods: [
+          { name: 'fetchQuotes', description: 'Fetch current rate quotes from all connected carriers.' },
+          { name: 'fetchSurcharges', description: 'Fetch the fuel and residential surcharges each carrier adds to a quote.' },
+        ],
+      },
+    ],
+    implementations: [
+      {
+        id: 'shipment_scheduler_impl',
+        contract: 'ishipment_scheduler',
+        sourcePath: 'src/fulfillment/dispatch-desk.ts',
+        methods: [
+          {
+            name: 'scheduleShipment',
+            detail: 'intent',
+            intent:
+              'Book a parcel with the carrier that is cheapest once surcharges are counted: take each carrier\'s base quote, add the surcharges that carrier applies to this parcel, and hand the parcel to the lowest total that still meets the promised delivery window. A carrier that quotes nothing for the parcel is skipped rather than booked at a default rate.',
+            calls: declaredCalls,
+          },
+        ],
+      },
+      {
+        id: 'carrier_quote_adapter_impl',
+        contract: 'icarrier_quote_adapter',
+        sourcePath: 'src/fulfillment/dispatch-desk.ts',
+        methods: [
+          {
+            name: 'fetchQuotes',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Call each connected carrier rate API and merge the quotes.' }],
+          },
+          {
+            name: 'fetchSurcharges',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Call each connected carrier surcharge API and merge the answers.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/fulfillment/dispatch-desk.ts': [
+        'export function scheduleShipment(parcelId: string): void {',
+        '  const quotes = fetchQuotes(parcelId);',
+        '  const surcharges = fetchSurcharges(parcelId);',
+        '  bookCheapest(parcelId, quotes, surcharges);',
+        '}',
+        '',
+        'export function fetchQuotes(parcelId: string): number[] {',
+        '  return [12.5, 14.0];',
+        '}',
+        '',
+        'export function fetchSurcharges(parcelId: string): number[] {',
+        '  return [1.75, 0.5];',
+        '}',
+        '',
+        'function bookCheapest(parcelId: string, quotes: number[], surcharges: number[]): void {',
+        '  // hand the cheapest total to the chosen carrier',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}
+
+/**
+ * A restock planner that declares its calls instead of narrating them — the
+ * `calls` counterpart of the opening `call`-step pair. Only the planner
+ * module's text varies: `callsTheCatalogue` writes the call the declaration
+ * claims, or leaves it out.
+ */
+function restockPlannerTree(callsTheCatalogue: boolean): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'warehouse', description: 'Stock levels, replenishment planning and supplier hand-off.' }],
+    components: [
+      {
+        id: 'restock-planner',
+        componentType: 'Orchestrator',
+        subsystem: 'warehouse',
+        description: 'Decides when each stock line is reordered and how much of it to reorder.',
+        dependsOn: ['supplier-catalog'],
+      },
+      {
+        id: 'supplier-catalog',
+        componentType: 'Adapter',
+        subsystem: 'warehouse',
+        description: 'Wraps the supplier trading APIs behind one catalogue of prices and lead times.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'irestock_planner',
+        component: 'restock-planner',
+        methods: [{ name: 'planRestock', description: 'Decide the reorder quantity and date for one stock line.' }],
+      },
+      {
+        id: 'isupplier_catalog',
+        component: 'supplier-catalog',
+        methods: [{ name: 'leadTimes', description: 'Read each supplier\'s current lead time for one stock keeping unit.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'restock_planner_impl',
+        contract: 'irestock_planner',
+        sourcePath: 'src/warehouse/restock-planner.ts',
+        methods: [
+          {
+            name: 'planRestock',
+            detail: 'intent',
+            intent:
+              'Reorder a stock line before it runs out: read the supplier lead times for the unit, project the stock on hand across the longest of them, and order the shortfall from the cheapest supplier that can deliver inside the window. A supplier that answers with no lead time is left out of the projection rather than assumed instant.',
+            calls: ['supplier-catalog.leadTimes'],
+          },
+        ],
+      },
+      {
+        id: 'supplier_catalog_impl',
+        contract: 'isupplier_catalog',
+        sourcePath: 'src/warehouse/supplier-catalog.ts',
+        methods: [
+          {
+            name: 'leadTimes',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Ask each connected supplier API for the unit\'s current lead time and merge the answers.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/warehouse/restock-planner.ts': (callsTheCatalogue
+        ? [
+          'import { leadTimes } from \'./supplier-catalog.js\';',
+          '',
+          'export function planRestock(sku: string, onHand: number): number {',
+          '  const days = leadTimes(sku);',
+          '  return Math.max(0, days.length * 10 - onHand);',
+          '}',
+          '',
+        ]
+        : [
+          'const STALE_LEAD_DAYS: Record<string, number> = { \'pallet-wrap\': 14 };',
+          '',
+          'export function planRestock(sku: string, onHand: number): number {',
+          '  // the catalogue call was dropped for a hard-coded table nobody has refreshed',
+          '  return Math.max(0, (STALE_LEAD_DAYS[sku] ?? 7) * 10 - onHand);',
+          '}',
+          '',
+        ]).join('\n'),
+      'src/warehouse/supplier-catalog.ts': [
+        'export function leadTimes(sku: string): number[] {',
+        '  return sku.length > 0 ? [3, 9] : [];',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}
 
 /**
  * A payroll repository facade over its own store, with a cold-storage archive

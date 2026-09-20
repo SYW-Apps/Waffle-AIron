@@ -13,7 +13,7 @@ findings through or whose nested mount reaches outside its own project, a tree
 that still has a Specialist or a Gateway or breaks the new Supervisor and Actor
 dependency rules, a tree whose narratives or names the new readability checks
 judge, a tree whose code↔spec conformance the tightened call and body checks
-can now follow, or a tree holding a case the fixed validator rules used to miss
+can now follow — a method's declared `calls` among them — or a tree holding a case the fixed validator rules used to miss
 — including a narrative step carrying a field its own step type cannot have, or a
 tree whose coarse `lint.allow` stops covering findings that name a site, or a
 tree whose intent-level methods were vouching for collaborators no narrative
@@ -64,9 +64,43 @@ its intent prose checkable. Where the call cannot be written truthfully (nobody 
 a modelling question), that is debt: a sited `lint.allow` with the reason that is true there, or a fix to the model.
 Do not declare a call the code does not make.
 
-*Not yet wired:* a declared call is validated against the SPEC (target resolves, collaborator declared, method on the
-contract) but not yet against the CODE — Level-3 call conformance still reads narrative `call` steps only. Extending
-it is the natural follow-on, and would make a declaration exactly as checkable as a step.
+**A declared call is now checked against the CODE**, in the same rule, the same loop and the same verdict as a
+narrative `call` step. It was validated against the spec only (the target resolves, the collaborator is declared, the
+method is on the contract), so it was an unverified claim: a channel through which a method with no narrative could
+buy reachability in the graph while the code did nothing. That channel is closed.
+
+- **A step and a declaration make the same claim.** Both say *this method calls that component's method*. A step also
+  says WHERE in the flow — and this check has never read order, arguments or conditions, so the step number is no part
+  of what it judges. It is only how a finding POINTS at the claim: `step 3 → billing_store.save` or
+  `declared call → billing_store.save`. One question, one verdict, one rule.
+- **The same codes, deliberately.** `CALL_STEP_UNREALIZED` and `CALL_ORIGIN_UNRESOLVED` now read "call step or declared
+  call". A separate code per spelling would fragment the debt register's vocabulary over a distinction the finding does
+  not turn on, and the register would then carry the same fact under two names.
+- **The unit a register entry or a lint allow names** is `<component>.<method>` for a declaration — the `calls` entry
+  verbatim — where a step's is `3:<component>.<method>`. That is the spelling `calls` was given for, now used.
+- **The converse direction asks a declaring method the same question.** A colocated call — a modelled method of another
+  component in the same file, which nothing imports and no file-level check can see — must be written down, and `calls`
+  is where a narrative-less method writes one down. `UNDECLARED_COLOCATED_CALL` now reads "neither a narrative step nor
+  a declared call names it", and its remedy names `calls` beside the narrative.
+- **N:1 identity forwarding and the conformance dial apply unchanged.** Both are facts about the code and the
+  component, which do not know which way the claim was written.
+- **A method that claims NOTHING is still judged in neither direction.** It has nothing to prove forward and has not
+  failed to declare anything; what it leaves unsaid is `UNUSED_COMPONENT`/`UNUSED_METHOD`'s subject, which is the
+  pressure that makes a declaration worth writing. Measured on wairon's own tree, extending the converse direction to
+  those methods too would report 7 further colocated crossings — five of them an Adapter or Index reaching a Store it
+  sits beside — so that is a modelling question, not a wiring one, and it is left open rather than decided here.
+
+Measured on wairon's own tree before the change: **134 declared edges over 84 methods in 31 implementations**. 99
+verify outright, 2 are accepted by N:1 identity forwarding, and **33 are `CALL_ORIGIN_UNRESOLVED`** — every one of them
+a call on a local binding or parameter whose declared type the reader does not follow, all inside the project
+configuration Repository's single module. **Nothing was accused: zero `CALL_STEP_UNREALIZED`, zero new
+`UNDECLARED_COLOCATED_CALL`.** The 33 are carried as `unreadable`, which is what they are.
+
+**Breaking.** A project whose declarations do not match its code newly reports, and `validate --ci` can newly fail. A
+declared call that names a target realized in a file the code never reaches is `CALL_STEP_UNREALIZED`; one whose call
+site the reader cannot resolve to a file is `CALL_ORIGIN_UNRESOLVED`, which accuses nothing and asks for nothing. The
+remedy for the first is to make the call, fix the declaration, or map the code name with a per-method `symbol` — never
+to drop the declaration, which would only move the finding to `UNUSED_*`. Do not declare a call the code does not make.
 
 ### A `lint.allow` covers exactly the finding it names
 
@@ -2387,7 +2421,10 @@ same as not knowing whether the next one an author writes will.
       never applying.
 11. **Re-run `validate --ci`: code↔spec conformance follows the call now.** Three
     new findings, and one existing one that reaches further, so read them before
-    you silence anything.
+    you silence anything. All four read a method's declared `calls` as well as
+    its narrative `call` steps: a declaration asserts the same call a step does,
+    so it answers to the same check, and a finding says `declared call` where it
+    would otherwise say `step 3`.
     - `CALL_STEP_UNREALIZED` is no longer satisfied by a same-named function in
       another module. Where it newly fires, either the call really does land
       somewhere else, or the target's `sourcePath` names a file the function was
@@ -2403,9 +2440,10 @@ same as not knowing whether the next one an author writes will.
       interface, or a forwarding table whose entry no chase can follow. Point the
       path at the file that implements it, or dial that method to `off`.
     - `UNDECLARED_COLOCATED_CALL` fires where several components share one source
-      file and one calls another without a narrative step saying so. Narrate the
-      call — it is a real edge — or split the file so the boundary is one the
-      import graph can see.
+      file and one calls another without saying so. Narrate the call, or list it
+      in the method's `calls` where the method shows no steps — it is a real edge
+      either way — or split the file so the boundary is one the import graph can
+      see.
 12. **Re-run `validate --ci`: two rules now see what they always claimed to judge.**
     - **New warning `FOREIGN_STEP_FIELD`** on a narrative step carrying a field its
       own `type` cannot have — `outcome` on a branch, `error` on a call,

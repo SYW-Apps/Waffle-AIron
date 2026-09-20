@@ -102,25 +102,31 @@ methods:
           string literal nor as a property-access name (below exact grade, any identifier counts)
   - name: callConformance
     description: >-
-      Rule call-conformance. Code↔spec Level 3: the narrative `call` step ↔ realized call relation,
-      judged both ways against the method's own source file (its sourcePath, else the
-      implementation's), at exact analysis grade only. Forward: every `call` step must be realized
-      by a call whose callee RESOLVES TO one of the target method's own source files — the target's
-      contract name or a per-method `symbol` override, closed transitively over the named helpers
-      the realized function calls, and resolved against every file the call CAN have reached: a
-      `this.<field>.<method>()` receiver followed through the field's DECLARED TYPE, a `new
-      Class(...).<method>()` receiver through the module its CLASS NAME came from. A matching call
-      whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which
-      NAMES the shape it could not follow and asks for nothing — a coverage hole in the reader,
-      reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a
-      degraded one. A finding names a landing only from the PROVEN tier so that widening what a call
-      reached can accept a step but never accuse one, and a target that names no file of its own
-      falls back to name membership. Converse: a call that resolves to a modelled method of ANOTHER
-      component in the SAME file crosses a component boundary while looking local, so the narrative
-      must declare it (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file
-      private helper is no modelled method and is never reported. Order, arguments and conditions
-      stay unverified, dispatch steps (runtime-table routed) are skipped, the conformance dial (off)
-      skips, and weaker analysis grades never guess.
+      Rule call-conformance. Code↔spec Level 3: the CLAIMED call ↔ realized call relation, judged
+      both ways against the method's own source file (its sourcePath, else the implementation's), at
+      exact analysis grade only. A method claims a call two ways and they face one check: a
+      narrative `call` step, and an entry of the declared `calls` a narrative-less method reaches
+      its collaborators through. They assert the same thing, and the step number is no part of the
+      claim — this check never reads order, so it is only how a finding points at one. Forward:
+      every claim must be realized by a call whose callee RESOLVES TO one of the target method's own
+      source files — the target's contract name or a per-method `symbol` override, closed
+      transitively over the named helpers the realized function calls, and resolved against every
+      file the call CAN have reached: a `this.<field>.<method>()` receiver followed through the
+      field's DECLARED TYPE, a `new Class(...).<method>()` receiver through the module its CLASS
+      NAME came from. A matching call whose origin a pure model cannot resolve is reported apart as
+      CALL_ORIGIN_UNRESOLVED, which NAMES the shape it could not follow and asks for nothing — a
+      coverage hole in the reader, reported for the reason CONFORMANCE_DEGRADED is: a silently
+      degraded gate is worse than a degraded one. A finding names a landing only from the PROVEN
+      tier so that widening what a call reached can accept a claim but never accuse one, and a
+      target that names no file of its own falls back to name membership. Converse: a call that
+      resolves to a modelled method of ANOTHER component in the SAME file crosses a component
+      boundary while looking local, so the method must claim it — in a step or in `calls`
+      (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper
+      is no modelled method and is never reported. A method that claims nothing at all is judged in
+      neither direction: what it leaves unsaid is UNUSED_*'s subject. Order, arguments and
+      conditions stay unverified, dispatch steps (runtime-table routed) are no claim about a call
+      site, a malformed declared reference is MALFORMED_DECLARED_CALL's finding and names no target
+      here, the conformance dial (off) skips, and weaker analysis grades never guess.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -131,19 +137,19 @@ methods:
       - code: CALL_STEP_UNREALIZED
         severity: warning
         summary: >-
-          Narrative call step realized by no call that resolves to the target method's own source
-          file — the call is absent, or it lands in another module
+          Narrative call step or declared call realized by no call that resolves to the target
+          method's own source file — the call is absent, or it lands in another module
       - code: CALL_ORIGIN_UNRESOLVED
         severity: warning
         summary: >-
-          Narrative call step whose target name IS called, but only from call sites written in a
-          shape this analysis cannot resolve to a file — the step was not checked, and is neither
-          proven realized nor accused
+          Narrative call step or declared call whose target name IS called, but only from call sites
+          written in a shape this analysis cannot resolve to a file — the claim was not checked, and
+          is neither proven realized nor accused
       - code: UNDECLARED_COLOCATED_CALL
         severity: warning
         summary: >-
           The realized function calls a modelled method of another component living in the same
-          source file, and no narrative step declares that call
+          source file, and neither a narrative step nor a declared call names it
   - name: hiddenState
     description: >-
       Rule hidden-state. The fields-vs-Store criterion, statically approximated: module-scope
@@ -376,4 +382,4 @@ methods:
           a unit that finding no longer reports — delete it, the register only shrinks
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-19T20:32:40.941Z'
+updatedAt: '2026-09-20T09:44:37.115Z'
