@@ -1,14 +1,14 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "0455b0c1f85e599c965212ba1ca33535b6ba910087909b4f791ed9ee18d93320"
+    "digest": "15b82c8986ed54402f39f1c7bfed12c61ae27d4bcd4838a92f72afe698947d1c"
   },
-  "lockedAt": "2026-09-20T15:00:55.414Z",
+  "lockedAt": "2026-09-20T17:53:05.406Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "5.1.1-dev.50",
+  "validatorVersion": "5.1.1-dev.51",
   "validationResult": {
     "valid": true,
     "errors": 0,
