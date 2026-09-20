@@ -1,7 +1,8 @@
 import { projectConfigRepository } from '../config/project-config.js';
 import type { ProjectConfig } from '../models/project.js';
 import type { Domain } from '../models/domain.js';
-import * as topology from './topology.js';
+import * as projector from './domain_projector.js';
+import * as curator from './domain_curator.js';
 
 export * from './detection.js';
 export * from './templates.js';
@@ -58,8 +59,11 @@ export type { GenerateOptions, GenerateSummary } from '../exporters/generate.js'
 export { exportSpecTree, importSpecTree } from './treetransfer.js';
 
 // The agent topology (icore_portal resolveDomains / addDomain / removeDomain) —
-// 1:1 forwards to the topology Repository's facade in ./topology.js, which is
-// the only thing this Portal knows about the domains.
+// 1:1 forwards to the two Orchestrators above the topology Repository, which is
+// all this Portal knows about the domains. The READ goes to `domain_projector`,
+// which answers across the spec tree and the configuration alike; both WRITES
+// go to `domain_curator`, never to the facade, because a Portal reaching a
+// write-effect facade method is the shortcut the standard names by code.
 //
 // This file used to `export * from './domains.js'`, republishing the whole raw
 // surface of a member — `findDomain`, `listFreeStandingDomains`,
@@ -71,20 +75,20 @@ export { exportSpecTree, importSpecTree } from './treetransfer.js';
 // star export from ./detection.js: the detector is its own component, published
 // by identity rather than wrapped.
 //
-// The facade is bound as a namespace so each call SITE names the contract
-// method it reaches — `topology.resolve()`, not a renamed `resolveTopologyDomains()`
-// that reads like a second implementation and tells neither a reader nor the
-// conformance analysis which method was called.
+// Each collaborator is bound as a namespace so the call SITE names the contract
+// method it reaches — `curator.registerDomain(…)`, not a renamed
+// `addTopologyDomain()` that reads like a second implementation and tells
+// neither a reader nor the conformance analysis which method was called.
 export function resolveDomains(): Domain[] {
-  return topology.resolve();
+  return projector.resolveDomains();
 }
 
 export function addDomain(domain: Domain): void {
-  topology.addFreeStanding(domain);
+  curator.registerDomain(domain);
 }
 
 export function removeDomain(id: string): void {
-  topology.removeFreeStanding(id);
+  curator.unregisterDomain(id);
 }
 
 // Component rename, contract-method rename and Specialist retirement
