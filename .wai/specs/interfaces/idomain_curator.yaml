@@ -16,6 +16,7 @@ methods:
       - name: domain
         type: Domain
         description: The domain to register
+    effect: write
   - name: unregister
     description: >-
       Take a free-standing domain back out and persist the removal. Refuses an id the spec tree
@@ -26,6 +27,7 @@ methods:
       - name: id
         type: string
         description: The domain id to unregister
+    effect: write
 status: complete
 createdAt: '2026-09-20T22:44:25.051Z'
-updatedAt: '2026-09-20T22:45:26.035Z'
+updatedAt: '2026-09-20T23:03:42.532Z'

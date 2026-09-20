@@ -3,8 +3,8 @@ name: Domain Registry Implementation
 description: >-
   src/core/domains.ts. Every write is read-modify-write through the store: load the configuration,
   change the domains array, save it back. Nothing is cached between calls, so two commands in one
-  process cannot disagree about what is registered. The reads moved to `domain_index` — what is left
-  here is only what changes the file.
+  process cannot disagree about what is registered. The reads moved to `domain_projector` — what is
+  left here is only what changes the file.
 contract: idomain_registry
 sourcePath: src/core/domains.ts
 methods:
@@ -71,4 +71,4 @@ methods:
     symbol: addFreeStandingDomain
 status: complete
 createdAt: '2026-09-20T22:02:08.143Z'
-updatedAt: '2026-09-20T22:43:54.193Z'
+updatedAt: '2026-09-20T23:03:07.222Z'

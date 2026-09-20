@@ -2,7 +2,7 @@ id: idomain_registry
 name: Domain Registry Interface
 description: >-
   What a project registers into its topology by hand. Only the free-standing domains are here: the
-  derived ones belong to the spec tree, and the read that spans both is `idomain_index`.
+  derived ones belong to the spec tree, and the read that spans both is `idomain_projector`.
 component: domain_registry
 methods:
   - name: addFreeStanding
@@ -30,4 +30,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-09-20T22:01:53.106Z'
-updatedAt: '2026-09-20T22:41:10.990Z'
+updatedAt: '2026-09-20T23:03:05.681Z'

@@ -17,6 +17,7 @@ methods:
       - name: domain
         type: Domain
         description: The domain to register
+    effect: write
   - name: removeFreeStanding
     description: Unregister a free-standing domain and persist the removal.
     signature: 'removeFreeStanding(id: string): void'
@@ -25,6 +26,7 @@ methods:
       - name: id
         type: string
         description: The domain id to unregister
+    effect: write
   - name: loadConfig
     description: >-
       The topology configuration as the file holds it, for callers that want the document rather
@@ -36,4 +38,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T22:05:40.864Z'
-updatedAt: '2026-09-20T22:44:57.732Z'
+updatedAt: '2026-09-20T23:03:41.724Z'

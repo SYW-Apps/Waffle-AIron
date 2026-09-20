@@ -67,6 +67,12 @@ forward to `domain_curator`. A Portal that reaches a write-effect facade method
 is the shortcut the standard names by code — and here it is not ceremony, because
 the id check a registration needs cannot be made where the write happens.
 
+`itopology_repository` now tags those two methods `effect: write`, which is what
+makes that rule enforce anything: `PORTAL_WRITE_SHORTCUT` judges tagged methods
+only, and the facade carried no tag, so the old shape validated clean. Measured
+by pointing `addDomain` back at the facade with the tags in place — it fails as
+an error now, where before it passed in silence.
+
 **This narrows the public library surface further.** `findDomain`,
 `listFreeStandingDomains` and `deriveSubsystemDomains` are gone from
 `src/core/domains.ts` entirely, and `addFreeStandingDomain` and
