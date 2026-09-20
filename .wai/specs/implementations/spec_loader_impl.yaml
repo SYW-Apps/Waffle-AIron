@@ -154,8 +154,22 @@ methods:
         type: call
         targetComponent: spec_index
         targetMethod: inspectChainedRoots
+  - name: loadTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadTypeSpec
+  - name: saveTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: saveTypeSpec
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-12T17:38:20.626Z'
+updatedAt: '2026-09-19T23:04:53.499Z'

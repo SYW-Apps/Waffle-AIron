@@ -17,6 +17,29 @@ methods:
       - name: candidate
         type: ComponentSpec
         description: The component as the tool's arguments describe it
+  - name: updateSpecGated
+    description: >-
+      Forward the sdd_update_spec patch to the authoring portal's gate: the intrinsic rules judge
+      the merged candidate and refuse it before anything reaches disk, and a dry run runs that whole
+      write and answers with the report it would have produced without touching a file.
+    signature: >-
+      updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
+      SpecChangeReport
+    returns: SpecChangeReport
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The stored spec's id
+      - name: delta
+        type: SpecDelta
+        description: The partial change to merge, carrying the delta's own verbs
+      - name: dryRun
+        type: boolean
+        description: Answer with what the delta would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:42:03.998Z'
-updatedAt: '2026-09-18T21:51:06.048Z'
+updatedAt: '2026-09-19T22:56:26.373Z'

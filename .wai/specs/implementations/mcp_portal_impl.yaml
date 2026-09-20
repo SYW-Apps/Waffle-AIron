@@ -128,6 +128,48 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: renameMethod
+  - name: sdd_update_spec
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the updateSpec workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: updateSpec
+  - name: sdd_set_endpoints
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the setEndpoints workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: setEndpoints
+  - name: sdd_set_public_interfaces
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the setPublicInterfaces workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: setPublicInterfaces
+  - name: sdd_set_subsystem_project_path
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the setSubsystemProjectPath workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: setSubsystemProjectPath
+  - name: sdd_get_spec
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the getSpec workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: getSpec
+  - name: sdd_add_type
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the addType workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: addType
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T19:27:27.881Z'
+updatedAt: '2026-09-19T23:07:19.580Z'

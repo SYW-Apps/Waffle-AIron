@@ -16,6 +16,16 @@ methods:
         type: call
         targetComponent: authoring_portal
         targetMethod: addComponent
+  - name: updateSpecGated
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Call updateSpecGated on the authoring portal: the gate judges the merged candidate and
+          refuses it before anything reaches disk, and a dry run runs that same write and answers
+          with the report it would have produced
+        type: call
+        targetComponent: authoring_portal
+        targetMethod: updateSpecGated
 status: complete
 createdAt: '2026-09-18T21:43:42.731Z'
-updatedAt: '2026-09-18T21:51:11.435Z'
+updatedAt: '2026-09-19T22:57:13.585Z'

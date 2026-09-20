@@ -421,6 +421,20 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: repairForeignStepFields
+  - name: loadTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadTypeSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadTypeSpec
+  - name: saveTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward saveTypeSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: saveTypeSpec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T23:51:16.633Z'
+updatedAt: '2026-09-19T23:04:53.984Z'

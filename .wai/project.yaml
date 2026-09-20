@@ -152,7 +152,7 @@ rules:
     # modelling decision nobody has taken, unreadable is a shape the analysis
     # cannot follow and there is nothing in the tree to fix for it.
     carried:
-      # 46 finding(s), 59 unit(s).
+      # 49 finding(s), 59 unit(s).
       - kind: drift
         why: >-
           A spec names a source file that only USES the function, and the code that holds it lives
@@ -354,7 +354,13 @@ rules:
             at: 'loadComponentSpecs'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
+            at: 'loadImplementationSpec'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
             at: 'loadImplementationSpecs'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
+            at: 'loadTypeSpec'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
             at: 'loadInterfaceSpec'
@@ -387,6 +393,9 @@ rules:
             at: 'saveSubsystemSpec'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
+            at: 'saveTypeSpec'
+          - code: METHOD_BODY_NOT_FOUND
+            spec: mcp_core_adapter_impl
             at: 'saveSystemSpec'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_orchestrator_impl
@@ -400,7 +409,7 @@ rules:
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_validator_adapter_impl
             at: 'validateSddTree'
-      # 94 finding(s), 131 unit(s).
+      # 95 finding(s), 132 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -457,7 +466,7 @@ rules:
               - 'spec_registry.invalidateCache'
           - code: UNDECLARED_COLOCATED_CALL
             spec: core_orchestrator_impl
-            at: 'updateSpec'
+            at: 'saveTypeSpec'
             covers:
               - 'spec_registry.invalidateCache'
           - code: UNDECLARED_COLOCATED_CALL
@@ -811,6 +820,11 @@ rules:
             covers:
               - 'spec_registry.invalidateCache'
           - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_loader_impl
+            at: 'saveTypeSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
             spec: spec_validator_impl
             at: 'resolveThroughParent'
             covers:
@@ -916,7 +930,7 @@ rules:
             covers:
               - 'spec_validator.resolveThroughParent'
               - 'validator_core_adapter.loadProjectConfig'
-      # 6 finding(s), 52 unit(s).
+      # 6 finding(s), 56 unit(s).
       - kind: undecided
         why: >-
           src/mcp/server.ts is one file modelled as five components (mcp_portal, mcp_server,
@@ -945,16 +959,18 @@ rules:
               - 'mcp_core_adapter.composeAgentBrief'
               - 'mcp_core_adapter.createChainedSubsystem'
               - 'mcp_core_adapter.loadComponentSpecs'
-              - 'mcp_core_adapter.loadImplementationSpecs'
+              - 'mcp_core_adapter.loadImplementationSpec'
               - 'mcp_core_adapter.loadInterfaceSpecs'
               - 'mcp_core_adapter.loadProjectConfig'
               - 'mcp_core_adapter.loadSubsystemSpecs'
               - 'mcp_core_adapter.loadSystemSpec'
+              - 'mcp_core_adapter.loadTypeSpec'
               - 'mcp_core_adapter.resolveAgentTopology'
               - 'mcp_core_adapter.saveImplementationSpec'
               - 'mcp_core_adapter.saveInterfaceSpec'
               - 'mcp_core_adapter.saveSubsystemSpec'
               - 'mcp_core_adapter.saveSystemSpec'
+              - 'mcp_core_adapter.saveTypeSpec'
               - 'mcp_orchestrator.externalizeSubsystem'
               - 'mcp_orchestrator.internalizeSubsystem'
               - 'mcp_orchestrator.moveSubsystemProject'
@@ -986,14 +1002,16 @@ rules:
               - 'mcp_core_adapter.composeAgentBrief'
               - 'mcp_core_adapter.createChainedSubsystem'
               - 'mcp_core_adapter.loadComponentSpecs'
-              - 'mcp_core_adapter.loadImplementationSpecs'
+              - 'mcp_core_adapter.loadImplementationSpec'
               - 'mcp_core_adapter.loadInterfaceSpecs'
               - 'mcp_core_adapter.loadProjectConfig'
               - 'mcp_core_adapter.loadSubsystemSpecs'
+              - 'mcp_core_adapter.loadTypeSpec'
               - 'mcp_core_adapter.saveImplementationSpec'
               - 'mcp_core_adapter.saveInterfaceSpec'
               - 'mcp_core_adapter.saveSubsystemSpec'
               - 'mcp_core_adapter.saveSystemSpec'
+              - 'mcp_core_adapter.saveTypeSpec'
               - 'mcp_orchestrator.externalizeSubsystem'
               - 'mcp_orchestrator.internalizeSubsystem'
               - 'mcp_orchestrator.moveSubsystemProject'

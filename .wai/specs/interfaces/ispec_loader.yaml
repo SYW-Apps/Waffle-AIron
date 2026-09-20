@@ -134,6 +134,25 @@ methods:
     returns: ChainedRootsInspection
     guarantees:
       - idempotent
+  - name: loadTypeSpec
+    description: Loads a single type specification (entity or value-object) by id.
+    signature: 'loadTypeSpec(id: string): TypeSpec | null'
+    returns: TypeSpec | null
+    params:
+      - name: id
+        type: string
+        description: The type's id
+  - name: saveTypeSpec
+    description: >-
+      Saves a type specification, answering with the placement notices the write owes — a re-save
+      never relocates the existing file, and under the flat layout subsystem ownership is the field,
+      not the folder.
+    signature: 'saveTypeSpec(spec: TypeSpec): string[]'
+    returns: string[]
+    params:
+      - name: spec
+        type: TypeSpec
+        description: The type to persist
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-19T00:29:56.134Z'
+updatedAt: '2026-09-19T23:04:53.356Z'

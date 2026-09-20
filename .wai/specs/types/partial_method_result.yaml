@@ -1,0 +1,25 @@
+kind: value-object
+id: partial_method_result
+name: PartialMethodResult
+description: >-
+  The marker a filtered spec read carries: which methods the answer holds, how many it leaves out,
+  and the warning that it must never be re-authored from. Present only when a read named methods,
+  because a write tool REPLACES the method list — re-authoring from a partial answer would delete
+  every method left out, and only this marker stands between the two.
+subsystem: sdd_mcp
+fields:
+  - name: shown
+    type: string[]
+    description: The method names this answer carries.
+    optional: false
+  - name: omitted
+    type: number
+    description: How many of the spec's methods are NOT in it.
+    optional: false
+  - name: warning
+    type: string
+    description: Why it must never be re-authored from, named in full.
+    optional: false
+methods: []
+createdAt: '2026-09-19T23:05:27.992Z'
+updatedAt: '2026-09-19T23:05:28.173Z'
