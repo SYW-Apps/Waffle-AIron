@@ -1,0 +1,27 @@
+kind: value-object
+id: layout_model
+name: LayoutModel
+description: >-
+  The minimum a graph has to say about itself to be arranged: who belongs to which subsystem, who
+  owns whom, and what depends on what. Deliberately narrower than the canvas model — the layout has
+  no business knowing a component's description or a system's vision, and a narrower input is what
+  lets the same arrangement serve formats that know nothing of each other.
+fields:
+  - name: subsystems
+    type: object[]
+    description: The subsystem containers, by id.
+    optional: false
+  - name: components
+    type: object[]
+    description: >-
+      Each component's id, its subsystem, its componentType, the pattern that owns it if any, what
+      it owns, and what it depends on.
+    optional: false
+  - name: edges
+    type: object[]
+    description: Dependency edges as from/to ids, each flagged when it crosses a subsystem boundary.
+    optional: false
+methods: []
+sourcePath: src/core/canvas-layout.ts
+createdAt: '2026-09-20T16:40:48.647Z'
+updatedAt: '2026-09-20T16:40:48.658Z'

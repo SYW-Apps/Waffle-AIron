@@ -298,6 +298,18 @@ methods:
           CLI flags: --strict (treat a repository with no approval, or no spec tree at all, as a
           failure rather than a notice).
         optional: false
+  - name: runDiagram
+    description: >-
+      `wairon diagram`: render the project's spec tree into a diagram artifact and write it out. The
+      canvas is a self-contained page that opens from disk; draw.io and Excalidraw are exchange
+      formats for tools the reader already has. Which format is asked for decides only the encoder —
+      every format draws the same arrangement of the same tree.
+    signature: 'runDiagram(options: DiagramOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: options
+        type: DiagramOptions
+        description: The requested format and where to write the artifact
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-19T12:25:31.864Z'
+updatedAt: '2026-09-20T16:41:28.161Z'

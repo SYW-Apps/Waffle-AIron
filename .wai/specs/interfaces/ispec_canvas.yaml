@@ -1,0 +1,38 @@
+id: ispec_canvas
+name: Spec Canvas Interface
+description: >-
+  Building the canvas model from the spec tree, and drawing it as a page that needs nothing else to
+  open. The two are separate because the model is also what the live web canvas consumes — rendering
+  is one consumer of it, not its purpose.
+component: spec_canvas
+methods:
+  - name: build
+    description: >-
+      Project the current project's spec tree into the canvas model: the nodes, their containment,
+      the edges between them, and any findings to surface on them. Findings are passed in rather
+      than computed here — the canvas draws a judgement, it does not make one.
+    signature: 'build(issues?: ValidationIssue[]): CanvasModel'
+    returns: CanvasModel
+    params:
+      - name: issues
+        type: ValidationIssue[]
+        description: Findings to mark on the nodes they name; none when omitted
+        optional: true
+    guarantees:
+      - idempotent
+  - name: render
+    description: >-
+      Draw a canvas model as a single self-contained HTML page: markup, styles and the interaction
+      engine all embedded, so the file opens from disk with no server and no network. That embedding
+      is why this component's file is mostly text.
+    signature: 'render(model: CanvasModel): string'
+    returns: string
+    params:
+      - name: model
+        type: CanvasModel
+        description: The model to draw
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T16:38:05.210Z'
+updatedAt: '2026-09-20T16:38:05.230Z'

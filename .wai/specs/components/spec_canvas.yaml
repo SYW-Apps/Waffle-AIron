@@ -1,0 +1,20 @@
+id: spec_canvas
+name: Spec Canvas
+description: >-
+  The interactive canvas of a spec tree: the model behind it, and the self-contained offline page
+  that draws it. It is the SINGLE source for that engine — `scripts/gen-canvas-engine.mjs` extracts
+  `web/src/canvas/*` from this component's file so the React app and the exported page can never
+  drift, which is why the engine lives here as text rather than in the web app that also runs it.
+  That is also why the file is large out of proportion to its surface: two exported functions, and
+  roughly four fifths of it is the embedded engine the page carries so it works with no network.
+  Despite the name, `canvas-layout.ts` is not part of this — nothing here calls it; it serves the
+  diagram codec.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - spec_loader
+dependencyClass: read
+status: complete
+createdAt: '2026-09-20T16:37:57.042Z'
+updatedAt: '2026-09-20T16:39:48.338Z'

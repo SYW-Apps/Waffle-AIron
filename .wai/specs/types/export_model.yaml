@@ -1,0 +1,35 @@
+kind: value-object
+id: export_model
+name: ExportModel
+description: >-
+  What an exporter needs to draw a tree and no more: names to label boxes with, types to colour them
+  by, ownership to nest them by, and edges to connect them. It is a narrowing of the canvas model —
+  the canvas carries vision, descriptions, databases and view preferences that a static export has
+  nowhere to put.
+fields:
+  - name: system
+    type: object
+    description: The system's name, for the diagram title.
+    optional: false
+  - name: generatedAt
+    type: string
+    description: When the export was produced, stamped into the artifact.
+    optional: false
+  - name: subsystems
+    type: object[]
+    description: Each subsystem's id and name.
+    optional: false
+  - name: components
+    type: object[]
+    description: >-
+      Each component's id, name, subsystem, componentType, portalType, whether it is public, the
+      pattern that owns it, and what it owns.
+    optional: false
+  - name: edges
+    type: object[]
+    description: Dependency edges as from/to ids, each flagged when it crosses a subsystem boundary.
+    optional: false
+methods: []
+sourcePath: src/core/diagram-export.ts
+createdAt: '2026-09-20T16:40:55.173Z'
+updatedAt: '2026-09-20T16:40:55.189Z'

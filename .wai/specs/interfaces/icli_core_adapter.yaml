@@ -167,6 +167,18 @@ methods:
       - name: apply
         type: boolean
         description: Write the repair; false plans without writing
+  - name: renderDiagram
+    description: >-
+      Calls renderDiagram on core portal: render the spec tree into the requested format and answer
+      the artifact as a string. The CLI reaches diagram rendering through here rather than importing
+      the canvas and exporter modules directly — those live in another subsystem, and an adapter is
+      what a subsystem boundary is crossed with.
+    signature: 'renderDiagram(format: string): string'
+    returns: string
+    params:
+      - name: format
+        type: string
+        description: canvas, mermaid, drawio or excalidraw
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T23:51:22.134Z'
+updatedAt: '2026-09-20T16:42:31.028Z'

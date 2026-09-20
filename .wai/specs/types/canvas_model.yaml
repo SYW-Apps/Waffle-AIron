@@ -1,0 +1,39 @@
+kind: value-object
+id: canvas_model
+name: CanvasModel
+description: >-
+  The whole tree as the interactive canvas needs it: the system with its vision, target language,
+  databases and view preferences, every subsystem and component with its prose, and the edges
+  between them. Wider than the export model on purpose — the canvas is explorable, so it carries
+  what a reader clicks into, while a static export carries only what it can draw. It is also the
+  model the live web canvas consumes, which is why building it is a separate method from rendering
+  it.
+fields:
+  - name: system
+    type: object
+    description: >-
+      The system's name, vision, target language, declared databases, and the diagram view
+      preferences the canvas opens with.
+    optional: false
+  - name: generatedAt
+    type: string
+    description: When the model was built, stamped into the rendered page.
+    optional: false
+  - name: subsystems
+    type: object[]
+    description: Each subsystem's id, name and description.
+    optional: false
+  - name: components
+    type: object[]
+    description: Each component with what the canvas shows about it, including the findings marked on it.
+    optional: false
+  - name: edges
+    type: object[]
+    description: >-
+      Dependency and ownership edges between the nodes, each flagged when it crosses a subsystem
+      boundary.
+    optional: false
+methods: []
+sourcePath: src/core/canvas.ts
+createdAt: '2026-09-20T16:41:02.457Z'
+updatedAt: '2026-09-20T16:41:02.469Z'

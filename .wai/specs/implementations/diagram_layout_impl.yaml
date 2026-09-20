@@ -1,0 +1,42 @@
+id: diagram_layout_impl
+name: Diagram Layout Implementation
+description: >-
+  src/core/canvas-layout.ts. Fixed box and gap constants rather than a solver: the arrangement has
+  to be reproducible across formats and across runs, and a heuristic that drifts would make two
+  exports of the same tree disagree.
+contract: idiagram_layout
+sourcePath: src/core/canvas-layout.ts
+methods:
+  - name: computeLayout
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Group the components by the subsystem that holds them, and inside each by the pattern that
+          owns them; a retired Gateway is no pattern and lays out as a plain box
+        type: local
+      - stepNumber: 2
+        description: >-
+          Place each subsystem's members in rows at the fixed box size and gaps, wrapping at the
+          maximum row width, and size the pattern container around what it holds
+        type: local
+      - stepNumber: 3
+        description: Decide how each container contributes
+        type: branch
+        condition: the container is collapsed
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Give it its header height only and place nothing inside it — collapsing changes the
+          arrangement, it does not merely hide part of it
+        type: local
+      - stepNumber: 5
+        description: Size it around the boxes it contains
+        type: local
+      - stepNumber: 6
+        description: Answer with absolute boxes for every visible component and every subsystem container
+        type: return
+        outcome: laid out
+status: complete
+createdAt: '2026-09-20T16:38:44.364Z'
+updatedAt: '2026-09-20T16:38:44.373Z'

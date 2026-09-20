@@ -1,0 +1,46 @@
+kind: value-object
+id: diagram_options
+name: DiagramOptions
+description: >-
+  What `wairon diagram` was asked for: which slice of the tree, how deep, and in which format. The
+  format flags are separate booleans rather than one enum because the command grew them one at a
+  time and they are not quite exclusive — worth knowing before anyone treats them as a closed set.
+fields:
+  - name: subsystem
+    type: string
+    description: Draw only this subsystem's slice of the tree.
+    optional: true
+  - name: sequence
+    type: string
+    description: >-
+      A `component:method` (or `component.method`) to draw as a narrative sequence diagram instead
+      of the architecture.
+    optional: true
+  - name: depth
+    type: number
+    description: How far to descend.
+    optional: true
+  - name: all
+    type: boolean
+    description: Draw the whole tree rather than the default slice.
+    optional: true
+  - name: canvas
+    type: boolean
+    description: Emit the interactive self-contained HTML canvas instead of Mermaid.
+    optional: true
+  - name: drawio
+    type: boolean
+    description: Emit an editable draw.io file.
+    optional: true
+  - name: excalidraw
+    type: boolean
+    description: Emit an Excalidraw scene.
+    optional: true
+  - name: out
+    type: string
+    description: Where to write the artifact.
+    optional: true
+methods: []
+sourcePath: src/commands/diagram.ts
+createdAt: '2026-09-20T16:42:26.894Z'
+updatedAt: '2026-09-20T16:42:26.906Z'

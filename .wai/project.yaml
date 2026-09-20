@@ -88,7 +88,6 @@ rules:
     # reported the day it appears, which is the whole point.
     unclaimed:
       - src/commands/aliases.ts
-      - src/commands/diagram.ts
       - src/commands/domains.ts
       - src/commands/execution.ts
       - src/commands/status.ts
@@ -96,12 +95,9 @@ rules:
       - src/config/loader.ts
       - src/config/userconfig.ts
       - src/core/budget_policy.ts
-      - src/core/canvas-layout.ts
-      - src/core/canvas.ts
       - src/core/context.ts
       - src/core/demo-seed.ts
       - src/core/detection.ts
-      - src/core/diagram-export.ts
       - src/core/domains.ts
       - src/core/execution_profile.ts
       - src/core/narrative-labels.ts
