@@ -967,13 +967,15 @@ methods:
         type: local
       - stepNumber: 4
         description: >-
-          The conformance dial off skips, and only exact analysis grade fires (weaker grades never
-          guess) — the stance stays written here, where the accusation is read: otherwise continue
-          with the next method
+          The conformance dial off skips, only exact analysis grade fires (weaker grades never
+          guess), and a method that CLAIMS no call is this rule's subject in neither direction —
+          nothing to prove forward, and nothing it could have failed to declare, so what it leaves
+          unsaid is UNUSED_*'s subject and not a charge of hiding a colocated call. The stance stays
+          written here, where the accusation is read: otherwise continue with the next method
         type: branch
         condition: >-
-          tier is not off, implMethod.narrative is non-empty, the entry names a sourceFile, and
-          facts exist with status analyzed at analysisGrade exact
+          tier is not off, implMethod.narrative or implMethod.calls is non-empty, the entry names a
+          sourceFile, and facts exist with status analyzed at analysisGrade exact
         onFalseStep: 2
       - stepNumber: 5
         description: >-
@@ -981,8 +983,14 @@ methods:
           sites = the private closedCallSites(code, file, fnSymbol): the function's own
           facts.callSitesOf entry, closed transitively over the named helpers it calls, each site
           carrying the file its names resolve in. The forward direction closes over EVERYTHING the
-          function reaches — a wider callee set can only accept more, never accuse. Start an empty
-          missed list
+          function reaches — a wider callee set can only accept more, never accuse. claims = the
+          private claimsOf(implMethod): every narrative call step carrying its stepNumber, then
+          every declared `calls` entry parsed into the component and method it names and carrying no
+          stepNumber at all. One subject, because the two assert the same call and only a step also
+          says where in the flow it happens — which this check never reads. A dispatch step names a
+          capability rather than a method and asserts nothing about a call site, and a declared
+          reference that is not <component>.<method> names no target (MALFORMED_DECLARED_CALL
+          reports exactly that): neither becomes a claim. Start an empty missed list
         type: local
       - stepNumber: 6
         description: >-
@@ -993,33 +1001,31 @@ methods:
         onFalseStep: 2
       - stepNumber: 7
         label: stepLoop
-        description: Check each narrative step
+        description: Check each call the method claims
         type: loop
-        over: implMethod.narrative
+        over: claims
         endStep: 13
       - stepNumber: 8
         description: >-
-          Only call steps count (dispatch steps route through runtime tables, so the bound name
-          never appears at the call site); a target this tree does not contain is
-          cross-tree-references' finding, and surface-reference-backing's once it resolves: continue
-          with the next step
+          A target this tree does not contain is cross-tree-references' finding, and
+          surface-reference-backing's once it resolves: continue with the next claim
         type: branch
-        condition: >-
-          step is a call step with targetComponent and targetMethod, and ctx.componentMap has
-          step.targetComponent
+        condition: ctx.componentMap has claim.component
         onFalseStep: 7
       - stepNumber: 9
         description: >-
           target = the private resolveCallTarget over the implementations of each interface in
-          ctx.interfacesByComponent.get(step.targetComponent): accepted = step.targetMethod plus the
-          symbol each target-side implementation declares for it, files = each such implementation's
-          method sourcePath, else its own
+          ctx.interfacesByComponent.get(claim.component): accepted = claim.method plus the symbol
+          each target-side implementation declares for it, files = each such implementation's method
+          sourcePath, else its own
         type: local
       - stepNumber: 10
         description: >-
           N:1 identity forwarding — the caller's own realized symbol IS the target name, so facade
-          and target collapse onto one function and the step is realized by identity, exactly as
-          Level 1's N:1 sharing blesses: continue with the next step
+          and target collapse onto one function and the claim is realized by identity, exactly as
+          Level 1's N:1 sharing blesses. A declaration earns this on the same terms a step does: the
+          reason is the shape of the CODE, which does not know which way the claim was written.
+          Continue with the next claim
         type: branch
         condition: accepted lacks fnSymbol
         onFalseStep: 7
@@ -1031,56 +1037,63 @@ methods:
           type and a new Class(...).<method>() receiver through the module its class name came from.
           landed = the union of code.originOf(site, file) over the same sites — the files a call
           PROVABLY lands in, empty where a pure model cannot say, and the only tier a finding may
-          name a landing from: widening what a call reached can accept a step, it must never accuse
+          name a landing from: widening what a call reached can accept a claim, it must never accuse
           one
         type: local
       - stepNumber: 12
         description: >-
           A target naming no file of its own has nothing to resolve AGAINST (MISSING_SOURCE_PATH
           reports exactly that), so it falls back to the name membership this check has always had;
-          otherwise a call landing in one of the target's own files realizes the step: continue with
-          the next step
+          otherwise a call landing in one of the target's own files realizes the claim: continue
+          with the next claim
         type: branch
         condition: >-
-          the step is unrealized: target.files is empty and matching is empty, or target.files is
+          the claim is unrealized: target.files is empty and matching is empty, or target.files is
           non-empty and reached meets none of it
         onFalseStep: 7
       - stepNumber: 13
         label: appendMissed
         description: >-
-          Append the step's stepNumber, its target (targetComponent.targetMethod), the accepted
-          names and the miss to missed: absent when matching is empty, unresolved when landed is
-          empty — carrying the distinct SHAPES the matching sites were written in, which is what an
-          unresolved answer is about — else elsewhere carrying the files it did land in
+          Append to missed: the claim's stepNumber when it has one, its target (component.method),
+          the accepted names and the miss — absent when matching is empty, unresolved when landed is
+          empty, carrying the distinct SHAPES the matching sites were written in, which is what an
+          unresolved answer is about, else elsewhere carrying the files it did land in
         type: local
       - stepNumber: 14
         label: unrealizedReport
         description: >-
           When missed holds an entry whose miss is NOT unresolved, report CALL_STEP_UNREALIZED
           (warning; spec impl.id; draft context the entry's draftContext), one finding per method
-          listing each such step with its target, the names looked for and the files it landed in
+          listing each such claim with its target, the names looked for and the files it landed in
           instead, plus the function fnSymbol and file: callees are closed over the named helpers
           the function calls and resolved through this file's import bindings, order and arguments
-          unchecked. Only what RESOLVED may accuse, so an unresolved miss is never counted here
+          unchecked. A claim reads as "step 3" or as "declared call" and is carried as a unit the
+          same way — stepNumber:target for a step, target alone for a declaration, which is the
+          `calls` entry verbatim. Only what RESOLVED may accuse, so an unresolved miss is never
+          counted here
         type: local
       - stepNumber: 15
         label: unresolvedReport
         description: >-
           When missed holds an unresolved entry, report CALL_ORIGIN_UNRESOLVED (warning; spec
           impl.id; draft context the entry's draftContext), one finding per method listing each such
-          step with the shape its call sites were written in: the target name IS called inside
+          claim with the shape its call sites were written in: the target name IS called inside
           fnSymbol, but from no site this analysis can resolve to a file. It names which forms
           resolve and which do not, and asks for nothing — this is a coverage hole in the reader,
-          not a defect in the code or the narrative, so the step is neither proven realized nor
-          accused of being missing and no working call is asked to be rewritten to suit the analysis
+          not a defect in the code or in what the method claims, so the claim is neither proven
+          realized nor accused of being missing and no working call is asked to be rewritten to suit
+          the analysis
         type: local
       - stepNumber: 16
         description: >-
-          declared = every targetComponent.targetMethod any narrative step of the method names.
-          crossings = the sites of closedCallSites(code, file, fnSymbol, stopping AT the colocated
-          names) whose name is a colocated modelled method of another component, is not in declared,
-          and whose code.originOf resolves to this very file. The converse direction stops at a
-          modelled method because what it goes on to call belongs to its own narrative
+          declared = every targetComponent.targetMethod any narrative step of the method names,
+          together with every entry of its declared `calls`. A dispatch or register step asserts
+          nothing about a call site, but it does name the target out loud, and this direction asks
+          only whether the boundary hop is written down where a reader will find it. crossings = the
+          sites of closedCallSites(code, file, fnSymbol, stopping AT the colocated names) whose name
+          is a colocated modelled method of another component, is not in declared, and whose
+          code.originOf resolves to this very file. The converse direction stops at a modelled
+          method because what it goes on to call belongs to its own narrative
         type: local
       - stepNumber: 17
         description: >-
@@ -1097,7 +1110,7 @@ methods:
           draftContext), one finding per method naming each crossing's called symbol and the
           component method it is: sharing a file does not make the hop internal — it crosses a
           component boundary nothing imports, which no file-level check can see. Narrate the call,
-          or move the code so the boundary is real
+          declare it in `calls`, or move the code so the boundary is real
         type: local
     symbol: check
   - name: carriedDebt
@@ -1226,4 +1239,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-19T19:06:23.841Z'
+updatedAt: '2026-09-20T09:45:54.340Z'

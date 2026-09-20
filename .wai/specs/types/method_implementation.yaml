@@ -62,9 +62,12 @@ fields:
       calls-only with no steps authored). Each entry is one "<component>.<method>" reference — the
       spelling the conformance debt register and a lint allow name a unit with. The narrative graph
       walk takes exactly these edges for a method with no narrative and no others, so an undeclared
-      collaborator is not reached; each entry is validated like a call step
-      (narrative-target-references). Refused beside a non-empty narrative, where the steps already
-      say what is called.
+      collaborator is not reached. An entry is held to everything a call step is held to: the target
+      is validated the same way (narrative-target-references), and the CODE is read for it the same
+      way (call-conformance, both directions) — a declaration asserts the same call a step does,
+      minus the position in the flow that this check never reads, so it can no more buy reachability
+      without the code than a step can. Refused beside a non-empty narrative, where the steps
+      already say what is called.
     optional: true
 methods:
   - name: sourceFile
@@ -121,4 +124,4 @@ methods:
     symbol: parseDeclaredCall
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-13T16:59:08.774Z'
-updatedAt: '2026-09-19T21:38:40.917Z'
+updatedAt: '2026-09-20T09:46:47.782Z'

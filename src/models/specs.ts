@@ -957,8 +957,12 @@ export const MethodImplementationSchema = z.object({
    * so a lower detail dial no longer vouches for everything the component
    * declares. Each entry gets the same target validation a `call` step gets
    * (the component resolves, the caller declares it, the method is on its
-   * contract). Refused beside a non-empty narrative, where the steps already
-   * say what is called and a second spelling could only disagree.
+   * contract) AND the same code↔spec reading (call-conformance, both
+   * directions): an entry asserts the same call a step does, minus the
+   * position in the flow that check never reads, so it can no more buy
+   * reachability without the code than a step can. Refused beside a non-empty
+   * narrative, where the steps already say what is called and a second
+   * spelling could only disagree.
    */
   calls: z.array(z.string().min(1)).optional(),
   /**

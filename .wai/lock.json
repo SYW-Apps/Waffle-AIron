@@ -1,14 +1,14 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "eac96df8cb859772440f8bc7f9bdac5f83e4af35b72f79a2075e6679650689ad"
+    "digest": "e52d137c57b8aa8d09073c58f0472eb548f68ab7e364aa9bf15394667f555304"
   },
-  "lockedAt": "2026-09-20T09:20:33.170Z",
+  "lockedAt": "2026-09-20T10:05:33.250Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "5.1.1-dev.44",
+  "validatorVersion": "5.1.1-dev.45",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -276,7 +276,7 @@
     ".wai/specs/implementations/cli_surfaces_client_adapter_impl.yaml": "6cce12f4eb57adb998ddaeec1deec5d3377e0721ee07953e1aecc5b0d14d90e2",
     ".wai/specs/implementations/cli_validator_adapter_impl.yaml": "8155aaf7f11aee4c526b49583c1e3fb32b7575484a1fa798779351c890a267fe",
     ".wai/specs/implementations/cli_variants_adapter_impl.yaml": "92c2e00e17920ebc92349edabdc53edc09f6bda131f7c3fd091d2822855757ba",
-    ".wai/specs/implementations/conformance_rules_impl.yaml": "e220db8b9c603b9d6f5522656362a7d236ddc35415155f18baad4218b6affc84",
+    ".wai/specs/implementations/conformance_rules_impl.yaml": "c987d17aba7d19e31b33fc7255c77096b26b20cd0b854996f18a8cc55bbb1520",
     ".wai/specs/implementations/core_orchestrator_impl.yaml": "264d546b6b1bc93e9c939d58dc02c6e571f675e6c34d3f1bdc07bb6b307f1a14",
     ".wai/specs/implementations/core_portal_impl.yaml": "083068ab158b3018de9edacac269b2e2dd265599bd07abb4c329755b4c15a571",
     ".wai/specs/implementations/credential_index_impl.yaml": "c1bc0bd3d3a5e4fe1e44542bddfec59bc6e96022373e750fa7dbc1e0360f8b93",
@@ -501,7 +501,7 @@
     ".wai/specs/interfaces/icli_surfaces_client_adapter.yaml": "2d027c0f0fee8a50d88fbb62c430bd5ce5161bfb8a7fd2a2a613e2adac758fad",
     ".wai/specs/interfaces/icli_validator_adapter.yaml": "f93812cb04483654ecd405c78f9597847dfc8e361cbe293cb75ba0865bc92017",
     ".wai/specs/interfaces/icli_variants_adapter.yaml": "b65d3bd68145c0f0150358283596fe0da7f0c81c7f4985a023751d84b5fbb636",
-    ".wai/specs/interfaces/iconformance_rules.yaml": "f875d6430a97ba4afd25e05433f10381c79096f2355414d9edbf555423a8315c",
+    ".wai/specs/interfaces/iconformance_rules.yaml": "e1d0f3dac83972cb98806870c4ed7b3d2e3a4d21dee05c0e5a8e5acef9157923",
     ".wai/specs/interfaces/icore_orchestrator.yaml": "38b17a0836abfe92c8a0f71d8685e7914870d2988a92d0de4acbfa15409e0401",
     ".wai/specs/interfaces/icore_portal.yaml": "d97a03923c00670074836c8111b2e004016eda29f2c532a53596e88b95e4256e",
     ".wai/specs/interfaces/icredential_index.yaml": "6b46cddc39eb8fdf0ebcccc9961c40e0b8810e22549556d964fb8e3337021cde",
@@ -791,7 +791,7 @@
     ".wai/specs/types/lock_status.yaml": "a618160053f3346ca0fbe869705a64b6810f0f974324d6e29e251c5702376fef",
     ".wai/specs/types/mcp_install_options.yaml": "ddb154eebd630bb4f9726afd97ce9c95cb974ff9e58b8609fab733ac3a42dffc",
     ".wai/specs/types/mcp_tool_response.yaml": "3c1a3aaa2bbd3b7902c4ccda833918dde52e461288bf0e88ee3cab70efa70046",
-    ".wai/specs/types/method_implementation.yaml": "f37e43465c72a0da387ec41da565101f8966bf776c0f1488a22c025bda11ac18",
+    ".wai/specs/types/method_implementation.yaml": "89b4d5c930b7f7c235af82a7373b41827bbcc2a2d336a8c7cc5746ce7682283f",
     ".wai/specs/types/method_rename.yaml": "17d383e1db6c567a2f4f0e2fe2abbe853dda6750e606deb056d906b3654d46ce",
     ".wai/specs/types/method_signature.yaml": "33581ece5211e1629db530fd7d57a4f8191b64482d30381af9612d3d7218ed5b",
     ".wai/specs/types/mount_surface_snapshots.yaml": "24e784a4b010598f684225de04616d777b3cf48ba5f45f6fc10549962802f58a",
