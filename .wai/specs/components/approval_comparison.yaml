@@ -1,0 +1,26 @@
+id: approval_comparison
+name: Approval Comparison
+description: >-
+  Whether this tree is still the tree that was approved, and where it is not. Holds nothing and
+  writes nothing: it derives per-spec content digests from the spec files on disk, compares them
+  against the digests the lock record carries, and answers the difference. It completes a triple
+  that was two thirds designed — `state_hash` answers what the gate identity IS, `lock_store`
+  answers where the record lives, and until now nothing named the arithmetic between them, which is
+  the part `wairon lock` and `lock-check` actually decide on. Two stereotype choices are worth
+  recording because both were refused first. It is NOT a Query, though it only reads: a Query is a
+  member of one Repository computing over that Repository's own Store, and this reads the spec tree
+  and the lock record, which belong to different owners. And it carries no `dependencyClass`, though
+  it writes nothing: `read` logic may reach Repositories, Indexes, Adapters and other pure or read
+  Orchestrators but never a Store directly, and `lock_store` is a Store with no facade over it.
+  Claiming `read` would have been a promise the dependency graph does not keep. Child pins belong
+  here for the same reason the digests do — a chained subproject's approved commit is part of what
+  the record covers, so "did this change" has to account for it.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - spec_loader
+  - lock_store
+status: complete
+createdAt: '2026-09-20T15:18:48.313Z'
+updatedAt: '2026-09-20T15:22:26.252Z'

@@ -11,7 +11,10 @@ import {
   getLoaderIssues,
   scanAllSpecs,
 } from '../core/specs.js';
-import { approvalRecord, diffAgainstApproval, diffSize, movedChildren } from '../core/approval.js';
+// The approval surface comes through core_portal, not out of ../core/approval.js:
+// sdd_cli reaching into another subsystem's module is the boundary this Portal
+// exists to hold.
+import { approvalRecord, diffAgainstApproval, diffSize, movedChildren } from '../core/index.js';
 import { describeApprover } from '../core/lockfile.js';
 import { implementationSourceFiles } from '../models/specs.js';
 

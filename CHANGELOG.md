@@ -26,6 +26,60 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### The approval is reached through the portal that already claimed to publish it
+
+`src/core/index.ts` has said for a while that the approval is "published on the
+portal because both the local lock and the hosted admin plane approve through
+it". It published four of the six functions that sentence covers. `wairon lock`
+and `wairon status` imported the other two — `movedChildren` and `diffSize` —
+straight out of `src/core/approval.js`, which is sdd_cli reaching past
+`core_portal` into another subsystem's module. Nothing was broken by it, and
+that is why it lasted: an import that resolves is invisible until something asks
+where the boundary is.
+
+`core_portal` now re-exports `movedChildren`, and both commands take the whole
+approval surface from the portal. The re-export is by identity rather than a
+wrapper, so there is no second place for the behaviour to drift — and a test
+asserts exactly that, beside one that reads both command files and fails if
+either names the module again. A type-check cannot make that assertion: both
+imports compile, so only the import site says which side of the boundary a
+command is on.
+
+**`diffSize` stays a free function, and stays off the contract.** It is
+`ApprovalDiff`'s own arithmetic — added plus changed plus removed — so it
+belongs to the value, not to the component that builds one. `ApprovalDiff` is
+plain data: built as an object literal, compared field by field in tests, never
+reconstructed from anything. Turning the count into a real method would mean a
+class, and the class would buy nothing but the dot. It ships beside the type on
+the portal for the reason a method travels with its type — a caller that can
+receive a diff from there has to be able to count one from there, or it is back
+to importing the module. `ChildPinDrift` is now a named exported interface
+rather than an inline `{ id; pinned; now }`, so the contract has something to
+bind to, and `now: null` — the child that no longer carries an approval at all,
+which is a different problem from a child that moved — finally has a test.
+
+**What it cost to learn.** Eleven warnings went in and nine came out, and the
+nine are one finding wearing three codes. Six `CALL_STEP_UNREALIZED` say the
+narratives name calls this code does not make: `captureApprovedSpecs` is
+narrated as reading `spec_loader.loadComponentSpecs` and actually digests raw
+file text through `snapshotSpecFiles`, which no spec models at all; four methods
+are narrated as `lock_store.read` and actually call `readLockRecordAt`, a
+root-scoped read the `ilock_store` contract does not have; and
+`currentChildPins` is narrated as calling `spec_loader.listChainedRoots` while
+its signature takes the mounts from its caller precisely so it does not have to.
+None of the six is closable in code without making the code worse.
+
+`INCOHESIVE_METHODS` is the same gap read a second way, and it is not a real
+split. The rule groups methods by the components their narratives reach:
+`captureApprovedSpecs` and `currentChildPins` reach `spec_loader`, the other
+four reach `lock_store`, no overlap, two groups. In the code both groups touch
+both — `captureApprovedSpecs` calls `readLockRecord` to carry a scoped
+approval forward, and `diffAgainstApproval` digests the tree through
+`currentSpecDigests` — so narratives naming what the bodies do would union the
+two groups into one and the finding would not exist. No `lint.allow` was added:
+the finding is pointing at a narrative, and silencing it there would move a
+known defect into a claim.
+
 ### A delete goes through the store that calls itself the only one touching disk
 
 C6, the code half. `spec_file_store` describes itself as "the single file-I/O

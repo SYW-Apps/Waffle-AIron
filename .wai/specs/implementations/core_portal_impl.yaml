@@ -253,18 +253,33 @@ methods:
   - name: currentChildPins
     narrative:
       - stepNumber: 1
-        description: Forward chained-child pin resolution (re-export)
-        type: local
+        description: >-
+          Re-export the child-pin read — this Portal method and the comparison component's function
+          are the same function, so the call resolves by identity
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: currentChildPins
   - name: captureApprovedSpecs
     narrative:
       - stepNumber: 1
-        description: Forward approval capture to the agent-facing approval module (re-export)
-        type: local
+        description: >-
+          Capture the tree's per-spec digests for an approval record. Published here by re-export
+          rather than by wrapping, so this Portal method and the comparison component's function are
+          the same function — the call resolves by identity
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: captureApprovedSpecs
   - name: localApprover
+    sourcePath: src/core/approver.ts
     narrative:
       - stepNumber: 1
-        description: Forward approver resolution to the approver identity module (re-export)
+        description: >-
+          Resolve the approving identity from the local environment: prefer the git author identity,
+          fall back to user@hostname, and never throw or prompt — a lock must not fail because a
+          name could not be resolved. Re-exported through this Portal rather than living in it,
+          which is why the method names its own file
         type: local
+    symbol: localApprover
   - name: resolveSubprojectForNamespace
     narrative:
       - stepNumber: 1
@@ -479,6 +494,40 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: deleteTypeSpec
+  - name: diffAgainstApproval
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Re-export the comparison: this Portal method and the comparison component's function are
+          the same function, so the call resolves by identity
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: diffAgainstApproval
+  - name: approvalRecord
+    narrative:
+      - stepNumber: 1
+        description: Re-export the record read
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: approvalRecord
+  - name: movedChildren
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Re-export the child-pin drift read, so sdd_cli reaches it through this Portal rather than
+          importing the approval module across a subsystem boundary
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: movedChildren
+  - name: settledSpecPaths
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Re-export the settled-path read — the same function published under this surface, so the
+          call resolves by identity
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: settledSpecPaths
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T14:30:21.806Z'
+updatedAt: '2026-09-20T18:13:56.098Z'

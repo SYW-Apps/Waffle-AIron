@@ -1,11 +1,15 @@
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
-import {
-  captureApprovedSpecs, diffAgainstApproval, diffSize, currentChildPins, movedChildren,
-} from '../core/approval.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import * as path from 'path';
 import {
+  // The approval surface, reached through core_portal rather than through
+  // ../core/approval.js — sdd_cli does not import another subsystem's modules.
+  captureApprovedSpecs,
+  diffAgainstApproval,
+  diffSize,
+  currentChildPins,
+  movedChildren,
   localApprover,
   writeLockRecord,
   specPathsInScope,

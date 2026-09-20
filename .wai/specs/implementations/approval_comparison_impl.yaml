@@ -1,0 +1,119 @@
+id: approval_comparison_impl
+name: Approval Comparison Implementation
+description: >-
+  The approval arithmetic in src/core/approval.ts: free functions over a project root, holding
+  nothing between calls. Each read defaults its root to the bound project, which is why callers that
+  have one tree pass nothing. Digests normalize CRLF to LF before hashing, so the same commit
+  checked out on Windows and Linux compares equal — the same reason the gate identity had to be made
+  reproducible.
+contract: iapproval_comparison
+sourcePath: src/core/approval.ts
+methods:
+  - name: captureApprovedSpecs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the tree's spec files and digest each one's raw text, normalizing CRLF to LF first
+          and keying by the path relative to the project root, so the same commit digests equally on
+          any platform. The raw read goes straight to disk rather than through the spec file store —
+          digesting needs bytes, and the store's read parses; that bypass is known debt, not a
+          design
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read the record already on file, so a scoped approval carries forward the digests it is
+          not re-capturing rather than dropping them
+        type: call
+        targetComponent: lock_store
+        targetMethod: read
+      - stepNumber: 3
+        description: Answer with the digest map to write into the record
+        type: return
+        outcome: captured
+  - name: diffAgainstApproval
+    narrative:
+      - stepNumber: 1
+        description: Read the approval record under the given root
+        type: call
+        targetComponent: lock_store
+        targetMethod: readAt
+      - stepNumber: 2
+        description: Decide whether there is anything to compare against
+        type: branch
+        condition: the project carries no record
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Answer null — never approved is a different answer from approved and drifted, and a caller
+          has to tell them apart
+        type: return
+        outcome: unapproved
+      - stepNumber: 4
+        description: >-
+          Digest the tree as it stands and compare it against the digests the record carries: a path
+          the record does not cover is added, one whose digest differs is changed, one the record
+          covers that is gone is removed, and the rest are unchanged
+        type: local
+      - stepNumber: 5
+        description: Answer with the four lists
+        type: return
+        outcome: compared
+  - name: approvalRecord
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the approval record under the given root, answering null when the project carries
+          none
+        type: call
+        targetComponent: lock_store
+        targetMethod: readAt
+  - name: settledSpecPaths
+    narrative:
+      - stepNumber: 1
+        description: Read the approval record under the given root
+        type: call
+        targetComponent: lock_store
+        targetMethod: readAt
+      - stepNumber: 2
+        description: >-
+          Answer the record's covered paths as a set for membership tests, or null when there is no
+          record
+        type: return
+        outcome: settled
+  - name: currentChildPins
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Take the mounts the caller passed and keep those whose projectPath mounts a chained child.
+          The caller supplies them rather than this method discovering them, which is what the
+          signature says and why nothing here walks for roots
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read each child's own approval record under its mounted root, keyed by the subsystem id it
+          mounts as; a child with no approval contributes no entry
+        type: call
+        targetComponent: lock_store
+        targetMethod: readAt
+      - stepNumber: 3
+        description: Answer with the pin map
+        type: return
+        outcome: pinned
+  - name: movedChildren
+    narrative:
+      - stepNumber: 1
+        description: Read the parent's approval record for the child pins it covers
+        type: call
+        targetComponent: lock_store
+        targetMethod: readAt
+      - stepNumber: 2
+        description: >-
+          Compare each child's current pin against the recorded one, and answer the subsystem ids
+          that differ — a parent's approval covers the children it mounted, so a moved child is
+          drift even when no spec file of the parent changed
+        type: return
+        outcome: moved
+status: complete
+createdAt: '2026-09-20T15:19:32.451Z'
+updatedAt: '2026-09-20T18:13:06.937Z'

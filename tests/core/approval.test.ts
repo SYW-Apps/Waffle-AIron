@@ -9,8 +9,10 @@ import {
 } from '../../src/core/specs.js';
 import {
   captureApprovedSpecs, approvalRecord, diffAgainstApproval, diffSize,
-  currentChildPins, movedChildren, pinOf,
+  currentChildPins, movedChildren, pinOf, type ChildPinDrift,
 } from '../../src/core/approval.js';
+// The same surface as the CLI sees it: through core_portal, never the module.
+import * as portal from '../../src/core/index.js';
 import {
   readLockRecord, writeLockRecord, normalizeApprover, describeApprover,
   type ApproverIdentity, type LockRecord,
@@ -422,5 +424,92 @@ describe('the approval', () => {
 
     // …and the parent's OWN spec diff is untouched by it.
     expect(diffSize(diffAgainstApproval()!)).toBe(0);
+  });
+
+  it('says a child LOST its approval rather than calling it a move', () => {
+    // `now: null` is the reason this answer is a pair of pins and not a
+    // boolean. A child that re-approved at a different state and a child whose
+    // owner deleted its lock are both "not the pin I recorded", but they are
+    // different problems: one is work to review, the other is an approval that
+    // no longer exists. A boolean would report them identically, and the parent
+    // would go looking for a diff there is nothing to diff against.
+    root = project();
+    const childRoot = path.join(root, 'packages', 'billing');
+    const mounts = [{ id: 'billing', projectPath: 'packages/billing' }];
+
+    const childLock = approveAt(childRoot);
+    approve(TESTER, currentChildPins(mounts, root));
+
+    fs.rmSync(path.join(childRoot, '.wai', 'lock.json'));
+
+    const moved: ChildPinDrift[] = movedChildren(mounts, root);
+    expect(moved).toEqual([{ id: 'billing', pinned: pinOf(childLock.stateId), now: null }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Where sdd_cli is allowed to reach it.
+//
+// `wairon lock` and `wairon status` were importing movedChildren and diffSize
+// straight out of src/core/approval.js — a command reaching past core_portal
+// into another subsystem's module, while the Portal's own comment already said
+// the approval is published there "because both the local lock and the hosted
+// admin plane approve through it". Nothing was broken by it, which is exactly
+// why it survived: an import that works is invisible until something asks where
+// the boundary is.
+// ---------------------------------------------------------------------------
+describe('the approval, published on core_portal', () => {
+  const REPO_ROOT = path.resolve(__dirname, '..', '..');
+
+  it('publishes the same functions, not wrappers around them', () => {
+    // Re-export, so the Portal method and the component's function resolve by
+    // identity. A wrapper would be a second place for the behaviour to drift.
+    expect(portal.movedChildren).toBe(movedChildren);
+    expect(portal.diffSize).toBe(diffSize);
+    expect(portal.diffAgainstApproval).toBe(diffAgainstApproval);
+    expect(portal.approvalRecord).toBe(approvalRecord);
+    expect(portal.currentChildPins).toBe(currentChildPins);
+    expect(portal.captureApprovedSpecs).toBe(captureApprovedSpecs);
+  });
+
+  it('answers a child drift through the Portal exactly as the module does', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approval-portal-'));
+    try {
+      const childRoot = path.join(root, 'packages', 'billing');
+      const mounts = [{ id: 'billing', projectPath: 'packages/billing' }];
+      approveAt(childRoot);
+      fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({
+        stateId: { algorithm: 'sha256+content+doctrine+inputs', digest: 'b'.repeat(64) },
+        lockedAt: now, lockedBy: TESTER, validatorVersion: 'test',
+        validationResult: { valid: true, errors: 0, warnings: 0 },
+        status: 'ready', specs: {}, children: { billing: 'sha256:stale' },
+      }, null, 2));
+
+      expect(portal.movedChildren(mounts, root)).toEqual(movedChildren(mounts, root));
+      expect(portal.movedChildren(mounts, root)).toHaveLength(1);
+    } finally {
+      try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    }
+  });
+
+  it('is how the VALIDATOR reaches it too — sdd_validator does not import the module', () => {
+    // The third instance of the same crossing: validation.ts took
+    // settledSpecPaths straight out of ./approval.js, which is sdd_validator
+    // reaching into an sdd_core module rather than through the Portal. Same
+    // assertion a type-check cannot make - both spellings compile.
+    const source = fs.readFileSync(path.join(REPO_ROOT, 'src/core/validation.ts'), 'utf8');
+    expect(source).not.toContain("import { settledSpecPaths } from './approval.js'");
+    expect(source).toContain("import { settledSpecPaths } from './index.js'");
+  });
+  it('is how the commands reach it — neither imports the module', () => {
+    // The one assertion a type-check cannot make: both imports compile either
+    // way, so only the import SITE says which side of the boundary the command
+    // is on.
+    for (const rel of ['src/commands/lock.ts', 'src/commands/status.ts']) {
+      const source = fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
+      expect(source).not.toMatch(/from '\.\.\/core\/approval\.js'/);
+      expect(source).toMatch(/from '\.\.\/core\/index\.js'/);
+    }
   });
 });

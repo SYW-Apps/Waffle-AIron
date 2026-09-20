@@ -48,16 +48,35 @@ export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migrat
 export { repairForeignStepFields } from './narrative-repair.js';
 export type { ForeignFieldRepair } from './narrative-repair.js';
 
-// The approval (icore_portal captureApprovedSpecs / currentChildPins) — the
+// The approval (icore_portal captureApprovedSpecs … movedChildren) — the
 // per-spec digests a lock RECORDS instead of writing statuses into the tree.
 // Published on the portal because both the local lock and the hosted admin
 // plane (through host_core_adapter) approve through it.
+//
+// `movedChildren` is here for exactly that reason: `wairon lock` and `wairon
+// status` were importing it — and `diffSize` — straight out of ./approval.js,
+// which is sdd_cli reaching past this Portal into another subsystem's module.
+// The comment above already said where they belonged; the imports had just
+// never been moved.
+//
+// `diffSize` is not a Portal method and is not claimed as one: it is the
+// `ApprovalDiff` value object's own arithmetic, realized as a free function
+// over the value. It ships beside the type because a method travels with its
+// type — a caller that can receive an `ApprovalDiff` from here must be able to
+// count one from here, or it is back to importing the module.
 export {
   captureApprovedSpecs,
   currentChildPins,
   approvalRecord,
   diffAgainstApproval,
+  movedChildren,
+  diffSize,
+  // The validator needs it to tell an approved spec from an unapproved one, and
+  // was importing it straight from ./approval.js - the same reach past this
+  // Portal that movedChildren and diffSize were making.
+  settledSpecPaths,
 } from './approval.js';
+export type { ApprovalDiff, ChildPinDrift } from './approval.js';
 // Who to record as the approver on a machine with no wairon account — resolved
 // through the portal like everything else sdd_cli reaches in sdd_core.
 export { localApprover } from './approver.js';

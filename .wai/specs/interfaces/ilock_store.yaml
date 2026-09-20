@@ -13,6 +13,22 @@ methods:
     signature: 'write(record: LockRecord): void'
     returns: void
     effect: write
+  - name: readAt
+    description: >-
+      Read the lock record of a project at a given root, or null when it has none. Distinct from
+      `read` rather than a parameter on it because a contract method binds exactly one code symbol,
+      and the two reads are two functions — but the real reason it exists is the chained model: a
+      parent compares its approval against the records of the children it mounts, and none of those
+      is the bound project.
+    signature: 'readAt(root: string): LockRecord | null'
+    returns: LockRecord | null
+    params:
+      - name: root
+        type: string
+        description: The project root whose record to read
+    guarantees:
+      - idempotent
+    effect: read
 status: complete
 createdAt: '2026-07-04T12:48:43.336Z'
-updatedAt: '2026-09-17T16:34:43.806Z'
+updatedAt: '2026-09-20T18:12:44.404Z'

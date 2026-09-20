@@ -49,7 +49,16 @@ export interface ApprovalDiff {
   unchangedPaths: string[];
 }
 
-/** Total number of specs that differ from the approved tree. */
+/**
+ * Total number of specs that differ from the approved tree.
+ *
+ * Arithmetic over the diff's own fields, so it belongs to the VALUE rather than
+ * to the component that builds one — a caller holding a diff should not have to
+ * reach for a service to count it. It stays a free function taking the value
+ * because `ApprovalDiff` is plain data: it is built as an object literal, read
+ * back out of nothing, and compared field-by-field in tests. Making the count a
+ * real method would mean a class, and a class would buy nothing but the dot.
+ */
 export function diffSize(d: ApprovalDiff): number {
   return d.added.length + d.changed.length + d.removed.length;
 }
@@ -202,6 +211,24 @@ export function pinOf(stateId: StateId): string {
 }
 
 /**
+ * One chained child sitting at a different pin than the approval recorded.
+ *
+ * Both pins are carried rather than a boolean, because a parent deciding
+ * whether to re-lock needs to see what it approved and what it is looking at
+ * now. And `now` is nullable on purpose: a child that no longer carries an
+ * approval of its own is a DIFFERENT problem from a child that moved, and a
+ * caller that cannot tell them apart reports the wrong one.
+ */
+export interface ChildPinDrift {
+  /** The mount id — the parent subsystem the child is mounted as. */
+  id: string;
+  /** The pin the parent's approval recorded for this child. */
+  pinned: string;
+  /** The pin the child is at now, or null when it carries no approval. */
+  now: string | null;
+}
+
+/**
  * The approved StateId of every chained child mounted under this root, keyed by
  * mount id — what a parent approval PINS.
  *
@@ -230,11 +257,11 @@ export function currentChildPins(
 export function movedChildren(
   mounts: { id: string; projectPath?: string }[],
   root: string = getProjectRoot(),
-): { id: string; pinned: string; now: string | null }[] {
+): ChildPinDrift[] {
   const pinned = approvalRecord(root)?.children;
   if (!pinned) return [];
   const now = currentChildPins(mounts, root);
-  const moved: { id: string; pinned: string; now: string | null }[] = [];
+  const moved: ChildPinDrift[] = [];
   for (const [id, was] of Object.entries(pinned)) {
     const current = now[id] ?? null;
     if (current !== was) moved.push({ id, pinned: was, now: current });
