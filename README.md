@@ -212,6 +212,12 @@ validation), js-yaml, the MCP SDK, and Vitest. Bundled with tsup.
 
 Actively developed. For bugs or questions, open an issue.
 
+Working on this repo (or delegating work in it) — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for what this checkout does differently: line
+endings, the gate commands and their baselines, and the stale-MCP-server tell.
+The conventions that hold for *any* wairon project ship in the `sdd-implement`
+and `sdd-delegate` skills.
+
 ## License
 
 MIT
