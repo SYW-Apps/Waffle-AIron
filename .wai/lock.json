@@ -1,14 +1,14 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "e52d137c57b8aa8d09073c58f0472eb548f68ab7e364aa9bf15394667f555304"
+    "digest": "5ddd00e132c0bc339442436aa6af1c61a38201f5ff766acac1b8b5508c8d1e78"
   },
-  "lockedAt": "2026-09-20T10:05:33.250Z",
+  "lockedAt": "2026-09-20T11:01:36.276Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "5.1.1-dev.45",
+  "validatorVersion": "5.1.1-dev.46",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -276,7 +276,7 @@
     ".wai/specs/implementations/cli_surfaces_client_adapter_impl.yaml": "6cce12f4eb57adb998ddaeec1deec5d3377e0721ee07953e1aecc5b0d14d90e2",
     ".wai/specs/implementations/cli_validator_adapter_impl.yaml": "8155aaf7f11aee4c526b49583c1e3fb32b7575484a1fa798779351c890a267fe",
     ".wai/specs/implementations/cli_variants_adapter_impl.yaml": "92c2e00e17920ebc92349edabdc53edc09f6bda131f7c3fd091d2822855757ba",
-    ".wai/specs/implementations/conformance_rules_impl.yaml": "c987d17aba7d19e31b33fc7255c77096b26b20cd0b854996f18a8cc55bbb1520",
+    ".wai/specs/implementations/conformance_rules_impl.yaml": "b146439c8e1846115f79d273390c05cc1659314bd6d6333881659ad797a9b276",
     ".wai/specs/implementations/core_orchestrator_impl.yaml": "264d546b6b1bc93e9c939d58dc02c6e571f675e6c34d3f1bdc07bb6b307f1a14",
     ".wai/specs/implementations/core_portal_impl.yaml": "083068ab158b3018de9edacac269b2e2dd265599bd07abb4c329755b4c15a571",
     ".wai/specs/implementations/credential_index_impl.yaml": "c1bc0bd3d3a5e4fe1e44542bddfec59bc6e96022373e750fa7dbc1e0360f8b93",
@@ -425,7 +425,7 @@
     ".wai/specs/implementations/skills_orchestrator_impl.yaml": "6cdfbf2f41db13eaac073eff45e90ec6478b91f3a8510d417e411084702dcc65",
     ".wai/specs/implementations/skills_portal_impl.yaml": "0eced976798de3bd049841871458ec1ce0b0530f679bbf6602f816aaa50283c8",
     ".wai/specs/implementations/skills_resource_orchestrator_impl.yaml": "ff7e7afd40d3795fff8665adfa36bdb3d57928abe89ad34fb5df5e9256fbe7db",
-    ".wai/specs/implementations/source_analysis_adapter_impl.yaml": "f7c5f0f0386bfc3cbb8df7d92924365f1a5a623d002b216af07315df368454ea",
+    ".wai/specs/implementations/source_analysis_adapter_impl.yaml": "b217e32228db001cc01ab3085df41fcc4b11c75179d5e3c190703ba4fd352486",
     ".wai/specs/implementations/spec_doc_pages_impl.yaml": "da793f45c233c1e4a5343af0d0ca5e82cb61e8809265719464a512431990bf41",
     ".wai/specs/implementations/spec_file_store_impl.yaml": "98e8d92e91e9411101faf5bb4b3721fa7b4b5da804a5a54cb867e2c1b4a5ccd6",
     ".wai/specs/implementations/spec_index_impl.yaml": "58000c19ef5904d2beba403c786cb753235fd9748edf48c353cf715014d3df6e",
@@ -501,7 +501,7 @@
     ".wai/specs/interfaces/icli_surfaces_client_adapter.yaml": "2d027c0f0fee8a50d88fbb62c430bd5ce5161bfb8a7fd2a2a613e2adac758fad",
     ".wai/specs/interfaces/icli_validator_adapter.yaml": "f93812cb04483654ecd405c78f9597847dfc8e361cbe293cb75ba0865bc92017",
     ".wai/specs/interfaces/icli_variants_adapter.yaml": "b65d3bd68145c0f0150358283596fe0da7f0c81c7f4985a023751d84b5fbb636",
-    ".wai/specs/interfaces/iconformance_rules.yaml": "e1d0f3dac83972cb98806870c4ed7b3d2e3a4d21dee05c0e5a8e5acef9157923",
+    ".wai/specs/interfaces/iconformance_rules.yaml": "aeaf2cde3c5e22521a7fb0d013ab2b3d7625bf6f3e8a4ab36853eadc966fe597",
     ".wai/specs/interfaces/icore_orchestrator.yaml": "38b17a0836abfe92c8a0f71d8685e7914870d2988a92d0de4acbfa15409e0401",
     ".wai/specs/interfaces/icore_portal.yaml": "d97a03923c00670074836c8111b2e004016eda29f2c532a53596e88b95e4256e",
     ".wai/specs/interfaces/icredential_index.yaml": "6b46cddc39eb8fdf0ebcccc9961c40e0b8810e22549556d964fb8e3337021cde",
@@ -720,7 +720,7 @@
     ".wai/specs/types/audit_query.yaml": "5d605c7dc5627d89833bc85ef57ce0a8f43d2c8ad69d6a26d7d0920e21434a54",
     ".wai/specs/types/audit_retention_policy.yaml": "d649e46c74d890003c2357952310409f44892c513e7f060c7d74b244873fb4f8",
     ".wai/specs/types/available_profile.yaml": "dcc5470376389eac6b76658321c73cc36b7f07c943bcc100733b02ed38c51112",
-    ".wai/specs/types/call_site_fact.yaml": "1a27884a46576a8e5f3dd91bb5023b26881c807cdeb5d239b718b4fb8d5b71f8",
+    ".wai/specs/types/call_site_fact.yaml": "65c681b05ace234faf669f06dfbe7a140ebd02f9487dcb3171712d67b700fe55",
     ".wai/specs/types/candidate_options.yaml": "d586235d476cf40d69b0f1cb829c683761ff62be59786d880fa05a7341b651b5",
     ".wai/specs/types/candidate_verdict.yaml": "a8b29bdd14aae0426d473398b97217a51c324e8dd90d5fe3a21d81c8e0493423",
     ".wai/specs/types/carried_debt.yaml": "f95413ff7b24cf4277603829e2e0f4941610bf7a0e5377a88010dcc9413d246a",
@@ -729,7 +729,7 @@
     ".wai/specs/types/chained_roots_inspection.yaml": "ea28cb144d7207e39a00e3143c5c1fdac66af884ab30f8a7d86e52d925b8ae6a",
     ".wai/specs/types/chained_subproject_dir.yaml": "ab5b5f74436b5d521b9d2bb2d97148ef11847dd3775f59b39cc740eb40cc6c32",
     ".wai/specs/types/chaining_parent_ref.yaml": "22dabaa13709b032273967aec9ea614b3bc45cdfac3278b61723733625d28b9d",
-    ".wai/specs/types/code_index.yaml": "6281b5b213372a5f63ae8e69fdf18a740d5ddfd41295b2aa5c302b8222f422b5",
+    ".wai/specs/types/code_index.yaml": "bbdfd5c7e694d600582a963907f2e308a749115615788d997b0a2a6bfbc0f0d3",
     ".wai/specs/types/code_model.yaml": "94476130078c2c2f5419a36695173bc0679e58a44f03d89c923dda9fc65c099d",
     ".wai/specs/types/complexity_rule_config.yaml": "c82f545caf6f5b891b41a9b4c668c26ade2b12d969b387ffc175f87fa5b35e99",
     ".wai/specs/types/component_rename.yaml": "79d824bc6bdd596ac4b2d59df217c534de93500e9831c21c3a2907304657fa67",
@@ -885,7 +885,7 @@
     ".wai/specs/types/shared_view_result.yaml": "fb961f00a0579d5dc6222dbd067d7112efd172787ccbf4a688307e229532561a",
     ".wai/specs/types/skill_resource_descriptor.yaml": "129213cfb929389ee8d54f4f9525704f99a856c569a919d402f5252d2e57e5b1",
     ".wai/specs/types/skills_export_result.yaml": "1384c83558352b01366ad8fc267f74273c425264bb02a7003ddb1f61ad145b6b",
-    ".wai/specs/types/source_file_facts.yaml": "fb7cdf2b7fc908eee37711a19e0811cee9e164210188a172dffed3088aa1f7ca",
+    ".wai/specs/types/source_file_facts.yaml": "10271ec9133cf1e6cc1994df0244195343b9dca5d42ab2ab02f4f98bc8d6af14",
     ".wai/specs/types/spec_change.yaml": "7f3d4cfedce7fe99e76f9feeb16d3bfc3bbf75ee0d1b95db9febe885bb9937e4",
     ".wai/specs/types/spec_change_report.yaml": "a13a00182116948df9153897e2ee5552501aa65252a226ba08b70168ce2d1c0b",
     ".wai/specs/types/spec_delta.yaml": "ad809602e04a00d6a1307d877f91709c8bd8c5ce60c1c9f16309c41aa699f3d9",
