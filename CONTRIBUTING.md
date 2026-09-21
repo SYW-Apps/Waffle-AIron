@@ -82,6 +82,13 @@ Changing that text is *supposed* to fail them — that is the assertion doing it
 job. Fix it to match the new text; loosening it to match anything removes the one
 thing keeping the templates and the validator's vocabulary in step.
 
+A rule's `summary` is spec data, not a code string. `tests/core/rule-catalog.test.ts`
+proves the registry's codes and the L3 `findings[].summary` values on
+`iheuristic_rules.yaml` (and its siblings) are ONE list, so changing a summary in
+the rule file alone fails the suite. Change it through the authoring tools first and
+let the code string follow. This catches every contributor who touches a rule's
+codes, and the suite is currently the only place that says so.
+
 ---
 
 ## A stale MCP server
