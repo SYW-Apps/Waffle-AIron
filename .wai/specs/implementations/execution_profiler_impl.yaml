@@ -1,0 +1,51 @@
+id: execution_profiler_impl
+name: Execution Profiler Implementation
+description: >-
+  src/core/execution_profile.ts. Every input comes off the agent record, so there is no filesystem
+  access and nothing to fail. The classification constants — which stereotypes are mechanical, which
+  templates manage or only read, the owned-path counts that make work wide — are the whole of the
+  policy here, and they sit at the top of the file so the derivation can be argued with in one
+  place.
+contract: iexecution_profiler
+sourcePath: src/core/execution_profile.ts
+methods:
+  - name: derive
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read breadth from the paths the agent may reach. An agent allowed to read everything is
+          surveying by construction, whatever its owned count says; otherwise the owned-path count
+          decides between wide, moderate and narrow
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read reasoning depth from the stereotype tags first — the component vocabulary already
+          encodes how much judgment a role carries, so use it rather than inventing a second
+          classification — and fall back to the template when an agent carries no stereotype
+        type: local
+      - stepNumber: 3
+        description: >-
+          Decide whether the agent writes from its ROLE, never from how many paths happened to
+          resolve. An implementer whose source path could not be inferred is a topology gap to fix,
+          not a read-only agent
+        type: local
+      - stepNumber: 4
+        description: >-
+          A manager template routes work rather than performing it, and that is what marks it as
+          delegating
+        type: local
+      - stepNumber: 5
+        description: >-
+          Compose the rationale from the reasons that actually applied, so a reader can disagree
+          with the derivation rather than only receive its verdict
+        type: local
+      - stepNumber: 6
+        description: >-
+          Answer the profile: breadth, writes, reasoning depth, delegation and the rationale that
+          explains them
+        type: return
+        outcome: profiled
+    symbol: deriveExecutionProfile
+status: complete
+createdAt: '2026-09-20T23:51:25.689Z'
+updatedAt: '2026-09-20T23:52:21.826Z'

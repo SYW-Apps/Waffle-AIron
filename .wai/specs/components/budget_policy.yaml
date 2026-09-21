@@ -1,0 +1,18 @@
+id: budget_policy
+name: Budget Policy
+description: >-
+  Maps a work profile onto an allowance: what capability tier, how many turns, which tools, how much
+  MCP. Still tool-agnostic — it decides \"large tier, 40 turns, read-only\" and never \"opus\",
+  because only the consumer knows what its host can select. The aggressiveness dial lives here so
+  that the one quality-affecting choice in the system is a single reviewable place rather than a
+  decision scattered through the exporters. The tiers are ordered as strict supersets, so raising
+  the dial can only ever tighten a budget, which is what makes it safe to turn without auditing
+  every agent.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+status: complete
+createdAt: '2026-09-20T23:50:58.601Z'
+updatedAt: '2026-09-20T23:52:22.711Z'

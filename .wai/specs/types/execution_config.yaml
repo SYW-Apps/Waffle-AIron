@@ -1,0 +1,25 @@
+kind: value-object
+id: execution_config
+name: ExecutionConfig
+description: >-
+  The project's execution-budget settings: one dial and a set of exceptions to it. Lives in
+  `.wai/project.yaml`, so turning the dial is a reviewable change rather than a per-run flag.
+fields:
+  - name: tier
+    type: string
+    description: >-
+      How hard to optimize: off, free, default, trade or aggressive. Defaults to `off`, which
+      preserves pre-feature output exactly — enabling budgets can never silently change an existing
+      project's generated files.
+    optional: false
+  - name: overrides
+    type: object
+    description: >-
+      Per-agent budgets keyed by agent id, each a partial budget merged over the derived one. An
+      explicit budget always wins: the tree is a good default, not an authority on how you want to
+      spend.
+    optional: false
+methods: []
+sourcePath: src/models/execution.ts
+createdAt: '2026-09-20T23:50:46.626Z'
+updatedAt: '2026-09-20T23:50:46.636Z'

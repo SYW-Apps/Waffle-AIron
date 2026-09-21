@@ -583,6 +583,20 @@ methods:
         type: call
         targetComponent: domain_detector
         targetMethod: detectCandidates
+  - name: deriveExecutionProfile
+    narrative:
+      - stepNumber: 1
+        description: Forward to the execution profiler
+        type: call
+        targetComponent: execution_profiler
+        targetMethod: derive
+  - name: resolveBudget
+    narrative:
+      - stepNumber: 1
+        description: Forward to the budget policy
+        type: call
+        targetComponent: budget_policy
+        targetMethod: resolve
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T22:45:20.221Z'
+updatedAt: '2026-09-20T23:51:59.237Z'

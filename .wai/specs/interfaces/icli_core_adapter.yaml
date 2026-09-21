@@ -257,6 +257,36 @@ methods:
         type: Set<string>
         description: Domain ids already in use
         optional: true
+  - name: deriveExecutionProfile
+    description: What an agent's work is like, for `wairon execution show`. Forwarded to the core portal.
+    signature: 'deriveExecutionProfile(agent: AgentRecord): ExecutionProfile'
+    returns: ExecutionProfile
+    params:
+      - name: agent
+        type: AgentRecord
+        description: The resolved agent whose work shape is wanted
+    guarantees:
+      - idempotent
+  - name: resolveBudget
+    description: >-
+      What that work earns under the project's dial, for `wairon execution show`. Forwarded to the
+      core portal.
+    signature: >-
+      resolveBudget(profile: ExecutionProfile, config: ExecutionConfig, agentId: string):
+      ExecutionBudget | undefined
+    returns: ExecutionBudget | undefined
+    params:
+      - name: profile
+        type: ExecutionProfile
+        description: What the work is like
+      - name: config
+        type: ExecutionConfig
+        description: The project's dial and its per-agent overrides
+      - name: agentId
+        type: string
+        description: Which agent, so its override can be found
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T22:08:08.677Z'
+updatedAt: '2026-09-20T23:52:03.071Z'

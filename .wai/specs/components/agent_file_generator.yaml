@@ -17,6 +17,8 @@ dependsOn:
   - exporter_resolver
   - template_source_adapter
   - agent_resolver
+  - execution_profiler
+  - budget_policy
 status: complete
 createdAt: '2026-09-20T19:45:25.916Z'
-updatedAt: '2026-09-20T20:04:13.290Z'
+updatedAt: '2026-09-20T23:51:45.661Z'

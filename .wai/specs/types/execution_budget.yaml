@@ -2,20 +2,54 @@ kind: value-object
 id: execution_budget
 name: ExecutionBudget
 description: >-
-  What an agent is allowed to spend: which model tier it runs on and how much effort it may use. Two
-  fields rather than a number because the two are not interchangeable — a cheap model thinking hard
-  and an expensive model answering quickly are different trades, and a caller choosing between them
-  needs to say which.
+  What an agent is allowed to spend, and what it is allowed to reach. Not a number: a cheap model
+  thinking hard and an expensive model answering quickly are different trades, and the tool grant is
+  a different axis again. `modelTier` and `effort` are absent rather than defaulted at the `free`
+  tier, because that tier is defined as having no quality tradeoff and picking a model is a quality
+  decision — an exporter must omit the field, not substitute a default.
 fields:
   - name: modelTier
     type: string
-    description: The model tier this agent runs on.
-    optional: false
+    description: >-
+      The capability tier this agent runs on, named as a tier and never as a model. Absent means
+      express no model choice at all.
+    optional: true
   - name: effort
     type: string
-    description: How much effort it may spend within that tier.
+    description: How much effort it may spend within that tier. Absent means the host's own default.
+    optional: true
+  - name: maxTurns
+    type: number
+    description: >-
+      Turn ceiling — a circuit breaker, not a target. Hitting it returns partial output, which is
+      the intended failure mode; a subagent running hundreds of turns is no longer preserving the
+      parent's context.
+    optional: true
+  - name: toolClass
+    type: string
+    description: 'Which grant of tools the agent gets: read-only, implement, orchestrate or full.'
     optional: false
-methods: []
+  - name: allowNestedDelegation
+    type: boolean
+    description: >-
+      Whether this agent may spawn its own subagents. False withholds the tool entirely — structural
+      enforcement, so no instruction text has to be carried and re-read to achieve it.
+    optional: false
+  - name: mcp
+    type: string
+    description: 'How much of the MCP surface it loads: none, project or all.'
+    optional: false
+methods:
+  - name: summarize
+    signature: 'summarize(profile: ExecutionProfile): string[]'
+    returns: string[]
+    description: >-
+      Human-readable lines for a brief or CLI output, speaking in capability TIERS and never model
+      names — the consumer maps a tier onto whatever its host understands, and only the consumer
+      knows that. Pure projection over the budget's own fields plus the profile that earned them, so
+      it lives on the type rather than on the component that resolves it: a caller holding a budget
+      should not reach for a service to print it. Not named `describe`, which is a test-runner
+      global.
 sourcePath: src/models/execution.ts
 createdAt: '2026-09-20T19:47:48.244Z'
-updatedAt: '2026-09-20T19:47:48.255Z'
+updatedAt: '2026-09-20T23:50:17.063Z'
