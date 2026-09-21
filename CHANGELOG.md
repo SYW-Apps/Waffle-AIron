@@ -26,6 +26,59 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### Fan-out is coupling only when the component holds flow
+
+`GOD_COMPONENT` and `EXCESSIVE_DEPENDENCIES` both counted `dependsOn.length` and
+stopped there. That proxy conflates two structurally different shapes. A Portal
+that fans out to twelve areas while narrating nothing but hand-offs is a routing
+table: its responsibility lives in what it forwards to, and its dependency count
+tracks how many areas the subsystem publishes rather than how much it knows. An
+Orchestrator coordinating ten stateful collaborators is the god component the
+rule exists to catch. The raw count cannot tell them apart, so it reported the
+first and would keep reporting it however the subsystem was arranged — the only
+escape being an allow, which teaches users to suppress a rule that asked the
+wrong question.
+
+The two `findings[].summary` lines still read as they did: `rule-catalog.test.ts`
+proves the registry's code list and `iheuristic_rules.yaml` are one list, so a
+summary is spec data and changes through the authoring tools, not here.
+
+**Both rules now exempt a pure forwarder**, and it is the same judgement
+`INCOHESIVE_METHODS` has made since the method-cohesion rule learned it — the
+same one naming-discipline makes when it spares an Adapter's and a Portal's
+method names from the stutter check, *because a forwarder's method mirrors the
+command or route it exposes*. The fan-out rules were the only ones that never
+got it. `isForwardingMethod` was already in `method-cohesion.ts`; it is now
+exported beside `isPureForwarder` and `pureForwarderComponents`, and all three
+rules read the one definition rather than three spellings that would drift.
+
+**A component with no narrated method is NOT exempt**, because absence of
+narrative is not evidence of forwarding. Nor is one whose methods hold flow: a
+single method that branches is enough to be judged, which is what keeps the
+exemption narrow enough to be worth having. Deliberately not done: raising the
+limit, or scaling it with project size. Both would loosen the rule for
+Orchestrators too, which is precisely where it should stay tight.
+
+### Printing an allowance belongs to the allowance
+
+`describeBudget` sat on the budget policy in `sdd_core`, and the two callers who
+wanted it — `wairon agent brief` and the MCP server's brief resource — reached
+across a subsystem boundary into a core module to print six lines. Rendering a
+budget is pure projection over its own fields, so it is now `summarize(budget,
+profile)` on `src/models/execution.ts`, beside the type it renders and with the
+value first, the way `diffSize(d: ApprovalDiff)` already reads. The output is
+unchanged line for line. It is not named `describe`, which is a test-runner
+global. Both callers now hold a budget and name no core module at all.
+
+**`wairon execution show` goes through the adapter like everything else.** It
+was importing `resolveAgentTopology`, `deriveExecutionProfile` and `resolveBudget`
+straight out of three `sdd_core` modules. The core Portal now publishes the two
+derivations — `deriveExecutionProfile` says what an agent's work is LIKE and
+names no model, tool or host; `resolveBudget` maps that shape onto an allowance —
+and `cli_core_adapter` forwards both. That is the seventh time this crossing has
+been found, and it closed the way it always does: the boundary is crossed in one
+place, by the one component whose whole job is to cross it.
+
 ### Combining two sources is workflow, not registry work
 
 `src/core/domains.ts` realizes `domain_registry`, and it also derived domains

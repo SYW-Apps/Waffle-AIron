@@ -65,7 +65,7 @@ import {
   loadProjectConfig,
   resolveAgentTopology,
 } from '../commands/subsystem.js';
-import { describeBudget } from '../core/budget_policy.js';
+import { summarize } from '../models/execution.js';
 import { showExecution, setExecutionTier } from '../commands/execution.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -693,7 +693,7 @@ async function runAgent(action: string, id: string): Promise<void> {
       if (brief.budget && brief.profile) {
         logger.blank();
         logger.info('Execution budget (advisory — apply when spawning):');
-        for (const line of describeBudget(brief.profile, brief.budget)) {
+        for (const line of summarize(brief.budget, brief.profile)) {
           logger.info(`  ${line.replace(/^- \*\*(.+?)\*\*: /, '$1: ')}`);
         }
       }

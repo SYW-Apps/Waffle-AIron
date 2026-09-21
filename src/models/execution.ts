@@ -123,6 +123,40 @@ export const ExecutionBudgetSchema = z.object({
 
 export type ExecutionBudget = z.infer<typeof ExecutionBudgetSchema>;
 
+/**
+ * Human-readable lines describing an allowance, for briefs and CLI output.
+ *
+ * Speaks in capability TIERS, never model names — the consumer maps a tier
+ * onto whatever its host tool understands, and only the consumer knows that.
+ * Keeping the mapping out of here is what lets one brief serve a Claude Code
+ * session, a hosted MCP client, and a tool that cannot pick models at all.
+ *
+ * Pure projection over the budget's own fields plus the profile that earned
+ * them, so it belongs to the VALUE rather than to the component that resolves
+ * one — a caller holding a budget should not have to reach for a service to
+ * print it. It stays a free function taking the value for the reason
+ * `diffSize(d: ApprovalDiff)` does: an `ExecutionBudget` is plain data, built
+ * as an object literal and compared field-by-field, and making this a real
+ * method would mean a class that buys nothing but the dot.
+ *
+ * Not named `describe`, which is a test-runner global.
+ */
+export function summarize(budget: ExecutionBudget, profile: ExecutionProfile): string[] {
+  const lines = [
+    `- **Work shape**: ${profile.breadth} breadth, ${profile.reasoningDepth} reasoning${profile.writes ? '' : ', read-only'}${profile.delegates ? ', delegating' : ''}`,
+    `- **Why**: ${profile.rationale}`,
+  ];
+  if (budget.modelTier) lines.push(`- **Capability tier**: ${budget.modelTier}`);
+  if (budget.effort) lines.push(`- **Effort**: ${budget.effort}`);
+  if (budget.maxTurns !== undefined) {
+    lines.push(`- **Turn ceiling**: ${budget.maxTurns} (a circuit breaker — hitting it should read as a scoping error, not a limit to work up to)`);
+  }
+  lines.push(`- **Tool grant**: ${budget.toolClass}`);
+  lines.push(`- **May delegate further**: ${budget.allowNestedDelegation ? 'yes' : 'no'}`);
+  lines.push(`- **MCP access**: ${budget.mcp}`);
+  return lines;
+}
+
 // ---------------------------------------------------------------------------
 // Policy tiers — the configurable aggressiveness dial
 //

@@ -29,6 +29,8 @@ import {
   addDomain as coreAddDomain,
   removeDomain as coreRemoveDomain,
   detectDomainCandidates as coreDetectDomainCandidates,
+  deriveExecutionProfile as coreDeriveExecutionProfile,
+  resolveBudget as coreResolveBudget,
 } from '../core/index.js';
 import type { GenerateOptions, GenerateSummary } from '../core/index.js';
 import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
@@ -43,6 +45,9 @@ import type {
   SubsystemSpec,
   SystemSpec,
 } from '../models/index.js';
+// The execution vocabulary is a type spec's, not a component's: shared value
+// shapes, so naming them here is vocabulary rather than a reach into sdd_core.
+import type { ExecutionBudget, ExecutionConfig, ExecutionProfile } from '../models/execution.js';
 
 // ---------------------------------------------------------------------------
 // subsystem command — create/relocate external (chained) subprojects
@@ -258,6 +263,29 @@ export function detectDomainCandidates(
   trackedIds?: Set<string>,
 ): DetectedDomainCandidate[] {
   return coreDetectDomainCandidates(projectRoot, trackedPaths, trackedIds);
+}
+
+// cli_core_adapter.deriveExecutionProfile / resolveBudget — 1:1 forwards to the
+// core portal, backing `wairon execution show`: what an agent's work is like,
+// and what that work earns under the project's dial (nothing at all when the
+// dial is off).
+//
+// `wairon execution` used to call them straight out of ../core/execution_profile.js
+// and ../core/budget_policy.js, and resolve its topology out of
+// ../core/agent_resolver.js — sdd_cli reaching into three sdd_core modules, past
+// the Portal that publishes all three calls. It is the seventh time that
+// crossing has been found, and it closes the way it always does: here, on the
+// one component whose whole job is to cross into sdd_core.
+export function deriveExecutionProfile(agent: AgentRecord): ExecutionProfile {
+  return coreDeriveExecutionProfile(agent);
+}
+
+export function resolveBudget(
+  profile: ExecutionProfile,
+  config: ExecutionConfig,
+  agentId: string,
+): ExecutionBudget | undefined {
+  return coreResolveBudget(profile, config, agentId);
 }
 
 interface SubsystemAddOptions {

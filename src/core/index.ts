@@ -168,3 +168,25 @@ export {
 
 // The project_config type's own behaviour, for callers deriving from a loaded configuration.
 export { declaredPackNames, declaredProfileIds } from '../config/project-config.js';
+
+// What an agent's work is LIKE, and what that work earns (icore_portal
+// deriveExecutionProfile / resolveBudget) — pure 1:1 forwards to the execution
+// profiler and the budget policy, republished by identity rather than wrapped,
+// so this Portal method and the Orchestrator's function are the same function.
+//
+// Published because `wairon execution show` is an sdd_cli command while both
+// derivations are sdd_core components: the command importing
+// ../core/execution_profile.js and ../core/budget_policy.js directly is
+// exactly the crossing this Portal exists to prevent. That reach has now been
+// found seven times — movedChildren, diffSize and settledSpecPaths out of
+// ./approval.js, the four modules `wairon diagram` built its artifacts out of,
+// the generator `wairon generate` wrote through, and the two domain modules
+// `wairon domains` read — and it closes the way it always does: the boundary
+// is crossed HERE, once.
+//
+// The two stay separate methods because they answer separate questions: the
+// profile describes the work and names no model, tool or host, and the budget
+// maps that shape onto an allowance. A caller that only wants to SAY what an
+// agent's work is like should not have to resolve a budget to find out.
+export { deriveExecutionProfile } from './execution_profile.js';
+export { resolveBudget } from './budget_policy.js';

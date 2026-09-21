@@ -141,26 +141,3 @@ export function resolveBudget(
   return override ? { ...budget, ...override } : budget;
 }
 
-/**
- * Human-readable lines describing an allowance, for briefs and CLI output.
- *
- * Speaks in capability TIERS, never model names — the consumer maps a tier
- * onto whatever its host tool understands, and only the consumer knows that.
- * Keeping the mapping out of here is what lets one brief serve a Claude Code
- * session, a hosted MCP client, and a tool that cannot pick models at all.
- */
-export function describeBudget(profile: ExecutionProfile, budget: ExecutionBudget): string[] {
-  const lines = [
-    `- **Work shape**: ${profile.breadth} breadth, ${profile.reasoningDepth} reasoning${profile.writes ? '' : ', read-only'}${profile.delegates ? ', delegating' : ''}`,
-    `- **Why**: ${profile.rationale}`,
-  ];
-  if (budget.modelTier) lines.push(`- **Capability tier**: ${budget.modelTier}`);
-  if (budget.effort) lines.push(`- **Effort**: ${budget.effort}`);
-  if (budget.maxTurns !== undefined) {
-    lines.push(`- **Turn ceiling**: ${budget.maxTurns} (a circuit breaker — hitting it should read as a scoping error, not a limit to work up to)`);
-  }
-  lines.push(`- **Tool grant**: ${budget.toolClass}`);
-  lines.push(`- **May delegate further**: ${budget.allowNestedDelegation ? 'yes' : 'no'}`);
-  lines.push(`- **MCP access**: ${budget.mcp}`);
-  return lines;
-}
