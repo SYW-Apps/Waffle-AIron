@@ -1,0 +1,57 @@
+id: local_approver_impl
+name: Approver Identity Implementation
+description: >-
+  src/core/approver.ts. Both reads are wrapped so neither can fail the caller: a missing git, a
+  directory that is not a repository, an unset key, and a locked-down environment that refuses to
+  name its own user all mean the same thing here — nothing to read — and each falls through to the
+  next best answer. Deliberately NOT a MAC address or any other hardware id: modern systems
+  randomize those, they differ per interface and VPN, and collecting one is device fingerprinting
+  for a field that is not authentication anyway.
+contract: ilocal_approver
+sourcePath: src/core/approver.ts
+methods:
+  - name: resolve
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask git for the configured author name and email, each read guarded so that no git, no
+          repository or no such key all come back as simply nothing. This is the one identity the
+          repository already attributes work to, so a reviewer can match it against the author of
+          the commit carrying the lock — that matching is the whole value, because it makes the
+          claim checkable against something the repository can actually enforce
+        type: local
+      - stepNumber: 2
+        description: Decide whether git named a whole identity
+        type: branch
+        condition: both a name and an email came back
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer `name <email>`, marked as coming from git
+        type: return
+        outcome: git identity
+      - stepNumber: 4
+        description: Decide whether half an identity is available
+        type: branch
+        condition: an email came back but no name
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Answer the email alone, still marked as from git. Half a git identity is not a whole one,
+          and inventing the other half would mean labelling a machine-derived string as `git` — git
+          itself refuses to commit on a partial identity rather than doing that
+        type: return
+        outcome: git identity
+      - stepNumber: 6
+        description: >-
+          Fall back to the operating system: the username joined to the hostname, each read behind
+          its own guard so a refusal leaves a lesser answer rather than none. The hostname is the
+          useful half because it names the machine to go and look at, where a bare username in CI is
+          `runner` or `root` and identifies nobody. Marked `os`, never `git`
+        type: return
+        outcome: machine identity
+    symbol: localApprover
+status: complete
+createdAt: '2026-09-21T10:07:02.586Z'
+updatedAt: '2026-09-21T10:08:00.163Z'

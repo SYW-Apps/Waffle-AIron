@@ -17,7 +17,8 @@ dependsOn:
   - domain_detector
   - execution_profiler
   - budget_policy
+  - local_approver
 portalType: Custom
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T23:51:51.974Z'
+updatedAt: '2026-09-21T10:07:06.038Z'

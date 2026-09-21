@@ -41,7 +41,7 @@ export const complexityRule: SddRule = {
     { code: 'DESCRIPTION_TOO_SHORT', defaultSeverity: 'warning', summary: 'Description is shorter than the configured minimum length' },
     { code: 'EXCESSIVE_METHODS', defaultSeverity: 'warning', summary: 'Interface declares more methods than the configured limit' },
     { code: 'EXCESSIVE_METHOD_PARAMS', defaultSeverity: 'warning', summary: 'Interface method declares more parameters than the configured limit' },
-    { code: 'EXCESSIVE_DEPENDENCIES', defaultSeverity: 'warning', summary: 'Component has more dependencies than the configured limit' },
+    { code: 'EXCESSIVE_DEPENDENCIES', defaultSeverity: 'warning', summary: 'Component has more dependencies than the configured limit; not reported on a pure forwarder, whose fan-out is a routing table rather than knowledge' },
     { code: 'EXCESSIVE_SUBSYSTEM_COMPONENTS', defaultSeverity: 'warning', summary: 'Subsystem has more direct components than the configured limit' },
   ],
   check(ctx) {

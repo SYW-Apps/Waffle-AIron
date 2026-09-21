@@ -39,9 +39,11 @@ first and would keep reporting it however the subsystem was arranged — the onl
 escape being an allow, which teaches users to suppress a rule that asked the
 wrong question.
 
-The two `findings[].summary` lines still read as they did: `rule-catalog.test.ts`
-proves the registry's code list and `iheuristic_rules.yaml` are one list, so a
-summary is spec data and changes through the authoring tools, not here.
+Both `findings[].summary` lines now say the exemption exists, in the contract and
+in the registry alike. `rule-catalog.test.ts` proves those are ONE list, so a rule
+summary is spec data: it changes through the authoring tools and the code string
+follows. Worth knowing before touching a rule's codes, because the suite is the
+only place that tells you.
 
 **Both rules now exempt a pure forwarder**, and it is the same judgement
 `INCOHESIVE_METHODS` has made since the method-cohesion rule learned it — the
@@ -58,6 +60,28 @@ single method that branches is enough to be judged, which is what keeps the
 exemption narrow enough to be worth having. Deliberately not done: raising the
 limit, or scaling it with project size. Both would loosen the rule for
 Orchestrators too, which is precisely where it should stay tight.
+
+And then the narrow version earned its keep immediately, by refusing to exempt
+`core_portal` over exactly one method. `localApprover` re-exported a function
+that shells out to `git config` and reads `os.hostname()` — **a Portal
+publishing unmediated I/O**, which its own narrative half-admitted by saying
+"re-exported through this Portal rather than living in it" while typing the step
+`local`. No rule catches that directly. This one caught it by its shadow.
+
+**`local_approver` is that reading, as a component.** A `read` Orchestrator, so
+answering the question provably cannot change anything, with the preference
+order narrated where it can be argued with: git's configured author first,
+because it is the one identity the repository already attributes work to and a
+reviewer can match it against the commit carrying the lock; then the email alone
+if that is all git has, since inventing the other half would mean labelling a
+machine-derived string as `git`; then `user@hostname`, where the hostname is the
+useful half because a bare username in CI is `runner` and identifies nobody.
+
+The identity stays CALLER-supplied. Moving the resolution inside the lock write
+was considered and rejected on measurement: `writeLockRecord` has two callers,
+and the hosted one passes an authenticated principal. Filling it in from the
+local machine would have stamped every hosted lock `runner@hostname` and quietly
+replaced the strongest identity in the system with the weakest.
 
 ### Printing an allowance belongs to the allowance
 

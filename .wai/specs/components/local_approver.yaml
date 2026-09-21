@@ -1,0 +1,21 @@
+id: local_approver
+name: Approver Identity
+description: >-
+  Who to record as having approved a lock, on a machine where wairon has no account of its own. It
+  reads the local environment to find out — git's configured author first, the operating system's
+  user and host as a fallback — and declared `read`, because answering the question must never
+  change anything. It exists as a component because that reading was previously published straight
+  off `core_portal`, which made the Portal's surface include unmediated I/O. The honest limit is in
+  its own prose: the lock record is COMMITTED, so `git log .wai/lock.json` already says who approved
+  and when, backed by whatever the repository enforces. This is a convenience copy for the paths git
+  does not follow — an archive, a push into a hosted instance, a tarball — and the `source` field is
+  what stops it overclaiming. A hosted instance never asks this: there the approver is the
+  authenticated principal, which is a stronger answer than any machine can give about itself.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: read
+status: complete
+createdAt: '2026-09-21T10:06:49.901Z'
+updatedAt: '2026-09-21T10:07:59.854Z'

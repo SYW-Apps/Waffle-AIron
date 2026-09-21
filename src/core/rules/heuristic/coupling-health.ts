@@ -23,7 +23,7 @@ export const couplingRule: SddRule = {
     { code: 'MUTUAL_SUBSYSTEM_DEPENDENCY', defaultSeverity: 'warning', summary: 'Subsystems depend on each other without a declared trusted link' },
     { code: 'INVALID_TRUSTED_LINK', defaultSeverity: 'error', summary: 'trustedLinks references a non-existent subsystem' },
     { code: 'UNUSED_TRUSTED_LINK', defaultSeverity: 'warning', summary: 'trustedLinks declares a peer no dependency actually reaches' },
-    { code: 'GOD_COMPONENT', defaultSeverity: 'warning', summary: 'Component with excessive dependency fan-out' },
+    { code: 'GOD_COMPONENT', defaultSeverity: 'warning', summary: 'Component with excessive dependency fan-out; not reported on a pure forwarder, whose every narrated method is a single hand-off' },
   ],
   check(ctx) {
     // --- Build the subsystem-level dependency graph from cross-subsystem component deps
