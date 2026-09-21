@@ -1,5 +1,6 @@
 import { isDraftSubsystem } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
+import { pureForwarderComponents } from './method-cohesion.js';
 
 function checkDescription(
   ctx: RuleContext,
@@ -64,6 +65,16 @@ export const complexityRule: SddRule = {
     }
 
     // 2. Components (Doc & Complexity checks)
+    //
+    // The dependency cap spares a PURE FORWARDER — a component whose every
+    // narrated method is a single hand-off — for the reason GOD_COMPONENT
+    // does, since the two read the same number: a door's fan-out counts how
+    // many areas it publishes, not how much it knows, so capping it would
+    // punish the component for the size of the subsystem behind it. The test
+    // is method cohesion's, applied unchanged; a component nobody has
+    // narrated is not exempt, because absence of narrative is not evidence of
+    // forwarding.
+    const forwarders = pureForwarderComponents(ctx);
     for (const comp of ctx.components) {
       const docConfig = ctx.documentationConfigFor(comp.subsystem);
       const complexityConfig = ctx.complexityConfigFor(comp.subsystem);
@@ -79,7 +90,11 @@ export const complexityRule: SddRule = {
         isDraft
       );
 
-      if (complexityConfig?.maxComponentDependencies !== undefined && comp.dependsOn.length > complexityConfig.maxComponentDependencies) {
+      if (
+        complexityConfig?.maxComponentDependencies !== undefined
+        && comp.dependsOn.length > complexityConfig.maxComponentDependencies
+        && !forwarders.has(comp.id)
+      ) {
         ctx.addIssue(
           'warning',
           'EXCESSIVE_DEPENDENCIES',

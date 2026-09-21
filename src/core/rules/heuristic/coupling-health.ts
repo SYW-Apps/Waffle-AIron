@@ -1,5 +1,6 @@
 import { SddRule } from '../types.js';
 import { splitNamespace } from '../../../models/index.js';
+import { pureForwarderComponents } from './method-cohesion.js';
 
 /** Default dependsOn count above which a component is flagged as doing too much.
  *  Overridden by the effective rules.complexity.maxComponentDependencies for the
@@ -109,9 +110,20 @@ export const couplingRule: SddRule = {
     // --- God component detection: each component is held to the effective
     // cap of its own subsystem (the project's complexity config overlaid with
     // the subsystem profile pack's), the value EXCESSIVE_DEPENDENCIES reads.
+    //
+    // Fan-out is only coupling when the component holds flow of its own. A
+    // door that narrates nothing but hand-offs is a routing table: its
+    // responsibility lives in what it forwards to, and its dependency count
+    // tracks how many areas the subsystem publishes rather than how much it
+    // knows — so splitting it or hiding its collaborators behind a facade
+    // would answer a question nobody asked. That is the same judgement
+    // INCOHESIVE_METHODS already makes, and the same one naming-discipline
+    // makes when it spares an Adapter's and a Portal's method names from the
+    // stutter check; the test itself is method cohesion's, used unchanged.
+    const forwarders = pureForwarderComponents(ctx);
     for (const comp of ctx.components) {
       const threshold = ctx.complexityConfigFor(comp.subsystem)?.maxComponentDependencies ?? DEFAULT_GOD_COMPONENT_THRESHOLD;
-      if (comp.dependsOn.length > threshold) {
+      if (comp.dependsOn.length > threshold && !forwarders.has(comp.id)) {
         ctx.addIssue(
           'warning',
           'GOD_COMPONENT',
