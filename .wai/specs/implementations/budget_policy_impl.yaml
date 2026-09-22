@@ -1,0 +1,77 @@
+id: budget_policy_impl
+name: Budget Policy Implementation
+description: >-
+  src/core/budget_policy.ts. The tier ordering is the load-bearing invariant: the tiers are listed
+  once, in order, and every step-down asks only whether the current dial is at least some floor.
+  That is what makes each tier a strict superset of the constraints below it, so turning the dial up
+  can tighten a budget and never loosen one.
+contract: ibudget_policy
+sourcePath: src/core/budget_policy.ts
+methods:
+  - name: resolve
+    narrative:
+      - stepNumber: 1
+        description: Decide whether budgets are switched on at all
+        type: branch
+        condition: the configured tier is `off`
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Answer nothing. This is the default, and it is the point of the tier rather than a
+          failure: a project that has not opted in must generate byte-identical output to one that
+          never had the feature
+        type: return
+        outcome: no budget
+      - stepNumber: 3
+        description: >-
+          Take the base capability tier from reasoning depth — mechanical to small, standard to
+          standard, deep to large. Deep starts at large rather than frontier on purpose: frontier is
+          worth reserving for work explicitly marked as such, not handed to every Orchestrator by
+          default
+        type: local
+      - stepNumber: 4
+        description: >-
+          Step the tier down where the dial asks for it: from `trade` up, standard-depth work drops
+          one tier; from `aggressive` up, anything that is not deep drops to small. Deep work is
+          never stepped down, because getting judgment wrong is what costs the most
+        type: local
+      - stepNumber: 5
+        description: >-
+          Set the turn ceiling from breadth, and only from the `default` tier up. A wide survey
+          legitimately needs more turns than a focused implementation; the ceiling is halved at
+          `aggressive`. These are circuit breakers sized well above normal completion, not targets
+          to work up to
+        type: local
+      - stepNumber: 6
+        description: >-
+          Reduce effort only from the `trade` tier up, and only for mechanical work. Lowering effort
+          on work that carries judgment is the change most likely to cost more than it saves, by
+          turning one good pass into two mediocre ones
+        type: local
+      - stepNumber: 7
+        description: >-
+          Grant tools from whether the agent writes: implement or read-only. `orchestrate` is
+          deliberately never derived — every agent in a wairon topology owns and authors something,
+          so stripping a router's write tools would not make it cheaper, it would make it broken
+        type: local
+      - stepNumber: 8
+        description: >-
+          Decide MCP reach: everything below `free` loads all of it; above that, managers and wide
+          readers get the project surface because spec-tree tools are what they reason WITH, and a
+          focused implementer gets none, since its brief already quotes the contract
+        type: local
+      - stepNumber: 9
+        description: >-
+          Merge this agent's override from the configuration over everything decided above, because
+          an explicit budget always wins — the tree is a good default, not an authority on how
+          someone wants to spend
+        type: local
+      - stepNumber: 10
+        description: Answer the allowance
+        type: return
+        outcome: resolved
+    symbol: resolveBudget
+status: complete
+createdAt: '2026-09-20T23:51:39.290Z'
+updatedAt: '2026-09-20T23:52:24.153Z'

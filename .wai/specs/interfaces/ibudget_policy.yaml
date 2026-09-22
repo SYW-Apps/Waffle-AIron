@@ -1,0 +1,32 @@
+id: ibudget_policy
+name: Budget Policy Interface
+description: >-
+  What a work profile earns under the project's current dial, per agent. Callers that want to PRINT
+  an allowance ask the budget itself; this only decides one.
+component: budget_policy
+methods:
+  - name: resolve
+    description: >-
+      The allowance for one agent, or nothing at all when the dial is `off`. Returning nothing is
+      the point of that tier rather than an error: enabling this feature must never silently change
+      an existing project's generated output. A per-agent override in the configuration is merged
+      over the derived answer last, because an explicit budget always wins.
+    signature: >-
+      resolve(profile: ExecutionProfile, config: ExecutionConfig, agentId: string): ExecutionBudget
+      | undefined
+    returns: ExecutionBudget | undefined
+    params:
+      - name: profile
+        type: ExecutionProfile
+        description: What the work is like
+      - name: config
+        type: ExecutionConfig
+        description: The project's dial and its per-agent overrides
+      - name: agentId
+        type: string
+        description: Which agent, so its override can be found
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T23:51:08.930Z'
+updatedAt: '2026-09-20T23:52:23.497Z'

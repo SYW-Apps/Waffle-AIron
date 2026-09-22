@@ -1,0 +1,41 @@
+kind: value-object
+id: execution_profile
+name: ExecutionProfile
+description: >-
+  What an agent's work is LIKE, read off the topology and nothing else. Deliberately tool-agnostic:
+  it never names a model, a tool or a host CLI, because the moment it did, one policy decision would
+  be frozen into the description of the work. The policy layer decides what a shape earns; this only
+  says what the shape is.
+fields:
+  - name: breadth
+    type: string
+    description: 'How much of the tree the agent must read: narrow, moderate or wide.'
+    optional: false
+  - name: writes
+    type: boolean
+    description: >-
+      Whether the agent modifies files at all. A property of the ROLE, not of how many paths
+      happened to resolve — deriving it from owned-path count silently produced implementers that
+      could not implement.
+    optional: false
+  - name: reasoningDepth
+    type: string
+    description: 'How much judgment the work carries: mechanical, standard or deep.'
+    optional: false
+  - name: delegates
+    type: boolean
+    description: >-
+      Whether this agent is a MANAGER whose job is routing work rather than performing it. Managers
+      must stay thin: one that reads files accumulates context exactly like a main session and stops
+      being cheaper than doing the work inline.
+    optional: false
+  - name: rationale
+    type: string
+    description: >-
+      Why the profile came out this way, in prose — surfaced in briefs and `wairon analyze` so a
+      reader can disagree with the derivation rather than just receive it.
+    optional: false
+methods: []
+sourcePath: src/models/execution.ts
+createdAt: '2026-09-20T23:50:42.878Z'
+updatedAt: '2026-09-20T23:50:42.889Z'

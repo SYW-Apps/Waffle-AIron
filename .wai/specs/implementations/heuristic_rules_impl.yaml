@@ -140,13 +140,25 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 20
+        endStep: 21
       - stepNumber: 20
+        description: >-
+          Before judging fan-out, decide whether this component holds any flow of its own: look up
+          its implementation and ask whether EVERY narrated method is a single hand-off, using the
+          same forwarding test method cohesion already applies. A component with no narrated methods
+          is not exempt — absence of narrative is not evidence of forwarding
+        type: local
+      - stepNumber: 21
         label: reportGod
         description: >-
-          When comp.dependsOn.length exceeds threshold(comp), report GOD_COMPONENT (warning; draft
-          context ctx.isComponentDraft(comp.id)) naming comp.id, its dependency count and
-          threshold(comp).
+          When comp.dependsOn.length exceeds threshold(comp) AND the component is not a pure
+          forwarder, report GOD_COMPONENT (warning; draft context ctx.isComponentDraft(comp.id))
+          naming the count and the threshold. A pure forwarder is exempt because its fan-out is a
+          routing table rather than knowledge: the responsibility lives in what it forwards to,
+          which is exactly the reasoning INCOHESIVE_METHODS already accepts. Measured across this
+          tree, every high-fan-out Portal narrates 100% hand-offs while every high-fan-out
+          Orchestrator holds real flow, so the exemption separates the two shapes the raw count
+          conflates
         type: local
     symbol: check
   - name: namingConventions
@@ -364,9 +376,12 @@ methods:
       - stepNumber: 6
         label: compComplexityCheck
         description: >-
-          When complexityConfig.maxComponentDependencies is set and comp.dependsOn.length exceeds
-          it, report EXCESSIVE_DEPENDENCIES (warning; draft context isDraft) naming comp.id, its
-          dependency count and the limit.
+          When complexityConfig.maxComponentDependencies is set, comp.dependsOn.length exceeds it,
+          AND the component is not a pure forwarder (every narrated method a single hand-off, the
+          same test method cohesion uses), report EXCESSIVE_DEPENDENCIES (warning) naming the count
+          and the limit. The forwarder exemption is what stops the limit from punishing a Portal for
+          the size of the subsystem behind it — a door's fan-out tracks how many areas it publishes,
+          not how much it knows
         type: local
       - stepNumber: 7
         label: intfLoop
@@ -1028,4 +1043,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-18T20:21:29.296Z'
+updatedAt: '2026-09-21T00:04:52.365Z'

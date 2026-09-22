@@ -1146,6 +1146,7 @@ methods:
         targetComponent: cli_mcp_adapter
         targetMethod: reportMcpStatus
   - name: runExecutionShow
+    sourcePath: src/commands/execution.ts
     narrative:
       - stepNumber: 1
         description: Is this an initialized wairon project?
@@ -1184,8 +1185,10 @@ methods:
         type: return
         outcome: tier off, nothing derived
       - stepNumber: 8
-        description: Resolve the current agent topology from the live spec tree.
-        type: local
+        description: Ask the core adapter for the current agent topology, resolved from the live spec tree
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveAgentTopology
       - stepNumber: 9
         description: An empty topology has nothing to budget.
         type: branch
@@ -1203,27 +1206,34 @@ methods:
         over: the resolved agents
         endStep: 12
       - stepNumber: 12
-        description: >-
-          Derive the agent's execution profile from its work, with the rationale that produced it,
-          and resolve its budget under the project's execution settings; print the model tier (or
-          inherit), tool class, turn limit, MCP access and effort — marked as an override when the
-          configuration overrides this agent — followed by the rationale.
-        type: local
+        description: Ask the adapter what this agent's work is like
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: deriveExecutionProfile
       - stepNumber: 13
+        description: >-
+          Ask the adapter what that work earns under the project's dial, and print the row:
+          capability tier, tool grant, turn ceiling, MCP reach, and the rationale underneath
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveBudget
+      - stepNumber: 14
         description: When the configuration declares per-agent overrides, print how many.
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           When any agent is pinned to the frontier tier — only an override can do that — warn that
           frontier is a sparring partner for questions the specs do not settle rather than an owner
           tier, and that an owner needing it usually points at a component doing too much.
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: Done.
         type: return
         outcome: allowances listed
     conformance: 'off'
+    symbol: showExecution
   - name: runExecutionSetTier
+    sourcePath: src/commands/execution.ts
     narrative:
       - stepNumber: 1
         description: Is this an initialized wairon project?
@@ -1292,6 +1302,7 @@ methods:
         type: return
         outcome: tier set
     conformance: 'off'
+    symbol: setExecutionTier
   - name: runDoctor
     sourcePath: src/commands/doctor.ts
     narrative:
@@ -1605,4 +1616,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T22:08:34.971Z'
+updatedAt: '2026-09-20T23:52:16.701Z'

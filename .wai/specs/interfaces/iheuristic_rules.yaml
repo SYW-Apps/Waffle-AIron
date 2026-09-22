@@ -33,7 +33,9 @@ methods:
         summary: trustedLinks declares a peer no dependency actually reaches
       - code: GOD_COMPONENT
         severity: warning
-        summary: Component with excessive dependency fan-out
+        summary: >-
+          Component with excessive dependency fan-out; not reported on a pure forwarder, whose every
+          narrated method is a single hand-off
   - name: signatureLanguageBuiltins
     description: >-
       Rule signature-language-builtins. Contracts must speak the declared target language: builtin
@@ -152,7 +154,9 @@ methods:
         summary: Interface method declares more parameters than the configured limit
       - code: EXCESSIVE_DEPENDENCIES
         severity: warning
-        summary: Component has more dependencies than the configured limit
+        summary: >-
+          Component has more dependencies than the configured limit; not reported on a pure
+          forwarder, whose fan-out is a routing table rather than knowledge
       - code: EXCESSIVE_SUBSYSTEM_COMPONENTS
         severity: warning
         summary: Subsystem has more direct components than the configured limit
@@ -234,4 +238,4 @@ methods:
           component
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-09-18T20:21:17.320Z'
+updatedAt: '2026-09-21T10:08:22.211Z'

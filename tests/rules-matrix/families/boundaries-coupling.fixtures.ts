@@ -10,7 +10,12 @@
  *    crosses is stale spec.
  *  - GOD_COMPONENT (warning): excessive dependsOn fan-out; threshold defaults
  *    to 8 and is overridable via rules.complexity.maxComponentDependencies
- *    (the same knob EXCESSIVE_DEPENDENCIES reads — documented).
+ *    (the same knob EXCESSIVE_DEPENDENCIES reads — documented). A PURE
+ *    FORWARDER is exempt: fan-out is coupling only where the component holds
+ *    flow of its own, and a switchboard's count tracks how many areas it
+ *    publishes rather than how much it knows. A component with NO narrated
+ *    method is not exempt, because absence of narrative is not evidence of
+ *    forwarding.
  */
 import { defineRuleFixture, type FixtureSpecInput } from '../harness.js';
 
@@ -68,6 +73,66 @@ const INTAKE_COLLABORATORS: FixtureSpecInput[] = [
   { id: 'lab-orders-adapter', componentType: 'Adapter', description: 'Wraps the lab information system\'s ordering API.' },
   { id: 'pharmacy-feed-adapter', componentType: 'Adapter', description: 'Wraps the pharmacy formulary feed.' },
 ];
+
+/**
+ * The nine intake steps a clinic front desk hands its counter commands to —
+ * each one owns a step of the visit, and each publishes exactly one method.
+ */
+const INTAKE_STEPS = [
+  { id: 'eligibility-check', method: 'check', description: 'Decides whether the patient\'s insurance covers the visit.' },
+  { id: 'triage-scoring', method: 'score', description: 'Scores intake urgency so the queue orders itself.' },
+  { id: 'consent-capture', method: 'capture', description: 'Captures the consent forms the visit requires.' },
+  { id: 'copay-quoting', method: 'quote', description: 'Quotes the copay the patient owes at the counter.' },
+  { id: 'room-assignment', method: 'assign', description: 'Assigns an examination room to an admitted patient.' },
+  { id: 'chart-opening', method: 'open', description: 'Opens the encounter chart the clinicians write into.' },
+  { id: 'lab-ordering', method: 'order', description: 'Places the standing lab orders an intake protocol calls for.' },
+  { id: 'patient-notification', method: 'notify', description: 'Tells the patient what happens next, and when.' },
+  { id: 'visit-closing', method: 'close', description: 'Closes the encounter once the clinician signs off.' },
+];
+
+const intakeStepComponents = INTAKE_STEPS.map(s => ({
+  id: s.id,
+  componentType: 'Orchestrator',
+  subsystem: 'patient-intake',
+  description: s.description,
+}));
+
+const intakeStepInterfaces = INTAKE_STEPS.map(s => ({
+  id: `i${s.id.replace(/-/g, '_')}`,
+  component: s.id,
+  methods: [{ name: s.method, description: s.description }],
+}));
+
+/** A desk method that hands the counter command straight to the step that owns it. */
+const handsOff = (s: typeof INTAKE_STEPS[number]) => ({
+  name: s.method,
+  narrative: [
+    {
+      stepNumber: 1,
+      description: `Hand the ${s.method} command to ${s.id} with the receptionist's credential unchanged.`,
+      type: 'call',
+      targetComponent: s.id,
+      targetMethod: s.method,
+    },
+    { stepNumber: 2, description: `Return what ${s.id} answered.`, type: 'return', outcome: `${s.method} result` },
+  ],
+});
+
+const DESK_COMPONENT = {
+  id: 'visit-front-desk',
+  componentType: 'Orchestrator',
+  subsystem: 'patient-intake',
+  description: 'The clinic counter: hands each command a receptionist types to the intake step that owns it.',
+  dependsOn: INTAKE_STEPS.map(s => s.id),
+};
+
+const DESK_INTERFACE = {
+  id: 'ivisit_front_desk',
+  component: 'visit-front-desk',
+  methods: INTAKE_STEPS.map(s => ({ name: s.method, description: `Hand the ${s.method} command to the step that owns it.` })),
+};
+
+const INTAKE_SUB = { id: 'patient-intake', description: 'Patient intake, eligibility, and consent handling.' };
 
 export default [
   // -------------------------------------------------------------------------
@@ -239,6 +304,80 @@ export default [
           dependsOn: INTAKE_COLLABORATORS.slice(0, 4).map(c => c.id),
         },
         ...INTAKE_COLLABORATORS.slice(0, 4).map(c => ({ ...c, subsystem: 'patient-intake' })),
+      ],
+    },
+  }),
+  // -------------------------------------------------------------------------
+  // GOD_COMPONENT — the pure-forwarder exemption, and its two boundaries
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'GOD_COMPONENT',
+    expectFire: false,
+    reason:
+      'Every narrated method of the desk is a single hand-off, so it holds no responsibility of its own to split: the responsibility lives in the nine steps it forwards to. Its fan-out counts how many intake steps the clinic publishes, not how much the desk knows — the same judgement INCOHESIVE_METHODS already makes, and the reason splitting it would answer a question nobody asked.',
+    scenario:
+      'A clinic front desk hands each counter command straight to the intake step that owns it, reaching nine of them and doing nothing else in any method.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [INTAKE_SUB],
+      components: [DESK_COMPONENT, ...intakeStepComponents],
+      interfaces: [DESK_INTERFACE, ...intakeStepInterfaces],
+      implementations: [
+        { id: 'visit_front_desk_impl', contract: 'ivisit_front_desk', methods: INTAKE_STEPS.map(handsOff) },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'GOD_COMPONENT',
+    severity: 'warning',
+    anchoredTo: 'visit-front-desk',
+    expectFire: true,
+    scenario:
+      'The same nine-step front desk carries an implementation nobody has narrated yet, so nothing in the tree says its methods only hand off.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [INTAKE_SUB],
+      components: [DESK_COMPONENT, ...intakeStepComponents],
+      interfaces: [DESK_INTERFACE, ...intakeStepInterfaces],
+      implementations: [
+        {
+          id: 'visit_front_desk_impl',
+          contract: 'ivisit_front_desk',
+          methods: INTAKE_STEPS.map(s => ({ name: s.method })),
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'GOD_COMPONENT',
+    severity: 'warning',
+    anchoredTo: 'visit-front-desk',
+    expectFire: true,
+    scenario:
+      'The front desk stops forwarding and starts deciding: its admission method drives eligibility, triage and room assignment itself, branching on what each answers.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [INTAKE_SUB],
+      components: [DESK_COMPONENT, ...intakeStepComponents],
+      interfaces: [DESK_INTERFACE, ...intakeStepInterfaces],
+      implementations: [
+        {
+          id: 'visit_front_desk_impl',
+          contract: 'ivisit_front_desk',
+          methods: [
+            {
+              name: 'check',
+              narrative: [
+                { stepNumber: 1, description: 'Ask eligibility-check whether the insurance covers this visit.', type: 'call', targetComponent: 'eligibility-check', targetMethod: 'check' },
+                { stepNumber: 2, description: 'Is the patient covered?', type: 'branch', condition: 'eligibility came back covered', onTrueStep: 3, onFalseStep: 5 },
+                { stepNumber: 3, description: 'Ask triage-scoring how urgent the visit is.', type: 'call', targetComponent: 'triage-scoring', targetMethod: 'score' },
+                { stepNumber: 4, description: 'Ask room-assignment for a room matching that urgency.', type: 'call', targetComponent: 'room-assignment', targetMethod: 'assign' },
+                { stepNumber: 5, description: 'Answer the counter with the admission decision.', type: 'return', outcome: 'admission decided' },
+              ],
+            },
+            ...INTAKE_STEPS.filter(s => s.method !== 'check').map(handsOff),
+          ],
+        },
       ],
     },
   }),

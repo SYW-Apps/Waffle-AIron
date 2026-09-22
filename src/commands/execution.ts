@@ -1,10 +1,15 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
-import { loadProjectConfig, projectConfigExists, setExecutionTier as writeExecutionTier } from './subsystem.js';
-import { resolveAgentTopology } from '../core/agent_resolver.js';
-import { deriveExecutionProfile } from '../core/execution_profile.js';
-import { resolveBudget } from '../core/budget_policy.js';
+// Every sdd_core call goes through the core adapter, never a core module directly.
+import {
+  loadProjectConfig,
+  projectConfigExists,
+  setExecutionTier as writeExecutionTier,
+  resolveAgentTopology,
+  deriveExecutionProfile,
+  resolveBudget,
+} from './subsystem.js';
 import {
   BUDGET_TIER_DESCRIPTIONS,
   BudgetTier,

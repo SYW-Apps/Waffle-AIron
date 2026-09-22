@@ -712,6 +712,38 @@ methods:
         type: Set<string>
         description: Domain ids already in use
         optional: true
+  - name: deriveExecutionProfile
+    description: >-
+      Published read: what an agent's work is like, derived from its topology alone. Forwarded to
+      the execution profiler.
+    signature: 'deriveExecutionProfile(agent: AgentRecord): ExecutionProfile'
+    returns: ExecutionProfile
+    params:
+      - name: agent
+        type: AgentRecord
+        description: The resolved agent whose work shape is wanted
+    guarantees:
+      - idempotent
+  - name: resolveBudget
+    description: >-
+      Published read: what a work profile earns under the project's dial, or nothing when the dial
+      is off. Forwarded to the budget policy.
+    signature: >-
+      resolveBudget(profile: ExecutionProfile, config: ExecutionConfig, agentId: string):
+      ExecutionBudget | undefined
+    returns: ExecutionBudget | undefined
+    params:
+      - name: profile
+        type: ExecutionProfile
+        description: What the work is like
+      - name: config
+        type: ExecutionConfig
+        description: The project's dial and its per-agent overrides
+      - name: agentId
+        type: string
+        description: Which agent, so its override can be found
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T22:09:23.365Z'
+updatedAt: '2026-09-20T23:51:55.860Z'

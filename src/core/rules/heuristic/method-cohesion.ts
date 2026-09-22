@@ -1,5 +1,5 @@
-import type { ComponentSpec, ImplementationSpec, NarrativeStep } from '../../../models/index.js';
-import { SddRule } from '../types.js';
+import type { ComponentSpec, ImplementationSpec, MethodImplementation, NarrativeStep } from '../../../models/index.js';
+import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // An Orchestrator is a workflow's one place: its methods drive the same
@@ -63,13 +63,48 @@ function groupsSharingCollaborators(calledBy: Map<string, Set<string>>): string[
  * `local` step is in-component work, and a flow step is a decision — either
  * means the method does something of its own, so it is not a forwarder.
  */
-function isForwardingMethod(narrative: NarrativeStep[]): boolean {
+export function isForwardingMethod(narrative: NarrativeStep[]): boolean {
   let handoffs = 0;
   for (const step of narrative) {
     if (step.type === 'call' || step.type === 'dispatch') handoffs++;
     else if (step.type !== 'return') return false;
   }
   return handoffs === 1;
+}
+
+/**
+ * Whether a realized set of methods is a PURE FORWARDER's: every method that
+ * carries a narrative is a single hand-off, and at least one does.
+ *
+ * The second half is load-bearing. Absence of narrative is not evidence of
+ * forwarding — a component nobody has narrated says nothing about itself — so
+ * it is judged like any other rather than exempted for free. An unnarrated
+ * method BESIDE narrated hand-offs is the detail dial's business, not this
+ * test's, which is why the filter comes first.
+ *
+ * Factored out because the judgement is not this rule's alone: what a
+ * forwarder holds (nothing of its own) is the same answer the fan-out rules
+ * need, and two spellings of it would drift.
+ */
+export function isPureForwarder(methods: MethodImplementation[]): boolean {
+  const narrated = methods.filter(m => (m.narrative ?? []).length > 0);
+  return narrated.length > 0 && narrated.every(m => isForwardingMethod(m.narrative ?? []));
+}
+
+/**
+ * The components whose realized methods are all hand-offs, across every
+ * implementation that realizes them — a component with no implementation at
+ * all is never here, for the same reason an unnarrated one is not: there is
+ * nothing to read.
+ */
+export function pureForwarderComponents(ctx: RuleContext): Set<string> {
+  const realized = new Map<string, MethodImplementation[]>();
+  for (const impl of ctx.implementations) {
+    const intf = ctx.interfaceMap.get(impl.contract);
+    if (!intf) continue;
+    realized.set(intf.component, [...(realized.get(intf.component) ?? []), ...impl.methods]);
+  }
+  return new Set([...realized].filter(([, methods]) => isPureForwarder(methods)).map(([id]) => id));
 }
 
 export const methodCohesionRule: SddRule = {
@@ -95,8 +130,7 @@ export const methodCohesionRule: SddRule = {
       // detail dial's business, not this rule's — so a switchboard whose every
       // hand-off is a single call is never accused of holding two
       // responsibilities, and one method of real logic is enough to be judged.
-      const narrated = impl.methods.filter(m => (m.narrative ?? []).length > 0);
-      if (narrated.length > 0 && narrated.every(m => isForwardingMethod(m.narrative ?? []))) continue;
+      if (isPureForwarder(impl.methods)) continue;
 
       const calledBy = new Map<string, Set<string>>();
       for (const method of impl.methods) {

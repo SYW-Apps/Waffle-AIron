@@ -270,15 +270,15 @@ methods:
         targetComponent: approval_comparison
         targetMethod: captureApprovedSpecs
   - name: localApprover
-    sourcePath: src/core/approver.ts
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the approving identity from the local environment: prefer the git author identity,
-          fall back to user@hostname, and never throw or prompt — a lock must not fail because a
-          name could not be resolved. Re-exported through this Portal rather than living in it,
-          which is why the method names its own file
-        type: local
+          Forward to the approver identity, which reads the local environment for the answer.
+          Re-exported through this Portal rather than resolved in it — reading git and the operating
+          system is work, and a Portal dispatches
+        type: call
+        targetComponent: local_approver
+        targetMethod: resolve
     symbol: localApprover
   - name: resolveSubprojectForNamespace
     narrative:
@@ -583,6 +583,20 @@ methods:
         type: call
         targetComponent: domain_detector
         targetMethod: detectCandidates
+  - name: deriveExecutionProfile
+    narrative:
+      - stepNumber: 1
+        description: Forward to the execution profiler
+        type: call
+        targetComponent: execution_profiler
+        targetMethod: derive
+  - name: resolveBudget
+    narrative:
+      - stepNumber: 1
+        description: Forward to the budget policy
+        type: call
+        targetComponent: budget_policy
+        targetMethod: resolve
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T22:45:20.221Z'
+updatedAt: '2026-09-21T10:07:07.844Z'

@@ -1,0 +1,17 @@
+id: execution_profiler
+name: Execution Profiler
+description: >-
+  Reads the resource shape of an agent's work off the topology that is already resolved, and answers
+  what that work is LIKE — never what it should cost. It requires no spec authoring to work: every
+  input is something an agent record already carries, so a project gets a profile for free the
+  moment it has agents at all. Kept tool-agnostic on purpose, and kept apart from `budget_policy`
+  for the same reason: if the description of the work knew about model tiers, every future change to
+  the pricing dial would be a change to what the work is said to be.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+status: complete
+createdAt: '2026-09-20T23:50:54.762Z'
+updatedAt: '2026-09-20T23:52:20.092Z'

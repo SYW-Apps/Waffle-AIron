@@ -189,6 +189,20 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: detectDomainCandidates
+  - name: deriveExecutionProfile
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: deriveExecutionProfile
+  - name: resolveBudget
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: resolveBudget
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T22:09:37.344Z'
+updatedAt: '2026-09-20T23:52:06.882Z'

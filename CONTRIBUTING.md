@@ -65,7 +65,7 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 216 files / 3647 tests |
+| `npx vitest run` | 217 files / 3663 tests |
 | `npx vitest run --config vitest.e2e.config.ts` | 5 files / 25 tests |
 | `npm run build` | clean |
 | `node dist/cli/index.js validate` | 0 errors, 0 warnings |
@@ -81,6 +81,13 @@ Some tests assert on the text of the shipped skill and agent templates
 Changing that text is *supposed* to fail them — that is the assertion doing its
 job. Fix it to match the new text; loosening it to match anything removes the one
 thing keeping the templates and the validator's vocabulary in step.
+
+A rule's `summary` is spec data, not a code string. `tests/core/rule-catalog.test.ts`
+proves the registry's codes and the L3 `findings[].summary` values on
+`iheuristic_rules.yaml` (and its siblings) are ONE list, so changing a summary in
+the rule file alone fails the suite. Change it through the authoring tools first and
+let the code string follow. This catches every contributor who touches a rule's
+codes, and the suite is currently the only place that says so.
 
 ---
 

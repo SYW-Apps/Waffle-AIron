@@ -69,7 +69,7 @@ import {
 // Through the Portal, not the module: the registry shape this server hands to
 // the registry validator is sdd_core's to publish, and icore_portal names it.
 import { loadRegistry as coreLoadRegistry } from '../core/index.js';
-import { describeBudget } from '../core/budget_policy.js';
+import { summarize } from '../models/execution.js';
 import type { AgentBrief, AgentRecord } from '../models/agent.js';
 import {
   listExternalInterfaces as coreListExternalInterfaces,
@@ -966,7 +966,7 @@ function renderAgentBriefMarkdown(brief: AgentBrief): string {
       '',
       '## Execution budget',
       '',
-      ...describeBudget(brief.profile, brief.budget),
+      ...summarize(brief.budget, brief.profile),
       '',
       'Advisory — apply these when spawning. Map the capability tier onto your host tool\'s models; a tool that cannot express a field should ignore it rather than approximate it.',
     );
