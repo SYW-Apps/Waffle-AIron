@@ -155,11 +155,87 @@ methods:
     sourcePath: src/commands/update.ts
     narrative:
       - stepNumber: 1
-        description: Check remote github release page for new releases
-        type: local
+        description: Decide whether this run names a channel on the command line
+        type: branch
+        condition: a --channel was given
+        onTrueStep: 2
+        onFalseStep: 6
       - stepNumber: 2
-        description: If new release is found and not in check-only mode, pull and apply updates
+        description: Decide whether it is a channel this build knows
+        type: branch
+        condition: the named channel is recognized
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Record it for this machine, so choosing a channel outlives the run that chose it —
+          `--channel` is a setting, not a per-invocation flag
+        type: call
+        targetComponent: user_config_store
+        targetMethod: setChannel
+      - stepNumber: 4
+        description: Use the channel just named
+        type: jump
+        toStep: 7
+      - stepNumber: 5
+        description: Refuse by name, listing every valid channel, and exit non-zero without checking anything
+        type: return
+        outcome: unknown channel
+      - stepNumber: 6
+        description: Use the channel recorded for this machine
+        type: call
+        targetComponent: user_config_store
+        targetMethod: channel
+      - stepNumber: 7
+        description: >-
+          Ask GitHub for the release list. A failure here reports the network problem and stops,
+          rather than reporting no update available — which would be indistinguishable from being
+          current
         type: local
+      - stepNumber: 8
+        description: >-
+          Keep only the releases eligible for that channel and take the newest, then say so when the
+          running build is itself off-channel
+        type: local
+      - stepNumber: 9
+        description: Decide whether anything newer is on offer
+        type: branch
+        condition: no eligible release is newer than the running build
+        onTrueStep: 10
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report already up to date, and mention a newer build waiting on a wider channel if one
+          exists — so that being current on `stable` never silently hides a `beta` release
+        type: return
+        outcome: up to date
+      - stepNumber: 11
+        description: >-
+          Report the new version and the first lines of its release notes, pointing at the full
+          notes when they are longer
+        type: local
+      - stepNumber: 12
+        description: Decide whether this run was only asking
+        type: branch
+        condition: check-only mode
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Exit non-zero to signal that an update is available, having changed nothing — the non-zero
+          status is the answer, for scripts that poll
+        type: return
+        outcome: update available
+      - stepNumber: 14
+        description: >-
+          Download the asset for this platform and swap the running binary, keeping the previous one
+          beside it so a bad release can be stepped back from
+        type: local
+      - stepNumber: 15
+        description: Done
+        type: return
+        outcome: updated
+    symbol: runUpdate
   - name: runHostProject
     sourcePath: src/commands/host.ts
     narrative:
@@ -1572,6 +1648,119 @@ methods:
         type: return
         outcome: removed
     symbol: runDomainsRemove
+  - name: runAliasesList
+    sourcePath: src/commands/aliases.ts
+    narrative:
+      - stepNumber: 1
+        description: Ask which short names this person has opted out of
+        type: call
+        targetComponent: user_config_store
+        targetMethod: disabledAliases
+      - stepNumber: 2
+        description: >-
+          Find where the binaries live. A packaged binary already knows — it is the directory the
+          running executable sits in — so nothing is looked up and nothing can be stale
+        type: local
+      - stepNumber: 3
+        description: >-
+          For each supported alias, report which of five states it is in: registered by npm and
+          unchangeable from here, opted out, shadowed by a different program already on PATH,
+          present, or missing with the command that would create it
+        type: local
+      - stepNumber: 4
+        description: >-
+          Close with the install directory when there is one to name, and say plainly when there is
+          not — an npm install has no directory of ours to manage
+        type: local
+      - stepNumber: 5
+        description: Done
+        type: return
+        outcome: listed
+    symbol: runAliasesList
+  - name: runAliasesEnable
+    sourcePath: src/commands/aliases.ts
+    narrative:
+      - stepNumber: 1
+        description: Decide whether this is a name we support
+        type: branch
+        condition: the name is one of the supported aliases
+        onTrueStep: 3
+        onFalseStep: 2
+      - stepNumber: 2
+        description: Refuse by name, listing every supported alias, and exit non-zero
+        type: return
+        outcome: refused
+      - stepNumber: 3
+        description: Read the opted-out list
+        type: call
+        targetComponent: user_config_store
+        targetMethod: disabledAliases
+      - stepNumber: 4
+        description: >-
+          Drop this name from it and record that, whichever kind of install this is — so that
+          enabling an alias here is not quietly undone by the next install reading a stale opt-out
+        type: call
+        targetComponent: user_config_store
+        targetMethod: setDisabledAliases
+      - stepNumber: 5
+        description: Decide whether there is anything to create on disk
+        type: branch
+        condition: this is a packaged binary
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Create the alias beside the binary — a symlink on Unix, a .cmd wrapper on Windows — and
+          report it enabled
+        type: return
+        outcome: enabled
+      - stepNumber: 7
+        description: Report that npm's own bin entries already register it, so nothing on disk changed
+        type: return
+        outcome: already registered
+    symbol: runAliasesEnable
+  - name: runAliasesDisable
+    sourcePath: src/commands/aliases.ts
+    narrative:
+      - stepNumber: 1
+        description: Decide whether this is a name we support
+        type: branch
+        condition: the name is one of the supported aliases
+        onTrueStep: 3
+        onFalseStep: 2
+      - stepNumber: 2
+        description: Refuse by name, listing every supported alias, and exit non-zero
+        type: return
+        outcome: refused
+      - stepNumber: 3
+        description: Read the opted-out list
+        type: call
+        targetComponent: user_config_store
+        targetMethod: disabledAliases
+      - stepNumber: 4
+        description: >-
+          Add this name to it and record that. The opt-out is what stops a later install recreating
+          the alias — removing the file alone would not survive one
+        type: call
+        targetComponent: user_config_store
+        targetMethod: setDisabledAliases
+      - stepNumber: 5
+        description: Decide whether there is anything to remove from disk
+        type: branch
+        condition: this is a packaged binary
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Remove the symlink or wrapper beside the binary and report it disabled
+        type: return
+        outcome: disabled
+      - stepNumber: 7
+        description: >-
+          Report that npm's bin entries cannot be changed from here, and what would have to happen
+          instead
+        type: return
+        outcome: npm managed
+    symbol: runAliasesDisable
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -1616,4 +1805,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T23:52:16.701Z'
+updatedAt: '2026-09-22T21:21:11.381Z'

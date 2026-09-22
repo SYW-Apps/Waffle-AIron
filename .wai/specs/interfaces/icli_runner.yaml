@@ -353,6 +353,31 @@ methods:
       - name: id
         type: string
         description: The domain id to unregister
+  - name: runAliasesList
+    description: >-
+      `wairon aliases list`: show every supported short command name and whether it is active, opted
+      out, shadowed by something else on PATH, or simply missing.
+    signature: 'runAliasesList(): Promise<void>'
+    returns: Promise<void>
+    params: []
+  - name: runAliasesEnable
+    description: '`wairon aliases enable <name>`: create the alias and clear it from the opted-out list.'
+    signature: 'runAliasesEnable(alias: string): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: alias
+        type: string
+        description: The alias name to enable
+  - name: runAliasesDisable
+    description: >-
+      `wairon aliases disable <name>`: remove the alias and record the opt-out so a later install
+      does not recreate it.
+    signature: 'runAliasesDisable(alias: string): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: alias
+        type: string
+        description: The alias name to disable
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T22:10:43.901Z'
+updatedAt: '2026-09-22T21:19:11.813Z'

@@ -1,0 +1,23 @@
+kind: value-object
+id: update_channel
+name: UpdateChannel
+description: >-
+  Which release track `wairon update` follows: `stable`, `beta`, `preview` or `dev`, listed
+  narrowest first. The order is the whole point — each channel is a superset of the one before it,
+  so a person on `beta` is offered stable releases too, and widening the channel can only ever add
+  candidates. A value this build does not recognize is never honoured: it reads as `stable`, because
+  an unknown string in a hand-edited or future-version config must not be able to widen what a
+  stable install will fetch.
+fields: []
+methods:
+  - name: isValid
+    signature: 'isValid(value: string): boolean'
+    returns: boolean
+    description: >-
+      Whether a string names a channel this build knows. Lives on the type because it is the one
+      question anyone asks about a raw channel string, and every caller that asks it — the CLI flag,
+      the stored setting — must get the same answer.
+    symbol: isUpdateChannel
+sourcePath: src/config/userconfig.ts
+createdAt: '2026-09-22T21:20:58.590Z'
+updatedAt: '2026-09-22T21:21:29.940Z'
