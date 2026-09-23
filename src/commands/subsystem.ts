@@ -31,6 +31,12 @@ import {
   detectDomainCandidates as coreDetectDomainCandidates,
   deriveExecutionProfile as coreDeriveExecutionProfile,
   resolveBudget as coreResolveBudget,
+  globalGuideFilePath as coreGlobalGuideFilePath,
+  localGuideFilePath as coreLocalGuideFilePath,
+  injectGuide as coreInjectGuide,
+  writeRootGuideDelegator as coreWriteRootGuideDelegator,
+  reinjectLocalGuides as coreReinjectLocalGuides,
+  readStampVersion as coreReadStampVersion,
 } from '../core/index.js';
 import type { GenerateOptions, GenerateSummary } from '../core/index.js';
 import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
@@ -286,6 +292,46 @@ export function resolveBudget(
   agentId: string,
 ): ExecutionBudget | undefined {
   return coreResolveBudget(profile, config, agentId);
+}
+
+// cli_core_adapter's guide and stamp methods — 1:1 forwards to the core portal,
+// backing `wairon init` (write the guides a new project gets), `wairon generate`
+// (refresh them, so a guide never goes on describing an older wairon than the
+// one installed) and `wairon doctor` (find them, refresh them, and read the
+// stamp that says how old they are).
+//
+// All three used to call straight out of ../utils/ai-guide.js and
+// ../core/stamp.js — sdd_cli reaching into two sdd_core modules, past the Portal
+// that publishes all six calls. It is the eighth time that crossing has been
+// found, and it closes the way it always does: here, on the one component whose
+// whole job is to cross into sdd_core.
+//
+// `wairon generate` reached through a lazy `require` rather than an import,
+// which hid the crossing from a reader and would have broken the call outright
+// once the CLI is bundled — ../core/context.ts carries the note saying exactly
+// that about exactly this form. It is a normal import now.
+export function globalGuideFilePath(target: string): string | null {
+  return coreGlobalGuideFilePath(target);
+}
+
+export function localGuideFilePath(projectRoot: string, target: string): string | null {
+  return coreLocalGuideFilePath(projectRoot, target);
+}
+
+export function injectGuide(filePath: string, scope: 'global' | 'local'): void {
+  coreInjectGuide(filePath, scope);
+}
+
+export function writeRootGuideDelegator(projectRoot: string, target: string): void {
+  coreWriteRootGuideDelegator(projectRoot, target);
+}
+
+export function reinjectLocalGuides(projectRoot: string, targets: string[]): string[] {
+  return coreReinjectLocalGuides(projectRoot, targets);
+}
+
+export function readStampVersion(content: string): string | null {
+  return coreReadStampVersion(content);
 }
 
 interface SubsystemAddOptions {

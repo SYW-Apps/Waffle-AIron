@@ -92,12 +92,6 @@ export function localGuideFilePath(projectRoot: string, targetType: string): str
 // Detect / inject
 // ---------------------------------------------------------------------------
 
-/** Returns true if the file exists and already contains the wairon guide. */
-export function hasWaironGuide(filePath: string): boolean {
-  if (!fs.existsSync(filePath)) return false;
-  return fs.readFileSync(filePath, 'utf-8').includes(GUIDE_MARKER_START);
-}
-
 /**
  * Inject (or update) the wairon guide section in the given file.
  * Creates the file and any parent directories if they don't exist.

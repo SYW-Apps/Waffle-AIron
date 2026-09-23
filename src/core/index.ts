@@ -190,3 +190,34 @@ export { declaredPackNames, declaredProfileIds } from '../config/project-config.
 // agent's work is like should not have to resolve a budget to find out.
 export { deriveExecutionProfile } from './execution_profile.js';
 export { resolveBudget } from './budget_policy.js';
+
+// The guide wairon writes into another tool's configuration file, and the stamp
+// that says which build wrote it (icore_portal globalGuideFilePath …
+// readStampVersion) — pure 1:1 forwards to the tool guide and the version
+// stamp, republished by identity rather than wrapped, so each Portal method and
+// the function behind it are the same function.
+//
+// Published because `wairon init`, `wairon generate` and `wairon doctor` are
+// sdd_cli commands while the guide and the stamp are sdd_core components: those
+// three importing ../utils/ai-guide.js and ../core/stamp.js directly is exactly
+// the crossing this Portal exists to prevent. That reach has now been found
+// eight times — movedChildren, diffSize and settledSpecPaths out of
+// ./approval.js, the four modules `wairon diagram` built its artifacts out of,
+// the generator `wairon generate` wrote through, the two domain modules `wairon
+// domains` read, and the two derivations `wairon execution` resolved were the
+// first seven — and it closes the way it always does: the boundary is crossed
+// HERE, once.
+//
+// `stripGuideSection` stays unpublished on purpose. It is the guide's own
+// internal seam — inject strips before it appends, which is what makes
+// injection idempotent — and no command outside sdd_core has ever needed to
+// take a section out without putting one back. A Portal that republished it
+// would be offering a half-write nobody asked for.
+export {
+  globalGuideFilePath,
+  localGuideFilePath,
+  injectGuide,
+  writeRootGuideDelegator,
+  reinjectLocalGuides,
+} from '../utils/ai-guide.js';
+export { readStampVersion } from './stamp.js';

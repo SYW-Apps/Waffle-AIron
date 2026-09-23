@@ -12,12 +12,6 @@ import {
   setProjectRoot,
 } from '../utils/fs.js';
 import type { SubsystemSpec } from '../models/index.js';
-import {
-  globalGuideFilePath,
-  localGuideFilePath,
-  injectGuide,
-  writeRootGuideDelegator,
-} from '../utils/ai-guide.js';
 import { writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/paths.js';
 import {
@@ -27,6 +21,12 @@ import {
   createChainedSubsystem,
   defaultPackSelections,
   ensureProjectInitialized,
+  // Through the core adapter, never ../utils/ai-guide.js: writing a tool's
+  // configuration file is sdd_core work, and init is an sdd_cli command.
+  globalGuideFilePath,
+  localGuideFilePath,
+  injectGuide,
+  writeRootGuideDelegator,
 } from './subsystem.js';
 import { exportSddSkills } from './skills.js';
 import { defaultTargetConfig } from '../config/defaults.js';
