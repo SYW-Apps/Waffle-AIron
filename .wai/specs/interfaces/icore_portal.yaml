@@ -852,13 +852,18 @@ methods:
     guarantees:
       - idempotent
   - name: getStatusReport
-    description: 'Published read: how complete the spec tree is, as text. Forwarded to the project status.'
-    signature: 'getStatusReport(options: StatusOptions): string'
+    description: >-
+      Published read: how complete the spec tree is, as text, marked up however the caller asked.
+      Forwarded to the project status.
+    signature: 'getStatusReport(options: StatusOptions, decor?: StatusDecor): string'
     returns: string
     params:
       - name: options
         type: StatusOptions
         description: How much of the tree to cover
+      - name: decor
+        type: StatusDecor
+        description: How to mark up each kind of thing, or nothing for plain text
     guarantees:
       - idempotent
   - name: approvalVerdict
@@ -945,4 +950,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T12:55:34.678Z'
+updatedAt: '2026-09-23T14:52:37.940Z'

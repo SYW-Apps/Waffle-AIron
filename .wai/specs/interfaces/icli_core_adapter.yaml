@@ -394,6 +394,31 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: getStatusReport
+    description: >-
+      How complete the spec tree is, for `wairon status`, marked up with the terminal's own colours.
+      Forwarded to the core portal — the dashboard used to render this itself, line for line, which
+      is how it and the MCP report came to disagree.
+    signature: 'getStatusReport(options: StatusOptions, decor?: StatusDecor): string'
+    returns: string
+    params:
+      - name: options
+        type: StatusOptions
+        description: How much of the tree to cover
+      - name: decor
+        type: StatusDecor
+        description: How to mark up each kind of thing
+    guarantees:
+      - idempotent
+  - name: approvalVerdict
+    description: >-
+      What the lock says about the tree, for the line `wairon status` and `wairon doctor` print
+      under the dashboard. Forwarded to the core portal.
+    signature: 'approvalVerdict(): ApprovalVerdict'
+    returns: ApprovalVerdict
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T11:11:53.969Z'
+updatedAt: '2026-09-23T14:52:42.142Z'

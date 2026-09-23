@@ -266,6 +266,20 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: derivedDocPaths
+  - name: getStatusReport
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: getStatusReport
+  - name: approvalVerdict
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: approvalVerdict
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T11:11:56.541Z'
+updatedAt: '2026-09-23T14:52:44.193Z'

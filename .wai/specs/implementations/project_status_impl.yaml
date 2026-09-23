@@ -48,16 +48,19 @@ methods:
       - stepNumber: 7
         description: >-
           Count each component's progress through the layers — whether it has a contract, an
-          implementation, and source files its implementation names — and narrow to one subsystem
-          when the options asked for that
+          implementation, and source files its implementation names — narrowing to one subsystem
+          when the options asked for that, and marking each part through the role the caller
+          supplied: structure, layer, score, draft, present or missing. Roles rather than colours,
+          so this renderer never learns what a terminal is
         type: local
       - stepNumber: 8
         description: >-
-          Answer the report as text, so a terminal, an MCP client and a test all read the same
-          account rather than three renderings that can drift apart
+          Answer the report as text. One renderer, so the terminal and the MCP status tool cannot
+          drift into disagreeing about what this tree contains — which they did, for as long as each
+          had its own copy
         type: return
         outcome: report
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-09-23T11:47:14.030Z'
+updatedAt: '2026-09-23T14:52:32.080Z'

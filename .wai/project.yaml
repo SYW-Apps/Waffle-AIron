@@ -87,7 +87,6 @@ rules:
     # (STALE_UNCLAIMED_ENTRY). A file that is neither claimed nor listed is
     # reported the day it appears, which is the whole point.
     unclaimed:
-      - src/commands/status.ts
       - src/config/defaults.ts
       - src/core/demo-seed.ts
       - src/core/narrative-labels.ts
