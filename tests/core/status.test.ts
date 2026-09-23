@@ -548,9 +548,12 @@ updatedAt: '2026-06-10T22:00:00Z'
     // sdd_mcp importing ../commands/status.js put one subsystem behind another
     // for its own status tool. The ban is on the SPECIFIER in any spelling —
     // static import, lazy require or dynamic import — not on one import line.
+    // The approval verdict now rides the same import, for the same reason: it
+    // was a private helper in the CLI command, so the MCP tool had nothing to
+    // say about a tree that had drifted.
     const source = fs.readFileSync(path.join(REPO_ROOT, 'src/mcp/server.ts'), 'utf8');
     expect(source).not.toContain('commands/status.js');
-    expect(source).toContain("import { getStatusReport } from '../core/index.js';");
+    expect(source).toMatch(/import \{ getStatusReport[^}]*\} from '\.\.\/core\/index\.js';/);
   });
 
   it('leaves the CLI command with no second declaration of StatusOptions', () => {

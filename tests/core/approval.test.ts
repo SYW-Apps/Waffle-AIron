@@ -9,7 +9,7 @@ import {
 } from '../../src/core/specs.js';
 import {
   captureApprovedSpecs, approvalRecord, diffAgainstApproval, diffSize,
-  currentChildPins, movedChildren, pinOf, type ChildPinDrift,
+  currentChildPins, movedChildren, pinOf, approvalVerdict, type ChildPinDrift,
 } from '../../src/core/approval.js';
 // The same surface as the CLI sees it: through core_portal, never the module.
 import * as portal from '../../src/core/index.js';
@@ -458,6 +458,87 @@ describe('the approval', () => {
 // why it survived: an import that works is invisible until something asks where
 // the boundary is.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// The verdict: the one sentence every presenter shows about the approval.
+//
+// It used to be a PRIVATE helper inside `wairon status`, so the terminal could
+// say "15 specs changed since approval" while sdd_get_status — what an AI agent
+// reads to decide whether it may write code against these specs — said nothing
+// at all, and silence reads exactly like being current. Nothing covered the
+// line either: the status tests all used temp projects with NO lock record,
+// where the verdict was empty whatever the code did, which is how a later wave
+// could drop it with the suite still green. These cover the three answers by
+// name.
+// ---------------------------------------------------------------------------
+describe('the verdict the lock gives on the tree', () => {
+  let root: string;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+  });
+
+  it('says nothing about a project nobody has approved', () => {
+    root = project();
+
+    // Absence of an approval is the normal state of a tree still being
+    // designed, not news — and `drifted` must not claim otherwise.
+    expect(approvalVerdict()).toEqual({ text: '', drifted: false });
+  });
+
+  it('answers that nothing moved, and names who approved it', () => {
+    root = project();
+    approve();
+
+    const verdict = approvalVerdict();
+    expect(verdict.drifted).toBe(false);
+    expect(verdict.text).toContain('no spec has changed since');
+    expect(verdict.text).toContain(describeApprover(TESTER));
+    expect(verdict.text).toContain(now);
+  });
+
+  it('NAMES the spec that moved and reports it as drift', () => {
+    root = project();
+    approve();
+
+    updateSpec('component', 'worker', { description: 'a revised worker component' });
+    invalidateSpecCache();
+
+    const verdict = approvalVerdict();
+    expect(verdict.drifted).toBe(true);
+    // Singular, with no redundant "(1 changed)" breakdown — one category says
+    // it once — and pointing at the FILE rather than merely asserting staleness.
+    expect(verdict.text).toMatch(/1 spec changed since approval/);
+    expect(verdict.text).not.toMatch(/\(1 changed\)/);
+    expect(verdict.text).toMatch(/worker/);
+    expect(verdict.text).not.toContain('STALE');
+  });
+
+  it('names the LIMIT of a lock written before per-spec approval', () => {
+    root = project();
+    const record = approve();
+    delete (record as { specs?: unknown }).specs;
+    writeLockRecord(record);
+
+    const verdict = approvalVerdict();
+    // Such a record proves the tree validated, not which specs still match it.
+    // Saying so beats implying either answer — and it is not drift, because
+    // nothing here can tell whether anything moved.
+    expect(verdict.text).toContain('predates per-spec approval');
+    expect(verdict.drifted).toBe(false);
+  });
+
+  it('never lets a broken read break the report', () => {
+    root = project();
+    approve();
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), 'not json at all');
+
+    // An unreadable record reads as no record: quiet, not a thrown status.
+    expect(approvalVerdict()).toEqual({ text: '', drifted: false });
+  });
+});
+
 describe('the approval, published on core_portal', () => {
   const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
@@ -470,6 +551,7 @@ describe('the approval, published on core_portal', () => {
     expect(portal.approvalRecord).toBe(approvalRecord);
     expect(portal.currentChildPins).toBe(currentChildPins);
     expect(portal.captureApprovedSpecs).toBe(captureApprovedSpecs);
+    expect(portal.approvalVerdict).toBe(approvalVerdict);
   });
 
   it('answers a child drift through the Portal exactly as the module does', () => {

@@ -17,11 +17,17 @@ import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
-// mcp_core_adapter's completeness report (icore_portal getStatusReport), taken
-// from the core barrel like every other core call this file makes. It used to
-// come out of src/commands/status.ts — sdd_mcp reaching into an sdd_cli command
-// file for a report that was never CLI-specific.
-import { getStatusReport } from '../core/index.js';
+// mcp_core_adapter's completeness report (icore_portal getStatusReport) and the
+// lock's verdict on the tree (icore_portal approvalVerdict), taken from the core
+// barrel like every other core call this file makes. The report used to come out
+// of src/commands/status.ts — sdd_mcp reaching into an sdd_cli command file for a
+// report that was never CLI-specific — and the verdict used to live there as a
+// PRIVATE helper, which is why this server could only ever answer with silence
+// about a tree that had drifted from its approval. Both are taken BY IDENTITY,
+// unrenamed: each is a method this file's mcp_core_adapter contract names, and a
+// renamed binding would leave the narrative's call site pointing at a symbol the
+// contract does not carry.
+import { getStatusReport, approvalVerdict } from '../core/index.js';
 import type { ProjectConfig } from '../models/project.js';
 // mcp_core_adapter's project configuration read (icore_portal loadProjectConfig,
 // null when the project has none) and the renames (icore_portal
@@ -2273,7 +2279,15 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           subsystem,
           recursive: recursive ?? true,
         });
-        return text(`${statusFamilyContext()}${report}`);
+        // Step 2: which trees this answer spans.
+        const family = statusFamilyContext();
+        // Step 3: what the lock says about the tree as it stands. An agent
+        // reading this tool is deciding whether it may write code against these
+        // specs, so a tree that has drifted from its approval is the single most
+        // important thing this answer can carry — and silence reads exactly like
+        // being current, which is what this tool used to answer.
+        const verdict = approvalVerdict();
+        return text(`${family}${report}${verdict.text}`);
       } catch (e) {
         return errText(String(e));
       }

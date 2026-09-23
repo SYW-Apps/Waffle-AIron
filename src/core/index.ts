@@ -127,8 +127,15 @@ export {
   // was importing it straight from ./approval.js - the same reach past this
   // Portal that movedChildren and diffSize were making.
   settledSpecPaths,
+  // What the lock says about the tree as it stands. Republished by IDENTITY,
+  // like getStatusReport below: the Portal method and the Orchestrator function
+  // are the same function. Every presenter needs the same answer — the terminal,
+  // the MCP status tool, anything else — and `wairon status` used to keep a
+  // private copy of it, which is how sdd_get_status came to say nothing at all
+  // about a tree that had drifted from its approval.
+  approvalVerdict,
 } from './approval.js';
-export type { ApprovalDiff, ChildPinDrift } from './approval.js';
+export type { ApprovalDiff, ChildPinDrift, ApprovalVerdict } from './approval.js';
 // Who to record as the approver on a machine with no wairon account — resolved
 // through the portal like everything else sdd_cli reaches in sdd_core.
 export { localApprover } from './approver.js';

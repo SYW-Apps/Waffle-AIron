@@ -26,6 +26,59 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### The approval verdict is a published read, and `sdd_get_status` carries it again
+
+The previous entry dropped one line from the status report: the approval
+verdict — how many specs have moved since a human last locked the tree, who
+approved it and when. It was dropped for a real reason (`project_status`
+depends on the spec loader alone, and keeping the verdict inside the report
+raised two `UNDECLARED_DEPENDENCY` warnings) and it named the fix. This is the
+fix.
+
+The loss was not cosmetic. `sdd_get_status` is what an AI agent reads to decide
+whether it may write code against these specs, and a tree that has drifted from
+its approval is the single most important thing that answer can carry — while
+silence reads exactly like being current.
+
+The verdict is now **`approval_comparison.verdict`**, published rather than kept
+private, because every presenter needs the same answer and two renderings of
+"has this drifted" that can disagree is precisely what a lock exists to prevent.
+It lives in `src/core/approval.ts` as `approvalVerdict()`, beside the digests and
+the child pins it already reads, and answers an `ApprovalVerdict` — the sentence
+to show and whether it IS drift, kept apart so a caller picks its severity from
+the fact rather than by matching prose. `core_portal` republishes it by identity
+(the Portal method and the Orchestrator function are the same function),
+`mcp_core_adapter` forwards it, and `sdd_get_status` composes it beside the
+completeness report. `wairon status` calls the same function instead of the
+private copy it used to keep — that copy is what let the terminal name the specs
+that had moved while the MCP tool said nothing at all.
+
+**`src/core/status.ts` is untouched**, which is the whole point. The verdict is
+composed *beside* the report by each presenter, never folded into it: putting it
+back inside would hand the approval dependency to every reader of the report,
+which is the coupling the last entry correctly refused. The function was MOVED,
+not rewritten, so all three of its outcomes survive byte for byte — silence when
+nothing was ever approved, the "predates per-spec approval" wording when the
+record is a coarse lock, and otherwise the verdict naming the specs that moved.
+`wairon status` output on this repository is byte-identical before and after.
+
+Both core symbols are imported into `src/mcp/server.ts` **unrenamed**: each is a
+method the file's `mcp_core_adapter` contract names, so a renamed binding would
+leave the narrative's call site pointing at a symbol the contract does not carry.
+
+Ten tests, because the gap that let this be dropped silently was a test gap: the
+status tests all ran on temp projects with **no lock record**, where the verdict
+was empty whatever the code did. Five in `tests/core/approval.test.ts` drive the
+function itself — never approved, approved and unchanged, approved and then
+edited (it must NAME the spec, not assert staleness), a record written before
+per-spec approval, and an unreadable one — plus the Portal identity assertion.
+Five more in `tests/mcp/status-verdict.test.ts` drive the real MCP server over an
+in-memory transport: the tool reports the drift, confirms an unmoved tree, stays
+quiet about a project nobody approved, composes the verdict beside a report that
+does not contain it, and — the guard against the coupling creeping back —
+`src/core/status.ts` names no approval module. Reverting `src/mcp/server.ts`
+alone fails three of the five; reverting the core change as well fails eight.
+
 ### The completeness report belongs to core, not to a CLI command
 
 `src/mcp/server.ts` imported `getStatusReport` out of `../commands/status.js` —
@@ -48,16 +101,18 @@ option shape from core rather than declaring a second copy of it. Two
 declarations of the same options is how the terminal and the MCP server come to
 disagree about what recursion depth means.
 
-**One behaviour is dropped, deliberately and visibly.** `getStatusReport` used to
-append the approval verdict — which specs have moved since a human last locked
-the tree. That line reads the lock record and the approval digests, and
-`project_status` depends on the spec loader alone: keeping it raises two
-`UNDECLARED_DEPENDENCY` warnings, `project_status` → `approval_comparison` and
-`project_status` → `lock_store`, measured rather than assumed. `wairon status`
-still prints the verdict, because `runStatus` keeps the reader it always had;
-`sdd_get_status` no longer does. Putting it back on the MCP report is a spec
-change — the dependency declared on `project_status`, or the verdict modelled as
-its own published read — not a `lint.allow`.
+**One behaviour was dropped here, and is restored in the entry above.**
+`getStatusReport` used to append the approval verdict — which specs have moved
+since a human last locked the tree. That line reads the lock record and the
+approval digests, and `project_status` depends on the spec loader alone: keeping
+it raises two `UNDECLARED_DEPENDENCY` warnings, `project_status` →
+`approval_comparison` and `project_status` → `lock_store`, measured rather than
+assumed. Dropping it from the report was right; leaving `sdd_get_status` silent
+about a drifted tree was not, and the wave said so. The second of the two fixes
+named here is the one taken — the verdict modelled as its own published read on
+`approval_comparison`, composed beside the report rather than inside it — so
+`getStatusReport` still knows nothing about the approval, and both `wairon
+status` and `sdd_get_status` show the verdict.
 
 Four tests in `tests/core/status.test.ts`, covering the boundary rather than the
 report's content, which was already covered. Two of them are the same assertion

@@ -13,9 +13,11 @@ import {
 } from '../core/specs.js';
 // The approval surface comes through core_portal, not out of ../core/approval.js:
 // sdd_cli reaching into another subsystem's module is the boundary this Portal
-// exists to hold.
-import { approvalRecord, diffAgainstApproval, diffSize, movedChildren } from '../core/index.js';
-import { describeApprover } from '../core/lockfile.js';
+// exists to hold. The verdict itself is the approval comparison's own published
+// read now: the terminal and the MCP status tool have to answer the same
+// question, and two renderings of "has this drifted" that can disagree is the
+// thing a lock exists to prevent.
+import { approvalVerdict } from '../core/index.js';
 import { implementationSourceFiles } from '../models/specs.js';
 // The report itself, and the shape of its options, now live in sdd_core: the
 // terminal is one of its readers, not its owner. This file renders those same
@@ -206,7 +208,7 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
 
   // The same approval verdict the MCP report carries — the CLI is where a
   // human actually looks, so it must not be the surface that stays quiet.
-  const lock = lockReport();
+  const lock = approvalVerdict();
   if (lock.text.trim()) {
     logger.blank();
     if (lock.drifted) logger.warn(lock.text.trim());
@@ -214,85 +216,4 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
   }
 
   logger.blank();
-}
-
-/**
- * What has changed since the human last approved this tree.
- *
- * This used to report the lock's StateId verdict, which could only ever say
- * `STALE` — a banner that fired on a tree validating 0 errors / 0 warnings,
- * named nothing to look at, and asked for work that produced no new
- * information. With a digest per spec in the lock record, the same line can
- * name the specs that actually moved, which is the only form a human can act
- * on.
- *
- * Silent for a project that was never approved: absence of an approval is the
- * normal state of a tree still being designed, not news.
- *
- * Answers whether it IS drift alongside the text — so the caller picks its
- * severity from the fact rather than by matching this function's own wording.
- */
-function lockReport(): { text: string; drifted: boolean } {
-  const quiet = { text: '', drifted: false };
-  try {
-    const approval = approvalRecord();
-    if (!approval) return quiet;
-    const by = describeApprover(approval.lockedBy);
-
-    // A moved chained child is a change the parent should review even when none
-    // of the parent's OWN specs shifted — the trees are approved separately, and
-    // this pin is the only thing that crosses between them.
-    const moved = movedChildren(loadSubsystemSpecs());
-    const childNote = moved.length
-      ? `\n${moved.length} chained child project(s) moved since approval: ${moved.map((m) => m.id).join(', ')}.`
-      : '';
-
-    const diff = diffAgainstApproval();
-    if (!diff) {
-      // Locked, but by a record written before per-spec approval existed: it
-      // proves the tree validated, not which specs still match it. Say exactly
-      // that rather than implying either answer.
-      return {
-        text: `\nApproved: ${approval.lockedAt} by ${by} — this lock predates per-spec approval, so `
-          + `drift is only visible at whole-tree level. Re-lock to record it.${childNote}\n`,
-        drifted: moved.length > 0,
-      };
-    }
-    if (diffSize(diff) === 0) {
-      return {
-        text: `\nApproved: ${approval.lockedAt} by ${by} — no spec has changed since.${childNote}\n`,
-        drifted: moved.length > 0,
-      };
-    }
-
-    const parts: string[] = [];
-    if (diff.changed.length) parts.push(`${diff.changed.length} changed`);
-    if (diff.added.length) parts.push(`${diff.added.length} added`);
-    if (diff.removed.length) parts.push(`${diff.removed.length} removed`);
-
-    // Name a few, then say how many more — enough to orient without becoming
-    // the wall of text the old banner was trying not to be.
-    const named = [...diff.changed, ...diff.added, ...diff.removed].slice(0, 5);
-    const rest = diffSize(diff) - named.length;
-
-    // One category needs no breakdown: "1 spec changed since approval (1
-    // changed)" says the same thing twice. The parenthetical earns its place
-    // only when the diff actually mixes kinds.
-    const n = diffSize(diff);
-    const noun = `${n} spec${n === 1 ? '' : 's'}`;
-    const headline = parts.length === 1
-      ? `${noun} ${parts[0].slice(String(diffSize(diff)).length + 1)} since approval`
-      : `${noun} changed since approval (${parts.join(', ')})`;
-
-    return {
-      text: `\n${headline} — approved ${approval.lockedAt} by ${by}:\n`
-        + named.map((p) => `  ${p}`).join('\n')
-        + (rest > 0 ? `\n  … and ${rest} more` : '')
-        + childNote
-        + '\n',
-      drifted: true,
-    };
-  } catch {
-    return quiet; // never let a report line break the report
-  }
 }
