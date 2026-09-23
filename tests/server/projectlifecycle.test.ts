@@ -39,7 +39,7 @@ import type {
   PrincipalSubject,
   ScopeKind,
 } from '../../src/server/types.js';
-import type { ApproverIdentity } from '../../src/core/lockfile.js';
+import type { ApproverIdentity } from '../../src/models/lock.js';
 
 /** A hosted approver, the way the lifecycle orchestrator resolves one from an
  *  authenticated principal. */

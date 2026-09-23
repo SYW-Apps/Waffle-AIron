@@ -14,9 +14,10 @@ import {
 // The same surface as the CLI sees it: through core_portal, never the module.
 import * as portal from '../../src/core/index.js';
 import {
-  readLockRecord, writeLockRecord, normalizeApprover, describeApprover,
-  type ApproverIdentity, type LockRecord,
+  readLockRecord, writeLockRecord, normalizeApprover,
+  type LockRecord,
 } from '../../src/core/lockfile.js';
+import { describeApprover, type ApproverIdentity } from '../../src/models/lock.js';
 import { computeGateStateId } from '../../src/core/validation.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
 

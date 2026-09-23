@@ -2,7 +2,8 @@ import * as crypto from 'crypto';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
-import type { LockRecord, ApproverIdentity } from '../core/lockfile.js';
+import type { LockRecord } from '../core/lockfile.js';
+import type { ApproverIdentity } from '../models/lock.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
 import { placeProject, listOrganizationUnits } from './organization.js';

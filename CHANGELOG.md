@@ -23,8 +23,111 @@ relying on a merge rule that was silently wrong (item 10), and a scripted call
 to a create tool that carries an unknown key inside a method, a param or a
 narrative step is now refused where it used to be stripped (item 13). Nine
 `sdd_*` tools now declare an `outputSchema`, which changes what a conforming MCP
-client expects back from them (item 14). Nothing here is purely additive, so
-`[minor]` would understate it.
+client expects back from them (item 14). The library surface narrows too:
+`@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
+(item 4). Nothing here is purely additive, so `[minor]` would understate it.
+
+### The core Portal publishes its contract, not sixteen whole modules
+
+`src/core/index.ts` realizes `core_portal`, and it carried seventeen
+`export * from` lines. Sixteen of them republished modules realizing **39
+components**, so the barrel offered **240 runtime names** where `icore_portal`
+declares 97 — and `@wairon/cli`, which re-exports it, offered 438. Every
+consumer could therefore reach any member and bypass the facade, which is why
+the same sdd_cli→sdd_core crossing kept being found one symbol at a time:
+`movedChildren`, `diffSize` and `settledSpecPaths` out of `./approval.js`, the
+four modules `wairon diagram` built its artifacts out of, the generator `wairon
+generate` wrote through, the two domain modules `wairon domains` read, the two
+derivations `wairon execution` resolved, the guide and the stamp, the context
+documents, the status report. Each was closed by naming one forward. The hole
+they kept coming through was the star block, and this is that.
+
+The sixteen are gone. Every method `icore_portal` declares is now a stated
+**identity re-export** — `export { foo } from './bar.js';`, never a wrapper —
+grouped by source module: the spec tree and the lock state from `./specs.js`,
+provisioning and the chained-subproject wiring from `./provision.js`, the tree
+identity from `./statehash.js`, the lock record from `./lockfile.js`, the
+rendered diagram from `./diagram.js`, domain detection from `./detection.js`,
+the extension packs from `./extensions.js`, the machine pack store from
+`./packstore.js`, the agent topology from `./agent_resolver.js`. Identity
+matters here: the Portal method and the component's function are the same
+function, which is what lets the conformance analysis resolve each call by
+identity instead of reading a second implementation.
+
+The barrel now publishes **113 runtime names** — the 97 contract methods, three
+methods that travel with a type it publishes (`diffSize`, `declaredPackNames`,
+`declaredProfileIds`), the six-name shared rule vocabulary, and the seven
+diagram functions reported below — plus fourteen shared value shapes as
+`export type`. The package entry drops from **438 names to 318**: `@wairon/cli`
+stops exporting 120 names, none of them on any contract. Nothing was added.
+
+**One star export stays**: `./rules/index.js` realizes no component. It is
+sdd_validator's shared rule vocabulary — rule types, the context builder, the
+registry — imported through here by 93 modules, with no contract to overshoot.
+
+**Seven diagram functions are reported rather than quietly forwarded.**
+`generateComponentDiagram`, `generateSequenceDiagram`, `generateDiagramSet`,
+`diagramSetIndex`, `toMarkdown`, `loadSpecGraph` and `buildCanvasDataModel` back
+`wairon diagram --all|--sequence|--subsystem` and `wairon host demo`, and no
+spec names them: `icore_portal` names `renderDiagram`, `iarchitecture_diagrams`
+names `render` and `buildGraphModel`. `cli_core_adapter` dependsOn `core_portal`
+alone, so this barrel is the only route that does not make sdd_cli import an
+sdd_core module. They are published under their own heading, separate from the
+contract, and the barrel-surface test carries them as a **shrink-only ratchet** —
+the list fails the moment one of them becomes a contract method, and a new name
+cannot join it. The same goes for `activeTargetTypes`, which the public library
+disambiguates against the models' pure `activeTargetTypes(config)`: `src/index.ts`
+now names `./core/skills.js` rather than taking it off a surface that never
+claimed it.
+
+**`approver_identity` moved to `src/models/lock.ts`.** `ApproverIdentity` and
+its `label` projection (`describeApprover`) lived inside `src/core/lockfile.ts`,
+the lock STORE. That placement was load-bearing in the wrong direction: a Portal
+may not depend on a Store, so while the function sat beside the lock file's I/O
+there was no legal route for a CLI command to render an approver at all — which
+is why `wairon doctor` was reaching into `../core/lockfile.js` for it. It is
+shared vocabulary and a pure projection over the value's own fields, so it lives
+with the models; `src/core/lockfile.ts` imports the type back, and
+`src/commands/lock.ts` and `src/commands/doctor.ts` take the function from the
+models. The rendering is byte-identical — the same four outcomes, including the
+`[authenticated]` marker that separates an identity an instance vouched for from
+one read off a machine.
+
+**`extension_orchestrator` publishes its two pack-store writes.**
+`installPackFromDirectory` and `uninstallPack` are now bound in
+`src/core/extensions.ts` the same way its three read siblings already were, so
+the orchestrator declares what its contract promises. The core portal forwards
+all five from the module that holds them.
+
+**The embedding API is named on the library entry instead of inherited.**
+`validateSddTree`, `loadExtensions`, `loadExtensionPacks`, `emptyExtensions`,
+`globalPacksDir` and `discoverPacks` are what `docs/extending-wairon.md` and
+`examples/wrapper/wrapper.js` document as the way a wrapper product compiles
+its own doctrine into a gate binary — and `iextension_orchestrator.load`
+records that contract in the spec tree (`invokedBy: external`, "no internal
+call chain exists by design"). None of them is on `icore_portal`, so all six
+reached the package only because the barrel starred the module that held them,
+and narrowing the Portal would have taken a documented API down with it.
+`src/index.ts` names them itself now, from the modules that hold them. Removing
+one from there is a deliberate break; losing one because a Portal stopped
+starring a module is not, and this is the difference the split makes visible.
+
+Twenty-one tests, in two tiers, because a barrel is exactly the thing a type
+checker proves EXISTS and cannot prove is still a facade. `tests/core/core-barrel-surface.test.ts`
+reads `icore_portal` and compares — it freezes no list of names, so it keeps
+holding as the contract changes — and refuses any name on the surface that no
+spec accounts for, asserts every contract method is carried, asserts exactly one
+star export survives, ratchets the seven reported functions, checks the fourteen
+declared types, resolves what each of the five consumer files outside
+`src/core` takes off the barrel, and holds the embedding API — every name the
+doc lists, and every call the shipped wrapper example makes. Reverting
+`src/core/index.ts` alone fails seven of its sixteen; reverting `src/index.ts`
+alone fails the two embedding ones; reverting `src/core/lockfile.ts` alone fails
+the one that says the approver projection has left the store.
+`tests/e2e/core-surface.test.ts`
+drives `sdd_get_status`, `wairon status` and `wairon lock-check` against the
+REAL built server and CLI, before an approval and after one — removing either the
+`getStatusReport` or the `approvalVerdict` forward from the barrel fails it.
 
 ### The approval verdict is a published read, and `sdd_get_status` carries it again
 
@@ -3117,7 +3220,20 @@ same as not knowing whether the next one an author writes will.
    otherwise report `UNKNOWN_PROFILE`, which fails `validate --ci`.**
 4. **Embedding wairon as a library:** `LoadedExtensions` gained required
    `instructions` and `selectionFailures` fields. Use the exported
-   `emptyExtensions()` rather than hand-constructing one.
+   `emptyExtensions()` rather than hand-constructing one. **And the surface
+   narrowed**: `src/core/index.ts` stopped republishing sixteen whole modules, so
+   `@wairon/cli` exports 318 runtime names where it exported 438. The 120 that
+   went were never on `icore_portal` — internals of the spec loader and the spec
+   validator, the skills exporter, the surfaces and OpenAPI codecs, the template
+   and variant registries, the pack manifest schemas, the tree-archive staging —
+   reachable only because a star export republished the module that held them. **Everything
+   `docs/extending-wairon.md` documents still works**: `validateSddTree`,
+   `loadExtensions`, `loadExtensionPacks`, `emptyExtensions`, `globalPacksDir`,
+   `discoverPacks`, `loadProjectExtensions`, `setProjectRoot`, `SDD_RULES`,
+   `composeRuleSequence` and the spec loaders/savers are named on the library
+   entry rather than inherited, and `examples/wrapper/wrapper.js` runs unchanged.
+   If you depended on one of the 120, open an issue naming the call — it can be
+   modelled onto a contract, which is the only way a surface stays a surface.
 5. **Chained subprojects: re-run `validate --ci` in each child.** It can newly
    fail, by design — it was waving these through:
    - a reference into the parent now carries the parent's verdict; fix the edge

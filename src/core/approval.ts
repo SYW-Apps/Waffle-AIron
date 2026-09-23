@@ -2,7 +2,8 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
 import { snapshotSpecFiles, loadSubsystemSpecs } from './specs.js';
-import { readLockRecord, readLockRecordAt, describeApprover } from './lockfile.js';
+import { readLockRecord, readLockRecordAt } from './lockfile.js';
+import { describeApprover } from '../models/lock.js';
 import type { LockRecord } from './lockfile.js';
 import type { StateId } from './statehash.js';
 

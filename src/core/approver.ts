@@ -1,6 +1,6 @@
 import { execFileSync } from 'child_process';
 import * as os from 'os';
-import type { ApproverIdentity } from './lockfile.js';
+import type { ApproverIdentity } from '../models/lock.js';
 
 // ---------------------------------------------------------------------------
 // Local approver identity, re-exported through core_portal (sdd_core's inbound
