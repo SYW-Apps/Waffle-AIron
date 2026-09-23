@@ -139,6 +139,7 @@ methods:
         description: Continue with the next implementation.
         type: local
     symbol: check
+    exportedVia: hierarchyRule
   - name: roundtripSerialization
     sourcePath: src/core/rules/integrity/roundtrip-serialization.ts
     narrative:
@@ -154,6 +155,7 @@ methods:
         description: Report ROUNDTRIP_SERIALIZATION (error) using the issue's own message and specId verbatim.
         type: local
     symbol: check
+    exportedVia: roundtripRule
   - name: lintAllows
     sourcePath: src/core/rules/integrity/lint-allows.ts
     narrative:
@@ -233,6 +235,7 @@ methods:
         description: Continue with the next lint allow.
         type: local
     symbol: check
+    exportedVia: lintAllowsRule
   - name: typeDeclarations
     sourcePath: src/core/rules/integrity/type-declarations.ts
     narrative:
@@ -273,6 +276,7 @@ methods:
           with nothing to inform implementers or the ERD.
         type: local
     symbol: check
+    exportedVia: typeDeclarationsRule
   - name: fieldTypeReferences
     sourcePath: src/core/rules/integrity/field-type-references.ts
     narrative:
@@ -326,6 +330,7 @@ methods:
           undefined reference.
         type: local
     symbol: check
+    exportedVia: fieldTypeReferencesRule
   - name: signatureTypeReferences
     sourcePath: src/core/rules/integrity/signature-type-references.ts
     narrative:
@@ -374,6 +379,7 @@ methods:
           the undefined reference.
         type: local
     symbol: check
+    exportedVia: signatureTypeReferencesRule
   - name: reservedIdSegments
     sourcePath: src/core/rules/integrity/reserved-id-segments.ts
     narrative:
@@ -401,6 +407,7 @@ methods:
           spec.
         type: local
     symbol: check
+    exportedVia: reservedIdSegmentsRule
   - name: namespaceShadowing
     sourcePath: src/core/rules/integrity/namespace-shadowing.ts
     narrative:
@@ -431,6 +438,7 @@ methods:
           subsystem, making the local spec unaddressable — rename one of them.
         type: local
     symbol: check
+    exportedVia: namespaceShadowingRule
   - name: publicSurfaceBinding
     sourcePath: src/core/rules/integrity/public-surface-binding.ts
     narrative:
@@ -503,6 +511,7 @@ methods:
           components.
         type: local
     symbol: check
+    exportedVia: publicSurfaceBindingRule
   - name: publicSurfaceDeclaredType
     sourcePath: src/core/rules/integrity/public-surface-declared-type.ts
     narrative:
@@ -581,6 +590,7 @@ methods:
           reworded.
         type: local
     symbol: check
+    exportedVia: publicSurfaceDeclaredTypeRule
   - name: publicSurfaceBoundContract
     sourcePath: src/core/rules/integrity/public-surface-bound-contract.ts
     narrative:
@@ -653,6 +663,7 @@ methods:
           actually belongs to (intf.component).
         type: local
     symbol: check
+    exportedVia: publicSurfaceBoundContractRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-19T20:33:59.429Z'
+updatedAt: '2026-09-23T17:53:08.980Z'

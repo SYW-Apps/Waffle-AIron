@@ -57,6 +57,7 @@ methods:
           its interfaces
         type: local
     symbol: check
+    exportedVia: lifecycleRule
   - name: durabilityRoundTrip
     sourcePath: src/core/rules/wiring/durability-round-trip.ts
     narrative:
@@ -124,6 +125,7 @@ methods:
           flow
         type: local
     symbol: check
+    exportedVia: durabilityRule
   - name: untypedSeams
     sourcePath: src/core/rules/wiring/untyped-seams.ts
     narrative:
@@ -173,6 +175,7 @@ methods:
           subsystem and the offenders
         type: local
     symbol: check
+    exportedVia: untypedSeamRule
   - name: proseClaims
     sourcePath: src/core/rules/wiring/prose-claims.ts
     narrative:
@@ -245,6 +248,7 @@ methods:
           data-layer component
         type: local
     symbol: check
+    exportedVia: proseClaimRule
   - name: eventTopology
     sourcePath: src/core/rules/wiring/event-topology.ts
     narrative:
@@ -303,6 +307,7 @@ methods:
           on s.compId, naming the topic and every declaration of it on that component
         type: local
     symbol: check
+    exportedVia: eventTopologyRule
   - name: dependencyCycles
     sourcePath: src/core/rules/wiring/dependency-cycles.ts
     narrative:
@@ -337,6 +342,7 @@ methods:
         type: return
         outcome: the first cycle through a component in scope is reported
     symbol: check
+    exportedVia: cyclesRule
   - name: dispatchTableBindings
     sourcePath: src/core/rules/wiring/dispatch-table-bindings.ts
     narrative:
@@ -431,6 +437,7 @@ methods:
           or owns
         type: local
     symbol: check
+    exportedVia: dispatchTableBindingsRule
   - name: dispatchStepRouting
     sourcePath: src/core/rules/wiring/dispatch-step-routing.ts
     narrative:
@@ -526,6 +533,7 @@ methods:
           naming the guarantee, the capability and the bound component and method
         type: local
     symbol: check
+    exportedVia: dispatchStepRoutingRule
   - name: invokedByDescription
     sourcePath: src/core/rules/wiring/invoked-by-description.ts
     narrative:
@@ -564,6 +572,7 @@ methods:
           and the invokedBy kind
         type: local
     symbol: check
+    exportedVia: invokedByDescriptionRule
   - name: unusedDetection
     sourcePath: src/core/rules/wiring/unused-detection.ts
     narrative:
@@ -670,6 +679,7 @@ methods:
           allow covers exactly the one it names and never its neighbours on the same interface
         type: local
     symbol: check
+    exportedVia: reachabilityRule
   - name: unusedTypes
     sourcePath: src/core/rules/wiring/unused-types.ts
     narrative:
@@ -710,6 +720,7 @@ methods:
           is t.subsystem has status draft or design, none when there is no such subsystem) on t.id
         type: local
     symbol: check
+    exportedVia: unusedTypesRule
   - name: uniqueInvariantIds
     sourcePath: src/core/rules/wiring/unique-invariant-ids.ts
     narrative:
@@ -742,6 +753,7 @@ methods:
           repeated id
         type: local
     symbol: check
+    exportedVia: uniqueInvariantIdsRule
   - name: invariantBacking
     sourcePath: src/core/rules/wiring/invariant-backing.ts
     narrative:
@@ -818,6 +830,7 @@ methods:
           implementation and the invariant with its description
         type: local
     symbol: check
+    exportedVia: invariantBackingRule
   - name: invariantReferences
     sourcePath: src/core/rules/wiring/invariant-references.ts
     narrative:
@@ -846,6 +859,7 @@ methods:
           number, the method and the ref
         type: local
     symbol: check
+    exportedVia: invariantReferencesRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-19T21:38:41.505Z'
+updatedAt: '2026-09-23T17:53:17.379Z'

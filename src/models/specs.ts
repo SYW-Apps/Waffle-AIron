@@ -971,6 +971,23 @@ export const MethodImplementationSchema = z.object({
    * name — e.g. a store's `put` realized by `saveSnapshot`.
    */
   symbol: z.string().optional(),
+  /**
+   * The exported binding a consumer imports to REACH this method, when the
+   * realization is published as a value that COMPOSES it rather than exported
+   * in its own right — a rule module publishes `callConformanceRule`, and the
+   * method is the `check` inside it.
+   *
+   * `symbol` cannot say this: it names the code-level name REALIZING the
+   * contract method — the function itself — so a file whose whole published
+   * surface is the composing value publishes a name no contract mentions, and
+   * the surface check reads an unpromised export where the design has a
+   * promised one. Naming the handle here is what closes that gap.
+   *
+   * A declaration, never a waiver: a handle the method's own source file
+   * does not actually export is reported (UNREALIZED_EXPORT_HANDLE) and
+   * allows nothing, so the field can never become a free-text suppression.
+   */
+  exportedVia: z.string().optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
   ext: ExtDataSchema.optional(),
 });

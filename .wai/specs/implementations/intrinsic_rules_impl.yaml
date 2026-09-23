@@ -65,6 +65,7 @@ methods:
         description: Continue with the next component.
         type: local
     symbol: check
+    exportedVia: portalFieldsRule
   - name: durabilityDeclaration
     sourcePath: src/core/rules/intrinsic/durability-declaration.ts
     narrative:
@@ -115,6 +116,7 @@ methods:
         description: Continue with the next component.
         type: local
     symbol: check
+    exportedVia: durabilityDeclarationRule
   - name: logicDeclaration
     sourcePath: src/core/rules/intrinsic/logic-declaration.ts
     narrative:
@@ -152,6 +154,7 @@ methods:
         description: Continue with the next component.
         type: local
     symbol: check
+    exportedVia: logicDeclarationRule
   - name: retiredStereotypes
     sourcePath: src/core/rules/intrinsic/retired-stereotypes.ts
     narrative:
@@ -202,8 +205,9 @@ methods:
         description: Continue with the next component.
         type: local
     symbol: check
+    exportedVia: retiredStereotypesRule
 lint:
   allow: []
 status: complete
 createdAt: '2026-09-14T23:17:12.294Z'
-updatedAt: '2026-09-18T20:21:31.849Z'
+updatedAt: '2026-09-23T17:52:46.454Z'

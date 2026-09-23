@@ -1340,5 +1340,231 @@ rules:
             at: 'readResource'
             covers:
               - '1:skills_portal.readResource'
+      # 34 finding(s), 74 unit(s).
+      - kind: undecided
+        why: >-
+          The first measured yield of export-conformance, after the 90 realization handles that
+          `exportedVia` now declares. What is left is ragged rather than uniform, which is what real
+          debt looks like and what the 90 were not: helpers a sibling component reaches for (ten path
+          and loader-issue accessors on src/core/specs.ts, seven project-identity helpers on
+          src/server/projects.ts), factories and classes that ARE a realization handle in another
+          shape (ClaudeExporter, hostCore, projectConfigRepository) and could be declared once each
+          one's owning method is identified, and shared constants nobody modelled (SUBPROJECT_SEPARATOR,
+          BUILTIN_ROLES, COMPATIBLE_DEFAULT_EXPOSURE). Undecided rather than drift because each name
+          has three legal answers - declare it as a contract method, declare it as a handle, or stop
+          exporting it - and which one is right depends on what the name is FOR, which nobody has read
+          file by file yet. None of it is a limit of the reader: every finding names an import that
+          resolves, at exact grade, from a file realizing none of the accused components.
+        findings:
+          - code: UNDECLARED_EXPORT
+            spec: cli_skills_adapter_impl
+            at: 'src/commands/skills.ts'
+            covers:
+              - 'runSkillsInstall'
+              - 'runSkillsList'
+          - code: UNDECLARED_EXPORT
+            spec: project_config_fs_adapter_impl
+            at: 'src/config/project-config.ts'
+            covers:
+              - 'projectConfigRepository'
+              - 'projectConfigRepositoryAt'
+          - code: UNDECLARED_EXPORT
+            spec: user_config_store_impl
+            at: 'src/config/userconfig.ts'
+            covers:
+              - 'UPDATE_CHANNELS'
+          - code: UNDECLARED_EXPORT
+            spec: architecture_diagrams_impl
+            at: 'src/core/diagram.ts'
+            covers:
+              - 'buildCanvasDataModel'
+          - code: UNDECLARED_EXPORT
+            spec: extension_orchestrator_impl
+            at: 'src/core/extensions.ts'
+            covers:
+              - 'DeclarativePackSchema'
+              - 'LoadedPackSkill'
+              - 'PackScope'
+              - 'loadExtensionPacks'
+              - 'packDirEntry'
+          - code: UNDECLARED_EXPORT
+            spec: core_portal_impl
+            at: 'src/core/index.ts'
+            covers:
+              - 'declaredPackNames'
+              - 'declaredProfileIds'
+              - 'diffSize'
+          - code: UNDECLARED_EXPORT
+            spec: openapi_codec_impl
+            at: 'src/core/openapi.ts'
+            covers:
+              - 'isOpenApiDocument'
+          - code: UNDECLARED_EXPORT
+            spec: core_orchestrator_impl
+            at: 'src/core/provision.ts'
+            covers:
+              - 'backfillChainedSubprojectConfigs'
+          - code: UNDECLARED_EXPORT
+            spec: spec_validator_impl
+            at: 'src/core/rules/candidate.ts'
+            covers:
+              - 'formatCandidateRefusal'
+          - code: UNDECLARED_EXPORT
+            spec: skill_resources_impl
+            at: 'src/core/skills.ts'
+            covers:
+              - 'activeTargetTypes'
+              - 'checkSkillFreshness'
+              - 'listSkillNames'
+          - code: UNDECLARED_EXPORT
+            spec: core_orchestrator_impl
+            at: 'src/core/specs.ts'
+            covers:
+              - 'assertContainedProjectPath'
+              - 'clearLoaderIssues'
+              - 'findLegacySpecFiles'
+              - 'getComponentPath'
+              - 'getImplementationPath'
+              - 'getInterfacePath'
+              - 'getLoaderIssues'
+              - 'getSubsystemPath'
+              - 'scanAllSpecs'
+              - 'snapshotSpecFiles'
+          - code: UNDECLARED_EXPORT
+            spec: state_hash_impl
+            at: 'src/core/statehash.ts'
+            covers:
+              - 'stateIdEquals'
+          - code: UNDECLARED_EXPORT
+            spec: surface_fs_adapter_impl
+            at: 'src/core/surfaces.ts'
+            covers:
+              - 'loadMountSurfaceSnapshots'
+          - code: UNDECLARED_EXPORT
+            spec: template_source_adapter_impl
+            at: 'src/core/templates.ts'
+            covers:
+              - 'renderTemplateInstructions'
+          - code: UNDECLARED_EXPORT
+            spec: claude_exporter_impl
+            at: 'src/exporters/claude.ts'
+            covers:
+              - 'ClaudeExporter'
+          - code: UNDECLARED_EXPORT
+            spec: custom_exporter_impl
+            at: 'src/exporters/custom.ts'
+            covers:
+              - 'CustomExporter'
+          - code: UNDECLARED_EXPORT
+            spec: gemini_exporter_impl
+            at: 'src/exporters/gemini.ts'
+            covers:
+              - 'GeminiExporter'
+          - code: UNDECLARED_EXPORT
+            spec: host_core_adapter_impl
+            at: 'src/server/adapters.ts'
+            covers:
+              - 'hostCore'
+              - 'hostGit'
+              - 'hostProducer'
+              - 'hostSdk'
+              - 'hostSurfaces'
+          - code: UNDECLARED_EXPORT
+            spec: admin_orchestrator_impl
+            at: 'src/server/admin.ts'
+            covers:
+              - 'AdminAuthError'
+              - 'LockValidationError'
+              - 'hostedApprover'
+          - code: UNDECLARED_EXPORT
+            spec: audit_index_impl
+            at: 'src/server/audit.ts'
+            covers:
+              - 'DEFAULT_AUDIT_POLICY'
+          - code: UNDECLARED_EXPORT
+            spec: authentication_impl
+            at: 'src/server/auth.ts'
+            covers:
+              - 'localDevSubject'
+          - code: UNDECLARED_EXPORT
+            spec: authorization_impl
+            at: 'src/server/authorization.ts'
+            covers:
+              - 'actionableProjectIds'
+              - 'actionableUnitIds'
+              - 'isInstanceAdmin'
+          - code: UNDECLARED_EXPORT
+            spec: credential_index_impl
+            at: 'src/server/credentials.ts'
+            covers:
+              - 'hashToken'
+          - code: UNDECLARED_EXPORT
+            spec: identity_orchestrator_impl
+            at: 'src/server/identity.ts'
+            covers:
+              - 'ANONYMOUS_SSO_ACTOR'
+              - 'ForbiddenError'
+              - 'buildSsoAuditEvent'
+              - 'isInAdminGroup'
+          - code: UNDECLARED_EXPORT
+            spec: identity_provider_adapter_impl
+            at: 'src/server/idp.ts'
+            covers:
+              - 'assertAllowedRedirectUri'
+          - code: UNDECLARED_EXPORT
+            spec: organization_index_impl
+            at: 'src/server/organization.ts'
+            covers:
+              - 'validateUnitHierarchy'
+          - code: UNDECLARED_EXPORT
+            spec: policy_index_impl
+            at: 'src/server/policy.ts'
+            covers:
+              - 'COMPATIBLE_DEFAULT_EXPOSURE'
+          - code: UNDECLARED_EXPORT
+            spec: project_index_impl
+            at: 'src/server/projects.ts'
+            covers:
+              - 'SUBPROJECT_SEPARATOR'
+              - 'assertMintableNarrowingEntry'
+              - 'existingProjectRoot'
+              - 'isValidProjectId'
+              - 'parseQualifiedSelector'
+              - 'registerLocalDevProject'
+              - 'resolveSubprojectMounts'
+          - code: UNDECLARED_EXPORT
+            spec: role_index_impl
+            at: 'src/server/roles.ts'
+            covers:
+              - 'BUILTIN_ROLES'
+              - 'isBuiltinRoleId'
+          - code: UNDECLARED_EXPORT
+            spec: visibility_rules_impl
+            at: 'src/server/visibility.ts'
+            covers:
+              - 'audienceCovers'
+          - code: UNDECLARED_EXPORT
+            spec: web_graph_orchestrator_impl
+            at: 'src/server/web.ts'
+            covers:
+              - 'handleWebRequest'
+              - 'sessionCookieValue'
+              - 'setSessionCookie'
+          - code: UNDECLARED_EXPORT
+            spec: web_session_index_impl
+            at: 'src/server/websessions.ts'
+            covers:
+              - 'WEB_SESSION_PREFIX'
+          - code: UNDECLARED_EXPORT
+            spec: ai_tool_guide_impl
+            at: 'src/utils/ai-guide.ts'
+            covers:
+              - 'GLOBAL_GUIDE_BODY'
+          - code: UNDECLARED_EXPORT
+            spec: secret_index_impl
+            at: 'src/utils/secrets.ts'
+            covers:
+              - 'resolveGitToken'
+              - 'resolveSecret'
 createdAt: '2026-06-10T20:23:10.714Z'
 updatedAt: '2026-06-10T20:23:10.714Z'

@@ -57,6 +57,7 @@ methods:
           followed by fixHint
         type: local
     symbol: check
+    exportedVia: guaranteeTokensRule
   - name: narrativeStepConfig
     sourcePath: src/core/rules/narrative/narrative-step-config.ts
     narrative:
@@ -90,6 +91,7 @@ methods:
           context isDraftCtx — with problem.detail following the method-and-implementation prefix
         type: local
     symbol: check
+    exportedVia: narrativeStepConfigRule
   - name: narrativeReachability
     sourcePath: src/core/rules/narrative/narrative-reachability.ts
     narrative:
@@ -144,6 +146,7 @@ methods:
           spans: regions must be nested or disjoint
         type: local
     symbol: check
+    exportedVia: narrativeReachabilityRule
   - name: narrativeJumpEdges
     sourcePath: src/core/rules/narrative/narrative-jump-edges.ts
     narrative:
@@ -229,6 +232,7 @@ methods:
           step and the handler step it falls into: end the body with a jump, return or throw
         type: local
     symbol: check
+    exportedVia: narrativeJumpEdgesRule
   - name: contractSymmetry
     sourcePath: src/core/rules/narrative/contract-symmetry.ts
     narrative:
@@ -287,6 +291,7 @@ methods:
           implementation, naming the contract method and its interface
         type: local
     symbol: check
+    exportedVia: contractSymmetryRule
   - name: narrativeTargetReferences
     sourcePath: src/core/rules/narrative/narrative-target-references.ts
     narrative:
@@ -428,6 +433,7 @@ methods:
           component and where
         type: local
     symbol: check
+    exportedVia: narrativeTargetReferencesRule
   - name: crossTreeReferences
     sourcePath: src/core/rules/narrative/cross-tree-references.ts
     narrative:
@@ -528,6 +534,7 @@ methods:
           calls|registers callback "<targetMethod>" (step <n>) on' otherwise
         type: local
     symbol: check
+    exportedVia: crossTreeReferencesRule
   - name: surfaceReferenceBacking
     sourcePath: src/core/rules/narrative/surface-reference-backing.ts
     narrative:
@@ -645,6 +652,7 @@ methods:
           id that does not expose it
         type: local
     symbol: check
+    exportedVia: surfaceReferenceBackingRule
   - name: meaninglessBranches
     sourcePath: src/core/rules/narrative/meaningless-branches.ts
     narrative:
@@ -707,6 +715,7 @@ methods:
           the one step every case and the default go to
         type: local
     symbol: check
+    exportedVia: meaninglessBranchesRule
   - name: inescapableCycles
     sourcePath: src/core/rules/narrative/inescapable-cycles.ts
     narrative:
@@ -752,6 +761,7 @@ methods:
           ascending order: once entered, the flow never terminates
         type: local
     symbol: check
+    exportedVia: inescapableCyclesRule
   - name: unconditionalCallCycles
     sourcePath: src/core/rules/narrative/unconditional-call-cycles.ts
     narrative:
@@ -838,6 +848,7 @@ methods:
           implementation and target: it recurses without a base case
         type: local
     symbol: check
+    exportedVia: unconditionalCallCyclesRule
   - name: narrativeDetail
     sourcePath: src/core/rules/narrative/narrative-detail.ts
     narrative:
@@ -910,6 +921,7 @@ methods:
           naming the method and its level: its behavioural prose is missing or placeholder-thin
         type: local
     symbol: check
+    exportedVia: narrativeDetailRule
   - name: detailSufficiency
     sourcePath: src/core/rules/narrative/detail-sufficiency.ts
     narrative:
@@ -1027,6 +1039,7 @@ methods:
           level and the logic stereotype whose full floor it sits below
         type: local
     symbol: check
+    exportedVia: detailSufficiencyRule
 status: complete
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-19T21:40:56.219Z'
+updatedAt: '2026-09-23T17:53:13.336Z'

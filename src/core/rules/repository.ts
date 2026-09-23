@@ -78,6 +78,7 @@ import { integrationSimWiringRule } from './conformance/integration-sim-wiring.j
 import { integrationSimCoverageRule } from './conformance/integration-sim-coverage.js';
 import { typeRealizationRule } from './conformance/type-realization.js';
 import { unclaimedSourceRule } from './conformance/unclaimed-source.js';
+import { exportConformanceRule } from './conformance/export-conformance.js';
 import { carriedDebtRule } from './conformance/carried-debt.js';
 import { couplingRule } from './heuristic/coupling-health.js';
 import { signatureLanguageBuiltinsRule } from './heuristic/signature-language-builtins.js';
@@ -262,6 +263,7 @@ export const SDD_RULES: SddRule[] = [
   // the family because the second one reads what all the others named.
   typeRealizationRule,
   unclaimedSourceRule,
+  exportConformanceRule,
   couplingRule,
   // Target-language fit in two questions: what a CONTRACT may name, and what
   // a NARRATIVE may describe.

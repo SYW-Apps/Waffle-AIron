@@ -383,6 +383,38 @@ methods:
         summary: >-
           An entry of the conformance debt register carries a finding that no longer fires, or lists
           a unit that finding no longer reports — delete it, the register only shrinks
+  - name: exportConformance
+    description: >-
+      Rule export-conformance. Code-to-contract for the SURFACE: does this file publish anything the
+      components it realizes never promised, that another component then takes? The rest of the
+      conformance set reads contract-to-code — it asks whether the code holds what a spec claims —
+      so a file could export whatever it liked under a component's name and nothing looked. That is
+      one half of the same hole as a contract promising a parameter it never passes. A method's
+      `exportedVia` names the export a consumer imports to REACH it — the value that composes it,
+      which `symbol` cannot name because `symbol` names the function inside — and a declared handle
+      the file does not actually export is itself a finding, so naming one can never become a
+      free-text suppression. Both questions are asked only of a file read at exact grade, and a
+      taker counts only when its own import specifier resolves to the file it is accused of taking
+      from: below that nothing separates an export from a mention, or a shared word from a shared
+      module.
+    signature: 'exportConformance(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: 'The rule context: specs, the code model, and the issue sink'
+    findings:
+      - code: UNDECLARED_EXPORT
+        severity: warning
+        summary: >-
+          A file realizing a component exports a name no contract of that component declares, and a
+          file realizing a DIFFERENT component imports it — a surface reached across a boundary that
+          the design never promised
+      - code: UNREALIZED_EXPORT_HANDLE
+        severity: warning
+        summary: >-
+          An implementation method declares an `exportedVia` handle its own source file does not
+          export — the spec names a published route to the method that nobody can import
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-20T10:41:25.688Z'
+updatedAt: '2026-09-23T17:35:59.791Z'

@@ -161,6 +161,7 @@ methods:
           conflates
         type: local
     symbol: check
+    exportedVia: couplingRule
   - name: namingConventions
     sourcePath: src/core/rules/heuristic/naming-conventions.ts
     narrative:
@@ -328,6 +329,7 @@ methods:
           (NAMING_CONVENTION_VIOLATION or INVALID_NAMING_PATTERN, against t.id).
         type: local
     symbol: check
+    exportedVia: namingRule
   - name: complexityAndMetadata
     sourcePath: src/core/rules/heuristic/complexity-and-metadata.ts
     narrative:
@@ -478,6 +480,7 @@ methods:
           DESCRIPTION_TOO_SHORT (warning) the same way.
         type: local
     symbol: check
+    exportedVia: complexityRule
   - name: narrativeComplexity
     sourcePath: src/core/rules/heuristic/narrative-complexity.ts
     narrative:
@@ -557,6 +560,7 @@ methods:
           hard maximum), anchored on the implementation id and carrying isDraft.
         type: local
     symbol: check
+    exportedVia: narrativeComplexityRule
   - name: namingDiscipline
     sourcePath: src/core/rules/heuristic/naming-discipline.ts
     narrative:
@@ -651,6 +655,7 @@ methods:
           draft state.
         type: local
     symbol: check
+    exportedVia: namingDisciplineRule
   - name: methodCohesion
     sourcePath: src/core/rules/heuristic/method-cohesion.ts
     narrative:
@@ -703,6 +708,7 @@ methods:
           ctx.isComponentDraft(component.id).
         type: local
     symbol: check
+    exportedVia: methodCohesionRule
   - name: signatureLanguageBuiltins
     sourcePath: src/core/rules/heuristic/signature-language-builtins.ts
     narrative:
@@ -766,6 +772,7 @@ methods:
         description: This type reference is processed.
         type: local
     symbol: check
+    exportedVia: signatureLanguageBuiltinsRule
   - name: narrativeLanguageConstructs
     sourcePath: src/core/rules/heuristic/narrative-language-constructs.ts
     narrative:
@@ -830,6 +837,7 @@ methods:
         description: This construct is processed.
         type: local
     symbol: check
+    exportedVia: narrativeLanguageConstructsRule
   - name: technologyBinding
     sourcePath: src/core/rules/heuristic/technology-binding.ts
     narrative:
@@ -868,6 +876,7 @@ methods:
         description: This implementation is processed.
         type: local
     symbol: check
+    exportedVia: technologyBindingRule
   - name: technologyBoundaries
     sourcePath: src/core/rules/heuristic/technology-boundaries.ts
     narrative:
@@ -1041,6 +1050,7 @@ methods:
           naming t.id, home.label and ownersDesc(home).
         type: local
     symbol: check
+    exportedVia: technologyRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-21T00:04:52.365Z'
+updatedAt: '2026-09-23T17:53:05.159Z'
