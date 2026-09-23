@@ -27,11 +27,11 @@ import {
   localGuideFilePath,
   injectGuide,
   writeRootGuideDelegator,
+  syncContextFiles,
 } from './subsystem.js';
 import { exportSddSkills } from './skills.js';
 import { defaultTargetConfig } from '../config/defaults.js';
 import { ProjectConfig, TargetConfig, activeTargetTypes } from '../models/project.js';
-import { syncContextFiles } from '../core/context.js';
 
 // ---------------------------------------------------------------------------
 // init command

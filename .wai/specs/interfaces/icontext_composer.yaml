@@ -1,0 +1,56 @@
+id: icontext_composer
+name: Context Composer Interface
+description: >-
+  Render either derived document, or refresh both on disk. The two reads beside them exist because
+  the store is not reachable from outside this subsystem and callers legitimately need them: whether
+  a project has been described, and where the derived documents live.
+component: context_composer
+methods:
+  - name: renderDomains
+    description: >-
+      The domain map as a document: every domain this project has, which subsystem each is bound to,
+      and the paths it owns. A pure function of the spec tree and the configuration — running it
+      twice returns the same bytes, which is the property `wairon generate`'s idempotence rests on.
+    signature: 'renderDomains(): string'
+    returns: string
+    params: []
+    guarantees:
+      - idempotent
+  - name: renderGuide
+    description: >-
+      The single document an AI tool can import to understand this project: what a person wrote
+      about it, the domain map, and the wairon usage guide, in one file. A configuration that fails
+      its own schema falls back to a neutral project name rather than failing the render — a broken
+      config should not cost you the guide.
+    signature: 'renderGuide(): string'
+    returns: string
+    params: []
+    guarantees:
+      - idempotent
+  - name: refresh
+    description: >-
+      Rebuild both derived documents and write each one only if it changed, answering which actually
+      moved. Called by `wairon generate` and `wairon init`.
+    signature: 'refresh(): SyncResult'
+    returns: SyncResult
+    params: []
+    effect: write
+  - name: hasNotes
+    description: >-
+      Whether this project has the human-written project document. Its absence is a normal state,
+      not a fault.
+    signature: 'hasNotes(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: derivedPaths
+    description: Where the two derived documents live, for callers that report on them rather than read them.
+    signature: 'derivedPaths(): string[]'
+    returns: string[]
+    params: []
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-23T11:11:10.943Z'
+updatedAt: '2026-09-23T11:12:09.999Z'

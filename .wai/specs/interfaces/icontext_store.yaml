@@ -1,0 +1,67 @@
+id: icontext_store
+name: Context Store Interface
+description: >-
+  Reads for the documents a person wrote, writes for the two wairon derives, and the paths of the
+  derived pair for anything that needs to report on them. There is deliberately no write for the
+  human-authored documents: nothing in wairon should be able to overwrite them.
+component: context_store
+methods:
+  - name: hasNotes
+    description: >-
+      Whether this project has the human-written project document at all. Its absence is a normal
+      state — a project that has not been described yet — not a fault.
+    signature: 'hasNotes(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: readNotes
+    description: What a person wrote about this project, or nothing when they have not.
+    signature: 'readNotes(): string | null'
+    returns: string | null
+    params: []
+    guarantees:
+      - idempotent
+  - name: readArchitecture
+    description: >-
+      What a person wrote about this system's design, or nothing when they have not. Optional by
+      intent: many projects say everything worth saying in the spec tree itself.
+    signature: 'readArchitecture(): string | null'
+    returns: string | null
+    params: []
+    guarantees:
+      - idempotent
+  - name: writeDomains
+    description: >-
+      Write the derived domain document, answering whether it actually changed. Unchanged content is
+      not rewritten, which is what stops a regenerate producing a diff when no design moved.
+    signature: 'writeDomains(content: string): boolean'
+    returns: boolean
+    params:
+      - name: content
+        type: string
+        description: The rendered domain document
+    effect: write
+  - name: writeGuide
+    description: >-
+      Write the derived guide document, answering whether it actually changed. Same
+      no-op-on-unchanged rule as the domain document.
+    signature: 'writeGuide(content: string): boolean'
+    returns: boolean
+    params:
+      - name: content
+        type: string
+        description: The rendered guide document
+    effect: write
+  - name: derivedPaths
+    description: >-
+      Where the two derived documents live, for callers that report on them rather than read them —
+      `wairon doctor` compares their version stamps against the running build.
+    signature: 'derivedPaths(): string[]'
+    returns: string[]
+    params: []
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-23T11:10:36.887Z'
+updatedAt: '2026-09-23T11:12:07.461Z'

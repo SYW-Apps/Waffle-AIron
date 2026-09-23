@@ -1,0 +1,20 @@
+kind: value-object
+id: sync_result
+name: SyncResult
+description: >-
+  Which of the derived context documents actually moved. Two booleans rather than a count, because a
+  caller reports them by name — and both being false is the normal, good outcome: it means a
+  regenerate found nothing to change, which is the whole point of writing only on difference.
+fields:
+  - name: domainsUpdated
+    type: boolean
+    description: Whether the domain document's content differed from what was on disk.
+    optional: false
+  - name: guideUpdated
+    type: boolean
+    description: Whether the guide document's content differed from what was on disk.
+    optional: false
+methods: []
+sourcePath: src/core/context.ts
+createdAt: '2026-09-23T11:11:37.495Z'
+updatedAt: '2026-09-23T11:11:37.505Z'

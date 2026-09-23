@@ -37,8 +37,11 @@ import {
   writeRootGuideDelegator as coreWriteRootGuideDelegator,
   reinjectLocalGuides as coreReinjectLocalGuides,
   readStampVersion as coreReadStampVersion,
+  syncContextFiles as coreSyncContextFiles,
+  hasContext as coreHasContext,
+  derivedDocPaths as coreDerivedDocPaths,
 } from '../core/index.js';
-import type { GenerateOptions, GenerateSummary } from '../core/index.js';
+import type { GenerateOptions, GenerateSummary, SyncResult } from '../core/index.js';
 import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
 import type { ForeignFieldRepair, SpecialistRetirement, TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
 import type {
@@ -332,6 +335,35 @@ export function reinjectLocalGuides(projectRoot: string, targets: string[]): str
 
 export function readStampVersion(content: string): string | null {
   return coreReadStampVersion(content);
+}
+
+// cli_core_adapter's context methods — 1:1 forwards to the core portal, backing
+// `wairon generate` (ask whether the project has been described, then rebuild
+// the derived pair), `wairon init` (seed them) and `wairon doctor` (rebuild them
+// under --fix, and ask where they live so the staleness check reports on the
+// generated pair and never on the two a person wrote).
+//
+// All three used to call straight out of ../core/context.js — sdd_cli reaching
+// into an sdd_core module, past the Portal that publishes exactly these three
+// calls. It is the ninth time that crossing has been found, and it closes the
+// way it always does: here, on the one component whose whole job is to cross
+// into sdd_core.
+//
+// `CONTEXT_PATHS` is not forwarded and is not on any contract. `wairon doctor`
+// was reaching for two of its entries by name to build its staleness list,
+// which is the module's internal layout leaking into a command; `derivedDocPaths`
+// answers the question it was actually asking. The layout of `.wai/context/`
+// stays stated once, in the store.
+export function syncContextFiles(): SyncResult {
+  return coreSyncContextFiles();
+}
+
+export function hasContext(): boolean {
+  return coreHasContext();
+}
+
+export function derivedDocPaths(): string[] {
+  return coreDerivedDocPaths();
 }
 
 interface SubsystemAddOptions {

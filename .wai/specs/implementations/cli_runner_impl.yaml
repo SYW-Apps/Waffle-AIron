@@ -62,7 +62,7 @@ methods:
         description: Did the spec tree resolve any agent?
         type: branch
         condition: at least one agent resolved from the spec tree
-        onFalseStep: 9
+        onFalseStep: 11
       - stepNumber: 4
         description: >-
           Generate the agent outputs for the configured target engines when agent files are
@@ -85,49 +85,63 @@ methods:
         targetMethod: exportSddSkills
       - stepNumber: 7
         description: >-
+          Ask whether this project has a human-written project document, since the derived guide
+          folds it in when there is one
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: hasContext
+      - stepNumber: 8
+        description: >-
+          Rebuild the derived context documents through the core adapter, each written only if it
+          changed — so a regenerate with no design change behind it leaves no diff
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: syncContextFiles
+      - stepNumber: 9
+        description: >-
           Re-inject the local AI guides for the configuration's active targets through the core
           adapter, so a guide never outlives the tree it claims to describe
         type: call
         targetComponent: cli_core_adapter
         targetMethod: reinjectLocalGuides
-      - stepNumber: 8
+      - stepNumber: 10
         description: Continue with the cascade
         type: jump
-        toStep: 10
-      - stepNumber: 9
+        toStep: 12
+      - stepNumber: 11
         description: 'Warn that no agent resolved from the spec tree: define subsystems and components first'
         type: local
-      - stepNumber: 10
+      - stepNumber: 12
         description: Is the cascade off for this run?
         type: branch
         condition: the run is scoped to a domain or root, a dry run, or --no-recurse
-        onFalseStep: 12
-      - stepNumber: 11
+        onFalseStep: 14
+      - stepNumber: 13
         description: Stop after this layer
         type: return
         outcome: this layer generated
-      - stepNumber: 12
+      - stepNumber: 14
         description: List this project's direct chained subprojects
         type: call
         targetComponent: cli_core_adapter
         targetMethod: listDirectChainedSubprojects
-      - stepNumber: 13
+      - stepNumber: 15
         description: Generate each subproject's layer in its own root
         type: loop
         loopKind: forEach
         over: each direct chained subproject
-        endStep: 15
-      - stepNumber: 14
+        endStep: 17
+      - stepNumber: 16
         description: Complete the subproject's bootstrap without overwriting it
         type: call
         targetComponent: cli_core_adapter
         targetMethod: ensureProjectInitialized
-      - stepNumber: 15
+      - stepNumber: 17
         description: >-
           Generate the subproject's layer and its own subprojects by running this command bound to
           the subproject root
         type: local
-      - stepNumber: 16
+      - stepNumber: 18
         description: Every layer is generated
         type: return
         outcome: every layer generated
@@ -1432,8 +1446,12 @@ methods:
         condition: the project is initialized and its configuration is valid
         onFalseStep: 11
       - stepNumber: 4
-        description: Regenerate the context files under .wai/context
-        type: local
+        description: >-
+          Rebuild the derived context documents through the core adapter, each written only if it
+          changed
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: syncContextFiles
       - stepNumber: 5
         description: Re-export the SDD skills for the active targets
         type: call
@@ -1523,18 +1541,25 @@ methods:
         targetMethod: repairForeignStepFields
       - stepNumber: 19
         description: >-
+          Ask where the derived context documents live, so the staleness check reports on the
+          generated pair and never on the two a person wrote
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: derivedDocPaths
+      - stepNumber: 20
+        description: >-
           Generated files and skills: read the version each one was stamped with and compare it
           against the running build, so a file written by an older wairon is reported as stale
           rather than assumed current
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readStampVersion
-      - stepNumber: 20
+      - stepNumber: 21
         description: 'Lock: compute the gate identity as it stands now'
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 21
+      - stepNumber: 22
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
           frozen, warning when it predates per-spec approval; a stale one warns to re-lock; a
@@ -1542,18 +1567,18 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readLockState
-      - stepNumber: 22
+      - stepNumber: 23
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed but not applied, and those applied from
           the machine-wide store
         type: local
-      - stepNumber: 23
+      - stepNumber: 24
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and flag a legacy global Antigravity plugin
         type: local
-      - stepNumber: 24
+      - stepNumber: 25
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -1842,4 +1867,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-23T00:13:43.624Z'
+updatedAt: '2026-09-23T11:12:35.664Z'
