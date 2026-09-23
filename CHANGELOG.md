@@ -82,6 +82,16 @@ the change is reverted; the four that hold either way pin behaviour that was
 already correct — the no-timestamp property, and the guide still rendering when
 the project configuration fails its own schema.
 
+**This narrows the public library surface.** `src/index.ts` re-exports the core
+barrel wholesale, so dropping the star export also removes `contextDir`,
+`CONTEXT_PATHS`, `renderDomainsDoc`, `renderWaironGuide`, `readProjectContext`
+and `readArchitectureContext` from the `wairon` package. Nothing in this
+repository consumed any of them, and no stated forward was added to keep them:
+a package surface that exists because a star export swept it up is not a surface
+anybody chose to publish. The three operations the Portal names are still there,
+and the renderers remain reachable where they are actually used — from inside the
+module, and from the idempotence test that guards them.
+
 ### The guide wairon writes into another tool's config file, reached through the portal
 
 `wairon init` wrote the AI guides, `wairon generate` refreshed them and `wairon
