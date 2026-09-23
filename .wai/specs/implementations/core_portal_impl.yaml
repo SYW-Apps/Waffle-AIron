@@ -597,6 +597,48 @@ methods:
         type: call
         targetComponent: budget_policy
         targetMethod: resolve
+  - name: globalGuideFilePath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the tool guide
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: globalPath
+  - name: localGuideFilePath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the tool guide
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: localPath
+  - name: injectGuide
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the tool guide
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: inject
+  - name: writeRootGuideDelegator
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the tool guide
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: writeDelegator
+  - name: reinjectLocalGuides
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the tool guide
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: refreshLocal
+  - name: readStampVersion
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the version stamp
+        type: call
+        targetComponent: version_stamp
+        targetMethod: parse
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-21T10:07:07.844Z'
+updatedAt: '2026-09-23T00:12:01.473Z'

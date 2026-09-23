@@ -744,6 +744,87 @@ methods:
         description: Which agent, so its override can be found
     guarantees:
       - idempotent
+  - name: globalGuideFilePath
+    description: >-
+      Published read: where an AI tool keeps its machine-wide configuration. Forwarded to the tool
+      guide.
+    signature: 'globalGuideFilePath(target: string): string | null'
+    returns: string | null
+    params:
+      - name: target
+        type: string
+        description: 'The AI tool: `claude` or `gemini`'
+    guarantees:
+      - idempotent
+  - name: localGuideFilePath
+    description: >-
+      Published read: where an AI tool keeps its per-project configuration. Forwarded to the tool
+      guide.
+    signature: 'localGuideFilePath(projectRoot: string, target: string): string | null'
+    returns: string | null
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: target
+        type: string
+        description: The AI tool
+    guarantees:
+      - idempotent
+  - name: injectGuide
+    description: >-
+      Published write: put the wairon guide into a tool's configuration file, replacing any section
+      already there. Forwarded to the tool guide.
+    signature: 'injectGuide(filePath: string, scope: string): void'
+    returns: void
+    params:
+      - name: filePath
+        type: string
+        description: The configuration file to write
+      - name: scope
+        type: string
+        description: '`global` or `local`'
+    effect: write
+  - name: writeRootGuideDelegator
+    description: >-
+      Published write: write the repository-root pointer at the in-project guide. Forwarded to the
+      tool guide.
+    signature: 'writeRootGuideDelegator(projectRoot: string, target: string): void'
+    returns: void
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: target
+        type: string
+        description: The AI tool
+    effect: write
+  - name: reinjectLocalGuides
+    description: >-
+      Published write: refresh the in-project guide for every target that already has one, answering
+      the paths written. Forwarded to the tool guide.
+    signature: 'reinjectLocalGuides(projectRoot: string, targets: string[]): string[]'
+    returns: string[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: targets
+        type: string[]
+        description: The AI tools to refresh
+    effect: write
+  - name: readStampVersion
+    description: >-
+      Published read: the wairon version stamped in generated content, or nothing when it carries
+      none. Forwarded to the version stamp.
+    signature: 'readStampVersion(content: string): string | null'
+    returns: string | null
+    params:
+      - name: content
+        type: string
+        description: Generated content that may carry a stamp
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T23:51:55.860Z'
+updatedAt: '2026-09-23T00:11:51.971Z'

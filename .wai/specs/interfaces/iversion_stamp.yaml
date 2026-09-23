@@ -1,0 +1,32 @@
+id: iversion_stamp
+name: Version Stamp Interface
+description: >-
+  Write the mark, and read one back. Both sides live here so they cannot drift into disagreeing
+  about the shape they share.
+component: version_stamp
+methods:
+  - name: render
+    description: >-
+      The stamp for the running build, as an HTML comment — invisible where these files are read,
+      survivable where a person edits around it.
+    signature: 'render(): string'
+    returns: string
+    params: []
+    guarantees:
+      - idempotent
+  - name: parse
+    description: >-
+      The wairon version stamped in some generated content, or nothing when it carries no stamp.
+      Content with no stamp is not an error: it predates stamping, or a person replaced the file
+      wholesale, and both mean the same thing — there is nothing to compare against.
+    signature: 'parse(content: string): string | null'
+    returns: string | null
+    params:
+      - name: content
+        type: string
+        description: Generated content that may carry a stamp
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-23T00:10:46.928Z'
+updatedAt: '2026-09-23T00:12:19.426Z'

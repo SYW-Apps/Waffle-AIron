@@ -98,7 +98,6 @@ rules:
       - src/core/rules/narrative/completed-step-graph.ts
       - src/core/rules/read-model.ts
       - src/core/rules/wiring/invariant-ref.ts
-      - src/core/stamp.ts
       - src/index.ts
       - src/server/errors.ts
       - src/server/httpio.ts
@@ -106,7 +105,6 @@ rules:
       - src/server/realtime.ts
       - src/server/swagger.ts
       - src/server/websocket.ts
-      - src/utils/ai-guide.ts
       - src/utils/canonical-json.ts
       - src/utils/download.ts
       - src/utils/errors.ts

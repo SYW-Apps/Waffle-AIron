@@ -1,0 +1,96 @@
+id: iai_tool_guide
+name: AI Tool Guide Interface
+description: >-
+  Where each tool keeps its configuration, and how the wairon section inside it is put there,
+  recognised and taken out again. Every write is confined to the marked section; nothing here ever
+  rewrites a file it does not own the middle of.
+component: ai_tool_guide
+methods:
+  - name: globalPath
+    description: >-
+      Where a tool keeps its machine-wide configuration, honouring the environment override that
+      account aliases set, or nothing when the tool is not one we inject into.
+    signature: 'globalPath(target: string): string | null'
+    returns: string | null
+    params:
+      - name: target
+        type: string
+        description: 'The AI tool: `claude` or `gemini`'
+    guarantees:
+      - idempotent
+  - name: localPath
+    description: >-
+      Where a tool keeps its per-project configuration inside this repository, or nothing when the
+      tool is not one we inject into.
+    signature: 'localPath(projectRoot: string, target: string): string | null'
+    returns: string | null
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: target
+        type: string
+        description: 'The AI tool: `claude`, `gemini` or `agy`'
+    guarantees:
+      - idempotent
+  - name: inject
+    description: >-
+      Put the guide into a file, replacing any section already there. Creates the file and its
+      directories when absent. Idempotent by construction: the old section is removed before the new
+      one is appended, so running it twice leaves the same file.
+    signature: 'inject(filePath: string, scope: string): void'
+    returns: void
+    params:
+      - name: filePath
+        type: string
+        description: The configuration file to write
+      - name: scope
+        type: string
+        description: '`global` for the machine-wide guide, `local` for the in-project one'
+    effect: write
+  - name: strip
+    description: >-
+      The same content with the marked section removed, and everything outside it untouched. Content
+      carrying no markers comes back unchanged rather than being treated as an error.
+    signature: 'strip(content: string): string'
+    returns: string
+    params:
+      - name: content
+        type: string
+        description: File content that may carry a guide
+    guarantees:
+      - idempotent
+  - name: writeDelegator
+    description: >-
+      Write the repository-root file that points a tool at the real guide inside the project, so the
+      root stays a one-line pointer rather than a second copy to keep in step.
+    signature: 'writeDelegator(projectRoot: string, target: string): void'
+    returns: void
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: target
+        type: string
+        description: The AI tool to write a pointer for
+    effect: write
+  - name: refreshLocal
+    description: >-
+      Write the in-project guide and the root pointer for every target that is a tool we inject
+      into, answering the guide paths actually written. Used after anything that changes what the
+      guide should say — a wairon upgrade, a regenerate — so a stale guide is never left claiming to
+      describe the current tree. It INSTALLS as well as refreshes: a known target gets a guide
+      whether or not it had one, and an unrecognized target name is ignored rather than refused.
+    signature: 'refreshLocal(projectRoot: string, targets: string[]): string[]'
+    returns: string[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: targets
+        type: string[]
+        description: The AI tools to refresh
+    effect: write
+status: complete
+createdAt: '2026-09-23T00:11:03.274Z'
+updatedAt: '2026-09-23T00:14:14.595Z'
