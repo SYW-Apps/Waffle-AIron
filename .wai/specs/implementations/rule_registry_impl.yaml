@@ -385,94 +385,99 @@ methods:
         targetComponent: conformance_rules
         targetMethod: typeRealization
       - stepNumber: 76
+        description: Register type-shape
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: typeShape
+      - stepNumber: 77
         description: Register unclaimed-source
         type: register
         targetComponent: conformance_rules
         targetMethod: unclaimedSource
-      - stepNumber: 77
+      - stepNumber: 78
         description: Register export-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: exportConformance
-      - stepNumber: 78
+      - stepNumber: 79
         description: Register coupling-health
         type: register
         targetComponent: heuristic_rules
         targetMethod: couplingHealth
-      - stepNumber: 79
+      - stepNumber: 80
         description: Register signature-language-builtins
         type: register
         targetComponent: heuristic_rules
         targetMethod: signatureLanguageBuiltins
-      - stepNumber: 80
+      - stepNumber: 81
         description: Register narrative-language-constructs
         type: register
         targetComponent: heuristic_rules
         targetMethod: narrativeLanguageConstructs
-      - stepNumber: 81
+      - stepNumber: 82
         description: Register technology-binding
         type: register
         targetComponent: heuristic_rules
         targetMethod: technologyBinding
-      - stepNumber: 82
+      - stepNumber: 83
         description: Register technology-boundaries
         type: register
         targetComponent: heuristic_rules
         targetMethod: technologyBoundaries
-      - stepNumber: 83
+      - stepNumber: 84
         description: Register naming-conventions
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingConventions
-      - stepNumber: 84
+      - stepNumber: 85
         description: Register complexity-and-metadata
         type: register
         targetComponent: heuristic_rules
         targetMethod: complexityAndMetadata
-      - stepNumber: 85
+      - stepNumber: 86
         description: Register narrative-complexity
         type: register
         targetComponent: heuristic_rules
         targetMethod: narrativeComplexity
-      - stepNumber: 86
+      - stepNumber: 87
         description: Register naming-discipline
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingDiscipline
-      - stepNumber: 87
+      - stepNumber: 88
         description: Register method-cohesion
         type: register
         targetComponent: heuristic_rules
         targetMethod: methodCohesion
-      - stepNumber: 88
+      - stepNumber: 89
         description: Register pack-resolution
         type: register
         targetComponent: extension_rules
         targetMethod: packResolution
-      - stepNumber: 89
+      - stepNumber: 90
         description: Register pack-reproducibility
         type: register
         targetComponent: extension_rules
         targetMethod: packReproducibility
-      - stepNumber: 90
+      - stepNumber: 91
         description: >-
           Register carried-debt (the rule index later moves it, with lint-allows, after any pack
           rules)
         type: register
         targetComponent: conformance_rules
         targetMethod: carriedDebt
-      - stepNumber: 91
+      - stepNumber: 92
         description: Register lint-allows (the rule index later moves it after any pack rules)
         type: register
         targetComponent: integrity_rules
         targetMethod: lintAllows
-      - stepNumber: 92
+      - stepNumber: 93
         description: For each registered built-in rule, in that order
         type: loop
         loopKind: forEach
         over: the registered built-in rules
-        endStep: 93
-      - stepNumber: 93
+        endStep: 94
+      - stepNumber: 94
         label: append-builtin
         description: Append the rule to the store
         type: call
@@ -511,4 +516,4 @@ lint:
         ruleSequence reads. A new rule adds one step here, which is the point.
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-09-23T16:50:57.590Z'
+updatedAt: '2026-09-23T18:12:21.806Z'

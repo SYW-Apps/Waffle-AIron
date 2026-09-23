@@ -415,6 +415,42 @@ methods:
         summary: >-
           An implementation method declares an `exportedVia` handle its own source file does not
           export — the spec names a published route to the method that nobody can import
+  - name: typeShape
+    description: >-
+      Rule type-shape. Code-to-contract for the DATA: a type spec's `fields` are compared, name by
+      name, against the shape its `sourcePath` actually declares. `typeRealization` asks whether a
+      type EXISTS in code; nothing asked whether it is the shape the spec claims, so a type spec
+      could describe two fields of a six-field record — and call the two that are optional required
+      — straight through a lock and a CI gate, while the ERD, the agent briefs and every implementer
+      read it as truth. That is the worst of the code-to-spec gaps, because a wrong signature
+      eventually breaks at a call site and a type spec that lies is only ever read by humans and
+      agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists, and
+      a DERIVED one, an alias followed one hop to the object literal its schema is built from, where
+      the keys are the members. A shape that extends another is judged on what it shows and never on
+      what it omits, since its inherited members are not in this file to count.
+    signature: 'typeShape(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNREALIZED_TYPE_FIELD
+        severity: warning
+        summary: >-
+          A type spec declares a field the shape at its sourcePath does not carry — the spec
+          describes data the code does not have, and every reader of the ERD and the briefs has been
+          told it exists
+      - code: UNDECLARED_TYPE_FIELD
+        severity: warning
+        summary: >-
+          The shape at a type's sourcePath carries a field the type spec does not declare — data the
+          design never described, so no diagram draws it and no brief hands it to an implementer
+      - code: TYPE_FIELD_OPTIONALITY
+        severity: warning
+        summary: >-
+          A type spec and the shape at its sourcePath disagree about whether a field may be absent —
+          one of them is telling a reader the data is guaranteed when it is not, or the reverse
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-23T17:35:59.791Z'
+updatedAt: '2026-09-23T18:11:45.832Z'

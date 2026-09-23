@@ -132,6 +132,14 @@ fields:
       with nothing records nothing, and so does one annotated with anything but a plain type
       reference: what an initializer INFERS is not what the code declares
     optional: true
+  - name: typeShapes
+    type: Record<string, TypeShapeFact>
+    description: >-
+      The members of each named shape the file declares, by declaration name — what lets a type
+      spec's `fields` be checked against the data the code actually carries, rather than read as
+      truth by the ERD and every brief. EXACT grade only: below it a member list cannot be told from
+      a mention, and a guess about somebody's data model is worse than silence.
+    optional: true
 methods:
   - name: resolveImport
     signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
@@ -187,4 +195,4 @@ methods:
       what keeps an unannotated receiver from becoming a guess, exactly as it is for a field
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-09-20T10:41:25.932Z'
+updatedAt: '2026-09-23T18:11:35.564Z'

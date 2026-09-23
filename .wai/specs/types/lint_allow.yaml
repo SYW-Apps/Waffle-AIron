@@ -1,0 +1,36 @@
+kind: value-object
+id: lint_allow
+name: LintAllow
+description: >-
+  One acknowledged finding: the issue code a spec accepts, where it accepts it, and why. The reason
+  is required because an allow without one is indistinguishable from a rule nobody understood, and
+  the whole point of writing the acceptance down is that a later reader can weigh it. `at` names the
+  SITE exactly as the finding names it, so an allow covers the occurrence it names and not its
+  neighbours; `covers` lists the units of an aggregating finding, and the allow silences it only
+  when every reported unit is listed — a unit nobody decided on surfaces on the day it appears
+  instead of inheriting a decision taken about the others.
+fields:
+  - name: code
+    type: string
+    description: The issue code being allowed
+    optional: false
+  - name: at
+    type: string
+    description: >-
+      The site inside this spec the allow covers, named exactly as the finding names it — a contract
+      method, an import edge, a declared edge
+    optional: true
+  - name: covers
+    type: string[]
+    description: >-
+      The units of an aggregating finding this allow covers, each named the way the finding's own
+      message names it. Meaningless without `at`, and refused there
+    optional: true
+  - name: reason
+    type: string
+    description: Why this finding is acceptable here
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-23T18:35:14.993Z'
+updatedAt: '2026-09-23T18:35:15.008Z'

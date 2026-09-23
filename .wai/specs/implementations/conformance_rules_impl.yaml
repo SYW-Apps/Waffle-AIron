@@ -1344,6 +1344,76 @@ methods:
         outcome: clean
     symbol: check
     exportedVia: exportConformanceRule
+  - name: typeShape
+    sourcePath: src/core/rules/conformance/type-shape.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each type spec that names a source file, ask the analyzer for the shape declared there
+          under the type's own code name — its `symbol` when it declares one, else its name. A type
+          that names no file is making no claim about code and there is nothing here to check
+        type: local
+      - stepNumber: 2
+        description: Decide whether the shape can honestly be read at all
+        type: branch
+        condition: the file was read at exact grade and a shape of that name was found
+        onTrueStep: 3
+        onFalseStep: 9
+      - stepNumber: 3
+        label: read
+        description: >-
+          Take the shape's data members and whether the code lets each be absent. Method-style
+          members are not data and are left to the method axis `typeRealization` already judges;
+          counting them here would accuse every behavioural interface of carrying undeclared state.
+          A field the spec gives a function type that the code writes as a method is one fact in two
+          spellings, not a disagreement
+        type: local
+      - stepNumber: 4
+        description: Decide whether this shape's whole membership is in front of us
+        type: branch
+        condition: the shape extends another type
+        onTrueStep: 7
+        onFalseStep: 5
+      - stepNumber: 5
+        label: presence
+        description: >-
+          Report each declared field the shape does not carry. The spec is describing data the code
+          does not have, and it is the ERD and the briefs that carried the claim — nothing breaks at
+          a call site to correct it
+        type: local
+      - stepNumber: 6
+        description: >-
+          Report each field the shape carries that no declared field names. Data the design never
+          described is data no diagram draws and no brief hands to an implementer, which is how a
+          record grows past the model of it without anyone deciding to
+        type: local
+      - stepNumber: 7
+        label: optionality
+        description: >-
+          Report each field both sides carry but disagree about. Absent-able is the code's word for
+          it — a wrapper that lets the key be missing — and a wrapper that FILLS a missing key makes
+          the field required in the value the type finally holds, which is the thing the spec is
+          describing. Judged even for a shape that extends another, because a member this file lists
+          is one this file answers for
+        type: local
+      - stepNumber: 8
+        description: >-
+          Done: the type's data was compared to the code's, which is the one reading a spec-driven
+          gate could not make before
+        type: return
+        outcome: judged
+      - stepNumber: 9
+        label: silent
+        description: >-
+          Say nothing. Below exact grade a member list cannot be told from a mention, and a guess
+          about somebody's data model is worse than silence; a type whose shape the file does not
+          declare at all is `typeRealization`'s finding, and reporting it here too would make one
+          absence look like two
+        type: return
+        outcome: unjudged
+    symbol: check
+    exportedVia: typeShapeRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-23T17:52:50.450Z'
+updatedAt: '2026-09-23T18:12:05.260Z'

@@ -10,7 +10,9 @@ import {
   type ImplementationSpec,
   type ImportBindingFact,
   type MethodImplementation,
+  type ShapeMemberFact,
   type SourceFileFacts,
+  type TypeShapeFact,
   type TypeSpec,
 } from '../models/index.js';
 
@@ -377,6 +379,12 @@ interface ExactFacts {
    * one that calls it.
    */
   localTypes: Map<string, Set<string>>;
+  /**
+   * The members of each named shape the file declares, by declaration name
+   * — an interface's, a class's, a type literal alias's, and a derived
+   * alias's after the one hop to the schema value it names.
+   */
+  typeShapes: Map<string, TypeShapeFact>;
   /** Module-scope mutable (`let`/`var`) binding names. */
   mutableBindings: Set<string>;
   /**
@@ -404,7 +412,15 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const typeOnlyBindings = new Map<string, string>();
   const fieldTypes = new Map<string, Set<string>>();
   const localTypes = new Map<string, Set<string>>();
+  const typeShapes = new Map<string, TypeShapeFact>();
   const mutableBindings = new Set<string>();
+  /**
+   * The two halves of the DERIVED hop, collected as the walk meets them and
+   * joined after it: an alias routinely names a schema const the file
+   * declares further down, so neither half can answer in one pass.
+   */
+  const schemaConstants = new Map<string, import('typescript').Expression>();
+  const derivedAliases: { name: string; constant: string }[] = [];
 
   /**
    * The dedup key of a call site: its shape, not its number of occurrences.
@@ -473,6 +489,112 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     const named = localTypes.get(name.text) ?? new Set<string>();
     named.add(typeName);
     localTypes.set(name.text, named);
+  };
+
+  // What a named shape's MEMBERS are. Property-style members are the DATA;
+  // method-style ones are behaviour, which the spec models on the axis
+  // `typeRealization` judges — `structure?(text: string): string` is a method
+  // signature, and counting it as a field would accuse every behavioural
+  // interface in a tree of carrying undeclared state.
+  const recordDeclaredShape = (
+    name: string,
+    members: readonly (import('typescript').ClassElement | import('typescript').TypeElement)[],
+    inherited: boolean,
+  ): void => {
+    const fields: ShapeMemberFact[] = [];
+    const methods: string[] = [];
+    for (const member of members) {
+      // A constructor, an index signature and a call signature name no member.
+      const memberName = member.name ? propertyNameText(member.name) : undefined;
+      if (!memberName) continue;
+      if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) {
+        methods.push(memberName);
+      } else if (ts.isPropertySignature(member) || ts.isPropertyDeclaration(member)) {
+        fields.push({ name: memberName, optional: !!member.questionToken });
+      }
+    }
+    const shape: TypeShapeFact = { origin: 'declared', fields, methods };
+    if (inherited) shape.inherited = true;
+    typeShapes.set(name, shape);
+  };
+
+  // The schema const a `type X = z.infer<typeof XSchema>` alias names: the ONE
+  // hop a derived shape is allowed. Anything else — a union, an intersection,
+  // a second alias, a qualified `typeof ns.XSchema` — resolves to nothing,
+  // because a shape this model cannot follow is one it must not guess at.
+  const inferredSchemaConstant = (type: import('typescript').TypeNode): string | undefined => {
+    if (!ts.isTypeReferenceNode(type)) return undefined;
+    const reference = ts.isIdentifier(type.typeName) ? type.typeName.text
+      : ts.isQualifiedName(type.typeName) ? type.typeName.right.text : undefined;
+    if (reference !== 'infer') return undefined;
+    const [argument] = type.typeArguments ?? [];
+    if (!argument || !ts.isTypeQueryNode(argument) || !ts.isIdentifier(argument.exprName)) return undefined;
+    return argument.exprName.text;
+  };
+
+  // The BASE `.object({…})` call of a chained schema expression. Walking to
+  // the base is the whole of it: `z.object({…}).refine(fn, { message })` hands
+  // the REFINE OPTIONS to whoever takes the first object literal it meets, and
+  // the shape then reads as one field called `message`.
+  const baseObjectLiteral = (
+    expression: import('typescript').Expression,
+  ): import('typescript').ObjectLiteralExpression | undefined => {
+    let node: import('typescript').Node | undefined = expression;
+    const walked = new Set<import('typescript').Node>();
+    while (node && !walked.has(node)) {
+      walked.add(node);
+      if (ts.isCallExpression(node)) {
+        const callee: import('typescript').Expression = node.expression;
+        if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'object') {
+          const literal = node.arguments.find(argument => ts.isObjectLiteralExpression(argument));
+          if (literal) return literal as import('typescript').ObjectLiteralExpression;
+        }
+        node = callee;
+      } else if (ts.isPropertyAccessExpression(node)) {
+        node = node.expression;
+      } else break;
+    }
+    return undefined;
+  };
+
+  // The combinators applied to ONE schema expression, read off its own call
+  // chain and never off its text: a `.default()` nested inside a record's
+  // value says nothing about whether the outer key may be absent.
+  const chainedCombinators = (expression: import('typescript').Expression): Set<string> => {
+    const applied = new Set<string>();
+    let node: import('typescript').Node | undefined = expression;
+    const walked = new Set<import('typescript').Node>();
+    while (node && !walked.has(node)) {
+      walked.add(node);
+      if (ts.isCallExpression(node)) {
+        const callee: import('typescript').Expression = node.expression;
+        if (ts.isPropertyAccessExpression(callee)) applied.add(callee.name.text);
+        node = callee;
+      } else if (ts.isPropertyAccessExpression(node)) {
+        node = node.expression;
+      } else break;
+    }
+    return applied;
+  };
+
+  // The members of a schema object literal. `.optional()` and `.nullish()`
+  // are what let a key be ABSENT; `.default(x)` FILLS a missing one, so the
+  // value the type finally holds always has it — which makes the field
+  // REQUIRED in what the alias yields, `.optional().default(x)` included.
+  const schemaMembers = (literal: import('typescript').ObjectLiteralExpression): ShapeMemberFact[] => {
+    const fields: ShapeMemberFact[] = [];
+    for (const property of literal.properties) {
+      const memberName = property.name ? propertyNameText(property.name) : undefined;
+      if (!memberName) continue;
+      if (ts.isShorthandPropertyAssignment(property)) {
+        fields.push({ name: memberName, optional: false });
+      } else if (ts.isPropertyAssignment(property)) {
+        const applied = chainedCombinators(property.initializer);
+        const optional = (applied.has('optional') || applied.has('nullish')) && !applied.has('default');
+        fields.push({ name: memberName, optional });
+      }
+    }
+    return fields;
   };
 
   const hasExportModifier = (node: import('typescript').Node): boolean => {
@@ -578,6 +700,29 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     // constructor parameter property is both, and is recorded as both — inside
     // the constructor body the same name IS the parameter.
     if (ts.isParameter(node) || ts.isVariableDeclaration(node)) recordLocalType(node.name, node.type);
+    // And what a named SHAPE holds, which is the data model's own claim: an
+    // interface or class lists its members, and a type alias either lists them
+    // (a type literal) or names the value they come from — the derived hop,
+    // resolved after the walk. Read outside the chain below, which is an
+    // else-if over these same node kinds.
+    if (ts.isInterfaceDeclaration(node)) {
+      recordDeclaredShape(node.name.text, node.members, (node.heritageClauses?.length ?? 0) > 0);
+    } else if (ts.isClassDeclaration(node) && node.name) {
+      recordDeclaredShape(node.name.text, node.members, (node.heritageClauses?.length ?? 0) > 0);
+    } else if (ts.isTypeAliasDeclaration(node)) {
+      if (ts.isTypeLiteralNode(node.type)) recordDeclaredShape(node.name.text, node.type.members, false);
+      else {
+        const constant = inferredSchemaConstant(node.type);
+        if (constant) derivedAliases.push({ name: node.name.text, constant });
+      }
+    }
+    // The value half of that hop, kept as the walk meets it. First binding
+    // wins: a name rebound later is a different value, and the shape a spec
+    // claims is the one the file introduces under the name.
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+      && !schemaConstants.has(node.name.text)) {
+      schemaConstants.set(node.name.text, node.initializer);
+    }
     if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)
       || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isModuleDeclaration(node)) {
       const name = node.name && ts.isIdentifier(node.name) ? node.name.text : undefined;
@@ -665,13 +810,28 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   };
   visit(sf);
 
+  // The derived hop, now that both halves have been seen. ONE hop and no
+  // more: an alias whose schema const this file does not declare, or whose
+  // chain never reaches an object literal, records NO shape. Silence is the
+  // honest answer — the type still has to be DECLARED somewhere, which is
+  // `typeRealization`'s question, and a guessed member list would be read as
+  // measurement by everything downstream.
+  for (const alias of derivedAliases) {
+    if (typeShapes.has(alias.name)) continue;
+    const initializer = schemaConstants.get(alias.constant);
+    if (!initializer) continue;
+    const literal = baseObjectLiteral(initializer);
+    if (!literal) continue;
+    typeShapes.set(alias.name, { origin: 'derived', fields: schemaMembers(literal), methods: [] });
+  }
+
   // A pure re-export barrel, stated as what it IS: a file whose every
   // top-level statement re-exports another module. Nothing is declared here,
   // so there is nothing for a spec to claim.
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, mutableBindings, reexportOnly };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -965,6 +1125,7 @@ export function buildCodeModel(
             typeOnlyBindings: Object.fromEntries(facts.typeOnlyBindings),
             fieldTypes: Object.fromEntries([...facts.fieldTypes].map(([k, v]) => [k, [...v]])),
             localTypes: Object.fromEntries([...facts.localTypes].map(([k, v]) => [k, [...v]])),
+            typeShapes: Object.fromEntries(facts.typeShapes),
             topLevelMutableBindings: [...facts.mutableBindings],
             reexportOnly: facts.reexportOnly,
           };

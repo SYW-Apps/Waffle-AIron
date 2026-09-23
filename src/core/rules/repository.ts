@@ -77,6 +77,7 @@ import { integrationSimFileRule } from './conformance/integration-sim-file.js';
 import { integrationSimWiringRule } from './conformance/integration-sim-wiring.js';
 import { integrationSimCoverageRule } from './conformance/integration-sim-coverage.js';
 import { typeRealizationRule } from './conformance/type-realization.js';
+import { typeShapeRule } from './conformance/type-shape.js';
 import { unclaimedSourceRule } from './conformance/unclaimed-source.js';
 import { exportConformanceRule } from './conformance/export-conformance.js';
 import { carriedDebtRule } from './conformance/carried-debt.js';
@@ -258,10 +259,12 @@ export const SDD_RULES: SddRule[] = [
   integrationSimFileRule,
   integrationSimWiringRule,
   integrationSimCoverageRule,
-  // The data model's own claim on code, and the question no spec can ask
-  // from the spec side: which files are named by nothing at all. Last in
-  // the family because the second one reads what all the others named.
+  // The data model's own claim on code — does the file hold the type, and is
+  // it the SHAPE the spec claims — and then the question no spec can ask from
+  // the spec side: which files are named by nothing at all. Last in the
+  // family because that one reads what all the others named.
   typeRealizationRule,
+  typeShapeRule,
   unclaimedSourceRule,
   exportConformanceRule,
   couplingRule,

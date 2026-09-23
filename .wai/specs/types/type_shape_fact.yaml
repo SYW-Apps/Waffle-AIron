@@ -1,0 +1,40 @@
+kind: value-object
+id: type_shape_fact
+name: TypeShapeFact
+description: >-
+  The members of one named shape a file declares — what a data type is, read off the code so a type
+  spec's claim about it can be checked. Two origins answer, and the difference is recorded rather
+  than smoothed away. A DECLARED shape lists its own members, so the file is the whole answer. A
+  DERIVED one names a value instead — an alias resolved one hop to the object literal its schema is
+  built from, where the keys are the members — so the answer is as good as that hop and no better. A
+  shape that EXTENDS another carries members this file never lists, which is why presence and
+  absence are different questions for it: what it shows can be judged, what it omits cannot.
+subsystem: sdd_validator
+fields:
+  - name: origin
+    type: string
+    description: >-
+      How the members were read: 'declared' when the shape lists them itself, 'derived' when an
+      alias was followed one hop to the value its shape comes from
+    optional: false
+  - name: fields
+    type: ShapeMemberFact[]
+    description: The data members, each with whether the code lets it be absent
+    optional: false
+  - name: methods
+    type: string[]
+    description: >-
+      The method-style members, kept apart from fields because a spec models them on a different
+      axis and counting them as data would accuse every behavioural interface of carrying undeclared
+      state
+    optional: false
+  - name: inherited
+    type: boolean
+    description: >-
+      True when the shape extends another, so members it does not list exist but are not in this
+      file to count
+    optional: true
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-09-23T18:11:29.597Z'
+updatedAt: '2026-09-23T18:11:29.617Z'

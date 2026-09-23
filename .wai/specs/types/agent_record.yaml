@@ -39,7 +39,23 @@ fields:
       integration): each component's variant guidance + same-variant siblings, injected into the
       agent context. Empty when none.
     optional: true
+  - name: status
+    type: string
+    description: >-
+      Whether this agent is active or retired. Always present — a record written without one is
+      active, so the absence of a decision is never mistaken for a retirement.
+    optional: false
+  - name: createdAt
+    type: string
+    description: >-
+      When this agent was first registered. Store-managed: the write decides it and no author sets
+      it.
+    optional: false
+  - name: updatedAt
+    type: string
+    description: When this agent was last written. Store-managed.
+    optional: false
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-19T11:07:04.887Z'
+updatedAt: '2026-09-23T18:36:07.651Z'

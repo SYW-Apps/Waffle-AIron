@@ -50,6 +50,26 @@ fields:
       round-trip hydration) treats these as entrypoints alongside Portals, Observers, and published
       components.
     optional: true
+  - name: lint
+    type: LintConfig
+    description: >-
+      This spec's own acknowledged findings — validator results its author looked at and accepted,
+      each with a reason.
+    optional: true
+  - name: ext
+    type: json
+    description: >-
+      Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
+      the core, preserved verbatim through load and save.
+    optional: true
+  - name: createdAt
+    type: string
+    description: 'When this spec was first written. Store-managed: the write decides it and no author sets it.'
+    optional: false
+  - name: updatedAt
+    type: string
+    description: When this spec was last written. Store-managed.
+    optional: false
 methods:
   - name: isDraft
     signature: 'isDraft(): boolean'
@@ -58,4 +78,4 @@ methods:
     symbol: isDraftSubsystem
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-19T11:07:18.725Z'
+updatedAt: '2026-09-23T18:35:52.945Z'
