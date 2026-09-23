@@ -10,6 +10,7 @@ import {
   type ImplementationSpec,
   type ImportBindingFact,
   type MethodImplementation,
+  type ParameterFact,
   type ShapeMemberFact,
   type SourceFileFacts,
   type TypeShapeFact,
@@ -385,6 +386,18 @@ interface ExactFacts {
    * alias's after the one hop to the schema value it names.
    */
   typeShapes: Map<string, TypeShapeFact>;
+  /**
+   * The parameters each named function-like DECLARES, by name — the signature
+   * a caller of that name reaches. Only a function-like with a BODY records
+   * one, which is what settles overloads: the overload signatures are not what
+   * a caller lands on, and a name with no body here has no signature to read
+   * at all. Same-named bodies keep EVERY candidate, the way the field-type
+   * facts do: a file routinely holds a class member and the module-level
+   * facade forwarding to it under one name, with different parameters, and
+   * picking one would silently drop the other's leading argument from view.
+   * Which one a contract means is not this model's to decide.
+   */
+  functionParams: Map<string, ParameterFact[][]>;
   /** Module-scope mutable (`let`/`var`) binding names. */
   mutableBindings: Set<string>;
   /**
@@ -413,6 +426,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const fieldTypes = new Map<string, Set<string>>();
   const localTypes = new Map<string, Set<string>>();
   const typeShapes = new Map<string, TypeShapeFact>();
+  const functionParams = new Map<string, ParameterFact[][]>();
   const mutableBindings = new Set<string>();
   /**
    * The two halves of the DERIVED hop, collected as the walk meets them and
@@ -623,6 +637,27 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     return undefined;
   };
 
+  // What a function-like DECLARES it takes, in order — the other half of the
+  // signature a contract's `params` are read against. A parameter bound by
+  // DESTRUCTURING records no name: there is none for a contract's to be
+  // compared with, and inventing one would be a guess about somebody's
+  // signature. Absent-able is the caller's question, so all three spellings
+  // answer it — a question mark, a default value, and a rest parameter, which
+  // a caller may leave out exactly as it may leave out an optional one.
+  const declaredParameters = (fn: import('typescript').Node): ParameterFact[] =>
+    ((fn as import('typescript').SignatureDeclarationBase).parameters ?? []).map((parameter) => {
+      const fact: ParameterFact = {
+        optional: !!parameter.questionToken || !!parameter.initializer || !!parameter.dotDotDotToken,
+      };
+      if (ts.isIdentifier(parameter.name)) fact.name = parameter.name.text;
+      // The annotation as WRITTEN, whitespace-normalized so a signature broken
+      // over lines reads as the one type it is. An unannotated parameter
+      // records none — what an initializer infers is not what the code
+      // declares, the same silence a field with no annotation keeps.
+      if (parameter.type) fact.type = parameter.type.getText(sf).replace(/\s+/g, ' ').trim();
+      return fact;
+    });
+
   // One pass per named function's body collecting classic cyclomatic
   // complexity (decision points + 1) AND direct callee names. Nested NAMED
   // function-likes are excluded — they get their own entries — while
@@ -686,6 +721,15 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       const sites = calls.get(fnName) ?? new Map<string, CallSiteFact>();
       for (const [key, site] of facts.callees) sites.set(key, site);
       calls.set(fnName, sites);
+      // The signature a caller reaches, recorded inside the WITH-A-BODY guard
+      // this block already is: an overload's signatures have no body, so the
+      // implementation signature is the only one collected. EVERY body under
+      // the name is kept — a class member and the module-level facade that
+      // forwards to it are two different signatures, and which one a contract
+      // means is the reader's question, not this walk's.
+      const signatures = functionParams.get(fnName) ?? [];
+      signatures.push(declaredParameters(node));
+      functionParams.set(fnName, signatures);
     }
     // What the code DECLARES an instance field to be: a class property's own
     // annotation, and a constructor parameter property's — the shape that
@@ -837,7 +881,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, mutableBindings, reexportOnly };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -1132,6 +1176,7 @@ export function buildCodeModel(
             fieldTypes: Object.fromEntries([...facts.fieldTypes].map(([k, v]) => [k, [...v]])),
             localTypes: Object.fromEntries([...facts.localTypes].map(([k, v]) => [k, [...v]])),
             typeShapes: Object.fromEntries(facts.typeShapes),
+            functionParams: Object.fromEntries(facts.functionParams),
             topLevelMutableBindings: [...facts.mutableBindings],
             reexportOnly: facts.reexportOnly,
           };

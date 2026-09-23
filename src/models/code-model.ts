@@ -103,6 +103,26 @@ export interface ShapeMemberFact {
 }
 
 /**
+ * One parameter of a function as the code declares it: what it is called, what
+ * it is annotated with, and whether a caller may leave it out.
+ *
+ * The TYPE is what makes a RENAME tellable from a dropped parameter —
+ * `seed(config: HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)`
+ * is one parameter under two names, and matching on names alone reads it as a
+ * parameter the code lost. A parameter bound by destructuring has no name to
+ * compare, so it records none rather than inventing one: a guess about
+ * somebody's signature is worse than silence, exactly as it is for a field.
+ */
+export interface ParameterFact {
+  /** The parameter's name, absent when it is bound by a destructuring pattern instead. */
+  name?: string;
+  /** The type it is annotated with, exactly as written and whitespace-normalized; absent when the code annotates nothing. */
+  type?: string;
+  /** Whether a caller may leave it out — marked optional, given a default, or a rest parameter. */
+  optional: boolean;
+}
+
+/**
  * The members of one named shape a file declares — what a data type IS, read
  * off the code so a type spec's claim about it can be checked.
  *
@@ -242,6 +262,27 @@ export interface SourceFileFacts {
    * somebody measures it against the code.
    */
   typeShapes?: Record<string, TypeShapeFact>;
+  /**
+   * The parameter lists of each named function-like in the file, by name (see
+   * ParameterFact) — what lets a contract's declared `params` be checked
+   * against the signature that realizes them, the last of the three
+   * code-to-spec readings nothing had ever made. EXACT grade only: below it a
+   * parameter list cannot be told from a call.
+   *
+   * EVERY body under a name is kept, not the first: a file routinely holds a
+   * class member and the module-level facade that forwards to it under one
+   * name, with different parameters, and picking one silently drops the
+   * other's leading argument from view. Same-named bodies therefore keep every
+   * candidate, exactly as the field-type facts do, and a reader accuses only
+   * what all of them agree on.
+   *
+   * Overloads record the IMPLEMENTATION signature, the one with a body,
+   * because that is the one a caller actually reaches — and a name with no
+   * entry at all has no signature here to read, which is the silence a
+   * forwarding file owes: that the body is not here is already
+   * `methodRealization`'s finding.
+   */
+  functionParams?: Record<string, ParameterFact[][]>;
   /**
    * Module-scope mutable bindings (`let`/`var` at the top level of the file).
    * EXACT grade only. The static approximation of held state a logic
