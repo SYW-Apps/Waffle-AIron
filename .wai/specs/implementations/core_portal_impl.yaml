@@ -674,6 +674,48 @@ methods:
         type: call
         targetComponent: approval_comparison
         targetMethod: verdict
+  - name: specPathsInScope
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: specPathsInScope
+  - name: packStoreDir
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: packStoreDir
+  - name: listInstalledPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: listInstalledPacks
+  - name: resolveInstalledPack
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: resolveInstalledPack
+  - name: installPackFromDirectory
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: installPackFromDirectory
+  - name: uninstallPack
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: uninstallPack
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T12:24:38.290Z'
+updatedAt: '2026-09-23T12:56:16.866Z'

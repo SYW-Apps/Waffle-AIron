@@ -562,6 +562,19 @@ methods:
       - name: id
         type: string
         description: The type id
+  - name: specPathsInScope
+    description: >-
+      Every spec file path inside a scope, or the whole tree when no subsystem is named. Used when
+      an approval is taken over part of a tree rather than all of it, so the record says exactly
+      which files it covers.
+    signature: 'specPathsInScope(scopeSubsystem?: string): string[]'
+    returns: string[]
+    params:
+      - name: scopeSubsystem
+        type: string
+        description: The subsystem to scope to, or the whole tree when omitted
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T14:30:10.516Z'
+updatedAt: '2026-09-23T12:56:12.834Z'

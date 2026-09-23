@@ -136,10 +136,9 @@ methods:
       - stepNumber: 4
         description: >-
           Name who approved it, in the form a reviewer can match against the commit that carries the
-          lock
-        type: call
-        targetComponent: lock_store
-        targetMethod: describeApprover
+          lock. A projection over the identity's own fields, so it needs nothing beyond the record
+          already in hand
+        type: local
       - stepNumber: 5
         description: >-
           Read the subsystems that mount a chained child, then check whether any child's pin moved.
@@ -177,4 +176,4 @@ methods:
     symbol: approvalVerdict
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-09-23T12:24:20.763Z'
+updatedAt: '2026-09-23T12:57:18.799Z'

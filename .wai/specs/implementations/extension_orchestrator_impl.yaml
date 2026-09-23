@@ -321,7 +321,42 @@ methods:
       whose manifest will not load is skipped rather than seeded broken, and any failure degrades to
       an empty list — initializing a project must never fail because of a bad pack sitting in the
       store.
+  - name: packStoreDir
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the pack store
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: packStoreDir
+  - name: listInstalledPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the pack store
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: listInstalledPacks
+  - name: resolveInstalledPack
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the pack store
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: resolveInstalledPack
+  - name: installPackFromDirectory
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the pack store
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: installPackFromDirectory
+  - name: uninstallPack
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the pack store
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: uninstallPack
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-09-17T20:28:28.127Z'
+updatedAt: '2026-09-23T12:55:18.423Z'

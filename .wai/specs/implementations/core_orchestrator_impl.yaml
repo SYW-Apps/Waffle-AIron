@@ -1433,6 +1433,19 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: deleteTypeSpec
+  - name: specPathsInScope
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the spec tree's own layout and collect every spec file path inside the scope, or all
+          of them when no subsystem was named
+        type: local
+      - stepNumber: 2
+        description: >-
+          Answer the paths, so an approval taken over part of a tree records exactly which files it
+          covers rather than implying the whole
+        type: return
+        outcome: paths
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T14:30:15.834Z'
+updatedAt: '2026-09-23T12:56:42.893Z'

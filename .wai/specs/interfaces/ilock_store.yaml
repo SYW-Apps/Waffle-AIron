@@ -29,20 +29,6 @@ methods:
     guarantees:
       - idempotent
     effect: read
-  - name: describeApprover
-    description: >-
-      An approver identity as a line to show: the name beside the id when both are known, and marked
-      as authenticated when the instance that issued the credential vouched for it. The distinction
-      is the point — a self-declared git identity and one an instance authenticated are different
-      claims, and a reader must be able to tell them apart at a glance.
-    signature: 'describeApprover(who: ApproverIdentity): string'
-    returns: string
-    params:
-      - name: who
-        type: ApproverIdentity
-        description: The identity recorded on a lock
-    guarantees:
-      - idempotent
 status: complete
 createdAt: '2026-07-04T12:48:43.336Z'
-updatedAt: '2026-09-23T12:24:29.202Z'
+updatedAt: '2026-09-23T12:57:16.001Z'

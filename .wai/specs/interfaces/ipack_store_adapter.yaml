@@ -10,13 +10,6 @@ methods:
     signature: 'packStoreDir(): string'
     returns: string
     params: []
-    invokedBy:
-      kind: sibling-subsystem
-      caller: >-
-        The `wairon pack install|uninstall|which|use` commands (sdd_cli, cli_packs_adapter) drive
-        the store lifecycle, crossing into sdd_core over its published barrel surface; a modeled
-        cross-subsystem edge onto this internal Adapter would violate boundaries. A future
-        core_portal passthrough would retire this declaration.
   - name: resolveInstalledPack
     description: >-
       Resolve a project selection against the store: the exact version when one is pinned, otherwise
@@ -50,12 +43,6 @@ methods:
         type: string
         description: Where the pack came from (URL or path), recorded for later sync.
         optional: true
-    invokedBy:
-      kind: sibling-subsystem
-      caller: >-
-        The `wairon pack install|add` commands (sdd_cli, cli_packs_adapter) install a materialized
-        pack directory into the store over sdd_core's published barrel surface rather than a modeled
-        component edge.
   - name: uninstallPack
     description: >-
       Remove a pack from the store: the named version, or every version when none is given. Returns
@@ -69,11 +56,6 @@ methods:
       - name: version
         type: string
         optional: true
-    invokedBy:
-      kind: sibling-subsystem
-      caller: >-
-        The `wairon pack uninstall` command (sdd_cli, cli_packs_adapter) removes an installed
-        version over sdd_core's published barrel surface rather than a modeled component edge.
   - name: computePackDigest
     description: >-
       Compute the canonical sha256 content digest of a pack directory: every regular file's relative
@@ -102,4 +84,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-29T17:41:50.550Z'
-updatedAt: '2026-09-13T22:58:46.652Z'
+updatedAt: '2026-09-23T12:56:40.990Z'

@@ -870,6 +870,79 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: specPathsInScope
+    description: >-
+      Published read: every spec file path inside a scope, for an approval taken over part of a
+      tree. Forwarded to the spec loader.
+    signature: 'specPathsInScope(scopeSubsystem?: string): string[]'
+    returns: string[]
+    params:
+      - name: scopeSubsystem
+        type: string
+        description: The subsystem to scope to, or the whole tree when omitted
+    guarantees:
+      - idempotent
+  - name: packStoreDir
+    description: >-
+      Published read: where installed packs live on this machine. Forwarded to the extension
+      orchestrator.
+    signature: 'packStoreDir(): string'
+    returns: string
+    params: []
+    guarantees:
+      - idempotent
+  - name: listInstalledPacks
+    description: >-
+      Published read: every pack installed on this machine, whatever any project declares. Forwarded
+      to the extension orchestrator.
+    signature: 'listInstalledPacks(): InstalledPack[]'
+    returns: InstalledPack[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveInstalledPack
+    description: >-
+      Published read: one installed pack by name and optional version. Forwarded to the extension
+      orchestrator.
+    signature: 'resolveInstalledPack(name: string, version?: string): InstalledPack | null'
+    returns: InstalledPack | null
+    params:
+      - name: name
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: A specific version, or the newest when omitted
+    guarantees:
+      - idempotent
+  - name: installPackFromDirectory
+    description: >-
+      Published write: install a pack from a directory on disk. Forwarded to the extension
+      orchestrator.
+    signature: 'installPackFromDirectory(sourceDir: string, origin?: string): InstalledPack'
+    returns: InstalledPack
+    params:
+      - name: sourceDir
+        type: string
+        description: The directory holding the pack
+      - name: origin
+        type: string
+        description: Where it came from, for the record
+    effect: write
+  - name: uninstallPack
+    description: >-
+      Published write: remove an installed pack, answering whether there was one. Forwarded to the
+      extension orchestrator.
+    signature: 'uninstallPack(name: string, version?: string): boolean'
+    returns: boolean
+    params:
+      - name: name
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: A specific version, or every version when omitted
+    effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T12:24:36.777Z'
+updatedAt: '2026-09-23T12:55:34.678Z'
