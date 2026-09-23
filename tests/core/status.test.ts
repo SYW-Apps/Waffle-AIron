@@ -233,7 +233,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const report = getStatusReport();
+      const report = getStatusReport().text;
       // Proof (revert): removing the method-listing loop in getStatusReport
       // makes this assertion fail because the method line is never printed.
       expect(report).toContain('method execute -> src/execute.ts');
@@ -392,7 +392,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const report = getStatusReport();
+      const report = getStatusReport().text;
       // 20 (L2) + 30 (L3) + 30 (L4) = 80%; the 20% source-file credit is
       // withheld because the method's own file does not exist even though
       // the implementation's own sourcePath does.
@@ -474,7 +474,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const report = getStatusReport();
+      const report = getStatusReport().text;
       // Proof (revert): restoring the old unconditional "(No source path)"
       // suffix (whenever impl.sourcePath is absent) makes this assertion fail.
       expect(report).not.toContain('(No source path)');
@@ -540,8 +540,8 @@ updatedAt: '2026-06-10T22:00:00Z'
     try {
       const throughTheModule = getStatusReport();
       const throughThePortal = corePortal.getStatusReport();
-      expect(throughTheModule).toContain('[Subsystem] sub-a');
-      expect(throughThePortal).toBe(throughTheModule);
+      expect(throughTheModule.text).toContain('[Subsystem] sub-a');
+      expect(throughThePortal).toEqual(throughTheModule);
     } finally {
       proj.cleanup();
     }
@@ -778,7 +778,7 @@ describe('the report renders once and the caller decides how it looks', () => {
       // Byte equality, not containment: the decor seam defaults every role to
       // identity, so a report asked for plainly must be indistinguishable from
       // the report this renderer produced when it had no roles at all.
-      expect(getStatusReport()).toBe(PLAIN_FIXTURE_REPORT);
+      expect(getStatusReport().text).toBe(PLAIN_FIXTURE_REPORT);
     } finally {
       proj.cleanup();
     }
@@ -796,7 +796,7 @@ describe('the report renders once and the caller decides how it looks', () => {
         present: (text: string) => text,
         missing: (text: string) => text,
       };
-      expect(getStatusReport({}, identity)).toBe(PLAIN_FIXTURE_REPORT);
+      expect(getStatusReport({}, identity).text).toBe(PLAIN_FIXTURE_REPORT);
     } finally {
       proj.cleanup();
     }
@@ -813,7 +813,7 @@ describe('the report renders once and the caller decides how it looks', () => {
         draft: text => `«d:${text}»`,
         present: text => `«p:${text}»`,
         missing: text => `«m:${text}»`,
-      });
+      }).text;
 
       // The system's own name is the one thing marked `emphasis`, its label is
       // the `system` layer, and the percentage arrives with its number.
@@ -935,5 +935,108 @@ describe('wairon status keeps the colours it has always had', () => {
       logSpy.mockRestore();
       proj.cleanup();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The fact beside the text.
+//
+// `report` used to answer ONE string carrying three different outcomes: a
+// dashboard, a list of files that would not parse, and "there is no system
+// here". The only way to tell them apart was to match the prose, and no caller
+// did — so `wairon status` printed a parse failure to stdout under a heading
+// and exited 0, and a script reading a broken tree read it as healthy.
+//
+// The report now says THAT it failed and the presenter decides what that is
+// worth: the terminal spends an exit code on it, the MCP tool shows the text
+// and carries on. Neither failure carries the `wairon init` hint — the same
+// report goes to an agent that cannot run it.
+// ---------------------------------------------------------------------------
+
+/** The sentence the report answers when there is no L0 system, in one place. */
+const NO_SYSTEM_SENTENCE = 'L0 System specification (system.yaml) is missing.';
+
+/** A minimal L0 so the parse-failure case is reached on its own merits. */
+const MINIMAL_SYSTEM = `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`;
+
+describe('the report says whether it could be produced at all', () => {
+  it('marks a tree with an unparseable spec file failed, and names what would not parse', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', MINIMAL_SYSTEM);
+    fs.writeFileSync(
+      path.join(proj.tempDir, '.wai', 'specs', 'components', 'broken.yaml'),
+      'id: broken\nname: [unclosed\n',
+    );
+
+    proj.activate();
+    try {
+      const report = getStatusReport();
+      // Proof (revert): answering the explanation as a bare string again makes
+      // `failed` undefined here — which is exactly how `wairon status` came to
+      // exit 0 over a tree it could not read.
+      expect(report.failed).toBe(true);
+      expect(report.text).toContain('Failed to parse specification files:');
+      expect(report.text).toContain('broken.yaml');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('marks a tree with no L0 system failed, in the words it has always used', () => {
+    const proj = createTempProject();
+
+    proj.activate();
+    try {
+      const report = getStatusReport();
+      expect(report.failed).toBe(true);
+      // Byte equality, not containment: the command recognises THIS failure by
+      // its sentence to decide whether to add the `wairon init` hint, so the
+      // sentence is a contract between the two files, not prose.
+      expect(report.text).toBe(NO_SYSTEM_SENTENCE);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('keeps the `wairon init` hint out of the report — that advice is the terminal\'s', () => {
+    const proj = createTempProject();
+    proj.activate();
+    try {
+      // sdd_get_status hands this same text to an agent inside a subproject
+      // session, which has no terminal to run it in.
+      expect(getStatusReport().text).not.toContain('wairon init');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('marks a report it could produce not failed, and leaves its bytes alone', () => {
+    const proj = createDecorFixture();
+    try {
+      const report = getStatusReport();
+      expect(report.failed).toBe(false);
+      expect(report.text).toBe(PLAIN_FIXTURE_REPORT);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('pins the command\'s prose match to the sentence the report actually returns', () => {
+    // One prose match survives, in the CLI: which failure this is decides
+    // whether ` Run `wairon init` first.` is appended. The report cannot say
+    // which — it says only that it failed — so the two spellings are pinned
+    // here. Changing core's sentence without changing the command's copy would
+    // silently stop the hint from ever appearing, and nothing else would notice.
+    const source = fs.readFileSync(
+      path.join(REPO_ROOT_STATUS, 'src/commands/status.ts'),
+      'utf8',
+    );
+    expect(source).toContain(`const NO_SYSTEM_SPEC = '${NO_SYSTEM_SENTENCE}';`);
   });
 });

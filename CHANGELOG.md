@@ -48,7 +48,9 @@ status` now supplies chalk through those roles and does nothing else: it
 refuses outside a project, asks `cli_core_adapter` for the report, prints a
 heading and the report, asks for the verdict and prints it. **The coloured
 output is unchanged** — captured under `FORCE_COLOR=1` before and after, 90,872
-bytes over 915 lines, byte-identical.
+bytes over 915 lines, byte-identical. What the collapse *did* change, and what
+this entry did not say when it was written, is the command's two refusals: it
+stopped exiting non-zero over a tree it could not read. That is the next entry.
 
 Naming roles instead of colours is what makes one renderer safe for both
 readers: `src/core/status.ts` imports no `chalk` and never learns what a
@@ -57,6 +59,34 @@ past its adapter — it was importing `../core/specs.js` for the tree and
 `../core/index.js` for the verdict, the tenth instance of the sdd_cli→sdd_core
 crossing; `cli_core_adapter` forwards `getStatusReport` and `approvalVerdict`
 like every other core call. Six `validate --ci` warnings close with it.
+
+### `wairon status` exits non-zero again over a tree it cannot read
+
+Collapsing the dashboard onto the shared renderer (above) cost the command its
+two `process.exit(1)` paths. `getStatusReport` answered ONE string carrying
+three different outcomes — a completeness map, a list of spec files that would
+not parse, and "there is no L0 system here" — so the only way to tell a refusal
+from a report was to match the prose, and nothing did. Both refusals became
+report body on **stdout**, under an *Architecture Status Dashboard* heading,
+with **exit 0**: a script running `wairon status` over a broken tree read it as
+healthy. No test in the suite covered either path.
+
+The fix is in the contract, not the caller. `report` now answers a
+**`StatusReport`** — `{ text, failed }` — the same two-part shape the approval
+verdict already uses, so a presenter decides what to DO from a fact rather than
+by recognising a sentence. `wairon status` prints the explanation as an error on
+**stderr** and exits 1, appending ``Run `wairon init` first.`` when the failure
+is the missing system spec; that hint stays in the CLI, because `sdd_get_status`
+hands the same explanation to an agent with no terminal to run it in.
+`sdd_get_status` takes `.text` and shows it whether or not the tree loaded — a
+client asking after status most needs to hear that it will not load.
+
+The report's own bytes did not move: all three `text` values are what the
+function returned before, and the healthy dashboard under `FORCE_COLOR=1` is
+byte-identical. Three e2e tests now spawn the built CLI over an unparseable
+tree, over a tree with no `system.yaml`, and over a healthy one, and read the
+exit code — the one thing no test that imports source can see, because it would
+take `process.exit` with it.
 
 ### The core Portal publishes its contract, not sixteen whole modules
 

@@ -396,5 +396,10 @@ export type { SyncResult } from './context.js';
 // is the whole of what the terminal dashboard now does. It is a vocabulary of
 // ROLES, not colours, so the renderer behind this never learns what a terminal
 // is — which is the only reason one renderer can serve both readers.
+//
+// `StatusReport` rides it for the opposite reason: the report answers a FACT
+// beside the text — whether the tree could be read at all — and a presenter
+// that cannot see that fact has to recognise the prose instead. `wairon status`
+// did not, so it exited 0 over a tree that would not parse.
 export { getStatusReport } from './status.js';
-export type { StatusDecor, StatusOptions } from './status.js';
+export type { StatusDecor, StatusOptions, StatusReport } from './status.js';

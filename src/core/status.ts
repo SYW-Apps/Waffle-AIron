@@ -28,6 +28,31 @@ import { implementationSourceFiles } from '../models/specs.js';
 import { pathExists, fromProjectRoot } from '../utils/fs.js';
 
 /**
+ * The completeness report, and whether it could be produced at all. Two parts
+ * rather than one string, for the same reason the approval verdict has two: a
+ * caller decides what to DO from the fact, never by matching the prose. A
+ * terminal exits non-zero on a tree it could not read; an MCP client shows the
+ * text and carries on. Neither should have to recognise a sentence to tell
+ * those apart — and for as long as this was one string, the terminal did not
+ * try: `wairon status` answered 0 over a tree that would not parse.
+ */
+export interface StatusReport {
+  /**
+   * The report to show. On failure this is the explanation — each file that
+   * would not parse and what was wrong with it, or that no system
+   * specification exists — because a tree that will not load is exactly when
+   * somebody is asking after its status.
+   */
+  text: string;
+  /**
+   * Whether the tree could be reported on at all: false for a normal report,
+   * true when a spec file would not parse or there is no L0 system. A script
+   * running `wairon status` over a broken tree must not read it as healthy.
+   */
+  failed: boolean;
+}
+
+/**
  * How much of the tree a status report should cover. Both fields are optional
  * and both narrow rather than widen: absent means the whole project,
  * recursively.
@@ -106,7 +131,7 @@ function fillDecor(decor?: StatusDecor): FilledDecor {
   };
 }
 
-export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor): string {
+export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor): StatusReport {
   const mark = fillDecor(decor);
 
   // Step 1: load the tree, following chained subprojects as far as the options allow
@@ -116,20 +141,24 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   const loaderErrors = getLoaderIssues();
 
   // Step 2/3: a tree that will not load is precisely when somebody asks after
-  // its status, so name each failure rather than refusing to answer.
+  // its status, so name each failure rather than refusing to answer — and say
+  // plainly that the report FAILED, because answering without that fact is how
+  // a script came to read a tree that would not parse as a healthy one.
   if (loaderErrors.length > 0) {
     let errText = 'Failed to parse specification files:\n';
     for (const issue of loaderErrors) {
       const prefix = issue.specId ? mark.structure(`[${issue.specId}] `) : '';
       errText += `${prefix}[${issue.code}] ${issue.message}\n`;
     }
-    return errText;
+    return { text: errText, failed: true };
   }
 
   // Step 4/5: a missing L0 is a different state from a tree that failed to
-  // parse, and reads differently to whoever is looking.
+  // parse, and reads differently to whoever is looking. The sentence stops
+  // here: `wairon init` is advice only a terminal can give, and the MCP client
+  // reading the same report cannot run it.
   if (!system) {
-    return 'L0 System specification (system.yaml) is missing.';
+    return { text: 'L0 System specification (system.yaml) is missing.', failed: true };
   }
 
   // Step 6: read the subsystems, components, interfaces and implementations
@@ -275,7 +304,8 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
     }
   }
 
-  // Step 8: answer as text, so a terminal, an MCP client and a test all read
-  // the same account rather than three renderings that can drift apart.
-  return output;
+  // Step 8: answer the report as text, not failed, so a terminal, an MCP
+  // client and a test all read the same account rather than three renderings
+  // that can drift apart.
+  return { text: output, failed: false };
 }

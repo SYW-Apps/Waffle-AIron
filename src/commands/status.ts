@@ -51,6 +51,36 @@ const TERMINAL_DECOR: StatusDecor = {
 };
 
 /**
+ * The one failure a person at a terminal can act on in the next second, and
+ * the advice that goes with it. Neither is in the report: `sdd_get_status`
+ * hands the same explanation to an agent that cannot run `wairon init`, so
+ * the suggestion belongs to the command, not to sdd_core.
+ *
+ * Recognising WHICH failure this is by its sentence is the last prose match
+ * left here — the report says THAT it failed, never which way — so the two
+ * spellings are pinned together by a test rather than by hope.
+ */
+const NO_SYSTEM_SPEC = 'L0 System specification (system.yaml) is missing.';
+const INIT_HINT = ' Run `wairon init` first.';
+
+/**
+ * A tree that will not load, said the way this command has always said it:
+ * on stderr, one line per failure, and a non-zero exit.
+ *
+ * The exit code is the whole point. A script running `wairon status` over a
+ * broken tree sees nothing else, and for one release it saw 0 — the report
+ * had become a string carrying three different outcomes, so the only way to
+ * tell a failure from a dashboard was to read the prose, and nothing did.
+ */
+function refuseUnreadableTree(explanation: string): never {
+  const lines = withoutTrailingNewline(explanation).split('\n');
+  const last = lines.length - 1;
+  if (lines[last] === NO_SYSTEM_SPEC) lines[last] += INIT_HINT;
+  for (const line of lines) logger.error(line);
+  process.exit(1);
+}
+
+/**
  * The report already ends each line; `console.log` would add a second one.
  * Printing through `console.log` rather than writing to the stream is what
  * keeps the dashboard testable at all.
@@ -68,17 +98,24 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
   // terminal's colours as roles.
   const report = getStatusReport(options, TERMINAL_DECOR);
 
-  // Step 3: print a heading and the report beneath it.
+  // Step 3: decide whether the tree could be reported on at all.
+  if (report.failed) {
+    // Step 4: print the explanation as an error and exit non-zero, naming
+    // `wairon init` when there is no system specification.
+    refuseUnreadableTree(report.text);
+  }
+
+  // Step 5: print a heading and the report beneath it.
   logger.header('Architecture Status Dashboard');
   logger.blank();
-  console.log(withoutTrailingNewline(report));
+  console.log(withoutTrailingNewline(report.text));
 
-  // Step 4: ask what the lock says about this tree. The same verdict the MCP
+  // Step 6: ask what the lock says about this tree. The same verdict the MCP
   // report carries — the CLI is where a human actually looks, so it must not be
   // the surface that stays quiet.
   const lock = approvalVerdict();
 
-  // Step 5: print the verdict, choosing severity from whether it reports drift
+  // Step 7: print the verdict, choosing severity from whether it reports drift
   // rather than by matching its wording — which is why the verdict answers a
   // fact beside the sentence.
   if (lock.text.trim()) {
@@ -88,5 +125,5 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
   }
 
   logger.blank();
-  // Step 6: done.
+  // Step 8: done.
 }

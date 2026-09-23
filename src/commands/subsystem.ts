@@ -43,7 +43,7 @@ import {
   getStatusReport as coreGetStatusReport,
   approvalVerdict as coreApprovalVerdict,
 } from '../core/index.js';
-import type { ApprovalVerdict, GenerateOptions, GenerateSummary, StatusDecor, StatusOptions, SyncResult } from '../core/index.js';
+import type { ApprovalVerdict, GenerateOptions, GenerateSummary, StatusDecor, StatusOptions, StatusReport, SyncResult } from '../core/index.js';
 import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
 import type { ForeignFieldRepair, SpecialistRetirement, TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
 import type {
@@ -252,6 +252,10 @@ export function resolveExpectedOutputPaths(
 // wrote through were the first five), and it closes the way it always does:
 // here, on the one component whose whole job is to cross into sdd_core.
 //
+// The report crosses as a `StatusReport`, not a string: the terminal has to
+// know whether the tree could be read at all, and it is the CLI — not sdd_core
+// — that turns that fact into an exit code.
+//
 // There is no `findDomain` on the contract and none is wanted: a lookup is one
 // `resolveDomains().find(…)` at the call site, and publishing a second read
 // that answers a subset of the first is how two spellings of "which domains are
@@ -380,7 +384,7 @@ export function derivedDocPaths(): string[] {
 // `wairon status` also reached straight into ../core/specs.js for the tree — the
 // tenth time that crossing has been found, and it closes the way it always does:
 // here, on the one component whose whole job is to cross into sdd_core.
-export function getStatusReport(options: StatusOptions, decor?: StatusDecor): string {
+export function getStatusReport(options: StatusOptions, decor?: StatusDecor): StatusReport {
   return coreGetStatusReport(options, decor);
 }
 
