@@ -125,8 +125,72 @@ methods:
     signature: 'defaultPackSelections(): PackSelection[]'
     returns: PackSelection[]
     params: []
+  - name: packStoreDir
+    description: >-
+      Where installed packs live on this machine. Published because `wairon packs` reports the path
+      to a person who may need to look in it; the orchestrator fronts the store adapter so no
+      consumer has to know the layout.
+    signature: 'packStoreDir(): string'
+    returns: string
+    params: []
+    guarantees:
+      - idempotent
+  - name: listInstalledPacks
+    description: >-
+      Every pack installed on this machine, whatever any project has declared. The distinction
+      matters: installed and applied are different states, and a pack present but undeclared is
+      exactly what `wairon doctor` reports.
+    signature: 'listInstalledPacks(): InstalledPack[]'
+    returns: InstalledPack[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveInstalledPack
+    description: >-
+      One installed pack by name, at a given version or the newest when none is named, or nothing
+      when it is not installed.
+    signature: 'resolveInstalledPack(name: string, version?: string): InstalledPack | null'
+    returns: InstalledPack | null
+    params:
+      - name: name
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: A specific version, or the newest when omitted
+    guarantees:
+      - idempotent
+  - name: installPackFromDirectory
+    description: >-
+      Install a pack from a directory on disk, recording where it came from so a later listing can
+      say whether it was fetched or made locally.
+    signature: 'installPackFromDirectory(sourceDir: string, origin?: string): InstalledPack'
+    returns: InstalledPack
+    params:
+      - name: sourceDir
+        type: string
+        description: The directory holding the pack
+      - name: origin
+        type: string
+        description: Where it came from, for the record
+    effect: write
+  - name: uninstallPack
+    description: >-
+      Remove an installed pack, answering whether there was one to remove. Removing from the machine
+      store never edits a project: a project that declared the pack still declares it, and that
+      mismatch is something to report rather than silently repair.
+    signature: 'uninstallPack(name: string, version?: string): boolean'
+    returns: boolean
+    params:
+      - name: name
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: A specific version, or every version when omitted
+    effect: write
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-09-17T20:37:15.068Z'
+updatedAt: '2026-09-23T12:55:09.836Z'

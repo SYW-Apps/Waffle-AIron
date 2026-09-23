@@ -33,10 +33,6 @@ methods:
     description: Calls loadComponentSpec on core portal
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
     returns: ComponentSpec | null
-  - name: loadComponentSpecs
-    description: Calls loadComponentSpecs on core portal
-    signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
   - name: saveInterfaceSpec
     description: Calls saveInterfaceSpec on core portal
     signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
@@ -45,18 +41,10 @@ methods:
     description: Calls loadInterfaceSpec on core portal
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
     returns: InterfaceSpec | null
-  - name: loadInterfaceSpecs
-    description: Calls loadInterfaceSpecs on core portal
-    signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
   - name: saveImplementationSpec
     description: Calls saveImplementationSpec on core portal
     signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
     returns: void
-  - name: loadImplementationSpecs
-    description: Calls loadImplementationSpecs on core portal
-    signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
   - name: createChainedSubsystem
     description: >-
       Calls createChainedSubsystem on core portal to scaffold the child subproject and wire the
@@ -203,6 +191,27 @@ methods:
       - name: id
         type: string
         description: The type id
+  - name: getStatusReport
+    description: >-
+      How complete the spec tree is, as text, for the MCP status tool. Forwarded to the core portal
+      — previously reached out of a CLI command file, which put sdd_mcp behind sdd_cli.
+    signature: 'getStatusReport(options: StatusOptions): string'
+    returns: string
+    params:
+      - name: options
+        type: StatusOptions
+        description: How much of the tree to cover
+    guarantees:
+      - idempotent
+  - name: approvalVerdict
+    description: >-
+      What the lock says about the tree, for the MCP status tool — so an agent asking after status
+      learns the tree has drifted rather than being told nothing. Forwarded to the core portal.
+    signature: 'approvalVerdict(): ApprovalVerdict'
+    returns: ApprovalVerdict
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T14:28:21.161Z'
+updatedAt: '2026-09-23T12:24:40.768Z'

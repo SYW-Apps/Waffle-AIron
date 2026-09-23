@@ -1854,12 +1854,6 @@ lint:
         checkSkillFreshness and exportSddSkills — skill freshness and the active targets. Track D
         designs that area and routes doctor through a modelled adapter.
     - code: UNDECLARED_DEPENDENCY
-      at: src/commands/doctor.ts -> src/core/lockfile.ts
-      reason: >-
-        doctor reaches core directly for work no spec models yet: describeApprover, the approver
-        text on the lock report. Track D designs that area and routes doctor through a modelled
-        adapter.
-    - code: UNDECLARED_DEPENDENCY
       at: src/commands/doctor.ts -> src/core/extensions.ts
       reason: >-
         doctor reaches core directly for work no spec models yet: diagnoseProjectPacks and
@@ -1867,4 +1861,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-23T11:12:35.664Z'
+updatedAt: '2026-09-23T13:37:26.918Z'

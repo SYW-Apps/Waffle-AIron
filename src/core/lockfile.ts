@@ -2,6 +2,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { aiDir, aiDirAt } from '../utils/fs.js';
 import type { StateId } from './statehash.js';
+// The approver is shared vocabulary, not this store's private shape: a command
+// that only wants to RENDER one must not have to reach a Store to do it.
+import type { ApproverIdentity } from '../models/lock.js';
 
 // ---------------------------------------------------------------------------
 // Lock Registry (sdd_host / sdd_core)
@@ -15,25 +18,6 @@ import type { StateId } from './statehash.js';
 // aiDir(), so it targets whichever project is bound in the current
 // (request-scoped) context.
 // ---------------------------------------------------------------------------
-
-/**
- * Who approved, and HOW that identity was established — because the two are
- * different claims. A `hosted` identity was authenticated by the instance that
- * issued the caller's credential; `git` and `os` are self-declared, read from
- * the machine's own config. Recording the source keeps the record honest about
- * how much it proves instead of leaving a bare name to imply more than it can.
- *
- * The actual proof is the commit that introduces this file — signed commits or
- * a protected branch establish it; no field inside the file ever can.
- */
-export interface ApproverIdentity {
-  /** Git author line, hosted subject id, or OS username — per `source`. */
-  id: string;
-  /** Display name when the source carries one separately from the id. */
-  name?: string;
-  /** 'legacy' is a record written before this field existed: an opaque string. */
-  source: 'git' | 'hosted' | 'os' | 'legacy';
-}
 
 export interface LockRecord {
   /** The exact spec-tree state this lock validated. */
@@ -89,12 +73,6 @@ export function normalizeApprover(value: unknown): ApproverIdentity {
     return { id: v.id, ...(v.name ? { name: v.name } : {}), source };
   }
   return { id: typeof value === 'string' && value ? value : 'unknown', source: 'legacy' };
-}
-
-/** One line for a human: the approver plus how much that name is worth. */
-export function describeApprover(who: ApproverIdentity): string {
-  const label = who.name ? `${who.name} (${who.id})` : who.id;
-  return who.source === 'hosted' ? `${label} [authenticated]` : label;
 }
 
 /** Read the current project's lock record, or null when absent/unreadable. */

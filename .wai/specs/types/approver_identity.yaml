@@ -22,7 +22,18 @@ fields:
     type: string
     description: '"git" | "hosted" | "os" | "legacy" — how the identity was established.'
     optional: false
-methods: []
-sourcePath: src/core/lockfile.ts
+methods:
+  - name: label
+    signature: 'label(): string'
+    returns: string
+    description: >-
+      The identity as a line to show: the name beside the id when both are known, and marked as
+      authenticated when the instance that issued the credential vouched for it. A self-declared
+      identity read off a machine and one an instance authenticated are different claims, and a
+      reader has to be able to tell them apart at a glance. Pure projection over the type's own
+      fields, so it lives here rather than on the store that happens to persist it — which is also
+      what lets a CLI command render an approver without reaching into sdd_core's lock store.
+    symbol: describeApprover
+sourcePath: src/models/lock.ts
 createdAt: '2026-09-12T00:19:23.550Z'
-updatedAt: '2026-09-19T11:07:05.335Z'
+updatedAt: '2026-09-23T12:57:14.938Z'

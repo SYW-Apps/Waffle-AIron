@@ -17,7 +17,17 @@ import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
-import { getStatusReport } from '../commands/status.js';
+// mcp_core_adapter's completeness report (icore_portal getStatusReport) and the
+// lock's verdict on the tree (icore_portal approvalVerdict), taken from the core
+// barrel like every other core call this file makes. The report used to come out
+// of src/commands/status.ts — sdd_mcp reaching into an sdd_cli command file for a
+// report that was never CLI-specific — and the verdict used to live there as a
+// PRIVATE helper, which is why this server could only ever answer with silence
+// about a tree that had drifted from its approval. Both are taken BY IDENTITY,
+// unrenamed: each is a method this file's mcp_core_adapter contract names, and a
+// renamed binding would leave the narrative's call site pointing at a symbol the
+// contract does not carry.
+import { getStatusReport, approvalVerdict } from '../core/index.js';
 import type { ProjectConfig } from '../models/project.js';
 // mcp_core_adapter's project configuration read (icore_portal loadProjectConfig,
 // null when the project has none) and the renames (icore_portal
@@ -2258,16 +2268,26 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     ({ subsystem, recursive }) => {
       try {
         // STATIC import, not a lazy require: the server is bundled (tsup), and a
-        // runtime `require('../commands/status.js')` resolves against the bundle's
-        // directory — where that file does not exist. It worked from the CLI
-        // (whose bundle happened to contain it) and failed on the HOSTED data
-        // plane, where sdd_get_status answered "Cannot find module" instead of
-        // the dashboard.
+        // runtime require of a relative path resolves against the BUNDLE's
+        // directory — where the module does not exist. This report was lazily
+        // required from src/commands/status.ts once: it worked from the CLI
+        // (whose bundle happened to contain that file) and failed on the HOSTED
+        // data plane, where sdd_get_status answered "Cannot find module" instead
+        // of the dashboard. The source module moved; the reason it must be bound
+        // at the top of the file did not.
         const report = getStatusReport({
           subsystem,
           recursive: recursive ?? true,
         });
-        return text(`${statusFamilyContext()}${report}`);
+        // Step 2: which trees this answer spans.
+        const family = statusFamilyContext();
+        // Step 3: what the lock says about the tree as it stands. An agent
+        // reading this tool is deciding whether it may write code against these
+        // specs, so a tree that has drifted from its approval is the single most
+        // important thing this answer can carry — and silence reads exactly like
+        // being current, which is what this tool used to answer.
+        const verdict = approvalVerdict();
+        return text(`${family}${report}${verdict.text}`);
       } catch (e) {
         return errText(String(e));
       }

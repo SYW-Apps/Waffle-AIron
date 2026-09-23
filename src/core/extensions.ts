@@ -13,6 +13,14 @@ import { RulesConfigSchema, type PackSelection } from '../models/project.js';
 // The store is a sibling adapter; both modules reach each other only inside
 // function bodies, so the import cycle never runs at module-init time.
 import { resolveInstalledPack, packStoreDir, listInstalledPacks, computePackDigest } from './packstore.js';
+// iextension_orchestrator's two pack-store WRITES, bound the same way its three
+// read siblings above are: named from the store, so the orchestrator's method
+// and the store's function stay the same function. They are published as well
+// as bound, because installing and removing a pack is an effect and the core
+// portal must be able to forward it without reaching an Adapter itself —
+// `wairon packs add|remove` comes through here, never through ./packstore.js.
+import { installPackFromDirectory, uninstallPack } from './packstore.js';
+export { installPackFromDirectory, uninstallPack };
 
 // ---------------------------------------------------------------------------
 // Extension packs — wairon's plugin surface.

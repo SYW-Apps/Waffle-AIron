@@ -31,7 +31,10 @@ import { backfillChainedSubprojectConfigs } from '../core/provision.js';
 import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
 import { findLegacySpecFiles } from '../core/specs.js';
 import { computeGateStateId, validateSddTree } from './validate.js';
-import { describeApprover } from '../core/lockfile.js';
+// The approver's own projection, taken from the models rather than from
+// sdd_core's lock store: rendering a name is the value object's behaviour, and
+// a command has no business reaching a Store to get it.
+import { describeApprover } from '../models/lock.js';
 import { diagnoseProjectPacks, pinInstalledPacksAsSelections } from '../core/extensions.js';
 import { claudeMcpConfigPath } from './mcp.js';
 

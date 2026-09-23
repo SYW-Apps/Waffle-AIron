@@ -87,6 +87,18 @@ methods:
         description: The subsystem specs whose projectPath mounts a chained child
     guarantees:
       - idempotent
+  - name: verdict
+    description: >-
+      What the lock says about the tree as it stands, as a line to show plus whether it is drift.
+      Silent for a project that was never approved. Published rather than kept private because every
+      presenter needs the same answer — the terminal, the MCP status tool and anything else — and
+      two renderings of "has this drifted" that can disagree is precisely the thing a lock exists to
+      prevent.
+    signature: 'verdict(): ApprovalVerdict'
+    returns: ApprovalVerdict
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-20T15:19:05.602Z'
-updatedAt: '2026-09-20T15:24:31.161Z'
+updatedAt: '2026-09-23T12:24:08.161Z'

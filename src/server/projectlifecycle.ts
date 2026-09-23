@@ -10,7 +10,7 @@ import {
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedLock, hostedApprover } from './admin.js';
-import type { ApproverIdentity } from '../core/lockfile.js';
+import type { ApproverIdentity } from '../models/lock.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
 import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds } from './authorization.js';

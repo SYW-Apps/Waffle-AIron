@@ -2,55 +2,57 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { runStatus, getStatusReport } from '../../src/commands/status.js';
+import { runStatus } from '../../src/commands/status.js';
+import { getStatusReport } from '../../src/core/status.js';
+import * as corePortal from '../../src/core/index.js';
+
+function createTempProject() {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-status-test-'));
+  const originalCwd = process.cwd();
+
+  // Create .wai directory and project.yaml
+  const waiDir = path.join(tempDir, '.wai');
+  fs.mkdirSync(waiDir);
+  fs.writeFileSync(path.join(waiDir, 'project.yaml'), JSON.stringify({
+    schemaVersion: '1.0.0',
+    name: 'test-project',
+    targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+  }));
+
+  const specsDir = path.join(waiDir, 'specs');
+  fs.mkdirSync(specsDir);
+  fs.mkdirSync(path.join(specsDir, 'subsystems'));
+  fs.mkdirSync(path.join(specsDir, 'components'));
+  fs.mkdirSync(path.join(specsDir, 'interfaces'));
+  fs.mkdirSync(path.join(specsDir, 'implementations'));
+
+  return {
+    tempDir,
+    originalCwd,
+    writeSpec: (type: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation', name: string, content: string) => {
+      let filePath = '';
+      if (type === 'system') {
+        filePath = path.join(specsDir, '.index.yaml');
+      } else {
+        filePath = path.join(specsDir, `${type}s`, `${name}.yaml`);
+      }
+      fs.writeFileSync(filePath, content);
+    },
+    activate: () => {
+      vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
+    },
+    cleanup: () => {
+      vi.restoreAllMocks();
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (e) {
+        // ignore cleanup
+      }
+    }
+  };
+}
 
 describe('runStatus completeness dashboard', () => {
-  function createTempProject() {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-status-test-'));
-    const originalCwd = process.cwd();
-
-    // Create .wai directory and project.yaml
-    const waiDir = path.join(tempDir, '.wai');
-    fs.mkdirSync(waiDir);
-    fs.writeFileSync(path.join(waiDir, 'project.yaml'), JSON.stringify({
-      schemaVersion: '1.0.0',
-      name: 'test-project',
-      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
-    }));
-
-    const specsDir = path.join(waiDir, 'specs');
-    fs.mkdirSync(specsDir);
-    fs.mkdirSync(path.join(specsDir, 'subsystems'));
-    fs.mkdirSync(path.join(specsDir, 'components'));
-    fs.mkdirSync(path.join(specsDir, 'interfaces'));
-    fs.mkdirSync(path.join(specsDir, 'implementations'));
-
-    return {
-      tempDir,
-      originalCwd,
-      writeSpec: (type: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation', name: string, content: string) => {
-        let filePath = '';
-        if (type === 'system') {
-          filePath = path.join(specsDir, '.index.yaml');
-        } else {
-          filePath = path.join(specsDir, `${type}s`, `${name}.yaml`);
-        }
-        fs.writeFileSync(filePath, content);
-      },
-      activate: () => {
-        vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
-      },
-      cleanup: () => {
-        vi.restoreAllMocks();
-        try {
-          fs.rmSync(tempDir, { recursive: true, force: true });
-        } catch (e) {
-          // ignore cleanup
-        }
-      }
-    };
-  }
-
   it('prints completeness tree correctly for complete and draft nodes', async () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', `
@@ -480,5 +482,85 @@ updatedAt: '2026-06-10T22:00:00Z'
     } finally {
       proj.cleanup();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Where the report is published from. The content of the report is covered
+// above; what is asserted here is the BOUNDARY — which module owns it, and who
+// is allowed to reach it from where. A type-check cannot make any of these:
+// every spelling below compiles either way, so only the import SITE says which
+// side of the subsystem line a caller is on.
+// ---------------------------------------------------------------------------
+describe('the completeness report is published from sdd_core', () => {
+  const REPO_ROOT = path.resolve(__dirname, '..', '..');
+
+  it('is the same function on the core portal as in the module — an identity re-export, not a wrapper', () => {
+    // core_portal getStatusReport forwards 1:1 to project_status report, and
+    // the forward is the re-export itself. A wrapper would still return the
+    // right string while breaking the N:1 identity that CALL_STEP_UNREALIZED
+    // exempts, so equality of OUTPUT is not the assertion that matters here.
+    expect(corePortal.getStatusReport).toBe(getStatusReport);
+  });
+
+  it('answers through the portal what the module answers directly', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: A component
+subsystem: sub-a
+componentType: Orchestrator
+status: complete
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const throughTheModule = getStatusReport();
+      const throughThePortal = corePortal.getStatusReport();
+      expect(throughTheModule).toContain('[Subsystem] sub-a');
+      expect(throughThePortal).toBe(throughTheModule);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('is how the MCP server reaches it — sdd_mcp does not import the sdd_cli command', () => {
+    // sdd_mcp importing ../commands/status.js put one subsystem behind another
+    // for its own status tool. The ban is on the SPECIFIER in any spelling —
+    // static import, lazy require or dynamic import — not on one import line.
+    // The approval verdict now rides the same import, for the same reason: it
+    // was a private helper in the CLI command, so the MCP tool had nothing to
+    // say about a tree that had drifted.
+    const source = fs.readFileSync(path.join(REPO_ROOT, 'src/mcp/server.ts'), 'utf8');
+    expect(source).not.toContain('commands/status.js');
+    expect(source).toMatch(/import \{ getStatusReport[^}]*\} from '\.\.\/core\/index\.js';/);
+  });
+
+  it('leaves the CLI command with no second declaration of StatusOptions', () => {
+    // Two declarations of the same option shape is how the terminal and the
+    // MCP server come to disagree about what recursion depth means.
+    const source = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/status.ts'), 'utf8');
+    expect(source).not.toContain('interface StatusOptions');
+    expect(source).toContain("import type { StatusOptions } from '../core/status.js';");
   });
 });

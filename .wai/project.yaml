@@ -390,22 +390,13 @@ rules:
             at: 'loadComponentSpec'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
-            at: 'loadComponentSpecs'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
             at: 'loadImplementationSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'loadImplementationSpecs'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
             at: 'loadTypeSpec'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
             at: 'loadInterfaceSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'loadInterfaceSpecs'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
             at: 'loadSubsystemSpec'
@@ -1054,15 +1045,15 @@ rules:
             covers:
               - 'mcp_core_adapter.composeAgentBrief'
               - 'mcp_core_adapter.createChainedSubsystem'
-              - 'mcp_core_adapter.loadComponentSpecs'
               - 'mcp_core_adapter.loadImplementationSpec'
-              - 'mcp_core_adapter.loadInterfaceSpecs'
               - 'mcp_core_adapter.loadProjectConfig'
               - 'mcp_core_adapter.loadSubsystemSpecs'
               - 'mcp_core_adapter.loadSystemSpec'
               - 'mcp_core_adapter.loadTypeSpec'
               - 'mcp_core_adapter.saveImplementationSpec'
               - 'mcp_core_adapter.saveInterfaceSpec'
+              - 'mcp_core_adapter.loadInterfaceSpec'
+              - 'mcp_core_adapter.loadComponentSpec'
               - 'mcp_core_adapter.saveSubsystemSpec'
               - 'mcp_core_adapter.saveSystemSpec'
               - 'mcp_core_adapter.saveTypeSpec'
@@ -1096,14 +1087,14 @@ rules:
             covers:
               - 'mcp_core_adapter.composeAgentBrief'
               - 'mcp_core_adapter.createChainedSubsystem'
-              - 'mcp_core_adapter.loadComponentSpecs'
               - 'mcp_core_adapter.loadImplementationSpec'
-              - 'mcp_core_adapter.loadInterfaceSpecs'
               - 'mcp_core_adapter.loadProjectConfig'
               - 'mcp_core_adapter.loadSubsystemSpecs'
               - 'mcp_core_adapter.loadTypeSpec'
               - 'mcp_core_adapter.saveImplementationSpec'
               - 'mcp_core_adapter.saveInterfaceSpec'
+              - 'mcp_core_adapter.loadInterfaceSpec'
+              - 'mcp_core_adapter.loadComponentSpec'
               - 'mcp_core_adapter.saveSubsystemSpec'
               - 'mcp_core_adapter.saveSystemSpec'
               - 'mcp_core_adapter.saveTypeSpec'

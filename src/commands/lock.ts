@@ -16,9 +16,12 @@ import {
   loadSubsystemSpecs,
   loadSystemSpec,
   readLockState,
-  describeApprover,
   type LockRecord,
 } from '../core/index.js';
+// The approver's own projection, taken from the models rather than from the
+// core barrel: rendering a name is the value object's behaviour, not a Portal
+// method, and it travels with the type.
+import { describeApprover } from '../models/lock.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { computeGateStateId, type ValidationResult } from '../core/validation.js';
 

@@ -4,35 +4,165 @@ import type { Domain } from '../models/domain.js';
 import * as projector from './domain_projector.js';
 import * as curator from './domain_curator.js';
 
-export * from './detection.js';
-export * from './templates.js';
-export * from './validation.js';
-export * from './extensions.js';
-export * from './variants.js';
+// ---------------------------------------------------------------------------
+// What this Portal publishes — and nothing else.
+//
+// This file used to carry seventeen `export * from` lines. Sixteen of them
+// republished modules realizing 39 components: 240 runtime names on a surface
+// whose contract names 97 methods, and 438 on `@wairon/cli`, which re-exports
+// this file. A star export says nothing about which of a module's functions
+// the Portal means, so every consumer could reach any member and bypass the
+// facade — which is why the sdd_cli→sdd_core crossings the comments below
+// record kept reappearing one symbol at a time. Each one was closed by naming a
+// single forward; the hole they kept coming through was this block.
+//
+// Every forward here is an IDENTITY re-export — `export { foo } from './bar.js'`
+// — never a wrapper. The Portal method and the component's function are the
+// same function, which is what lets the conformance analysis resolve the call
+// by identity instead of reading a second implementation.
+//
+// The rule barrel is the one star that stays: ./rules/index.js realizes no
+// component. It is sdd_validator's shared vocabulary — rule types, the context
+// builder, the registry — imported through here by 93 modules, with no contract
+// for it to overshoot.
 export * from './rules/index.js';
-export * from './specs.js';
-export * from './provision.js';
-export * from './diagram.js';
-export * from './lockfile.js';
-export * from './statehash.js';
-export * from './agent_resolver.js';
-export * from './skills.js';
-export * from './surfaces.js';
-export * from './openapi.js';
-export * from './packstore.js';
-export * from './treetransfer.js';
 
-// Two components legitimately expose a `loadProjectExtensions`: sdd_core's real
-// pack loader (extensions.js) and sdd_skills' thin client adapter onto it
-// (skills.js, named for the contract method it realizes). On the PUBLIC core
-// surface the loader is the one callers mean — stated explicitly so the star
-// exports above are not ambiguous.
-export { loadProjectExtensions } from './extensions.js';
+// The spec tree itself (icore_portal loadSystemSpec … readLockState) — 1:1
+// forwards to the core orchestrator, which owns every read and every write of
+// a spec file. Published because sdd_cli, sdd_mcp and sdd_host all author
+// through this Portal and none of them may import ../core/specs.js.
+export {
+  loadSystemSpec,
+  saveSystemSpec,
+  loadSubsystemSpecs,
+  loadSubsystemSpec,
+  saveSubsystemSpec,
+  deleteSubsystemSpec,
+  loadComponentSpecs,
+  loadComponentSpec,
+  saveComponentSpec,
+  deleteComponentSpec,
+  loadInterfaceSpecs,
+  loadInterfaceSpec,
+  saveInterfaceSpec,
+  deleteInterfaceSpec,
+  loadImplementationSpecs,
+  loadImplementationSpec,
+  saveImplementationSpec,
+  deleteImplementationSpec,
+  loadTypeSpecs,
+  loadTypeSpec,
+  saveTypeSpec,
+  deleteTypeSpec,
+  updateSpec,
+  moveMethods,
+  dryRunSerializeSpecs,
+  specPathsInScope,
+  consumedContractInputs,
+  buildProjectGraph,
+  resolveChainingParent,
+  resolveSubprojectForNamespace,
+  computeStateIdAt,
+  readLockState,
+} from './specs.js';
+export type { LockStatus } from './specs.js';
 
-// Live delegation-brief composition (icore_portal composeAgentBrief) — a pure
-// 1:1 forward to the agent resolver, stated explicitly for the anchored
-// conformance check.
-export { composeAgentBrief } from './agent_resolver.js';
+// Project provisioning and the chained-subproject wiring (icore_portal
+// provisionProject … internalizeSubsystem) — 1:1 forwards to the core
+// orchestrator. `wairon init` and `wairon subsystem` are sdd_cli commands and
+// the scaffolding is sdd_core's, so the boundary is crossed here.
+export {
+  provisionProject,
+  ensureProjectInitialized,
+  listDirectChainedSubprojects,
+  createChainedSubsystem,
+  moveSubsystemProject,
+  externalizeSubsystem,
+  internalizeSubsystem,
+} from './provision.js';
+
+// The tree's identity (icore_portal computeStateId) — what a lock is taken
+// against, and what a staleness check compares to.
+export { computeStateId } from './statehash.js';
+export type { StateId } from './statehash.js';
+
+// The lock record itself (icore_portal readLockRecord / writeLockRecord).
+// `wairon lock` writes one and `wairon status` reads one; neither is allowed to
+// know where the file lives.
+export { readLockRecord, writeLockRecord } from './lockfile.js';
+export type { LockRecord } from './lockfile.js';
+
+// The rendered architecture diagram (icore_portal renderDiagram) — one string
+// for `wairon diagram`, which is the only thing that command needs from the
+// four core modules it used to build its artifacts out of.
+export { renderDiagram } from './diagram.js';
+
+// THE REST OF THE DIAGRAM SURFACE — NOT contract methods, and reported as a
+// gap rather than papered over.
+//
+// `icore_portal` names `renderDiagram`; `iarchitecture_diagrams` names `render`
+// and `buildGraphModel`. These seven are none of those, and no spec anywhere
+// names them — yet `wairon diagram --all|--sequence|--subsystem` and
+// `wairon host demo` are built out of them, and cli_core_adapter dependsOn
+// core_portal alone, so this barrel is the only route that does not make
+// sdd_cli import an sdd_core module.
+//
+// They are published here under their own heading, separate from the contract
+// above, so the gap is legible instead of hiding inside a star export: the
+// honest fix is to model them (on this contract or on a diagram portal of their
+// own), not to keep the star that concealed that they were never designed. The
+// barrel-surface test carries this list as a shrink-only ratchet — a new name
+// cannot join it without a spec.
+export {
+  generateComponentDiagram,
+  generateSequenceDiagram,
+  generateDiagramSet,
+  diagramSetIndex,
+  toMarkdown,
+  loadSpecGraph,
+  buildCanvasDataModel,
+} from './diagram.js';
+
+// Domain detection (icore_portal detectDomainCandidates) — the detector is its
+// own component, published by identity rather than wrapped. It proposes
+// candidates and never registers one; the registration lives with the curator
+// below.
+export { detectDomainCandidates } from './detection.js';
+
+// The extension packs governing this project (icore_portal
+// loadProjectExtensions … uninstallPack) — 1:1 forwards to the extension
+// orchestrator, which fronts the pack store so no consumer has to know its
+// layout. Two components legitimately expose a `loadProjectExtensions`:
+// sdd_core's real pack loader (extensions.js) and sdd_skills' thin client
+// adapter onto it (skills.js, named for the contract method it realizes). On
+// the PUBLIC core surface the loader is the one callers mean.
+//
+// The two WRITES are why the forwards come from the orchestrator and not from
+// ../core/packstore.js: installing and removing a pack is an effect, and a
+// Portal that reached the store adapter for it would be taking the persistence
+// shortcut the standard names by code. `wairon packs` goes through here.
+export { loadProjectExtensions, defaultPackSelections } from './extensions.js';
+
+// The machine's pack store (icore_portal packStoreDir … uninstallPack) —
+// forwarded from the module that HOLDS them, which is the store adapter. The
+// extension orchestrator binds the same five functions (see ./extensions.js)
+// and publishes the two writes, so this Portal method, the orchestrator's
+// method and the store's function are one function under three names — the
+// identity the forward is worth having.
+export {
+  packStoreDir,
+  listInstalledPacks,
+  resolveInstalledPack,
+  installPackFromDirectory,
+  uninstallPack,
+} from './packstore.js';
+export type { InstalledPack } from './packstore.js';
+
+// The agent topology as the spec tree and the registry describe it (icore_portal
+// composeAgentBrief / resolveAgentTopology / loadRegistry) — 1:1 forwards to the
+// agent resolver. The brief is composed against the CURRENT tree on every call,
+// which is why nothing here caches it.
+export { composeAgentBrief, resolveAgentTopology, loadRegistry } from './agent_resolver.js';
 
 // Agent FILE generation (icore_portal generateAll / resolveExpectedOutputPaths)
 // — pure 1:1 forwards to the agent file generator, published here because
@@ -56,6 +186,7 @@ export type { GenerateOptions, GenerateSummary } from '../exporters/generate.js'
 // forwards to the tree transfer orchestrator, stated explicitly for the same
 // anchored conformance check.
 export { exportSpecTree, importSpecTree } from './treetransfer.js';
+export type { TreeExportResult, TreeImportOptions, TreeImportResult } from './treetransfer.js';
 
 // The agent topology (icore_portal resolveDomains / addDomain / removeDomain) —
 // 1:1 forwards to the two Orchestrators above the topology Repository, which is
@@ -95,6 +226,7 @@ export function removeDomain(id: string): void {
 // forwards to the core orchestrator, stated explicitly for the same anchored
 // conformance check.
 export { renameComponent, renameMethod } from './provision.js';
+export type { ComponentRename, MethodRename } from './provision.js';
 export { retireSpecialists } from './stereotype-migration.js';
 export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migration.js';
 export { repairForeignStepFields } from './narrative-repair.js';
@@ -127,8 +259,15 @@ export {
   // was importing it straight from ./approval.js - the same reach past this
   // Portal that movedChildren and diffSize were making.
   settledSpecPaths,
+  // What the lock says about the tree as it stands. Republished by IDENTITY,
+  // like getStatusReport below: the Portal method and the Orchestrator function
+  // are the same function. Every presenter needs the same answer — the terminal,
+  // the MCP status tool, anything else — and `wairon status` used to keep a
+  // private copy of it, which is how sdd_get_status came to say nothing at all
+  // about a tree that had drifted from its approval.
+  approvalVerdict,
 } from './approval.js';
-export type { ApprovalDiff, ChildPinDrift } from './approval.js';
+export type { ApprovalDiff, ChildPinDrift, ApprovalVerdict } from './approval.js';
 // Who to record as the approver on a machine with no wairon account — resolved
 // through the portal like everything else sdd_cli reaches in sdd_core.
 export { localApprover } from './approver.js';
@@ -241,3 +380,15 @@ export { readStampVersion } from './stamp.js';
 // rather than merely unpublished.
 export { syncContextFiles, hasContext, derivedDocPaths } from './context.js';
 export type { SyncResult } from './context.js';
+
+// The completeness report (icore_portal getStatusReport) — a 1:1 forward to the
+// project status, republished by identity rather than wrapped, so the Portal
+// method and the Orchestrator function are the same function.
+//
+// sdd_mcp was importing this out of ../commands/status.js: the MCP server
+// reaching into an sdd_cli command file for a report that was never
+// CLI-specific, which put sdd_mcp behind sdd_cli for its own status tool. The
+// terminal, the MCP server and two test files all want the same report; this is
+// where they get it.
+export { getStatusReport } from './status.js';
+export type { StatusOptions } from './status.js';

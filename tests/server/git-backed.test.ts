@@ -24,7 +24,7 @@ import { hostCore } from '../../src/server/adapters.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
 import { seedChainedMount } from './helpers.js';
 import type { HostConfig } from '../../src/server/types.js';
-import type { ApproverIdentity } from '../../src/core/lockfile.js';
+import type { ApproverIdentity } from '../../src/models/lock.js';
 
 /** A hosted approver, the way the lifecycle orchestrator resolves one from an
  *  authenticated principal. */

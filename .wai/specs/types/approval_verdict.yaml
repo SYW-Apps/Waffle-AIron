@@ -1,0 +1,25 @@
+kind: value-object
+id: approval_verdict
+name: ApprovalVerdict
+description: >-
+  What the lock says about the tree as it stands: the sentence to show, and whether it is drift. The
+  two are separate because the caller picks its own severity from the FACT rather than by matching
+  the sentence's wording — a terminal warns in yellow, an MCP client may do nothing at all, and
+  neither should have to parse prose to decide.
+fields:
+  - name: text
+    type: string
+    description: >-
+      The verdict as a line to show, empty for a project that was never approved — absence of an
+      approval is the normal state of a tree still being designed, not news.
+    optional: false
+  - name: drifted
+    type: boolean
+    description: >-
+      Whether the tree has actually moved since it was approved, including a chained child whose pin
+      moved even when none of this project's own specs did.
+    optional: false
+methods: []
+sourcePath: src/core/approval.ts
+createdAt: '2026-09-23T12:24:05.267Z'
+updatedAt: '2026-09-23T12:24:05.496Z'

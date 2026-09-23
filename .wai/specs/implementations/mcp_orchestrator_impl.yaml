@@ -77,37 +77,6 @@ methods:
         targetComponent: mcp_validator_adapter
         targetMethod: validateSddTree
     symbol: sdd_validate_tree
-  - name: getStatus
-    narrative:
-      - stepNumber: 1
-        description: Load subsystem specs for the dashboard
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpecs
-      - stepNumber: 2
-        description: Load component specs for the dashboard
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadComponentSpecs
-      - stepNumber: 3
-        description: Load interface specs for the dashboard
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadInterfaceSpecs
-      - stepNumber: 4
-        description: Load implementation specs for the dashboard
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadImplementationSpecs
-      - stepNumber: 5
-        description: >-
-          Compose the hierarchical completeness report, opened by the project's family context: when
-          this root is a chained subproject within the request's reach (resolveChainingParent), the
-          mount it is known by and its parent project's name; and the chained subprojects this root
-          mounts, each with its path — so a connected agent learns in-band where it sits, instead of
-          from a startup log it never sees
-        type: local
-    symbol: sdd_get_status
   - name: addSubsystem
     narrative:
       - stepNumber: 1
@@ -571,7 +540,43 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: loadProjectConfig
     symbol: getProjectConfig
+  - name: getStatus
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask core for the completeness report through the adapter. Statically bound, never a lazy
+          require: this server is bundled, and a runtime require of a command file resolves against
+          the bundle's own directory — which worked from the CLI, whose bundle happened to contain
+          that file, and answered "Cannot find module" on the hosted data plane instead of the
+          report
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: getStatusReport
+      - stepNumber: 2
+        description: >-
+          Read the subsystems that mount a chained subproject, so the context line can name which
+          trees this answer spans — a report that silently covered three projects would read exactly
+          like one that covered this one
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: >-
+          Ask what the lock says about the tree as it stands. An agent reading this tool is deciding
+          whether it may write code against these specs, so a tree that has drifted from its
+          approval is the single most important thing this answer can carry — and silence would read
+          exactly like being current
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: approvalVerdict
+      - stepNumber: 4
+        description: >-
+          Answer it behind the tool-family context line, so a client reading one tool's output knows
+          which family of tools it belongs to
+        type: return
+        outcome: status
+    symbol: sdd_get_status
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-20T14:32:17.761Z'
+updatedAt: '2026-09-23T12:24:47.572Z'

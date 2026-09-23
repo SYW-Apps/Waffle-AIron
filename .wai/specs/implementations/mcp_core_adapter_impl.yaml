@@ -57,14 +57,6 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadComponentSpec
-  - name: loadComponentSpecs
-    narrative:
-      - stepNumber: 1
-        description: Call loadComponentSpecs on core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: loadComponentSpecs
-    symbol: loadComponentSpec
   - name: saveInterfaceSpec
     narrative:
       - stepNumber: 1
@@ -79,14 +71,6 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadInterfaceSpec
-  - name: loadInterfaceSpecs
-    narrative:
-      - stepNumber: 1
-        description: Call loadInterfaceSpecs on core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: loadInterfaceSpecs
-    symbol: loadInterfaceSpec
   - name: saveImplementationSpec
     narrative:
       - stepNumber: 1
@@ -94,14 +78,6 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: saveImplementationSpec
-  - name: loadImplementationSpecs
-    narrative:
-      - stepNumber: 1
-        description: Call loadImplementationSpecs on core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: loadImplementationSpecs
-    symbol: loadImplementationSpec
   - name: createChainedSubsystem
     narrative:
       - stepNumber: 1
@@ -221,7 +197,21 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: deleteTypeSpec
+  - name: getStatusReport
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: getStatusReport
+  - name: approvalVerdict
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: approvalVerdict
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T21:23:36.040Z'
+updatedAt: '2026-09-23T12:24:41.923Z'

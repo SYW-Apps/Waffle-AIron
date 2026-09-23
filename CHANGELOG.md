@@ -23,8 +23,212 @@ relying on a merge rule that was silently wrong (item 10), and a scripted call
 to a create tool that carries an unknown key inside a method, a param or a
 narrative step is now refused where it used to be stripped (item 13). Nine
 `sdd_*` tools now declare an `outputSchema`, which changes what a conforming MCP
-client expects back from them (item 14). Nothing here is purely additive, so
-`[minor]` would understate it.
+client expects back from them (item 14). The library surface narrows too:
+`@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
+(item 4). Nothing here is purely additive, so `[minor]` would understate it.
+
+### The core Portal publishes its contract, not sixteen whole modules
+
+`src/core/index.ts` realizes `core_portal`, and it carried seventeen
+`export * from` lines. Sixteen of them republished modules realizing **39
+components**, so the barrel offered **240 runtime names** where `icore_portal`
+declares 97 — and `@wairon/cli`, which re-exports it, offered 438. Every
+consumer could therefore reach any member and bypass the facade, which is why
+the same sdd_cli→sdd_core crossing kept being found one symbol at a time:
+`movedChildren`, `diffSize` and `settledSpecPaths` out of `./approval.js`, the
+four modules `wairon diagram` built its artifacts out of, the generator `wairon
+generate` wrote through, the two domain modules `wairon domains` read, the two
+derivations `wairon execution` resolved, the guide and the stamp, the context
+documents, the status report. Each was closed by naming one forward. The hole
+they kept coming through was the star block, and this is that.
+
+The sixteen are gone. Every method `icore_portal` declares is now a stated
+**identity re-export** — `export { foo } from './bar.js';`, never a wrapper —
+grouped by source module: the spec tree and the lock state from `./specs.js`,
+provisioning and the chained-subproject wiring from `./provision.js`, the tree
+identity from `./statehash.js`, the lock record from `./lockfile.js`, the
+rendered diagram from `./diagram.js`, domain detection from `./detection.js`,
+the extension packs from `./extensions.js`, the machine pack store from
+`./packstore.js`, the agent topology from `./agent_resolver.js`. Identity
+matters here: the Portal method and the component's function are the same
+function, which is what lets the conformance analysis resolve each call by
+identity instead of reading a second implementation.
+
+The barrel now publishes **113 runtime names** — the 97 contract methods, three
+methods that travel with a type it publishes (`diffSize`, `declaredPackNames`,
+`declaredProfileIds`), the six-name shared rule vocabulary, and the seven
+diagram functions reported below — plus fourteen shared value shapes as
+`export type`. The package entry drops from **438 names to 318**: `@wairon/cli`
+stops exporting 120 names, none of them on any contract. Nothing was added.
+
+**One star export stays**: `./rules/index.js` realizes no component. It is
+sdd_validator's shared rule vocabulary — rule types, the context builder, the
+registry — imported through here by 93 modules, with no contract to overshoot.
+
+**Seven diagram functions are reported rather than quietly forwarded.**
+`generateComponentDiagram`, `generateSequenceDiagram`, `generateDiagramSet`,
+`diagramSetIndex`, `toMarkdown`, `loadSpecGraph` and `buildCanvasDataModel` back
+`wairon diagram --all|--sequence|--subsystem` and `wairon host demo`, and no
+spec names them: `icore_portal` names `renderDiagram`, `iarchitecture_diagrams`
+names `render` and `buildGraphModel`. `cli_core_adapter` dependsOn `core_portal`
+alone, so this barrel is the only route that does not make sdd_cli import an
+sdd_core module. They are published under their own heading, separate from the
+contract, and the barrel-surface test carries them as a **shrink-only ratchet** —
+the list fails the moment one of them becomes a contract method, and a new name
+cannot join it. The same goes for `activeTargetTypes`, which the public library
+disambiguates against the models' pure `activeTargetTypes(config)`: `src/index.ts`
+now names `./core/skills.js` rather than taking it off a surface that never
+claimed it.
+
+**`approver_identity` moved to `src/models/lock.ts`.** `ApproverIdentity` and
+its `label` projection (`describeApprover`) lived inside `src/core/lockfile.ts`,
+the lock STORE. That placement was load-bearing in the wrong direction: a Portal
+may not depend on a Store, so while the function sat beside the lock file's I/O
+there was no legal route for a CLI command to render an approver at all — which
+is why `wairon doctor` was reaching into `../core/lockfile.js` for it. It is
+shared vocabulary and a pure projection over the value's own fields, so it lives
+with the models; `src/core/lockfile.ts` imports the type back, and
+`src/commands/lock.ts` and `src/commands/doctor.ts` take the function from the
+models. The rendering is byte-identical — the same four outcomes, including the
+`[authenticated]` marker that separates an identity an instance vouched for from
+one read off a machine.
+
+**`extension_orchestrator` publishes its two pack-store writes.**
+`installPackFromDirectory` and `uninstallPack` are now bound in
+`src/core/extensions.ts` the same way its three read siblings already were, so
+the orchestrator declares what its contract promises. The core portal forwards
+all five from the module that holds them.
+
+**The embedding API is named on the library entry instead of inherited.**
+`validateSddTree`, `loadExtensions`, `loadExtensionPacks`, `emptyExtensions`,
+`globalPacksDir` and `discoverPacks` are what `docs/extending-wairon.md` and
+`examples/wrapper/wrapper.js` document as the way a wrapper product compiles
+its own doctrine into a gate binary — and `iextension_orchestrator.load`
+records that contract in the spec tree (`invokedBy: external`, "no internal
+call chain exists by design"). None of them is on `icore_portal`, so all six
+reached the package only because the barrel starred the module that held them,
+and narrowing the Portal would have taken a documented API down with it.
+`src/index.ts` names them itself now, from the modules that hold them. Removing
+one from there is a deliberate break; losing one because a Portal stopped
+starring a module is not, and this is the difference the split makes visible.
+
+Twenty-one tests, in two tiers, because a barrel is exactly the thing a type
+checker proves EXISTS and cannot prove is still a facade. `tests/core/core-barrel-surface.test.ts`
+reads `icore_portal` and compares — it freezes no list of names, so it keeps
+holding as the contract changes — and refuses any name on the surface that no
+spec accounts for, asserts every contract method is carried, asserts exactly one
+star export survives, ratchets the seven reported functions, checks the fourteen
+declared types, resolves what each of the five consumer files outside
+`src/core` takes off the barrel, and holds the embedding API — every name the
+doc lists, and every call the shipped wrapper example makes. Reverting
+`src/core/index.ts` alone fails seven of its sixteen; reverting `src/index.ts`
+alone fails the two embedding ones; reverting `src/core/lockfile.ts` alone fails
+the one that says the approver projection has left the store.
+`tests/e2e/core-surface.test.ts`
+drives `sdd_get_status`, `wairon status` and `wairon lock-check` against the
+REAL built server and CLI, before an approval and after one — removing either the
+`getStatusReport` or the `approvalVerdict` forward from the barrel fails it.
+
+### The approval verdict is a published read, and `sdd_get_status` carries it again
+
+The previous entry dropped one line from the status report: the approval
+verdict — how many specs have moved since a human last locked the tree, who
+approved it and when. It was dropped for a real reason (`project_status`
+depends on the spec loader alone, and keeping the verdict inside the report
+raised two `UNDECLARED_DEPENDENCY` warnings) and it named the fix. This is the
+fix.
+
+The loss was not cosmetic. `sdd_get_status` is what an AI agent reads to decide
+whether it may write code against these specs, and a tree that has drifted from
+its approval is the single most important thing that answer can carry — while
+silence reads exactly like being current.
+
+The verdict is now **`approval_comparison.verdict`**, published rather than kept
+private, because every presenter needs the same answer and two renderings of
+"has this drifted" that can disagree is precisely what a lock exists to prevent.
+It lives in `src/core/approval.ts` as `approvalVerdict()`, beside the digests and
+the child pins it already reads, and answers an `ApprovalVerdict` — the sentence
+to show and whether it IS drift, kept apart so a caller picks its severity from
+the fact rather than by matching prose. `core_portal` republishes it by identity
+(the Portal method and the Orchestrator function are the same function),
+`mcp_core_adapter` forwards it, and `sdd_get_status` composes it beside the
+completeness report. `wairon status` calls the same function instead of the
+private copy it used to keep — that copy is what let the terminal name the specs
+that had moved while the MCP tool said nothing at all.
+
+**`src/core/status.ts` is untouched**, which is the whole point. The verdict is
+composed *beside* the report by each presenter, never folded into it: putting it
+back inside would hand the approval dependency to every reader of the report,
+which is the coupling the last entry correctly refused. The function was MOVED,
+not rewritten, so all three of its outcomes survive byte for byte — silence when
+nothing was ever approved, the "predates per-spec approval" wording when the
+record is a coarse lock, and otherwise the verdict naming the specs that moved.
+`wairon status` output on this repository is byte-identical before and after.
+
+Both core symbols are imported into `src/mcp/server.ts` **unrenamed**: each is a
+method the file's `mcp_core_adapter` contract names, so a renamed binding would
+leave the narrative's call site pointing at a symbol the contract does not carry.
+
+Ten tests, because the gap that let this be dropped silently was a test gap: the
+status tests all ran on temp projects with **no lock record**, where the verdict
+was empty whatever the code did. Five in `tests/core/approval.test.ts` drive the
+function itself — never approved, approved and unchanged, approved and then
+edited (it must NAME the spec, not assert staleness), a record written before
+per-spec approval, and an unreadable one — plus the Portal identity assertion.
+Five more in `tests/mcp/status-verdict.test.ts` drive the real MCP server over an
+in-memory transport: the tool reports the drift, confirms an unmoved tree, stays
+quiet about a project nobody approved, composes the verdict beside a report that
+does not contain it, and — the guard against the coupling creeping back —
+`src/core/status.ts` names no approval module. Reverting `src/mcp/server.ts`
+alone fails three of the five; reverting the core change as well fails eight.
+
+### The completeness report belongs to core, not to a CLI command
+
+`src/mcp/server.ts` imported `getStatusReport` out of `../commands/status.js` —
+sdd_mcp reaching into an sdd_cli command file, which put one subsystem behind
+another for its own status tool. The same crossing the context documents and the
+AI guide closed, in the other direction.
+
+The report was never CLI-specific: the terminal, the MCP server and two test
+files all want it. It lives in **`src/core/status.ts`** now, realizing
+`project_status` — a `read` Orchestrator over the spec loader, because asking
+after a project's state must never change it. `core_portal` publishes
+`getStatusReport` by identity rather than wrapped, and `StatusOptions` beside it;
+`mcp_core_adapter` forwards 1:1 and the MCP server binds it at the top of the
+file, where it has to be — the report was once lazily required from the command
+module, which resolved against the CLI bundle and answered "Cannot find module"
+on the hosted data plane instead of the dashboard.
+
+`runStatus` — the coloured terminal dashboard — stays in sdd_cli, and takes the
+option shape from core rather than declaring a second copy of it. Two
+declarations of the same options is how the terminal and the MCP server come to
+disagree about what recursion depth means.
+
+**One behaviour was dropped here, and is restored in the entry above.**
+`getStatusReport` used to append the approval verdict — which specs have moved
+since a human last locked the tree. That line reads the lock record and the
+approval digests, and `project_status` depends on the spec loader alone: keeping
+it raises two `UNDECLARED_DEPENDENCY` warnings, `project_status` →
+`approval_comparison` and `project_status` → `lock_store`, measured rather than
+assumed. Dropping it from the report was right; leaving `sdd_get_status` silent
+about a drifted tree was not, and the wave said so. The second of the two fixes
+named here is the one taken — the verdict modelled as its own published read on
+`approval_comparison`, composed beside the report rather than inside it — so
+`getStatusReport` still knows nothing about the approval, and both `wairon
+status` and `sdd_get_status` show the verdict.
+
+Four tests in `tests/core/status.test.ts`, covering the boundary rather than the
+report's content, which was already covered. Two of them are the same assertion
+at different strengths on purpose: the portal answers the same string as the
+module, AND it is the same function — a wrapper passes the first and fails the
+second, and the identity is what `CALL_STEP_UNREALIZED`'s N:1 forwarding exempts.
+The other two are source scans, the one assertion a type-check cannot make:
+`src/mcp/server.ts` names no `commands/status.js` in any spelling — static
+import, lazy require or dynamic — and `src/commands/status.ts` declares no
+`StatusOptions` of its own. All four fail when their half of the change is
+reverted; the same-string test holds against a wrapper, which is exactly the gap
+the identity test fills. The temp-project helper moved to module scope so the new
+block reuses it instead of growing a second copy.
 
 ### The context documents, and who is allowed to write them
 
@@ -3016,7 +3220,20 @@ same as not knowing whether the next one an author writes will.
    otherwise report `UNKNOWN_PROFILE`, which fails `validate --ci`.**
 4. **Embedding wairon as a library:** `LoadedExtensions` gained required
    `instructions` and `selectionFailures` fields. Use the exported
-   `emptyExtensions()` rather than hand-constructing one.
+   `emptyExtensions()` rather than hand-constructing one. **And the surface
+   narrowed**: `src/core/index.ts` stopped republishing sixteen whole modules, so
+   `@wairon/cli` exports 318 runtime names where it exported 438. The 120 that
+   went were never on `icore_portal` — internals of the spec loader and the spec
+   validator, the skills exporter, the surfaces and OpenAPI codecs, the template
+   and variant registries, the pack manifest schemas, the tree-archive staging —
+   reachable only because a star export republished the module that held them. **Everything
+   `docs/extending-wairon.md` documents still works**: `validateSddTree`,
+   `loadExtensions`, `loadExtensionPacks`, `emptyExtensions`, `globalPacksDir`,
+   `discoverPacks`, `loadProjectExtensions`, `setProjectRoot`, `SDD_RULES`,
+   `composeRuleSequence` and the spec loaders/savers are named on the library
+   entry rather than inherited, and `examples/wrapper/wrapper.js` runs unchanged.
+   If you depended on one of the 120, open an issue naming the call — it can be
+   modelled onto a contract, which is the only way a surface stays a surface.
 5. **Chained subprojects: re-run `validate --ci` in each child.** It can newly
    fail, by design — it was waving these through:
    - a reference into the parent now carries the parent's verdict; fix the edge
