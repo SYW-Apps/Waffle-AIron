@@ -708,7 +708,13 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     if (ts.isInterfaceDeclaration(node)) {
       recordDeclaredShape(node.name.text, node.members, (node.heritageClauses?.length ?? 0) > 0);
     } else if (ts.isClassDeclaration(node) && node.name) {
-      recordDeclaredShape(node.name.text, node.members, (node.heritageClauses?.length ?? 0) > 0);
+      // Only an `extends` clause brings members with it. A class that
+      // `implements` an interface still lists its whole shape, so reading that
+      // as inherited would exempt it from the presence checks for nothing.
+      const extendsOther = (node.heritageClauses ?? []).some(
+        (clause) => clause.token === ts.SyntaxKind.ExtendsKeyword,
+      );
+      recordDeclaredShape(node.name.text, node.members, extendsOther);
     } else if (ts.isTypeAliasDeclaration(node)) {
       if (ts.isTypeLiteralNode(node.type)) recordDeclaredShape(node.name.text, node.type.members, false);
       else {
