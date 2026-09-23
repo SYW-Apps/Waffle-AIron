@@ -87,26 +87,63 @@ rules:
     # (STALE_UNCLAIMED_ENTRY). A file that is neither claimed nor listed is
     # reported the day it appears, which is the whole point.
     unclaimed:
+      # Constants — the supported aliases, the version, the default target list.
+      # 16 importers and nothing to call.
       - src/config/defaults.ts
       - src/core/demo-seed.ts
       - src/core/narrative-labels.ts
+      # Stereotype predicates shared by three doctrine rules that are themselves
+      # modelled. Rule-family vocabulary.
       - src/core/rules/doctrine/stereotype-terms.ts
+      # Assertion selectors shared by three extension rules that are themselves
+      # modelled. Rule-family vocabulary.
       - src/core/rules/extension/declared-assertion.ts
+      # The rule barrel and the context every rule reads. 97 importers, and every rule
+      # it assembles IS modelled — 93 of the 100 rule files carry a spec. Modelling the
+      # assembly point as well would put a component between each rule and its own
+      # registration. See read-model.ts, which is its substrate and unclaimed for the
+      # same reason.
       - src/core/rules/index.ts
+      # Graph helpers shared by three narrative cycle rules that are themselves
+      # modelled. Rule-family vocabulary.
       - src/core/rules/narrative/completed-step-graph.ts
+      # The analysis substrate rules/index.ts builds the context from: the code index,
+      # the import graph, the realization and ownership indexes. Exactly one importer,
+      # and that importer is the barrel above. Claiming this without claiming the
+      # barrel would leave all seven builders with no modelled caller.
       - src/core/rules/read-model.ts
+      # Invariant reference parsing shared by two wiring rules that are themselves
+      # modelled. Rule-family vocabulary.
       - src/core/rules/wiring/invariant-ref.ts
+      # The package entry. It re-exports the core Portal and names the documented
+      # embedding API that no contract covers — validateSddTree, loadExtensions and
+      # their neighbours, which docs/extending-wairon.md documents and
+      # examples/wrapper/wrapper.js calls. A library surface, not a component.
       - src/index.ts
+      # sdd_host's HTTP error shapes, 39 importers inside that subsystem. Vocabulary
+      # for replies, not a component that answers anything.
       - src/server/errors.ts
+      # Request and response plumbing shared by the hosted handlers — reading a body,
+      # writing a status. The handlers are modelled; this is how they speak HTTP.
       - src/server/httpio.ts
       - src/server/migration.ts
       - src/server/realtime.ts
       - src/server/swagger.ts
       - src/server/websocket.ts
+      # Deterministic serialization for hashing. Pure, and the gate identity depends
+      # on it being exactly one implementation rather than a component someone could
+      # reasonably swap.
       - src/utils/canonical-json.ts
+      # A file download helper for `wairon update`. Two importers, wraps one fetch.
       - src/utils/download.ts
+      # The error types every subsystem throws and catches. 39 importers, no state,
+      # no decisions: modelling it would give all 39 a declared edge saying only
+      # "this one throws errors". Same shape as fs.ts below.
       - src/utils/errors.ts
+      # Filename slugging. Pure.
       - src/utils/filenames.ts
+      # An interactive prompt widget. One importer, and it decides nothing about this
+      # system — it asks a person a question.
       - src/utils/filteredCheckbox.ts
       # The shared yaml and fs helpers. The spec file store used to claim both
       # as its own sourcePaths, which was false: it is its own module and these
@@ -119,8 +156,13 @@ rules:
       # was tried and measured - nineteen components then needed a declared
       # edge saying only "this one resolves paths". Same shape as fs.ts above.
       - src/config/paths.ts
+      # Terminal output, 26 importers. A component here would be on the dependency
+      # list of nearly every CLI narrative and would tell a reader nothing.
       - src/utils/logger.ts
+      # Semver comparison. Pure arithmetic over strings.
       - src/utils/version.ts
+      # Parse and serialize, 16 importers. Deliberately NOT the spec file store: it
+      # holds the syntax, the store holds the decisions about files.
       - src/utils/yaml.ts
       # The React SPA under web/. It was outside `sourceRoots` entirely until now,
       # so it was not tracked debt — it was invisible, and could grow without any
