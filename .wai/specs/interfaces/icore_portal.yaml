@@ -853,10 +853,10 @@ methods:
       - idempotent
   - name: getStatusReport
     description: >-
-      Published read: how complete the spec tree is, as text, marked up however the caller asked.
-      Forwarded to the project status.
-    signature: 'getStatusReport(options: StatusOptions, decor?: StatusDecor): string'
-    returns: string
+      Published read: how complete the spec tree is, marked up however the caller asked, and whether
+      it could be reported on at all. Forwarded to the project status.
+    signature: 'getStatusReport(options: StatusOptions, decor?: StatusDecor): StatusReport'
+    returns: StatusReport
     params:
       - name: options
         type: StatusOptions
@@ -950,4 +950,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T14:52:37.940Z'
+updatedAt: '2026-09-23T15:17:58.560Z'

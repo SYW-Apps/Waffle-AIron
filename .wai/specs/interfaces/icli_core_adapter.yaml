@@ -396,11 +396,11 @@ methods:
       - idempotent
   - name: getStatusReport
     description: >-
-      How complete the spec tree is, for `wairon status`, marked up with the terminal's own colours.
-      Forwarded to the core portal — the dashboard used to render this itself, line for line, which
-      is how it and the MCP report came to disagree.
-    signature: 'getStatusReport(options: StatusOptions, decor?: StatusDecor): string'
-    returns: string
+      How complete the spec tree is, for `wairon status`, marked up with the terminal's own colours
+      — and whether it could be reported on, which is what decides the exit code. Forwarded to the
+      core portal.
+    signature: 'getStatusReport(options: StatusOptions, decor?: StatusDecor): StatusReport'
+    returns: StatusReport
     params:
       - name: options
         type: StatusOptions
@@ -421,4 +421,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T14:52:42.142Z'
+updatedAt: '2026-09-23T15:18:00.607Z'

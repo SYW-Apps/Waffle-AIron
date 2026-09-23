@@ -1839,19 +1839,32 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: getStatusReport
       - stepNumber: 3
+        description: Decide whether the tree could be reported on at all
+        type: branch
+        condition: the report came back failed
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Print the explanation as an error and exit non-zero, naming `wairon init` when there is no
+          system specification. A script running this over a tree that will not parse must not read
+          it as healthy, and the exit code is the only part of that a script sees
+        type: return
+        outcome: unreadable
+      - stepNumber: 5
         description: Print a heading and the report beneath it
         type: local
-      - stepNumber: 4
+      - stepNumber: 6
         description: Ask what the lock says about this tree
         type: call
         targetComponent: cli_core_adapter
         targetMethod: approvalVerdict
-      - stepNumber: 5
+      - stepNumber: 7
         description: >-
           Print the verdict, choosing severity from whether it reports drift rather than by matching
           its wording — which is why the verdict answers a fact beside the sentence
         type: local
-      - stepNumber: 6
+      - stepNumber: 8
         description: Done
         type: return
         outcome: printed
@@ -1894,4 +1907,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-23T14:52:56.383Z'
+updatedAt: '2026-09-23T15:18:25.780Z'
