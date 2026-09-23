@@ -19,10 +19,15 @@ import {
   readStampVersion,
   localGuideFilePath,
   reinjectLocalGuides,
+  // Same crossing, same place it closes: rebuilding the derived context
+  // documents and asking where they live is sdd_core work. `CONTEXT_PATHS` is
+  // gone from here for the same reason — the layout of `.wai/context/` is the
+  // store's to state, not a list this command spells out for itself.
+  syncContextFiles,
+  derivedDocPaths,
 } from './subsystem.js';
 import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { backfillChainedSubprojectConfigs } from '../core/provision.js';
-import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
 import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
 import { findLegacySpecFiles } from '../core/specs.js';
 import { computeGateStateId, validateSddTree } from './validate.js';
@@ -224,10 +229,8 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
 
   // ── Generated context files ─────────────────────────────────────────────────
   console.log(chalk.bold(`Generated files ${chalk.gray('(stale = older than installed)')}`));
-  for (const [label, p] of [
-    ['.wai/context/wairon-guide.md', CONTEXT_PATHS.waironGuideMd()],
-    ['.wai/context/domains.md', CONTEXT_PATHS.domainsMd()],
-  ] as const) {
+  for (const p of derivedDocPaths()) {
+    const label = path.relative(getProjectRoot(), p).replace(/\\/g, '/');
     if (!pathExists(p)) {
       line(tally, 'warn', `${label} — not generated yet (run \`wairon generate\`)`);
       continue;

@@ -1,4 +1,4 @@
-import { aiDir, writeFile, writeFileIfChanged, readFileOrNull, pathExists } from '../utils/fs.js';
+import { aiDir, writeFileIfChanged, readFileOrNull, pathExists } from '../utils/fs.js';
 import { GLOBAL_GUIDE_BODY } from '../utils/ai-guide.js';
 import { versionStamp } from './stamp.js';
 // STATIC: the lazy require this replaced was documented as breaking a circular
@@ -23,6 +23,14 @@ import { projectConfigRepository } from '../config/project-config.js';
 //
 // The generated files are rebuilt by syncContextFiles() which is called by
 // `wairon generate` and `wairon init`.
+//
+// The two human-edited documents are READ here and never written. There is
+// deliberately no write path for them and none is wanted: overwriting what
+// somebody wrote about their own system is the one unrecoverable thing this
+// directory could do, and a write function that exists is a write function
+// something eventually calls. `writeProjectContext` and
+// `writeArchitectureContext` were exactly that — exported, callable, and
+// called by nothing for as long as they existed.
 // ---------------------------------------------------------------------------
 
 export function contextDir(...segments: string[]): string {
@@ -45,12 +53,8 @@ export function hasContext(): boolean {
   return pathExists(CONTEXT_PATHS.projectMd());
 }
 
-export function hasArchitectureContext(): boolean {
-  return pathExists(CONTEXT_PATHS.architectureMd());
-}
-
 // ---------------------------------------------------------------------------
-// Raw reads / writes (human-edited files)
+// Raw reads (human-edited files) — read-only by design; see the header note
 // ---------------------------------------------------------------------------
 
 export function readProjectContext(): string | null {
@@ -61,12 +65,31 @@ export function readArchitectureContext(): string | null {
   return readFileOrNull(CONTEXT_PATHS.architectureMd());
 }
 
-export function writeProjectContext(content: string): void {
-  writeFile(CONTEXT_PATHS.projectMd(), content);
+// ---------------------------------------------------------------------------
+// Writes for the two DERIVED files, and where they live
+//
+// Both go through the write-only-if-changed primitive and answer whether the
+// content actually differed, which is what keeps a regenerate free of diffs
+// when no design moved — a file rewritten with identical bytes is still a
+// modified file to git.
+// ---------------------------------------------------------------------------
+
+export function writeDomainsDoc(content: string): boolean {
+  return writeFileIfChanged(CONTEXT_PATHS.domainsMd(), content);
 }
 
-export function writeArchitectureContext(content: string): void {
-  writeFile(CONTEXT_PATHS.architectureMd(), content);
+export function writeGuideDoc(content: string): boolean {
+  return writeFileIfChanged(CONTEXT_PATHS.waironGuideMd(), content);
+}
+
+/**
+ * Where the two DERIVED documents live — `wairon doctor` compares their version
+ * stamps against the running build. The derived pair only: a caller reporting on
+ * generated files has no business being handed the paths of the two a person
+ * wrote, and would report them stale for having no stamp.
+ */
+export function derivedDocPaths(): string[] {
+  return [CONTEXT_PATHS.waironGuideMd(), CONTEXT_PATHS.domainsMd()];
 }
 
 // ---------------------------------------------------------------------------
@@ -219,8 +242,12 @@ export function syncContextFiles(): SyncResult {
   const domainsContent  = renderDomainsDoc();
   const guideContent    = renderWaironGuide();
 
-  const domainsUpdated  = writeFileIfChanged(CONTEXT_PATHS.domainsMd(),     domainsContent);
-  const guideUpdated    = writeFileIfChanged(CONTEXT_PATHS.waironGuideMd(),  guideContent);
+  // Through the store's own writes, not writeFileIfChanged inline: the
+  // write-only-if-changed rule and the path each document lives at are the
+  // store's to state once, and a renderer that reached the primitive directly
+  // would be a second place they could drift.
+  const domainsUpdated  = writeDomainsDoc(domainsContent);
+  const guideUpdated    = writeGuideDoc(guideContent);
 
   return { domainsUpdated, guideUpdated };
 }

@@ -26,6 +26,62 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### The context documents, and who is allowed to write them
+
+`.wai/context/` holds two kinds of document and the code treated them as one.
+`project.md` and `architecture.md` are written by a **person**; `domains.md` and
+`wairon-guide.md` are **derived**. `src/core/context.ts` exported a write for all
+four.
+
+**`writeProjectContext` and `writeArchitectureContext` are deleted, and nothing
+replaces them.** Neither has ever had a caller. They were exported, callable, and
+aimed at the one unrecoverable thing this directory could do — overwriting what
+somebody wrote about their own system — and a write function that exists is a
+write function something eventually calls. The derived pair is written; the human
+pair is only ever read. `hasArchitectureContext` goes with them for the reason
+`hasWaironGuide` did: a published read with no reader is a claim somebody later
+trusts.
+
+The store now names its writes — `writeDomainsDoc` and `writeGuideDoc`, each
+answering whether the content actually differed — and `syncContextFiles` calls
+them instead of reaching `writeFileIfChanged` inline. Where each derived document
+lives, and the write-only-if-changed rule that keeps a regenerate free of diffs,
+are stated once now rather than in two places that could drift.
+
+`wairon init`, `wairon generate` and `wairon doctor` imported
+`../core/context.js` directly — sdd_cli reaching into an sdd_core module. Ninth
+instance of that crossing; the first eight are listed in `src/core/index.ts`, and
+it closes where every one of them did. `core_portal` publishes three operations —
+`syncContextFiles`, `hasContext` and the new `derivedDocPaths` — by identity
+rather than wrapped, and `cli_core_adapter` forwards each 1:1.
+
+**`export * from './context.js'` is gone from `src/core/index.ts`**, the same way
+the `./domains.js` star export went two changes ago. It republished a whole
+module — both renderers, the path table, the directory helper, both human-file
+readers — from a Portal whose contract names three context operations, which says
+nothing about which of them the Portal means and lets every consumer keep
+depending on the member rather than the facade. Three commands were doing exactly
+that.
+
+`wairon doctor`'s reach was the subtler one: it built its staleness list out of
+`CONTEXT_PATHS.waironGuideMd()` and `CONTEXT_PATHS.domainsMd()`, which is the
+module's internal layout of `.wai/context/` spelled out inside a command, and
+would have reported on the wrong pair the day that layout moved. It asks
+`derivedDocPaths()` now. `CONTEXT_PATHS` stays an internal constant of
+`context.ts` and is on no contract.
+
+Twenty-nine tests in `tests/commands/context-boundary.test.ts`. The behavioural
+half proves the derived pair moves only when it has something to say — a second
+refresh answers false for both, writing notes moves the guide alone, changing a
+domain's owned paths moves the domain document alone — that `derivedDocPaths`
+names exactly the files a refresh writes and neither document a person wrote, and
+that a refresh run twice leaves both human-authored files byte-for-byte. Rendering
+is proven pure by moving the clock a year and a half between two calls rather than
+by calling twice in the same millisecond. Twenty-five of the twenty-nine fail when
+the change is reverted; the four that hold either way pin behaviour that was
+already correct — the no-timestamp property, and the guide still rendering when
+the project configuration fails its own schema.
+
 ### The guide wairon writes into another tool's config file, reached through the portal
 
 `wairon init` wrote the AI guides, `wairon generate` refreshed them and `wairon

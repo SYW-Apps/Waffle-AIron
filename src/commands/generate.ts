@@ -14,10 +14,11 @@ import {
   generateAll,
   resolveExpectedOutputPaths,
   reinjectLocalGuides,
+  hasContext,
+  syncContextFiles,
 } from './subsystem.js';
 import { exportSddSkills } from './skills.js';
 import { WAIRON_MANAGED_MARKER } from '../exporters/base.js';
-import { hasContext, syncContextFiles } from '../core/context.js';
 import { getProjectRoot, runWithProjectRoot, pathExists } from '../utils/fs.js';
 import { activeTargetTypes } from '../models/project.js';
 import type { AgentRecord } from '../models/agent.js';

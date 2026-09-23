@@ -17,7 +17,6 @@ export * from './lockfile.js';
 export * from './statehash.js';
 export * from './agent_resolver.js';
 export * from './skills.js';
-export * from './context.js';
 export * from './surfaces.js';
 export * from './openapi.js';
 export * from './packstore.js';
@@ -221,3 +220,24 @@ export {
   reinjectLocalGuides,
 } from '../utils/ai-guide.js';
 export { readStampVersion } from './stamp.js';
+
+// The shared context documents (icore_portal syncContextFiles / hasContext /
+// derivedDocPaths) — 1:1 forwards to the context composer, republished by
+// identity rather than wrapped, so each Portal method and the Orchestrator's
+// function are the same function.
+//
+// This file used to `export * from './context.js'`, republishing a whole
+// module — `contextDir`, `CONTEXT_PATHS`, both renderers and both human-file
+// readers — from a Portal whose contract names three context operations. It is
+// the same thing the `export * from './domains.js'` above it was: a star export
+// says nothing about which of those the Portal means, and it lets a consumer
+// keep depending on the module rather than on the facade. Three commands were
+// doing exactly that, importing ../core/context.js straight out of sdd_cli.
+//
+// Only the derived PAIR is published. There is no write for the two documents a
+// person writes, here or anywhere: nothing in wairon should be able to
+// overwrite what somebody wrote about their own system, and the two functions
+// that could (`writeProjectContext`, `writeArchitectureContext`) are gone
+// rather than merely unpublished.
+export { syncContextFiles, hasContext, derivedDocPaths } from './context.js';
+export type { SyncResult } from './context.js';
