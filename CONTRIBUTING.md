@@ -41,6 +41,18 @@ Most obvious ways to check for carriage returns lie, including one that wraps th
 | `file f` | Correct. Says `with CRLF line terminators`, or says nothing about them. |
 | `x=$(grep -Uc $'\r' f)` | Lies, even though the command inside it is the correct one. Capturing it collapses the lone-CR argument to an empty pattern, which matches every line, so what comes back is the file's **line count** whatever its endings are. Run the check unwrapped, or put the CR in a variable first (`CR=$'\r'; grep -Uc "$CR" f`). |
 
+Two traps for scripted edits specifically:
+
+- **Never let a normaliser touch text that itself contains `\r` or `\n` escapes.**
+  A script that rewrites every line ending to CRLF will also rewrite the escape
+  sequence you meant to insert, putting a real carriage return inside a string
+  literal — which is an unterminated-string parse error, found at build time
+  rather than at write time. Build such text with `String.fromCharCode(13)`.
+- **A quoted heredoc still loses doubled backslashes here.** `<<'EOF'` keeps a lone
+  backslash but collapses `\\` to `\`, so `p.replace(/\\/g, "/")` arrives as
+  `p.replace(/\/g, "/")` — an unterminated character class, and a syntax error at run
+  time. Write the script with the file-writing tool, or avoid doubled backslashes.
+
 Byte counts show it too: a CRLF file loses exactly one byte per line when it is
 flattened, so `wc -c` before and after a rewrite is evidence.
 
@@ -74,7 +86,7 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 218 files / 3683 tests |
+| `npx vitest run` | 219 files / 3715 tests |
 | `npx vitest run --config vitest.e2e.config.ts` | 5 files / 25 tests |
 | `npm run build` | clean |
 | `node dist/cli/index.js validate` | 0 errors, 0 warnings |

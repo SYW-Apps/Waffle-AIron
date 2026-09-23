@@ -6,12 +6,23 @@ import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { AI_PATHS } from '../config/paths.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
-import { loadProjectConfig, projectConfigExists, retireSpecialists, repairForeignStepFields, readLockState } from './subsystem.js';
+import {
+  loadProjectConfig,
+  projectConfigExists,
+  retireSpecialists,
+  repairForeignStepFields,
+  readLockState,
+  // Through the core adapter, never ../core/stamp.js or ../utils/ai-guide.js:
+  // reading a stamp and refreshing the guides are sdd_core work, and doctor is
+  // an sdd_cli command. Eighth instance of that crossing, closed where the
+  // other seven were.
+  readStampVersion,
+  localGuideFilePath,
+  reinjectLocalGuides,
+} from './subsystem.js';
 import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { backfillChainedSubprojectConfigs } from '../core/provision.js';
 import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
-import { readStampVersion } from '../core/stamp.js';
-import { localGuideFilePath, reinjectLocalGuides } from '../utils/ai-guide.js';
 import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
 import { findLegacySpecFiles } from '../core/specs.js';
 import { computeGateStateId, validateSddTree } from './validate.js';

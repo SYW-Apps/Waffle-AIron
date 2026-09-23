@@ -1,0 +1,17 @@
+id: version_stamp
+name: Version Stamp
+description: >-
+  The mark a generated file carries saying which wairon wrote it. Every file wairon generates into
+  somebody else's tree — an injected guide, a context document, a plugin skill — gets one, and
+  `wairon doctor` reads it back to say when a file was produced by an older build than the one
+  installed and is therefore stale. It is an HTML comment on purpose: invisible where these files
+  are read, and survivable where a person edits around it. Pure both ways, so writing a stamp and
+  recognising one can never disagree about the shape.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+status: complete
+createdAt: '2026-09-23T00:10:35.326Z'
+updatedAt: '2026-09-23T00:12:18.605Z'

@@ -26,6 +26,49 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### The guide wairon writes into another tool's config file, reached through the portal
+
+`wairon init` wrote the AI guides, `wairon generate` refreshed them and `wairon
+doctor` read the version stamp on them — all three by importing
+`../utils/ai-guide.js` and `../core/stamp.js` straight out of sdd_core. Eighth
+instance of that crossing; the first seven are listed in `src/core/index.ts`, and
+it closes where every one of them did. `core_portal` now publishes the six
+operations — `globalGuideFilePath`, `localGuideFilePath`, `injectGuide`,
+`writeRootGuideDelegator`, `reinjectLocalGuides` and `readStampVersion` — by
+identity rather than wrapped, `cli_core_adapter` forwards each 1:1, and none of
+the three commands names a core module any more.
+
+`wairon generate` reached for its refresh through a lazy
+`require('../utils/ai-guide.js')`, which was worse than an import in two ways: it
+hid the crossing from a reader, and **it does not resolve once the CLI is
+bundled** — `src/core/context.ts` carries that exact note about that exact form,
+one module away, where the same lazy shape was already replaced. It is a normal
+static import now, so the crossing is visible and the call survives bundling.
+
+**`hasWaironGuide` is deleted.** It answered "does this file already carry a
+guide?", which no caller has ever asked, because injection strips before it
+appends and so nobody has to look first. A published read with no reader is not
+harmless: it is a claim somebody later trusts. `stripGuideSection` stays
+deliberately unpublished for the mirror-image reason — it is the guide's own
+internal seam, and a Portal republishing it would be offering a half-write.
+
+Thirty-two tests in `tests/commands/ai-guide-boundary.test.ts`, and the file
+opens with a warning rather than an import. `injectGuide(path, 'global')` writes
+a real AI tool's machine-wide configuration — on a maintainer's machine, the
+`CLAUDE.md` Claude Code loads into every session — so every test here redirects
+`HOME`, `USERPROFILE`, `CLAUDE_CONFIG_DIR` and `GEMINI_CONFIG_DIR` at a throwaway
+directory and then **asks the code under test where it would write**, refusing to
+run if the answer is outside it. `afterAll` re-reads the real files and fails if
+a byte moved. The same fence `tests/config/userconfig.test.ts` established.
+
+Every behaviour proven by revert, and two of them are worth naming because they
+had no test at all before: injection twice leaves **one** section rather than
+two, and what a person wrote above and below the markers survives a re-inject
+verbatim. Both fail the moment `inject` stops stripping first. One claim did
+**not** move under revert and is reported rather than counted: refreshing a
+guide ignores a target name it does not recognize through two mechanisms at
+once, so deleting the explicit skip changes no observable behaviour — the path
+lookup answers nothing for an unknown tool anyway.
 ### Fan-out is coupling only when the component holds flow
 
 `GOD_COMPONENT` and `EXCESSIVE_DEPENDENCIES` both counted `dependsOn.length` and

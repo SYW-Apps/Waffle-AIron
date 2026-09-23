@@ -1,0 +1,36 @@
+id: version_stamp_impl
+name: Version Stamp Implementation
+description: >-
+  src/core/stamp.ts. The comment form and the pattern that recognises it sit in one file so they
+  cannot drift apart; the pattern is deliberately tolerant of the whitespace a formatter might
+  introduce around the marker.
+contract: iversion_stamp
+sourcePath: src/core/stamp.ts
+methods:
+  - name: render
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the running build's version wrapped as an HTML comment, so it is inert wherever the
+          file is read and a person editing around it cannot be confused by it
+        type: return
+        outcome: stamped
+    symbol: versionStamp
+  - name: parse
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Look for the stamp anywhere in the content, tolerating the whitespace a formatter may have
+          put around the marker
+        type: local
+      - stepNumber: 2
+        description: >-
+          Answer the version it names, or nothing when the content carries no stamp — which is not
+          an error but a fact: the file predates stamping, or somebody replaced it wholesale, and
+          either way there is nothing to compare against
+        type: return
+        outcome: version or nothing
+    symbol: readStampVersion
+status: complete
+createdAt: '2026-09-23T00:11:11.864Z'
+updatedAt: '2026-09-23T00:12:20.316Z'

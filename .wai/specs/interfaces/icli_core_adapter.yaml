@@ -287,6 +287,87 @@ methods:
         description: Which agent, so its override can be found
     guarantees:
       - idempotent
+  - name: globalGuideFilePath
+    description: >-
+      Where an AI tool keeps its machine-wide configuration, for `wairon init`. Forwarded to the
+      core portal.
+    signature: 'globalGuideFilePath(target: string): string | null'
+    returns: string | null
+    params:
+      - name: target
+        type: string
+        description: The AI tool
+    guarantees:
+      - idempotent
+  - name: localGuideFilePath
+    description: >-
+      Where an AI tool keeps its per-project configuration, for `wairon init` and `wairon doctor`.
+      Forwarded to the core portal.
+    signature: 'localGuideFilePath(projectRoot: string, target: string): string | null'
+    returns: string | null
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: target
+        type: string
+        description: The AI tool
+    guarantees:
+      - idempotent
+  - name: injectGuide
+    description: >-
+      Put the wairon guide into a tool's configuration file, for `wairon init`. Forwarded to the
+      core portal.
+    signature: 'injectGuide(filePath: string, scope: string): void'
+    returns: void
+    params:
+      - name: filePath
+        type: string
+        description: The configuration file
+      - name: scope
+        type: string
+        description: '`global` or `local`'
+    effect: write
+  - name: writeRootGuideDelegator
+    description: >-
+      Write the repository-root pointer at the in-project guide, for `wairon init`. Forwarded to the
+      core portal.
+    signature: 'writeRootGuideDelegator(projectRoot: string, target: string): void'
+    returns: void
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: target
+        type: string
+        description: The AI tool
+    effect: write
+  - name: reinjectLocalGuides
+    description: >-
+      Refresh the in-project guides, for `wairon generate` and `wairon doctor --fix`. Forwarded to
+      the core portal.
+    signature: 'reinjectLocalGuides(projectRoot: string, targets: string[]): string[]'
+    returns: string[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: targets
+        type: string[]
+        description: The AI tools to refresh
+    effect: write
+  - name: readStampVersion
+    description: >-
+      The wairon version stamped in generated content, for `wairon doctor`'s staleness check.
+      Forwarded to the core portal.
+    signature: 'readStampVersion(content: string): string | null'
+    returns: string | null
+    params:
+      - name: content
+        type: string
+        description: Generated content
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T23:52:03.071Z'
+updatedAt: '2026-09-23T00:12:09.203Z'

@@ -1,0 +1,139 @@
+id: ai_tool_guide_impl
+name: AI Tool Guide Implementation
+description: >-
+  src/utils/ai-guide.ts. Both guide bodies are literals in this file rather than templates, because
+  what they say is a decision about how agents should behave and belongs somewhere a reviewer sees
+  it change. The injected text always says `wairon` literally and never a development path: the
+  guide is documentation for whoever reads it next, not a command line for this machine.
+contract: iai_tool_guide
+sourcePath: src/utils/ai-guide.ts
+methods:
+  - name: globalPath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the tool's machine-wide configuration file, preferring the environment override the
+          tool sets for account aliases over the default directory — the same override the MCP
+          installer honours, so the two never disagree about where a tool lives. An unknown tool
+          answers nothing rather than guessing a path
+        type: return
+        outcome: path or nothing
+    symbol: globalGuideFilePath
+  - name: localPath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the tool's configuration file inside this project. An unknown tool answers nothing
+          rather than guessing a path
+        type: return
+        outcome: path or nothing
+    symbol: localGuideFilePath
+  - name: inject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Choose which guide this is: the machine-wide one, which must stay inert in projects that
+          have no spec tree, or the in-project one, which addresses an agent already operating
+          inside one
+        type: local
+      - stepNumber: 2
+        description: Ask for the stamp that says which build wrote this
+        type: call
+        targetComponent: version_stamp
+        targetMethod: render
+      - stepNumber: 3
+        description: >-
+          Read whatever is in the file today, treating an absent file as empty rather than as a
+          failure
+        type: local
+      - stepNumber: 4
+        description: Remove any section already there
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: strip
+      - stepNumber: 5
+        description: >-
+          Append the marked section to what is left, creating the directories if this is the first
+          write. Stripping before appending is what makes this idempotent — running it twice leaves
+          one section, not two
+        type: local
+      - stepNumber: 6
+        description: Done
+        type: return
+        outcome: injected
+    symbol: injectGuide
+  - name: strip
+    narrative:
+      - stepNumber: 1
+        description: Find the opening and closing markers
+        type: local
+      - stepNumber: 2
+        description: Decide whether there is a section to remove
+        type: branch
+        condition: both markers are present
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Answer everything before the opening marker joined to everything after the closing one, so
+          whatever a person wrote around the section survives exactly
+        type: return
+        outcome: stripped
+      - stepNumber: 4
+        description: >-
+          Answer the content unchanged. A file with no markers is one we have never written to, not
+          a broken one
+        type: return
+        outcome: unchanged
+    symbol: stripGuideSection
+  - name: writeDelegator
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Write the repository-root file as a pointer at the real guide inside the project, rather
+          than a second copy of it — one file to keep current instead of two that can disagree
+        type: local
+      - stepNumber: 2
+        description: Done
+        type: return
+        outcome: written
+    symbol: writeRootGuideDelegator
+  - name: refreshLocal
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each target asked for, skip any name that is not a tool we inject into — an unknown
+          target is ignored rather than refused, because callers pass whatever the project has
+          configured
+        type: local
+      - stepNumber: 2
+        description: Find where that tool's in-project configuration lives
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: localPath
+      - stepNumber: 3
+        description: >-
+          Write the in-project guide there. Note this INSTALLS where none existed rather than only
+          refreshing what is already present: a known target that a project has configured is one we
+          write for, and the marker fence is what makes doing so safe
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: inject
+      - stepNumber: 4
+        description: >-
+          Write the repository-root pointer for that target as well, so the root file and the real
+          guide can never drift apart — refreshing one without the other is how a root ends up
+          pointing at something that no longer says what it claims
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: writeDelegator
+      - stepNumber: 5
+        description: >-
+          Answer the guide paths actually written, without repeats, so a caller reports exactly what
+          it touched instead of claiming to have refreshed everything asked for
+        type: return
+        outcome: refreshed
+    symbol: reinjectLocalGuides
+status: complete
+createdAt: '2026-09-23T00:11:34.495Z'
+updatedAt: '2026-09-23T00:14:15.375Z'

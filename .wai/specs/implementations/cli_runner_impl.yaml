@@ -85,9 +85,11 @@ methods:
         targetMethod: exportSddSkills
       - stepNumber: 7
         description: >-
-          Re-inject the local AI guides for the configuration's active targets
-          (project_config.activeTargetTypes)
-        type: local
+          Re-inject the local AI guides for the configuration's active targets through the core
+          adapter, so a guide never outlives the tree it claims to describe
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: reinjectLocalGuides
       - stepNumber: 8
         description: Continue with the cascade
         type: jump
@@ -512,6 +514,38 @@ methods:
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
+      - stepNumber: 19
+        description: >-
+          For each tool the person chose to install machine-wide, find its global configuration file
+          through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: globalGuideFilePath
+      - stepNumber: 20
+        description: Find each tool's in-project configuration file as well
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: localGuideFilePath
+      - stepNumber: 21
+        description: >-
+          Write the guide into each one the plan asked for — the machine-wide guide into the global
+          file, the in-project one into the local file. They say different things on purpose: the
+          global guide must stay inert in projects that have no spec tree
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: injectGuide
+      - stepNumber: 22
+        description: >-
+          Write the repository-root pointer for every target that got a local guide, and for the
+          targets that want only a root file. A pointer rather than a copy, so there is one document
+          to keep current instead of two that can disagree
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: writeRootGuideDelegator
+      - stepNumber: 23
+        description: Report what was created and where, and name the next command to run
+        type: return
+        outcome: initialized
   - name: runSubsystemMove
     sourcePath: src/commands/subsystem.ts
     narrative:
@@ -1407,10 +1441,11 @@ methods:
         targetMethod: exportSddSkills
       - stepNumber: 6
         description: >-
-          Re-inject the local AI guides for the active targets, record the installed packs the
-          project no longer applies as explicit selections, migrate legacy spec filenames, and
-          initialize the chained subprojects that have specs but no project.yaml
-        type: local
+          Re-inject the local AI guides for the active targets through the core adapter, recording
+          which files were written so the report can name them
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: reinjectLocalGuides
       - stepNumber: 7
         description: >-
           Retire the Specialists with apply true: each becomes an Orchestrator with the
@@ -1488,10 +1523,12 @@ methods:
         targetMethod: repairForeignStepFields
       - stepNumber: 19
         description: >-
-          Generated files and skills: compare the version stamps of the context files and injected
-          guides with the installed wairon, and check each active target's skills for stale or
-          missing files
-        type: local
+          Generated files and skills: read the version each one was stamped with and compare it
+          against the running build, so a file written by an older wairon is reported as stale
+          rather than assumed current
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: readStampVersion
       - stepNumber: 20
         description: 'Lock: compute the gate identity as it stands now'
         type: call
@@ -1805,4 +1842,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-22T21:21:11.381Z'
+updatedAt: '2026-09-23T00:13:43.624Z'

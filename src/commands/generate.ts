@@ -13,6 +13,7 @@ import {
   ensureProjectInitialized,
   generateAll,
   resolveExpectedOutputPaths,
+  reinjectLocalGuides,
 } from './subsystem.js';
 import { exportSddSkills } from './skills.js';
 import { WAIRON_MANAGED_MARKER } from '../exporters/base.js';
@@ -184,7 +185,11 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
   // stay current with the installed wairon (otherwise only `init` writes them),
   // for the configuration's active targets.
   try {
-    const { reinjectLocalGuides } = require('../utils/ai-guide.js') as typeof import('../utils/ai-guide.js');
+    // STATIC, and through the core adapter: the lazy `require` this replaced
+    // both hid an sdd_cli -> sdd_core module reach from a reader and would not
+    // have resolved at all once the CLI is bundled — ../core/context.ts carries
+    // that same note about that same form.
+    //
     // getProjectRoot() (not process.cwd()) so a cascaded subproject layer
     // re-injects ITS guides into ITS own dir, not the original invocation dir.
     reinjectLocalGuides(getProjectRoot(), activeTargetTypes(projectConfig));

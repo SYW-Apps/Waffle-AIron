@@ -1,0 +1,18 @@
+id: ai_tool_guide
+name: AI Tool Guide
+description: >-
+  Keeps each AI tool's own configuration file carrying a current wairon guide — `CLAUDE.md` for
+  Claude Code, `GEMINI.md` for Antigravity, in the tool's global directory or the project's. The
+  files belong to those tools, not to wairon, so the guide is fenced between HTML-comment markers
+  and every write replaces only what lies between them: injection is idempotent, and anything a
+  person wrote around it survives untouched. Two guides, deliberately different: the GLOBAL one says
+  \"if a spec tree exists here, this is how it works\" and must stay inert in projects that have
+  none, while the LOCAL one addresses an agent already operating inside one.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - version_stamp
+status: complete
+createdAt: '2026-09-23T00:10:39.146Z'
+updatedAt: '2026-09-23T00:12:21.313Z'
