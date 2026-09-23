@@ -1340,5 +1340,524 @@ rules:
             at: 'readResource'
             covers:
               - '1:skills_portal.readResource'
+      # 34 finding(s), 74 unit(s).
+      - kind: undecided
+        why: >-
+          The first measured yield of export-conformance, after the 90 realization handles that
+          `exportedVia` now declares. What is left is ragged rather than uniform, which is what real
+          debt looks like and what the 90 were not: helpers a sibling component reaches for (ten path
+          and loader-issue accessors on src/core/specs.ts, seven project-identity helpers on
+          src/server/projects.ts), factories and classes that ARE a realization handle in another
+          shape (ClaudeExporter, hostCore, projectConfigRepository) and could be declared once each
+          one's owning method is identified, and shared constants nobody modelled (SUBPROJECT_SEPARATOR,
+          BUILTIN_ROLES, COMPATIBLE_DEFAULT_EXPOSURE). Undecided rather than drift because each name
+          has three legal answers - declare it as a contract method, declare it as a handle, or stop
+          exporting it - and which one is right depends on what the name is FOR, which nobody has read
+          file by file yet. None of it is a limit of the reader: every finding names an import that
+          resolves, at exact grade, from a file realizing none of the accused components.
+        findings:
+          - code: UNDECLARED_EXPORT
+            spec: cli_skills_adapter_impl
+            at: 'src/commands/skills.ts'
+            covers:
+              - 'runSkillsInstall'
+              - 'runSkillsList'
+          - code: UNDECLARED_EXPORT
+            spec: project_config_fs_adapter_impl
+            at: 'src/config/project-config.ts'
+            covers:
+              - 'projectConfigRepository'
+              - 'projectConfigRepositoryAt'
+          - code: UNDECLARED_EXPORT
+            spec: user_config_store_impl
+            at: 'src/config/userconfig.ts'
+            covers:
+              - 'UPDATE_CHANNELS'
+          - code: UNDECLARED_EXPORT
+            spec: architecture_diagrams_impl
+            at: 'src/core/diagram.ts'
+            covers:
+              - 'buildCanvasDataModel'
+          - code: UNDECLARED_EXPORT
+            spec: extension_orchestrator_impl
+            at: 'src/core/extensions.ts'
+            covers:
+              - 'DeclarativePackSchema'
+              - 'LoadedPackSkill'
+              - 'PackScope'
+              - 'loadExtensionPacks'
+              - 'packDirEntry'
+          - code: UNDECLARED_EXPORT
+            spec: core_portal_impl
+            at: 'src/core/index.ts'
+            covers:
+              - 'declaredPackNames'
+              - 'declaredProfileIds'
+              - 'diffSize'
+          - code: UNDECLARED_EXPORT
+            spec: openapi_codec_impl
+            at: 'src/core/openapi.ts'
+            covers:
+              - 'isOpenApiDocument'
+          - code: UNDECLARED_EXPORT
+            spec: core_orchestrator_impl
+            at: 'src/core/provision.ts'
+            covers:
+              - 'backfillChainedSubprojectConfigs'
+          - code: UNDECLARED_EXPORT
+            spec: spec_validator_impl
+            at: 'src/core/rules/candidate.ts'
+            covers:
+              - 'formatCandidateRefusal'
+          - code: UNDECLARED_EXPORT
+            spec: skill_resources_impl
+            at: 'src/core/skills.ts'
+            covers:
+              - 'activeTargetTypes'
+              - 'checkSkillFreshness'
+              - 'listSkillNames'
+          - code: UNDECLARED_EXPORT
+            spec: core_orchestrator_impl
+            at: 'src/core/specs.ts'
+            covers:
+              - 'assertContainedProjectPath'
+              - 'clearLoaderIssues'
+              - 'findLegacySpecFiles'
+              - 'getComponentPath'
+              - 'getImplementationPath'
+              - 'getInterfacePath'
+              - 'getLoaderIssues'
+              - 'getSubsystemPath'
+              - 'scanAllSpecs'
+              - 'snapshotSpecFiles'
+          - code: UNDECLARED_EXPORT
+            spec: state_hash_impl
+            at: 'src/core/statehash.ts'
+            covers:
+              - 'stateIdEquals'
+          - code: UNDECLARED_EXPORT
+            spec: surface_fs_adapter_impl
+            at: 'src/core/surfaces.ts'
+            covers:
+              - 'loadMountSurfaceSnapshots'
+          - code: UNDECLARED_EXPORT
+            spec: template_source_adapter_impl
+            at: 'src/core/templates.ts'
+            covers:
+              - 'renderTemplateInstructions'
+          - code: UNDECLARED_EXPORT
+            spec: claude_exporter_impl
+            at: 'src/exporters/claude.ts'
+            covers:
+              - 'ClaudeExporter'
+          - code: UNDECLARED_EXPORT
+            spec: custom_exporter_impl
+            at: 'src/exporters/custom.ts'
+            covers:
+              - 'CustomExporter'
+          - code: UNDECLARED_EXPORT
+            spec: gemini_exporter_impl
+            at: 'src/exporters/gemini.ts'
+            covers:
+              - 'GeminiExporter'
+          - code: UNDECLARED_EXPORT
+            spec: host_core_adapter_impl
+            at: 'src/server/adapters.ts'
+            covers:
+              - 'hostCore'
+              - 'hostGit'
+              - 'hostProducer'
+              - 'hostSdk'
+              - 'hostSurfaces'
+          - code: UNDECLARED_EXPORT
+            spec: admin_orchestrator_impl
+            at: 'src/server/admin.ts'
+            covers:
+              - 'AdminAuthError'
+              - 'LockValidationError'
+              - 'hostedApprover'
+          - code: UNDECLARED_EXPORT
+            spec: audit_index_impl
+            at: 'src/server/audit.ts'
+            covers:
+              - 'DEFAULT_AUDIT_POLICY'
+          - code: UNDECLARED_EXPORT
+            spec: authentication_impl
+            at: 'src/server/auth.ts'
+            covers:
+              - 'localDevSubject'
+          - code: UNDECLARED_EXPORT
+            spec: authorization_impl
+            at: 'src/server/authorization.ts'
+            covers:
+              - 'actionableProjectIds'
+              - 'actionableUnitIds'
+              - 'isInstanceAdmin'
+          - code: UNDECLARED_EXPORT
+            spec: credential_index_impl
+            at: 'src/server/credentials.ts'
+            covers:
+              - 'hashToken'
+          - code: UNDECLARED_EXPORT
+            spec: identity_orchestrator_impl
+            at: 'src/server/identity.ts'
+            covers:
+              - 'ANONYMOUS_SSO_ACTOR'
+              - 'ForbiddenError'
+              - 'buildSsoAuditEvent'
+              - 'isInAdminGroup'
+          - code: UNDECLARED_EXPORT
+            spec: identity_provider_adapter_impl
+            at: 'src/server/idp.ts'
+            covers:
+              - 'assertAllowedRedirectUri'
+          - code: UNDECLARED_EXPORT
+            spec: organization_index_impl
+            at: 'src/server/organization.ts'
+            covers:
+              - 'validateUnitHierarchy'
+          - code: UNDECLARED_EXPORT
+            spec: policy_index_impl
+            at: 'src/server/policy.ts'
+            covers:
+              - 'COMPATIBLE_DEFAULT_EXPOSURE'
+          - code: UNDECLARED_EXPORT
+            spec: project_index_impl
+            at: 'src/server/projects.ts'
+            covers:
+              - 'SUBPROJECT_SEPARATOR'
+              - 'assertMintableNarrowingEntry'
+              - 'existingProjectRoot'
+              - 'isValidProjectId'
+              - 'parseQualifiedSelector'
+              - 'registerLocalDevProject'
+              - 'resolveSubprojectMounts'
+          - code: UNDECLARED_EXPORT
+            spec: role_index_impl
+            at: 'src/server/roles.ts'
+            covers:
+              - 'BUILTIN_ROLES'
+              - 'isBuiltinRoleId'
+          - code: UNDECLARED_EXPORT
+            spec: visibility_rules_impl
+            at: 'src/server/visibility.ts'
+            covers:
+              - 'audienceCovers'
+          - code: UNDECLARED_EXPORT
+            spec: web_graph_orchestrator_impl
+            at: 'src/server/web.ts'
+            covers:
+              - 'handleWebRequest'
+              - 'sessionCookieValue'
+              - 'setSessionCookie'
+          - code: UNDECLARED_EXPORT
+            spec: web_session_index_impl
+            at: 'src/server/websessions.ts'
+            covers:
+              - 'WEB_SESSION_PREFIX'
+          - code: UNDECLARED_EXPORT
+            spec: ai_tool_guide_impl
+            at: 'src/utils/ai-guide.ts'
+            covers:
+              - 'GLOBAL_GUIDE_BODY'
+          - code: UNDECLARED_EXPORT
+            spec: secret_index_impl
+            at: 'src/utils/secrets.ts'
+            covers:
+              - 'resolveGitToken'
+              - 'resolveSecret'
+      # 47 finding(s), 87 unit(s).
+      - kind: undecided
+        why: >-
+          The first measured yield of type-shape, after the 32 envelope fields the spec types now
+          declare. Three shapes, and they are ragged rather than uniform. One, a spec names data the
+          code does not carry (hosted_project_record describes nine fields its record has never had).
+          Two, the code carries data no spec describes, so the ERD draws a record smaller than the one
+          that exists. Three, and split almost two to one, the two sides disagree about whether a field
+          may be absent: 19 are a spec calling a defaulted field optional - true of what an AUTHOR may
+          omit, false of the value the type finally holds, which is what a type spec describes - and 9
+          run the other way, where the spec promises a field is always there and the code lets it be
+          missing. Those 9 are the ones to read first: a promise the data does not keep is the shape
+          that misleads, and the other two shapes only omit.
+          Undecided rather than drift because for each one the spec may be wrong or the code may be,
+          and which it is cannot be read off the divergence - only off what the data is FOR. Nothing
+          here is a limit of the reader: every finding is exact grade, and the shape it compares was
+          either listed by the declaration or reached by one hop to the value it is built from.
+        findings:
+          - code: UNDECLARED_TYPE_FIELD
+            spec: agent_brief
+            at: 'AgentBrief'
+            covers:
+              - 'profile'
+              - 'budget'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: agent_record
+            at: 'AgentRecord'
+            covers:
+              - 'description'
+              - 'bundleOrigin'
+              - 'readPaths'
+              - 'writePaths'
+              - 'dependencies'
+              - 'targets'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: canvas_model
+            at: 'CanvasModel'
+            covers:
+              - 'types'
+              - 'typeEdges'
+              - 'dataEdges'
+              - 'issues'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: complexity_rule_config
+            at: 'ComplexityRuleConfig'
+            covers:
+              - 'maxUnnarratedComplexity'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: component_spec
+            at: 'ComponentSpec'
+            covers:
+              - 'status'
+          - code: UNREALIZED_TYPE_FIELD
+            spec: component_spec
+            at: 'ComponentSpec'
+            covers:
+              - 'remoteInterfaces'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: diagram_options
+            at: 'DiagramOptions'
+            covers:
+              - 'format'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: domain
+            at: 'Domain'
+            covers:
+              - 'ownedPaths'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: git_config
+            at: 'GitConfig'
+            covers:
+              - 'credentialRef'
+              - 'lastSyncAt'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: host_config
+            at: 'HostConfig'
+            covers:
+              - 'adminHost'
+          - code: UNREALIZED_TYPE_FIELD
+            spec: host_config
+            at: 'HostConfig'
+            covers:
+              - 'authFile'
+              - 'auditPolicy'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: host_exposure_policy
+            at: 'HostExposurePolicy'
+            covers:
+              - 'webUiEnabled'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: hosted_project_record
+            at: 'HostedProjectRecord'
+            covers:
+              - 'unitId'
+          - code: UNREALIZED_TYPE_FIELD
+            spec: hosted_project_record
+            at: 'HostedProjectRecord'
+            covers:
+              - 'displayName'
+              - 'description'
+              - 'createdBySubject'
+              - 'ownerSubject'
+              - 'tags'
+              - 'environment'
+              - 'ownerUnitId'
+              - 'placementIds'
+              - 'mcpServerDisplayName'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: implementation_spec
+            at: 'ImplementationSpec'
+            covers:
+              - 'status'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: interface_spec
+            at: 'InterfaceSpec'
+            covers:
+              - 'status'
+          - code: UNREALIZED_TYPE_FIELD
+            spec: lock_record
+            at: 'LockRecord'
+            covers:
+              - 'lockedBySubject'
+              - 'lockedByTokenId'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: lock_status
+            at: 'LockStatus'
+            covers:
+              - 'record'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: method_implementation
+            at: 'MethodImplementation'
+            covers:
+              - 'narrative'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: method_implementation
+            at: 'MethodImplementation'
+            covers:
+              - 'exportedVia'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: method_signature
+            at: 'MethodSignature'
+            covers:
+              - 'signature'
+              - 'returns'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: method_signature
+            at: 'MethodSignature'
+            covers:
+              - 'description'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: organization_unit_record
+            at: 'OrganizationUnitRecord'
+            covers:
+              - 'createdBy'
+          - code: UNREALIZED_TYPE_FIELD
+            spec: pack_instruction_block
+            at: 'PackInstructionBlock'
+            covers:
+              - 'pack'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: pack_selection_failure
+            at: 'PackSelectionFailure'
+            covers:
+              - 'severity'
+          - code: UNREALIZED_TYPE_FIELD
+            spec: pack_skill
+            at: 'PackSkill'
+            covers:
+              - 'pack'
+              - 'version'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: principal
+            at: 'Principal'
+            covers:
+              - 'authenticated'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: project_config
+            at: 'ProjectConfig'
+            covers:
+              - 'projectType'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: project_config
+            at: 'ProjectConfig'
+            covers:
+              - 'description'
+              - 'execution'
+              - 'paths'
+              - 'globalTemplatesDir'
+              - 'aiGuide'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: project_config_view
+            at: 'ProjectConfigView'
+            covers:
+              - 'lockStale'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: project_placement
+            at: 'ProjectPlacement'
+            covers:
+              - 'createdBy'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: project_relation_record
+            at: 'ProjectRelationRecord'
+            covers:
+              - 'sourceAdapter'
+              - 'createdBy'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: remote_command_options
+            at: 'RemoteCommandOptions'
+            covers:
+              - 'allowPartial'
+          - code: UNREALIZED_TYPE_FIELD
+            spec: remote_command_options
+            at: 'RemoteCommandOptions'
+            covers:
+              - 'yes'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: remote_transfer_options
+            at: 'RemoteTransferOptions'
+            covers:
+              - 'allowPartial'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: remote_transfer_outcome
+            at: 'RemoteTransferOutcome'
+            covers:
+              - 'skipped'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: rules_config
+            at: 'RulesConfig'
+            covers:
+              - 'sddRuleSeverity'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: rules_config
+            at: 'RulesConfig'
+            covers:
+              - 'generateComponentImplementers'
+              - 'materializeAgentFiles'
+              - 'designDepth'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: subsystem_spec
+            at: 'SubsystemSpec'
+            covers:
+              - 'status'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: subsystem_spec
+            at: 'SubsystemSpec'
+            covers:
+              - 'profile'
+              - 'designDepth'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: surface_export_result
+            at: 'SurfaceExportResult'
+            covers:
+              - 'renderedSet'
+              - 'writtenPaths'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: system_public_interface
+            at: 'SystemPublicInterface'
+            covers:
+              - 'id'
+              - 'name'
+              - 'subsystem'
+              - 'component'
+              - 'type'
+              - 'details'
+              - 'audience'
+              - 'authPolicy'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: system_spec
+            at: 'SystemSpec'
+            covers:
+              - 'databases'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: template
+            at: 'Template'
+            covers:
+              - 'defaultTags'
+              - 'requiresOwnedPaths'
+              - 'version'
+          - code: TYPE_FIELD_OPTIONALITY
+            spec: token_mint_request
+            at: 'TokenMintRequest'
+            covers:
+              - 'projects'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: validation_issue
+            at: 'ValidationIssue'
+            covers:
+              - 'surfaceResolved'
+          - code: UNDECLARED_TYPE_FIELD
+            spec: web_session
+            at: 'WebSession'
+            covers:
+              - 'projects'
 createdAt: '2026-06-10T20:23:10.714Z'
 updatedAt: '2026-06-10T20:23:10.714Z'

@@ -127,6 +127,32 @@ change report naming what moved, an old one a single sentence.
 
 ---
 
+## Narrative jumps: use labels, not hand-counted step numbers
+
+Inserting a step into an L5 narrative renumbers every later step, and
+`sdd_update_spec` relocates the jump fields with it. That relocation has gone
+wrong before, and the failure is quiet: a branch keeps a plausible number that
+now points one step past where it meant to land, and nothing but a careful
+re-read catches it.
+
+Every jump-by-number field has a symbolic twin resolved at write time —
+`label` on the step, and `onTrueLabel` / `onFalseLabel` / `toLabel` / `endLabel`
+on the jump. A labelled jump survives an insert because it never named a number.
+Prefer labels whenever a narrative is likely to grow.
+
+When a numeric jump is edited anyway, verify the flow afterwards rather than
+trusting the change report:
+
+```
+awk '/^  - name: METHOD/{f=1} f&&/^  - name: /&&!/METHOD/{exit} f' <impl>.yaml \
+  | grep -E 'stepNumber|type:|onTrueStep|onFalseStep|toStep|outcome'
+```
+
+That prints the control flow on its own, which is short enough to read in one
+pass and is where a mis-relocated target is obvious.
+
+---
+
 ## Untracked paths are somebody else's work in flight
 
 Run `git status` before you start. This repo regularly carries an uncommitted

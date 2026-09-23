@@ -57,6 +57,12 @@ fields:
       finding_declaration). Each declared code must be anchored in the method's source file as a
       string literal or a property-access name (UNREALIZED_FINDING).
     optional: true
+  - name: ext
+    type: json
+    description: >-
+      Opaque namespaced extension data a pack or tool attaches to this method. Never validated or
+      interpreted by the core, preserved verbatim through load and save.
+    optional: true
 methods:
   - name: typeRefs
     signature: 'typeRefs(): string[]'
@@ -82,4 +88,4 @@ methods:
     symbol: methodGenericParameters
 sourcePath: src/models/specs.ts
 createdAt: '2026-08-11T15:28:28.921Z'
-updatedAt: '2026-09-19T11:07:10.940Z'
+updatedAt: '2026-09-23T18:35:59.077Z'

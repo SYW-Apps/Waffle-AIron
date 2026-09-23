@@ -60,6 +60,7 @@ methods:
           lint.allow a deliberate exception
         type: local
     symbol: check
+    exportedVia: facadeForwardingRule
   - name: subsystemBoundaryDependencies
     sourcePath: src/core/rules/doctrine/subsystem-boundary-dependencies.ts
     narrative:
@@ -205,6 +206,7 @@ methods:
           stereotype leaks the boundary, so expose a Portal and point the component at it
         type: local
     symbol: check
+    exportedVia: subsystemBoundaryDepsRule
   - name: logicDependencyClass
     sourcePath: src/core/rules/doctrine/logic-dependency-class.ts
     narrative:
@@ -276,6 +278,7 @@ methods:
           message ends with storeHint
         type: local
     symbol: check
+    exportedVia: logicDependencyClassRule
   - name: dataBlockDependencies
     sourcePath: src/core/rules/doctrine/data-block-dependencies.ts
     narrative:
@@ -377,6 +380,7 @@ methods:
           that calls the Repository facade
         type: local
     symbol: check
+    exportedVia: dataBlockDepsRule
   - name: entrypointDependencies
     sourcePath: src/core/rules/doctrine/entrypoint-dependencies.ts
     narrative:
@@ -488,6 +492,7 @@ methods:
           that depends on it
         type: local
     symbol: check
+    exportedVia: entrypointDepsRule
   - name: portalWriteShortcut
     sourcePath: src/core/rules/doctrine/portal-write-shortcut.ts
     narrative:
@@ -566,6 +571,7 @@ methods:
           only, so route the write through an Orchestrator
         type: local
     symbol: check
+    exportedVia: portalWriteShortcutRule
   - name: patternMembership
     sourcePath: src/core/rules/doctrine/pattern-membership.ts
     narrative:
@@ -686,6 +692,7 @@ methods:
           exactly one owner
         type: local
     symbol: check
+    exportedVia: patternMembershipRule
   - name: patternContainment
     sourcePath: src/core/rules/doctrine/pattern-containment.ts
     narrative:
@@ -779,6 +786,7 @@ methods:
           component or View to route to
         type: local
     symbol: check
+    exportedVia: patternContainmentRule
   - name: unownedBlocks
     sourcePath: src/core/rules/doctrine/unowned-blocks.ts
     narrative:
@@ -845,6 +853,7 @@ methods:
           Repository whose Store it reads
         type: local
     symbol: check
+    exportedVia: unownedBlocksRule
   - name: memberVisibility
     sourcePath: src/core/rules/doctrine/member-visibility.ts
     narrative:
@@ -883,6 +892,7 @@ methods:
           and its owner: depend on the facade instead
         type: local
     symbol: check
+    exportedVia: memberVisibilityRule
   - name: portalEndpoints
     sourcePath: src/core/rules/doctrine/portal-endpoints.ts
     narrative:
@@ -946,6 +956,7 @@ methods:
           portalType, and the expected transport
         type: local
     symbol: check
+    exportedVia: portalsRule
   - name: nonPortalEndpoints
     sourcePath: src/core/rules/doctrine/non-portal-endpoints.ts
     narrative:
@@ -987,6 +998,7 @@ methods:
           carry endpoints
         type: local
     symbol: check
+    exportedVia: nonPortalEndpointsRule
   - name: portalCallAuth
     sourcePath: src/core/rules/doctrine/portal-call-auth.ts
     narrative:
@@ -1048,6 +1060,7 @@ methods:
           needs none
         type: local
     symbol: check
+    exportedVia: portalCallAuthRule
   - name: authSourceWiring
     sourcePath: src/core/rules/doctrine/auth-source-wiring.ts
     narrative:
@@ -1126,6 +1139,7 @@ methods:
           wiring is real
         type: local
     symbol: check
+    exportedVia: authSourceWiringRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-18T20:21:26.559Z'
+updatedAt: '2026-09-23T17:52:54.696Z'

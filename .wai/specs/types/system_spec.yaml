@@ -42,7 +42,21 @@ fields:
       consumption may only target these entries (never subsystem internals); the surface projector
       snapshots them at contract grade.
     optional: true
+  - name: schemaVersion
+    type: string
+    description: >-
+      The spec-format version this file was written at, so a later wairon can read an earlier tree
+      rather than guess at it. Always present — a missing version is filled on write.
+    optional: false
+  - name: createdAt
+    type: string
+    description: 'When this spec was first written. Store-managed: the write decides it and no author sets it.'
+    optional: false
+  - name: updatedAt
+    type: string
+    description: When this spec was last written. Store-managed.
+    optional: false
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-19T11:07:19.631Z'
+updatedAt: '2026-09-23T18:36:05.302Z'

@@ -68,6 +68,7 @@ methods:
           const-bound container mutation is beyond the check
         type: local
     symbol: check
+    exportedVia: hiddenStateRule
   - name: dependencyConformance
     sourcePath: src/core/rules/conformance/dependency-conformance.ts
     narrative:
@@ -184,6 +185,7 @@ methods:
           declared edge is stale
         type: local
     symbol: check
+    exportedVia: dependencyConformanceRule
   - name: sourceFileLinkage
     sourcePath: src/core/rules/conformance/source-file-linkage.ts
     narrative:
@@ -315,6 +317,7 @@ methods:
           it were not checked
         type: local
     symbol: check
+    exportedVia: sourceFileLinkageRule
   - name: findingRealization
     sourcePath: src/core/rules/conformance/finding-realization.ts
     narrative:
@@ -390,6 +393,7 @@ methods:
           under its declared code, or remove the declaration
         type: local
     symbol: check
+    exportedVia: findingRealizationRule
   - name: integrationSimDeclaration
     sourcePath: src/core/rules/conformance/integration-sim-declaration.ts
     narrative:
@@ -444,6 +448,7 @@ methods:
           lint.allow with the reason
         type: local
     symbol: check
+    exportedVia: integrationSimDeclarationRule
   - name: integrationSimFile
     sourcePath: src/core/rules/conformance/integration-sim-file.ts
     narrative:
@@ -492,6 +497,7 @@ methods:
           facts, or status missing), escapes the project root, or is not readable as source text
         type: local
     symbol: check
+    exportedVia: integrationSimFileRule
   - name: integrationSimWiring
     sourcePath: src/core/rules/conformance/integration-sim-wiring.ts
     narrative:
@@ -586,6 +592,7 @@ methods:
           stay faked), or fix the simPath
         type: local
     symbol: check
+    exportedVia: integrationSimWiringRule
   - name: integrationSimCoverage
     sourcePath: src/core/rules/conformance/integration-sim-coverage.ts
     narrative:
@@ -667,6 +674,7 @@ methods:
           component's sim: anchors to withdraw the claim
         type: local
     symbol: check
+    exportedVia: integrationSimCoverageRule
   - name: typeRealization
     sourcePath: src/core/rules/conformance/type-realization.ts
     narrative:
@@ -755,6 +763,7 @@ methods:
           for, the file and the grade it was analyzed at
         type: local
     symbol: check
+    exportedVia: typeRealizationRule
   - name: unclaimedSource
     sourcePath: src/core/rules/conformance/unclaimed-source.ts
     narrative:
@@ -835,6 +844,7 @@ methods:
           outside the declared roots) — delete the entry, the list only shrinks
         type: local
     symbol: check
+    exportedVia: unclaimedSourceRule
   - name: methodRealization
     sourcePath: src/core/rules/conformance/method-realization.ts
     narrative:
@@ -937,6 +947,7 @@ methods:
           deeper check reads nothing and the method is judged on its name alone
         type: local
     symbol: check
+    exportedVia: methodRealizationRule
   - name: callConformance
     sourcePath: src/core/rules/conformance/call-conformance.ts
     narrative:
@@ -1114,6 +1125,7 @@ methods:
           declare it in `calls`, or move the code so the boundary is real
         type: local
     symbol: check
+    exportedVia: callConformanceRule
   - name: carriedDebt
     sourcePath: src/core/rules/conformance/carried-debt.ts
     narrative:
@@ -1238,6 +1250,170 @@ methods:
           debt is paid, so delete those lines from the entry's covers; the register only shrinks
         type: local
     symbol: check
+    exportedVia: carriedDebtRule
+  - name: exportConformance
+    sourcePath: src/core/rules/conformance/export-conformance.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build, per source file, the set of names the components realized by that file legitimately
+          answer to: every method its contracts declare, every method name and per-method symbol its
+          implementations record. A file may realize several components — wairon's own MCP server
+          realizes eleven — so the sets union rather than compete
+        type: local
+      - stepNumber: 2
+        description: >-
+          Add each method's declared publication handle — the export a consumer imports to REACH the
+          method, which `symbol` cannot name because `symbol` names the function inside it. Read it
+          only where that method's own file was analysed at exact grade; below that nothing
+          separates an export from a mention, so no verdict on a handle could be backed, and a
+          method whose file the run never read at all is skipped rather than guessed at. A handle
+          the file does export becomes promised surface. One it does not is reported against the
+          implementation that declares it, naming the method and the file, and does not count as
+          allowed — a route nobody can import cannot be the reason a name is promised, and without
+          that the field would be a free-text way to silence the rule
+        type: local
+      - stepNumber: 3
+        description: >-
+          Add what the data model legitimately publishes from the same files: a type's own
+          declaration and each pure type method under its symbol. Whether a type IS published is
+          `typeRealization`'s question and stays there; this rule only needs to stop re-reporting
+          its answers as surface nobody promised
+        type: local
+      - stepNumber: 4
+        description: >-
+          For each analysed file, take the exported names the contracts do not cover. These are
+          candidates, not findings — an exported helper that only its own file's components use is a
+          module's business, and reporting it would flag 304 names in this tree alone, most of them
+          internal
+        type: local
+      - stepNumber: 5
+        description: Decide whether the analysis can honestly tell an export from a mention
+        type: branch
+        condition: the file was analysed at exact grade
+        onTrueStep: 6
+        onFalseStep: 10
+      - stepNumber: 6
+        description: >-
+          Walk every other analysed file that realizes a component, and read its runtime import
+          bindings — the local name, and the name the module published it under when the import
+          renamed it. Resolve each binding's OWN module specifier and keep only the bindings that
+          land in this file: a name is not taken from here merely because somebody elsewhere binds
+          the same word, and an accusation that cannot name the import it rests on is not one
+        type: local
+      - stepNumber: 7
+        description: Decide whether that consumer is a different component at all
+        type: branch
+        condition: the consumer realizes none of the components the exporting file realizes
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Record the name as crossed. This is the whole finding: a surface the design never
+          promised, reached from outside the thing that owns it. Judged on OVERLAP rather than on
+          one component matching, because a file realizing many components shares each of them with
+          a different neighbour, and requiring every owner to match reports a crossing wherever two
+          files merely differ in how much they hold
+        type: local
+      - stepNumber: 9
+        description: >-
+          Ignore it. Two files realizing the same component are that component's own implementation
+          spread over two files, which the source-path model has always allowed
+        type: local
+      - stepNumber: 10
+        description: Decide whether anything crossed
+        type: branch
+        condition: the file has at least one crossed name
+        onTrueStep: 11
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Report the file once, naming every crossed name as a unit the finding covers, so the
+          register carries each crossing rather than the message that happens to list them. A file
+          has no spec of its own, so the finding lands on an implementation that names it — the
+          first by sorted id when several do, which keeps one crossing one finding instead of one
+          per owner. Carryable, because this is measured code-to-spec drift — a surface that grew
+          past its contract — and not a design that is illegal as written
+        type: return
+        outcome: reported
+      - stepNumber: 12
+        description: >-
+          Say nothing. A file whose whole exported surface is either promised or private is exactly
+          what the rule is asking for
+        type: return
+        outcome: clean
+    symbol: check
+    exportedVia: exportConformanceRule
+  - name: typeShape
+    sourcePath: src/core/rules/conformance/type-shape.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each type spec that names a source file, ask the analyzer for the shape declared there
+          under the type's own code name — its `symbol` when it declares one, else its name. A type
+          that names no file is making no claim about code and there is nothing here to check
+        type: local
+      - stepNumber: 2
+        description: Decide whether the shape can honestly be read at all
+        type: branch
+        condition: the file was read at exact grade and a shape of that name was found
+        onTrueStep: 3
+        onFalseStep: 9
+      - stepNumber: 3
+        label: read
+        description: >-
+          Take the shape's data members and whether the code lets each be absent. Method-style
+          members are not data and are left to the method axis `typeRealization` already judges;
+          counting them here would accuse every behavioural interface of carrying undeclared state.
+          A field the spec gives a function type that the code writes as a method is one fact in two
+          spellings, not a disagreement
+        type: local
+      - stepNumber: 4
+        description: Decide whether this shape's whole membership is in front of us
+        type: branch
+        condition: the shape extends another type
+        onTrueStep: 7
+        onFalseStep: 5
+      - stepNumber: 5
+        label: presence
+        description: >-
+          Report each declared field the shape does not carry. The spec is describing data the code
+          does not have, and it is the ERD and the briefs that carried the claim — nothing breaks at
+          a call site to correct it
+        type: local
+      - stepNumber: 6
+        description: >-
+          Report each field the shape carries that no declared field names. Data the design never
+          described is data no diagram draws and no brief hands to an implementer, which is how a
+          record grows past the model of it without anyone deciding to
+        type: local
+      - stepNumber: 7
+        label: optionality
+        description: >-
+          Report each field both sides carry but disagree about. Absent-able is the code's word for
+          it — a wrapper that lets the key be missing — and a wrapper that FILLS a missing key makes
+          the field required in the value the type finally holds, which is the thing the spec is
+          describing. Judged even for a shape that extends another, because a member this file lists
+          is one this file answers for
+        type: local
+      - stepNumber: 8
+        description: >-
+          Done: the type's data was compared to the code's, which is the one reading a spec-driven
+          gate could not make before
+        type: return
+        outcome: judged
+      - stepNumber: 9
+        label: silent
+        description: >-
+          Say nothing. Below exact grade a member list cannot be told from a mention, and a guess
+          about somebody's data model is worse than silence; a type whose shape the file does not
+          declare at all is `typeRealization`'s finding, and reporting it here too would make one
+          absence look like two
+        type: return
+        outcome: unjudged
+    symbol: check
+    exportedVia: typeShapeRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-20T10:41:26.239Z'
+updatedAt: '2026-09-23T18:12:05.260Z'

@@ -85,6 +85,56 @@ export interface CallSiteFact {
   from?: string;
 }
 
+/**
+ * One data member of a shape a file declares: its name, and whether the code
+ * lets it be ABSENT.
+ *
+ * Absent-able is the only optionality worth recording, because it is the only
+ * one a spec can be wrong about in a way a reader would notice — a field the
+ * spec calls required that the code lets you omit is a promise the data does
+ * not keep. A wrapper that FILLS a missing key is not absent-able: the value
+ * the type finally holds always has it, which is the shape the spec describes.
+ */
+export interface ShapeMemberFact {
+  /** The member's name, as the code spells it. */
+  name: string;
+  /** Whether the code lets the member be absent from a value of this shape. */
+  optional: boolean;
+}
+
+/**
+ * The members of one named shape a file declares — what a data type IS, read
+ * off the code so a type spec's claim about it can be checked.
+ *
+ * Two origins answer, and the difference is recorded rather than smoothed
+ * away. A DECLARED shape lists its own members, so the file is the whole
+ * answer. A DERIVED one names a VALUE instead — an alias resolved one hop to
+ * the object literal its schema is built from, where the keys are the members
+ * — so the answer is as good as that hop and no better, and a hop that lands
+ * on nothing readable records no shape at all. Silence, not a guess: a wrong
+ * member list is worse than none, because nothing downstream would correct it.
+ *
+ * Methods are kept apart from fields because a spec models them on a different
+ * axis — the one `typeRealization` already judges. Counting a behavioural
+ * interface's method signatures as data would accuse every one of them of
+ * carrying undeclared state.
+ */
+export interface TypeShapeFact {
+  /** How the members were read: the shape listed them itself, or an alias was followed one hop to the value its shape comes from. */
+  origin: 'declared' | 'derived';
+  /** The data members, each with whether the code lets it be absent. */
+  fields: ShapeMemberFact[];
+  /** The method-style members, kept on the axis a spec models them on. */
+  methods: string[];
+  /**
+   * True when the shape EXTENDS another, so members it does not list exist
+   * but are not in this file to count. Presence and absence are therefore
+   * different questions for it: what it shows can be judged, what it omits
+   * cannot.
+   */
+  inherited?: boolean;
+}
+
 export interface SourceFileFacts {
   /** Project-relative resolved source path (many implementations may share it, N:1). */
   path: string;
@@ -179,6 +229,19 @@ export interface SourceFileFacts {
    * rather than folded in.
    */
   typeOnlyBindings?: Record<string, string>;
+  /**
+   * The members of each named shape the file declares, by declaration name
+   * (see TypeShapeFact). EXACT grade only — below it a member list cannot be
+   * told from a mention, and a guess about somebody's data model is worse
+   * than silence.
+   *
+   * What lets a type spec's `fields` be CHECKED rather than read as truth by
+   * the ERD, the briefs and every implementer. A wrong method signature
+   * eventually breaks at a call site; a type spec that lies about its data is
+   * only ever read by humans and agents, so nothing corrects it until
+   * somebody measures it against the code.
+   */
+  typeShapes?: Record<string, TypeShapeFact>;
   /**
    * Module-scope mutable bindings (`let`/`var` at the top level of the file).
    * EXACT grade only. The static approximation of held state a logic
