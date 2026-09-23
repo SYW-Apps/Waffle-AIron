@@ -368,6 +368,32 @@ methods:
         description: Generated content
     guarantees:
       - idempotent
+  - name: syncContextFiles
+    description: >-
+      Rebuild the derived context documents, for `wairon generate`, `wairon init` and `wairon doctor
+      --fix`. Forwarded to the core portal.
+    signature: 'syncContextFiles(): SyncResult'
+    returns: SyncResult
+    params: []
+    effect: write
+  - name: hasContext
+    description: >-
+      Whether the project has a human-written project document, for `wairon generate`. Forwarded to
+      the core portal.
+    signature: 'hasContext(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: derivedDocPaths
+    description: >-
+      Where the derived context documents live, for `wairon doctor`'s staleness report. Forwarded to
+      the core portal.
+    signature: 'derivedDocPaths(): string[]'
+    returns: string[]
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T00:12:09.203Z'
+updatedAt: '2026-09-23T11:11:53.969Z'

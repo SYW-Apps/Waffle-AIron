@@ -1,0 +1,28 @@
+id: context_store
+name: Context Store
+description: >-
+  The documents under `.wai/context/`, which are of two kinds and must not be confused. `project.md`
+  and `architecture.md` are written by a PERSON and only ever read here — nothing regenerates them,
+  because overwriting what somebody wrote about their own system is the one unrecoverable thing this
+  directory could do. `domains.md` and `wairon-guide.md` are DERIVED, rebuilt from the spec tree,
+  and written only when their content actually changed so that a regenerate leaves no diff behind
+  when no design moved. Read from disk on every call, so a document a person just edited is never
+  served stale.
+subsystem: sdd_core
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Deliberately standalone (the sanctioned lightweight form), on the same grounds as
+        `user_config_store` and `remote_binding_store`: four flat markdown files read straight from
+        disk, with exactly one workflow-layer consumer in `context_composer` and no query surface —
+        there is nothing to index and nothing to project, because a document is read whole or
+        written whole. Revisit when a member earns it: a second writer, or a read that has to answer
+        across the documents rather than name one.
+status: complete
+createdAt: '2026-09-23T11:10:22.378Z'
+updatedAt: '2026-09-23T11:12:06.645Z'

@@ -1,0 +1,65 @@
+id: context_store_impl
+name: Context Store Implementation
+description: >-
+  src/core/context.ts. The four paths are derived from one directory helper rather than spelled out,
+  so the layout is stated once. Both derived writes go through the write-only-if-changed primitive;
+  both human-authored documents are read through the tolerant reader that answers nothing for an
+  absent file, because not having written one is the normal case.
+contract: icontext_store
+sourcePath: src/core/context.ts
+methods:
+  - name: hasNotes
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer whether the human-written project document is on disk. Absence is a normal state —
+          a project nobody has described yet — so this is a question, never a check that fails
+        type: return
+        outcome: present or not
+    symbol: hasContext
+  - name: readNotes
+    narrative:
+      - stepNumber: 1
+        description: Answer the project document's content, or nothing when there is none
+        type: return
+        outcome: notes or nothing
+    symbol: readProjectContext
+  - name: readArchitecture
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the architecture document's content, or nothing when there is none. Optional by
+          intent: many projects say everything worth saying in the spec tree itself
+        type: return
+        outcome: architecture or nothing
+    symbol: readArchitectureContext
+  - name: writeDomains
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Write the derived domain document only if its content differs from what is already there,
+          and answer whether it changed. Comparing before writing is what keeps a regenerate free of
+          diffs when no design moved — a file rewritten with identical bytes is still a modified
+          file to git
+        type: return
+        outcome: changed or unchanged
+    symbol: writeDomainsDoc
+  - name: writeGuide
+    narrative:
+      - stepNumber: 1
+        description: Write the derived guide document under the same rule, and answer whether it changed
+        type: return
+        outcome: changed or unchanged
+    symbol: writeGuideDoc
+  - name: derivedPaths
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer where the two derived documents live. Only the derived pair — a caller reporting on
+          generated files has no business being handed the paths of the ones a person wrote
+        type: return
+        outcome: paths
+    symbol: derivedDocPaths
+status: complete
+createdAt: '2026-09-23T11:10:50.049Z'
+updatedAt: '2026-09-23T11:12:08.349Z'

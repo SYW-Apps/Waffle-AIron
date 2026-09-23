@@ -1,0 +1,130 @@
+id: context_composer_impl
+name: Context Composer Implementation
+description: >-
+  src/core/context.ts, alongside the store it writes through. Both renderers reach the domain set
+  through the projector rather than the registry or the topology facade, because \"which domains
+  exist\" spans the spec tree as well as the configuration — each of those answers half, and a
+  consumer must not be the place the halves are joined.
+contract: icontext_composer
+sourcePath: src/core/context.ts
+methods:
+  - name: renderDomains
+    narrative:
+      - stepNumber: 1
+        description: Ask the projector for every domain, derived and registered alike
+        type: call
+        targetComponent: domain_projector
+        targetMethod: resolve
+      - stepNumber: 2
+        description: >-
+          Open with the stamp saying which build wrote this, and a line telling a reader that the
+          file is generated and how to rebuild it
+        type: call
+        targetComponent: version_stamp
+        targetMethod: render
+      - stepNumber: 3
+        description: Decide whether there is anything to tabulate
+        type: branch
+        condition: the project has no domains at all
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Say so, and name both ways to get one — define a subsystem, or add a free-standing domain
+          — rather than leaving an empty table that reads like a fault
+        type: return
+        outcome: empty document
+      - stepNumber: 5
+        description: >-
+          Tabulate each domain: its id, its name, whether it comes from a subsystem or was
+          registered by hand, and the paths it owns. No timestamp anywhere in the output — that is
+          what makes rendering twice return the same bytes
+        type: return
+        outcome: document
+    symbol: renderDomainsDoc
+  - name: renderGuide
+    narrative:
+      - stepNumber: 1
+        description: Ask the projector for the domains this guide will describe
+        type: call
+        targetComponent: domain_projector
+        targetMethod: resolve
+      - stepNumber: 2
+        description: >-
+          Read the project's name from its configuration, falling back to a neutral phrase when the
+          configuration fails its own schema — a broken config should cost the reader a name, not
+          the whole guide
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 3
+        description: Read what a person wrote about this project
+        type: call
+        targetComponent: context_store
+        targetMethod: readNotes
+      - stepNumber: 4
+        description: Read what they wrote about its design, which many projects leave to the spec tree
+        type: call
+        targetComponent: context_store
+        targetMethod: readArchitecture
+      - stepNumber: 5
+        description: Open with the stamp and a do-not-edit line naming the command that rebuilds this
+        type: call
+        targetComponent: version_stamp
+        targetMethod: render
+      - stepNumber: 6
+        description: >-
+          Assemble one document: the project's own words first, then the domain map, then the wairon
+          usage guide — so an AI tool importing this single file needs nothing else to understand
+          where it is
+        type: return
+        outcome: guide
+    symbol: renderWaironGuide
+  - name: refresh
+    narrative:
+      - stepNumber: 1
+        description: Render the domain document
+        type: call
+        targetComponent: context_composer
+        targetMethod: renderDomains
+      - stepNumber: 2
+        description: Render the guide document
+        type: call
+        targetComponent: context_composer
+        targetMethod: renderGuide
+      - stepNumber: 3
+        description: Write the domain document, which reports back whether it actually changed
+        type: call
+        targetComponent: context_store
+        targetMethod: writeDomains
+      - stepNumber: 4
+        description: Write the guide document the same way
+        type: call
+        targetComponent: context_store
+        targetMethod: writeGuide
+      - stepNumber: 5
+        description: >-
+          Answer which of the two moved, so a caller can report what it changed instead of claiming
+          to have regenerated everything
+        type: return
+        outcome: synced
+    symbol: syncContextFiles
+  - name: hasNotes
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: context_store
+        targetMethod: hasNotes
+    symbol: hasContext
+  - name: derivedPaths
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: context_store
+        targetMethod: derivedPaths
+    symbol: derivedDocPaths
+status: complete
+createdAt: '2026-09-23T11:11:29.644Z'
+updatedAt: '2026-09-23T11:12:10.687Z'

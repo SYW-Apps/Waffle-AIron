@@ -89,7 +89,6 @@ rules:
     unclaimed:
       - src/commands/status.ts
       - src/config/defaults.ts
-      - src/core/context.ts
       - src/core/demo-seed.ts
       - src/core/narrative-labels.ts
       - src/core/rules/doctrine/stereotype-terms.ts

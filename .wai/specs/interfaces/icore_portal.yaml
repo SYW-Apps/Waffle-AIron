@@ -825,6 +825,32 @@ methods:
         description: Generated content that may carry a stamp
     guarantees:
       - idempotent
+  - name: syncContextFiles
+    description: >-
+      Published write: rebuild the derived context documents, writing each only if it changed.
+      Forwarded to the context composer.
+    signature: 'syncContextFiles(): SyncResult'
+    returns: SyncResult
+    params: []
+    effect: write
+  - name: hasContext
+    description: >-
+      Published read: whether this project has the human-written project document. Forwarded to the
+      context composer.
+    signature: 'hasContext(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: derivedDocPaths
+    description: >-
+      Published read: where the two derived context documents live, for callers reporting on them.
+      Forwarded to the context composer.
+    signature: 'derivedDocPaths(): string[]'
+    returns: string[]
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T00:11:51.971Z'
+updatedAt: '2026-09-23T11:11:45.449Z'
