@@ -20,7 +20,16 @@ Git stores LF and checks out CRLF here. `.gitattributes` pins only `*.sh` to LF
 
 Most tools that write files emit LF, which turns a three-line change into a
 whole-file diff. After any scripted or tool-driven write, normalise the file back
-to CRLF and confirm `git diff --stat` shows only the lines you meant.
+and confirm `git diff --stat` shows only the lines you meant.
+
+**The rule is preserve what the file has, not "make it CRLF".** The heading above
+describes the common case, not a uniform one: measured across `src/**/*.ts`, 212
+files are CRLF, 52 are LF and 3 are mixed. `install.ps1`, `src/commands/aliases.ts`
+and several tests are LF. Because `core.autocrlf` is true, git normalises on the way
+in and `git status` reads clean either way, so the difference is invisible until a
+scripted edit built for the wrong ending fails to match its anchor — or silently
+rewrites the whole file. Detect each file's endings before editing it and write back
+what was there.
 
 Most obvious ways to check for carriage returns lie, including one that wraps the correct check:
 
@@ -65,7 +74,7 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 217 files / 3663 tests |
+| `npx vitest run` | 218 files / 3683 tests |
 | `npx vitest run --config vitest.e2e.config.ts` | 5 files / 25 tests |
 | `npm run build` | clean |
 | `node dist/cli/index.js validate` | 0 errors, 0 warnings |

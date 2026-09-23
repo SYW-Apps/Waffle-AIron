@@ -1,14 +1,14 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "7b7f841cc34915a70405e84c8053a891095f817fec9ff6202527ab5544aab880"
+    "digest": "dae8e115251f50b9964ca74c7c139e9a968df8e666ddf10d764c43df7ff51382"
   },
-  "lockedAt": "2026-09-22T19:54:19.297Z",
+  "lockedAt": "2026-09-22T23:57:43.492Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "5.1.1-dev.57",
+  "validatorVersion": "5.1.1-dev.58",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -49,7 +49,7 @@
     ".wai/specs/components/cli_producer_adapter.yaml": "9c0de809f045011a099a3d9537f45dbd4350de98578767e3b3c28484847b3975",
     ".wai/specs/components/cli_remote_adapter.yaml": "32886466a78f062e0d457957aa63fd47107ee801dbaf337962862e82fa8b1d22",
     ".wai/specs/components/cli_rules_adapter.yaml": "2e763e4aa08cbd6ec84abb7dffd0698c20a6c422509338a1cbaeec347e30ca32",
-    ".wai/specs/components/cli_runner.yaml": "437dc05679ac059196693ab06f829f155bec1008b2b3120e63371f422a92d81e",
+    ".wai/specs/components/cli_runner.yaml": "46456dc53afb8853e1956a492ea9d046c46ea778b1a455755969f05daa401957",
     ".wai/specs/components/cli_skills_adapter.yaml": "6bab00d5fe00f4021ce894cbb63d2acd7107b182f95e2eb73435d98d40768bb0",
     ".wai/specs/components/cli_surfaces_client_adapter.yaml": "4c9df75bbd55970d5f2894af919d8149858c02fbf2616c4432f028077a10eaae",
     ".wai/specs/components/cli_validator_adapter.yaml": "ae4528aabe1011b92215733c9e83fd477a837ec4b7b60e1ff677a206f3d4e055",
@@ -241,6 +241,7 @@
     ".wai/specs/components/tree_archive_adapter.yaml": "2bdfedec68e85e49c77adafd2a772c3e524a777976ff560abdfe2287d9373814",
     ".wai/specs/components/tree_codec.yaml": "5da6fb5f078097c71a9bfaa10e5ffdd75dc97546f23e11bcfcca982819531d46",
     ".wai/specs/components/tree_transfer_orchestrator.yaml": "d9f3cbe461d1887de5f5a17a0e7d122e0120d2b0eb7ae4506882bf8b55025b46",
+    ".wai/specs/components/user_config_store.yaml": "65f8246b9e368b6697bcceed220ae495512308d905da4aee3eb701adbb780e47",
     ".wai/specs/components/user_index.yaml": "500dd6b8dbeda81bc2b089c5da4e80dcf3d8eda9e3ae9ce9a743f55eadeeca25",
     ".wai/specs/components/user_registry.yaml": "969b1a0266a533a58d2956dccc7d50107669224094be90be9fedb1d0d94dde3d",
     ".wai/specs/components/user_repository.yaml": "2fc53677d6fb8192ba984e7372ad2b2a16c23bae8d50602282cf98f3eab744b7",
@@ -293,7 +294,7 @@
     ".wai/specs/implementations/cli_producer_adapter_impl.yaml": "f54331da98b8ccc4de3d37219b2e505937503acc801fbf3c4d4583ed9cb483bb",
     ".wai/specs/implementations/cli_remote_adapter_impl.yaml": "73372ef2a5373bea6316d237f7371a24c67967bbd59b4e00049696b5472b4a20",
     ".wai/specs/implementations/cli_rules_adapter_impl.yaml": "ff7d7d33d719e29d3358794feff3b8ffc21668909978b092e5db2456419d3f3c",
-    ".wai/specs/implementations/cli_runner_impl.yaml": "0c5e7853a80dd7147f9f5d3880de2c2ee01264f7747c3c24c548267173fa0586",
+    ".wai/specs/implementations/cli_runner_impl.yaml": "d374dc304e1b68a2b863b8f5ca3b50481d84c13f72a9e919d1b7fb21dea73baa",
     ".wai/specs/implementations/cli_skills_adapter_impl.yaml": "aa3700ab76f7b9920dc6a489e305611296539348f7d659e5a9217da3607a3b61",
     ".wai/specs/implementations/cli_surfaces_client_adapter_impl.yaml": "6cce12f4eb57adb998ddaeec1deec5d3377e0721ee07953e1aecc5b0d14d90e2",
     ".wai/specs/implementations/cli_validator_adapter_impl.yaml": "8155aaf7f11aee4c526b49583c1e3fb32b7575484a1fa798779351c890a267fe",
@@ -484,6 +485,7 @@
     ".wai/specs/implementations/tree_archive_adapter_impl.yaml": "2caf99005cc74f9e7e187c3c8d90588e55696cd66e884262497cd44f8814e5cb",
     ".wai/specs/implementations/tree_codec_impl.yaml": "01b5c6e6c9e4ae723f9880fa14ed912e2a2661d9769e58ea043b8be1e7008bdd",
     ".wai/specs/implementations/tree_transfer_orchestrator_impl.yaml": "4a51e1496bbbd09ee5ca385153d8d99bbb7eb1684400908d4b66bd9c81e2d7aa",
+    ".wai/specs/implementations/user_config_store_impl.yaml": "789dd93e64a6263929384f7d7caa2674bbc76b6d9d407dada83399a4efd82f8a",
     ".wai/specs/implementations/user_index_impl.yaml": "507656ef93e142b28bde76327c8b0eece58d43cb6eb77e47364d52326c5c0f66",
     ".wai/specs/implementations/user_registry_impl.yaml": "ff57998599501d68dbde652b0e00a1223eae5757083ff5a89a7281bdcf3015b7",
     ".wai/specs/implementations/user_repository_impl.yaml": "656605eb5415ce710023ad94a072914510337c9d36639cbe3aa900369d3cb556",
@@ -536,7 +538,7 @@
     ".wai/specs/interfaces/icli_producer_adapter.yaml": "08aa5e592afc4971e3983a9ebadc7d7a0ebfebe0ea721f73ed17dcb361117dfb",
     ".wai/specs/interfaces/icli_remote_adapter.yaml": "ea1ca2bbe19a030d02be332dc37a7105337f2c68434973aa84e455cd42d0128e",
     ".wai/specs/interfaces/icli_rules_adapter.yaml": "297e2951732588244b15d4535da864026956e5183fc2e9737e87b1c9748e7c87",
-    ".wai/specs/interfaces/icli_runner.yaml": "c35ba2472f9ee3b65397b333899a283a678804e308a442e673dafd9b7a3b823a",
+    ".wai/specs/interfaces/icli_runner.yaml": "5de5b502b99a577c75e8dc447f1a3b909456bca2e57ad0a830a59a185fec1969",
     ".wai/specs/interfaces/icli_skills_adapter.yaml": "4c276db303592da822930417397cd075b48c52e70ba399b06a437b883e5e692f",
     ".wai/specs/interfaces/icli_surfaces_client_adapter.yaml": "2d027c0f0fee8a50d88fbb62c430bd5ce5161bfb8a7fd2a2a613e2adac758fad",
     ".wai/specs/interfaces/icli_validator_adapter.yaml": "9668e97cafb6cb02428ae12049613b9dc0faac2dd6af4c4919eda90f3f4b38b6",
@@ -728,6 +730,7 @@
     ".wai/specs/interfaces/itree_archive_adapter.yaml": "d5e164ccf04b92e66733df973c3f35280b0dc9153b78f3b9bb4813c8ab5215a0",
     ".wai/specs/interfaces/itree_codec.yaml": "21152a873efc63f36a8511fe637ba44b31df8e36d60fc74fb635609e4439a95c",
     ".wai/specs/interfaces/itree_transfer_orchestrator.yaml": "6853a3cf7edfebbf656c7397db35718c9c019514471d46190a6108b66c108e21",
+    ".wai/specs/interfaces/iuser_config_store.yaml": "1275f7afb50fba164a67197ebb48fdc9c74d9862f1631948d37b61c89f2a61da",
     ".wai/specs/interfaces/iuser_index.yaml": "3b405d9610d0d4048b7d7e7274ebcfbdd1d5a542bd97971c55d4859e17b01466",
     ".wai/specs/interfaces/iuser_registry.yaml": "9ff49e135b86c66ea08c4934d22c97ec94a659ecdea9f7489bd74e249fa52d5e",
     ".wai/specs/interfaces/iuser_repository.yaml": "b446f3cbcc967d9caa5ea57c16cb8011024de641846d31edee060926ad98e3da",
@@ -1004,6 +1007,8 @@
     ".wai/specs/types/type_spec.yaml": "6cda23bccb669f4638d9326966b761dc19e5b08bd1c22884a5bbdc7c9cd3a681",
     ".wai/specs/types/unit_disposition.yaml": "7cad22b30e41a7a61afbc023099c781a71e7d838cd1930a4c98d51913fba5451",
     ".wai/specs/types/unit_id_remap.yaml": "876aecfe7e7b535dbac270bc8a2431b6511672e20c29e16d9224168bfe5e56f9",
+    ".wai/specs/types/update_channel.yaml": "809e7f7208ebca348ea22d086e1ee62d5ff8d923a1e6e84506aba1723dbfc6f6",
+    ".wai/specs/types/user_config.yaml": "e4fda191b3d0666f6c6b84b151e6455b9c69095533ab6f1396541867ba8b7ade",
     ".wai/specs/types/validation_issue.yaml": "f6399dfc69ce7682593335c14747ab9f8e999f6c781a3791cb68424bd9edfc24",
     ".wai/specs/types/validation_options.yaml": "b1c2dc0b74c2a48a75536e0cb2ae85c4cd7c81e7634e7a3aae6bafb311bb96ff",
     ".wai/specs/types/validation_result.yaml": "c1b780c51781626a16b83a55c5a522e29af71ef31cef2e7e06edf11bc845f247",

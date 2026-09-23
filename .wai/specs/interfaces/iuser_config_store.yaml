@@ -1,0 +1,67 @@
+id: iuser_config_store
+name: User Config Store Interface
+description: >-
+  The whole file, and the two settings anyone actually asks for by name. The field accessors exist
+  because every caller wants one setting rather than the document, and each write is
+  read-modify-write so that setting one never discards another.
+component: user_config_store
+methods:
+  - name: load
+    description: >-
+      The settings as the file holds them. An absent, unreadable or malformed file all answer the
+      same way — nothing configured — because a machine that has never been set up is a normal
+      state, and a broken file must not stop the tool running.
+    signature: 'load(): UserConfig'
+    returns: UserConfig
+    params: []
+    guarantees:
+      - idempotent
+  - name: save
+    description: Write the settings back, creating the directory on first use.
+    signature: 'save(config: UserConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: UserConfig
+        description: The settings to persist
+    effect: write
+  - name: channel
+    description: >-
+      Which release channel to track. A hand-edited or future-version file can name a channel this
+      build does not know; that answers `stable` rather than being honoured, so an unrecognized
+      value can never widen what a stable install is willing to fetch.
+    signature: 'channel(): UpdateChannel'
+    returns: UpdateChannel
+    params: []
+    guarantees:
+      - idempotent
+  - name: setChannel
+    description: Record which release channel to track, leaving every other setting as it stands.
+    signature: 'setChannel(channel: UpdateChannel): void'
+    returns: void
+    params:
+      - name: channel
+        type: UpdateChannel
+        description: The channel to track
+    effect: write
+  - name: disabledAliases
+    description: >-
+      The short command names this person has opted out of — exceptions, not selections, so an alias
+      added in a later release is active without anyone opting in.
+    signature: 'disabledAliases(): string[]'
+    returns: string[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: setDisabledAliases
+    description: Record the opted-out alias names, leaving every other setting as it stands.
+    signature: 'setDisabledAliases(names: string[]): void'
+    returns: void
+    params:
+      - name: names
+        type: string[]
+        description: The alias names to keep disabled
+    effect: write
+status: complete
+createdAt: '2026-09-22T21:18:02.040Z'
+updatedAt: '2026-09-22T21:19:47.384Z'

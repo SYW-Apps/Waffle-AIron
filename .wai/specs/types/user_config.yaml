@@ -1,0 +1,28 @@
+kind: value-object
+id: user_config
+name: UserConfig
+description: >-
+  A person's own wairon settings, at `~/.wairon/config.json` — machine-wide, never per-project, and
+  never committed. Every field is optional and the file is created on first write, so a machine that
+  has never been configured is a normal state rather than a missing one. It is deliberately tiny:
+  anything a team should agree on belongs in the project's own configuration, and anything secret
+  belongs in the credential store beside it.
+fields:
+  - name: channel
+    type: string
+    description: >-
+      Which release channel `wairon update` tracks: stable, beta, preview or dev. Absent means
+      stable.
+    optional: true
+  - name: disabledAliases
+    type: string[]
+    description: >-
+      Short command names this person has opted OUT of. Every supported alias is active by default,
+      so the list names exceptions rather than selections — which is what lets a new alias ship
+      without anyone having to opt in. Only meaningful for binary installs; an npm install registers
+      its aliases through package.json and cannot be changed from here.
+    optional: true
+methods: []
+sourcePath: src/config/userconfig.ts
+createdAt: '2026-09-22T21:17:40.819Z'
+updatedAt: '2026-09-22T21:17:41.070Z'

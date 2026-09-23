@@ -1,0 +1,30 @@
+id: user_config_store
+name: User Config Store
+description: >-
+  A person's own settings for this machine, at `~/.wairon/config.json`: which release channel to
+  track, and which short aliases they have opted out of. Read straight from disk on every call
+  rather than held in RAM, so a value another process wrote — or the installer, or a hand edit — is
+  never stale, and a corrupt or unreadable file reads as \"nothing configured\" rather than
+  throwing, because an unconfigured machine is a normal state and a broken config must not stop the
+  tool running. Sits beside the credential store in the same directory and for the same reason:
+  these are facts about a person and a machine, not about a project, so they never enter a
+  repository.
+subsystem: sdd_cli
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Deliberately standalone (the sanctioned lightweight form), on the same grounds as
+        `remote_binding_store` beside it in this subsystem: one small flat file read straight from
+        disk, two optional fields, and exactly one workflow-layer consumer in `cli_runner`. There is
+        nothing to index and nothing to project — `channel` and `disabledAliases` are read whole and
+        written whole — so a Repository with a Registry and an Index around them would be ceremony
+        with no second reader to keep consistent. Revisit when a member earns it: a second writer,
+        or a read that needs logic of its own beyond the unknown-channel fallback.
+status: complete
+createdAt: '2026-09-22T21:17:47.544Z'
+updatedAt: '2026-09-22T21:19:46.561Z'
