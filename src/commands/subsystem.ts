@@ -40,8 +40,10 @@ import {
   syncContextFiles as coreSyncContextFiles,
   hasContext as coreHasContext,
   derivedDocPaths as coreDerivedDocPaths,
+  getStatusReport as coreGetStatusReport,
+  approvalVerdict as coreApprovalVerdict,
 } from '../core/index.js';
-import type { GenerateOptions, GenerateSummary, SyncResult } from '../core/index.js';
+import type { ApprovalVerdict, GenerateOptions, GenerateSummary, StatusDecor, StatusOptions, SyncResult } from '../core/index.js';
 import { readLockState as coreReadLockState, type LockStatus, type StateId } from '../core/index.js';
 import type { ForeignFieldRepair, SpecialistRetirement, TreeExportResult, TreeImportOptions, TreeImportResult } from '../core/index.js';
 import type {
@@ -364,6 +366,26 @@ export function hasContext(): boolean {
 
 export function derivedDocPaths(): string[] {
   return coreDerivedDocPaths();
+}
+
+// cli_core_adapter.getStatusReport / approvalVerdict — 1:1 forwards to the core
+// portal, the two reads `wairon status` is now made of. The dashboard used to
+// render the completeness map itself, a second copy of ../core/status.ts that
+// differed from it only in a heading, the verdict line and twenty-one chalk
+// calls; the verdict was the difference that shipped, because one copy carried
+// it and the other did not. The report takes the terminal's colours as
+// `StatusDecor` roles, which is why one renderer can serve both readers without
+// sdd_core ever learning what a terminal is.
+//
+// `wairon status` also reached straight into ../core/specs.js for the tree — the
+// tenth time that crossing has been found, and it closes the way it always does:
+// here, on the one component whose whole job is to cross into sdd_core.
+export function getStatusReport(options: StatusOptions, decor?: StatusDecor): string {
+  return coreGetStatusReport(options, decor);
+}
+
+export function approvalVerdict(): ApprovalVerdict {
+  return coreApprovalVerdict();
 }
 
 interface SubsystemAddOptions {

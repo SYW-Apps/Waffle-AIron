@@ -27,6 +27,37 @@ client expects back from them (item 14). The library surface narrows too:
 `@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
 (item 4). Nothing here is purely additive, so `[minor]` would understate it.
 
+### The status dashboard and the status report are one renderer
+
+`runStatus` in `src/commands/status.ts` and `getStatusReport` in
+`src/core/status.ts` were the same renderer written twice: both scanned the
+tree, loaded system, subsystem, component, interface and implementation specs,
+filtered by `--subsystem`, and drew the same completeness map. Diffed against
+each other on this repository's own tree, **901 of 902 output lines were
+identical** — the differences were a heading, the approval verdict line, and 21
+`chalk` calls. That duplication had already shipped a regression: the approval
+verdict existed in one copy and not the other, so `wairon status` and
+`sdd_get_status` could disagree about whether a tree had drifted from its lock.
+
+The second copy is gone. `getStatusReport` takes an optional **`StatusDecor`**,
+a vocabulary of ROLES rather than colours — `structure`, `emphasis`,
+`layer(kind, text)`, `score(pct, text)`, `draft`, `present`, `missing` — each
+defaulting to identity, so a caller that wants plain text passes nothing and
+the report it gets back is byte-for-byte the report it always got. `wairon
+status` now supplies chalk through those roles and does nothing else: it
+refuses outside a project, asks `cli_core_adapter` for the report, prints a
+heading and the report, asks for the verdict and prints it. **The coloured
+output is unchanged** — captured under `FORCE_COLOR=1` before and after, 90,872
+bytes over 915 lines, byte-identical.
+
+Naming roles instead of colours is what makes one renderer safe for both
+readers: `src/core/status.ts` imports no `chalk` and never learns what a
+terminal is, which a test now holds it to. The command also stopped reaching
+past its adapter — it was importing `../core/specs.js` for the tree and
+`../core/index.js` for the verdict, the tenth instance of the sdd_cli→sdd_core
+crossing; `cli_core_adapter` forwards `getStatusReport` and `approvalVerdict`
+like every other core call. Six `validate --ci` warnings close with it.
+
 ### The core Portal publishes its contract, not sixteen whole modules
 
 `src/core/index.ts` realizes `core_portal`, and it carried seventeen

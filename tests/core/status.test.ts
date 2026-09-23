@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+// Imported to force colour ON for the dashboard assertions, never to build the
+// expectations: those are written out as literal escape sequences.
+import chalk from 'chalk';
 import { runStatus } from '../../src/commands/status.js';
 import { getStatusReport } from '../../src/core/status.js';
 import * as corePortal from '../../src/core/index.js';
@@ -556,11 +559,381 @@ updatedAt: '2026-06-10T22:00:00Z'
     expect(source).toMatch(/import \{ getStatusReport[^}]*\} from '\.\.\/core\/index\.js';/);
   });
 
-  it('leaves the CLI command with no second declaration of StatusOptions', () => {
+  it('leaves the CLI command with no second declaration of the report vocabulary', () => {
     // Two declarations of the same option shape is how the terminal and the
-    // MCP server come to disagree about what recursion depth means.
+    // MCP server come to disagree about what recursion depth means. The same
+    // is true of the decor roles: the terminal supplies the COLOURS, never a
+    // second opinion about what the roles are.
     const source = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/status.ts'), 'utf8');
     expect(source).not.toContain('interface StatusOptions');
-    expect(source).toContain("import type { StatusOptions } from '../core/status.js';");
+    expect(source).not.toContain('interface StatusDecor');
+    expect(source).toContain("import type { StatusDecor, StatusOptions } from '../core/status.js';");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// One renderer, two readers.
+//
+// `wairon status` used to be a second copy of this renderer: 901 of its 902
+// output lines were identical to the report's, and the line that was not was
+// the approval verdict — present in one copy, absent from the other, which is
+// how the terminal and `sdd_get_status` came to disagree about whether the tree
+// had drifted from its lock. The copy is gone; the terminal now supplies the
+// COLOURS through `StatusDecor` and nothing else.
+//
+// What is asserted below is the seam that makes that safe: the report with no
+// decor is the report it always was, every role lands where it is meant to and
+// nowhere else, and the terminal's own output carries the same escape sequences
+// it carried before the copy was deleted.
+// ---------------------------------------------------------------------------
+
+const REPO_ROOT_STATUS = path.resolve(__dirname, '..', '..');
+
+/**
+ * One tree exercising every role the report can mark: a present source file, a
+ * missing one, a layer never written, a draft tag at three levels, a score at
+ * each of the three grades, and an implementation that names no path at all.
+ */
+function createDecorFixture() {
+  const proj = createTempProject();
+  proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+  proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+status: complete
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+  proj.writeSpec('subsystem', 'sub-b', `
+schemaVersion: 1.0.0
+id: sub-b
+name: SubsystemB
+description: Subsystem B description
+parentSystem: TestSystem
+status: draft
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+  const component = (id: string, type: string, status: string) => `
+schemaVersion: 1.0.0
+id: ${id}
+name: ${id}
+description: Component ${id}
+subsystem: sub-a
+componentType: ${type}
+dependsOn: []
+status: ${status}
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`;
+  const contract = (id: string, component: string, status: string, methods: string[]) => `
+schemaVersion: 1.0.0
+id: ${id}
+name: ${id}
+description: Interface ${id}
+component: ${component}
+status: ${status}
+methods:
+${methods.map(m => `  - name: ${m}\n    description: ${m}\n    signature: "${m}(): void"\n    returns: void`).join('\n')}
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`;
+
+  proj.writeSpec('component', 'c1-full', component('c1-full', 'Orchestrator', 'complete'));
+  proj.writeSpec('interface', 'ic1-full', contract('ic1-full', 'c1-full', 'complete', ['alpha']));
+  proj.writeSpec('implementation', 'im1-full', `
+schemaVersion: 1.0.0
+id: im1-full
+name: im1-full
+description: Implementation im1-full
+contract: ic1-full
+sourcePath: src/one.ts
+status: complete
+methods:
+  - name: alpha
+    narrative:
+      - stepNumber: 1
+        description: Step
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+  proj.writeSpec('component', 'c2-gone', component('c2-gone', 'Store', 'complete'));
+  proj.writeSpec('interface', 'ic2-gone', contract('ic2-gone', 'c2-gone', 'draft', ['alpha']));
+  proj.writeSpec('implementation', 'im2-gone', `
+schemaVersion: 1.0.0
+id: im2-gone
+name: im2-gone
+description: Implementation im2-gone
+contract: ic2-gone
+sourcePath: src/gone.ts
+status: complete
+methods:
+  - name: alpha
+    narrative:
+      - stepNumber: 1
+        description: Step
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+  // Never given a contract, so the report says what is missing and what it cost.
+  proj.writeSpec('component', 'c3-bare', component('c3-bare', 'Adapter', 'draft'));
+
+  proj.writeSpec('component', 'c4-nopath', component('c4-nopath', 'Index', 'complete'));
+  proj.writeSpec('interface', 'ic4-nopath', contract('ic4-nopath', 'c4-nopath', 'complete', ['alpha']));
+  proj.writeSpec('implementation', 'im4-nopath', `
+schemaVersion: 1.0.0
+id: im4-nopath
+name: im4-nopath
+description: Implementation im4-nopath
+contract: ic4-nopath
+status: complete
+methods:
+  - name: alpha
+    narrative:
+      - stepNumber: 1
+        description: Step
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+  proj.writeSpec('component', 'c5-methods', component('c5-methods', 'Registry', 'complete'));
+  proj.writeSpec('interface', 'ic5-methods', contract('ic5-methods', 'c5-methods', 'complete', ['alpha', 'beta']));
+  proj.writeSpec('implementation', 'im5-methods', `
+schemaVersion: 1.0.0
+id: im5-methods
+name: im5-methods
+description: Implementation im5-methods
+contract: ic5-methods
+status: complete
+methods:
+  - name: alpha
+    sourcePath: src/m-here.ts
+    narrative:
+      - stepNumber: 1
+        description: Step
+        type: local
+  - name: beta
+    sourcePath: src/m-gone.ts
+    narrative:
+      - stepNumber: 1
+        description: Step
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+  fs.mkdirSync(path.join(proj.tempDir, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(proj.tempDir, 'src/one.ts'), '// one');
+  fs.writeFileSync(path.join(proj.tempDir, 'src/m-here.ts'), '// here');
+  // src/gone.ts and src/m-gone.ts are deliberately never written.
+
+  proj.activate();
+  return proj;
+}
+
+/** The report that tree has always produced, with nothing marking it up. */
+const PLAIN_FIXTURE_REPORT = [
+  '● System: TestSystem (33% Complete)',
+  '├── [Subsystem] sub-a (66%)',
+  '│   ├── [Component: Orchestrator] c1-full (100%)',
+  '│   │   ├── Interface: ic1-full (1 methods)',
+  '│   │   └── Implementation: im1-full -> src/one.ts',
+  '│   ├── [Component: Store] c2-gone (50%)',
+  '│   │   ├── Interface: ic2-gone [draft] (1 methods)',
+  '│   │   └── Implementation: im2-gone -> src/gone.ts (File Missing!)',
+  '│   ├── [Component: Adapter] c3-bare [draft] (20%)',
+  '│   │   └── Interface: Missing (-30%)',
+  '│   │   └── Implementation: Missing (-30%)',
+  '│   ├── [Component: Index] c4-nopath (80%)',
+  '│   │   ├── Interface: ic4-nopath (1 methods)',
+  '│   │   └── Implementation: im4-nopath (No source path)',
+  '│   └── [Component: Registry] c5-methods (80%)',
+  '│       ├── Interface: ic5-methods (2 methods)',
+  '│       └── Implementation: im5-methods',
+  '│           ├── method alpha -> src/m-here.ts',
+  '│           └── method beta -> src/m-gone.ts (File Missing!)',
+  '└── [Subsystem] sub-b [draft] (0%)',
+  '',
+].join('\n');
+
+describe('the report renders once and the caller decides how it looks', () => {
+  it('answers the same bytes with no decor that it answered before there was one', () => {
+    const proj = createDecorFixture();
+    try {
+      // Byte equality, not containment: the decor seam defaults every role to
+      // identity, so a report asked for plainly must be indistinguishable from
+      // the report this renderer produced when it had no roles at all.
+      expect(getStatusReport()).toBe(PLAIN_FIXTURE_REPORT);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('answers the same bytes for a decor that marks nothing', () => {
+    const proj = createDecorFixture();
+    try {
+      const identity = {
+        structure: (text: string) => text,
+        emphasis: (text: string) => text,
+        layer: (_kind: string, text: string) => text,
+        score: (_pct: number, text: string) => text,
+        draft: (text: string) => text,
+        present: (text: string) => text,
+        missing: (text: string) => text,
+      };
+      expect(getStatusReport({}, identity)).toBe(PLAIN_FIXTURE_REPORT);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('hands each part to the role that names what it is — and to no other', () => {
+    const proj = createDecorFixture();
+    try {
+      const report = getStatusReport({}, {
+        structure: text => `«s:${text}»`,
+        emphasis: text => `«e:${text}»`,
+        layer: (kind, text) => `«l/${kind}:${text}»`,
+        score: (pct, text) => `«n/${pct}:${text}»`,
+        draft: text => `«d:${text}»`,
+        present: text => `«p:${text}»`,
+        missing: text => `«m:${text}»`,
+      });
+
+      // The system's own name is the one thing marked `emphasis`, its label is
+      // the `system` layer, and the percentage arrives with its number.
+      expect(report).toContain('«l/system:● System:» «e:TestSystem» «n/33:(33% Complete)»');
+
+      // Every layer label knows which layer it is.
+      expect(report).toContain('«l/subsystem:[Subsystem] sub-a»');
+      expect(report).toContain('«l/component:[Component: Orchestrator] c1-full»');
+      expect(report).toContain('«l/interface:Interface: ic1-full»');
+      expect(report).toContain('«l/implementation:Implementation: im1-full»');
+
+      // Scaffolding — prefixes and indentation — is `structure`, one call per
+      // line covering the whole run of it rather than one per box character.
+      expect(report).toContain('«s:├── »«l/subsystem:[Subsystem] sub-a»');
+      expect(report).toContain('«s:│   ├── »«l/component:[Component: Orchestrator] c1-full»');
+      expect(report).toContain('«s:│           └── »«m:method beta -> src/m-gone.ts (File Missing!)»');
+
+      // A source file that is there is `present`; one a spec names and does not
+      // have is `missing`, which is also what an unwritten layer is.
+      expect(report).toContain('«p: -> src/one.ts»');
+      expect(report).toContain('«m: -> src/gone.ts (File Missing!)»');
+      expect(report).toContain('«p:method alpha -> src/m-here.ts»');
+      expect(report).toContain('«m:Interface: Missing (-30%)»');
+      expect(report).toContain('«m:Implementation: Missing (-30%)»');
+
+      // Detail that should recede is `structure`, not `missing`: an
+      // implementation naming no path has nothing wrong with it.
+      expect(report).toContain('«l/implementation:Implementation: im4-nopath»«s: (No source path)»');
+
+      // A status tag on anything not complete is `draft`, at all three levels,
+      // and it carries its own leading space so the role owns the whole tag.
+      expect(report).toContain('«l/interface:Interface: ic2-gone»«d: [draft]»');
+      expect(report).toContain('«l/component:[Component: Adapter] c3-bare»«d: [draft]»');
+      expect(report).toContain('«l/subsystem:[Subsystem] sub-b»«d: [draft]»');
+
+      // And nowhere else: the method COUNT beside an interface is plain text,
+      // never a score, and a complete thing gets no draft tag.
+      expect(report).toContain('«l/interface:Interface: ic1-full» (1 methods)');
+      expect(report).not.toContain('«n/1:');
+      expect(report).not.toContain('«n/2:');
+      expect(report).not.toContain('«d: [complete]»');
+      // The system name is emphasised once and never marked any other way.
+      expect(report.match(/«e:/g)).toHaveLength(1);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('keeps sdd_core ignorant of terminals — the renderer imports no chalk', () => {
+    // The whole reason the roles are named for MEANING rather than colour. A
+    // chalk import here would compile and pass every output assertion above,
+    // and would put a terminal concern inside the module the MCP server reads.
+    const source = fs.readFileSync(path.join(REPO_ROOT_STATUS, 'src/core/status.ts'), 'utf8');
+    expect(source).not.toMatch(/from ['"]chalk['"]/);
+    expect(source).not.toContain('chalk');
+  });
+});
+
+describe('wairon status keeps the colours it has always had', () => {
+  it('carries the same escape sequences for the same parts', async () => {
+    const proj = createDecorFixture();
+    const previousLevel = chalk.level;
+    // Force colour on the shared chalk instance the command imports — the
+    // FORCE_COLOR=1 case, decided at import time in a real terminal.
+    chalk.level = 1;
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await runStatus();
+      const printed = logSpy.mock.calls.map(call => call.join(' ')).join('\n');
+
+      // The sequences are written out literally rather than rebuilt with chalk:
+      // composing the expectation from the same library that produced the
+      // output would pass whatever that library did.
+      const ESC = String.fromCharCode(27);
+      const bold = (text: string) => `${ESC}[1m${text}${ESC}[22m`;
+      const colour = (code: number, text: string) => `${ESC}[${code}m${text}${ESC}[39m`;
+      const gray = (text: string) => colour(90, text);
+
+      // System: bold blue label, bold name, and a score red below 50.
+      expect(printed).toContain(
+        `${bold(colour(34, '● System:'))} ${bold('TestSystem')} ${colour(31, '(33% Complete)')}`,
+      );
+      // Subsystem: gray scaffolding, bold cyan label, yellow score at 50+.
+      expect(printed).toContain(
+        `${gray('├── ')}${bold(colour(36, '[Subsystem] sub-a'))} ${colour(33, '(66%)')}`,
+      );
+      // A draft tag is yellow, and a component label is magenta.
+      expect(printed).toContain(
+        `${gray('│   ├── ')}${colour(35, '[Component: Adapter] c3-bare')}${colour(33, ' [draft]')} ${colour(31, '(20%)')}`,
+      );
+      // An interface label is blue; the method count beside it is uncoloured.
+      expect(printed).toContain(
+        `${gray('│   │   ├── ')}${colour(34, 'Interface: ic1-full')} (1 methods)`,
+      );
+      // An implementation label is green, and so is a source file that exists.
+      expect(printed).toContain(
+        `${gray('│   │   └── ')}${colour(32, 'Implementation: im1-full')}${colour(32, ' -> src/one.ts')}`,
+      );
+      // A file the spec names and the tree does not have is red.
+      expect(printed).toContain(colour(31, ' -> src/gone.ts (File Missing!)'));
+      expect(printed).toContain(colour(31, 'Interface: Missing (-30%)'));
+      // A missing method file is red; one that is there is green.
+      expect(printed).toContain(colour(32, 'method alpha -> src/m-here.ts'));
+      expect(printed).toContain(colour(31, 'method beta -> src/m-gone.ts (File Missing!)'));
+      // "no source path" recedes into gray rather than reading as an error.
+      expect(printed).toContain(`${colour(32, 'Implementation: im4-nopath')}${gray(' (No source path)')}`);
+      // A score of 100 is green.
+      expect(printed).toContain(colour(32, '(100%)'));
+
+      // The report arrives as ONE console.log — it is no longer printed a line
+      // at a time — and it already ends its last line, so printing it must not
+      // open a second blank one between the tree and the verdict below it.
+      const treeCall = logSpy.mock.calls.find(call => String(call[0]).includes('● System:'));
+      expect(treeCall).toBeDefined();
+      expect(String(treeCall?.[0]).endsWith('\n')).toBe(false);
+      expect(String(treeCall?.[0])).toContain('[Subsystem] sub-b');
+    } finally {
+      chalk.level = previousLevel;
+      logSpy.mockRestore();
+      proj.cleanup();
+    }
   });
 });

@@ -390,5 +390,11 @@ export type { SyncResult } from './context.js';
 // CLI-specific, which put sdd_mcp behind sdd_cli for its own status tool. The
 // terminal, the MCP server and two test files all want the same report; this is
 // where they get it.
+//
+// `StatusDecor` rides the same forward because it is how a caller asks for the
+// report to be marked up: `wairon status` passes chalk in through it, and that
+// is the whole of what the terminal dashboard now does. It is a vocabulary of
+// ROLES, not colours, so the renderer behind this never learns what a terminal
+// is — which is the only reason one renderer can serve both readers.
 export { getStatusReport } from './status.js';
-export type { StatusOptions } from './status.js';
+export type { StatusDecor, StatusOptions } from './status.js';
