@@ -1,29 +1,16 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized } from '../config/paths.js';
-import { pathExists, fromProjectRoot } from '../utils/fs.js';
-import {
-  loadSystemSpec,
-  loadSubsystemSpecs,
-  loadComponentSpecs,
-  loadInterfaceSpecs,
-  loadImplementationSpecs,
-  getLoaderIssues,
-  scanAllSpecs,
-} from '../core/specs.js';
-// The approval surface comes through core_portal, not out of ../core/approval.js:
-// sdd_cli reaching into another subsystem's module is the boundary this Portal
-// exists to hold. The verdict itself is the approval comparison's own published
-// read now: the terminal and the MCP status tool have to answer the same
-// question, and two renderings of "has this drifted" that can disagree is the
-// thing a lock exists to prevent.
-import { approvalVerdict } from '../core/index.js';
-import { implementationSourceFiles } from '../models/specs.js';
-// The report itself, and the shape of its options, now live in sdd_core: the
-// terminal is one of its readers, not its owner. This file renders those same
-// numbers with colour for a human; `getStatusReport` renders them as text for
-// everyone else.
-import type { StatusOptions } from '../core/status.js';
+// Both sdd_core reads cross the subsystem boundary through cli_core_adapter,
+// the one component whose whole job is that crossing. This command used to
+// reach past it — straight into ../core/specs.js for the tree and
+// ../core/index.js for the verdict — and then render the report itself, line
+// for line, a second copy of ../core/status.ts. The two copies drifted: the
+// approval verdict existed in one of them and not the other, so `wairon status`
+// and `sdd_get_status` disagreed about whether the tree had moved away from its
+// lock. There is one renderer now, and this file only says what the colours are.
+import { getStatusReport, approvalVerdict } from './subsystem.js';
+import type { StatusDecor, StatusOptions } from '../core/status.js';
 
 // ---------------------------------------------------------------------------
 // status command
@@ -31,184 +18,106 @@ import type { StatusOptions } from '../core/status.js';
 // Shows a hierarchical completeness map of the SDD Spec Tree.
 // ---------------------------------------------------------------------------
 
+/** What each layer's label looks like in a terminal. */
+const LAYER_COLOUR: Record<string, (text: string) => string> = {
+  system: text => chalk.bold.blue(text),
+  subsystem: text => chalk.bold.cyan(text),
+  component: text => chalk.magenta(text),
+  interface: text => chalk.blue(text),
+  implementation: text => chalk.green(text),
+};
+
+/** Green at complete, yellow past halfway, red below it. */
+function scoreColour(pct: number): (text: string) => string {
+  if (pct === 100) return text => chalk.green(text);
+  if (pct >= 50) return text => chalk.yellow(text);
+  return text => chalk.red(text);
+}
+
+/**
+ * The terminal's reading of each role the report hands back. The report names
+ * what a thing IS — scaffolding, a layer label, a score, a draft tag, a source
+ * file present or missing — and this is the only place that decides what colour
+ * that is. A role the terminal does not colour is simply not listed.
+ */
+const TERMINAL_DECOR: StatusDecor = {
+  structure: text => chalk.gray(text),
+  emphasis: text => chalk.bold(text),
+  layer: (kind, text) => (LAYER_COLOUR[kind] ?? ((plain: string) => plain))(text),
+  score: (pct, text) => scoreColour(pct)(text),
+  draft: text => chalk.yellow(text),
+  present: text => chalk.green(text),
+  missing: text => chalk.red(text),
+};
+
+/**
+ * The one failure a person at a terminal can act on in the next second, and
+ * the advice that goes with it. Neither is in the report: `sdd_get_status`
+ * hands the same explanation to an agent that cannot run `wairon init`, so
+ * the suggestion belongs to the command, not to sdd_core.
+ *
+ * Recognising WHICH failure this is by its sentence is the last prose match
+ * left here — the report says THAT it failed, never which way — so the two
+ * spellings are pinned together by a test rather than by hope.
+ */
+const NO_SYSTEM_SPEC = 'L0 System specification (system.yaml) is missing.';
+const INIT_HINT = ' Run `wairon init` first.';
+
+/**
+ * A tree that will not load, said the way this command has always said it:
+ * on stderr, one line per failure, and a non-zero exit.
+ *
+ * The exit code is the whole point. A script running `wairon status` over a
+ * broken tree sees nothing else, and for one release it saw 0 — the report
+ * had become a string carrying three different outcomes, so the only way to
+ * tell a failure from a dashboard was to read the prose, and nothing did.
+ */
+function refuseUnreadableTree(explanation: string): never {
+  const lines = withoutTrailingNewline(explanation).split('\n');
+  const last = lines.length - 1;
+  if (lines[last] === NO_SYSTEM_SPEC) lines[last] += INIT_HINT;
+  for (const line of lines) logger.error(line);
+  process.exit(1);
+}
+
+/**
+ * The report already ends each line; `console.log` would add a second one.
+ * Printing through `console.log` rather than writing to the stream is what
+ * keeps the dashboard testable at all.
+ */
+function withoutTrailingNewline(text: string): string {
+  return text.endsWith('\n') ? text.slice(0, -1) : text;
+}
+
 export async function runStatus(options: StatusOptions = {}): Promise<void> {
+  // Step 1: refuse outside a wairon project — a dashboard of nothing would read
+  // like an empty tree rather than like the wrong directory.
   assertProjectInitialized();
 
-  scanAllSpecs({ recursive: options.recursive ?? true });
+  // Step 2: ask the core adapter for the completeness report, handing it the
+  // terminal's colours as roles.
+  const report = getStatusReport(options, TERMINAL_DECOR);
 
-  const system = loadSystemSpec();
-  const loaderErrors = getLoaderIssues();
-
-  if (loaderErrors.length > 0) {
-    logger.error('Failed to parse specification files:');
-    for (const issue of loaderErrors) {
-      const prefix = issue.specId ? chalk.gray(`[${issue.specId}] `) : '';
-      logger.error(`${prefix}[${issue.code}] ${issue.message}`);
-    }
-    process.exit(1);
+  // Step 3: decide whether the tree could be reported on at all.
+  if (report.failed) {
+    // Step 4: print the explanation as an error and exit non-zero, naming
+    // `wairon init` when there is no system specification.
+    refuseUnreadableTree(report.text);
   }
 
-  let subsystems = loadSubsystemSpecs();
-  let components = loadComponentSpecs();
-  let interfaces = loadInterfaceSpecs();
-  let implementations = loadImplementationSpecs();
-
-  if (options.subsystem) {
-    subsystems = subsystems.filter(s => s.id === options.subsystem || s.id.startsWith(`${options.subsystem}::`));
-    components = components.filter(c => c.subsystem === options.subsystem || c.subsystem.startsWith(`${options.subsystem}::`));
-    interfaces = interfaces.filter(i => {
-      const c = components.find(comp => comp.id === i.component);
-      return c !== undefined;
-    });
-    implementations = implementations.filter(im => {
-      const inf = interfaces.find(i => i.id === im.contract);
-      return inf !== undefined;
-    });
-  }
-
-  if (!system) {
-    logger.error('L0 System specification (system.yaml) is missing. Run `wairon init` first.');
-    process.exit(1);
-  }
-
+  // Step 5: print a heading and the report beneath it.
   logger.header('Architecture Status Dashboard');
   logger.blank();
+  console.log(withoutTrailingNewline(report.text));
 
-  // 1. Calculate completeness for all components
-  const componentScores = new Map<string, number>();
-
-  for (const comp of components) {
-    let score = 20; // 20% for component specification existing
-
-    const intf = interfaces.find(i => i.component === comp.id);
-    if (intf) {
-      score += 30; // 30% for interface specification existing
-    }
-
-    const impl = implementations.find(im => intf && im.contract === intf.id);
-    if (impl) {
-      score += 30; // 30% for implementation specification existing
-      const sourceFiles = implementationSourceFiles(impl);
-      if (sourceFiles.length > 0 && sourceFiles.every(f => pathExists(fromProjectRoot(f)))) {
-        score += 20; // 20% for every named concrete source file existing on disk
-      }
-    }
-
-    // Cap at 50% if either component, interface, or implementation is explicitly draft/design
-    const isDraft =
-      comp.status === 'draft' ||
-      comp.status === 'design' ||
-      (intf && (intf.status === 'draft' || intf.status === 'design')) ||
-      (impl && (impl.status === 'draft' || impl.status === 'design'));
-
-    if (isDraft) {
-      score = Math.min(score, 50);
-    }
-
-    componentScores.set(comp.id, score);
-  }
-
-  // Helper to calculate subsystem score
-  const getSubsystemScore = (subId: string): number => {
-    const sub = subsystems.find(s => s.id === subId);
-    if (!sub) return 0;
-
-    const subComps = components.filter(c => c.subsystem === subId);
-    if (subComps.length === 0) return 0;
-
-    const totalScore = subComps.reduce((acc, c) => acc + (componentScores.get(c.id) ?? 0), 0);
-    let avg = Math.round(totalScore / subComps.length);
-
-    if (sub.status === 'draft' || sub.status === 'design') {
-      avg = Math.min(avg, 50);
-    }
-    return avg;
-  };
-
-  // Calculate system score
-  const totalSubsystemsScore = subsystems.reduce((acc, s) => acc + getSubsystemScore(s.id), 0);
-  const systemScore = subsystems.length > 0 ? Math.round(totalSubsystemsScore / subsystems.length) : 0;
-
-  // Print System
-  const systemColor = systemScore === 100 ? chalk.green : systemScore >= 50 ? chalk.yellow : chalk.red;
-  console.log(`${chalk.bold.blue('● System:')} ${chalk.bold(system.name)} ${systemColor(`(${systemScore}% Complete)`)}`);
-
-  // Print Subsystems and Components
-  for (let i = 0; i < subsystems.length; i++) {
-    const sub = subsystems[i];
-    const isLastSub = i === subsystems.length - 1;
-    const subPrefix = isLastSub ? '└── ' : '├── ';
-    const subIndent = isLastSub ? '    ' : '│   ';
-
-    const subScore = getSubsystemScore(sub.id);
-    const subStatusStr = sub.status !== 'complete' ? chalk.yellow(` [${sub.status}]`) : '';
-    const subScoreColor = subScore === 100 ? chalk.green : subScore >= 50 ? chalk.yellow : chalk.red;
-
-    console.log(`${chalk.gray(subPrefix)}${chalk.bold.cyan(`[Subsystem] ${sub.id}`)}${subStatusStr} ${subScoreColor(`(${subScore}%)`)}`);
-
-    const subComps = components.filter(c => c.subsystem === sub.id);
-    for (let j = 0; j < subComps.length; j++) {
-      const comp = subComps[j];
-      const isLastComp = j === subComps.length - 1;
-      const compPrefix = isLastComp ? '└── ' : '├── ';
-      const compIndent = isLastComp ? '    ' : '│   ';
-
-      const compScore = componentScores.get(comp.id) ?? 0;
-      const compStatusStr = comp.status !== 'complete' ? chalk.yellow(` [${comp.status}]`) : '';
-      const compScoreColor = compScore === 100 ? chalk.green : compScore >= 50 ? chalk.yellow : chalk.red;
-
-      console.log(`${chalk.gray(subIndent + compPrefix)}${chalk.magenta(`[Component: ${comp.componentType}] ${comp.id}`)}${compStatusStr} ${compScoreColor(`(${compScore}%)`)}`);
-
-      const intf = interfaces.find(inf => inf.component === comp.id);
-      const impl = implementations.find(im => intf && im.contract === intf.id);
-
-      // Print interface info
-      const intfPrefix = (intf && impl) ? '├── ' : '└── ';
-      if (intf) {
-        const intfStatusStr = intf.status !== 'complete' ? chalk.yellow(` [${intf.status}]`) : '';
-        console.log(`${chalk.gray(subIndent + compIndent + intfPrefix)}${chalk.blue(`Interface: ${intf.id}`)}${intfStatusStr} (${intf.methods.length} methods)`);
-      } else {
-        console.log(`${chalk.gray(subIndent + compIndent + intfPrefix)}${chalk.red('Interface: Missing (-30%)')}`);
-      }
-
-      // Print implementation info
-      if (impl) {
-        const implStatusStr = impl.status !== 'complete' ? chalk.yellow(` [${impl.status}]`) : '';
-        const methodsWithOwnPath = impl.methods.filter(m => m.sourcePath);
-        let pathStr: string;
-        if (impl.sourcePath) {
-          pathStr = pathExists(fromProjectRoot(impl.sourcePath))
-            ? chalk.green(` -> ${impl.sourcePath}`)
-            : chalk.red(` -> ${impl.sourcePath} (File Missing!)`);
-        } else if (methodsWithOwnPath.length > 0) {
-          // No implementation-level path, but methods name their own — listed below
-          // instead of claiming there is no source path at all.
-          pathStr = '';
-        } else {
-          pathStr = chalk.gray(' (No source path)');
-        }
-        console.log(`${chalk.gray(subIndent + compIndent + '└── ')}${chalk.green(`Implementation: ${impl.id}`)}${implStatusStr}${pathStr}`);
-
-        const methodIndent = subIndent + compIndent + '    ';
-        for (let k = 0; k < methodsWithOwnPath.length; k++) {
-          const method = methodsWithOwnPath[k];
-          const isLastMethod = k === methodsWithOwnPath.length - 1;
-          const methodPrefix = isLastMethod ? '└── ' : '├── ';
-          const methodPath = method.sourcePath as string;
-          const methodLine = pathExists(fromProjectRoot(methodPath))
-            ? chalk.green(`method ${method.name} -> ${methodPath}`)
-            : chalk.red(`method ${method.name} -> ${methodPath} (File Missing!)`);
-          console.log(`${chalk.gray(methodIndent + methodPrefix)}${methodLine}`);
-        }
-      } else {
-        console.log(`${chalk.gray(subIndent + compIndent + '└── ')}${chalk.red('Implementation: Missing (-30%)')}`);
-      }
-    }
-  }
-
-  // The same approval verdict the MCP report carries — the CLI is where a
-  // human actually looks, so it must not be the surface that stays quiet.
+  // Step 6: ask what the lock says about this tree. The same verdict the MCP
+  // report carries — the CLI is where a human actually looks, so it must not be
+  // the surface that stays quiet.
   const lock = approvalVerdict();
+
+  // Step 7: print the verdict, choosing severity from whether it reports drift
+  // rather than by matching its wording — which is why the verdict answers a
+  // fact beside the sentence.
   if (lock.text.trim()) {
     logger.blank();
     if (lock.drifted) logger.warn(lock.text.trim());
@@ -216,4 +125,5 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
   }
 
   logger.blank();
+  // Step 8: done.
 }

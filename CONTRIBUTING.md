@@ -51,7 +51,10 @@ Two traps for scripted edits specifically:
 - **A quoted heredoc still loses doubled backslashes here.** `<<'EOF'` keeps a lone
   backslash but collapses `\\` to `\`, so `p.replace(/\\/g, "/")` arrives as
   `p.replace(/\/g, "/")` — an unterminated character class, and a syntax error at run
-  time. Write the script with the file-writing tool, or avoid doubled backslashes.
+  time. **It does not always fail loudly.** The same collapse inside an anchor string turns
+  `\\n` into a real newline, so the text simply does not match and the edit is skipped
+  with no error at all — which is how it was found the second time. Write the script with
+  the file-writing tool, or avoid doubled backslashes, and check the edit applied.
 
 Byte counts show it too: a CRLF file loses exactly one byte per line when it is
 flattened, so `wc -c` before and after a rewrite is evidence.
@@ -86,8 +89,8 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 222 files / 3774 tests |
-| `npx vitest run --config vitest.e2e.config.ts` | 6 files / 30 tests |
+| `npx vitest run` | 222 files / 3784 tests |
+| `npx vitest run --config vitest.e2e.config.ts` | 7 files / 33 tests |
 | `npm run build` | clean |
 | `node dist/cli/index.js validate` | 0 errors, 0 warnings |
 | `node dist/cli/index.js validate --ci` | 0 errors, 0 warnings |

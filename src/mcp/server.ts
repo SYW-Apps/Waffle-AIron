@@ -2279,6 +2279,11 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           subsystem,
           recursive: recursive ?? true,
         });
+        // The text goes out whether or not the tree loaded. A client asking
+        // after status most needs to hear that it will NOT load, and unlike
+        // the terminal this tool has no exit code to spend on it — so the
+        // report's `failed` fact belongs to `wairon status`, and the
+        // explanation belongs here.
         // Step 2: which trees this answer spans.
         const family = statusFamilyContext();
         // Step 3: what the lock says about the tree as it stands. An agent
@@ -2287,7 +2292,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // important thing this answer can carry — and silence reads exactly like
         // being current, which is what this tool used to answer.
         const verdict = approvalVerdict();
-        return text(`${family}${report}${verdict.text}`);
+        return text(`${family}${report.text}${verdict.text}`);
       } catch (e) {
         return errText(String(e));
       }

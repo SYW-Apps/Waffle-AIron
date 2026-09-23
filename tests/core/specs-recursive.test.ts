@@ -477,7 +477,7 @@ describe('recursive subproject loading and namespacing', () => {
     expect(valResultFiltered.issues.some(i => i.specId === 'billing')).toBe(false);
 
     // Check status report with subsystem option
-    const statusReport = getStatusReport({ subsystem: 'billing::invoice' });
+    const statusReport = getStatusReport({ subsystem: 'billing::invoice' }).text;
     expect(statusReport).toContain('billing::invoice');
     expect(statusReport).toContain('billing::invoice_portal');
     expect(statusReport).not.toContain('billing\n');

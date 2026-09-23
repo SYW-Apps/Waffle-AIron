@@ -586,13 +586,25 @@ describe('the approval, published on core_portal', () => {
     expect(source).toContain("import { settledSpecPaths } from './index.js'");
   });
   it('is how the commands reach it — neither imports the module', () => {
-    // The one assertion a type-check cannot make: both imports compile either
-    // way, so only the import SITE says which side of the boundary the command
-    // is on.
+    // The one assertion a type-check cannot make: every spelling compiles, so
+    // only the import SITE says which side of the boundary the command is on.
+    // Neither command may name ./approval.js. Where each one is ALLOWED to take
+    // the verdict from differs, and that difference is the point:
+    //   lock.ts   — the core portal's barrel.
+    //   status.ts — cli_core_adapter, the component whose whole job is the
+    //               crossing. `wairon status` reached the barrel directly until
+    //               the dashboard stopped rendering the report itself; the
+    //               import-graph check (UNDECLARED_DEPENDENCY) names that reach
+    //               because cli_runner declares no edge to core_portal.
     for (const rel of ['src/commands/lock.ts', 'src/commands/status.ts']) {
       const source = fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
       expect(source).not.toMatch(/from '\.\.\/core\/approval\.js'/);
-      expect(source).toMatch(/from '\.\.\/core\/index\.js'/);
     }
+    const lockSource = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/lock.ts'), 'utf8');
+    expect(lockSource).toMatch(/from '\.\.\/core\/index\.js'/);
+
+    const statusSource = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/status.ts'), 'utf8');
+    expect(statusSource).toContain("import { getStatusReport, approvalVerdict } from './subsystem.js';");
+    expect(statusSource).not.toMatch(/^import .*from '\.\.\/core\/index\.js';$/m);
   });
 });

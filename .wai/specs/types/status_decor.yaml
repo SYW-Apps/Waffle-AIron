@@ -1,0 +1,50 @@
+kind: value-object
+id: status_decor
+name: StatusDecor
+description: >-
+  How a caller wants the completeness report marked up, named by what each part MEANS rather than by
+  how it should look. Every role is optional and defaults to leaving the text alone, so a caller
+  that wants plain text passes nothing and a caller that wants colour supplies its own. The point of
+  naming roles instead of colours is that the renderer stays ignorant of terminals: it knows a line
+  is a missing layer, not that missing is red — which is what lets one renderer serve a terminal, an
+  MCP client and anything else without any of them forking it.
+fields:
+  - name: structure
+    type: (string) => string
+    description: >-
+      The tree's own scaffolding — prefixes, indentation, and detail that should recede, like a spec
+      id beside an error or a note that no source path is set.
+    optional: true
+  - name: emphasis
+    type: (string) => string
+    description: 'The one name the reader came for: the system''s own.'
+    optional: true
+  - name: layer
+    type: (string, string) => string
+    description: >-
+      A layer's label, given which layer it is — system, subsystem, component, interface or
+      implementation — so a caller may distinguish them or not, as it chooses.
+    optional: true
+  - name: score
+    type: (number, string) => string
+    description: >-
+      A completeness percentage, given the number, so a caller can grade it however it grades
+      things. The renderer never decides that 100 is good and 40 is bad; it reports the number and
+      who is reading decides what that means.
+    optional: true
+  - name: draft
+    type: (string) => string
+    description: A status tag on something not yet complete.
+    optional: true
+  - name: present
+    type: (string) => string
+    description: A source file that exists where the spec says it should.
+    optional: true
+  - name: missing
+    type: (string) => string
+    description: A layer that was never written, or a source file a spec names that is not there.
+    optional: true
+methods: []
+sourcePath: src/core/status.ts
+createdAt: '2026-09-23T14:52:19.788Z'
+updatedAt: '2026-09-23T14:54:08.902Z'

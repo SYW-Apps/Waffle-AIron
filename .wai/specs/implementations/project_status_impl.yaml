@@ -23,9 +23,9 @@ methods:
         onFalseStep: 4
       - stepNumber: 3
         description: >-
-          Answer with each failure named — the file, the code and the message. A tree that will not
-          load is precisely when somebody asks after its status, so refusing to answer would
-          withhold the one thing they need
+          Answer with each failure named — the file, the code and the message — and say plainly that
+          the report failed. Refusing to answer would withhold the one thing the asker needs;
+          answering without marking it failed would let a script read a broken tree as a healthy one
         type: return
         outcome: parse failures
       - stepNumber: 4
@@ -36,8 +36,8 @@ methods:
         onFalseStep: 6
       - stepNumber: 5
         description: >-
-          Say the system specification is missing, which is a different state from a tree that
-          failed to parse and reads differently to whoever is looking
+          Say the system specification is missing, and mark the report failed. A different state
+          from a tree that would not parse, and it reads differently to whoever is looking
         type: return
         outcome: no system
       - stepNumber: 6
@@ -48,16 +48,19 @@ methods:
       - stepNumber: 7
         description: >-
           Count each component's progress through the layers — whether it has a contract, an
-          implementation, and source files its implementation names — and narrow to one subsystem
-          when the options asked for that
+          implementation, and source files its implementation names — narrowing to one subsystem
+          when the options asked for that, and marking each part through the role the caller
+          supplied: structure, layer, score, draft, present or missing. Roles rather than colours,
+          so this renderer never learns what a terminal is
         type: local
       - stepNumber: 8
         description: >-
-          Answer the report as text, so a terminal, an MCP client and a test all read the same
-          account rather than three renderings that can drift apart
+          Answer the report as text, not failed. One renderer, so the terminal and the MCP status
+          tool cannot drift into disagreeing about what this tree contains — which they did, for as
+          long as each had its own copy
         type: return
         outcome: report
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-09-23T11:47:14.030Z'
+updatedAt: '2026-09-23T15:17:51.283Z'

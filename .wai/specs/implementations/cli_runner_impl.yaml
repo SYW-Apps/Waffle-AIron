@@ -1228,11 +1228,10 @@ methods:
         type: return
         outcome: reported remotely
       - stepNumber: 5
-        description: >-
-          Not attached: read and print the LOCAL spec tree's completeness dashboard, scoped to a
-          subsystem when one was named, listing each implementation's source file and each method's
-          own source file, flagged when missing.
-        type: local
+        description: 'Not attached: print the LOCAL spec tree''s completeness dashboard'
+        type: call
+        targetComponent: cli_runner
+        targetMethod: localStatus
     symbol: statusCommand
   - name: runMcpServe
     sourcePath: src/commands/mcp.ts
@@ -1823,6 +1822,53 @@ methods:
         type: return
         outcome: npm managed
     symbol: runAliasesDisable
+  - name: localStatus
+    sourcePath: src/commands/status.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse outside a wairon project, naming `wairon init` — a dashboard of nothing would read
+          like an empty tree rather than like the wrong directory
+        type: local
+      - stepNumber: 2
+        description: >-
+          Ask the core adapter for the completeness report, handing it the terminal's colours as
+          roles: structure for the tree's scaffolding, layer for each label, score for a percentage,
+          draft for anything not yet complete, and present or missing for a source file
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: getStatusReport
+      - stepNumber: 3
+        description: Decide whether the tree could be reported on at all
+        type: branch
+        condition: the report came back failed
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Print the explanation as an error and exit non-zero, naming `wairon init` when there is no
+          system specification. A script running this over a tree that will not parse must not read
+          it as healthy, and the exit code is the only part of that a script sees
+        type: return
+        outcome: unreadable
+      - stepNumber: 5
+        description: Print a heading and the report beneath it
+        type: local
+      - stepNumber: 6
+        description: Ask what the lock says about this tree
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: approvalVerdict
+      - stepNumber: 7
+        description: >-
+          Print the verdict, choosing severity from whether it reports drift rather than by matching
+          its wording — which is why the verdict answers a fact beside the sentence
+        type: local
+      - stepNumber: 8
+        description: Done
+        type: return
+        outcome: printed
+    symbol: runStatus
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -1861,4 +1907,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-23T13:37:26.918Z'
+updatedAt: '2026-09-23T15:18:25.780Z'

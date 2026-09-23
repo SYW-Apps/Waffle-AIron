@@ -163,7 +163,7 @@ describe('sdd_get_status answers with the lock verdict', () => {
 
     // The report is a read over the spec loader alone: it counts completeness
     // and knows nothing about approval. Each presenter composes the two.
-    const report = getStatusReport({});
+    const report = getStatusReport({}).text;
     expect(report).not.toMatch(/since approval/);
     expect(report).toContain('alpha');
 

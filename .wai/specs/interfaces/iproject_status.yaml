@@ -7,18 +7,24 @@ component: project_status
 methods:
   - name: report
     description: >-
-      The completeness report for the tree, or for one subsystem when the options name it. A parse
-      failure is reported rather than thrown — a tree that will not load is exactly when somebody is
-      asking after its status, so the report names each file and what was wrong with it instead of
-      refusing to answer.
-    signature: 'report(options: StatusOptions): string'
-    returns: string
+      The completeness report for the tree, or for one subsystem when the options name it, marked up
+      however the caller asked — and whether it could be produced at all. A parse failure is
+      reported rather than thrown, because a tree that will not load is exactly when somebody is
+      asking after its status; it comes back as text with `failed` set, so a caller decides what to
+      do from the fact rather than by recognising a sentence. There is ONE renderer: the terminal
+      and the MCP status tool read the same text, differing only in what they do with the roles and
+      the fact it hands back.
+    signature: 'report(options: StatusOptions, decor?: StatusDecor): StatusReport'
+    returns: StatusReport
     params:
       - name: options
         type: StatusOptions
         description: How much of the tree to cover
+      - name: decor
+        type: StatusDecor
+        description: How to mark up each kind of thing, or nothing for plain text
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-23T11:46:44.909Z'
-updatedAt: '2026-09-23T11:47:13.215Z'
+updatedAt: '2026-09-23T15:17:47.350Z'

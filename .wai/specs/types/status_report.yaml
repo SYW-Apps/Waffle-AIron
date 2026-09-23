@@ -1,0 +1,28 @@
+kind: value-object
+id: status_report
+name: StatusReport
+description: >-
+  The completeness report, and whether it could be produced at all. Two parts rather than one
+  string, for the same reason the approval verdict has two: a caller decides what to DO from the
+  fact, never by matching the prose. A terminal exits non-zero on a tree it could not read; an MCP
+  client shows the text and carries on. Neither should have to recognise a sentence to tell those
+  apart.
+fields:
+  - name: text
+    type: string
+    description: >-
+      The report to show. On failure this is the explanation — each file that would not parse and
+      what was wrong with it, or that no system specification exists — because a tree that will not
+      load is exactly when somebody is asking after its status.
+    optional: false
+  - name: failed
+    type: boolean
+    description: >-
+      Whether the tree could be reported on at all: false for a normal report, true when a spec file
+      would not parse or there is no L0 system. A script running `wairon status` over a broken tree
+      must not read it as healthy.
+    optional: false
+methods: []
+sourcePath: src/core/status.ts
+createdAt: '2026-09-23T15:17:35.871Z'
+updatedAt: '2026-09-23T15:17:41.147Z'
