@@ -14,7 +14,7 @@ import {
   getLoaderIssues,
 } from '../../src/core/specs.js';
 import { validateSddTree } from '../../src/core/validation.js';
-import { getStatusReport } from '../../src/commands/status.js';
+import { getStatusReport } from '../../src/core/status.js';
 
 const now = new Date().toISOString();
 

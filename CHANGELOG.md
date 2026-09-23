@@ -26,6 +26,52 @@ narrative step is now refused where it used to be stripped (item 13). Nine
 client expects back from them (item 14). Nothing here is purely additive, so
 `[minor]` would understate it.
 
+### The completeness report belongs to core, not to a CLI command
+
+`src/mcp/server.ts` imported `getStatusReport` out of `../commands/status.js` —
+sdd_mcp reaching into an sdd_cli command file, which put one subsystem behind
+another for its own status tool. The same crossing the context documents and the
+AI guide closed, in the other direction.
+
+The report was never CLI-specific: the terminal, the MCP server and two test
+files all want it. It lives in **`src/core/status.ts`** now, realizing
+`project_status` — a `read` Orchestrator over the spec loader, because asking
+after a project's state must never change it. `core_portal` publishes
+`getStatusReport` by identity rather than wrapped, and `StatusOptions` beside it;
+`mcp_core_adapter` forwards 1:1 and the MCP server binds it at the top of the
+file, where it has to be — the report was once lazily required from the command
+module, which resolved against the CLI bundle and answered "Cannot find module"
+on the hosted data plane instead of the dashboard.
+
+`runStatus` — the coloured terminal dashboard — stays in sdd_cli, and takes the
+option shape from core rather than declaring a second copy of it. Two
+declarations of the same options is how the terminal and the MCP server come to
+disagree about what recursion depth means.
+
+**One behaviour is dropped, deliberately and visibly.** `getStatusReport` used to
+append the approval verdict — which specs have moved since a human last locked
+the tree. That line reads the lock record and the approval digests, and
+`project_status` depends on the spec loader alone: keeping it raises two
+`UNDECLARED_DEPENDENCY` warnings, `project_status` → `approval_comparison` and
+`project_status` → `lock_store`, measured rather than assumed. `wairon status`
+still prints the verdict, because `runStatus` keeps the reader it always had;
+`sdd_get_status` no longer does. Putting it back on the MCP report is a spec
+change — the dependency declared on `project_status`, or the verdict modelled as
+its own published read — not a `lint.allow`.
+
+Four tests in `tests/core/status.test.ts`, covering the boundary rather than the
+report's content, which was already covered. Two of them are the same assertion
+at different strengths on purpose: the portal answers the same string as the
+module, AND it is the same function — a wrapper passes the first and fails the
+second, and the identity is what `CALL_STEP_UNREALIZED`'s N:1 forwarding exempts.
+The other two are source scans, the one assertion a type-check cannot make:
+`src/mcp/server.ts` names no `commands/status.js` in any spelling — static
+import, lazy require or dynamic — and `src/commands/status.ts` declares no
+`StatusOptions` of its own. All four fail when their half of the change is
+reverted; the same-string test holds against a wrapper, which is exactly the gap
+the identity test fills. The temp-project helper moved to module scope so the new
+block reuses it instead of growing a second copy.
+
 ### The context documents, and who is allowed to write them
 
 `.wai/context/` holds two kinds of document and the code treated them as one.

@@ -17,11 +17,11 @@ import {
 import { approvalRecord, diffAgainstApproval, diffSize, movedChildren } from '../core/index.js';
 import { describeApprover } from '../core/lockfile.js';
 import { implementationSourceFiles } from '../models/specs.js';
-
-export interface StatusOptions {
-  subsystem?: string;
-  recursive?: boolean | number;
-}
+// The report itself, and the shape of its options, now live in sdd_core: the
+// terminal is one of its readers, not its owner. This file renders those same
+// numbers with colour for a human; `getStatusReport` renders them as text for
+// everyone else.
+import type { StatusOptions } from '../core/status.js';
 
 // ---------------------------------------------------------------------------
 // status command
@@ -228,13 +228,10 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
  *
  * Silent for a project that was never approved: absence of an approval is the
  * normal state of a tree still being designed, not news.
+ *
+ * Answers whether it IS drift alongside the text — so the caller picks its
+ * severity from the fact rather than by matching this function's own wording.
  */
-function lockLine(): string {
-  return lockReport().text;
-}
-
-/** The same verdict, plus whether it IS drift — so the caller picks its severity
- *  from the fact rather than by matching this function's own wording. */
 function lockReport(): { text: string; drifted: boolean } {
   const quiet = { text: '', drifted: false };
   try {
@@ -299,164 +296,3 @@ function lockReport(): { text: string; drifted: boolean } {
     return quiet; // never let a report line break the report
   }
 }
-
-export function getStatusReport(options: StatusOptions = {}): string {
-  scanAllSpecs({ recursive: options.recursive ?? true });
-
-  const system = loadSystemSpec();
-  const loaderErrors = getLoaderIssues();
-
-  if (loaderErrors.length > 0) {
-    let errText = 'Failed to parse specification files:\n';
-    for (const issue of loaderErrors) {
-      const prefix = issue.specId ? `[${issue.specId}] ` : '';
-      errText += `${prefix}[${issue.code}] ${issue.message}\n`;
-    }
-    return errText;
-  }
-
-  if (!system) {
-    return 'L0 System specification (system.yaml) is missing.';
-  }
-
-  let subsystems = loadSubsystemSpecs();
-  let components = loadComponentSpecs();
-  let interfaces = loadInterfaceSpecs();
-  let implementations = loadImplementationSpecs();
-
-  if (options.subsystem) {
-    subsystems = subsystems.filter(s => s.id === options.subsystem || s.id.startsWith(`${options.subsystem}::`));
-    components = components.filter(c => c.subsystem === options.subsystem || c.subsystem.startsWith(`${options.subsystem}::`));
-    interfaces = interfaces.filter(i => {
-      const c = components.find(comp => comp.id === i.component);
-      return c !== undefined;
-    });
-    implementations = implementations.filter(im => {
-      const inf = interfaces.find(i => i.id === im.contract);
-      return inf !== undefined;
-    });
-  }
-
-  let output = '';
-  const componentScores = new Map<string, number>();
-
-  for (const comp of components) {
-    let score = 20;
-
-    const intf = interfaces.find(i => i.component === comp.id);
-    if (intf) {
-      score += 30;
-    }
-
-    const impl = implementations.find(im => intf && im.contract === intf.id);
-    if (impl) {
-      score += 30;
-      const sourceFiles = implementationSourceFiles(impl);
-      if (sourceFiles.length > 0 && sourceFiles.every(f => pathExists(fromProjectRoot(f)))) {
-        score += 20;
-      }
-    }
-
-    const isDraft =
-      comp.status === 'draft' ||
-      comp.status === 'design' ||
-      (intf && (intf.status === 'draft' || intf.status === 'design')) ||
-      (impl && (impl.status === 'draft' || impl.status === 'design'));
-
-    if (isDraft) {
-      score = Math.min(score, 50);
-    }
-
-    componentScores.set(comp.id, score);
-  }
-
-  const getSubsystemScore = (subId: string): number => {
-    const sub = subsystems.find(s => s.id === subId);
-    if (!sub) return 0;
-
-    const subComps = components.filter(c => c.subsystem === subId);
-    if (subComps.length === 0) return 0;
-
-    const totalScore = subComps.reduce((acc, c) => acc + (componentScores.get(c.id) ?? 0), 0);
-    let avg = Math.round(totalScore / subComps.length);
-
-    if (sub.status === 'draft' || sub.status === 'design') {
-      avg = Math.min(avg, 50);
-    }
-    return avg;
-  };
-
-  const totalSubsystemsScore = subsystems.reduce((acc, s) => acc + getSubsystemScore(s.id), 0);
-  const systemScore = subsystems.length > 0 ? Math.round(totalSubsystemsScore / subsystems.length) : 0;
-
-  output += `● System: ${system.name} (${systemScore}% Complete)\n`;
-
-  for (let i = 0; i < subsystems.length; i++) {
-    const sub = subsystems[i];
-    const isLastSub = i === subsystems.length - 1;
-    const subPrefix = isLastSub ? '└── ' : '├── ';
-    const subIndent = isLastSub ? '    ' : '│   ';
-
-    const subScore = getSubsystemScore(sub.id);
-    const subStatusStr = sub.status !== 'complete' ? ` [${sub.status}]` : '';
-
-    output += `${subPrefix}[Subsystem] ${sub.id}${subStatusStr} (${subScore}%)\n`;
-
-    const subComps = components.filter(c => c.subsystem === sub.id);
-    for (let j = 0; j < subComps.length; j++) {
-      const comp = subComps[j];
-      const isLastComp = j === subComps.length - 1;
-      const compPrefix = isLastComp ? '└── ' : '├── ';
-      const compIndent = isLastComp ? '    ' : '│   ';
-
-      const compScore = componentScores.get(comp.id) ?? 0;
-      const compStatusStr = comp.status !== 'complete' ? ` [${comp.status}]` : '';
-
-      output += `${subIndent}${compPrefix}[Component: ${comp.componentType}] ${comp.id}${compStatusStr} (${compScore}%)\n`;
-
-      const intf = interfaces.find(inf => inf.component === comp.id);
-      const impl = implementations.find(im => intf && im.contract === intf.id);
-
-      const intfPrefix = (intf && impl) ? '├── ' : '└── ';
-      if (intf) {
-        const intfStatusStr = intf.status !== 'complete' ? ` [${intf.status}]` : '';
-        output += `${subIndent}${compIndent}${intfPrefix}Interface: ${intf.id}${intfStatusStr} (${intf.methods.length} methods)\n`;
-      } else {
-        output += `${subIndent}${compIndent}${intfPrefix}Interface: Missing (-30%)\n`;
-      }
-
-      if (impl) {
-        const implStatusStr = impl.status !== 'complete' ? ` [${impl.status}]` : '';
-        const methodsWithOwnPath = impl.methods.filter(m => m.sourcePath);
-        let pathStr: string;
-        if (impl.sourcePath) {
-          pathStr = pathExists(fromProjectRoot(impl.sourcePath))
-            ? ` -> ${impl.sourcePath}`
-            : ` -> ${impl.sourcePath} (File Missing!)`;
-        } else if (methodsWithOwnPath.length > 0) {
-          pathStr = '';
-        } else {
-          pathStr = ' (No source path)';
-        }
-        output += `${subIndent}${compIndent}└── Implementation: ${impl.id}${implStatusStr}${pathStr}\n`;
-
-        const methodIndent = `${subIndent}${compIndent}    `;
-        for (let k = 0; k < methodsWithOwnPath.length; k++) {
-          const method = methodsWithOwnPath[k];
-          const isLastMethod = k === methodsWithOwnPath.length - 1;
-          const methodPrefix = isLastMethod ? '└── ' : '├── ';
-          const methodPath = method.sourcePath as string;
-          const fileMissing = !pathExists(fromProjectRoot(methodPath));
-          output += `${methodIndent}${methodPrefix}method ${method.name} -> ${methodPath}${fileMissing ? ' (File Missing!)' : ''}\n`;
-        }
-      } else {
-        output += `${subIndent}${compIndent}└── Implementation: Missing (-30%)\n`;
-      }
-    }
-  }
-
-  output += lockLine();
-
-  return output;
-}
-

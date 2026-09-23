@@ -17,7 +17,11 @@ import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
-import { getStatusReport } from '../commands/status.js';
+// mcp_core_adapter's completeness report (icore_portal getStatusReport), taken
+// from the core barrel like every other core call this file makes. It used to
+// come out of src/commands/status.ts — sdd_mcp reaching into an sdd_cli command
+// file for a report that was never CLI-specific.
+import { getStatusReport } from '../core/index.js';
 import type { ProjectConfig } from '../models/project.js';
 // mcp_core_adapter's project configuration read (icore_portal loadProjectConfig,
 // null when the project has none) and the renames (icore_portal
@@ -2258,11 +2262,13 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     ({ subsystem, recursive }) => {
       try {
         // STATIC import, not a lazy require: the server is bundled (tsup), and a
-        // runtime `require('../commands/status.js')` resolves against the bundle's
-        // directory — where that file does not exist. It worked from the CLI
-        // (whose bundle happened to contain it) and failed on the HOSTED data
-        // plane, where sdd_get_status answered "Cannot find module" instead of
-        // the dashboard.
+        // runtime require of a relative path resolves against the BUNDLE's
+        // directory — where the module does not exist. This report was lazily
+        // required from src/commands/status.ts once: it worked from the CLI
+        // (whose bundle happened to contain that file) and failed on the HOSTED
+        // data plane, where sdd_get_status answered "Cannot find module" instead
+        // of the dashboard. The source module moved; the reason it must be bound
+        // at the top of the file did not.
         const report = getStatusReport({
           subsystem,
           recursive: recursive ?? true,

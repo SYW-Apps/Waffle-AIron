@@ -241,3 +241,15 @@ export { readStampVersion } from './stamp.js';
 // rather than merely unpublished.
 export { syncContextFiles, hasContext, derivedDocPaths } from './context.js';
 export type { SyncResult } from './context.js';
+
+// The completeness report (icore_portal getStatusReport) — a 1:1 forward to the
+// project status, republished by identity rather than wrapped, so the Portal
+// method and the Orchestrator function are the same function.
+//
+// sdd_mcp was importing this out of ../commands/status.js: the MCP server
+// reaching into an sdd_cli command file for a report that was never
+// CLI-specific, which put sdd_mcp behind sdd_cli for its own status tool. The
+// terminal, the MCP server and two test files all want the same report; this is
+// where they get it.
+export { getStatusReport } from './status.js';
+export type { StatusOptions } from './status.js';
