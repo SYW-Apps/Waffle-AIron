@@ -1,0 +1,24 @@
+id: iproject_status
+name: Project Status Interface
+description: >-
+  One question: how far along is this spec tree? Answered as text, so a terminal, an MCP client and
+  a test all read the same account rather than three that can disagree.
+component: project_status
+methods:
+  - name: report
+    description: >-
+      The completeness report for the tree, or for one subsystem when the options name it. A parse
+      failure is reported rather than thrown — a tree that will not load is exactly when somebody is
+      asking after its status, so the report names each file and what was wrong with it instead of
+      refusing to answer.
+    signature: 'report(options: StatusOptions): string'
+    returns: string
+    params:
+      - name: options
+        type: StatusOptions
+        description: How much of the tree to cover
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-23T11:46:44.909Z'
+updatedAt: '2026-09-23T11:47:13.215Z'

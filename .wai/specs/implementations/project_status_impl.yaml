@@ -1,0 +1,63 @@
+id: project_status_impl
+name: Project Status Implementation
+description: >-
+  src/core/status.ts. Every layer is counted from the specs the loader already holds rather than
+  from the filesystem, so the report describes the tree as the rest of wairon sees it — a report
+  built by walking directories could disagree with the validator about what exists, and the
+  disagreement would be invisible.
+contract: iproject_status
+sourcePath: src/core/status.ts
+methods:
+  - name: report
+    narrative:
+      - stepNumber: 1
+        description: Load the tree, following chained subprojects as far as the options allow
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Decide whether anything failed to parse
+        type: branch
+        condition: the loader reported issues
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Answer with each failure named — the file, the code and the message. A tree that will not
+          load is precisely when somebody asks after its status, so refusing to answer would
+          withhold the one thing they need
+        type: return
+        outcome: parse failures
+      - stepNumber: 4
+        description: Decide whether there is a system at all
+        type: branch
+        condition: no L0 system specification is present
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Say the system specification is missing, which is a different state from a tree that
+          failed to parse and reads differently to whoever is looking
+        type: return
+        outcome: no system
+      - stepNumber: 6
+        description: Read the subsystems, components, interfaces and implementations the tree holds
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 7
+        description: >-
+          Count each component's progress through the layers — whether it has a contract, an
+          implementation, and source files its implementation names — and narrow to one subsystem
+          when the options asked for that
+        type: local
+      - stepNumber: 8
+        description: >-
+          Answer the report as text, so a terminal, an MCP client and a test all read the same
+          account rather than three renderings that can drift apart
+        type: return
+        outcome: report
+    symbol: getStatusReport
+status: complete
+createdAt: '2026-09-23T11:46:54.974Z'
+updatedAt: '2026-09-23T11:47:14.030Z'

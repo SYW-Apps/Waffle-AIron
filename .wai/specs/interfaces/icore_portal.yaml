@@ -851,6 +851,16 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: getStatusReport
+    description: 'Published read: how complete the spec tree is, as text. Forwarded to the project status.'
+    signature: 'getStatusReport(options: StatusOptions): string'
+    returns: string
+    params:
+      - name: options
+        type: StatusOptions
+        description: How much of the tree to cover
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T11:11:45.449Z'
+updatedAt: '2026-09-23T11:47:02.508Z'

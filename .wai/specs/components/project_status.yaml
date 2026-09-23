@@ -1,0 +1,17 @@
+id: project_status
+name: Project Status
+description: >-
+  How complete the spec tree is, as a report anything can print: which subsystems exist, how far
+  each has been specified, and what failed to parse. Declared `read`, because asking after a
+  project's state must never change it. It lives in sdd_core rather than beside the command that
+  shows it because it has two readers already — the terminal and the MCP server — and a report the
+  MCP server reaches into a CLI command file to get is a boundary crossing waiting to be discovered.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - spec_loader
+dependencyClass: read
+status: complete
+createdAt: '2026-09-23T11:46:37.611Z'
+updatedAt: '2026-09-23T11:47:12.344Z'

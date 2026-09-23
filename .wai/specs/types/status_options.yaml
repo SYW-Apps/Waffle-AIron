@@ -1,0 +1,23 @@
+kind: value-object
+id: status_options
+name: StatusOptions
+description: >-
+  How much of the tree a status report should cover. Both fields are optional and both narrow rather
+  than widen: absent means the whole project, recursively.
+fields:
+  - name: subsystem
+    type: string
+    description: >-
+      Report on one subsystem rather than the whole tree. Accepts a namespaced id, so a chained
+      subproject's subsystem can be named from the parent.
+    optional: true
+  - name: recursive
+    type: boolean
+    description: >-
+      How far into chained subprojects to follow. Absent means all the way down; a depth may be
+      given instead of a flag to stop at a level.
+    optional: true
+methods: []
+sourcePath: src/core/status.ts
+createdAt: '2026-09-23T11:46:34.232Z'
+updatedAt: '2026-09-23T11:46:37.333Z'
