@@ -32,6 +32,22 @@ methods:
           absent or unreadable — a missing approval is an answer, not a failure
         type: local
     symbol: readLockRecordAt
+  - name: describeApprover
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Put the name beside the id when the record carries both, and answer the id alone when it
+          does not
+        type: local
+      - stepNumber: 2
+        description: >-
+          Mark it as authenticated when the instance that issued the credential vouched for the
+          identity, and leave it unmarked otherwise — a self-declared identity read off a machine
+          and one an instance authenticated are different claims, and the reader has to be able to
+          tell which they are looking at
+        type: return
+        outcome: label
+    symbol: describeApprover
 status: complete
 createdAt: '2026-07-04T12:53:38.524Z'
-updatedAt: '2026-09-20T18:12:48.544Z'
+updatedAt: '2026-09-23T12:24:31.782Z'

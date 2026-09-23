@@ -114,6 +114,67 @@ methods:
           drift even when no spec file of the parent changed
         type: return
         outcome: moved
+  - name: verdict
+    narrative:
+      - stepNumber: 1
+        description: Read the approval on record
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: approvalRecord
+      - stepNumber: 2
+        description: Decide whether this project has ever been approved
+        type: branch
+        condition: there is no approval record
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Answer silence, not drift. A tree still being designed has no approval by definition, and
+          saying so on every status would be noise standing where news should be
+        type: return
+        outcome: never approved
+      - stepNumber: 4
+        description: >-
+          Name who approved it, in the form a reviewer can match against the commit that carries the
+          lock
+        type: call
+        targetComponent: lock_store
+        targetMethod: describeApprover
+      - stepNumber: 5
+        description: >-
+          Read the subsystems that mount a chained child, then check whether any child's pin moved.
+          A moved child is a change this project should review even when none of its OWN specs
+          shifted — the trees are approved separately and the pin is the only thing that crosses
+          between them
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: movedChildren
+      - stepNumber: 6
+        description: Compare the tree against what was approved
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: diffAgainstApproval
+      - stepNumber: 7
+        description: Decide whether that comparison can be made at all
+        type: branch
+        condition: the record predates per-spec approval
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Say exactly that: the lock proves the tree validated, not which specs still match it, and
+          re-locking is what records the difference. Implying either answer would be worse than
+          naming the limit
+        type: return
+        outcome: coarse lock
+      - stepNumber: 9
+        description: >-
+          Answer the verdict, naming the specs that actually moved rather than a count — a number
+          tells somebody that something changed, a list tells them what to look at — and report
+          drift when either the specs or a child's pin moved
+        type: return
+        outcome: verdict
+    symbol: approvalVerdict
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-09-20T18:13:06.937Z'
+updatedAt: '2026-09-23T12:24:20.763Z'

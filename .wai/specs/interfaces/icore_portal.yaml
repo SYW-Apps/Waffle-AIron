@@ -861,6 +861,15 @@ methods:
         description: How much of the tree to cover
     guarantees:
       - idempotent
+  - name: approvalVerdict
+    description: >-
+      Published read: what the lock says about the tree as it stands, as a line to show plus whether
+      it is drift. Forwarded to the approval comparison.
+    signature: 'approvalVerdict(): ApprovalVerdict'
+    returns: ApprovalVerdict
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T11:47:02.508Z'
+updatedAt: '2026-09-23T12:24:36.777Z'
