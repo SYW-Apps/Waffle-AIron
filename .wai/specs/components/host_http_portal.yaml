@@ -12,6 +12,15 @@ dependsOn:
   - host_server
   - host_request_orchestrator
 portalType: HTTP_API
+mounts:
+  - portal: web_portal
+    prefixes:
+      - /web
+      - /
+    via: handleWebRequest
+  - portal: share_portal
+    prefixes:
+      - /share
 status: complete
 createdAt: '2026-07-04T12:33:41.703Z'
-updatedAt: '2026-07-04T13:06:22.588Z'
+updatedAt: '2026-09-24T20:10:25.468Z'

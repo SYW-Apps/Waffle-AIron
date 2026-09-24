@@ -639,6 +639,39 @@ describe('array deltas upsert by identity and honour delete markers', () => {
     invalidateSpecCache();
     expect(loadSubsystemSpec('billing')!.trustedLinks).toEqual([]);
   });
+
+  it('listener mounts: keyed by portal, upserted and deletable', () => {
+    // A listener mounts each portal once, so the portal is the mount's identity;
+    // without it a one-mount delta replaced the whole table.
+    project();
+    saveSubsystemSpec({ schemaVersion: '1.0.0', id: 'clinic', name: 'Clinic', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
+    saveComponentSpec({
+      id: 'public_listener', name: 'Public listener', description: 'd', subsystem: 'clinic', componentType: 'Portal', portalType: 'HTTP_API',
+      owns: [], dependsOn: [],
+      mounts: [
+        { portal: 'booking_portal', prefixes: ['/booking'], via: 'handleBookingRequest' },
+        { portal: 'referral_portal', prefixes: ['/referrals'] },
+        { portal: 'share_portal', prefixes: ['/share'] },
+      ],
+      createdAt: now, updatedAt: now,
+    } as never);
+    invalidateSpecCache();
+
+    updateSpec('component', 'public_listener', { mounts: [{ portal: 'booking_portal', prefixes: ['/', '/booking'], via: 'handleBookingRequest' }] });
+    invalidateSpecCache();
+    expect(loadComponentSpec('public_listener')!.mounts).toEqual([
+      { portal: 'booking_portal', prefixes: ['/', '/booking'], via: 'handleBookingRequest' },
+      { portal: 'referral_portal', prefixes: ['/referrals'] },
+      { portal: 'share_portal', prefixes: ['/share'] },
+    ]);
+
+    updateSpec('component', 'public_listener', { mounts: [{ portal: 'referral_portal', action: 'delete' }] });
+    invalidateSpecCache();
+    expect(loadComponentSpec('public_listener')!.mounts).toEqual([
+      { portal: 'booking_portal', prefixes: ['/', '/booking'], via: 'handleBookingRequest' },
+      { portal: 'share_portal', prefixes: ['/share'] },
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------

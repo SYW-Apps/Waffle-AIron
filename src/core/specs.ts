@@ -596,6 +596,10 @@ function stripNamespaceFromComponent(spec: ComponentSpec, prefix: string): Compo
       ...b,
       component: relativizeId(b.component, prefix),
     })),
+    mounts: spec.mounts?.map(m => ({
+      ...m,
+      portal: relativizeId(m.portal, prefix),
+    })),
   };
 }
 
@@ -1067,6 +1071,10 @@ export function rewriteSpecRefs(
     // A Portal's dispatch table carries component refs of its own, each with
     // the method that component serves the capability with.
     for (const binding of entries(raw.dispatch)) rewritePair(binding, 'component', 'method');
+    // A listener's mount names the portal it serves. It carries no method, so
+    // it reads like a dependsOn entry: left out, renaming a mounted portal
+    // leaves the listener routing requests to nothing.
+    for (const mount of entries(raw.mounts)) rewrite(mount, 'portal', 'component');
   } else if (kind === 'subsystem') {
     // Lifecycle entrypoints name components (same-subsystem by rule, but
     // rewrite defensively so a legacy/misdeclared tree can't silently dangle
@@ -1146,6 +1154,8 @@ function identityKeyOf(field: string, item: unknown): string | null {
   const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
   switch (field) {
     case 'dispatch':           return str(o.capability);
+    // A listener mounts each portal once, so the portal IS the mount's identity.
+    case 'mounts':             return str(o.portal);
     case 'lifecycle':          return `${String(o.phase)} ${String(o.component)} ${String(o.method)}`;
     case 'emits':
     case 'subscribesTo':       return `${String(o.topic)} ${o.event === undefined ? '' : String(o.event)}`;
@@ -1606,6 +1616,12 @@ export class SpecWorkspace {
         dispatch: comp.dispatch?.map(b => ({
           ...b,
           component: qualifyId(b.component, namespacePrefix, this.rootSubsystems),
+        })),
+        // A listener's mount names a portal id, qualified like any other
+        // component reference so a chained listener still finds its portals.
+        mounts: comp.mounts?.map(m => ({
+          ...m,
+          portal: qualifyId(m.portal, namespacePrefix, this.rootSubsystems),
         })),
       }));
 
@@ -3606,6 +3622,10 @@ export class SpecWorkspace {
           if (Array.isArray(out.dispatch)) {
             out.dispatch = out.dispatch.map((b: any) =>
               (typeof b?.component === 'string' ? { ...b, component: q(b.component) } : b));
+          }
+          if (Array.isArray(out.mounts)) {
+            out.mounts = out.mounts.map((m: any) =>
+              (typeof m?.portal === 'string' ? { ...m, portal: q(m.portal) } : m));
           }
           break;
         case 'interface':

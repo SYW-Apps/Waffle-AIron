@@ -391,12 +391,13 @@ methods:
       so a file could export whatever it liked under a component's name and nothing looked. That is
       one half of the same hole as a contract promising a parameter it never passes. A method's
       `exportedVia` names the export a consumer imports to REACH it — the value that composes it,
-      which `symbol` cannot name because `symbol` names the function inside — and a declared handle
-      the file does not actually export is itself a finding, so naming one can never become a
-      free-text suppression. Both questions are asked only of a file read at exact grade, and a
-      taker counts only when its own import specifier resolves to the file it is accused of taking
-      from: below that nothing separates an export from a mention, or a shared word from a shared
-      module.
+      which `symbol` cannot name because `symbol` names the function inside — and a listener's mount
+      names the router entry it calls to hand a portal its requests; both are declared publication,
+      and a declared handle the file does not actually export is itself a finding, so naming one can
+      never become a free-text suppression. Both questions are asked only of a file read at exact
+      grade, and a taker counts only when its own import specifier resolves to the file it is
+      accused of taking from: below that nothing separates an export from a mention, or a shared
+      word from a shared module.
     signature: 'exportConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -413,8 +414,9 @@ methods:
       - code: UNREALIZED_EXPORT_HANDLE
         severity: warning
         summary: >-
-          An implementation method declares an `exportedVia` handle its own source file does not
-          export — the spec names a published route to the method that nobody can import
+          A declared publication handle — a method's `exportedVia`, or the router entry a listener
+          mounts a portal through — names an export its own source file does not have: the spec
+          names a route to the code that nobody can import
   - name: typeShape
     description: >-
       Rule type-shape. Code-to-contract for the DATA: a type spec's `fields` are compared, name by
@@ -496,4 +498,4 @@ methods:
           them is telling a caller an argument is required when it is not, or the reverse
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-23T20:35:36.556Z'
+updatedAt: '2026-09-24T19:44:03.529Z'

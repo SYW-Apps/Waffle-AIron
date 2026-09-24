@@ -860,6 +860,49 @@ methods:
         type: local
     symbol: check
     exportedVia: invariantReferencesRule
+  - name: portalMounts
+    sourcePath: src/core/rules/wiring/portal-mounts.ts
+    narrative:
+      - stepNumber: 1
+        label: each-mount
+        description: >-
+          For each Portal declaring mounts, and each mount it declares, look up the component the
+          mount names
+        type: local
+      - stepNumber: 2
+        description: Decide whether the mount names something that can serve routes
+        type: branch
+        condition: the named component exists and is a Portal
+        onTrueStep: 4
+        onFalseStep: 3
+      - stepNumber: 3
+        label: bad-target
+        description: >-
+          Report the mount, naming what it points at. A listener mounting a component that does not
+          exist, or one that is not a Portal, routes requests to nothing
+        type: local
+      - stepNumber: 4
+        label: coverage
+        description: >-
+          Report each HTTP endpoint of the mounted portal whose path lies under none of this mount's
+          prefixes. The contract promises that route, and the listener sends it nowhere near the
+          portal that owns it; a path lies under a prefix when it equals it or continues it past a
+          slash, which is what lets `/` cover the root and nothing else
+        type: local
+      - stepNumber: 5
+        label: reachability
+        description: >-
+          Once every listener's mounts are known, report each Portal that declares HTTP endpoints,
+          declares no mounts field of its own, and is mounted by no listener. A listener is marked
+          by declaring the field, even empty, because it is the one kind of portal the host starts
+          directly rather than something else serving it
+        type: local
+      - stepNumber: 6
+        description: 'Done: every mount checked and every HTTP portal accounted for'
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: portalMountsRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-23T17:53:17.379Z'
+updatedAt: '2026-09-24T19:43:53.054Z'

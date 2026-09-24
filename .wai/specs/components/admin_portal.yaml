@@ -16,6 +16,24 @@ dependsOn:
   - pack_orchestrator
   - project_lifecycle_orchestrator
 portalType: HTTP_API
+mounts:
+  - portal: identity_portal
+    prefixes:
+      - /identity
+    via: handleIdentityRequest
+  - portal: project_policy_portal
+    prefixes:
+      - /projects
+      - /instance
+    via: handlePolicyRequest
+  - portal: landscape_portal
+    prefixes:
+      - /landscape
+    via: handleLandscapeRequest
+  - portal: operations_portal
+    prefixes:
+      - /operations
+    via: handleOperationsRequest
 status: complete
 createdAt: '2026-07-04T12:33:47.174Z'
-updatedAt: '2026-09-11T21:03:47.583Z'
+updatedAt: '2026-09-24T20:10:27.189Z'
