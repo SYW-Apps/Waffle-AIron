@@ -4861,7 +4861,8 @@ export function findLegacySpecFiles(): { path: string; expected: string }[] {
  * data. The L0 is a singleton, so its id is informational.
  */
 export function loadSpec(kind: WritableSpecKind, id: string): StoredSpec | null {
-  return current().load(kind, id);
+  const workspace: SpecWorkspace = current();
+  return workspace.load(kind, id);
 }
 
 /**
@@ -4870,7 +4871,8 @@ export function loadSpec(kind: WritableSpecKind, id: string): StoredSpec | null 
  * the authoring seam judges before it calls this.
  */
 export function saveSpec(kind: WritableSpecKind, spec: StoredSpec): string[] {
-  return current().save(kind, spec);
+  const workspace: SpecWorkspace = current();
+  return workspace.save(kind, spec);
 }
 
 /**
@@ -4878,7 +4880,8 @@ export function saveSpec(kind: WritableSpecKind, spec: StoredSpec): string[] {
  * document of the named kind; false when none was stored. The L0 is refused.
  */
 export function deleteSpec(kind: WritableSpecKind, id: string): boolean {
-  return current().delete(kind, id);
+  const workspace: SpecWorkspace = current();
+  return workspace.delete(kind, id);
 }
 
 export function updateSpec(
