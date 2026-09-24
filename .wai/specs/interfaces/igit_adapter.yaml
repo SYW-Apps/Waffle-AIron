@@ -52,6 +52,17 @@ methods:
     params:
       - name: subpath
         type: string
+  - name: excludeLocalFiles
+    description: >-
+      Keep this container's local-only state out of commits without touching the shared .gitignore:
+      add `.wai/git.json` — the per-container connection config — to `.git/info/exclude`.
+      `.wai/lock.json` is deliberately NOT excluded, because approvals live there and a hosted
+      project's approval must reach the remote to mean anything outside this container; an exclusion
+      an earlier wairon version wrote is actively removed, with a warning, so an upgraded container
+      stops silently hiding an approval that should ship. Idempotent.
+    signature: 'excludeLocalFiles(): void'
+    returns: void
+    params: []
 status: complete
 createdAt: '2026-07-04T16:31:59.438Z'
-updatedAt: '2026-07-16T15:24:09.061Z'
+updatedAt: '2026-09-24T14:31:50.309Z'
