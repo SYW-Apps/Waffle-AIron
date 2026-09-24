@@ -44,8 +44,7 @@ import {
 } from '../core/index.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
-import { resolveNarrativeLabels } from '../core/narrative-labels.js';
-import { EndpointSchema, type Endpoint, type SubsystemSpec, type SystemSpec, type TypeSpec, type InterfaceSpec, type MethodSignature } from '../models/specs.js';
+import { EndpointSchema, type Endpoint, type PublicInterface, type SubsystemSpec, type SystemSpec, type TypeSpec, type InterfaceSpec, type ImplementationSpec } from '../models/specs.js';
 import {
   listResources as coreListSkillResources,
   readResource as coreReadSkillResource,
@@ -64,7 +63,11 @@ import { resolveDomains } from '../core/index.js';
 // The gated authoring seam — shared by every access path (see core/authoring.ts).
 // Statically imported for the same reason as the core adapters below: it reads
 // the request-scoped project root at CALL time.
-import { addComponent, updateSpecGated, moveMethods } from '../core/authoring.js';
+// Only the seam's PORTAL names cross at runtime (writeSpec, deleteSpec,
+// updateSpecGated, moveMethods); its value shapes come across as types.
+import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from '../core/authoring.js';
+import type { SpecDeletion, SpecRestatement, SpecWriteReceipt } from '../core/authoring.js';
+import type { TestsToRevisit } from '../core/validation.js';
 import type { SpecChange, SpecChangeReport } from '../core/specs.js';
 import type { ComponentSpec } from '../models/specs.js';
 // Statically imported for the same reason as the skills adapter: these read the
@@ -232,6 +235,45 @@ function qualifiedComponentId(id: string): string {
   return chained.length === 1 ? chained[0] : id;
 }
 
+/**
+ * mcp_orchestrator.setPublicInterfaces step 2 — a REPLACEMENT expressed as the
+ * one delta the store's merge understands.
+ *
+ * The merge upserts publicInterfaces by their identity, component + interface:
+ * a restated entry updates in place and a new one is appended, so what the list
+ * no longer names has to be DELETED explicitly — one marker per stored entry
+ * beyond the number the list restates under that identity (a stored duplicate
+ * the list restates once loses its surplus copy). A list naming one identity
+ * twice cannot be expressed at all — the merge would fold the second entry into
+ * the first — so it is answered with the refusal instead of being written as
+ * something other than what was asked.
+ */
+function publicInterfacesReplacement(
+  subsystem: string,
+  stored: PublicInterface[],
+  list: PublicInterface[],
+): { publicInterfaces: Record<string, unknown>[] } | string {
+  const identity = (pi: PublicInterface): string => `${pi.component ?? '(no component)'}${pi.interface ? `/${pi.interface}` : ''}`;
+  const restated = new Map<string, number>();
+  for (const pi of list) restated.set(identity(pi), (restated.get(identity(pi)) ?? 0) + 1);
+  const twice = [...restated].filter(([, n]) => n > 1).map(([key]) => `"${key}"`);
+  if (twice.length) {
+    return `Refusing to set the public interfaces of subsystem "${subsystem}": the list names ${twice.join(', ')} more than once. `
+      + 'An entry is identified by its component and interface, so two entries sharing one cannot be told apart by any '
+      + 'later edit — bind each to its own component or interface, or merge them into one. Nothing was written.';
+  }
+  const seen = new Map<string, number>();
+  const deletes: Record<string, unknown>[] = [];
+  for (const pi of stored) {
+    const key = identity(pi);
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+    if (seen.get(key)! > (restated.get(key) ?? 0)) {
+      deletes.push({ component: pi.component, interface: pi.interface, action: 'delete' });
+    }
+  }
+  return { publicInterfaces: [...deletes, ...list] };
+}
+
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -247,6 +289,16 @@ function json(value: unknown): CallToolResult {
 
 function errText(message: string): CallToolResult {
   return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
+}
+
+/**
+ * A thrown refusal answered as its own sentence. The authoring seam's refusals
+ * (a missing parent, a status a restatement would lower, an unresolved label)
+ * are written to be read as they stand, so they are not wrapped a second time
+ * in the error's own "Error:" prefix.
+ */
+function errMessage(e: unknown): CallToolResult {
+  return errText(e instanceof Error ? e.message : String(e));
 }
 
 /**
@@ -335,44 +387,52 @@ function renderChangeReport(report: SpecChangeReport): string {
   // The tests this write just invalidated. A structured field nobody renders
   // is a field nobody reads, and the whole point is that the change which
   // creates the collision is the one that says so.
-  if (report.testsToRevisit.length) {
-    lines.push('', 'TESTS TO REVISIT:');
-    for (const entry of report.testsToRevisit) {
-      lines.push(`- ${entry.method} (searched as "${entry.symbol}")`);
-      if (entry.imported.length) lines.push(`  imports it: ${entry.imported.join(', ')}`);
-      if (entry.mentioned.length) lines.push(`  names it: ${entry.mentioned.join(', ')}`);
-      if (entry.indiscriminate) {
-        lines.push('  names it: withheld — the bare name matches more than a tenth of the suite, so the list carries no signal.');
-      }
-    }
-  }
+  lines.push(...renderTestsToRevisit(report.testsToRevisit));
   return lines.join('\n');
 }
 
 /** The kinds a spec write addresses, as the receipt and the change report name them. */
 const SPEC_KINDS = ['system', 'subsystem', 'component', 'interface', 'implementation', 'type'] as const;
 
-/** The lifecycle statuses, weakest first (the policy that reads them: "Status at create", below). */
-const STATUS_ORDER = ['draft', 'design', 'complete'] as const;
-type StatedStatus = typeof STATUS_ORDER[number];
+/**
+ * The lifecycle statuses a tool's input may state, as the zod vocabulary its
+ * schema is built from. What a stated status MAY do — raise or restate the
+ * stored one, never lower it — is the authoring seam's rule, not this list's.
+ */
+const STATUS_VALUES = ['draft', 'design', 'complete'] as const;
+type StatedStatus = typeof STATUS_VALUES[number];
+
+/** The tests a write invalidated, field for field as the authoring seam reports them. */
+const testsToRevisitOutput = z.array(z.object({
+  method: z.string().describe('The contract method this write changed or deleted.'),
+  symbol: z.string().describe('The code-level name searched for: the method\'s `symbol` when it declares one, else its name.'),
+  imported: z.array(z.string()).describe('Test files that IMPORT that symbol — the high-confidence list, because an import is a binding and not a coincidence.'),
+  mentioned: z.array(z.string()).describe('Test files that name the symbol without importing it — usually a test driving it through a portal. Empty when `indiscriminate` is true.'),
+  indiscriminate: z.boolean().describe('True when the bare name matched more than a tenth of the test suite, so the mention list was withheld as noise.'),
+})).describe(
+  'The tests that encode a method this write changed or deleted, one entry per such method. Empty when the '
+  + 'write touched no method, when the project declares no `rules.conformance.testRoots`, or when nothing '
+  + 'references them. Read it before promising that existing tests still pass.',
+);
 
 /**
- * sdd_mcp::SpecWriteReceipt — what a create tool answers with as data.
- *
- * A create is an UPSERT, so "added" and "re-authored in place" are two outcomes
- * of the same call. The sentence has always said which; this says it in a field,
- * because a caller that has to read English to find out is a caller that
- * eventually stops checking.
+ * The tests-to-revisit block of a text answer — rendered identically for a
+ * delta, a restatement and a delete, because a structured field nobody renders
+ * is a field nobody reads.
  */
-type SpecWriteReceipt = {
-  kind: typeof SPEC_KINDS[number];
-  id: string;
-  name: string;
-  replacedExisting: boolean;
-  status?: StatedStatus;
-  notices: string[];
-  scaffoldedProjectPath?: string;
-};
+function renderTestsToRevisit(entries: TestsToRevisit[]): string[] {
+  if (!entries.length) return [];
+  const lines = ['', 'TESTS TO REVISIT:'];
+  for (const entry of entries) {
+    lines.push(`- ${entry.method} (searched as "${entry.symbol}")`);
+    if (entry.imported.length) lines.push(`  imports it: ${entry.imported.join(', ')}`);
+    if (entry.mentioned.length) lines.push(`  names it: ${entry.mentioned.join(', ')}`);
+    if (entry.indiscriminate) {
+      lines.push('  names it: withheld — the bare name matches more than a tenth of the suite, so the list carries no signal.');
+    }
+  }
+  return lines;
+}
 
 const specWriteReceiptOutput = {
   kind: z.enum(SPEC_KINDS).describe('The spec kind written.'),
@@ -382,8 +442,8 @@ const specWriteReceiptOutput = {
     'True when a spec already held this id and the call re-authored it in place rather than adding one. '
     + 'The notices then say what was carried forward, removed or cleared by the restatement.',
   ),
-  status: z.enum(STATUS_ORDER).optional().describe(
-    'The lifecycle status written. Absent for a type, which carries none.',
+  status: z.enum(STATUS_VALUES).optional().describe(
+    'The lifecycle status written. Absent for the L0 and a type, which carry none.',
   ),
   notices: z.array(z.string()).describe(
     'The notice lines the text answer lists, one per entry: what was carried forward, what a restatement '
@@ -392,19 +452,30 @@ const specWriteReceiptOutput = {
   scaffoldedProjectPath: z.string().optional().describe(
     'The child project directory a chained subsystem\'s create scaffolded; absent for every other write.',
   ),
+  testsToRevisit: testsToRevisitOutput,
   ...staleServerOutput,
 } satisfies Record<keyof SpecWriteReceipt | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
 /**
  * A create's answer: the sentence it has always given, with the NOTICE block
- * composed from the receipt's own notices, and the receipt itself beside it.
- * One list feeds both channels, so the prose can never report a notice the data
- * omits.
+ * composed from the receipt's own notices and the tests it invalidated, and the
+ * receipt itself beside it. One list feeds both channels, so the prose can never
+ * report a notice the data omits.
  */
 function writeReceipt(sentence: string, receipt: SpecWriteReceipt): CallToolResult {
   const noticeBlock = receipt.notices.length ? `\n\nNOTICE:\n- ${receipt.notices.join('\n- ')}` : '';
-  return structured(`${sentence}${noticeBlock}`, receipt);
+  const testsBlock = renderTestsToRevisit(receipt.testsToRevisit).join('\n');
+  return structured(`${sentence}${noticeBlock}${testsBlock ? `\n${testsBlock}` : ''}`, receipt);
 }
+
+/** What sdd_delete_spec answers with as data. */
+const specDeletionOutput = {
+  kind: z.enum(SPEC_KINDS).describe('The spec kind deleted.'),
+  id: z.string().describe('The id the spec was stored under.'),
+  deleted: z.boolean().describe('True when a spec document was removed.'),
+  testsToRevisit: testsToRevisitOutput,
+  ...staleServerOutput,
+} satisfies Record<keyof SpecDeletion | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
 /** ONE change a write made, field for field as core reports it. */
 const specChangeOutput = {
@@ -431,17 +502,7 @@ const specChangeReportOutput = {
   ),
   notices: z.array(z.string()).describe('Store placement notices, gate warnings and delta notices.'),
   summary: z.string().describe('One line for people.'),
-  testsToRevisit: z.array(z.object({
-    method: z.string().describe('The contract method this write changed or deleted.'),
-    symbol: z.string().describe('The code-level name searched for: the method\'s `symbol` when it declares one, else its name.'),
-    imported: z.array(z.string()).describe('Test files that IMPORT that symbol — the high-confidence list, because an import is a binding and not a coincidence.'),
-    mentioned: z.array(z.string()).describe('Test files that name the symbol without importing it — usually a test driving it through a portal. Empty when `indiscriminate` is true.'),
-    indiscriminate: z.boolean().describe('True when the bare name matched more than a tenth of the test suite, so the mention list was withheld as noise.'),
-  })).describe(
-    'The tests that encode a method this write changed or deleted, one entry per such method. Empty when the '
-    + 'write touched no method, when the project declares no `rules.conformance.testRoots`, or when nothing '
-    + 'references them. Read it before promising that existing tests still pass.',
-  ),
+  testsToRevisit: testsToRevisitOutput,
   ...staleServerOutput,
 } satisfies Record<keyof SpecChangeReport | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
@@ -673,214 +734,21 @@ function reg<Args extends Record<string, unknown>>(
 }
 
 // ---------------------------------------------------------------------------
-// Re-authoring semantics: REPLACE what the input expresses, CARRY what it cannot
-//
-// Every sdd_initialize_*/sdd_add_*/sdd_define_*/sdd_write_* tool is an UPSERT:
-// calling it with an id that already exists rewrites that spec. Each tool's input
-// schema is a hand-maintained SUBSET of the canonical zod schema
-// (src/models/specs.ts), so any field the input cannot express — lint.allow, ext,
-// a Portal's auth, variant, patterns, externalLinks, the system's databases —
-// would be erased by a restatement that never mentioned it. That loss is silent:
-// the tool answers "Successfully added", and a suppressed warning coming back
-// days later is the only tell.
-//
-// So the boundary carries forward everything the input does not express, and says
-// so. The complementary half matters just as much: for fields the input DOES
-// express, replace stays the contract — an author who restates a spec means the
-// restatement. But a restatement that empties something is REPORTED, because
-// "the array I forgot to repeat is now gone" is precisely the accident this seam
-// exists to catch. Reporting costs a line of output; the alternative costs a
-// silent deletion.
-//
-// Why here and not in core/specs.ts: the store receives a whole spec object and
-// cannot distinguish "the caller cleared this" from "the caller never mentioned
-// it". Only the tool boundary, where an argument is observably absent, can tell
-// those apart — so this is the layer that owes the guarantee.
-//
-// tests/mcp/schema-field-coverage.test.ts holds the invariant that no canonical
-// field escapes this seam: every one is expressed, carried, or store-managed.
+// Re-authoring: a create tool STATES a restatement — the spec as its arguments
+// give it, plus the fields its own input schema can express — and the authoring
+// seam (core/authoring.ts writeSpec) decides everything from there: status,
+// carry, clear, removal, the gate, and the tests the write invalidated. Only the
+// door can tell a field left out from a field it has no way to say, so each tool
+// passes its `*InputFields` list; the rules that read it live in the seam, once,
+// for every door.
 // ---------------------------------------------------------------------------
 
-/** Fields the STORE decides on every write — never carried here, never reported. */
-const STORE_MANAGED_FIELDS = new Set(['status', 'updatedAt']);
-
-// ---------------------------------------------------------------------------
-// Status at create
-//
-// Every create tool used to hardcode 'draft', so a spec authored at a level the
-// author already considered settled needed a follow-up sdd_update_spec that is
-// easy to forget — and a whole tree of them is easy to forget twice. The four
-// levels that HAVE a status take one; the L0 and a type have no status field at
-// all, so the argument would be a lie there and they do not offer it.
-//
-// Omitting it keeps the same OUTCOME it always had: a new spec is born draft, a
-// re-authored one keeps the status it is stored at. It used to reach that
-// outcome by handing the store 'draft' and letting the store's no-demotion guard
-// turn it back — which meant this boundary did not KNOW the status the spec
-// would end up at, and so could not report it. The receipt has to, so the status
-// already stored is resolved here and written as itself; the store's guard stays
-// as the backstop for every other caller.
-//
-// What an explicit status must never do is undo a lock quietly, and the store
-// cannot help there — it cannot tell a stated 'draft' from the default one. Only
-// this boundary knows, so the rule lives here: a stated status may raise a
-// spec's level or restate it, never lower it.
-// ---------------------------------------------------------------------------
-
-const statusInput = z.enum(STATUS_ORDER).optional().describe(
+const statusInput = z.enum(STATUS_VALUES).optional().describe(
   'The spec\'s lifecycle status. Omitted means draft for a NEW spec and the status already stored for a '
   + 're-authoring, so a restatement never reopens a frozen spec. State it to author straight at design or '
   + 'complete instead of promoting afterwards. A status that would LOWER the stored one is refused — reopening '
   + 'a spec for revision is sdd_update_spec\'s job, which sets the demotion deliberately.',
 );
-
-/**
- * The status this create WRITES — the one the spec will actually hold — or the
- * refusal that stops it.
- *
- * `status` absent answers the status already stored, or 'draft' for a spec that
- * does not exist yet: a new spec is born draft and a re-authored one keeps what
- * it had. A stated status is written as stated, unless it would take the spec
- * backwards, which is refused by name rather than applied or silently ignored.
- *
- * Answering the stored status rather than a bare 'draft' is what lets the write
- * receipt state the status truthfully. Reporting the status ASKED FOR would be a
- * lie on exactly the call that matters — a restatement of a complete spec, which
- * keeps its status and would have been reported as draft.
- */
-function statusForCreate(
-  label: string,
-  stated: StatedStatus | undefined,
-  existing: { status?: string } | null | undefined,
-): { status: StatedStatus } | { refusal: string } {
-  // A stored status the lifecycle does not know (a legacy value) is no status
-  // to keep and none to be lowered from: it reads as "nothing held".
-  const stored = existing?.status as StatedStatus | undefined;
-  const held = stored !== undefined && STATUS_ORDER.includes(stored) ? stored : undefined;
-  if (stated === undefined) return { status: held ?? 'draft' };
-  if (held === undefined) return { status: stated };
-  const rank = (s: StatedStatus): number => STATUS_ORDER.indexOf(s);
-  if (rank(stated) < rank(held)) {
-    return {
-      refusal:
-        `Refusing to re-author ${label} at status "${stated}": it is stored at "${held}", and a create tool `
-        + 'never lowers a spec\'s status — a restatement that reopened a frozen spec would undo a lock without '
-        + `saying so. Nothing was written. To reopen it deliberately, use sdd_update_spec with `
-        + `{"status": "${stated}"}; to keep the level it has, leave status out.`,
-    };
-  }
-  return { status: stated };
-}
-
-/**
- * Fields carried whenever the input omits them, EVEN THOUGH the input could have
- * expressed them. `ext` is opaque pack/tool data the authoring agent does not own
- * and has no way to know it must restate — the schema promises it is "preserved
- * verbatim", and replace semantics would break that promise on every re-author.
- * Everything else expressed keeps replace semantics.
- */
-const ALWAYS_CARRIED_FIELDS = new Set(['ext']);
-
-function isEmptyValue(value: unknown): boolean {
-  if (value === undefined || value === null) return true;
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === 'string') return value.trim() === '';
-  if (typeof value === 'object') return Object.keys(value as object).length === 0;
-  return false;
-}
-
-/**
- * Copy every field the tool's input cannot express from the previous version onto
- * the spec about to be written. MUTATES `next`; returns the carried field names.
- *
- * Driven by the tool's own inputSchema keys, so a field added to a tool starts
- * being replaced, and a field added only to the canonical schema starts being
- * carried — both without anyone remembering to edit this list.
- */
-function carryUnexpressed<T extends Record<string, unknown>>(
-  existing: T | null | undefined,
-  next: T,
-  expressed: readonly string[],
-): string[] {
-  if (!existing) return [];
-  const carried: string[] = [];
-  for (const [field, value] of Object.entries(existing)) {
-    if (value === undefined) continue;
-    if (STORE_MANAGED_FIELDS.has(field)) continue;
-    if (expressed.includes(field) && !ALWAYS_CARRIED_FIELDS.has(field)) continue;
-    if (next[field] !== undefined) continue;
-    (next as Record<string, unknown>)[field] = value;
-    carried.push(field);
-  }
-  return carried;
-}
-
-/**
- * Expressed fields this restatement emptied. Never rewrites anything — replace
- * is the contract for what the input CAN say; this only makes the loss visible.
- */
-function clearedByOmission<T extends Record<string, unknown>>(
-  existing: T | null | undefined,
-  next: T,
-  expressed: readonly string[],
-): string[] {
-  if (!existing) return [];
-  const cleared: string[] = [];
-  for (const field of expressed) {
-    const before = existing[field];
-    if (STORE_MANAGED_FIELDS.has(field) || ALWAYS_CARRIED_FIELDS.has(field)) continue;
-    if (isEmptyValue(before) || !isEmptyValue(next[field])) continue;
-    cleared.push(Array.isArray(before) ? `${field} (had ${before.length})` : field);
-  }
-  return cleared;
-}
-
-/** Named members present before and absent now — methods dropped by a restatement. */
-function removedByName(
-  before: ReadonlyArray<{ name: string }> | undefined,
-  after: ReadonlyArray<{ name: string }> | undefined,
-): string[] {
-  if (!before?.length) return [];
-  const kept = new Set((after ?? []).map((m) => m.name));
-  return before.map((m) => m.name).filter((n) => !kept.has(n));
-}
-
-/**
- * The re-authoring notices, in the order a reader wants them: what happened,
- * what survived, what was deleted, what was emptied.
- */
-function rewriteNotices(opts: {
-  /** e.g. `Component "graphics"` */
-  label: string;
-  carried: string[];
-  cleared: string[];
-  removed: string[];
-  /** Noun for removed members, singular (default "method"). */
-  removedNoun?: string;
-  /** Appended to the removal line — e.g. " (and its narrative)". */
-  removedSuffix?: string;
-}): string[] {
-  const notices = [`${opts.label} already existed — re-authored in place; this input REPLACES what it expresses.`];
-  if (opts.carried.length) {
-    notices.push(`Carried forward (not expressible through this tool): ${opts.carried.join(', ')}.`);
-  }
-  if (opts.removed.length) {
-    const noun = opts.removedNoun ?? 'method';
-    const plural = opts.removed.length === 1 ? noun : `${noun}s`;
-    notices.push(
-      `REMOVED by this restatement: ${plural} ${opts.removed.map((n) => `"${n}"`).join(', ')}`
-      + `${opts.removedSuffix ?? ''} — absent from the input, so no longer in the spec. `
-      + `Restate them to keep them, or use sdd_update_spec to edit one member at a time.`,
-    );
-  }
-  if (opts.cleared.length) {
-    notices.push(
-      `CLEARED by omission: ${opts.cleared.join(', ')} — the argument was not repeated, so the previous value is gone. `
-      + `Use sdd_update_spec if you meant to leave it untouched.`,
-    );
-  }
-  return notices;
-}
 
 // ---------------------------------------------------------------------------
 // Built-in SDD skill resources (mcp_skills_adapter + SDK registration)
@@ -1247,37 +1115,30 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ name, vision, boundaries, globalRequirements, targetLanguage }) => {
       try {
-        const { loadSystemSpec, saveSystemSpec } = requireSpecs();
-        const now = new Date().toISOString();
-        // Re-initializing used to hard-reset databases to [] and drop the gateway
-        // publicInterfaces + diagram defaults, under a "Successfully initialized"
-        // banner. Carry them; only a genuinely new system gets the defaults.
-        const existing = loadSystemSpec();
-        const next: Partial<SystemSpec> = {
-          name,
-          vision,
-          boundaries: boundaries ?? [],
-          globalRequirements: globalRequirements ?? [],
-          ...(targetLanguage ? { targetLanguage } : {}),
+        // mcp_orchestrator.initializeSystem step 1: the restatement. Re-initializing
+        // used to hard-reset databases and drop the gateway publicInterfaces and
+        // diagram defaults; the seam carries whatever this input cannot express,
+        // and a genuinely new system gets the schema's defaults.
+        const restatement: SpecRestatement = {
+          kind: 'system',
+          spec: {
+            name,
+            vision,
+            boundaries: boundaries ?? [],
+            globalRequirements: globalRequirements ?? [],
+            ...(targetLanguage ? { targetLanguage } : {}),
+          } as unknown as SystemSpec,
+          fields: systemInputFields,
         };
-        const carried = carryUnexpressed(existing, next as Record<string, unknown>, systemInputFields);
-        const cleared = clearedByOmission(existing, next as Record<string, unknown>, systemInputFields);
-        next.schemaVersion ??= '1.0.0';
-        next.databases ??= [];
-        next.createdAt ??= now;
-        next.updatedAt = now;
-        saveSystemSpec(next as SystemSpec);
-        const notices = existing
-          ? rewriteNotices({ label: `System spec "${existing.name}"`, carried, cleared, removed: [] })
-          : [];
-        // The L0 is a singleton, read back by the id "system" — the same handle
-        // sdd_get_spec takes for it.
+        // Step 2: through the authoring seam. Step 3: the receipt — the L0 is a
+        // singleton, read back by the id "system", the handle sdd_get_spec takes.
+        const receipt = writeSpec(restatement);
         return writeReceipt(
-          `Successfully ${existing ? 're-authored' : 'initialized'} L0 System Spec for "${name}".`,
-          { kind: 'system', id: 'system', name, replacedExisting: Boolean(existing), notices },
+          `Successfully ${receipt.replacedExisting ? 're-authored' : 'initialized'} L0 System Spec for "${name}".`,
+          receipt,
         );
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -1319,54 +1180,38 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ id, name, description, publicInterfaces, projectPath, targetLanguage, profile, designDepth, trustedLinks, lifecycle, status }) => {
       try {
-        const { loadSystemSpec, loadSubsystemSpec, saveSubsystemSpec } = requireSpecs();
-        const system = loadSystemSpec();
-        if (!system) return errText('System spec must be initialized (sdd_initialize_system) first.');
-        const now = new Date().toISOString();
-        const existing = loadSubsystemSpec(id);
-        const resolved = statusForCreate(`subsystem "${id}"`, status, existing);
-        if ('refusal' in resolved) return errText(resolved.refusal);
-        const spec: SubsystemSpec = {
-          id,
-          name,
-          description,
-          parentSystem: system.name,
-          publicInterfaces: publicInterfaces ?? [],
-          projectPath,
-          ...(targetLanguage ? { targetLanguage } : {}),
-          ...(profile ? { profile } : {}),
-          ...(designDepth ? { designDepth } : {}),
-          ...(lifecycle ? { lifecycle } : {}),
-          trustedLinks: trustedLinks ?? [],
-          status: resolved.status,
-          createdAt: now,
-          updatedAt: now,
+        // mcp_orchestrator.addSubsystem step 1: the restatement. parentSystem is
+        // the seam's to derive from the L0; everything this input cannot say
+        // (lint, ext) is the seam's to carry.
+        const restatement: SpecRestatement = {
+          kind: 'subsystem',
+          spec: {
+            id,
+            name,
+            description,
+            publicInterfaces: publicInterfaces ?? [],
+            projectPath,
+            ...(targetLanguage ? { targetLanguage } : {}),
+            ...(profile ? { profile } : {}),
+            ...(designDepth ? { designDepth } : {}),
+            ...(lifecycle ? { lifecycle } : {}),
+            trustedLinks: trustedLinks ?? [],
+          } as unknown as SubsystemSpec,
+          fields: subsystemInputFields,
+          status,
         };
-        // parentSystem is derived from the L0 spec, not carried; everything else
-        // this input cannot say (lint, ext) survives the re-authoring.
-        const carried = carryUnexpressed(existing, spec as unknown as Record<string, unknown>, subsystemInputFields);
-        const cleared = clearedByOmission(existing, spec as unknown as Record<string, unknown>, subsystemInputFields);
-        if (existing) spec.createdAt = existing.createdAt;
-        const notices = existing
-          ? rewriteNotices({ label: `Subsystem "${id}"`, carried: ['createdAt', ...carried], cleared, removed: [] })
-          : [];
-        const receipt: SpecWriteReceipt = {
-          kind: 'subsystem', id, name, replacedExisting: Boolean(existing), status: resolved.status, notices,
-        };
-        // External (chained) subsystem: also scaffold the child project so the
-        // projectPath never points at an empty directory.
-        if (projectPath && projectPath.trim() !== '') {
-          const { createChainedSubsystem } = requireProvision();
-          createChainedSubsystem(spec, name);
+        // Step 2: through the authoring seam, which requires the L0 and scaffolds
+        // the child project of a chained subsystem. Step 3: the receipt.
+        const receipt = writeSpec(restatement);
+        if (receipt.scaffoldedProjectPath) {
           return writeReceipt(
-            `Successfully added external subsystem "${name}" (${id}) and scaffolded its child project at ${projectPath}.`,
-            { ...receipt, scaffoldedProjectPath: projectPath },
+            `Successfully added external subsystem "${name}" (${id}) and scaffolded its child project at ${receipt.scaffoldedProjectPath}.`,
+            receipt,
           );
         }
-        saveSubsystemSpec(spec);
         return writeReceipt(`Successfully added L1 Subsystem Spec "${name}" (${id}).`, receipt);
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -1374,7 +1219,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ subsystem: string; publicInterfaces: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[] }>(server,
     'sdd_set_public_interfaces',
     {
-      description: 'Set (replace) an existing subsystem\'s publicInterfaces, binding each to the component (and optional interface) that realizes it. Use this to backfill bindings once the subsystem\'s components exist — cross-subsystem dependencies may only target a published public component.',
+      description: 'Set (replace) an existing subsystem\'s publicInterfaces, binding each to the component (and optional interface) that realizes it. Use this to backfill bindings once the subsystem\'s components exist — cross-subsystem dependencies may only target a published public component. A replacement, not a merge: an entry left out is removed. An entry\'s identity is its component and interface, so a list naming one identity twice is refused. Written through the authoring seam as one gated delta, and answered with the change report — every entry added, changed or removed, or that nothing changed — as structured content beside the sentence.',
       inputSchema: {
         subsystem: z.string().describe('The L1 subsystem id to update'),
         publicInterfaces: z.array(z.object({
@@ -1384,20 +1229,26 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           interface: z.string().optional().describe('Optional L3 interface id on that component'),
         }).strict()).describe('The full replacement list of public interfaces for this subsystem'),
       },
+      outputSchema: specChangeReportOutput,
     },
     ({ subsystem, publicInterfaces }) => {
       try {
-        const { loadSubsystemSpec, saveSubsystemSpec } = requireSpecs();
+        // mcp_orchestrator.setPublicInterfaces step 1: the subsystem whose
+        // published surface is being set.
+        const { loadSubsystemSpec } = requireSpecs();
         const sub = loadSubsystemSpec(subsystem);
         if (!sub) return errText(`Subsystem "${subsystem}" does not exist.`);
-        saveSubsystemSpec({
-          ...sub,
-          publicInterfaces,
-          updatedAt: new Date().toISOString(),
-        });
-        return text(`Updated public interfaces for subsystem "${subsystem}" (${publicInterfaces.length} ${publicInterfaces.length === 1 ? 'entry' : 'entries'}).`);
+        // Step 2: the replacement as ONE delta, so it stays a single judged write.
+        const delta = publicInterfacesReplacement(subsystem, sub.publicInterfaces ?? [], publicInterfaces);
+        if (typeof delta === 'string') return errText(delta);
+        // Step 3: through the authoring seam. Step 4: the change report.
+        const report = updateSpecGated('subsystem', subsystem, delta);
+        return structured(
+          `Updated public interfaces for subsystem "${subsystem}" (${publicInterfaces.length} ${publicInterfaces.length === 1 ? 'entry' : 'entries'}).\n${renderChangeReport(report)}`,
+          report,
+        );
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -1405,25 +1256,27 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ subsystem: string; projectPath?: string }>(server,
     'sdd_set_subsystem_project_path',
     {
-      description: 'Set (or clear) the projectPath of an L1 Subsystem for subsystem chaining. projectPath should be a relative path to the external project root directory.',
+      description: 'Set (or clear) the projectPath of an L1 Subsystem for subsystem chaining. projectPath should be a relative path to the external project root directory. It rewrites the link only (sdd_move_subsystem_project relocates the directory with it). Written through the authoring seam as a gated delta, and answered with the change report as structured content beside the sentence.',
       inputSchema: {
         subsystem: z.string().describe('The L1 subsystem id to update'),
         projectPath: z.string().optional().describe('Relative path to external project root (or omit to clear)'),
       },
+      outputSchema: specChangeReportOutput,
     },
     ({ subsystem, projectPath }) => {
       try {
-        const { loadSubsystemSpec, saveSubsystemSpec } = requireSpecs();
-        const sub = loadSubsystemSpec(subsystem);
-        if (!sub) return errText(`Subsystem "${subsystem}" does not exist.`);
-        saveSubsystemSpec({
-          ...sub,
-          projectPath,
-          updatedAt: new Date().toISOString(),
-        });
-        return text(`Updated projectPath for subsystem "${subsystem}" to: ${projectPath || 'none (cleared)'}`);
+        // mcp_orchestrator.setSubsystemProjectPath step 1: the change as a delta —
+        // only the link moves, never the directory it names.
+        const delta = projectPath ? { projectPath } : { unset: ['projectPath'] };
+        // Step 2: through the authoring seam, which refuses an id no subsystem
+        // holds. Step 3: the change report.
+        const report = updateSpecGated('subsystem', subsystem, delta);
+        return structured(
+          `Updated projectPath for subsystem "${subsystem}" to: ${projectPath || 'none (cleared)'}\n${renderChangeReport(report)}`,
+          report,
+        );
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -1606,66 +1459,44 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, mounts, durability, dependencyClass, emits, subscribesTo, ext, status }) => {
       try {
-        const { loadSubsystemSpec, loadComponentSpec } = requireSpecs();
-        const sub = loadSubsystemSpec(subsystem);
-        if (!sub) return errText(`Parent subsystem "${subsystem}" does not exist.`);
-        const now = new Date().toISOString();
-        // Loaded BEFORE the candidate is built: the status a create may write
-        // depends on the one already stored.
-        const existing = loadComponentSpec(id);
-        const resolved = statusForCreate(`component "${id}"`, status, existing);
-        if ('refusal' in resolved) return errText(resolved.refusal);
-        const candidate: ComponentSpec = {
-          id,
-          name,
-          description,
-          subsystem,
-          componentType,
-          owns: owns ?? [],
-          dependsOn: dependsOn ?? [],
-          ...(portalType ? { portalType } : {}),
-          ...(basePath ? { basePath } : {}),
-          ...(dispatch ? { dispatch } : {}),
-          // An EMPTY list is kept: declaring the field is what marks a listener.
-          ...(mounts ? { mounts } : {}),
-          ...(durability ? { durability } : {}),
-          ...(dependencyClass ? { dependencyClass } : {}),
-          ...(emits ? { emits } : {}),
-          ...(subscribesTo ? { subscribesTo } : {}),
-          ...(ext ? { ext } : {}),
-          status: resolved.status,
-          createdAt: now,
-          updatedAt: now,
+        // mcp_orchestrator.addComponent step 1: the restatement. Re-adding an
+        // existing component used to erase everything this input cannot express
+        // — lint.allow above all, whose only symptom is the suppressed warning
+        // silently coming back — so the seam carries it, and says so.
+        const restatement: SpecRestatement = {
+          kind: 'component',
+          spec: {
+            id,
+            name,
+            description,
+            subsystem,
+            componentType,
+            owns: owns ?? [],
+            dependsOn: dependsOn ?? [],
+            ...(portalType ? { portalType } : {}),
+            ...(basePath ? { basePath } : {}),
+            ...(dispatch ? { dispatch } : {}),
+            // An EMPTY list is kept: declaring the field is what marks a listener.
+            ...(mounts ? { mounts } : {}),
+            ...(durability ? { durability } : {}),
+            ...(dependencyClass ? { dependencyClass } : {}),
+            ...(emits ? { emits } : {}),
+            ...(subscribesTo ? { subscribesTo } : {}),
+            ...(ext ? { ext } : {}),
+          } as unknown as ComponentSpec,
+          fields: componentInputFields,
+          status,
         };
-
-        // Re-adding an existing component used to erase everything this input
-        // cannot express — lint.allow above all, whose only symptom is the
-        // suppressed warning silently coming back. Carry it, and say so.
-        const carried = carryUnexpressed(existing, candidate as unknown as Record<string, unknown>, componentInputFields);
-        const cleared = clearedByOmission(existing, candidate as unknown as Record<string, unknown>, componentInputFields);
-        if (existing) candidate.createdAt = existing.createdAt;
-
-        // addComponent gates the candidate before persisting it: a field that
-        // contradicts componentType is refused while it is still only an
-        // argument, so nothing reaches disk and the fix is to retry the call.
-        // Carrying happens FIRST so the gate judges the spec that will actually
-        // be written — retyping a Portal to an Orchestrator carries its `auth`
-        // and surfaces AUTH_ON_NON_PORTAL, instead of the field vanishing unseen.
-        const notices = addComponent(candidate);
-        if (existing) {
-          notices.push(...rewriteNotices({
-            label: `Component "${id}"`,
-            carried: ['createdAt', ...carried],
-            cleared,
-            removed: [],
-          }));
-        }
+        // Step 2: the seam requires the subsystem and judges the candidate —
+        // carried fields included, so retyping a Portal carries its `auth` into
+        // the judgement — before anything reaches disk. Step 3: the receipt.
+        const receipt = writeSpec(restatement);
         return writeReceipt(
-          `Successfully ${existing ? 're-authored' : 'added'} L2 Component Spec "${name}" (${id}, ${componentType}).`,
-          { kind: 'component', id, name, replacedExisting: Boolean(existing), status: resolved.status, notices },
+          `Successfully ${receipt.replacedExisting ? 're-authored' : 'added'} L2 Component Spec "${name}" (${id}, ${componentType}).`,
+          receipt,
         );
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -1718,56 +1549,27 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ id, name, description, component, methods, status }) => {
       try {
-        const { loadComponentSpec, loadInterfaceSpec, saveInterfaceSpec } = requireSpecs();
-        const comp = loadComponentSpec(component);
-        if (!comp) return errText(`Component "${component}" does not exist.`);
-        const now = new Date().toISOString();
-        // Redefining an EXISTING interface replaces what the input expresses —
-        // but the input cannot express spec-level lint/ext or per-method endpoint
-        // bindings (sdd_set_endpoints), and may omit per-method ext. Carry those
-        // forward instead of silently dropping them, at BOTH levels: the same
-        // rule applied per method, keyed off the method input's own field list.
-        const existing = loadInterfaceSpec(id);
-        const resolved = statusForCreate(`interface "${id}"`, status, existing);
-        if ('refusal' in resolved) return errText(resolved.refusal);
-        const carried: string[] = [];
-        const specMethods = (methods ?? []).map((m) => {
-          const prev = existing?.methods.find((p) => p.name === m.name);
-          const next = { ...m } as unknown as Record<string, unknown>;
-          for (const field of carryUnexpressed(prev as unknown as Record<string, unknown>, next, interfaceMethodInputFields)) {
-            carried.push(`${field} (${m.name})`);
-          }
-          return next as unknown as MethodSignature;
-        });
-        const spec: InterfaceSpec = {
-          id,
-          name,
-          description,
-          component,
-          methods: specMethods,
-          status: resolved.status,
-          createdAt: now,
-          updatedAt: now,
+        // mcp_orchestrator.defineInterface step 1: the restatement. The input
+        // cannot express spec-level lint/ext or a method's endpoint binding
+        // (sdd_set_endpoints), and may omit a method's ext: the seam carries
+        // those at BOTH levels, keyed off this input's own field lists.
+        const restatement: SpecRestatement = {
+          kind: 'interface',
+          spec: { id, name, description, component, methods: methods ?? [] } as unknown as InterfaceSpec,
+          fields: interfaceInputFields,
+          memberFields: interfaceMethodInputFields,
+          status,
         };
-        carried.push(...carryUnexpressed(existing, spec as unknown as Record<string, unknown>, interfaceInputFields));
-        const cleared = clearedByOmission(existing, spec as unknown as Record<string, unknown>, interfaceInputFields);
-        if (existing) spec.createdAt = existing.createdAt;
-        const notices = saveInterfaceSpec(spec);
-        if (existing) {
-          notices.push(...rewriteNotices({
-            label: `Interface "${id}"`,
-            carried: ['createdAt', ...carried],
-            cleared,
-            removed: removedByName(existing.methods, specMethods),
-            removedSuffix: ' (endpoint bindings included)',
-          }));
-        }
+        // Step 2: through the seam, which requires the component, names every
+        // method the restatement removed, and reports the tests a changed or
+        // removed method invalidated. Step 3: the receipt.
+        const receipt = writeSpec(restatement);
         return writeReceipt(
-          `Successfully ${existing ? 're-authored' : 'defined'} L3 Interface Contract "${name}" (${id}).`,
-          { kind: 'interface', id, name, replacedExisting: Boolean(existing), status: resolved.status, notices },
+          `Successfully ${receipt.replacedExisting ? 're-authored' : 'defined'} L3 Interface Contract "${name}" (${id}).`,
+          receipt,
         );
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -1780,7 +1582,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'Custom'; httpMethod?: string; path?: string; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; address?: string }> }>(server,
     'sdd_set_endpoints',
     {
-      description: 'Bind concrete wire endpoints to existing L3 interface methods (required for every Portal). Pick `transport` and fill that transport\'s address fields. Run after sdd_define_interface.',
+      description: 'Bind concrete wire endpoints to existing L3 interface methods (required for every Portal). Pick `transport` and fill that transport\'s address fields. Run after sdd_define_interface. Written through the authoring seam as one gated delta, and answered with the change report — every binding set or changed, or that nothing changed — as structured content beside the sentence.',
       inputSchema: {
         interface: z.string().describe('The L3 interface ID (e.g. "ibilling-gateway")'),
         endpoints: z.array(z.object({
@@ -1802,10 +1604,12 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           address: z.string().optional().describe('Custom: free-form address'),
         }).strict()).describe('One binding per method'),
       },
+      outputSchema: specChangeReportOutput,
     },
     ({ interface: interfaceId, endpoints }) => {
       try {
-        const { loadInterfaceSpec, saveInterfaceSpec } = requireSpecs();
+        // mcp_orchestrator.setEndpoints step 1: the contract the bindings attach to.
+        const { loadInterfaceSpec } = requireSpecs();
         const intf = loadInterfaceSpec(interfaceId);
         if (!intf) return errText(`Interface "${interfaceId}" does not exist.`);
 
@@ -1822,7 +1626,11 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           }
         };
 
+        // Step 2: every binding checked at the door — a method the contract does
+        // not declare (a delta would add a bare method under that name) or an
+        // endpoint the schema rejects refuses the whole write.
         const bound: string[] = [];
+        const methods: { name: string; endpoint: Endpoint }[] = [];
         for (const e of endpoints) {
           const m = intf.methods.find(x => x.name === e.method);
           if (!m) return errText(`Method "${e.method}" not found on interface "${interfaceId}". Define it via sdd_define_interface first.`);
@@ -1831,14 +1639,18 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
             const detail = parsed.error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
             return errText(`Invalid ${e.transport} endpoint for method "${e.method}": ${detail}`);
           }
-          m.endpoint = parsed.data as Endpoint;
+          methods.push({ name: e.method, endpoint: parsed.data as Endpoint });
           bound.push(`${e.method}→${e.transport}`);
         }
-        intf.updatedAt = new Date().toISOString();
-        saveInterfaceSpec(intf);
-        return text(`Bound ${bound.length} endpoint(s) on "${interfaceId}": ${bound.join(', ')}.`);
+        // Step 3: one delta naming each method with its endpoint, through the
+        // authoring seam. Step 4: the change report.
+        const report = updateSpecGated('interface', interfaceId, { methods });
+        return structured(
+          `Bound ${bound.length} endpoint(s) on "${interfaceId}": ${bound.join(', ')}.\n${renderChangeReport(report)}`,
+          report,
+        );
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -1921,70 +1733,43 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ id, name, description, contract, sourcePath, simPath, technologies, injectedParams, detail, conformance, methods, status }) => {
       try {
-        const { loadInterfaceSpec, loadImplementationSpec, saveImplementationSpec } = requireSpecs();
-        const intf = loadInterfaceSpec(contract);
-        if (!intf) return errText(`Interface contract "${contract}" does not exist.`);
-        // Re-authoring an EXISTING implementation replaces what the input
-        // expresses — but the input cannot express spec-level lint/ext and may
-        // omit per-method ext. Carry those forward from the previous version
-        // (createdAt likewise) instead of silently dropping them.
-        const existing = loadImplementationSpec(id);
-        const resolved = statusForCreate(`implementation "${id}"`, status, existing);
-        if ('refusal' in resolved) return errText(resolved.refusal);
-        const carried: string[] = [];
-        const resolvedMethods = (methods ?? []).map(m => {
-          const prev = existing?.methods.find(p => p.name === m.name);
-          const next = {
-            ...m,
-            narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
-          } as unknown as Record<string, unknown>;
-          for (const field of carryUnexpressed(prev as unknown as Record<string, unknown>, next, implMethodInputFields)) {
-            carried.push(`${field} (${m.name})`);
-          }
-          return next as unknown as { name: string; narrative: NarrativeStepIn[] };
-        });
-        // Symbolic *Label references resolve to step numbers before the spec
-        // is saved; an unresolvable reference rejects the whole write.
-        const labelErrors = resolvedMethods.flatMap(m => resolveNarrativeLabels(m.name, m.narrative));
-        if (labelErrors.length) return errText(`Unresolved narrative label references — nothing was saved:\n- ${labelErrors.join('\n- ')}`);
-        const now = new Date().toISOString();
-        const spec = {
-          id,
-          name,
-          description,
-          contract,
-          sourcePath,
-          simPath,
-          technologies,
-          injectedParams,
-          detail,
-          conformance,
-          // Post-resolution every cases/catches entry has its numeric step —
-          // the *Label twins exist only in the input type, not the spec's.
-          methods: resolvedMethods as Parameters<typeof saveImplementationSpec>[0]['methods'],
-          status: resolved.status,
-          createdAt: now,
-          updatedAt: now,
+        // mcp_orchestrator.writeNarrative step 1: the restatement, each step
+        // numbered by its position where the input left the number out. The
+        // input cannot express spec-level lint/ext and may omit a method's ext:
+        // the seam carries those forward instead of silently dropping them.
+        const restatement: SpecRestatement = {
+          kind: 'implementation',
+          spec: {
+            id,
+            name,
+            description,
+            contract,
+            sourcePath,
+            simPath,
+            technologies,
+            injectedParams,
+            detail,
+            conformance,
+            methods: (methods ?? []).map(m => ({
+              ...m,
+              narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
+            })),
+          } as unknown as ImplementationSpec,
+          fields: implInputFields,
+          memberFields: implMethodInputFields,
+          status,
         };
-        carried.push(...carryUnexpressed(existing, spec as unknown as Record<string, unknown>, implInputFields));
-        const cleared = clearedByOmission(existing, spec as unknown as Record<string, unknown>, implInputFields);
-        if (existing) spec.createdAt = existing.createdAt;
-        const notices = saveImplementationSpec(spec);
-        if (existing) {
-          notices.push(...rewriteNotices({
-            label: `Implementation "${id}"`,
-            carried: ['createdAt', ...carried],
-            cleared,
-            removed: removedByName(existing.methods, resolvedMethods as unknown as { name: string }[]),
-            removedSuffix: ' (L5 narratives included)',
-          }));
-        }
+        // Step 2: through the seam, which requires the contract, resolves every
+        // *Label reference (an unresolved one refuses the whole write), names
+        // every method a restatement removed, and reports the tests a changed or
+        // removed method invalidated. Step 3: the receipt.
+        const receipt = writeSpec(restatement);
         return writeReceipt(
           `Successfully saved L4 Implementation Spec "${name}" (${id}) with method narratives.`,
-          { kind: 'implementation', id, name, replacedExisting: Boolean(existing), status: resolved.status, notices },
+          receipt,
         );
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -2034,10 +1819,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity, sourcePath, symbol }) => {
       try {
-        const { loadTypeSpec, saveTypeSpec } = requireSpecs();
-        const now = new Date().toISOString();
-        const existing = loadTypeSpec(id);
-        const spec: TypeSpec = {
+        // mcp_orchestrator.addType step 1: the restatement, each field's
+        // optional flag defaulted to false.
+        const spec = {
           kind,
           id,
           name,
@@ -2060,33 +1844,18 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           ...(linkedEntity ? { linkedEntity } : {}),
           ...(sourcePath ? { sourcePath } : {}),
           ...(symbol ? { symbol } : {}),
-          createdAt: now,
-          updatedAt: now,
-        };
-        const carried = carryUnexpressed(existing, spec as unknown as Record<string, unknown>, typeInputFields);
-        const cleared = clearedByOmission(existing, spec as unknown as Record<string, unknown>, typeInputFields);
-        if (existing) spec.createdAt = existing.createdAt;
-        const notices = saveTypeSpec(spec);
-        if (existing) {
-          notices.push(...rewriteNotices({
-            label: `Type "${id}"`,
-            carried: ['createdAt', ...carried],
-            cleared,
-            removed: [
-              ...removedByName(existing.fields, spec.fields).map((n) => `field ${n}`),
-              ...removedByName(existing.methods, spec.methods).map((n) => `method ${n}`),
-            ],
-            removedNoun: 'member',
-          }));
-        }
-        // `kind` here is the type's OWN kind (entity | value-object); the
-        // receipt's kind is the spec level, which for this tool is always a type.
+        } as unknown as TypeSpec;
+        // Step 2: through the seam, which names every field or method the
+        // restatement removed. Step 3: the receipt — `kind` here is the type's
+        // OWN kind (entity | value-object); the receipt's kind is the spec
+        // level, always a type, which carries no lifecycle status.
+        const receipt = writeSpec({ kind: 'type', spec, fields: typeInputFields });
         return writeReceipt(
-          `Successfully ${existing ? 're-authored' : 'defined'} ${kind} type "${name}" (${id}).`,
-          { kind: 'type', id, name, replacedExisting: Boolean(existing), notices },
+          `Successfully ${receipt.replacedExisting ? 're-authored' : 'defined'} ${kind} type "${name}" (${id}).`,
+          receipt,
         );
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -2217,25 +1986,22 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string }>(server,
     'sdd_delete_spec',
     {
-      description: 'Delete a specification file from the spec tree and clean up any empty parent directories.',
+      description: 'Delete a specification file from the spec tree and clean up any empty parent directories. Answers with a structured deletion beside the sentence: whether a spec was removed, and the tests that encode a method the deletion took away (when the project declares test roots).',
       inputSchema: {
         kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of spec to delete'),
         id: z.string().describe('The ID of the spec to delete'),
       },
+      outputSchema: specDeletionOutput,
     },
     ({ kind, id }) => {
       try {
-        const specs = requireSpecs();
-        let deleted = false;
-        switch (kind) {
-          case 'subsystem':      deleted = specs.deleteSubsystemSpec(id); break;
-          case 'component':      deleted = specs.deleteComponentSpec(id); break;
-          case 'interface':      deleted = specs.deleteInterfaceSpec(id); break;
-          case 'implementation': deleted = specs.deleteImplementationSpec(id); break;
-          case 'type':           deleted = specs.deleteTypeSpec(id); break;
-        }
-        if (!deleted) return errText(`Spec of kind "${kind}" with ID "${id}" could not be deleted (file may not exist).`);
-        return text(`Successfully deleted ${kind} spec "${id}".`);
+        // mcp_orchestrator.deleteSpec step 1: through the authoring seam, which
+        // reports the tests a removed method invalidated.
+        const deletion = deleteSpec(kind, id);
+        // Step 2: "was never there" is not a failure, but it is not a deletion.
+        if (!deletion.deleted) return errText(`Spec of kind "${kind}" with ID "${id}" could not be deleted (file may not exist).`);
+        const testsBlock = renderTestsToRevisit(deletion.testsToRevisit).join('\n');
+        return structured(`Successfully deleted ${kind} spec "${id}".${testsBlock ? `\n${testsBlock}` : ''}`, deletion);
       } catch (e) {
         return errText(String(e));
       }

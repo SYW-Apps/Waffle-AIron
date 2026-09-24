@@ -1,12 +1,33 @@
-import type { ComponentSpec, MethodImplementation } from '../models/specs.js';
-import type { RulesConfig } from '../models/project.js';
 import {
-  saveComponentSpec, updateSpec, moveMethods as coreMoveMethods,
-  type MethodMoveReport, type SpecChangeReport, type SpecWriteHooks, type WritableSpecKind,
-} from './specs.js';
-import { validateComponentCandidate, findTestsReferencing } from './validation.js';
+  MethodImplementationSchema,
+  MethodSignatureSchema,
+  TypeMethodSchema,
+  type ComponentSpec,
+  type ImplementationSpec,
+  type InterfaceSpec,
+  type MethodImplementation,
+  type SpecStatus,
+  type SubsystemSpec,
+  type SystemSpec,
+  type TypeSpec,
+} from '../models/specs.js';
+import type { RulesConfig } from '../models/project.js';
+import type { MethodMoveReport, SpecChangeReport, SpecWriteHooks, WritableSpecKind } from './specs.js';
+// authoring_core_adapter — every hop into sdd_core lands on the core PORTAL,
+// never on the module behind it: the seam is a peer of sdd_core, and a peer
+// reaches another subsystem through what that subsystem publishes.
+import {
+  createChainedSubsystem,
+  deleteSpec as coreDeleteSpec,
+  loadProjectConfig,
+  loadSpec,
+  moveMethods as coreMoveMethods,
+  saveSpec,
+  updateSpec,
+} from './index.js';
+import { validateComponentCandidate, findTestsReferencing, type TestsToRevisit } from './validation.js';
 import { formatCandidateRefusal, type CandidateVerdict } from './rules/candidate.js';
-import { loadProjectConfig } from './index.js';
+import { resolveNarrativeLabels } from './narrative-labels.js';
 import { getProjectRoot } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
@@ -18,6 +39,12 @@ import { getProjectRoot } from '../utils/fs.js';
 // what may be written belongs HERE, above the store and above the rule engine,
 // where every door reuses it — not in a transport handler, where the next door
 // would have to reimplement it and would eventually reimplement it differently.
+//
+// Every write an AUTHOR makes enters here: a whole spec restated (writeSpec), a
+// delta (updateSpecGated), a method move (moveMethods), a delete (deleteSpec).
+// Only mechanical writes stay on the store — status promotion at lock, layout
+// normalization, migrations, doctor repairs, renames and subproject relocation —
+// because they change identity or bookkeeping, not what a spec says.
 //
 // Layering, and why it is this way round:
 //
@@ -32,6 +59,89 @@ import { getProjectRoot } from '../utils/fs.js';
 // which is what lets a spec authored before a rule existed still load and
 // still be repaired.
 // ---------------------------------------------------------------------------
+
+/** One spec of any level, as stored and as restated. */
+type Spec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec;
+
+/**
+ * sdd_authoring::SpecRestatement — a whole spec as a create tool states it,
+ * together with WHICH fields the tool could state.
+ *
+ * A create is an upsert: on an existing id it re-authors in place, replacing
+ * what the input expresses and carrying forward what it cannot express. The
+ * write cannot be judged without knowing the difference between a field left
+ * out and a field the door has no way to say — and only the door knows its own
+ * input schema, so it passes that knowledge here.
+ */
+export interface SpecRestatement {
+  /** system, subsystem, component, interface, implementation or type. */
+  kind: WritableSpecKind;
+  /** The spec as the caller stated it, before anything is carried into it. */
+  spec: Spec;
+  /** The spec-level fields this caller's input can express. */
+  fields: string[];
+  /** The per-method fields this caller's input can express (interface, implementation). */
+  memberFields?: string[];
+  /** The lifecycle status the caller stated; absent keeps the stored one, draft for a new spec. */
+  status?: SpecStatus;
+}
+
+/** sdd_authoring::SpecParent — the spec a restatement cannot be written without. */
+export interface SpecParent {
+  /** system, subsystem, component or interface. */
+  kind: WritableSpecKind;
+  /** The parent's id as the child names it; "system" for the L0 singleton. */
+  id: string;
+}
+
+/** sdd_authoring::SpecRestatementApplication — a restatement applied to the stored spec, before any judgement or write. */
+export interface SpecRestatementApplication {
+  /** The candidate: carried, createdAt kept, parent-derived fields set, status written. */
+  spec: Spec;
+  /** The status the candidate is written at; absent for a kind that carries none. */
+  status?: SpecStatus;
+  /** Set when nothing may be written, as the sentence that says why and how to proceed. */
+  refusal?: string;
+  /** True when a spec already held the id. */
+  replacedExisting: boolean;
+  /** What a re-authoring did beyond what the input says; empty for a new spec. */
+  notices: string[];
+  /** The methods the candidate changes or removes against the stored spec. */
+  changedMethods: string[];
+}
+
+/** sdd_authoring::SpecDeletion — what a delete answers with, as data. */
+export interface SpecDeletion {
+  kind: WritableSpecKind;
+  id: string;
+  /** False when no spec held the id: nothing was removed. */
+  deleted: boolean;
+  /** The tests that encode a method this deletion removed. */
+  testsToRevisit: TestsToRevisit[];
+}
+
+/**
+ * sdd_authoring::SpecWriteReceipt — what a whole-spec write answers with.
+ *
+ * A create is an UPSERT, so "added" and "re-authored in place" are two outcomes
+ * of the same call; this says which in a field, because a caller that has to
+ * read English to find out is a caller that eventually stops checking.
+ */
+export interface SpecWriteReceipt {
+  kind: WritableSpecKind;
+  /** The id the spec is stored under; "system" for the L0 singleton. */
+  id: string;
+  name: string;
+  replacedExisting: boolean;
+  /** The lifecycle status written; absent for the L0 and a type, which carry none. */
+  status?: SpecStatus;
+  /** Carried, removed and cleared fields, gate warnings and placement notices — one per entry. */
+  notices: string[];
+  /** The child project directory a chained subsystem's create scaffolded. */
+  scaffoldedProjectPath?: string;
+  /** The tests that encode a method this write changed or removed. */
+  testsToRevisit: TestsToRevisit[];
+}
 
 /**
  * The project's configuration, as the settings a write is judged and reported
@@ -76,17 +186,455 @@ export function componentCandidateGate(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Re-authoring semantics: REPLACE what the input expresses, CARRY what it cannot
+//
+// Every create tool is an UPSERT: calling it with an id that already exists
+// rewrites that spec. Each tool's input is a hand-maintained SUBSET of the
+// canonical schema (src/models/specs.ts), so any field the input cannot express
+// — lint.allow, ext, a Portal's auth, variant, patterns, externalLinks, the
+// system's databases, a method's endpoint — would be erased by a restatement
+// that never mentioned it. That loss is silent: the tool answers "Successfully
+// added", and a suppressed warning coming back days later is the only tell.
+//
+// So the write carries forward everything the input does not express, and says
+// so. The complementary half matters just as much: for fields the input DOES
+// express, replace stays the contract — an author who restates a spec means the
+// restatement. But a restatement that empties something is REPORTED, because
+// "the array I forgot to repeat is now gone" is precisely the accident this seam
+// exists to catch.
+//
+// The store cannot make this call: it receives a whole spec object and cannot
+// distinguish "the caller cleared this" from "the caller never mentioned it".
+// Only the door, where an argument is observably absent, can tell those apart —
+// so the door states its field list (SpecRestatement.fields) and the rules that
+// read it live here, once, for every door.
+//
+// tests/mcp/schema-field-coverage.test.ts holds the invariant that no canonical
+// field escapes this seam: every one is expressed, carried, or store-managed.
+// ---------------------------------------------------------------------------
+
+/** Fields the STORE decides on every write — never carried here, never reported. */
+const STORE_MANAGED_FIELDS = new Set(['status', 'updatedAt']);
+
 /**
- * Author a NEW L2 component: gate the candidate, then persist it.
- *
- * Throws on an intrinsic violation, before anything touches disk — so the remedy
- * really is "fix the arguments and call again", not "repair a saved spec".
- * Returns the store's notices plus any intrinsic warnings.
+ * Fields carried whenever the input omits them, EVEN THOUGH the input could have
+ * expressed them. `ext` is opaque pack/tool data the authoring agent does not own
+ * and has no way to know it must restate — the schema promises it is "preserved
+ * verbatim", and replace semantics would break that promise on every re-author.
  */
-export function addComponent(candidate: ComponentSpec): string[] {
-  const verdict = validateComponentCandidate(candidate, candidateOptions());
+const ALWAYS_CARRIED_FIELDS = new Set(['ext']);
+
+/** The lifecycle statuses, weakest first. */
+const STATUS_ORDER: readonly SpecStatus[] = ['draft', 'design', 'complete'];
+
+/** The kinds that carry a lifecycle status; the L0 and a type have none. */
+const STATUSED_KINDS: ReadonlySet<WritableSpecKind> = new Set(['subsystem', 'component', 'interface', 'implementation']);
+
+/** The sentence a restatement is refused with when its parent is absent. */
+const MISSING_PARENT: Partial<Record<WritableSpecKind, (parentId: string) => string>> = {
+  subsystem: () => 'System spec must be initialized (sdd_initialize_system) first.',
+  component: (id) => `Parent subsystem "${id}" does not exist.`,
+  interface: (id) => `Component "${id}" does not exist.`,
+  implementation: (id) => `Interface contract "${id}" does not exist.`,
+};
+
+/** How a re-authoring notice names the spec, and what a removed member drags with it. */
+const REWRITE_LABEL: Record<WritableSpecKind, string> = {
+  system: 'System spec',
+  subsystem: 'Subsystem',
+  component: 'Component',
+  interface: 'Interface',
+  implementation: 'Implementation',
+  type: 'Type',
+};
+
+/**
+ * spec_restatement.parent — the spec this one cannot be written without: the
+ * L0 for a subsystem, the subsystem a component names, the component an
+ * interface names, the contract an implementation names. None for the L0
+ * itself and for a type, whose subsystem is an ownership label and not a
+ * container.
+ */
+export function restatementParent(restatement: SpecRestatement): SpecParent | null {
+  const spec = restatement.spec as Record<string, any>;
+  switch (restatement.kind) {
+    case 'subsystem':      return { kind: 'system', id: 'system' };
+    case 'component':      return { kind: 'subsystem', id: spec.subsystem };
+    case 'interface':      return { kind: 'component', id: spec.component };
+    case 'implementation': return { kind: 'interface', id: spec.contract };
+    default:               return null;
+  }
+}
+
+/**
+ * spec_restatement.applyTo — what this restatement becomes over the stored
+ * spec, computed without touching disk: the status, the candidate with every
+ * unexpressed field carried and createdAt kept, the fields derived from the
+ * parent, every narrative *Label resolved, and the notices naming what was
+ * carried, removed and cleared. It REFUSES instead when the parent is absent,
+ * when the stated status would lower the stored one, or when a label does not
+ * resolve. A new spec carries nothing and raises no notices.
+ */
+export function applyRestatement(
+  restatement: SpecRestatement,
+  existing: Spec | null,
+  parent: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | null,
+): SpecRestatementApplication {
+  const replacedExisting = existing !== null;
+  const parentRef = restatementParent(restatement);
+  if (parentRef && !parent) return refused(restatement, replacedExisting, MISSING_PARENT[restatement.kind]!(parentRef.id));
+  const status = statusForCreate(restatement, existing);
+  if ('refusal' in status) return refused(restatement, replacedExisting, status.refusal);
+
+  const candidate = JSON.parse(JSON.stringify(restatement.spec)) as Record<string, any>;
+  if (restatement.kind === 'subsystem') candidate.parentSystem = (parent as SystemSpec).name;
+  const carried = carryInto(restatement, existing, candidate);
+  const cleared = clearedByOmission(existing, candidate, restatement.fields);
+  stampLifecycle(candidate, existing, status.status);
+
+  const labelErrors = resolveLabelsOf(restatement.kind, candidate);
+  if (labelErrors.length) {
+    return refused(restatement, replacedExisting, `Unresolved narrative label references — nothing was saved:\n- ${labelErrors.join('\n- ')}`);
+  }
+  return {
+    spec: candidate as Spec,
+    ...(status.status ? { status: status.status } : {}),
+    replacedExisting,
+    notices: existing ? rewriteNotices(restatement.kind, existing, candidate, carried, cleared) : [],
+    changedMethods: changedMethodsOf(restatement.kind, existing, candidate),
+  };
+}
+
+/** An application that may not be written, carrying the sentence that says why. */
+function refused(restatement: SpecRestatement, replacedExisting: boolean, refusal: string): SpecRestatementApplication {
+  return { spec: restatement.spec, refusal, replacedExisting, notices: [], changedMethods: [] };
+}
+
+/**
+ * The status the restatement WRITES — the one the spec will actually hold — or
+ * the refusal that stops it.
+ *
+ * `status` absent answers the status already stored, or 'draft' for a spec that
+ * does not exist yet: a new spec is born draft and a re-authored one keeps what
+ * it had. A stated status is written as stated, unless it would take the spec
+ * backwards, which is refused by name rather than applied or silently ignored —
+ * the store cannot tell a stated 'draft' from a default one, so only this seam
+ * can hold that a restatement never reopens a frozen spec. A kind without a
+ * lifecycle status answers none.
+ */
+function statusForCreate(
+  restatement: SpecRestatement,
+  existing: Spec | null,
+): { status?: SpecStatus } | { refusal: string } {
+  if (!STATUSED_KINDS.has(restatement.kind)) return {};
+  const stated = restatement.status;
+  // A stored status the lifecycle does not know (a legacy value) is no status
+  // to keep and none to be lowered from: it reads as "nothing held".
+  const stored = (existing as { status?: SpecStatus } | null)?.status;
+  const held = stored !== undefined && STATUS_ORDER.includes(stored) ? stored : undefined;
+  if (stated === undefined) return { status: held ?? 'draft' };
+  if (held === undefined || STATUS_ORDER.indexOf(stated) >= STATUS_ORDER.indexOf(held)) return { status: stated };
+  const label = `${restatement.kind} "${(restatement.spec as { id: string }).id}"`;
+  return {
+    refusal:
+      `Refusing to re-author ${label} at status "${stated}": it is stored at "${held}", and a create tool `
+      + 'never lowers a spec\'s status — a restatement that reopened a frozen spec would undo a lock without '
+      + `saying so. Nothing was written. To reopen it deliberately, use sdd_update_spec with `
+      + `{"status": "${stated}"}; to keep the level it has, leave status out.`,
+  };
+}
+
+/**
+ * Carry every unexpressed field from the stored spec into the candidate — per
+ * method first, keyed by name, when the door states its member fields — and
+ * answer with the carried names in the order a reader wants them: createdAt,
+ * then each method's, then the spec's own.
+ */
+function carryInto(restatement: SpecRestatement, existing: Spec | null, candidate: Record<string, any>): string[] {
+  if (!existing) return [];
+  const carried: string[] = ['createdAt'];
+  if (restatement.memberFields && Array.isArray(candidate.methods)) {
+    const stored: Record<string, unknown>[] = (existing as { methods?: Record<string, unknown>[] }).methods ?? [];
+    for (const method of candidate.methods as Record<string, unknown>[]) {
+      const prev = stored.find((p) => p.name === method.name);
+      for (const field of carryUnexpressed(prev, method, restatement.memberFields)) carried.push(`${field} (${String(method.name)})`);
+    }
+  }
+  // createdAt is kept by stampLifecycle and named first above, never carried as data.
+  carried.push(...carryUnexpressed(existing as Record<string, unknown>, candidate, [...restatement.fields, 'createdAt']));
+  return carried;
+}
+
+/**
+ * Copy every field the input cannot express from the previous version onto the
+ * spec about to be written. MUTATES `next`; returns the carried field names.
+ * Driven by the door's own field list, so a field added to a tool starts being
+ * replaced, and a field added only to the canonical schema starts being carried.
+ */
+function carryUnexpressed(
+  existing: Record<string, unknown> | null | undefined,
+  next: Record<string, unknown>,
+  expressed: readonly string[],
+): string[] {
+  if (!existing) return [];
+  const carried: string[] = [];
+  for (const [field, value] of Object.entries(existing)) {
+    if (value === undefined) continue;
+    if (STORE_MANAGED_FIELDS.has(field)) continue;
+    if (expressed.includes(field) && !ALWAYS_CARRIED_FIELDS.has(field)) continue;
+    if (next[field] !== undefined) continue;
+    next[field] = value;
+    carried.push(field);
+  }
+  return carried;
+}
+
+function isEmptyValue(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'string') return value.trim() === '';
+  if (typeof value === 'object') return Object.keys(value as object).length === 0;
+  return false;
+}
+
+/**
+ * Expressed fields this restatement emptied. Never rewrites anything — replace
+ * is the contract for what the input CAN say; this only makes the loss visible.
+ */
+function clearedByOmission(
+  existing: Spec | null,
+  next: Record<string, unknown>,
+  expressed: readonly string[],
+): string[] {
+  if (!existing) return [];
+  const stored = existing as Record<string, unknown>;
+  const cleared: string[] = [];
+  for (const field of expressed) {
+    const before = stored[field];
+    if (STORE_MANAGED_FIELDS.has(field) || ALWAYS_CARRIED_FIELDS.has(field)) continue;
+    if (isEmptyValue(before) || !isEmptyValue(next[field])) continue;
+    cleared.push(Array.isArray(before) ? `${field} (had ${before.length})` : field);
+  }
+  return cleared;
+}
+
+/** createdAt kept from the stored spec, updatedAt now, and the resolved status written. */
+function stampLifecycle(candidate: Record<string, any>, existing: Spec | null, status: SpecStatus | undefined): void {
+  const now = new Date().toISOString();
+  candidate.createdAt = existing?.createdAt ?? now;
+  candidate.updatedAt = now;
+  if (status) candidate.status = status;
+  else delete candidate.status;
+}
+
+/**
+ * method_implementation.resolveLabels over every method of an implementation:
+ * symbolic *Label references resolve to step numbers IN PLACE before the spec
+ * is saved, and whatever does not resolve is answered so the whole write can
+ * be refused.
+ */
+function resolveLabelsOf(kind: WritableSpecKind, candidate: Record<string, any>): string[] {
+  if (kind !== 'implementation') return [];
+  const methods = (candidate.methods ?? []) as { name: string; narrative?: Record<string, any>[] }[];
+  return methods.flatMap((m) => resolveNarrativeLabels(m.name, m.narrative ?? []));
+}
+
+/** Named members present before and absent now — methods dropped by a restatement. */
+function removedByName(
+  before: ReadonlyArray<{ name: string }> | undefined,
+  after: ReadonlyArray<{ name: string }> | undefined,
+): string[] {
+  if (!before?.length) return [];
+  const kept = new Set((after ?? []).map((m) => m.name));
+  return before.map((m) => m.name).filter((n) => !kept.has(n));
+}
+
+/**
+ * The re-authoring notices, in the order a reader wants them: what happened,
+ * what survived, what was deleted, what was emptied.
+ */
+function rewriteNotices(
+  kind: WritableSpecKind,
+  existing: Spec,
+  candidate: Record<string, any>,
+  carried: string[],
+  cleared: string[],
+): string[] {
+  const named = kind === 'system' ? (existing as SystemSpec).name : String(candidate.id);
+  const notices = [`${REWRITE_LABEL[kind]} "${named}" already existed — re-authored in place; this input REPLACES what it expresses.`];
+  if (carried.length) notices.push(`Carried forward (not expressible through this tool): ${carried.join(', ')}.`);
+  const removal = removalNotice(kind, existing, candidate);
+  if (removal) notices.push(removal);
+  if (cleared.length) {
+    notices.push(
+      `CLEARED by omission: ${cleared.join(', ')} — the argument was not repeated, so the previous value is gone. `
+      + 'Use sdd_update_spec if you meant to leave it untouched.',
+    );
+  }
+  return notices;
+}
+
+/** The members a restatement removed, as the one notice that names them — or none. */
+function removalNotice(kind: WritableSpecKind, existing: Spec, candidate: Record<string, any>): string | undefined {
+  const before = existing as { methods?: { name: string }[]; fields?: { name: string }[] };
+  let removed: string[] = [];
+  let noun = 'method';
+  let suffix = '';
+  if (kind === 'interface' || kind === 'implementation') {
+    removed = removedByName(before.methods, candidate.methods);
+    suffix = kind === 'interface' ? ' (endpoint bindings included)' : ' (L5 narratives included)';
+  } else if (kind === 'type') {
+    removed = [
+      ...removedByName(before.fields, candidate.fields).map((n) => `field ${n}`),
+      ...removedByName(before.methods, candidate.methods).map((n) => `method ${n}`),
+    ];
+    noun = 'member';
+  }
+  if (!removed.length) return undefined;
+  return `REMOVED by this restatement: ${removed.length === 1 ? noun : `${noun}s`} ${removed.map((n) => `"${n}"`).join(', ')}`
+    + `${suffix} — absent from the input, so no longer in the spec. `
+    + 'Restate them to keep them, or use sdd_update_spec to edit one member at a time.';
+}
+
+/** The canonical schema a method of each kind is stored through — what "unchanged" is judged in. */
+const METHOD_SCHEMA = {
+  interface: MethodSignatureSchema,
+  implementation: MethodImplementationSchema,
+  type: TypeMethodSchema,
+} as const;
+
+/**
+ * The methods the candidate changes or removes against the stored spec — the
+ * subject of the tests-to-revisit search. A candidate method is read through the
+ * same schema the stored one was, so a restatement that says the same thing in
+ * a different shape (a key left undefined, a default spelled out) is no change.
+ */
+function changedMethodsOf(kind: WritableSpecKind, existing: Spec | null, candidate: Record<string, any>): string[] {
+  if (!existing || !(kind in METHOD_SCHEMA)) return [];
+  const schema = METHOD_SCHEMA[kind as keyof typeof METHOD_SCHEMA];
+  const stored = ((existing as { methods?: { name: string }[] }).methods ?? []);
+  const next = (candidate.methods ?? []) as { name: string }[];
+  return stored
+    .filter((method) => {
+      const restated = next.find((m) => m.name === method.name);
+      if (!restated) return true;
+      const parsed = schema.safeParse(restated);
+      return !parsed.success || canonical(parsed.data) !== canonical(method);
+    })
+    .map((method) => method.name);
+}
+
+/** A value as a key-sorted string with undefined dropped — equality that ignores spelling. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v) => (v && typeof v === 'object' && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined).sort(([a], [b]) => a.localeCompare(b)))
+    : v));
+}
+
+/**
+ * Write a whole spec as a create tool states it, at any level, through the gate
+ * (authoring_orchestrator.writeSpec; the portal method is this same function).
+ *
+ * On an existing id it re-authors in place: what the input expresses is
+ * replaced, what it cannot express is carried and named, what an omission
+ * cleared and a restatement removed is named, and the stored status is never
+ * lowered. A refused status, a missing parent, an unresolved label or an
+ * intrinsic error throws before anything touches disk. The receipt carries the
+ * tests a changed or removed method invalidated — a contract redefined through
+ * a create invalidates its tests exactly as the same change through a delta.
+ */
+export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
+  // Step 1: the settings a component is judged with, and the test roots.
+  const bound = candidateOptions();
+  // Steps 2-4: the parent the restatement cannot be written without.
+  const parentRef = restatementParent(restatement);
+  const parent = parentRef ? loadSpec(parentRef.kind, parentRef.id) : null;
+  // Step 5: the spec this restatement re-authors, if one holds the id.
+  const id = restatement.kind === 'system' ? 'system' : (restatement.spec as { id: string }).id;
+  const existing = loadSpec(restatement.kind, id);
+  // Step 6: what the restatement becomes over it.
+  const application = applyRestatement(restatement, existing, parent as SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | null);
+  // Steps 7-8: a refusal stops the write before anything reaches disk.
+  if (application.refusal !== undefined) throw new Error(application.refusal);
+  // Steps 9-12: the intrinsic judgement, for the one kind judged at the boundary.
+  const gateNotices = restatement.kind === 'component' ? judgeComponent(application.spec as ComponentSpec, bound) : [];
+  // Steps 13-16: to disk — scaffolding a chained subsystem's child project.
+  const persisted = persistCandidate(restatement.kind, application.spec);
+  // Steps 17-18: the tests this write invalidated.
+  const testsToRevisit = testsInvalidatedBy(application.changedMethods, [existing, application.spec], bound);
+  // Step 19: the receipt.
+  return {
+    kind: restatement.kind,
+    id,
+    name: (application.spec as { name: string }).name,
+    replacedExisting: application.replacedExisting,
+    ...(application.status ? { status: application.status } : {}),
+    notices: [...gateNotices, ...persisted.notices, ...application.notices],
+    ...(persisted.scaffoldedProjectPath ? { scaffoldedProjectPath: persisted.scaffoldedProjectPath } : {}),
+    testsToRevisit,
+  };
+}
+
+/**
+ * Judge a component candidate — the spec that will actually be written, carried
+ * fields included, so retyping a Portal carries its auth into the judgement
+ * instead of letting it vanish unseen. Throws the formatted refusal on an error;
+ * answers the warnings as notices.
+ */
+function judgeComponent(candidate: ComponentSpec, options: { rules?: RulesConfig; projectType?: string }): string[] {
+  const verdict = validateComponentCandidate(candidate, options);
   if (verdict.errors.length) throw new Error(formatCandidateRefusal(verdict));
-  return [...noticesFrom(verdict), ...saveComponentSpec(candidate)];
+  return noticesFrom(verdict);
+}
+
+/** Persist the candidate: a chained subsystem with its child project, anything else through the store. */
+function persistCandidate(kind: WritableSpecKind, spec: Spec): { notices: string[]; scaffoldedProjectPath?: string } {
+  const projectPath = kind === 'subsystem' ? (spec as SubsystemSpec).projectPath : undefined;
+  if (projectPath && projectPath.trim() !== '') {
+    createChainedSubsystem(spec as SubsystemSpec, (spec as SubsystemSpec).name);
+    return { notices: [], scaffoldedProjectPath: projectPath };
+  }
+  return { notices: saveSpec(kind, spec) };
+}
+
+/**
+ * The tests that encode the named methods, when the project declares test roots.
+ * Each method is searched by the first `symbol` the given specs declare for it —
+ * the stored one before the restated one — and by its name when none does.
+ */
+function testsInvalidatedBy(
+  methods: string[],
+  specs: (Spec | null)[],
+  options: { rules?: RulesConfig },
+): TestsToRevisit[] {
+  const testRoots = options.rules?.conformance?.testRoots ?? [];
+  if (methods.length === 0 || testRoots.length === 0) return [];
+  const symbolOf = (name: string): string | undefined => specs
+    .map((s) => ((s as { methods?: { name: string; symbol?: string }[] } | null)?.methods ?? []).find((m) => m.name === name)?.symbol)
+    .find((symbol) => symbol !== undefined);
+  return findTestsReferencing(methods.map((name) => ({ name, symbol: symbolOf(name) })), getProjectRoot(), testRoots);
+}
+
+/**
+ * Delete one spec of the named kind and report the tests that encode a method
+ * the deletion took away (authoring_orchestrator.deleteSpec; the portal method
+ * is this same function). Deleting a contract or an implementation removes
+ * every method it held, which invalidates their tests exactly as removing one
+ * method by delta does. The L0 cannot be deleted.
+ */
+export function deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion {
+  // Step 1: the test roots the report searches.
+  const bound = candidateOptions();
+  // Step 2: the spec about to be removed, for the methods it takes with it.
+  const stored = loadSpec(kind, id);
+  // Step 3: the delete itself.
+  const deleted = coreDeleteSpec(kind, id);
+  // Steps 4-5: the tests the removed methods invalidated.
+  const methods = deleted ? ((stored as { methods?: { name: string }[] } | null)?.methods ?? []).map((m) => m.name) : [];
+  const testsToRevisit = testsInvalidatedBy(methods, [stored], bound);
+  // Step 6.
+  return { kind, id, deleted, testsToRevisit };
 }
 
 /**
