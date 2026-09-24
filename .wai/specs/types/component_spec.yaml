@@ -136,6 +136,13 @@ fields:
     type: string
     description: When this spec was last written. Store-managed.
     optional: false
+  - name: mounts
+    type: PortalMount[]
+    description: >-
+      Portal-only: the portals this LISTENER serves, each under its path prefixes and through its
+      entry point. Declaring the field — even empty — is what marks a portal as a listener, the one
+      kind of portal nothing else needs to mount.
+    optional: true
 methods:
   - name: defaultConformanceTier
     signature: 'defaultConformanceTier(): string'
@@ -189,4 +196,4 @@ methods:
       diagrams, "cli_packs_adapter" about packs. Empty when every word names a block.
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-23T18:35:45.178Z'
+updatedAt: '2026-09-24T19:43:38.367Z'

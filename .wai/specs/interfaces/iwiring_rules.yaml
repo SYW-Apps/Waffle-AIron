@@ -289,6 +289,40 @@ methods:
       - code: UNSOURCED_SUBSCRIPTION
         severity: warning
         summary: Topic is subscribed to but nothing in the tree emits it
+  - name: portalMounts
+    description: >-
+      Rule portal-mounts. Which listener serves which portal: a portal's routes are its methods'
+      endpoint bindings, but nothing said which listener hands it its requests, so a portal no
+      listener serves was unreachable without anyone noticing, and the call that mounts one crossed
+      a boundary no contract described. A listener Portal declares its mounts — each a portal, the
+      path prefixes routed to it, and optionally the router entry it calls — and this rule checks
+      them against the tree: a mount must name a Portal, every HTTP endpoint of a mounted portal
+      must lie under one of its prefixes, and every portal with HTTP endpoints must be mounted by
+      some listener unless it is one. A path lies under a prefix when it equals it or continues it
+      past a slash, so `/` covers only the root. Whether the named entry is really exported is the
+      code's question, and export-conformance asks it.
+    signature: 'portalMounts(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MOUNT_TARGET_NOT_PORTAL
+        severity: error
+        summary: >-
+          A listener mounts something that is not a Portal — an unknown component, or one whose type
+          cannot serve routes
+      - code: ENDPOINT_OUTSIDE_MOUNT
+        severity: warning
+        summary: >-
+          A mounted portal declares an HTTP endpoint under none of the prefixes its listener routes
+          to it — a route the contract promises that no request can reach
+      - code: UNMOUNTED_PORTAL
+        severity: warning
+        summary: >-
+          A portal declares HTTP endpoints but no listener mounts it and it declares no mounts of
+          its own — a whole surface nothing serves
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-09-18T23:49:06.912Z'
+updatedAt: '2026-09-24T19:43:47.199Z'

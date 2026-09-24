@@ -12,6 +12,9 @@
  *    method, which `symbol` cannot name because `symbol` names the function
  *    inside — that its own source file does not export. Reported instead of
  *    allowed, so the field can never be a free-text way to silence the rule.
+ *    The same holds for a listener mount's `via` — the router entry the
+ *    listener calls to hand a portal its requests — which the MOUNTED portal's
+ *    files must export, reported against the listener that declares it.
  *
  * The quiet shapes, each with a control:
  *  - a name the CONTRACT declares is surface the design promised, however far
@@ -26,7 +29,9 @@
  *    a namespace, so its silence is the rule's verdict and not a blind spot;
  *  - a handle the file DOES export is a route a consumer can import, and the
  *    name it publishes is promised surface — one tree, asserted from both
- *    sides, because silence on either half alone would leave the other free.
+ *    sides, because silence on either half alone would leave the other free;
+ *    a mount `via` the portal's file exports is read from both sides the same
+ *    way.
  */
 import { defineRuleFixture, type FixtureTree } from '../harness.js';
 
@@ -215,6 +220,111 @@ function namespaceLabelTree(labelSource: string[], callsDeclaredQuote: boolean):
         '',
       ].join('\n'),
       'src/shipping/label-orchestrator.ts': labelSource.join('\n'),
+    },
+  };
+}
+
+/**
+ * A clinic host whose public listener mounts the booking portal under /booking
+ * through a router entry, `handleBookingRequest`, that the listener imports
+ * from the booking portal's own module. No contract declares that entry: the
+ * booking portal's contract is its routes, and the entry is how the LISTENER
+ * hands it a request. The mount's `via` is the only thing that promises it, so
+ * one tree reads both ways — with the entry exported, the handle is realized
+ * and the listener's import is promised surface; `bookingExports` swaps in a
+ * module that publishes the entry under another name.
+ */
+function mountedBookingTree(bookingExports: 'handleBookingRequest' | 'routeBooking', via: string | undefined): FixtureTree {
+  return {
+    subsystems: [{ id: 'clinic', description: 'Patient booking for an outpatient clinic.' }],
+    components: [
+      {
+        id: 'clinic-listener',
+        componentType: 'Portal',
+        portalType: 'HTTP_API',
+        subsystem: 'clinic',
+        description: 'The clinic host\'s public HTTP listener; routes each request to the portal that owns its path.',
+        mounts: [{ portal: 'booking-portal', prefixes: ['/booking'], ...(via ? { via } : {}) }],
+      },
+      {
+        id: 'booking-portal',
+        componentType: 'Portal',
+        portalType: 'HTTP_API',
+        subsystem: 'clinic',
+        description: 'Lets patients book their clinic visits.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'iclinic_listener',
+        component: 'clinic-listener',
+        methods: [
+          {
+            name: 'reportHealth',
+            description: 'Report whether the clinic host is serving.',
+            endpoint: { transport: 'HTTP', method: 'GET', path: '/healthz' },
+          },
+        ],
+      },
+      {
+        id: 'ibooking_portal',
+        component: 'booking-portal',
+        methods: [
+          {
+            name: 'bookVisit',
+            description: 'Book a visit for a patient.',
+            endpoint: { transport: 'HTTP', method: 'POST', path: '/booking/visits' },
+          },
+        ],
+      },
+    ],
+    implementations: [
+      {
+        id: 'clinic_listener_impl',
+        contract: 'iclinic_listener',
+        sourcePath: 'src/clinic/listener.ts',
+        methods: [
+          {
+            name: 'reportHealth',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Answer that the clinic host is serving.' }],
+          },
+        ],
+      },
+      {
+        id: 'booking_portal_impl',
+        contract: 'ibooking_portal',
+        sourcePath: 'src/clinic/booking-portal.ts',
+        methods: [
+          {
+            name: 'bookVisit',
+            narrative: [{ stepNumber: 1, type: 'local', description: 'Record the requested visit for the patient.' }],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/clinic/booking-portal.ts': [
+        'export function bookVisit(patient: string): string {',
+        '  return \'visit:\' + patient;',
+        '}',
+        '',
+        `export function ${bookingExports}(path: string, body: string): string | undefined {`,
+        '  return path === \'/booking/visits\' ? bookVisit(body) : undefined;',
+        '}',
+        '',
+      ].join('\n'),
+      'src/clinic/listener.ts': [
+        `import { ${bookingExports} } from './booking-portal.js';`,
+        '',
+        'export function reportHealth(): string {',
+        '  return \'ok\';',
+        '}',
+        '',
+        'export function route(path: string, body: string): string | undefined {',
+        `  return path.startsWith('/booking/') ? ${bookingExports}(path, body) : reportHealth();`,
+        '}',
+        '',
+      ].join('\n'),
     },
   };
 }
@@ -718,5 +828,35 @@ export default [
       'The name the label orchestrator imports is the quote orchestrator\'s declared exportedVia handle — the export a consumer takes to REACH calculateQuote, which `symbol` cannot name because `symbol` names the function inside. Declared, it is promised surface, and the crossing the same tree would otherwise be reported for is no longer one.',
     scenario: 'The shipping label orchestrator imports the quote orchestrator\'s published object, the handle the quote orchestrator\'s implementation declares for its pricing method.',
     tree: COMPOSED_QUOTE_ORCHESTRATOR,
+  }),
+  // -------------------------------------------------------------------------
+  // UNREALIZED_EXPORT_HANDLE — a listener mount's `via`, the router entry the
+  // listener calls to hand a portal its requests. It belongs to the MOUNTED
+  // portal's files and is reported against the listener that declares it.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNREALIZED_EXPORT_HANDLE',
+    severity: 'warning',
+    anchoredTo: 'clinic-listener',
+    expectFire: true,
+    scenario:
+      'The clinic\'s public listener declares that it mounts the booking portal through handleBookingRequest, but the booking portal\'s module publishes its router entry as routeBooking — the mount names a route into the portal that nobody can import.',
+    tree: mountedBookingTree('routeBooking', 'handleBookingRequest'),
+  }),
+  defineRuleFixture({
+    code: 'UNREALIZED_EXPORT_HANDLE',
+    expectFire: false,
+    reason:
+      'The router entry the mount names is a binding the booking portal\'s own module really exports, so the listener\'s declaration names a route it can genuinely import.',
+    scenario: 'The clinic\'s public listener mounts the booking portal through handleBookingRequest, the router entry the booking portal\'s module exports.',
+    tree: mountedBookingTree('handleBookingRequest', 'handleBookingRequest'),
+  }),
+  defineRuleFixture({
+    code: 'UNDECLARED_EXPORT',
+    expectFire: false,
+    reason:
+      'No contract of the booking portal declares handleBookingRequest — its contract is its routes — and the listener, a different component, imports it. The mount\'s `via` declares that entry as the portal\'s published router surface, so the import is promised rather than a crossing; without the `via` this same tree is reported.',
+    scenario: 'The clinic\'s public listener imports the booking portal\'s router entry, which its mount of the booking portal declares as the entry it calls.',
+    tree: mountedBookingTree('handleBookingRequest', 'handleBookingRequest'),
   }),
 ];

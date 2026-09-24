@@ -69,6 +69,14 @@ import { RuleContext, SddRule } from '../types.js';
 // because a route nobody can import cannot be why a name is promised, and a
 // field that allowed one would be a free-text way to go quiet.
 //
+// A listener's mount is the same kind of declaration from the other side: its
+// `via` names the router entry the listener calls to hand a portal its
+// requests (`handleWebRequest`, which the host's router imports from the web
+// portal's file). Unmodelled, every such entry was a crossing no contract
+// described and had to be carried as debt; declared, it is promised surface of
+// the MOUNTED portal's files, held to the same honesty — an entry none of them
+// exports is reported against the listener that named it.
+//
 // The data model is not re-litigated here. A type's own declaration and its
 // pure methods are surface the design DID promise from those same files;
 // whether the file actually publishes them is `typeRealization`'s question,
@@ -93,7 +101,7 @@ const NOTHING_PROMISED: ReadonlySet<string> = new Set<string>();
 export const exportConformanceRule: SddRule = {
   name: 'export-conformance',
   description:
-    'Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code — it asks whether the code holds what a spec claims — so a file could export whatever it liked under a component\'s name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method\'s `exportedVia` names the export a consumer imports to REACH it — the value that composes it, which `symbol` cannot name because `symbol` names the function inside — and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module.',
+    'Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code — it asks whether the code holds what a spec claims — so a file could export whatever it liked under a component\'s name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method\'s `exportedVia` names the export a consumer imports to REACH it — the value that composes it, which `symbol` cannot name because `symbol` names the function inside — and a listener\'s mount names the router entry it calls to hand a portal its requests; both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module.',
   codes: [
     {
       code: 'UNDECLARED_EXPORT',
@@ -106,7 +114,7 @@ export const exportConformanceRule: SddRule = {
     {
       code: 'UNREALIZED_EXPORT_HANDLE',
       defaultSeverity: 'warning',
-      summary: 'An implementation method declares an `exportedVia` handle its own source file does not export — the spec names a published route to the method that nobody can import',
+      summary: 'A declared publication handle — a method\'s `exportedVia`, or the router entry a listener mounts a portal through — names an export its own source file does not have: the spec names a route to the code that nobody can import',
       // Deliberately NOT carryable, and so it hands over no `parts`: a wrong
       // handle is one string to correct, and a parking space for it could
       // only ever be a parking space for a lie.
@@ -175,6 +183,45 @@ export const exportConformanceRule: SddRule = {
         implementation.id,
         draftContext,
       );
+    }
+
+    // The other handle kind: a listener's mount `via`, the router entry the
+    // listener calls to hand the mounted portal its requests. It is published
+    // by the MOUNTED PORTAL's own files — the listener only imports it — so it
+    // is promised there, and reported against the LISTENER, the spec that
+    // declares it. A portal may be realized across several files and any one
+    // of them may hold the entry, so a verdict of "nobody exports it" needs
+    // every one of them read at exact grade: a file below that, or never read,
+    // might be the one, and a finding resting on it could not be backed. A
+    // mount naming no Portal is portal-mounts' finding, not a missing export.
+    for (const listener of ctx.components) {
+      if (listener.componentType !== 'Portal') continue;
+      for (const mount of listener.mounts ?? []) {
+        const handle = mount.via;
+        if (!handle) continue;
+        const portal = ctx.componentMap.get(mount.portal);
+        if (!portal) continue;
+        const files = realization.filesOf(portal.id).map(pathKey);
+        const exact = files.filter(file => {
+          const facts = code.factsAt(file);
+          return !!facts && facts.status === 'analyzed' && facts.analysisGrade === 'exact';
+        });
+        const exporters = exact.filter(file => code.factsAt(file)!.exportedNames.includes(handle));
+        for (const file of exporters) promise(file, handle);
+        if (exporters.length > 0 || exact.length === 0 || exact.length < files.length) continue;
+        ctx.addIssue(
+          'warning',
+          'UNREALIZED_EXPORT_HANDLE',
+          `Listener "${listener.id}" mounts portal "${portal.id}" through "${handle}", but `
+          + `${files.map(f => `"${f}"`).join(', ')} — the file(s) realizing "${portal.id}" — export no such name. A mount's `
+          + '`via` names the router entry the listener calls to hand the portal its requests, published by the portal\'s '
+          + 'own files, so one they do not publish promises a route nobody can import. It allows nothing either: every '
+          + 'export of those files is still read against the contracts. Name the entry the portal\'s file actually '
+          + 'exports, export it, or drop `via` if the listener calls the portal\'s contract methods directly.',
+          listener.id,
+          ctx.isComponentDraft(listener.id) || ctx.isComponentDraft(portal.id),
+        );
+      }
     }
 
     // ---- 3. what the data model publishes from those same files ----

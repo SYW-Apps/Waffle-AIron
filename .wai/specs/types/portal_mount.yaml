@@ -1,0 +1,32 @@
+kind: value-object
+id: portal_mount
+name: PortalMount
+description: >-
+  One portal a listener serves: which portal, under which path prefixes, and through which entry
+  point. A portal's routes are modelled as endpoint bindings on its own methods, but those say
+  nothing about which listener hands it its requests; a mount is that missing fact, stated where the
+  code decides it — in the listener's router. Without it, the call that mounts a portal is a
+  crossing no contract describes, a portal no listener serves is unreachable without anyone
+  noticing, and a route that belongs to no contract has nowhere to be missed from.
+fields:
+  - name: portal
+    type: string
+    description: The mounted Portal's component id
+    optional: false
+  - name: prefixes
+    type: string[]
+    description: >-
+      The path prefixes this listener routes to the portal. A path lies under a prefix when it
+      equals it or continues it past a slash, so `/` matches only the root itself
+    optional: false
+  - name: via
+    type: string
+    description: >-
+      The router entry the listener calls to hand the portal its request, exported by the portal's
+      own file. Absent when the listener calls the portal's contract methods directly, route by
+      route
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-24T19:43:36.895Z'
+updatedAt: '2026-09-24T19:44:17.010Z'

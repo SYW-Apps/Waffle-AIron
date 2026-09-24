@@ -449,6 +449,38 @@ export const PortalAuthSchema = z.object({
 });
 export type PortalAuth = z.infer<typeof PortalAuthSchema>;
 
+/**
+ * One portal a LISTENER serves: which portal, under which path prefixes, and
+ * through which router entry. A portal's routes are its methods' endpoint
+ * bindings, but those say nothing about which listener hands it its requests,
+ * and while that was unmodelled three things went wrong at once: the call that
+ * mounts a portal crossed a boundary no contract described (UNDECLARED_EXPORT
+ * carried as debt), a portal no listener served was unreachable with nobody
+ * noticing, and a route belonging to no contract had nowhere to be missed from.
+ * A mount states that fact where the code decides it — in the listener's router
+ * — so the portal-mounts rule can judge it and export-conformance can accept the
+ * router entry as declared publication rather than a crossing.
+ */
+export const PortalMountSchema = z.object({
+  /** The mounted Portal's component id. */
+  portal: z.string(),
+  /**
+   * The path prefixes this listener routes to the portal. A path lies under a
+   * prefix when it EQUALS it or continues it past a slash — so `/` covers the
+   * root itself and nothing else, which is what lets an app shell sit at `GET /`
+   * without swallowing every other route.
+   */
+  prefixes: z.array(z.string()),
+  /**
+   * The router entry the listener calls to hand the portal its request,
+   * exported by the PORTAL's own file (so export-conformance holds that file to
+   * it). Absent when the listener calls the portal's contract methods directly,
+   * route by route — then there is no entry to name.
+   */
+  via: z.string().optional(),
+});
+export type PortalMount = z.infer<typeof PortalMountSchema>;
+
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -467,6 +499,13 @@ export const ComponentSpecSchema = z.object({
   auth: PortalAuthSchema.optional(),
   /** Portal-only: capability → component.method dispatch table (see DispatchBindingSchema). */
   dispatch: z.array(DispatchBindingSchema).optional(),
+  /**
+   * Portal-only: the portals this LISTENER serves (see PortalMountSchema).
+   * Declaring the field — even as an empty array — is what marks a portal as a
+   * listener: the one kind of portal the host starts directly, so nothing else
+   * needs to mount it. Absent means "a portal something else must serve".
+   */
+  mounts: z.array(PortalMountSchema).optional(),
   /** Store-only: whether held state survives restart (see DurabilitySchema). */
   durability: DurabilitySchema.optional(),
   /** Orchestrator-only: what the logic may depend on; unset means a workflow (see DependencyClassSchema). */

@@ -1263,15 +1263,20 @@ methods:
         type: local
       - stepNumber: 2
         description: >-
-          Add each method's declared publication handle — the export a consumer imports to REACH the
-          method, which `symbol` cannot name because `symbol` names the function inside it. Read it
-          only where that method's own file was analysed at exact grade; below that nothing
-          separates an export from a mention, so no verdict on a handle could be backed, and a
-          method whose file the run never read at all is skipped rather than guessed at. A handle
-          the file does export becomes promised surface. One it does not is reported against the
-          implementation that declares it, naming the method and the file, and does not count as
-          allowed — a route nobody can import cannot be the reason a name is promised, and without
-          that the field would be a free-text way to silence the rule
+          Add the declared publication handles — each method's `exportedVia`, the export a consumer
+          imports to REACH the method, which `symbol` cannot name because `symbol` names the
+          function inside it; and each listener mount's `via`, the router entry the listener calls
+          to hand the mounted portal its requests, which belongs to the mounted portal's own files.
+          Read a handle only where its file was analysed at exact grade; below that nothing
+          separates an export from a mention, so no verdict on it could be backed, and a handle
+          whose file the run never read at all is skipped rather than guessed at. A portal may be
+          realized across several files, and a mount's entry may live in any of them: it is reported
+          missing only when EVERY one of those files was read at exact grade and none exports it,
+          since a file read below that, or not at all, may be the one holding it. A handle the file
+          does export becomes promised surface. One that is missing is reported against the spec
+          that declares it, naming the handle and the file, and does not count as allowed — a route
+          nobody can import cannot be the reason a name is promised, and without that the field
+          would be a free-text way to silence the rule
         type: local
       - stepNumber: 3
         description: >-
@@ -1503,4 +1508,4 @@ methods:
     exportedVia: paramConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-24T14:21:28.341Z'
+updatedAt: '2026-09-24T19:57:46.291Z'

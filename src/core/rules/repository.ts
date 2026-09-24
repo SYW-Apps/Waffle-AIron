@@ -56,6 +56,7 @@ import { cyclesRule } from './wiring/dependency-cycles.js';
 import { dispatchTableBindingsRule } from './wiring/dispatch-table-bindings.js';
 import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
 import { lifecycleRule } from './wiring/lifecycle-entrypoints.js';
+import { portalMountsRule } from './wiring/portal-mounts.js';
 import { reachabilityRule } from './wiring/unused-detection.js';
 import { invokedByDescriptionRule } from './wiring/invoked-by-description.js';
 import { unusedTypesRule } from './wiring/unused-types.js';
@@ -211,6 +212,9 @@ export const SDD_RULES: SddRule[] = [
   dispatchTableBindingsRule,
   dispatchStepRoutingRule,
   lifecycleRule,
+  // Which listener serves which portal: another declared edge into a
+  // component, so its validity reads beside dispatch and lifecycle.
+  portalMountsRule,
   // The declared entrypoint's own prose before the walk that its declaration
   // silences, then the walk, then the types no walk can reach.
   invokedByDescriptionRule,
