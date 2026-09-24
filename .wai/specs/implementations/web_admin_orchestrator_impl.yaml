@@ -9,6 +9,8 @@ description: >-
   directly.
 contract: iweb_admin_orchestrator
 sourcePath: src/server/webadmin.ts
+injectedParams:
+  - cfg
 methods:
   - name: listUsers
     narrative:
@@ -176,4 +178,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-13T18:28:58.935Z'
-updatedAt: '2026-09-18T16:57:50.889Z'
+updatedAt: '2026-09-23T21:20:15.143Z'

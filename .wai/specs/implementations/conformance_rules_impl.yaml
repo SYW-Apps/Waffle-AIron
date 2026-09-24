@@ -1414,6 +1414,88 @@ methods:
         outcome: unjudged
     symbol: check
     exportedVia: typeShapeRule
+  - name: paramConformance
+    sourcePath: src/core/rules/conformance/param-conformance.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each implementation method whose contract declares parameters, ask the analyzer for
+          the parameter lists of every function realizing it in its own file, under its `symbol`
+          when it declares one. A file may hold two bodies under one name — a class member and the
+          module-level facade that forwards to it — and which one the contract means is not
+          something this reader can decide, so every candidate is kept. A contract method declaring
+          no parameters makes no claim a signature could contradict
+        type: local
+      - stepNumber: 2
+        description: Decide whether a signature is there to read
+        type: branch
+        condition: the file was read at exact grade and at least one function of that name has a body
+        onTrueStep: 3
+        onFalseStep: 9
+      - stepNumber: 3
+        label: align
+        description: >-
+          Drop the leading parameters the implementation declares as injected — the config, data
+          root or transport handles whatever wires the component up supplies. Only a LEADING run is
+          dropped, and only names the implementation actually declared: an injected name appearing
+          after the contract's own parameters is not wiring, it is an argument in the middle of the
+          caller's list
+        type: local
+      - stepNumber: 4
+        description: >-
+          Match what remains against the declared parameters FROM THE FRONT, position by position.
+          Position, not name, is the correspondence a signature has: a caller passes arguments in
+          order, so the first remaining parameter IS the first declared one, whatever either side
+          calls it. A leading parameter no injection accounts for therefore shows up as a shift and
+          is reported by the count, never blamed on one name — aligning from the back instead would
+          accuse the wrong argument and rename-report every position after it. Where a name has
+          several candidate signatures, judge each and report only what they ALL agree on: a wider
+          answer can only narrow what this rule accuses, which is the stance the field-type facts
+          already take when one name has several declarations
+        type: local
+      - stepNumber: 5
+        description: Decide which side has more
+        type: branch
+        condition: the declared parameters and the realized ones are the same in number
+        onTrueStep: 7
+        onFalseStep: 6
+      - stepNumber: 6
+        label: count
+        description: >-
+          Report the surplus on whichever side has it: a declared parameter with no position to
+          occupy is one the code would never receive, and a realized parameter past the last
+          declared one is an argument a caller must supply that the design never mentions — the
+          shape that hid a credential in a signature nobody had read against its contract
+        type: local
+      - stepNumber: 7
+        label: compare
+        description: >-
+          For each matched position, report a name that differs while the declared type agrees. The
+          type agreeing is what makes this a rename rather than a different argument, and a rename
+          is worth saying: the contract, the ERD and every brief carry one word and the code answers
+          to another. Where the code annotates no type, say nothing about the name — without it a
+          rename cannot be told from a substitution, and a guess about somebody's signature is worse
+          than silence
+        type: local
+      - stepNumber: 8
+        description: >-
+          Report each matched position where the two sides disagree about whether the argument may
+          be left out. A default value or a rest parameter makes it omittable just as a question
+          mark does, because what a caller may leave out is the thing the contract is describing
+        type: return
+        outcome: judged
+      - stepNumber: 9
+        label: silent
+        description: >-
+          Say nothing. Below exact grade a parameter list cannot be told from a call, and a method
+          whose named file only CALLS the function is `methodRealization`'s finding — it already
+          reports that the body is not here, and a second voice saying the parameters cannot be read
+          would make one absence look like two
+        type: return
+        outcome: unjudged
+    symbol: check
+    exportedVia: paramConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-23T18:12:05.260Z'
+updatedAt: '2026-09-23T21:06:40.440Z'

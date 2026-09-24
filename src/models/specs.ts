@@ -1041,6 +1041,24 @@ export const ImplementationSpecSchema = z.object({
    * stereotypes should bind tech directly (TECH_ON_LOGIC_COMPONENT).
    */
   technologies: z.array(z.string()).optional(),
+  /**
+   * The parameter names THIS realization takes BEFORE the ones its contract
+   * declares — a config object, a data root, the transport handles a portal is
+   * handed. Supplied by whatever wires the component up, never by the caller
+   * the contract describes, which is why they belong to the realization and
+   * not to the contract: another realization of the same contract may hold
+   * them as fields instead.
+   *
+   * Declared rather than guessed, because a leading parameter the contract
+   * does not name is otherwise indistinguishable from one it named under a
+   * different name — `seed(config)` realized as `bootstrapInstance(cfg)` reads
+   * as a dropped parameter to anything that infers. A leading parameter this
+   * list does not name is a finding (UNDECLARED_PARAM), and only a LEADING run
+   * is dropped: one of these names appearing after the contract's own
+   * parameters is not wiring, it is an argument in the middle of the caller's
+   * list.
+   */
+  injectedParams: z.array(z.string()).optional(),
   methods: z.array(MethodImplementationSchema).default([]).superRefine((methods, ctx) => {
     // `calls` is the NARRATIVE-LESS spelling of a call. A method that has a
     // narrative already says what it calls, in steps the flow rules check; a

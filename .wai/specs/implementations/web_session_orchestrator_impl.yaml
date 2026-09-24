@@ -9,6 +9,8 @@ description: >-
   are best-effort and never fail the primary action.
 contract: iweb_session_orchestrator
 sourcePath: src/server/web.ts
+injectedParams:
+  - cfg
 methods:
   - name: startSignIn
     narrative:
@@ -440,4 +442,4 @@ lint:
         impossible.)
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-09-19T20:28:41.729Z'
+updatedAt: '2026-09-23T21:20:20.075Z'

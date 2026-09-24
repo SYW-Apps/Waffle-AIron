@@ -78,6 +78,7 @@ import { integrationSimWiringRule } from './conformance/integration-sim-wiring.j
 import { integrationSimCoverageRule } from './conformance/integration-sim-coverage.js';
 import { typeRealizationRule } from './conformance/type-realization.js';
 import { typeShapeRule } from './conformance/type-shape.js';
+import { paramConformanceRule } from './conformance/param-conformance.js';
 import { unclaimedSourceRule } from './conformance/unclaimed-source.js';
 import { exportConformanceRule } from './conformance/export-conformance.js';
 import { carriedDebtRule } from './conformance/carried-debt.js';
@@ -260,11 +261,14 @@ export const SDD_RULES: SddRule[] = [
   integrationSimWiringRule,
   integrationSimCoverageRule,
   // The data model's own claim on code — does the file hold the type, and is
-  // it the SHAPE the spec claims — and then the question no spec can ask from
-  // the spec side: which files are named by nothing at all. Last in the
-  // family because that one reads what all the others named.
+  // it the SHAPE the spec claims — then the SIGNATURE, the third reading:
+  // does the code take the arguments the contract promises. And then the
+  // question no spec can ask from the spec side: which files are named by
+  // nothing at all. Last in the family because that one reads what all the
+  // others named.
   typeRealizationRule,
   typeShapeRule,
+  paramConformanceRule,
   unclaimedSourceRule,
   exportConformanceRule,
   couplingRule,

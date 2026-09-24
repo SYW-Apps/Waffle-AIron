@@ -1859,5 +1859,1649 @@ rules:
             at: 'WebSession'
             covers:
               - 'projects'
+      # 189 finding(s), 216 unit(s).
+      - kind: undecided
+        why: >-
+          The first measured yield of param-conformance on the signatures the contracts describe in
+          their own terms, after the 40 implementations that declare their injected wiring. Four
+          shapes, and each name has two legal answers that only a reader of the code can choose
+          between. A contract declares an argument the function never takes, so the promise goes
+          nowhere and every brief built from it passes one. A function takes an argument no contract
+          names and no injection accounts for - enableGit takes a `pat`, executeApprovedLock an
+          `approver` - which is an input a caller must supply that the design never mentions, and the
+          credential case is the reason this rule exists at all. The two sides name the same argument
+          differently, agreeing on position and type: `config` where the code says `projectConfig`,
+          `credential` where it says `token`. And they disagree about whether an argument may be left
+          out, which tells a caller a value is guaranteed when it is not, or the reverse.
+          Undecided rather than drift because for each one the contract may be behind the code or the
+          code may have grown past its contract, and the divergence does not say which. Nothing here
+          is a limit of the reader: every finding is exact grade, aligned from the front, and where a
+          name has several bodies only what ALL of them agree on is reported.
+        findings:
+          - code: UNDECLARED_PARAM
+            spec: admin_orchestrator_impl
+            at: 'enableGit'
+            covers:
+              - 'pat'
+          - code: UNDECLARED_PARAM
+            spec: admin_orchestrator_impl
+            at: 'executeApprovedCreate'
+            covers:
+              - 'placedBy'
+          - code: PARAM_OPTIONALITY
+            spec: admin_orchestrator_impl
+            at: 'executeApprovedLock'
+            covers:
+              - 'subproject'
+          - code: UNDECLARED_PARAM
+            spec: admin_orchestrator_impl
+            at: 'executeApprovedLock'
+            covers:
+              - 'subproject'
+          - code: UNDECLARED_PARAM
+            spec: admin_orchestrator_impl
+            at: 'exportProjectTree'
+            covers:
+              - 'allowPartial'
+          - code: PARAM_NAME_MISMATCH
+            spec: agent_file_generator_impl
+            at: 'generateAll'
+            covers:
+              - 'config'
+          - code: PARAM_NAME_MISMATCH
+            spec: agent_file_generator_impl
+            at: 'resolveExpectedOutputPaths'
+            covers:
+              - 'config'
+          - code: UNDECLARED_PARAM
+            spec: agent_file_generator_impl
+            at: 'resolveExpectedOutputPaths'
+            covers:
+              - 'projectRoot'
+          - code: PARAM_NAME_MISMATCH
+            spec: ai_tool_guide_impl
+            at: 'globalPath'
+            covers:
+              - 'target'
+          - code: PARAM_NAME_MISMATCH
+            spec: ai_tool_guide_impl
+            at: 'localPath'
+            covers:
+              - 'target'
+          - code: PARAM_NAME_MISMATCH
+            spec: ai_tool_guide_impl
+            at: 'refreshLocal'
+            covers:
+              - 'targets'
+          - code: PARAM_NAME_MISMATCH
+            spec: ai_tool_guide_impl
+            at: 'writeDelegator'
+            covers:
+              - 'target'
+          - code: UNDECLARED_PARAM
+            spec: approval_comparison_impl
+            at: 'captureApprovedSpecs'
+            covers:
+              - 'scope'
+          - code: PARAM_OPTIONALITY
+            spec: approval_comparison_impl
+            at: 'currentChildPins'
+            covers:
+              - 'root'
+              - 'mounts'
+          - code: PARAM_OPTIONALITY
+            spec: approval_comparison_impl
+            at: 'movedChildren'
+            covers:
+              - 'root'
+              - 'mounts'
+          - code: UNREALIZED_PARAM
+            spec: approval_index_impl
+            at: 'list'
+            covers:
+              - 'requestedBy'
+          - code: UNREALIZED_PARAM
+            spec: authoring_core_adapter_impl
+            at: 'moveMethods'
+            covers:
+              - 'dryRun'
+          - code: UNDECLARED_PARAM
+            spec: cli_core_adapter_impl
+            at: 'exportSpecTree'
+            covers:
+              - 'allowPartial'
+          - code: PARAM_OPTIONALITY
+            spec: cli_core_adapter_impl
+            at: 'getStatusReport'
+            covers:
+              - 'decor'
+          - code: UNDECLARED_PARAM
+            spec: cli_lock_adapter_impl
+            at: 'lockTree'
+            covers:
+              - 'gate'
+          - code: PARAM_OPTIONALITY
+            spec: cli_mcp_adapter_impl
+            at: 'detectHostedMcpSource'
+            covers:
+              - 'cwd'
+          - code: PARAM_OPTIONALITY
+            spec: cli_mcp_adapter_impl
+            at: 'installMcpServer'
+            covers:
+              - 'options'
+          - code: PARAM_OPTIONALITY
+            spec: cli_packs_adapter_impl
+            at: 'buildPack'
+            covers:
+              - 'options'
+          - code: PARAM_OPTIONALITY
+            spec: cli_packs_adapter_impl
+            at: 'bundlePack'
+            covers:
+              - 'options'
+          - code: PARAM_OPTIONALITY
+            spec: cli_packs_adapter_impl
+            at: 'initPack'
+            covers:
+              - 'options'
+          - code: PARAM_OPTIONALITY
+            spec: cli_packs_adapter_impl
+            at: 'usePack'
+            covers:
+              - 'options'
+          - code: UNDECLARED_PARAM
+            spec: cli_remote_adapter_impl
+            at: 'exportRemoteTree'
+            covers:
+              - 'allowPartial'
+          - code: PARAM_OPTIONALITY
+            spec: cli_runner_impl
+            at: 'localStatus'
+            covers:
+              - 'options'
+          - code: PARAM_NAME_MISMATCH
+            spec: cli_runner_impl
+            at: 'runDiagram'
+            covers:
+              - 'options'
+          - code: PARAM_OPTIONALITY
+            spec: cli_runner_impl
+            at: 'runDiagram'
+            covers:
+              - 'options'
+          - code: PARAM_NAME_MISMATCH
+            spec: cli_runner_impl
+            at: 'runExecutionSetTier'
+            covers:
+              - 'tier'
+          - code: PARAM_NAME_MISMATCH
+            spec: cli_runner_impl
+            at: 'runLockCheck'
+            covers:
+              - 'options'
+          - code: PARAM_OPTIONALITY
+            spec: cli_runner_impl
+            at: 'runLogin'
+            covers:
+              - 'options'
+          - code: PARAM_NAME_MISMATCH
+            spec: cli_runner_impl
+            at: 'runLogout'
+            covers:
+              - 'options'
+          - code: PARAM_OPTIONALITY
+            spec: cli_runner_impl
+            at: 'runLogout'
+            covers:
+              - 'options'
+          - code: UNDECLARED_PARAM
+            spec: cli_runner_impl
+            at: 'runPack'
+            covers:
+              - 'arg'
+              - 'opts'
+          - code: UNDECLARED_PARAM
+            spec: cli_runner_impl
+            at: 'runPacks'
+            covers:
+              - 'arg'
+              - 'opts'
+          - code: PARAM_OPTIONALITY
+            spec: cli_runner_impl
+            at: 'runRemote'
+            covers:
+              - 'options'
+          - code: PARAM_OPTIONALITY
+            spec: core_orchestrator_impl
+            at: 'moveRenamedSpecs'
+            covers:
+              - 'movingInterface'
+              - 'movingImplementation'
+          - code: PARAM_OPTIONALITY
+            spec: core_orchestrator_impl
+            at: 'specPathsInScope'
+            covers:
+              - 'scopeSubsystem'
+          - code: PARAM_OPTIONALITY
+            spec: core_orchestrator_impl
+            at: 'updateSpec'
+            covers:
+              - 'dryRun'
+          - code: UNDECLARED_PARAM
+            spec: core_orchestrator_impl
+            at: 'updateSpec'
+            covers:
+              - 'delta'
+              - 'hooks'
+              - 'dryRun'
+          - code: UNDECLARED_PARAM
+            spec: diagnostics_impl
+            at: 'runChecks'
+            covers:
+              - 'relations'
+              - 'relationSnapshots'
+          - code: PARAM_NAME_MISMATCH
+            spec: domain_detector_impl
+            at: 'detectCandidates'
+            covers:
+              - 'trackedPaths'
+              - 'trackedIds'
+          - code: UNDECLARED_PARAM
+            spec: exposure_policy_orchestrator_impl
+            at: 'getExposurePolicy'
+            covers:
+              - 'credential'
+          - code: UNDECLARED_PARAM
+            spec: exposure_policy_orchestrator_impl
+            at: 'setExposurePolicy'
+            covers:
+              - 'exposure'
+          - code: UNDECLARED_PARAM
+            spec: git_backing_adapter_impl
+            at: 'cloneOrOpen'
+            covers:
+              - 'credentialRef'
+          - code: UNDECLARED_PARAM
+            spec: git_backing_orchestrator_impl
+            at: 'bindScope'
+            covers:
+              - 'binding'
+              - 'pat'
+          - code: UNDECLARED_PARAM
+            spec: git_backing_orchestrator_impl
+            at: 'listBindings'
+            covers:
+              - 'credential'
+          - code: UNDECLARED_PARAM
+            spec: git_backing_orchestrator_impl
+            at: 'syncScope'
+            covers:
+              - 'bindingId'
+          - code: UNDECLARED_PARAM
+            spec: git_backing_orchestrator_impl
+            at: 'unbindScope'
+            covers:
+              - 'bindingId'
+          - code: UNDECLARED_PARAM
+            spec: host_request_orchestrator_impl
+            at: 'auditToolCall'
+            covers:
+              - 'outcome'
+              - 'subproject'
+          - code: UNDECLARED_PARAM
+            spec: host_request_orchestrator_impl
+            at: 'dispatchProjectLifecycleTool'
+            covers:
+              - 'body'
+              - 'subproject'
+          - code: UNDECLARED_PARAM
+            spec: host_request_orchestrator_impl
+            at: 'handle'
+            covers:
+              - 'req'
+              - 'res'
+              - 'body'
+              - 'credential'
+          - code: UNREALIZED_PARAM
+            spec: host_validator_adapter_impl
+            at: 'validateAsComplete'
+            covers:
+              - 'options'
+              - 'projectType'
+          - code: PARAM_NAME_MISMATCH
+            spec: instance_bootstrap_impl
+            at: 'seed'
+            covers:
+              - 'config'
+          - code: PARAM_OPTIONALITY
+            spec: instance_identity_repository_impl
+            at: 'ensureSeeded'
+            covers:
+              - 'now'
+          - code: PARAM_OPTIONALITY
+            spec: landscape_orchestrator_impl
+            at: 'generate'
+            covers:
+              - 'scope'
+          - code: UNDECLARED_PARAM
+            spec: landscape_orchestrator_impl
+            at: 'generate'
+            covers:
+              - 'scope'
+          - code: PARAM_OPTIONALITY
+            spec: landscape_orchestrator_impl
+            at: 'listRelations'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: landscape_orchestrator_impl
+            at: 'listRelations'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: landscape_orchestrator_impl
+            at: 'placeProject'
+            covers:
+              - 'placement'
+          - code: UNDECLARED_PARAM
+            spec: landscape_orchestrator_impl
+            at: 'refreshPublicSurface'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: landscape_orchestrator_impl
+            at: 'removeRelation'
+            covers:
+              - 'id'
+          - code: UNDECLARED_PARAM
+            spec: landscape_orchestrator_impl
+            at: 'upsertRelation'
+            covers:
+              - 'relation'
+          - code: UNDECLARED_PARAM
+            spec: landscape_orchestrator_impl
+            at: 'upsertUnit'
+            covers:
+              - 'unit'
+          - code: UNDECLARED_PARAM
+            spec: mcp_orchestrator_impl
+            at: 'readResource'
+            covers:
+              - 'listChanged'
+          - code: PARAM_NAME_MISMATCH
+            spec: mcp_orchestrator_impl
+            at: 'renameComponent'
+            covers:
+              - 'id'
+          - code: PARAM_NAME_MISMATCH
+            spec: mcp_orchestrator_impl
+            at: 'renameMethod'
+            covers:
+              - 'id'
+              - 'method'
+          - code: PARAM_OPTIONALITY
+            spec: operations_orchestrator_impl
+            at: 'evaluateQuota'
+            covers:
+              - 'scope'
+          - code: UNDECLARED_PARAM
+            spec: operations_orchestrator_impl
+            at: 'evaluateQuota'
+            covers:
+              - 'scope'
+          - code: PARAM_OPTIONALITY
+            spec: operations_orchestrator_impl
+            at: 'getHealthReport'
+            covers:
+              - 'scope'
+          - code: UNDECLARED_PARAM
+            spec: operations_orchestrator_impl
+            at: 'getHealthReport'
+            covers:
+              - 'scope'
+          - code: PARAM_OPTIONALITY
+            spec: operations_orchestrator_impl
+            at: 'getUsage'
+            covers:
+              - 'scope'
+          - code: UNDECLARED_PARAM
+            spec: operations_orchestrator_impl
+            at: 'getUsage'
+            covers:
+              - 'scope'
+          - code: PARAM_NAME_MISMATCH
+            spec: pack_archive_adapter_impl
+            at: 'inflateEntry'
+            covers:
+              - 'path'
+          - code: PARAM_NAME_MISMATCH
+            spec: pack_orchestrator_impl
+            at: 'adoptProjectPack'
+            covers:
+              - 'name'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'adoptProjectPack'
+            covers:
+              - 'name'
+          - code: PARAM_OPTIONALITY
+            spec: pack_orchestrator_impl
+            at: 'installGlobalPackArchive'
+            covers:
+              - 'name'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'installGlobalPackArchive'
+            covers:
+              - 'name'
+          - code: PARAM_NAME_MISMATCH
+            spec: pack_orchestrator_impl
+            at: 'installGlobalPack'
+            covers:
+              - 'content'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'installGlobalPack'
+            covers:
+              - 'content'
+          - code: PARAM_OPTIONALITY
+            spec: pack_orchestrator_impl
+            at: 'installProjectPackArchive'
+            covers:
+              - 'name'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'installProjectPackArchive'
+            covers:
+              - 'name'
+          - code: PARAM_NAME_MISMATCH
+            spec: pack_orchestrator_impl
+            at: 'installProjectPack'
+            covers:
+              - 'name'
+              - 'content'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'installProjectPack'
+            covers:
+              - 'content'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'listAdoptableProjectPacks'
+            covers:
+              - 'project'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'listAvailableProfiles'
+            covers:
+              - 'credential'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'listGlobalPacks'
+            covers:
+              - 'credential'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'listProjectPacks'
+            covers:
+              - 'project'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'listProjectProfiles'
+            covers:
+              - 'project'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'removeGlobalPack'
+            covers:
+              - 'name'
+          - code: PARAM_NAME_MISMATCH
+            spec: pack_orchestrator_impl
+            at: 'removeProjectPack'
+            covers:
+              - 'name'
+          - code: UNDECLARED_PARAM
+            spec: pack_orchestrator_impl
+            at: 'removeProjectPack'
+            covers:
+              - 'name'
+          - code: UNDECLARED_PARAM
+            spec: pack_source_adapter_impl
+            at: 'readManifest'
+            covers:
+              - 'projectRoot'
+          - code: PARAM_OPTIONALITY
+            spec: pack_store_impl
+            at: 'installGlobalPackArchive'
+            covers:
+              - 'name'
+          - code: UNDECLARED_PARAM
+            spec: pack_store_impl
+            at: 'installGlobalPackArchive'
+            covers:
+              - 'name'
+          - code: PARAM_NAME_MISMATCH
+            spec: pack_store_impl
+            at: 'installGlobalPack'
+            covers:
+              - 'content'
+          - code: UNDECLARED_PARAM
+            spec: pack_store_impl
+            at: 'installGlobalPack'
+            covers:
+              - 'content'
+          - code: PARAM_NAME_MISMATCH
+            spec: pack_store_impl
+            at: 'installProjectPackArchive'
+            covers:
+              - 'name'
+          - code: PARAM_OPTIONALITY
+            spec: pack_store_impl
+            at: 'installProjectPackArchive'
+            covers:
+              - 'name'
+          - code: UNDECLARED_PARAM
+            spec: pack_store_impl
+            at: 'installProjectPackArchive'
+            covers:
+              - 'archive'
+              - 'name'
+          - code: PARAM_NAME_MISMATCH
+            spec: pack_store_impl
+            at: 'installProjectPack'
+            covers:
+              - 'content'
+          - code: UNDECLARED_PARAM
+            spec: pack_store_impl
+            at: 'installProjectPack'
+            covers:
+              - 'name'
+              - 'content'
+          - code: PARAM_OPTIONALITY
+            spec: pack_store_impl
+            at: 'listProjectPacks'
+            covers:
+              - 'config'
+          - code: UNDECLARED_PARAM
+            spec: pack_store_impl
+            at: 'listProjectPacks'
+            covers:
+              - 'project'
+          - code: UNDECLARED_PARAM
+            spec: pack_store_impl
+            at: 'removeGlobalPack'
+            covers:
+              - 'name'
+          - code: PARAM_NAME_MISMATCH
+            spec: pack_store_impl
+            at: 'removeProjectPack'
+            covers:
+              - 'ref'
+          - code: PARAM_OPTIONALITY
+            spec: pack_store_impl
+            at: 'removeProjectPack'
+            covers:
+              - 'ref'
+          - code: UNDECLARED_PARAM
+            spec: pack_store_impl
+            at: 'removeProjectPack'
+            covers:
+              - 'name'
+          - code: PARAM_NAME_MISMATCH
+            spec: permission_admin_orchestrator_impl
+            at: 'bindRole'
+            covers:
+              - 'roleId'
+              - 'scopeKind'
+          - code: PARAM_OPTIONALITY
+            spec: permission_admin_orchestrator_impl
+            at: 'bindRole'
+            covers:
+              - 'scopeKind'
+          - code: UNDECLARED_PARAM
+            spec: permission_admin_orchestrator_impl
+            at: 'bindRole'
+            covers:
+              - 'scopeId'
+          - code: UNDECLARED_PARAM
+            spec: permission_admin_orchestrator_impl
+            at: 'createRole'
+            covers:
+              - 'role'
+          - code: UNDECLARED_PARAM
+            spec: permission_admin_orchestrator_impl
+            at: 'deleteRole'
+            covers:
+              - 'roleId'
+          - code: PARAM_NAME_MISMATCH
+            spec: permission_admin_orchestrator_impl
+            at: 'listAssignments'
+            covers:
+              - 'subjectKind'
+          - code: PARAM_OPTIONALITY
+            spec: permission_admin_orchestrator_impl
+            at: 'listAssignments'
+            covers:
+              - 'scopeKind'
+          - code: UNDECLARED_PARAM
+            spec: permission_admin_orchestrator_impl
+            at: 'listAssignments'
+            covers:
+              - 'subjectId'
+          - code: UNDECLARED_PARAM
+            spec: permission_admin_orchestrator_impl
+            at: 'listRoles'
+            covers:
+              - 'credential'
+          - code: UNDECLARED_PARAM
+            spec: permission_admin_orchestrator_impl
+            at: 'removeAssignment'
+            covers:
+              - 'assignmentId'
+          - code: UNDECLARED_PARAM
+            spec: permission_admin_orchestrator_impl
+            at: 'setAssignment'
+            covers:
+              - 'assignment'
+          - code: PARAM_NAME_MISMATCH
+            spec: permission_admin_orchestrator_impl
+            at: 'unbindRole'
+            covers:
+              - 'roleId'
+              - 'scopeKind'
+          - code: PARAM_OPTIONALITY
+            spec: permission_admin_orchestrator_impl
+            at: 'unbindRole'
+            covers:
+              - 'scopeKind'
+          - code: UNDECLARED_PARAM
+            spec: permission_admin_orchestrator_impl
+            at: 'unbindRole'
+            covers:
+              - 'scopeId'
+          - code: UNDECLARED_PARAM
+            spec: permission_admin_orchestrator_impl
+            at: 'updateRole'
+            covers:
+              - 'role'
+          - code: UNDECLARED_PARAM
+            spec: project_lifecycle_orchestrator_impl
+            at: 'awaitApproval'
+            covers:
+              - 'timeoutSeconds'
+          - code: UNDECLARED_PARAM
+            spec: project_lifecycle_orchestrator_impl
+            at: 'decideRequest'
+            covers:
+              - 'decision'
+          - code: UNDECLARED_PARAM
+            spec: project_lifecycle_orchestrator_impl
+            at: 'executeApprovedRequest'
+            covers:
+              - 'requestId'
+          - code: UNDECLARED_PARAM
+            spec: project_lifecycle_orchestrator_impl
+            at: 'getApprovalStatus'
+            covers:
+              - 'requestId'
+          - code: UNDECLARED_PARAM
+            spec: project_lifecycle_orchestrator_impl
+            at: 'initializeProject'
+            covers:
+              - 'request'
+          - code: PARAM_OPTIONALITY
+            spec: project_lifecycle_orchestrator_impl
+            at: 'listPendingRequests'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: project_lifecycle_orchestrator_impl
+            at: 'listPendingRequests'
+            covers:
+              - 'projectId'
+          - code: PARAM_NAME_MISMATCH
+            spec: project_lifecycle_orchestrator_impl
+            at: 'lockProject'
+            covers:
+              - 'subproject'
+          - code: PARAM_OPTIONALITY
+            spec: project_lifecycle_orchestrator_impl
+            at: 'lockProject'
+            covers:
+              - 'subproject'
+          - code: UNDECLARED_PARAM
+            spec: project_lifecycle_orchestrator_impl
+            at: 'lockProject'
+            covers:
+              - 'subproject'
+          - code: UNDECLARED_PARAM
+            spec: project_ops_orchestrator_impl
+            at: 'bindBackingScope'
+            covers:
+              - 'pat'
+          - code: UNDECLARED_PARAM
+            spec: project_ops_orchestrator_impl
+            at: 'enableGit'
+            covers:
+              - 'pat'
+          - code: UNDECLARED_PARAM
+            spec: project_ops_orchestrator_impl
+            at: 'exportProjectTree'
+            covers:
+              - 'allowPartial'
+          - code: PARAM_NAME_MISMATCH
+            spec: project_ops_orchestrator_impl
+            at: 'setExposurePolicy'
+            covers:
+              - 'policy'
+          - code: PARAM_NAME_MISMATCH
+            spec: project_ops_orchestrator_impl
+            at: 'setPackPolicy'
+            covers:
+              - 'policy'
+          - code: PARAM_NAME_MISMATCH
+            spec: project_relation_store_impl
+            at: 'replaceAll'
+            covers:
+              - 'records'
+          - code: PARAM_OPTIONALITY
+            spec: project_status_impl
+            at: 'report'
+            covers:
+              - 'options'
+              - 'decor'
+          - code: PARAM_OPTIONALITY
+            spec: remote_orchestrator_impl
+            at: 'pullTree'
+            covers:
+              - 'options'
+          - code: PARAM_OPTIONALITY
+            spec: remote_orchestrator_impl
+            at: 'pushTree'
+            covers:
+              - 'options'
+          - code: PARAM_OPTIONALITY
+            spec: remote_orchestrator_impl
+            at: 'resolveTarget'
+            covers:
+              - 'overrides'
+          - code: UNDECLARED_PARAM
+            spec: share_admin_orchestrator_impl
+            at: 'createShareLink'
+            covers:
+              - 'input'
+          - code: UNDECLARED_PARAM
+            spec: share_admin_orchestrator_impl
+            at: 'getShareAccessLog'
+            covers:
+              - 'limit'
+          - code: UNDECLARED_PARAM
+            spec: share_admin_orchestrator_impl
+            at: 'listShareLinks'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: share_admin_orchestrator_impl
+            at: 'refreshSnapshot'
+            covers:
+              - 'linkId'
+          - code: UNDECLARED_PARAM
+            spec: share_admin_orchestrator_impl
+            at: 'removeShareLink'
+            covers:
+              - 'linkId'
+          - code: UNDECLARED_PARAM
+            spec: share_admin_orchestrator_impl
+            at: 'updateShareLink'
+            covers:
+              - 'changes'
+          - code: PARAM_NAME_MISMATCH
+            spec: share_snapshots_impl
+            at: 'capture'
+            covers:
+              - 'sessionId'
+              - 'view'
+          - code: UNDECLARED_PARAM
+            spec: share_snapshots_impl
+            at: 'capture'
+            covers:
+              - 'artifacts'
+          - code: PARAM_OPTIONALITY
+            spec: source_analysis_adapter_impl
+            at: 'findTestsReferencing'
+            covers:
+              - 'testRoots'
+          - code: PARAM_NAME_MISMATCH
+            spec: spec_file_store_impl
+            at: 'remove'
+            covers:
+              - 'specPath'
+          - code: PARAM_OPTIONALITY
+            spec: spec_validator_impl
+            at: 'findTestsReferencing'
+            covers:
+              - 'testRoots'
+          - code: PARAM_OPTIONALITY
+            spec: spec_validator_impl
+            at: 'resolveThroughParent'
+            covers:
+              - 'childRules'
+          - code: UNREALIZED_PARAM
+            spec: spec_validator_impl
+            at: 'validateAsComplete'
+            covers:
+              - 'projectType'
+          - code: PARAM_NAME_MISMATCH
+            spec: surface_exchange_orchestrator_impl
+            at: 'exportProjectSurface'
+            covers:
+              - 'format'
+              - 'maxAudience'
+              - 'portalId'
+          - code: PARAM_OPTIONALITY
+            spec: surface_exchange_orchestrator_impl
+            at: 'exportProjectSurface'
+            covers:
+              - 'portalId'
+          - code: UNDECLARED_PARAM
+            spec: surface_exchange_orchestrator_impl
+            at: 'exportProjectSurface'
+            covers:
+              - 'portalId'
+          - code: PARAM_NAME_MISMATCH
+            spec: surface_exchange_orchestrator_impl
+            at: 'getProjectSurfaceForMcp'
+            covers:
+              - 'targetProjectId'
+          - code: UNDECLARED_PARAM
+            spec: surface_exchange_orchestrator_impl
+            at: 'getProjectSurfaceForMcp'
+            covers:
+              - 'targetProjectId'
+          - code: PARAM_NAME_MISMATCH
+            spec: surface_exchange_orchestrator_impl
+            at: 'listReachableProjectInterfacesForMcp'
+            covers:
+              - 'targetProjectId'
+          - code: UNDECLARED_PARAM
+            spec: surface_exchange_orchestrator_impl
+            at: 'listReachableProjectInterfacesForMcp'
+            covers:
+              - 'targetProjectId'
+          - code: UNDECLARED_PARAM
+            spec: surface_exchange_orchestrator_impl
+            at: 'listReachableProjectsForMcp'
+            covers:
+              - 'currentProjectId'
+          - code: UNDECLARED_PARAM
+            spec: surface_exchange_orchestrator_impl
+            at: 'listVisibleSurfaces'
+            covers:
+              - 'currentProjectId'
+          - code: UNDECLARED_PARAM
+            spec: surface_fs_adapter_impl
+            at: 'deleteSnapshot'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_fs_adapter_impl
+            at: 'writeSnapshot'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_index_impl
+            at: 'byProject'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_orchestrator_impl
+            at: 'getSnapshot'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_orchestrator_impl
+            at: 'removeSnapshot'
+            covers:
+              - 'rootDir'
+          - code: UNREALIZED_PARAM
+            spec: surface_projector_impl
+            at: 'projectChildSurface'
+            covers:
+              - 'childSubsystemId'
+          - code: UNDECLARED_PARAM
+            spec: surface_registry_impl
+            at: 'deleteSnapshot'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_registry_impl
+            at: 'upsertSnapshot'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_repository_impl
+            at: 'getSnapshot'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_repository_impl
+            at: 'removeSnapshot'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_repository_impl
+            at: 'saveSnapshot'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_store_impl
+            at: 'get'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_store_impl
+            at: 'put'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_store_impl
+            at: 'remove'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_transfer_adapter_impl
+            at: 'readDocument'
+            covers:
+              - 'origin'
+          - code: PARAM_NAME_MISMATCH
+            spec: surface_transfer_adapter_impl
+            at: 'writeSnapshotTo'
+            covers:
+              - 'targetPath'
+              - 'rendered'
+          - code: UNDECLARED_PARAM
+            spec: surface_transfer_adapter_impl
+            at: 'writeSnapshotTo'
+            covers:
+              - 'portalId'
+          - code: PARAM_NAME_MISMATCH
+            spec: template_source_adapter_impl
+            at: 'loadTemplate'
+            covers:
+              - 'templateName'
+          - code: UNDECLARED_PARAM
+            spec: template_source_adapter_impl
+            at: 'loadTemplate'
+            covers:
+              - 'globalOverride'
+          - code: PARAM_NAME_MISMATCH
+            spec: user_config_store_impl
+            at: 'setDisabledAliases'
+            covers:
+              - 'names'
+          - code: PARAM_OPTIONALITY
+            spec: web_graph_orchestrator_impl
+            at: 'get'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: web_session_orchestrator_impl
+            at: 'completeSignIn'
+            covers:
+              - 'expectedNonce'
+      # 114 finding(s), 183 unit(s).
+      - kind: undecided
+        why: >-
+          The same rule on PORTALS, kept separate because it is one modelling question and not many
+          authoring ones. A portal contract models the call as the caller makes it - one `request`
+          carrying the whole HTTP exchange - while the realization takes the transport apart into
+          `cfg`, `sessionId`, `url` and `res`. Declaring those four as injected wiring does not close
+          it: its own `request` is then left with no position at all, so the finding
+          changes shape rather than going away. It is one finding per portal method whichever way it
+          is written, which is what makes it a decision about how a portal models its parameters and
+          not a list of mistakes. Held here, as one group with one answer owed, until that decision is
+          taken - re-model the portal contracts around the arguments the code actually receives, or
+          accept that a portal contract describes the request and its realization describes the wire.
+        findings:
+          - code: PARAM_NAME_MISMATCH
+            spec: landscape_portal_impl
+            at: 'exportProjectSurface'
+            covers:
+              - 'format'
+              - 'maxAudience'
+              - 'portalId'
+          - code: PARAM_OPTIONALITY
+            spec: landscape_portal_impl
+            at: 'exportProjectSurface'
+            covers:
+              - 'portalId'
+          - code: UNDECLARED_PARAM
+            spec: landscape_portal_impl
+            at: 'exportProjectSurface'
+            covers:
+              - 'portalId'
+          - code: PARAM_OPTIONALITY
+            spec: landscape_portal_impl
+            at: 'generateLandscape'
+            covers:
+              - 'scope'
+          - code: UNDECLARED_PARAM
+            spec: landscape_portal_impl
+            at: 'generateLandscape'
+            covers:
+              - 'scope'
+          - code: PARAM_OPTIONALITY
+            spec: landscape_portal_impl
+            at: 'listRelations'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: landscape_portal_impl
+            at: 'listRelations'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: landscape_portal_impl
+            at: 'listVisibleSurfaces'
+            covers:
+              - 'currentProjectId'
+          - code: UNDECLARED_PARAM
+            spec: landscape_portal_impl
+            at: 'placeProject'
+            covers:
+              - 'placement'
+          - code: UNDECLARED_PARAM
+            spec: landscape_portal_impl
+            at: 'refreshPublicSurface'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: landscape_portal_impl
+            at: 'removeRelation'
+            covers:
+              - 'id'
+          - code: UNDECLARED_PARAM
+            spec: landscape_portal_impl
+            at: 'upsertRelation'
+            covers:
+              - 'relation'
+          - code: UNDECLARED_PARAM
+            spec: landscape_portal_impl
+            at: 'upsertUnit'
+            covers:
+              - 'unit'
+          - code: UNDECLARED_PARAM
+            spec: mcp_portal_impl
+            at: 'readResource'
+            covers:
+              - 'listChanged'
+          - code: PARAM_OPTIONALITY
+            spec: operations_portal_impl
+            at: 'evaluateQuota'
+            covers:
+              - 'scope'
+          - code: UNDECLARED_PARAM
+            spec: operations_portal_impl
+            at: 'evaluateQuota'
+            covers:
+              - 'scope'
+          - code: PARAM_OPTIONALITY
+            spec: operations_portal_impl
+            at: 'getHealthReport'
+            covers:
+              - 'scope'
+          - code: UNDECLARED_PARAM
+            spec: operations_portal_impl
+            at: 'getHealthReport'
+            covers:
+              - 'scope'
+          - code: PARAM_OPTIONALITY
+            spec: operations_portal_impl
+            at: 'getUsage'
+            covers:
+              - 'scope'
+          - code: UNDECLARED_PARAM
+            spec: operations_portal_impl
+            at: 'getUsage'
+            covers:
+              - 'scope'
+          - code: UNDECLARED_PARAM
+            spec: project_policy_portal_impl
+            at: 'evaluateProjectPolicy'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: project_policy_portal_impl
+            at: 'getPackPolicy'
+            covers:
+              - 'credential'
+          - code: UNDECLARED_PARAM
+            spec: project_policy_portal_impl
+            at: 'initializeProjectWithProfile'
+            covers:
+              - 'request'
+          - code: UNDECLARED_PARAM
+            spec: project_policy_portal_impl
+            at: 'reconcileProjectPolicy'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: project_policy_portal_impl
+            at: 'setPackPolicy'
+            covers:
+              - 'policy'
+          - code: PARAM_NAME_MISMATCH
+            spec: share_portal_impl
+            at: 'downloadSharedArtifact'
+            covers:
+              - 'kind'
+          - code: PARAM_OPTIONALITY
+            spec: share_portal_impl
+            at: 'downloadSharedArtifact'
+            covers:
+              - 'portalId'
+          - code: UNDECLARED_PARAM
+            spec: share_portal_impl
+            at: 'downloadSharedArtifact'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: share_portal_impl
+            at: 'getSharedModel'
+            covers:
+              - 'req'
+              - 'res'
+          - code: PARAM_OPTIONALITY
+            spec: share_portal_impl
+            at: 'getSharedOpenApi'
+            covers:
+              - 'portalId'
+          - code: UNDECLARED_PARAM
+            spec: share_portal_impl
+            at: 'getSharedOpenApi'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: share_portal_impl
+            at: 'getSharedView'
+            covers:
+              - 'req'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: surface_portal_impl
+            at: 'exportSurface'
+            covers:
+              - 'portalId'
+          - code: UNDECLARED_PARAM
+            spec: surface_portal_impl
+            at: 'getSnapshot'
+            covers:
+              - 'rootDir'
+          - code: UNDECLARED_PARAM
+            spec: surface_portal_impl
+            at: 'removeSnapshot'
+            covers:
+              - 'rootDir'
+          - code: PARAM_OPTIONALITY
+            spec: validator_portal_impl
+            at: 'findTestsReferencing'
+            covers:
+              - 'testRoots'
+          - code: UNREALIZED_PARAM
+            spec: validator_portal_impl
+            at: 'validateAsComplete'
+            covers:
+              - 'projectType'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminAuditCount'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminAuditQuery'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminBindGitBacking'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminBindRole'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminCreateRole'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminCreateShareLink'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminDeleteRole'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminGetExposure'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminGetPackPolicy'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminGetShareAccessLog'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminInstallGlobalPackArchive'
+            covers:
+              - 'req'
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminInstallGlobalPack'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminListAssignments'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminListGitBacking'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminListGlobalPacks'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminListOrgUnits'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminListProviders'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminListRoles'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminListSecretRefs'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminListShareLinks'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminListUsers'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminPlaceProject'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminRefreshShareSnapshot'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminRemoveAssignment'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminRemoveGlobalPack'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminRemoveProvider'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminRemoveShareLink'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminRemoveUnit'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminSetAssignment'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminSetExposure'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminSetPackPolicy'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminSetUserStatus'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminSyncGitBacking'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminUnbindGitBacking'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminUnbindRole'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminUpdateRole'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminUpdateShareLink'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminUpsertOrgUnit'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminUpsertProvider'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'adminUpsertUser'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'availableProfilesList'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'completeSignIn'
+            covers:
+              - 'expectedNonce'
+          - code: PARAM_OPTIONALITY
+            spec: web_portal_impl
+            at: 'getGraph'
+            covers:
+              - 'projectId'
+          - code: UNREALIZED_PARAM
+            spec: web_portal_impl
+            at: 'getLoginOptions'
+            covers:
+              - 'request'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'listAgentTokens'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'loginWithPassword'
+            covers:
+              - 'res'
+              - 'secureCookie'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'mintAgentToken'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectCreate'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectDestroy'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectGitBind'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectGitCommit'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectGitStatus'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectGitSyncConfig'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectGitSync'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectGitUnbind'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectList'
+            covers:
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectLock'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectPackAdopt'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectPackInstallArchive'
+            covers:
+              - 'req'
+              - 'url'
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectPackInstall'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectPackRemove'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectPacksAdoptable'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectPacksList'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectPolicyEvaluate'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectPolicyReconcile'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectProducerConfigure'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectProducerRemove'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectProducerRun'
+            covers:
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectProducersList'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectProfilesList'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectTreeExport'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'projectTreeImport'
+            covers:
+              - 'url'
+              - 'body'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'revokeAgentToken'
+            covers:
+              - 'body'
+              - 'res'
+          - code: PARAM_NAME_MISMATCH
+            spec: web_portal_impl
+            at: 'serveApp'
+            covers:
+              - 'path'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'serveProjectCanvas'
+            covers:
+              - 'projectId'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'webGetProjectConfig'
+            covers:
+              - 'url'
+              - 'res'
+          - code: UNDECLARED_PARAM
+            spec: web_portal_impl
+            at: 'webSetProjectConfig'
+            covers:
+              - 'body'
+              - 'res'
 createdAt: '2026-06-10T20:23:10.714Z'
 updatedAt: '2026-06-10T20:23:10.714Z'

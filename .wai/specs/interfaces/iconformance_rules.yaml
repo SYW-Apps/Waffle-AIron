@@ -451,6 +451,49 @@ methods:
         summary: >-
           A type spec and the shape at its sourcePath disagree about whether a field may be absent —
           one of them is telling a reader the data is guaranteed when it is not, or the reverse
+  - name: paramConformance
+    description: >-
+      Rule param-conformance. Code-to-contract for the SIGNATURE, the last of the three readings a
+      spec-driven gate never made: a contract declares `params`, and nothing ever compared them to
+      the parameters of the function that realizes the method. A contract could promise an argument
+      the code does not take, take one the contract never mentions — including a secret — or name
+      the same argument two different things, and the brief handed to an implementer would carry the
+      contract's version. Parameters are matched by POSITION against the tail of the realization's
+      list, and the declared type is what tells a rename from a dropped argument: `seed(config:
+      HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one parameter under two
+      names, which anything matching on names alone reads as a parameter the code lost. What a
+      realization takes BEFORE the contract's own parameters is wiring, and it is declared on the
+      implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be
+      told from a renamed first argument. A method the named file only CALLS is left to
+      `methodRealization`, which already reports that the body is not here.
+    signature: 'paramConformance(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNREALIZED_PARAM
+        severity: warning
+        summary: >-
+          A contract declares a parameter the function realizing the method does not take — the
+          contract promises an argument that would go nowhere, and every brief and caller built from
+          it passes one
+      - code: UNDECLARED_PARAM
+        severity: warning
+        summary: >-
+          The realizing function takes a parameter no contract parameter names and no declared
+          injection accounts for — an argument a caller must supply that the design never mentions
+      - code: PARAM_NAME_MISMATCH
+        severity: warning
+        summary: >-
+          A contract parameter and the one realizing it agree on position and type but not on name —
+          the contract, the ERD and every brief say one word while the code says another
+      - code: PARAM_OPTIONALITY
+        severity: warning
+        summary: >-
+          A contract and its realization disagree about whether a parameter may be left out — one of
+          them is telling a caller an argument is required when it is not, or the reverse
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-23T18:11:45.832Z'
+updatedAt: '2026-09-23T20:35:36.556Z'

@@ -1,0 +1,30 @@
+kind: value-object
+id: parameter_fact
+name: ParameterFact
+description: >-
+  One parameter of a function as the code declares it: what it is called, what it is annotated with,
+  and whether a caller may leave it out. The type is what makes a RENAME tellable from a dropped
+  parameter — `seed(config: HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one
+  parameter under two names, and matching on names alone reads it as a parameter the code lost. A
+  parameter bound by destructuring has no name to compare, so it records none rather than inventing
+  one.
+subsystem: sdd_validator
+fields:
+  - name: name
+    type: string
+    description: The parameter's name, absent when it is bound by a destructuring pattern instead
+    optional: true
+  - name: type
+    type: string
+    description: >-
+      The type it is annotated with, exactly as written and whitespace-normalized; absent when the
+      code annotates nothing
+    optional: true
+  - name: optional
+    type: boolean
+    description: Whether a caller may leave it out — marked optional, given a default, or a rest parameter
+    optional: false
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-09-23T20:35:12.500Z'
+updatedAt: '2026-09-23T20:35:12.732Z'

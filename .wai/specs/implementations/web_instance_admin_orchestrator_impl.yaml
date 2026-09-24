@@ -10,6 +10,8 @@ description: >-
   as a server diagnostic and swallowed so it can never fail the primary action.
 contract: iweb_instance_admin_orchestrator
 sourcePath: src/server/webadmin.ts
+injectedParams:
+  - cfg
 methods:
   - name: listOrganizationUnits
     narrative:
@@ -413,4 +415,4 @@ lint:
         the pretence this allow exists instead of.
 status: complete
 createdAt: '2026-09-18T16:57:28.238Z'
-updatedAt: '2026-09-18T16:58:27.025Z'
+updatedAt: '2026-09-23T21:20:17.062Z'
