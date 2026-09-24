@@ -190,12 +190,39 @@ describe('sdd_set_public_interfaces — a replacement through one gated delta', 
     expect(loadSubsystemSpec('shop')?.publicInterfaces).toEqual([]);
   });
 
-  it('refuses a list naming one identity twice — the merge could not tell them apart', async () => {
+  it('refuses a list naming one identity twice — a genuine duplicate the merge would fold into one', async () => {
     const { call } = await bound();
     await seed(call);
-    const result = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: [entry('shop_portal', '/a'), entry('shop_portal', '/b')] });
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain('names "shop_portal" more than once');
+    const bound2 = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: [entry('shop_portal', '/a'), entry('shop_portal', '/b')] });
+    expect(bound2.isError).toBe(true);
+    expect(textOf(bound2)).toContain('names "shop_portal" more than once');
+    const unbound2 = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: [{ type: 'REST', details: '/a' }, { type: 'REST', details: '/a' }] });
+    expect(unbound2.isError).toBe(true);
+    expect(textOf(unbound2)).toContain('names "REST /a" more than once');
+  });
+
+  it('accepts two unbound surfaces and round-trips them — the design-first state before components exist', async () => {
+    const { call } = await bound();
+    await seed(call);
+    const unbound = [{ type: 'REST', details: '/api' }, { type: 'MessageBus', details: 'orders.created' }];
+    const set = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: unbound });
+    expect(set.isError ?? false, textOf(set)).toBe(false);
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('shop')?.publicInterfaces).toEqual(unbound);
+
+    const again = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: unbound });
+    expect(again.structuredContent.written).toBe(false);
+
+    // Binding one of them replaces it: the unbound REST entry is gone, the bound one is added.
+    const boundNow = [{ type: 'REST', details: '/api', component: 'shop_portal' }, unbound[1]];
+    const binding = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: boundNow });
+    expect(binding.isError ?? false, textOf(binding)).toBe(false);
+    expect(binding.structuredContent.changes.map((c: { path: string; change: string }) => `${c.change} ${c.path}`).sort()).toEqual([
+      'added publicInterfaces.shop_portal',
+      'removed publicInterfaces.REST /api',
+    ]);
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('shop')?.publicInterfaces).toEqual([unbound[1], boundNow[0]]);
   });
 
   it('refuses an unknown subsystem', async () => {

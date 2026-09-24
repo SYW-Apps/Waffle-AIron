@@ -1156,6 +1156,7 @@ function identityKeyOf(field: string, item: unknown): string | null {
   const o = item as Record<string, unknown>;
   const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
   switch (field) {
+    case 'publicInterfaces':   return publicInterfaceKey(o);
     case 'dispatch':           return str(o.capability);
     // A listener mounts each portal once, so the portal IS the mount's identity.
     case 'mounts':             return str(o.portal);
@@ -1184,6 +1185,26 @@ function identityKeyOf(field: string, item: unknown): string | null {
     case 'catches':            return str(o.error);
     default:                   return str(o.name) ?? str(o.id);
   }
+}
+
+/**
+ * A published interface's identity: the component it is bound to (and the
+ * interface, when it names one). An entry NOT YET BOUND — the design-first state
+ * a subsystem is authored in before its components exist — names no component,
+ * so it is identified by the only things it does say, its type and details.
+ * Keyed by component + interface alone, every unbound entry shared one identity
+ * and a delta naming one of them folded it into the first.
+ *
+ * Binding an unbound entry therefore changes its identity: a delta that adds a
+ * component adds a bound entry beside the unbound one, which stays until it is
+ * deleted by its type and details.
+ */
+function publicInterfaceKey(o: Record<string, unknown>): string | null {
+  const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  const component = str(o.component);
+  if (component) return str(o.interface) ? `${component}.${String(o.interface)}` : component;
+  if (typeof o.type === 'string' && typeof o.details === 'string') return `${o.type} ${o.details}`;
+  return null;
 }
 
 /**
@@ -1278,6 +1299,8 @@ const LABEL_TWIN_CONTAINERS = new Set(['cases', 'catches', 'branches']);
 function identityFieldsOf(field: string): string[] {
   switch (field) {
     case 'dispatch':           return ['capability'];
+    // Bound: component + interface; not yet bound: type + details.
+    case 'publicInterfaces':   return ['component', 'interface', 'type', 'details'];
     case 'lifecycle':          return ['phase', 'component', 'method'];
     case 'emits':
     case 'subscribesTo':       return ['topic', 'event'];
@@ -3538,9 +3561,11 @@ export class SpecWorkspace {
     const mergePublicInterfaces = (existing: any[], delta: any[]): any[] => {
       const merged = [...existing];
       for (const deltaItem of delta) {
-        const piKey = (i: any) => `${i?.component}.${i?.interface}`;
+        // Bound: component + interface; not yet bound: type + details (publicInterfaceKey).
+        const piKey = (i: any): string => String(identityKeyOf('publicInterfaces', i));
         assertDeltaMarkers(deltaItem, `publicInterface "${piKey(deltaItem)}"`);
-        const idx = merged.findIndex(item => item.component === deltaItem.component && item.interface === deltaItem.interface);
+        const key = identityKeyOf('publicInterfaces', deltaItem);
+        const idx = key === null ? -1 : merged.findIndex(item => identityKeyOf('publicInterfaces', item) === key);
         if (idx !== -1) {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
             merged.splice(idx, 1);
