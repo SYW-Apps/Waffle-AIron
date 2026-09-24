@@ -10,12 +10,14 @@
  *    crosses is stale spec.
  *  - GOD_COMPONENT (warning): excessive dependsOn fan-out; threshold defaults
  *    to 8 and is overridable via rules.complexity.maxComponentDependencies
- *    (the same knob EXCESSIVE_DEPENDENCIES reads — documented). A PURE
- *    FORWARDER is exempt: fan-out is coupling only where the component holds
- *    flow of its own, and a switchboard's count tracks how many areas it
- *    publishes rather than how much it knows. A component with NO narrated
- *    method is not exempt, because absence of narrative is not evidence of
- *    forwarding.
+ *    (the same knob EXCESSIVE_DEPENDENCIES reads — documented). A ROUTING
+ *    TABLE is exempt: fan-out is coupling only where the component holds flow
+ *    of its own with its collaborators, and a switchboard's count tracks how
+ *    many areas it publishes rather than how much it knows. Every method that
+ *    reaches a collaborator must be a single hand-off; one that reaches none
+ *    (a portal serving its own static screen) is neutral. A component with NO
+ *    narrated method is not exempt, because absence of narrative is not
+ *    evidence of forwarding.
  */
 import { defineRuleFixture, type FixtureSpecInput } from '../harness.js';
 
@@ -133,6 +135,33 @@ const DESK_INTERFACE = {
 };
 
 const INTAKE_SUB = { id: 'patient-intake', description: 'Patient intake, eligibility, and consent handling.' };
+
+/** The check-in kiosk: a Portal reaching the same nine intake steps, which also serves its own screen. */
+const KIOSK_COMPONENT = {
+  id: 'checkin-kiosk-portal',
+  componentType: 'Portal',
+  portalType: 'HTTP_API',
+  subsystem: 'patient-intake',
+  description: 'The waiting-room check-in kiosk: hands each command a patient taps to the intake step that owns it.',
+  dependsOn: INTAKE_STEPS.map(s => s.id),
+};
+
+const KIOSK_INTERFACE = {
+  id: 'icheckin_kiosk_portal',
+  component: 'checkin-kiosk-portal',
+  methods: [
+    ...INTAKE_STEPS.map(s => ({ name: s.method, description: `Hand the ${s.method} command to the step that owns it.` })),
+    { name: 'serveKioskScreen', description: 'Serve the static check-in screen the kiosk displays.' },
+  ],
+};
+
+/** A method that reaches NO collaborator: the kiosk serves its screen from its own file. */
+const SERVES_KIOSK_SCREEN = {
+  name: 'serveKioskScreen',
+  narrative: [
+    { stepNumber: 1, description: 'Answer with the check-in screen embedded in the kiosk portal\'s own module.', type: 'local' },
+  ],
+};
 
 export default [
   // -------------------------------------------------------------------------
@@ -376,6 +405,63 @@ export default [
               ],
             },
             ...INTAKE_STEPS.filter(s => s.method !== 'check').map(handsOff),
+          ],
+        },
+      ],
+    },
+  }),
+  // -------------------------------------------------------------------------
+  // GOD_COMPONENT — a ROUTING TABLE: a method that reaches no collaborator is
+  // neutral, one that reaches a collaborator with flow of its own is not
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'GOD_COMPONENT',
+    expectFire: false,
+    reason:
+      'Every method of the kiosk portal that reaches a collaborator is a single hand-off; the one that does not — serving the check-in screen from the portal\'s own file — touches none of the nine dependencies the count is about. The fan-out is still a routing table, so it is not reported.',
+    scenario:
+      'A clinic check-in kiosk portal hands each command straight to the intake step that owns it and also serves its own static check-in screen, reaching nine steps and holding no flow with any of them.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [INTAKE_SUB],
+      components: [KIOSK_COMPONENT, ...intakeStepComponents],
+      interfaces: [KIOSK_INTERFACE, ...intakeStepInterfaces],
+      implementations: [
+        {
+          id: 'checkin_kiosk_portal_impl',
+          contract: 'icheckin_kiosk_portal',
+          methods: [...INTAKE_STEPS.map(handsOff), SERVES_KIOSK_SCREEN],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'GOD_COMPONENT',
+    severity: 'warning',
+    anchoredTo: 'checkin-kiosk-portal',
+    expectFire: true,
+    scenario:
+      'The same check-in kiosk portal normalises the insurance member number itself before asking the eligibility step — flow of its own with a collaborator, so its nine-way fan-out is knowledge rather than routing.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [INTAKE_SUB],
+      components: [KIOSK_COMPONENT, ...intakeStepComponents],
+      interfaces: [KIOSK_INTERFACE, ...intakeStepInterfaces],
+      implementations: [
+        {
+          id: 'checkin_kiosk_portal_impl',
+          contract: 'icheckin_kiosk_portal',
+          methods: [
+            {
+              name: 'check',
+              narrative: [
+                { stepNumber: 1, description: 'Strip the spaces and the insurer prefix from the member number the patient typed.', type: 'local' },
+                { stepNumber: 2, description: 'Ask eligibility-check whether the insurance covers this visit.', type: 'call', targetComponent: 'eligibility-check', targetMethod: 'check' },
+                { stepNumber: 3, description: 'Return what eligibility-check answered.', type: 'return', outcome: 'check result' },
+              ],
+            },
+            ...INTAKE_STEPS.filter(s => s.method !== 'check').map(handsOff),
+            SERVES_KIOSK_SCREEN,
           ],
         },
       ],

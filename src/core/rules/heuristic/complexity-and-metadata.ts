@@ -1,6 +1,6 @@
 import { isDraftSubsystem } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
-import { pureForwarderComponents } from './method-cohesion.js';
+import { routingTableComponents } from './method-cohesion.js';
 
 function checkDescription(
   ctx: RuleContext,
@@ -41,7 +41,7 @@ export const complexityRule: SddRule = {
     { code: 'DESCRIPTION_TOO_SHORT', defaultSeverity: 'warning', summary: 'Description is shorter than the configured minimum length' },
     { code: 'EXCESSIVE_METHODS', defaultSeverity: 'warning', summary: 'Interface declares more methods than the configured limit' },
     { code: 'EXCESSIVE_METHOD_PARAMS', defaultSeverity: 'warning', summary: 'Interface method declares more parameters than the configured limit' },
-    { code: 'EXCESSIVE_DEPENDENCIES', defaultSeverity: 'warning', summary: 'Component has more dependencies than the configured limit; not reported on a pure forwarder, whose fan-out is a routing table rather than knowledge' },
+    { code: 'EXCESSIVE_DEPENDENCIES', defaultSeverity: 'warning', summary: 'Component has more dependencies than the configured limit; not reported on a routing table, which reaches every collaborator it has only through single hand-offs' },
     { code: 'EXCESSIVE_SUBSYSTEM_COMPONENTS', defaultSeverity: 'warning', summary: 'Subsystem has more direct components than the configured limit' },
   ],
   check(ctx) {
@@ -66,15 +66,16 @@ export const complexityRule: SddRule = {
 
     // 2. Components (Doc & Complexity checks)
     //
-    // The dependency cap spares a PURE FORWARDER — a component whose every
-    // narrated method is a single hand-off — for the reason GOD_COMPONENT
-    // does, since the two read the same number: a door's fan-out counts how
-    // many areas it publishes, not how much it knows, so capping it would
-    // punish the component for the size of the subsystem behind it. The test
-    // is method cohesion's, applied unchanged; a component nobody has
-    // narrated is not exempt, because absence of narrative is not evidence of
-    // forwarding.
-    const forwarders = pureForwarderComponents(ctx);
+    // The dependency cap spares a ROUTING TABLE — a component whose every
+    // narrated method that reaches a collaborator is a single hand-off, a
+    // method reaching none being neutral — for the reason GOD_COMPONENT does,
+    // since the two read the same number: a door's fan-out counts how many
+    // areas it publishes, not how much it knows, so capping it would punish
+    // the component for the size of the subsystem behind it. The test is the
+    // one GOD_COMPONENT applies (isRoutingTable), not method cohesion's
+    // stricter pure-forwarder test; a component nobody has narrated is not
+    // exempt, because absence of narrative is not evidence of routing.
+    const routingTables = routingTableComponents(ctx);
     for (const comp of ctx.components) {
       const docConfig = ctx.documentationConfigFor(comp.subsystem);
       const complexityConfig = ctx.complexityConfigFor(comp.subsystem);
@@ -93,7 +94,7 @@ export const complexityRule: SddRule = {
       if (
         complexityConfig?.maxComponentDependencies !== undefined
         && comp.dependsOn.length > complexityConfig.maxComponentDependencies
-        && !forwarders.has(comp.id)
+        && !routingTables.has(comp.id)
       ) {
         ctx.addIssue(
           'warning',

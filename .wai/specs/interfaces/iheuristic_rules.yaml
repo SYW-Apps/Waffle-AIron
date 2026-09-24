@@ -34,8 +34,8 @@ methods:
       - code: GOD_COMPONENT
         severity: warning
         summary: >-
-          Component with excessive dependency fan-out; not reported on a pure forwarder, whose every
-          narrated method is a single hand-off
+          Component with excessive dependency fan-out; not reported on a routing table, which
+          reaches every collaborator it has only through single hand-offs
   - name: signatureLanguageBuiltins
     description: >-
       Rule signature-language-builtins. Contracts must speak the declared target language: builtin
@@ -155,8 +155,8 @@ methods:
       - code: EXCESSIVE_DEPENDENCIES
         severity: warning
         summary: >-
-          Component has more dependencies than the configured limit; not reported on a pure
-          forwarder, whose fan-out is a routing table rather than knowledge
+          Component has more dependencies than the configured limit; not reported on a routing
+          table, which reaches every collaborator it has only through single hand-offs
       - code: EXCESSIVE_SUBSYSTEM_COMPONENTS
         severity: warning
         summary: Subsystem has more direct components than the configured limit
@@ -238,4 +238,4 @@ methods:
           component
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-09-21T10:08:22.211Z'
+updatedAt: '2026-09-24T21:02:22.349Z'

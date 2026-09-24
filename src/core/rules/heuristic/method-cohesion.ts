@@ -82,9 +82,10 @@ export function isForwardingMethod(narrative: NarrativeStep[]): boolean {
  * method BESIDE narrated hand-offs is the detail dial's business, not this
  * test's, which is why the filter comes first.
  *
- * Factored out because the judgement is not this rule's alone: what a
- * forwarder holds (nothing of its own) is the same answer the fan-out rules
- * need, and two spellings of it would drift.
+ * The fan-out rules ask a narrower question and use `isRoutingTable`, which
+ * shares this test's hand-off predicate but lets a method that reaches no
+ * collaborator stand aside; this one stays strict, because for cohesion
+ * in-component work IS a responsibility of the component's own.
  */
 export function isPureForwarder(methods: MethodImplementation[]): boolean {
   const narrated = methods.filter(m => (m.narrative ?? []).length > 0);
@@ -105,6 +106,54 @@ export function pureForwarderComponents(ctx: RuleContext): Set<string> {
     realized.set(intf.component, [...(realized.get(intf.component) ?? []), ...impl.methods]);
   }
   return new Set([...realized].filter(([, methods]) => isPureForwarder(methods)).map(([id]) => id));
+}
+
+/** Whether a narrative reaches another component at all: any `call`, `dispatch` or `register` step. */
+export function reachesCollaborator(narrative: NarrativeStep[]): boolean {
+  return narrative.some(step => step.type === 'call' || step.type === 'dispatch' || step.type === 'register');
+}
+
+/**
+ * Whether a realized set of methods is a ROUTING TABLE's: every narrated
+ * method that reaches a collaborator does so as a single hand-off, a narrated
+ * method that reaches NO collaborator is neutral, and at least one hand-off
+ * exists.
+ *
+ * Why this is not `isPureForwarder`: the fan-out rules count COLLABORATORS,
+ * so the only methods that bear on the count are the ones that reach one. A
+ * portal that routes every request to an orchestrator and also serves its own
+ * embedded app shell — one `local` step, no call — holds no flow WITH its
+ * dependencies; the shell method touches none of them, and letting it
+ * disqualify the portal reports a fan-out the component never exercises. The
+ * cohesion question is different: whether a component holds any
+ * responsibility of its own at all, where in-component work like a codec's
+ * DOES count, so `isPureForwarder` keeps its stricter test and
+ * INCOHESIVE_METHODS keeps using it. Relabelling a codec a forwarder there
+ * would hide exactly the split that rule exists to find.
+ *
+ * The second half holds as it does for a pure forwarder: a component whose
+ * narrated methods reach nothing, or that nobody has narrated, gives no
+ * evidence of routing and is judged like any other.
+ */
+export function isRoutingTable(methods: MethodImplementation[]): boolean {
+  const reaching = methods.map(m => m.narrative ?? []).filter(reachesCollaborator);
+  return reaching.length > 0 && reaching.every(isForwardingMethod);
+}
+
+/**
+ * The components whose realized methods, across every implementation that
+ * realizes them, form a routing table — what GOD_COMPONENT and
+ * EXCESSIVE_DEPENDENCIES spare. A component with no implementation is never
+ * here: there is nothing to read.
+ */
+export function routingTableComponents(ctx: RuleContext): Set<string> {
+  const realized = new Map<string, MethodImplementation[]>();
+  for (const impl of ctx.implementations) {
+    const intf = ctx.interfaceMap.get(impl.contract);
+    if (!intf) continue;
+    realized.set(intf.component, [...(realized.get(intf.component) ?? []), ...impl.methods]);
+  }
+  return new Set([...realized].filter(([, methods]) => isRoutingTable(methods)).map(([id]) => id));
 }
 
 export const methodCohesionRule: SddRule = {
