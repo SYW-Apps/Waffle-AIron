@@ -1351,6 +1351,70 @@ methods:
       transport: HTTP
       method: POST
       path: /web/admin/secrets
+  - name: adminGetLandscape
+    description: >-
+      The org-unit, project and relation graph for the signed-in admin, forwarding to the landscape
+      orchestrator (landscape:read).
+    signature: 'adminGetLandscape(sessionId: string): LandscapeGraphModel'
+    returns: LandscapeGraphModel
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/landscape
+  - name: adminGetHealth
+    description: The instance health report, forwarding to the operations orchestrator (operations:read).
+    signature: 'adminGetHealth(sessionId: string): InstanceHealthReport'
+    returns: InstanceHealthReport
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/health
+  - name: adminGetUsage
+    description: The resource usage snapshots, forwarding to the operations orchestrator (operations:read).
+    signature: 'adminGetUsage(sessionId: string): ResourceUsageSnapshot[]'
+    returns: ResourceUsageSnapshot[]
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/usage
+  - name: adminListApprovals
+    description: >-
+      The approval requests pending in the caller's scope, forwarding to the project lifecycle
+      orchestrator (approval:decide).
+    signature: 'adminListApprovals(sessionId: string): ApprovalRequest[]'
+    returns: ApprovalRequest[]
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/approvals
+  - name: adminDecideApproval
+    description: >-
+      Decide a pending approval request, forwarding to the project lifecycle orchestrator. The
+      decider is always the session's own principal, never a value the request supplies, and
+      self-approval is refused where the decision is made.
+    signature: 'adminDecideApproval(sessionId: string, decision: ApprovalDecision): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: sessionId
+        type: string
+      - name: decision
+        type: ApprovalDecision
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/approvals/decide
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-09-24T13:19:53.657Z'
+updatedAt: '2026-09-24T20:54:31.863Z'

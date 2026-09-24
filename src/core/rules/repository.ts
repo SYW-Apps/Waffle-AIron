@@ -80,6 +80,7 @@ import { integrationSimCoverageRule } from './conformance/integration-sim-covera
 import { typeRealizationRule } from './conformance/type-realization.js';
 import { typeShapeRule } from './conformance/type-shape.js';
 import { paramConformanceRule } from './conformance/param-conformance.js';
+import { routeCoverageRule } from './conformance/route-coverage.js';
 import { unclaimedSourceRule } from './conformance/unclaimed-source.js';
 import { exportConformanceRule } from './conformance/export-conformance.js';
 import { carriedDebtRule } from './conformance/carried-debt.js';
@@ -273,6 +274,7 @@ export const SDD_RULES: SddRule[] = [
   typeRealizationRule,
   typeShapeRule,
   paramConformanceRule,
+  routeCoverageRule,
   unclaimedSourceRule,
   exportConformanceRule,
   couplingRule,

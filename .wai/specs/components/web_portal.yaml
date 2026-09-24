@@ -34,7 +34,10 @@ dependsOn:
   - web_project_orchestrator
   - project_ops_orchestrator
   - share_admin_orchestrator
+  - landscape_orchestrator
+  - operations_orchestrator
+  - project_lifecycle_orchestrator
 portalType: HTTP_API
 status: complete
 createdAt: '2026-07-11T11:31:55.624Z'
-updatedAt: '2026-09-18T16:58:07.799Z'
+updatedAt: '2026-09-24T20:54:25.364Z'

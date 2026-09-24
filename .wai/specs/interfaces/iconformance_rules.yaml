@@ -496,6 +496,40 @@ methods:
         summary: >-
           A contract and its realization disagree about whether a parameter may be left out — one of
           them is telling a caller an argument is required when it is not, or the reverse
+  - name: routeCoverage
+    description: >-
+      Rule route-coverage. Code-to-contract for the ROUTES: does every route a router actually
+      answers have a contract endpoint, and does every contract endpoint have a route that answers
+      it? A portal's endpoints are what its contract promises; the router is what the code serves;
+      nothing compared the two, so a route with no contract — including a write — could run for
+      months without a single rule noticing. The listener's mount names the router function (its
+      `via`), and the routes are read out of that function's guards; the path segment the router
+      never checks is the one the mount's prefix guarantees. One idiom is read — a method comparison
+      with comparisons on the path's split segments — and a mounted router that yields no route in
+      it is reported as unread, never passed: a check that cannot see a router must say so rather
+      than stay quiet.
+    signature: 'routeCoverage(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNDECLARED_ROUTE
+        severity: warning
+        summary: >-
+          A router answers a route that no contract endpoint of the portal it serves declares — a
+          surface the code serves and the design never promised
+      - code: UNROUTED_ENDPOINT
+        severity: warning
+        summary: >-
+          A contract endpoint no route of the portal's router answers — the contract promises a
+          route that no request can reach
+      - code: UNREADABLE_ROUTER
+        severity: warning
+        summary: >-
+          A mounted portal's router yields no route this analysis can read, so its routes were not
+          checked against the contract at all
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-24T19:44:03.529Z'
+updatedAt: '2026-09-24T20:30:33.684Z'

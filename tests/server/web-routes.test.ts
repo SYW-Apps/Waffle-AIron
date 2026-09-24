@@ -13,7 +13,8 @@ import { upsertUser, getUserById } from '../../src/server/users.js';
 import { listProjectPlacements, getOrganizationUnit } from '../../src/server/organization.js';
 import { resolveSharedView } from '../../src/server/shareaccess.js';
 import * as projectops from '../../src/server/projectops.js';
-import { allow, createPlacedProject, seedUnit } from './helpers.js';
+import { initializeProject } from '../../src/server/projectlifecycle.js';
+import { allow, createPlacedProject, mintUserToken, seedUnit } from './helpers.js';
 import type { HostConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -1188,6 +1189,93 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       const vc = viewerCookie();
       expect((await post('/web/admin/share', input, vc)).status).toBe(403);
       expect((await get('/web/admin/share?projectId=demo', vc)).status).toBe(403);
+    });
+  });
+  // ── Scoped control-plane reads + the approval decision ─────────────────────
+
+  describe('/web/admin/landscape, health, usage, approvals, approvals/decide', () => {
+    /** Seed a pending project:init request from an approval-valued requester, so
+     *  the instance admin deciding it is never the original requester. */
+    function seedPendingInit(userId: string, projectId: string): string {
+      const unit = seedUnit(dataDir, `unit-${projectId}`);
+      const requester = mintUserToken(dataDir, { id: `tok-${userId}`, userId });
+      allow(dataDir, userId, 'project:create', 'unit', unit.id, 'approval');
+      const outcome = initializeProject(cfg, requester, { id: projectId, ownerUnitId: unit.id });
+      expect(outcome.status).toBe('pending-approval');
+      return outcome.approval!.id;
+    }
+
+    it('GET /web/admin/landscape answers the landscape graph model bare, not enveloped', async () => {
+      const cookie = adminCookie();
+      createPlacedProject(cfg, MASTER, 'demo');
+      const r = await get('/web/admin/landscape', cookie);
+      expect(r.status).toBe(200);
+      const body = json(r);
+      expect(Array.isArray(body.nodes)).toBe(true);
+      expect(JSON.stringify(body.nodes)).toContain('demo');
+    });
+
+    it('GET /web/admin/health answers the health report bare, not enveloped', async () => {
+      const r = await get('/web/admin/health', adminCookie());
+      expect(r.status).toBe(200);
+      expect(json(r)).toHaveProperty('status');
+    });
+
+    it('GET /web/admin/usage answers the snapshots inside a { usage } envelope', async () => {
+      const r = await get('/web/admin/usage', adminCookie());
+      expect(r.status).toBe(200);
+      const body = json(r);
+      expect(Object.keys(body)).toEqual(['usage']);
+      expect(Array.isArray(body.usage)).toBe(true);
+    });
+
+    it('GET /web/admin/approvals lists the pending requests inside a { requests } envelope', async () => {
+      const id = seedPendingInit('u-pending', 'pending-proj');
+      const r = await get('/web/admin/approvals', adminCookie());
+      expect(r.status).toBe(200);
+      const body = json(r);
+      expect(Object.keys(body)).toEqual(['requests']);
+      expect(body.requests.map((q: { id: string }) => q.id)).toContain(id);
+    });
+
+    it('POST /web/admin/approvals/decide decodes requestId / approved / reason, and decidedBy is the session principal', async () => {
+      const id = seedPendingInit('u-deny', 'deny-proj');
+      const inst = ensureInstanceIdentity(dataDir);
+      const r = await post('/web/admin/approvals/decide', {
+        requestId: id,
+        approved: false,
+        reason: 'not now',
+        // A client-supplied decider is never trusted: the server overrides it.
+        decidedBy: { userId: 'mallory', kind: 'human', issuer: 'local' },
+        decidedAt: '1999-01-01T00:00:00.000Z',
+      }, adminCookie());
+      expect(r.status).toBe(200);
+      const decided = json(r);
+      expect(decided.id).toBe(id);
+      expect(decided.status).toBe('denied');
+      expect(decided.decisionReason).toBe('not now');
+      expect(decided.decidedBy.userId).toBe(inst.superadminUserId);
+      expect(decided.decidedAt).not.toBe('1999-01-01T00:00:00.000Z');
+      // A decided request leaves the pending list.
+      expect(json(await get('/web/admin/approvals', adminCookie())).requests).toEqual([]);
+    });
+
+    it('POST /web/admin/approvals/decide: approved is true ONLY for a literal true (current behaviour)', async () => {
+      const id = seedPendingInit('u-truthy', 'truthy-proj');
+      const r = await post('/web/admin/approvals/decide', { requestId: id, approved: 'yes' }, adminCookie());
+      expect(r.status).toBe(200);
+      expect(json(r).status).toBe('denied');
+    });
+
+    it('no session: 401 on each; a viewer session: 403 on each', async () => {
+      for (const p of ['/web/admin/landscape', '/web/admin/health', '/web/admin/usage', '/web/admin/approvals']) {
+        expect((await get(p)).status).toBe(401);
+      }
+      expect((await post('/web/admin/approvals/decide', { requestId: 'x', approved: true })).status).toBe(401);
+      const vc = viewerCookie();
+      for (const p of ['/web/admin/health', '/web/admin/usage', '/web/admin/approvals']) {
+        expect((await get(p, vc)).status).toBe(403);
+      }
     });
   });
 });

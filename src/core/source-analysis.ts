@@ -11,6 +11,7 @@ import {
   type ImportBindingFact,
   type MethodImplementation,
   type ParameterFact,
+  type RouteFact,
   type ShapeMemberFact,
   type SourceFileFacts,
   type TypeShapeFact,
@@ -398,6 +399,13 @@ interface ExactFacts {
    * Which one a contract means is not this model's to decide.
    */
   functionParams: Map<string, ParameterFact[][]>;
+  /**
+   * The routes each named function-like handles, by name, deduplicated by
+   * route. A name gets an entry only when at least one branch of one of its
+   * bodies reads as a route — see SourceFileFacts.functionRoutes for why an
+   * empty entry is never written.
+   */
+  functionRoutes: Map<string, Map<string, RouteFact>>;
   /** Module-scope mutable (`let`/`var`) binding names. */
   mutableBindings: Set<string>;
   /**
@@ -427,6 +435,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const localTypes = new Map<string, Set<string>>();
   const typeShapes = new Map<string, TypeShapeFact>();
   const functionParams = new Map<string, ParameterFact[][]>();
+  const functionRoutes = new Map<string, Map<string, RouteFact>>();
   const mutableBindings = new Set<string>();
   /**
    * The two halves of the DERIVED hop, collected as the walk meets them and
@@ -713,6 +722,94 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     return { score, callees };
   };
 
+  // ---- routes: the ONE router idiom, read off a function's guards ----
+  //
+  // A branch serves a route when the conjunction of its own `&&`-conjuncts and
+  // those of every enclosing `if` on the path taken includes a comparison of
+  // `<x>.method` with a string literal. Routers NEST — an outer guard on the
+  // first segment, inner ones on the rest — so a then-branch inherits its
+  // guard's conjuncts and an else-branch does not: the else of `a && b` is
+  // `!(a && b)`, which fixes no segment at all. Within that conjunction
+  // `parts.length === N` pins the segment count and `parts[i] === '<lit>'`
+  // fixes segment i; any other conjunct is one the route model cannot state,
+  // so it neither narrows nor widens the route. Nested NAMED functions are
+  // skipped (they carry their own entries); anonymous callbacks count into the
+  // enclosing one, as they do for complexity and call sites.
+  const conjunctsOf = (
+    expression: import('typescript').Expression,
+    out: import('typescript').Expression[] = [],
+  ): import('typescript').Expression[] => {
+    if (ts.isParenthesizedExpression(expression)) return conjunctsOf(expression.expression, out);
+    if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+      conjunctsOf(expression.left, out);
+      conjunctsOf(expression.right, out);
+      return out;
+    }
+    out.push(expression);
+    return out;
+  };
+  /** `parts`, or `<anything>.parts` — the split path the idiom compares against. */
+  const isPartsRef = (expression: import('typescript').Expression): boolean =>
+    (ts.isIdentifier(expression) && expression.text === 'parts')
+    || (ts.isPropertyAccessExpression(expression) && expression.name.text === 'parts');
+  /** The one reading of a conjunct the route model can state, or undefined for any other. */
+  type RouteConstraint = { verb: string } | { length: number } | { index: number; literal: string };
+  const constraintOf = (conjunct: import('typescript').Expression): RouteConstraint | undefined => {
+    if (!ts.isBinaryExpression(conjunct) || conjunct.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken) {
+      return undefined;
+    }
+    const { left, right } = conjunct;
+    if (ts.isPropertyAccessExpression(left) && left.name.text === 'method' && ts.isStringLiteral(right)) {
+      return { verb: right.text };
+    }
+    if (ts.isPropertyAccessExpression(left) && left.name.text === 'length' && isPartsRef(left.expression)
+      && ts.isNumericLiteral(right)) {
+      return { length: Number(right.text) };
+    }
+    if (ts.isElementAccessExpression(left) && isPartsRef(left.expression)
+      && ts.isNumericLiteral(left.argumentExpression) && ts.isStringLiteral(right)) {
+      return { index: Number(left.argumentExpression.text), literal: right.text };
+    }
+    return undefined;
+  };
+  /** The route a conjunction states, or undefined when it names no method — a guard that is not a route. */
+  const routeOf = (conjuncts: import('typescript').Expression[]): RouteFact | undefined => {
+    let verb: string | undefined;
+    let length: number | undefined;
+    const fixed = new Map<number, string>();
+    for (const conjunct of conjuncts) {
+      const constraint = constraintOf(conjunct);
+      if (!constraint) continue;
+      if ('verb' in constraint) verb = constraint.verb;
+      else if ('length' in constraint) length = constraint.length;
+      else fixed.set(constraint.index, constraint.literal);
+    }
+    if (verb === undefined) return undefined;
+    // Without a pinned count the route is as long as the furthest segment it
+    // fixes — and may continue past it, which `exactLength: false` says.
+    const count = length ?? (fixed.size > 0 ? Math.max(...fixed.keys()) + 1 : 0);
+    const segments: string[] = [];
+    for (let index = 0; index < count; index++) segments.push(fixed.get(index) ?? '*');
+    return { verb, segments, exactLength: length !== undefined };
+  };
+  const collectRoutes = (fn: import('typescript').Node & { body?: import('typescript').Node }): Map<string, RouteFact> => {
+    const routes = new Map<string, RouteFact>();
+    const walk = (node: import('typescript').Node, enclosing: import('typescript').Expression[]): void => {
+      if (namedFunctionName(node) !== undefined) return;
+      if (ts.isIfStatement(node)) {
+        const guarded = [...enclosing, ...conjunctsOf(node.expression)];
+        const route = routeOf(guarded);
+        if (route) routes.set(`${route.verb} /${route.segments.join('/')}${route.exactLength ? '' : '/…'}`, route);
+        walk(node.thenStatement, guarded);
+        if (node.elseStatement) walk(node.elseStatement, enclosing);
+        return;
+      }
+      ts.forEachChild(node, child => walk(child, enclosing));
+    };
+    if (fn.body) walk(fn.body, []);
+    return routes;
+  };
+
   const visit = (node: import('typescript').Node): void => {
     const fnName = namedFunctionName(node);
     if (fnName && (node as { body?: import('typescript').Node }).body) {
@@ -730,6 +827,15 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       const signatures = functionParams.get(fnName) ?? [];
       signatures.push(declaredParameters(node));
       functionParams.set(fnName, signatures);
+      // The routes the body's guards serve. Only a name with at least one
+      // gets an entry: "no entry" is how a reader tells a router it could not
+      // read from one it read, so an empty map is never written.
+      const routes = collectRoutes(node as { body?: import('typescript').Node } & import('typescript').Node);
+      if (routes.size > 0) {
+        const known = functionRoutes.get(fnName) ?? new Map<string, RouteFact>();
+        for (const [key, route] of routes) known.set(key, route);
+        functionRoutes.set(fnName, known);
+      }
     }
     // What the code DECLARES an instance field to be: a class property's own
     // annotation, and a constructor parameter property's — the shape that
@@ -881,7 +987,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, functionRoutes, mutableBindings, reexportOnly };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -1177,6 +1283,7 @@ export function buildCodeModel(
             localTypes: Object.fromEntries([...facts.localTypes].map(([k, v]) => [k, [...v]])),
             typeShapes: Object.fromEntries(facts.typeShapes),
             functionParams: Object.fromEntries(facts.functionParams),
+            functionRoutes: Object.fromEntries([...facts.functionRoutes].map(([k, v]) => [k, [...v.values()]])),
             topLevelMutableBindings: [...facts.mutableBindings],
             reexportOnly: facts.reexportOnly,
           };

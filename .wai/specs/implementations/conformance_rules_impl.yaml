@@ -1506,6 +1506,65 @@ methods:
         outcome: unjudged
     symbol: check
     exportedVia: paramConformanceRule
+  - name: routeCoverage
+    sourcePath: src/core/rules/conformance/route-coverage.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each listener mount that names a router entry, find the routes the analyzer read from
+          that function in the mounted portal's files. A mount with no entry calls the portal's
+          methods one by one, and has no router of its own to read
+        type: local
+      - stepNumber: 2
+        description: Decide whether there is a router to judge
+        type: branch
+        condition: the entry's file was read at exact grade
+        onTrueStep: 3
+        onFalseStep: 7
+      - stepNumber: 3
+        label: any-routes
+        description: Decide whether the idiom was recognised at all
+        type: branch
+        condition: the router function yielded at least one route
+        onTrueStep: 5
+        onFalseStep: 4
+      - stepNumber: 4
+        label: unread
+        description: >-
+          Report the router as unread, naming the mount and the entry. Silence here would read as a
+          clean router; it is only one this analysis cannot see
+        type: return
+        outcome: unread
+      - stepNumber: 5
+        label: compare
+        description: >-
+          Complete each route with the mount's prefixes: a leading segment the router never checks
+          is the one the mount guarantees, and a portal mounted under several prefixes is served
+          under each. Match routes against the portal's HTTP endpoints that lie under this mount —
+          one outside it is already `ENDPOINT_OUTSIDE_MOUNT`'s finding — by verb and path. A
+          template parameter in an endpoint matches a segment the router leaves unconstrained, and
+          only that: a literal the router compares against is a distinct handler, and a template
+          endpoint beside it does not declare it, or the one route this check exists to find would
+          hide behind its neighbour. A route that pins no segment count also covers a longer path
+          with the same leading segments
+        type: local
+      - stepNumber: 6
+        description: >-
+          Report each route no endpoint matches — a surface the code serves and no contract declares
+          — and each endpoint no route answers, which the contract promises and no request reaches.
+          The first shape is the one that let a write run with no contract, so both are carryable
+          measured drift rather than refusals
+        type: return
+        outcome: judged
+      - stepNumber: 7
+        label: silent
+        description: >-
+          Say nothing. Below exact grade a guard cannot be read as a route, and the file's grade is
+          already on every other finding about it
+        type: return
+        outcome: unjudged
+    symbol: check
+    exportedVia: routeCoverageRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-24T19:57:46.291Z'
+updatedAt: '2026-09-24T20:49:49.747Z'

@@ -44,6 +44,7 @@ import type { ProducerConfig } from '../producers/index.js';
 import type {
   ApiKeyRecord,
   ApprovalDecision,
+  ApprovalRequest,
   AuditEvent,
   AuditQuery,
   AvailableProfile,
@@ -53,6 +54,7 @@ import type {
   HostedUserRecord,
   HostExposurePolicy,
   IdentityProviderConfig,
+  InstanceHealthReport,
   InstancePackPolicy,
   LandscapeGraphModel,
   OrganizationUnitRecord,
@@ -62,6 +64,7 @@ import type {
   PrincipalSubject,
   ProjectConfigView,
   ProjectProfileSelection,
+  ResourceUsageSnapshot,
   Role,
   ScopeKind,
   ShareAccessEntry,
@@ -2915,6 +2918,38 @@ function adminRemoveUnit(cfg: HostConfig, sessionId: string, unitId: string, dis
   webadmin.removeUnit(cfg, sessionId, unitId, disposition);
 }
 
+/** The org-unit + project + relation graph in the caller's scope (landscape:read);
+ *  forwards to landscape_orchestrator.generate. */
+function adminGetLandscape(cfg: HostConfig, sessionId: string): LandscapeGraphModel {
+  return generateLandscape(cfg, sessionId);
+}
+
+/** The instance health report (operations:read); forwards to
+ *  operations_orchestrator.getHealthReport. */
+function adminGetHealth(cfg: HostConfig, sessionId: string): InstanceHealthReport {
+  return getHealthReport(cfg, sessionId);
+}
+
+/** Resource usage snapshots (operations:read); forwards to
+ *  operations_orchestrator.getUsage. The router wraps them as { usage }. */
+function adminGetUsage(cfg: HostConfig, sessionId: string): ResourceUsageSnapshot[] {
+  return getUsage(cfg, sessionId);
+}
+
+/** Pending approval requests in the caller's scope (approval:decide); forwards to
+ *  project_lifecycle_orchestrator.listPendingRequests. The router wraps them as
+ *  { requests }. */
+function adminListApprovals(cfg: HostConfig, sessionId: string): ApprovalRequest[] {
+  return listPendingRequests(cfg, sessionId);
+}
+
+/** Decide a pending approval request; forwards the decision the router decoded
+ *  to project_lifecycle_orchestrator.decideRequest, which sets decidedBy from the
+ *  session principal and refuses self-approval. */
+function adminDecideApproval(cfg: HostConfig, sessionId: string, decision: ApprovalDecision): ApprovalRequest {
+  return decideRequest(cfg, sessionId, decision);
+}
+
 /** The optional {scopeKind, scopeId} pair from a request body (role bindings). */
 function bodyScope(body: Body): { scopeKind?: ScopeKind; scopeId?: string } {
   return {
@@ -3809,20 +3844,20 @@ export async function handleWebRequest(
       // ── Existing scoped control-plane reads (unchanged) ───────────────────
       // GET /web/admin/landscape — the org-unit + project + relation graph (landscape:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'landscape') {
-        return sendJson(res, 200, generateLandscape(cfg, sessionId));
+        return sendJson(res, 200, adminGetLandscape(cfg, sessionId));
       }
       // GET /web/admin/health — instance health report (operations:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'health') {
-        return sendJson(res, 200, getHealthReport(cfg, sessionId));
+        return sendJson(res, 200, adminGetHealth(cfg, sessionId));
       }
       // GET /web/admin/usage — resource usage snapshots (operations:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'usage') {
-        return sendJson(res, 200, { usage: getUsage(cfg, sessionId) });
+        return sendJson(res, 200, { usage: adminGetUsage(cfg, sessionId) });
       }
       // GET /web/admin/approvals — pending approval requests in the caller's scope
       // (approval:decide).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'approvals') {
-        return sendJson(res, 200, { requests: listPendingRequests(cfg, sessionId) });
+        return sendJson(res, 200, { requests: adminListApprovals(cfg, sessionId) });
       }
       // POST /web/admin/approvals/decide { requestId, approved, reason } — decide a
       // pending request. decidedBy is server-authoritative (the session principal);
@@ -3835,7 +3870,7 @@ export async function handleWebRequest(
           decidedBy: { userId: '', kind: 'human', issuer: 'local' }, // overridden server-side
           decidedAt: '', // set server-side
         };
-        return sendJson(res, 200, decideRequest(cfg, sessionId, decision));
+        return sendJson(res, 200, adminDecideApproval(cfg, sessionId, decision));
       }
     }
 

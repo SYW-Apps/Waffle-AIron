@@ -910,7 +910,58 @@ methods:
         targetComponent: web_instance_admin_orchestrator
         targetMethod: setSecret
     detail: calls-only
+  - name: adminGetLandscape
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session to landscape_orchestrator.generate, and hand back its result for the
+          router to encode
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: generate
+    detail: calls-only
+  - name: adminGetHealth
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session to operations_orchestrator.getHealthReport, and hand back its result
+          for the router to encode
+        type: call
+        targetComponent: operations_orchestrator
+        targetMethod: getHealthReport
+    detail: calls-only
+  - name: adminGetUsage
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session to operations_orchestrator.getUsage, and hand back its result for the
+          router to encode
+        type: call
+        targetComponent: operations_orchestrator
+        targetMethod: getUsage
+    detail: calls-only
+  - name: adminListApprovals
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session to project_lifecycle_orchestrator.listPendingRequests, and hand back
+          its result for the router to encode
+        type: call
+        targetComponent: project_lifecycle_orchestrator
+        targetMethod: listPendingRequests
+    detail: calls-only
+  - name: adminDecideApproval
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the decision the router decoded from the request to
+          project_lifecycle_orchestrator.decideRequest, and hand back its result for the router to
+          encode
+        type: call
+        targetComponent: project_lifecycle_orchestrator
+        targetMethod: decideRequest
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-09-24T13:19:55.012Z'
+updatedAt: '2026-09-24T20:54:36.407Z'
