@@ -36,9 +36,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          State the restatement: the component as the tool's arguments give it (its id qualified
-          into its subsystem's namespace), the fields this tool's input can express, and the status
-          stated, if any
+          State the restatement: the component as the tool's arguments give it, the fields this
+          tool's input can express, and the status stated, if any
         type: local
       - stepNumber: 2
         description: >-
@@ -571,4 +570,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-24T22:24:57.526Z'
+updatedAt: '2026-09-24T23:00:57.093Z'

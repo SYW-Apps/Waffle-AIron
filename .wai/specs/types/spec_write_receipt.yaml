@@ -30,8 +30,8 @@ fields:
   - name: status
     type: string | undefined
     description: >-
-      The lifecycle status written — draft, design or complete. Absent for a type, which carries
-      none.
+      The lifecycle status written — draft, design or complete. Absent for the L0 and for a type,
+      neither of which carries one.
     optional: true
   - name: notices
     type: string[]
@@ -56,4 +56,4 @@ fields:
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-19T07:48:15.465Z'
-updatedAt: '2026-09-24T22:26:12.706Z'
+updatedAt: '2026-09-24T23:00:59.243Z'

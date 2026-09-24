@@ -15,7 +15,9 @@ fields:
     optional: false
   - name: status
     type: string | undefined
-    description: The status the candidate is written at; absent for a type, which carries none
+    description: >-
+      The status the candidate is written at; absent for the L0 and for a type, neither of which
+      carries a lifecycle status
     optional: true
   - name: refusal
     type: string | undefined
@@ -43,4 +45,4 @@ fields:
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:29.854Z'
-updatedAt: '2026-09-24T22:26:10.351Z'
+updatedAt: '2026-09-24T23:00:58.113Z'
