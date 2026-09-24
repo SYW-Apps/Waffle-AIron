@@ -3532,10 +3532,8 @@ export async function handleWebRequest(
       }
       // POST /web/projects/producers/run { projectId, target }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'producers' && parts[3] === 'run') {
-        // Returned un-awaited, exactly as before this handler returned a value: a
-        // rejection escapes this try/catch (so it answers 500, not the mapped status).
-        // Preserved deliberately in the portal-convention refactor; fixed separately.
-        return opsRunProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? '')).then(() => sendJson(res, 200, { ok: true }));
+        await opsRunProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // GET /web/projects/git?projectId= — the git-backing status (project:admin).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'git') {

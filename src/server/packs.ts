@@ -412,16 +412,50 @@ function storeInstallGlobalPackArchive(archive: Uint8Array, name?: string): Pack
   return descriptor;
 }
 
+/** The manifest name a pack declares, or undefined when it fails to load (a
+ *  failed probe only echoes its file name back, which is no declaration). */
+function declaredName(loadRef: string, baseRoot: string, scope: PackScope): string | undefined {
+  const d = probe(loadRef, baseRoot, scope, loadRef);
+  return d.error ? undefined : d.name;
+}
+
+/**
+ * Pick the ONE pack a removal names, with the precedence pack resolution uses: a
+ * file stem or basename match first (unambiguous: one file), otherwise the packs
+ * whose declared manifest name equals the name, which is how the listing names
+ * them. Two packs declaring the same manifest name are refused, naming both,
+ * rather than guessing which to delete.
+ */
+function pickByName<T>(
+  candidates: T[],
+  name: string,
+  fileOf: (c: T) => string,
+  manifestOf: (c: T) => string | undefined,
+): T | undefined {
+  const byFile = candidates.find((c) => stem(fileOf(c)) === name || path.basename(fileOf(c)) === name);
+  if (byFile !== undefined) return byFile;
+  const byManifest = candidates.filter((c) => manifestOf(c) === name);
+  if (byManifest.length > 1) {
+    throw new Error(
+      `Pack name "${name}" is ambiguous: ${byManifest.map((c) => `"${fileOf(c)}"`).join(', ')} all declare it. ` +
+      'Remove one by its file name instead.',
+    );
+  }
+  return byManifest[0];
+}
+
 function storeRemoveGlobalPack(name: string): void {
   assertName(name);
   // Removals touch the MUTABLE instance tier only; a pack that lives solely in
   // the immutable image layer cannot be removed here. Removing an instance pack
-  // that shadowed a same-named image pack re-exposes the image pack.
+  // that shadowed a same-named image pack re-exposes the image pack. A pack is
+  // named by its file, or by the manifest name the listing shows.
   const dir = hostCore.globalPacksDir();
-  const match = hostCore.discoverPacks(dir).find((ref) => stem(ref) === name || path.basename(ref) === name);
+  const manifestOf = (ref: string) => declaredName(ref, path.dirname(ref), 'global');
+  const match = pickByName(hostCore.discoverPacks(dir), name, path.basename, manifestOf);
   if (!match) {
     const inImage = hostCore.discoverPacks(imagePacksDir()).some(
-      (ref) => stem(ref) === name || path.basename(ref) === name,
+      (ref) => stem(ref) === name || path.basename(ref) === name || manifestOf(ref) === name,
     );
     throw new Error(
       inImage
@@ -541,14 +575,22 @@ function boundProject(cfg: HostConfig, project: string): string {
   return root;
 }
 
-/** The one registration naming a pack, matched as project pack removal always
+/** The one registration naming a pack. First as project pack removal always
  *  matched it: the first path reference equal to .wai/packs/<name>.yaml or whose
- *  file stem or basename is the name, or a by-name selection with that name. */
+ *  file stem or basename is the name, or a by-name selection with that name.
+ *  Otherwise the path reference whose pack declares the manifest name `name`
+ *  (loaded against the bound project root), the name the listing shows. Two path
+ *  references declaring that manifest name are refused, naming both. */
 function findPackRegistration(config: ProjectConfig | null, name: string): PackRegistration | undefined {
   const relRef = `.wai/packs/${name}.yaml`;
-  return (config?.extensions?.packs ?? []).find((entry) => (typeof entry === 'string'
+  const entries = config?.extensions?.packs ?? [];
+  const direct = entries.find((entry) => (typeof entry === 'string'
     ? entry === relRef || stem(entry) === name || path.basename(entry) === name
     : entry.name === name));
+  if (direct !== undefined) return direct;
+  const root = getProjectRoot();
+  const refs = entries.filter((entry): entry is string => typeof entry === 'string');
+  return pickByName(refs, name, (ref) => ref, (ref) => declaredName(ref, root, 'project'));
 }
 
 export function listGlobalPacks(cfg: HostConfig, credential: string | null): PackDescriptor[] {

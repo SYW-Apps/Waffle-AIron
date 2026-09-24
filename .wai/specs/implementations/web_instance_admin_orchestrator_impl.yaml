@@ -225,14 +225,20 @@ methods:
         error: Unknown organization unit
       - stepNumber: 7
         description: >-
-          Route on the disposition: cascade deletes the subtree; migrate/absorb/alternative move
-          content to a destination
+          Route on the disposition: cascade deletes the subtree; alternative, migrate and absorb
+          move content to a destination; anything else is refused rather than read as one of them
         type: switch
         'on': disposition.kind
         cases:
           - value: cascade
             step: 26
-        defaultStep: 8
+          - value: alternative
+            step: 8
+          - value: migrate
+            step: 11
+          - value: absorb
+            step: 14
+        defaultStep: 38
       - stepNumber: 8
         description: An 'alternative' disposition needs a fresh replacement sibling
         type: branch
@@ -400,6 +406,14 @@ methods:
         description: Return once the unit has been removed
         type: return
         outcome: unit removed
+      - stepNumber: 38
+        description: >-
+          Reject a missing or unrecognised disposition, naming the four allowed kinds. Every one of
+          them moves or deletes content, so none may be a default: a missing kind, or a typo, used
+          to fall through to absorb and move a unit's contents to its parent without anyone having
+          asked for it
+        type: throw
+        error: 'A disposition kind is required: migrate, alternative, absorb or cascade'
     detail: full
   - name: setSecret
     narrative:
@@ -463,4 +477,4 @@ lint:
         the pretence this allow exists instead of.
 status: complete
 createdAt: '2026-09-18T16:57:28.238Z'
-updatedAt: '2026-09-24T13:19:42.634Z'
+updatedAt: '2026-09-24T13:34:15.359Z'

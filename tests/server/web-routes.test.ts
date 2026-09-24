@@ -318,12 +318,33 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       expect(unknown.status).toBe(404);
       expect(json(unknown).error).toMatch(/Unknown organization unit "nope"/);
 
-      // Current behaviour: an absent disposition decodes to {} (kind undefined),
-      // which falls through to the 'absorb' branch — a root unit cannot absorb.
+      // An absent disposition decodes to {} (kind undefined) and is refused by
+      // name — it no longer falls through to the 'absorb' branch.
       seedUnit(dataDir, 'rooted');
       const noDisp = await post('/web/admin/org/units/remove', { unitId: 'rooted' }, cookie);
       expect(noDisp.status).toBe(400);
-      expect(json(noDisp).error).toMatch(/Cannot absorb a root unit/);
+      expect(json(noDisp).error).toBe('A disposition kind is required: migrate, alternative, absorb or cascade');
+      expect(getOrganizationUnit(dataDir, 'rooted')).not.toBeNull();
+    });
+
+    it('POST /web/admin/org/units/remove refuses an unknown disposition kind on a non-root unit and moves nothing', async () => {
+      const cookie = adminCookie();
+      const parent = seedUnit(dataDir, 'parent');
+      const child = seedUnit(dataDir, 'child', { parentId: parent.id });
+      const grandchild = seedUnit(dataDir, 'grandchild', { parentId: child.id });
+      createPlacedProject(cfg, MASTER, 'kept', child);
+      const before = json(await get('/web/admin/org/units', cookie)).units;
+
+      // A typo of 'absorb' used to absorb: the child's contents moved to its parent.
+      const typo = await post('/web/admin/org/units/remove', { unitId: child.id, disposition: { kind: 'absorbb' } }, cookie);
+      expect(typo.status).toBe(400);
+      expect(json(typo).error).toBe('A disposition kind is required: migrate, alternative, absorb or cascade');
+
+      // The unit, its subtree and its placement are exactly as they were.
+      expect(getOrganizationUnit(dataDir, child.id)).not.toBeNull();
+      expect(getOrganizationUnit(dataDir, grandchild.id)?.parentId).toBe(child.id);
+      expect(listProjectPlacements(dataDir, 'kept').map((p) => p.unitId)).toEqual([child.id]);
+      expect(json(await get('/web/admin/org/units', cookie)).units).toEqual(before);
     });
 
     it('current behaviour: no session is 403 (not 401) on these instance-admin routes; a viewer session: 403', async () => {
@@ -582,27 +603,29 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
   // ── Packs: global remove, project remove, adoptable, adopt, profiles ──────
 
   describe('pack routes (global remove / project remove / adoptable / adopt / profiles)', () => {
-    it('POST /web/admin/packs/remove decodes the pack name (the install stem, not the canonical name)', async () => {
+    it('POST /web/admin/packs/remove decodes the pack name (the canonical name the listing shows, or the install stem)', async () => {
       const cookie = adminCookie();
       expect((await post('/web/admin/packs', { name: 'acme', content: ACME_PACK }, cookie)).status).toBe(200);
       expect(json(await get('/web/admin/packs', cookie)).packs).toEqual([
         expect.objectContaining({ name: 'acme-doctrine', ref: 'acme.yaml', tier: 'instance' }),
       ]);
 
-      // Current behaviour: the canonical name the listing shows (and both clients
-      // send) is refused when it differs from the install stem.
+      // The canonical name the listing shows (and both clients send) removes the
+      // pack even when it differs from the install stem.
       const byCanonical = await post('/web/admin/packs/remove', { name: 'acme-doctrine' }, cookie);
-      expect(byCanonical.status).toBe(400);
-      expect(json(byCanonical).error).toMatch(/No server-global instance pack named "acme-doctrine"/);
-      expect(json(await get('/web/admin/packs', cookie)).packs).toHaveLength(1);
+      expect(byCanonical.status).toBe(200);
+      expect(json(byCanonical)).toEqual({ ok: true });
+      expect(json(await get('/web/admin/packs', cookie)).packs).toEqual([]);
 
+      // The install stem still removes it too.
+      expect((await post('/web/admin/packs', { name: 'acme', content: ACME_PACK }, cookie)).status).toBe(200);
       const removed = await post('/web/admin/packs/remove', { name: 'acme' }, cookie);
       expect(removed.status).toBe(200);
       expect(json(removed)).toEqual({ ok: true });
       expect(json(await get('/web/admin/packs', cookie)).packs).toEqual([]);
     });
 
-    it('POST /web/projects/packs/remove decodes projectId and name (the install stem)', async () => {
+    it('POST /web/projects/packs/remove decodes projectId and name (the canonical name, or the install stem)', async () => {
       const cookie = adminCookie();
       createPlacedProject(cfg, MASTER, 'demo');
       expect((await post('/web/projects/packs', { projectId: 'demo', name: 'tenant', content: TENANT_PACK }, cookie)).status).toBe(200);
@@ -610,10 +633,16 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
         json(await get('/web/projects/packs?projectId=demo', cookie)).packs.map((p: { name: string }) => p.name);
       expect(await names()).toContain('tenant-doctrine');
 
-      // Current behaviour: the canonical name is refused when it differs from the stem.
+      // The canonical name the listing shows removes the pack even when it differs
+      // from the stem: the registration is gone and so are the vendored files.
       const byCanonical = await post('/web/projects/packs/remove', { projectId: 'demo', name: 'tenant-doctrine' }, cookie);
-      expect(byCanonical.status).toBe(400);
-      expect(json(byCanonical).error).toMatch(/Project has no registered pack named "tenant-doctrine"/);
+      expect(byCanonical.status).toBe(200);
+      expect(json(byCanonical)).toEqual({ ok: true });
+      expect(await names()).toEqual([]);
+      expect(fs.existsSync(path.join(dataDir, 'projects', 'demo', '.wai', 'packs', 'tenant.yaml'))).toBe(false);
+
+      // Reinstalled, the install stem keeps working below.
+      expect((await post('/web/projects/packs', { projectId: 'demo', name: 'tenant', content: TENANT_PACK }, cookie)).status).toBe(200);
       expect(await names()).toEqual(['tenant-doctrine']);
 
       // projectId is decoded: the same name against another project is refused.
@@ -625,6 +654,62 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       expect(removed.status).toBe(200);
       expect(json(removed)).toEqual({ ok: true });
       expect(await names()).toEqual([]);
+    });
+
+    it('POST /web/admin/packs/remove refuses a manifest name two instance packs declare, naming both files', async () => {
+      const cookie = adminCookie();
+      expect((await post('/web/admin/packs', { name: 'acme', content: ACME_PACK }, cookie)).status).toBe(200);
+      expect((await post('/web/admin/packs', { name: 'acme2', content: ACME_PACK }, cookie)).status).toBe(200);
+
+      const ambiguous = await post('/web/admin/packs/remove', { name: 'acme-doctrine' }, cookie);
+      expect(ambiguous.status).toBe(400);
+      expect(json(ambiguous).error).toMatch(/Pack name "acme-doctrine" is ambiguous/);
+      expect(json(ambiguous).error).toContain('"acme.yaml"');
+      expect(json(ambiguous).error).toContain('"acme2.yaml"');
+      expect(json(await get('/web/admin/packs', cookie)).packs).toHaveLength(2);
+
+      // A file name stays unambiguous.
+      expect((await post('/web/admin/packs/remove', { name: 'acme2' }, cookie)).status).toBe(200);
+      expect(json(await get('/web/admin/packs', cookie)).packs).toEqual([
+        expect.objectContaining({ name: 'acme-doctrine', ref: 'acme.yaml' }),
+      ]);
+    });
+
+    it('POST /web/admin/packs/remove names an image-only pack immutable by its manifest name too', async () => {
+      const cookie = adminCookie();
+      const imageDir = path.join(dataDir, 'image-packs');
+      fs.mkdirSync(imageDir, { recursive: true });
+      fs.writeFileSync(path.join(imageDir, 'baked.yaml'), ACME_PACK);
+      expect(json(await get('/web/admin/packs', cookie)).packs).toEqual([
+        expect.objectContaining({ name: 'acme-doctrine', tier: 'image' }),
+      ]);
+
+      for (const name of ['acme-doctrine', 'baked']) {
+        const r = await post('/web/admin/packs/remove', { name }, cookie);
+        expect(r.status).toBe(400);
+        expect(json(r).error).toContain(`Pack "${name}" is an immutable image-layer pack`);
+      }
+      expect(fs.existsSync(path.join(imageDir, 'baked.yaml'))).toBe(true);
+    });
+
+    it('POST /web/projects/packs/remove refuses a manifest name two registrations declare, naming both refs', async () => {
+      const cookie = adminCookie();
+      createPlacedProject(cfg, MASTER, 'demo');
+      expect((await post('/web/projects/packs', { projectId: 'demo', name: 'tenant', content: TENANT_PACK }, cookie)).status).toBe(200);
+      expect((await post('/web/projects/packs', { projectId: 'demo', name: 'tenant2', content: TENANT_PACK }, cookie)).status).toBe(200);
+      const names = async (): Promise<string[]> =>
+        json(await get('/web/projects/packs?projectId=demo', cookie)).packs.map((p: { name: string }) => p.name);
+
+      const ambiguous = await post('/web/projects/packs/remove', { projectId: 'demo', name: 'tenant-doctrine' }, cookie);
+      expect(ambiguous.status).toBe(400);
+      expect(json(ambiguous).error).toMatch(/Pack name "tenant-doctrine" is ambiguous/);
+      expect(json(ambiguous).error).toContain('".wai/packs/tenant.yaml"');
+      expect(json(ambiguous).error).toContain('".wai/packs/tenant2.yaml"');
+      expect(await names()).toEqual(['tenant-doctrine', 'tenant-doctrine']);
+
+      // The stem stays unambiguous.
+      expect((await post('/web/projects/packs/remove', { projectId: 'demo', name: 'tenant2' }, cookie)).status).toBe(200);
+      expect(await names()).toEqual(['tenant-doctrine']);
     });
 
     it('GET /web/projects/packs/adoptable + POST /web/projects/packs/adopt round-trip a server-global pack into the project', async () => {
@@ -827,23 +912,27 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       const cookie = adminCookie();
       createPlacedProject(cfg, MASTER, 'demo');
 
-      // Current behaviour: opsRunProducer is async and the router returns its
-      // promise un-awaited inside handleWebRequest's try, so a rejection escapes the
-      // error→status mapping and http.ts answers 500 with String(err).
+      // The router awaits opsRunProducer inside handleWebRequest's try, so a
+      // rejection goes through the error→status mapping (it once escaped as a 500).
       // An unconfigured target: the producer names the decoded target.
       const unconfigured = await post('/web/projects/producers/run', { projectId: 'demo', target: 'miro' }, cookie);
-      expect(unconfigured.status).toBe(500);
-      expect(json(unconfigured)).toEqual({ error: 'Error: Producer "miro" is not configured for this project.' });
+      expect(unconfigured.status).toBe(400);
+      expect(json(unconfigured)).toEqual({ error: 'Producer "miro" is not configured for this project.' });
+
+      // A target no producer exists for: refused through the mapping as well.
+      const bogus = await post('/web/projects/producers/run', { projectId: 'demo', target: 'bogus' }, cookie);
+      expect(bogus.status).toBe(400);
+      expect(json(bogus)).toEqual({ error: 'Producer "bogus" is not configured for this project.' });
 
       // A configured notion target with no token fails before any network call.
       await post('/web/projects/producers', { projectId: 'demo', target: 'notion', parentPageId: 'page-123' }, cookie);
       const noToken = await post('/web/projects/producers/run', { projectId: 'demo', target: 'notion' }, cookie);
-      expect(noToken.status).toBe(500);
-      expect(json(noToken).error).toMatch(/^Error: No Notion token/);
+      expect(noToken.status).toBe(400);
+      expect(json(noToken).error).toMatch(/^No Notion token/);
 
-      // The decoded projectId reaches the producer too: an unknown project, still 500.
+      // The decoded projectId reaches the producer too: an unknown project is 404.
       const ghost = await post('/web/projects/producers/run', { projectId: 'ghost', target: 'notion' }, cookie);
-      expect(ghost.status).toBe(500);
+      expect(ghost.status).toBe(404);
       expect(json(ghost).error).toMatch(/Unknown project "ghost"/);
 
       // The success envelope, with the external call stubbed out.
@@ -865,11 +954,17 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       expect(json(anon)).toEqual({ error: 'forbidden' });
       expect((await post('/web/projects/producers', { projectId: 'demo', target: 'notion', parentPageId: 'p' })).status).toBe(403);
       expect((await post('/web/projects/producers/remove', { projectId: 'demo', target: 'notion' })).status).toBe(403);
-      // run: the async escape again — 500 rather than 403.
-      expect((await post('/web/projects/producers/run', { projectId: 'demo', target: 'notion' })).status).toBe(500);
+      // run: awaited, so a missing session maps like its siblings.
+      const anonRun = await post('/web/projects/producers/run', { projectId: 'demo', target: 'notion' });
+      expect(anonRun.status).toBe(403);
+      expect(json(anonRun)).toEqual({ error: 'forbidden' });
       const vc = viewerCookie();
       expect((await get('/web/projects/producers?projectId=demo', vc)).status).toBe(403);
       expect((await post('/web/projects/producers', { projectId: 'demo', target: 'notion', parentPageId: 'p' }, vc)).status).toBe(403);
+      // run: a viewer without the grant is refused through the mapping, not a 500.
+      const viewerRun = await post('/web/projects/producers/run', { projectId: 'demo', target: 'notion' }, vc);
+      expect(viewerRun.status).toBe(403);
+      expect(json(viewerRun)).toEqual({ error: 'forbidden' });
     });
   });
 

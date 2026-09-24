@@ -1,14 +1,14 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "38797980aa8b47a59c7d4f495e7b1e4e4e68c0a6ee67085c5e8bbce6bf0a28ce"
+    "digest": "8bb6f7db0455e53b58d72583a36261861c517d7c573a8bcfc89e573879079dfe"
   },
-  "lockedAt": "2026-09-24T13:24:37.145Z",
+  "lockedAt": "2026-09-24T13:53:17.242Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "5.1.1-dev.65",
+  "validatorVersion": "5.1.1-dev.66",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -507,7 +507,7 @@
     ".wai/specs/implementations/visibility_rules_impl.yaml": "33f226a96c90a147b3174f7feec4f1d4fb77c890cef2c7db3eb35d0b9a269936",
     ".wai/specs/implementations/web_admin_orchestrator_impl.yaml": "1e227341715f0760a3f1e179e7f254e0c6d662a033cf73cf68c75c69127ab357",
     ".wai/specs/implementations/web_graph_orchestrator_impl.yaml": "f4bb9be015eddfa3a55edd58e3464a29abe2cc7aff7a4dfd66c201841e1ec94d",
-    ".wai/specs/implementations/web_instance_admin_orchestrator_impl.yaml": "166dbbd1b329c3ba6b68ee9f45b4262026042cfbbf99e37eecee7bc3f67dd85f",
+    ".wai/specs/implementations/web_instance_admin_orchestrator_impl.yaml": "75d8b6460f516e3ce1b474d260eb13a6083212ab161256ed3b58068712ae1bf6",
     ".wai/specs/implementations/web_portal_impl.yaml": "ff2f38beeefe0940cf1ca33f0eda9cb3f3a304d646fd4382fad2eb3becbb8299",
     ".wai/specs/implementations/web_project_orchestrator_impl.yaml": "fbe80fe22625aaee23b5ec6d36641b5f739bc51e3dbb86cc1a3c3bb69777adae",
     ".wai/specs/implementations/web_session_index_impl.yaml": "98c6ae379443a4fd31b9413039be3f8dbd881c244ba129cb26b0bc9c9f1abdc9",

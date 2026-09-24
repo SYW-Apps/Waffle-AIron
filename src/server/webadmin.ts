@@ -328,7 +328,13 @@ export function removeUnit(
   const units = organization.listOrganizationUnits(cfg.dataDir);
   const subtree = subtreeUnitIds(units, unitId);
 
-  // step 7: route on the disposition.
+  // step 7: route on the disposition. Every kind moves or deletes content, so
+  // none is a default: the switch's default (step 38) refuses anything else.
+  const kind: string | undefined = disposition?.kind;
+  if (kind !== 'migrate' && kind !== 'alternative' && kind !== 'absorb' && kind !== 'cascade') {
+    // step 38: a missing or unrecognised kind is refused, never read as absorb.
+    throw new Error('A disposition kind is required: migrate, alternative, absorb or cascade');
+  }
   if (disposition.kind === 'cascade') {
     // steps 26–28: delete every placement in the subtree.
     for (const placement of organization.listProjectPlacements(cfg.dataDir)) {
@@ -376,7 +382,8 @@ export function removeUnit(
       }
       destination = target;
     } else {
-      // 'absorb': content moves to the parent, which a root does not have.
+      // 'absorb' (the only kind left after step 38): content moves to the
+      // parent, which a root does not have.
       if (unit.parentId === undefined) {
         throw new Error('Cannot absorb a root unit — it has no parent.');
       }
