@@ -172,7 +172,7 @@ methods:
   - name: enableGit
     description: Forward to admin_orchestrator.enableGit (project:admin over the project upstream).
     signature: >-
-      enableGit(credential: string, project: string, remote: string, branch: string):
+      enableGit(credential: string, project: string, remote: string, branch: string, pat?: string):
       HostedProjectRecord
     returns: HostedProjectRecord
     params:
@@ -184,6 +184,12 @@ methods:
         type: string
       - name: branch
         type: string
+      - name: pat
+        type: string
+        description: >-
+          A personal access token for the remote, when reaching it needs one. Stored as a secret,
+          never kept on the binding.
+        optional: true
   - name: disableGit
     description: Forward to admin_orchestrator.disableGit (project:admin over the project upstream).
     signature: 'disableGit(credential: string, project: string): void'
@@ -291,13 +297,21 @@ methods:
     description: >-
       Forward to git_backing_orchestrator.bindScope (project:admin over the binding's scope
       upstream).
-    signature: 'bindBackingScope(credential: string, binding: GitBackingBinding): GitBackingBinding'
+    signature: >-
+      bindBackingScope(credential: string, binding: GitBackingBinding, pat?: string):
+      GitBackingBinding
     returns: GitBackingBinding
     params:
       - name: credential
         type: string
       - name: binding
         type: GitBackingBinding
+      - name: pat
+        type: string
+        description: >-
+          A personal access token for the backing remote, when reaching it needs one. Stored as a
+          secret, never kept on the binding.
+        optional: true
   - name: unbindBackingScope
     description: >-
       Forward to git_backing_orchestrator.unbindScope (project:admin over the binding's own scope
@@ -419,7 +433,7 @@ methods:
     description: Forward to admin_orchestrator.exportProjectTree (project:read over the project upstream).
     signature: >-
       exportProjectTree(credential: string, project: string, subproject?: string, includeDerived?:
-      boolean): TreeExportResult
+      boolean, allowPartial?: boolean): TreeExportResult
     returns: TreeExportResult
     params:
       - name: credential
@@ -431,6 +445,12 @@ methods:
         optional: true
       - name: includeDerived
         type: boolean
+        optional: true
+      - name: allowPartial
+        type: boolean
+        description: >-
+          Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left
+          out in the result, instead of refusing the whole export.
         optional: true
   - name: importProjectTree
     description: >-
@@ -455,4 +475,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-09-17T20:35:19.653Z'
+updatedAt: '2026-09-24T13:20:05.564Z'

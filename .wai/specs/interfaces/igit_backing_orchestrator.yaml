@@ -21,13 +21,19 @@ methods:
       Authenticate, require project:admin over the binding's scope (the named unit, or instance
       scope for an 'instance' binding), validate a 'unit' scope resolves to an existing organization
       unit, upsert the binding (one per scope), and audit at security level.
-    signature: 'bindScope(credential: string, binding: GitBackingBinding): GitBackingBinding'
+    signature: 'bindScope(credential: string, binding: GitBackingBinding, pat?: string): GitBackingBinding'
     returns: GitBackingBinding
     params:
       - name: credential
         type: string
       - name: binding
         type: GitBackingBinding
+      - name: pat
+        type: string
+        description: >-
+          A personal access token for the backing remote, when reaching it needs one. Stored as a
+          secret, never kept on the binding.
+        optional: true
     guarantees:
       - atomic
   - name: unbindScope
@@ -71,4 +77,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-16T15:39:32.918Z'
-updatedAt: '2026-09-17T20:37:17.198Z'
+updatedAt: '2026-09-24T13:20:06.978Z'

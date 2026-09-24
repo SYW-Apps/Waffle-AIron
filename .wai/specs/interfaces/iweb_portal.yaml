@@ -18,11 +18,12 @@ methods:
       ENABLED identity provider (no free-text provider input), hiding the SSO section when no
       provider is enabled and showing a clear "No sign-in method is configured" message when neither
       method exists.
-    signature: 'serveApp(path: string): string'
+    signature: 'serveApp(pathname: string): string'
     returns: string
     params:
-      - name: path
+      - name: pathname
         type: string
+        description: The request path the app shell or one of its static assets is served for
     endpoint:
       transport: HTTP
       method: GET
@@ -46,13 +47,18 @@ methods:
     description: >-
       Handle the SSO provider callback, forwarding to the web orchestrator to create the session,
       then set the session cookie and return the new session id.
-    signature: 'completeSignIn(state: string, code: string): string'
+    signature: 'completeSignIn(state: string, code: string, expectedNonce: string): string'
     returns: string
     params:
       - name: state
         type: string
       - name: code
         type: string
+      - name: expectedNonce
+        type: string
+        description: >-
+          The sign-in nonce the browser's pre-auth cookie carried, which the identity token must
+          echo — the login-CSRF check. Null when the cookie is absent, which fails the sign-in.
     endpoint:
       transport: HTTP
       method: GET
@@ -96,7 +102,10 @@ methods:
         type: string
       - name: projectId
         type: string
-        optional: true
+        description: >-
+          The project whose graph is drawn; empty for the landscape tier, which spans projects
+          rather than showing one
+        optional: false
       - name: level
         type: number
     endpoint:
@@ -107,11 +116,11 @@ methods:
     description: >-
       Sign the caller out of ALL their browser sessions (all devices/tabs). Forwards to the web
       orchestrator; clears the current session cookie too.
-    signature: 'signOutEverywhere(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'signOutEverywhere(sessionId: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -135,11 +144,13 @@ methods:
       web UI shell embeds it per selected project (an iframe over this route), reusing the SAME
       canvas engine as the static export. Forwards to the web orchestrator's getProjectCanvas;
       session-cookie authenticated, so cross-project access is Forbidden.
-    signature: 'serveProjectCanvas(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'serveProjectCanvas(sessionId: string, projectId: string): string'
+    returns: string
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -148,33 +159,42 @@ methods:
     description: >-
       List hosted users in the caller's scope; forwards the session to
       web_admin_orchestrator.listUsers.
-    signature: 'adminListUsers(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminListUsers(sessionId: string, project: string): HostedUserRecord[]'
+    returns: HostedUserRecord[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
       method: GET
       path: /web/admin/users
   - name: adminUpsertUser
     description: Create or update a hosted user; forwards to web_admin_orchestrator.upsertUser.
-    signature: 'adminUpsertUser(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminUpsertUser(sessionId: string, record: HostedUserRecord): HostedUserRecord'
+    returns: HostedUserRecord
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: record
+        type: HostedUserRecord
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/users
   - name: adminSetUserStatus
     description: Set a hosted user's lifecycle status; forwards to web_admin_orchestrator.setUserStatus.
-    signature: 'adminSetUserStatus(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminSetUserStatus(sessionId: string, userId: string, status: string): HostedUserRecord'
+    returns: HostedUserRecord
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: userId
+        type: string
+      - name: status
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -183,11 +203,11 @@ methods:
     description: >-
       List identity-provider (SSO) configurations; forwards to
       web_admin_orchestrator.listIdentityProviders.
-    signature: 'adminListProviders(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminListProviders(sessionId: string): IdentityProviderConfig[]'
+    returns: IdentityProviderConfig[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -196,11 +216,13 @@ methods:
     description: >-
       Create or update an identity-provider (SSO) configuration; forwards to
       web_admin_orchestrator.upsertIdentityProvider.
-    signature: 'adminUpsertProvider(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminUpsertProvider(sessionId: string, config: IdentityProviderConfig): IdentityProviderConfig'
+    returns: IdentityProviderConfig
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: config
+        type: IdentityProviderConfig
     endpoint:
       transport: HTTP
       method: POST
@@ -209,22 +231,24 @@ methods:
     description: >-
       Remove an identity-provider configuration by id; forwards to
       web_admin_orchestrator.removeIdentityProvider.
-    signature: 'adminRemoveProvider(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminRemoveProvider(sessionId: string, id: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: id
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/providers/remove
   - name: adminListOrgUnits
     description: List organization units; forwards to web_admin_orchestrator.listOrganizationUnits.
-    signature: 'adminListOrgUnits(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminListOrgUnits(sessionId: string): OrganizationUnitRecord[]'
+    returns: OrganizationUnitRecord[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -233,22 +257,28 @@ methods:
     description: >-
       Create or update an organization unit; forwards to
       web_admin_orchestrator.upsertOrganizationUnit.
-    signature: 'adminUpsertOrgUnit(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminUpsertOrgUnit(sessionId: string, record: OrganizationUnitRecord): OrganizationUnitRecord'
+    returns: OrganizationUnitRecord
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: record
+        type: OrganizationUnitRecord
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/org/units
   - name: adminPlaceProject
     description: Place a project into an organization unit; forwards to web_admin_orchestrator.placeProject.
-    signature: 'adminPlaceProject(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminPlaceProject(sessionId: string, projectId: string, unitId: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+      - name: unitId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -257,44 +287,50 @@ methods:
     description: >-
       Mint a single-project MCP token for an AI agent; forwards to
       web_admin_orchestrator.mintProjectToken. User self-service, session-authorized.
-    signature: 'mintAgentToken(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'mintAgentToken(sessionId: string, projectId: string, write: boolean): string'
+    returns: string
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+      - name: write
+        type: boolean
     endpoint:
       transport: HTTP
       method: POST
       path: /web/tokens
   - name: revokeAgentToken
     description: Revoke an MCP token by id; forwards to web_admin_orchestrator.revokeProjectToken.
-    signature: 'revokeAgentToken(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'revokeAgentToken(sessionId: string, tokenId: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: tokenId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/tokens/revoke
   - name: listAgentTokens
     description: List the caller's own MCP tokens; forwards to web_admin_orchestrator.listMyTokens.
-    signature: 'listAgentTokens(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'listAgentTokens(sessionId: string): ApiKeyRecord[]'
+    returns: ApiKeyRecord[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
       path: /web/tokens
   - name: projectList
     description: List the projects the caller can manage; forwards to web_project_orchestrator.list.
-    signature: 'projectList(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectList(sessionId: string): HostedProjectRecord[]'
+    returns: HostedProjectRecord[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -304,33 +340,50 @@ methods:
       Create a hosted project from { id, unitId, profileSelection? } — the REQUIRED owner unit plus
       an optional profile selection; forwards to web_project_orchestrator.create, which routes
       through the policy-aware initialization.
-    signature: 'projectCreate(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      projectCreate(sessionId: string, id: string, unitId: string, profileSelection:
+      ProjectProfileSelection): HostedProjectRecord
+    returns: HostedProjectRecord
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: id
+        type: string
+      - name: unitId
+        type: string
+        description: REQUIRED target organization unit that owns the new project.
+      - name: profileSelection
+        type: ProjectProfileSelection
+        description: >-
+          Optional profile selection recorded into the project's config; a policy with
+          requireProfileSelection rejects a create without one.
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
       path: /web/projects
   - name: projectLock
     description: Lock a project; forwards to web_project_orchestrator.lock.
-    signature: 'projectLock(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectLock(sessionId: string, projectId: string): LockRecord'
+    returns: LockRecord
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/projects/lock
   - name: projectDestroy
     description: Destroy a project; forwards to web_project_orchestrator.destroy.
-    signature: 'projectDestroy(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectDestroy(sessionId: string, id: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: id
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -343,11 +396,13 @@ methods:
       prior cookie exists to ride — so it is intentionally NOT in the cookie-mutation CSRF set; like
       every /web route it is gated on exposure.webUiEnabled. An invalid credential (or disabled
       password login, or an active throttle lockout) answers 401 with no distinguishing detail.
-    signature: 'loginWithPassword(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'loginWithPassword(user: string, password: string): string'
+    returns: string
     params:
-      - name: request
-        type: HttpRequest
+      - name: user
+        type: string
+      - name: password
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -356,11 +411,11 @@ methods:
     description: >-
       List the configured secret ref names (never values); forwards to
       web_admin_orchestrator.listSecretRefs. For the IdP form's clientSecretRef picker.
-    signature: 'adminListSecretRefs(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminListSecretRefs(sessionId: string): string[]'
+    returns: string[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -372,11 +427,9 @@ methods:
       rides no CSRF gate (it is a GET) — and gated with every /web route on exposure.webUiEnabled
       (404 when the web UI is off). The payload carries only the password-login flag and
       enabled-provider { id, displayName } pairs; never secrets, clientIds, or endpoint config.
-    signature: 'getLoginOptions(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
-    params:
-      - name: request
-        type: HttpRequest
+    signature: 'getLoginOptions(): WebLoginOptions'
+    returns: WebLoginOptions
+    params: []
     endpoint:
       transport: HTTP
       method: GET
@@ -385,55 +438,65 @@ methods:
     description: >-
       Remove an organization unit with a disposition (migrate/alternative/absorb/cascade); forwards
       to web_admin_orchestrator.removeUnit.
-    signature: 'adminRemoveUnit(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminRemoveUnit(sessionId: string, unitId: string, disposition: UnitDisposition): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: unitId
+        type: string
+      - name: disposition
+        type: UnitDisposition
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/org/units/remove
   - name: adminListRoles
     description: List permission roles; forwards to web_admin_orchestrator.listRoles.
-    signature: 'adminListRoles(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminListRoles(sessionId: string): Role[]'
+    returns: Role[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
       path: /web/admin/roles
   - name: adminCreateRole
     description: Create a permission role; forwards to web_admin_orchestrator.createRole.
-    signature: 'adminCreateRole(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminCreateRole(sessionId: string, role: Role): Role'
+    returns: Role
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: role
+        type: Role
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/roles
   - name: adminUpdateRole
     description: Update a permission role; forwards to web_admin_orchestrator.updateRole.
-    signature: 'adminUpdateRole(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminUpdateRole(sessionId: string, role: Role): Role'
+    returns: Role
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: role
+        type: Role
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/roles/update
   - name: adminDeleteRole
     description: Delete a permission role; forwards to web_admin_orchestrator.deleteRole.
-    signature: 'adminDeleteRole(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminDeleteRole(sessionId: string, roleId: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: roleId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -442,66 +505,108 @@ methods:
     description: >-
       List permission assignments filtered by scope/subject; forwards to
       web_admin_orchestrator.listAssignments.
-    signature: 'adminListAssignments(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      adminListAssignments(sessionId: string, scopeKind: string, scopeId: string, subjectKind:
+      string, subjectId: string): PermissionAssignment[]
+    returns: PermissionAssignment[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: scopeKind
+        type: string
+        optional: true
+      - name: scopeId
+        type: string
+        optional: true
+      - name: subjectKind
+        type: string
+        optional: true
+      - name: subjectId
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
       method: GET
       path: /web/admin/permissions
   - name: adminSetAssignment
     description: Upsert a permission assignment; forwards to web_admin_orchestrator.setAssignment.
-    signature: 'adminSetAssignment(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminSetAssignment(sessionId: string, assignment: PermissionAssignment): PermissionAssignment'
+    returns: PermissionAssignment
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: assignment
+        type: PermissionAssignment
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/permissions
   - name: adminRemoveAssignment
     description: Remove a permission assignment; forwards to web_admin_orchestrator.removeAssignment.
-    signature: 'adminRemoveAssignment(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminRemoveAssignment(sessionId: string, assignmentId: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: assignmentId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/permissions/remove
   - name: adminBindRole
     description: Bind a role to a user at a scope; forwards to web_admin_orchestrator.bindRole.
-    signature: 'adminBindRole(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      adminBindRole(sessionId: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      string): HostedUserRecord
+    returns: HostedUserRecord
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: userId
+        type: string
+      - name: roleId
+        type: string
+      - name: scopeKind
+        type: string
+        optional: true
+      - name: scopeId
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/roles/bind
   - name: adminUnbindRole
     description: Unbind a role from a user at a scope; forwards to web_admin_orchestrator.unbindRole.
-    signature: 'adminUnbindRole(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      adminUnbindRole(sessionId: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      string): HostedUserRecord
+    returns: HostedUserRecord
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: userId
+        type: string
+      - name: roleId
+        type: string
+      - name: scopeKind
+        type: string
+        optional: true
+      - name: scopeId
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/roles/unbind
   - name: adminListGlobalPacks
     description: List server-global packs; forwards to project_ops_orchestrator.listGlobalPacks.
-    signature: 'adminListGlobalPacks(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminListGlobalPacks(sessionId: string): PackDescriptor[]'
+    returns: PackDescriptor[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -510,33 +615,41 @@ methods:
     description: >-
       Install a declarative pack server-wide; forwards to
       project_ops_orchestrator.installGlobalPack.
-    signature: 'adminInstallGlobalPack(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminInstallGlobalPack(sessionId: string, name: string, content: string): PackDescriptor'
+    returns: PackDescriptor
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/packs
   - name: adminRemoveGlobalPack
     description: Remove a server-global pack; forwards to project_ops_orchestrator.removeGlobalPack.
-    signature: 'adminRemoveGlobalPack(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminRemoveGlobalPack(sessionId: string, name: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: name
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/packs/remove
   - name: projectPacksList
     description: List one project's registered packs; forwards to project_ops_orchestrator.listProjectPacks.
-    signature: 'projectPacksList(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectPacksList(sessionId: string, project: string): PackDescriptor[]'
+    returns: PackDescriptor[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -545,11 +658,19 @@ methods:
     description: >-
       Install a declarative pack into a project; forwards to
       project_ops_orchestrator.installProjectPack.
-    signature: 'projectPackInstall(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      projectPackInstall(sessionId: string, project: string, name: string, content: string):
+      PackDescriptor
+    returns: PackDescriptor
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -558,33 +679,39 @@ methods:
     description: >-
       Remove one of a project's registered packs; forwards to
       project_ops_orchestrator.removeProjectPack.
-    signature: 'projectPackRemove(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectPackRemove(sessionId: string, project: string, name: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/projects/packs/remove
   - name: adminGetPackPolicy
     description: Read the instance pack/profile policy; forwards to project_ops_orchestrator.getPackPolicy.
-    signature: 'adminGetPackPolicy(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminGetPackPolicy(sessionId: string): InstancePackPolicy'
+    returns: InstancePackPolicy
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
       path: /web/admin/policy
   - name: adminSetPackPolicy
     description: Replace the instance pack/profile policy; forwards to project_ops_orchestrator.setPackPolicy.
-    signature: 'adminSetPackPolicy(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminSetPackPolicy(sessionId: string, policy: InstancePackPolicy): InstancePackPolicy'
+    returns: InstancePackPolicy
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: policy
+        type: InstancePackPolicy
     endpoint:
       transport: HTTP
       method: POST
@@ -593,11 +720,13 @@ methods:
     description: >-
       Evaluate one project's pack/profile compliance; forwards to
       project_ops_orchestrator.evaluateProjectPolicy.
-    signature: 'projectPolicyEvaluate(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectPolicyEvaluate(sessionId: string, projectId: string): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -606,11 +735,13 @@ methods:
     description: >-
       Reconcile one project against the instance pack policy; forwards to
       project_ops_orchestrator.reconcileProjectPolicy.
-    signature: 'projectPolicyReconcile(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectPolicyReconcile(sessionId: string, projectId: string): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -619,11 +750,13 @@ methods:
     description: >-
       List one project's configured producer targets; forwards to
       project_ops_orchestrator.listProducers.
-    signature: 'projectProducersList(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectProducersList(sessionId: string, project: string): ProducerConfig[]'
+    returns: ProducerConfig[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -632,44 +765,62 @@ methods:
     description: >-
       Configure a producer target (Notion/Miro) for a project; forwards to
       project_ops_orchestrator.configureProducer.
-    signature: 'projectProducerConfigure(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      projectProducerConfigure(sessionId: string, project: string, target: string, parentPageId:
+      string): void
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
+      - name: parentPageId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/projects/producers
   - name: projectProducerRemove
     description: Remove a project's producer target; forwards to project_ops_orchestrator.removeProducer.
-    signature: 'projectProducerRemove(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectProducerRemove(sessionId: string, project: string, target: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/projects/producers/remove
   - name: projectProducerRun
     description: Run a configured producer projection; forwards to project_ops_orchestrator.produceProducer.
-    signature: 'projectProducerRun(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectProducerRun(sessionId: string, project: string, target: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/projects/producers/run
   - name: projectGitStatus
     description: Read a project's git-backing status; forwards to project_ops_orchestrator.getGitBinding.
-    signature: 'projectGitStatus(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectGitStatus(sessionId: string, project: string): GitBackingStatus'
+    returns: GitBackingStatus
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -678,33 +829,51 @@ methods:
     description: >-
       Bind a project to its REAL repository (wairon commits only .wai/); forwards to
       project_ops_orchestrator.enableGit.
-    signature: 'projectGitBind(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      projectGitBind(sessionId: string, project: string, remote: string, branch: string, pat?:
+      string): HostedProjectRecord
+    returns: HostedProjectRecord
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: remote
+        type: string
+      - name: branch
+        type: string
+      - name: pat
+        type: string
+        description: >-
+          A personal access token for the remote, when reaching it needs one. Stored as a secret,
+          never kept on the binding.
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
       path: /web/projects/git
   - name: projectGitUnbind
     description: Disconnect a project's repository binding; forwards to project_ops_orchestrator.disableGit.
-    signature: 'projectGitUnbind(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectGitUnbind(sessionId: string, project: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/projects/git/disconnect
   - name: projectGitSync
     description: Sync the default branch into the working branch; forwards to project_ops_orchestrator.syncGit.
-    signature: 'projectGitSync(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectGitSync(sessionId: string, project: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -713,11 +882,21 @@ methods:
     description: >-
       Publish a deliberate .wai/-scoped commit+push (optional subsystem subpath + message); forwards
       to project_ops_orchestrator.commitProject.
-    signature: 'projectGitCommit(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      projectGitCommit(sessionId: string, project: string, subsystem: string, message: string):
+      GitPublish
+    returns: GitPublish
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: subsystem
+        type: string
+        optional: true
+      - name: message
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
@@ -726,11 +905,21 @@ methods:
     description: >-
       Set a project's periodic-sync cadence (interval + skip-if-clean); forwards to
       project_ops_orchestrator.configureGitSync.
-    signature: 'projectGitSyncConfig(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      projectGitSyncConfig(sessionId: string, project: string, periodicSyncMinutes: number,
+      skipIfClean: boolean): void
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: periodicSyncMinutes
+        type: number
+        optional: true
+      - name: skipIfClean
+        type: boolean
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
@@ -739,11 +928,13 @@ methods:
     description: >-
       The scope-filtered, paginated, redacted audit viewer; forwards to
       project_ops_orchestrator.queryAuditEvents (filters from query params).
-    signature: 'adminAuditQuery(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminAuditQuery(sessionId: string, query: AuditQuery): AuditEvent[]'
+    returns: AuditEvent[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: query
+        type: AuditQuery
     endpoint:
       transport: HTTP
       method: GET
@@ -752,33 +943,37 @@ methods:
     description: >-
       The scoped audit-event count for pagination; forwards to
       project_ops_orchestrator.countAuditEvents.
-    signature: 'adminAuditCount(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminAuditCount(sessionId: string, query: AuditQuery): number'
+    returns: number
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: query
+        type: AuditQuery
     endpoint:
       transport: HTTP
       method: GET
       path: /web/admin/audit/count
   - name: adminGetExposure
     description: Read the instance exposure policy; forwards to project_ops_orchestrator.getExposurePolicy.
-    signature: 'adminGetExposure(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminGetExposure(sessionId: string): HostExposurePolicy'
+    returns: HostExposurePolicy
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
       path: /web/admin/exposure
   - name: adminSetExposure
     description: Replace the instance exposure policy; forwards to project_ops_orchestrator.setExposurePolicy.
-    signature: 'adminSetExposure(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminSetExposure(sessionId: string, policy: HostExposurePolicy): HostExposurePolicy'
+    returns: HostExposurePolicy
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: policy
+        type: HostExposurePolicy
     endpoint:
       transport: HTTP
       method: POST
@@ -787,11 +982,11 @@ methods:
     description: >-
       List the container-level backup bindings in the caller's admin reach; forwards to
       project_ops_orchestrator.listBackingBindings.
-    signature: 'adminListGitBacking(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminListGitBacking(sessionId: string): GitBackingBinding[]'
+    returns: GitBackingBinding[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -800,11 +995,21 @@ methods:
     description: >-
       Bind a unit container repo or the instance-structure backup repo; forwards to
       project_ops_orchestrator.bindBackingScope.
-    signature: 'adminBindGitBacking(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      adminBindGitBacking(sessionId: string, binding: GitBackingBinding, pat?: string):
+      GitBackingBinding
+    returns: GitBackingBinding
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: binding
+        type: GitBackingBinding
+      - name: pat
+        type: string
+        description: >-
+          A personal access token for the backing remote, when reaching it needs one. Stored as a
+          secret, never kept on the binding.
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
@@ -813,22 +1018,26 @@ methods:
     description: >-
       Remove a container-level backup binding; forwards to
       project_ops_orchestrator.unbindBackingScope.
-    signature: 'adminUnbindGitBacking(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminUnbindGitBacking(sessionId: string, bindingId: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: bindingId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/git-backing/remove
   - name: adminSyncGitBacking
     description: Run a container-level backup sync now; forwards to project_ops_orchestrator.syncBackingScope.
-    signature: 'adminSyncGitBacking(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminSyncGitBacking(sessionId: string, bindingId: string): boolean'
+    returns: boolean
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: bindingId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -837,33 +1046,39 @@ methods:
     description: >-
       Create a share link (mint the token once); forwards the session to
       share_admin_orchestrator.createShareLink, which enforces share:create on the target scope.
-    signature: 'adminCreateShareLink(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminCreateShareLink(sessionId: string, input: ShareLinkInput): ShareLinkCreated'
+    returns: ShareLinkCreated
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: input
+        type: ShareLinkInput
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/share
   - name: adminListShareLinks
     description: List a project's share links; forwards to share_admin_orchestrator.listShareLinks.
-    signature: 'adminListShareLinks(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminListShareLinks(sessionId: string, projectId: string): ShareLink[]'
+    returns: ShareLink[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
       path: /web/admin/share
   - name: adminRefreshShareSnapshot
     description: Re-capture a link's immutable snapshot; forwards to share_admin_orchestrator.refreshSnapshot.
-    signature: 'adminRefreshShareSnapshot(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminRefreshShareSnapshot(sessionId: string, linkId: string): ShareLink'
+    returns: ShareLink
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -872,33 +1087,43 @@ methods:
     description: >-
       Update a link's mutable settings (enabled / expiry / download permissions / embedding
       allowlist); forwards to share_admin_orchestrator.updateShareLink.
-    signature: 'adminUpdateShareLink(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminUpdateShareLink(sessionId: string, linkId: string, changes: ShareLinkUpdate): ShareLink'
+    returns: ShareLink
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
+      - name: changes
+        type: ShareLinkUpdate
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/share/update
   - name: adminRemoveShareLink
     description: Revoke a share link; forwards to share_admin_orchestrator.removeShareLink.
-    signature: 'adminRemoveShareLink(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminRemoveShareLink(sessionId: string, linkId: string): void'
+    returns: void
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
     endpoint:
       transport: HTTP
       method: POST
       path: /web/admin/share/remove
   - name: adminGetShareAccessLog
     description: Read a link's access log; forwards to share_admin_orchestrator.getShareAccessLog.
-    signature: 'adminGetShareAccessLog(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'adminGetShareAccessLog(sessionId: string, linkId: string, limit: number): ShareAccessEntry[]'
+    returns: ShareAccessEntry[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
+      - name: limit
+        type: number
     endpoint:
       transport: HTTP
       method: GET
@@ -909,11 +1134,18 @@ methods:
       body; pack name derived from the envelope, or overridden via the X-Wairon-Pack-Name header).
       Forwards to project_ops_orchestrator.installGlobalPackArchive. The ZIP-primary counterpart of
       adminInstallGlobalPack.
-    signature: 'adminInstallGlobalPackArchive(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      adminInstallGlobalPackArchive(sessionId: string, archive: bytes, name?: string):
+      PackDescriptor
+    returns: PackDescriptor
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: archive
+        type: bytes
+      - name: name
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
@@ -923,11 +1155,20 @@ methods:
       Install a declarative pack into a project from an uploaded .wpack archive (raw application/zip
       body). Forwards to project_ops_orchestrator.installProjectPackArchive. The ZIP-primary
       counterpart of projectPackInstall.
-    signature: 'projectPackInstallArchive(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      projectPackInstallArchive(sessionId: string, project: string, archive: bytes, name?: string):
+      PackDescriptor
+    returns: PackDescriptor
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: archive
+        type: bytes
+      - name: name
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
@@ -936,11 +1177,11 @@ methods:
     description: >-
       List the profiles available for selection (built-in + server-global pack profiles, each tagged
       with its source); forwards to project_ops_orchestrator.listAvailableProfiles.
-    signature: 'availableProfilesList(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'availableProfilesList(sessionId: string): AvailableProfile[]'
+    returns: AvailableProfile[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -949,11 +1190,13 @@ methods:
     description: >-
       List the server-global packs a project may adopt (the instance catalog with contents);
       forwards to project_ops_orchestrator.listAdoptableProjectPacks.
-    signature: 'projectPacksAdoptable(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectPacksAdoptable(sessionId: string, project: string): PackDescriptor[]'
+    returns: PackDescriptor[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -963,11 +1206,15 @@ methods:
       Adopt a server-global pack into a project by name (no archive upload); forwards to
       project_ops_orchestrator.adoptProjectPack. The catalog counterpart of
       projectPackInstall/projectPackInstallArchive.
-    signature: 'projectPackAdopt(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectPackAdopt(sessionId: string, project: string, name: string): PackDescriptor'
+    returns: PackDescriptor
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -977,11 +1224,13 @@ methods:
       Read a project's architectural config — its projectType (project-level architectural profile)
       and lock status; forwards to project_ops_orchestrator.getProjectConfig with the session as the
       credential.
-    signature: 'webGetProjectConfig(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'webGetProjectConfig(sessionId: string, projectId: string): ProjectConfigView'
+    returns: ProjectConfigView
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -990,11 +1239,17 @@ methods:
     description: >-
       Set a project's projectType (project-level architectural profile); forwards to
       project_ops_orchestrator.setProjectType with the session as the credential.
-    signature: 'webSetProjectConfig(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      webSetProjectConfig(sessionId: string, projectId: string, projectType: string):
+      ProjectConfigView
+    returns: ProjectConfigView
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+      - name: projectType
+        type: string
     endpoint:
       transport: HTTP
       method: POST
@@ -1007,11 +1262,13 @@ methods:
       project_ops_orchestrator.listProjectProfiles with the session as the credential. The
       project-type picker reads this instead of the instance-wide /web/admin/profiles catalog, which
       cannot see a project's own packs and cannot say which profiles still need adopting.
-    signature: 'projectProfilesList(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: 'projectProfilesList(sessionId: string, project: string): AvailableProfile[]'
+    returns: AvailableProfile[]
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
     endpoint:
       transport: HTTP
       method: GET
@@ -1023,11 +1280,27 @@ methods:
       project_ops_orchestrator.exportProjectTree with the session as the credential, and answers
       application/zip with a download disposition naming the project. Requires project:read over the
       project upstream.
-    signature: 'projectTreeExport(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      projectTreeExport(sessionId: string, project: string, subproject?: string, includeDerived?:
+      boolean, allowPartial?: boolean): TreeExportResult
+    returns: TreeExportResult
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: subproject
+        type: string
+        optional: true
+      - name: includeDerived
+        type: boolean
+        optional: true
+      - name: allowPartial
+        type: boolean
+        description: >-
+          Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left
+          out in the result, instead of refusing the whole export.
+        optional: true
     endpoint:
       transport: HTTP
       method: GET
@@ -1039,15 +1312,45 @@ methods:
       project_ops_orchestrator.importProjectTree with the session as the credential; requires
       project:admin over the project upstream, refuses executable entries, and reports where the
       replaced tree was backed up.
-    signature: 'projectTreeImport(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
+    signature: >-
+      projectTreeImport(sessionId: string, project: string, archive: bytes, subproject?: string,
+      replaceExisting?: boolean): TreeImportResult
+    returns: TreeImportResult
     params:
-      - name: request
-        type: HttpRequest
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: archive
+        type: bytes
+      - name: subproject
+        type: string
+        optional: true
+      - name: replaceExisting
+        type: boolean
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
       path: /web/projects/tree/import
+  - name: adminSetSecret
+    description: >-
+      Set or replace one integration secret by key on behalf of the signed-in instance admin,
+      forwarding to the web instance admin orchestrator. The value is write-only: the matching GET
+      lists key names and never values.
+    signature: 'adminSetSecret(sessionId: string, key: string, value: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: key
+        type: string
+      - name: value
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/secrets
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-09-17T20:35:29.211Z'
+updatedAt: '2026-09-24T13:19:53.657Z'

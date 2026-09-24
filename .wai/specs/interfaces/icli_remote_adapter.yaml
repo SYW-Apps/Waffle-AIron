@@ -10,11 +10,17 @@ methods:
     description: >-
       Call sdd_host_export_tree on the bound hosted project and return the decoded .waitree archive
       bytes with the envelope facts that came with them. Requires project:read on the far side.
-    signature: 'exportRemoteTree(target: RemoteTarget): TreeExportResult'
+    signature: 'exportRemoteTree(target: RemoteTarget, allowPartial?: boolean): TreeExportResult'
     returns: TreeExportResult
     params:
       - name: target
         type: remote_target
+      - name: allowPartial
+        type: boolean
+        description: >-
+          Ask the remote to pack whatever CAN be packed when a chained subproject cannot be, and
+          list the mounts left out, instead of refusing the whole export.
+        optional: true
   - name: importRemoteTree
     description: >-
       Call sdd_host_import_tree on the bound hosted project with the base64-encoded archive.
@@ -82,4 +88,4 @@ methods:
         type: remote_target
 status: complete
 createdAt: '2026-08-12T18:31:37.284Z'
-updatedAt: '2026-09-15T21:02:30.238Z'
+updatedAt: '2026-09-24T13:20:20.617Z'

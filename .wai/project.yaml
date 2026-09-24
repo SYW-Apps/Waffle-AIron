@@ -231,7 +231,7 @@ rules:
     # modelling decision nobody has taken, unreadable is a shape the analysis
     # cannot follow and there is nothing in the tree to fix for it.
     carried:
-      # 49 finding(s), 59 unit(s).
+      # 45 finding(s), 60 unit(s).
       - kind: drift
         why: >-
           A spec names a source file that only USES the function, and the code that holds it lives
@@ -477,7 +477,7 @@ rules:
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_validator_adapter_impl
             at: 'validateSddTree'
-      # 95 finding(s), 132 unit(s).
+      # 107 finding(s), 144 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -1197,7 +1197,7 @@ rules:
           - code: METHOD_BODY_NOT_FOUND
             spec: host_surfaces_adapter_impl
             at: 'exportBoundSurface'
-      # 6 finding(s), 7 unit(s).
+      # 7 finding(s), 11 unit(s).
       - kind: unreadable
         why: >-
           The step's target IS called by name, from a site written in a shape a pure model cannot
@@ -1566,7 +1566,7 @@ rules:
             covers:
               - 'resolveGitToken'
               - 'resolveSecret'
-      # 47 finding(s), 87 unit(s).
+      # 45 finding(s), 85 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of type-shape, after the 32 envelope fields the spec types now
@@ -1771,21 +1771,11 @@ rules:
             covers:
               - 'sourceAdapter'
               - 'createdBy'
-          - code: UNDECLARED_TYPE_FIELD
-            spec: remote_command_options
-            at: 'RemoteCommandOptions'
-            covers:
-              - 'allowPartial'
           - code: UNREALIZED_TYPE_FIELD
             spec: remote_command_options
             at: 'RemoteCommandOptions'
             covers:
               - 'yes'
-          - code: UNDECLARED_TYPE_FIELD
-            spec: remote_transfer_options
-            at: 'RemoteTransferOptions'
-            covers:
-              - 'allowPartial'
           - code: UNDECLARED_TYPE_FIELD
             spec: remote_transfer_outcome
             at: 'RemoteTransferOutcome'
@@ -1859,7 +1849,7 @@ rules:
             at: 'WebSession'
             covers:
               - 'projects'
-      # 226 finding(s), 257 unit(s).
+      # 214 finding(s), 244 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of param-conformance on the signatures the contracts describe in
@@ -1880,11 +1870,6 @@ rules:
         findings:
           - code: UNDECLARED_PARAM
             spec: admin_orchestrator_impl
-            at: 'enableGit'
-            covers:
-              - 'pat'
-          - code: UNDECLARED_PARAM
-            spec: admin_orchestrator_impl
             at: 'executeApprovedCreate'
             covers:
               - 'placedBy'
@@ -1898,11 +1883,6 @@ rules:
             at: 'executeApprovedLock'
             covers:
               - 'subproject'
-          - code: UNDECLARED_PARAM
-            spec: admin_orchestrator_impl
-            at: 'exportProjectTree'
-            covers:
-              - 'allowPartial'
           - code: PARAM_NAME_MISMATCH
             spec: agent_file_generator_impl
             at: 'generateAll'
@@ -1965,11 +1945,6 @@ rules:
             at: 'moveMethods'
             covers:
               - 'dryRun'
-          - code: UNDECLARED_PARAM
-            spec: cli_core_adapter_impl
-            at: 'exportSpecTree'
-            covers:
-              - 'allowPartial'
           - code: PARAM_OPTIONALITY
             spec: cli_core_adapter_impl
             at: 'getStatusReport'
@@ -2010,11 +1985,6 @@ rules:
             at: 'usePack'
             covers:
               - 'options'
-          - code: UNDECLARED_PARAM
-            spec: cli_remote_adapter_impl
-            at: 'exportRemoteTree'
-            covers:
-              - 'allowPartial'
           - code: PARAM_OPTIONALITY
             spec: cli_runner_impl
             at: 'localStatus'
@@ -2122,27 +2092,6 @@ rules:
             at: 'cloneOrOpen'
             covers:
               - 'credentialRef'
-          - code: UNDECLARED_PARAM
-            spec: git_backing_orchestrator_impl
-            at: 'bindScope'
-            covers:
-              - 'binding'
-              - 'pat'
-          - code: UNDECLARED_PARAM
-            spec: git_backing_orchestrator_impl
-            at: 'listBindings'
-            covers:
-              - 'credential'
-          - code: UNDECLARED_PARAM
-            spec: git_backing_orchestrator_impl
-            at: 'syncScope'
-            covers:
-              - 'bindingId'
-          - code: UNDECLARED_PARAM
-            spec: git_backing_orchestrator_impl
-            at: 'unbindScope'
-            covers:
-              - 'bindingId'
           - code: UNDECLARED_PARAM
             spec: host_request_orchestrator_impl
             at: 'auditToolCall'
@@ -2677,21 +2626,6 @@ rules:
             at: 'lockProject'
             covers:
               - 'subproject'
-          - code: UNDECLARED_PARAM
-            spec: project_ops_orchestrator_impl
-            at: 'bindBackingScope'
-            covers:
-              - 'pat'
-          - code: UNDECLARED_PARAM
-            spec: project_ops_orchestrator_impl
-            at: 'enableGit'
-            covers:
-              - 'pat'
-          - code: UNDECLARED_PARAM
-            spec: project_ops_orchestrator_impl
-            at: 'exportProjectTree'
-            covers:
-              - 'allowPartial'
           - code: PARAM_NAME_MISMATCH
             spec: project_ops_orchestrator_impl
             at: 'setExposurePolicy'
@@ -3034,474 +2968,5 @@ rules:
             at: 'get'
             covers:
               - 'projectId'
-          - code: UNDECLARED_PARAM
-            spec: web_session_orchestrator_impl
-            at: 'completeSignIn'
-            covers:
-              - 'expectedNonce'
-      # 77 finding(s), 142 unit(s).
-      - kind: undecided
-        why: >-
-          The same rule on web_portal alone, kept separate because it is one design divergence and
-          not many mistakes. Seventeen of eighteen portals follow one convention: the contract
-          declares the inputs the call actually needs, the wire lives in the method’s endpoint
-          binding, and the realizing function returns a value to a dispatcher that does the HTTP.
-          web_portal breaks it on both sides - 75 of its 82 contracts declare a single
-          `request: HttpRequest`, and its handlers take the request apart themselves (cfg,
-          sessionId, body, url) and write the response to `res`. Declaring that transport as
-          injected wiring would only change the finding’s shape, since the contract’s `request`
-          would then have no position at all. Owed: bring web_portal to the convention the other
-          seventeen already follow, which is its own phase.
-        findings:
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminAuditCount'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminAuditQuery'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminBindGitBacking'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminBindRole'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminCreateRole'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminCreateShareLink'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminDeleteRole'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminGetExposure'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminGetPackPolicy'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminGetShareAccessLog'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminInstallGlobalPackArchive'
-            covers:
-              - 'req'
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminInstallGlobalPack'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminListAssignments'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminListGitBacking'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminListGlobalPacks'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminListOrgUnits'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminListProviders'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminListRoles'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminListSecretRefs'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminListShareLinks'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminListUsers'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminPlaceProject'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminRefreshShareSnapshot'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminRemoveAssignment'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminRemoveGlobalPack'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminRemoveProvider'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminRemoveShareLink'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminRemoveUnit'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminSetAssignment'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminSetExposure'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminSetPackPolicy'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminSetUserStatus'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminSyncGitBacking'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminUnbindGitBacking'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminUnbindRole'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminUpdateRole'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminUpdateShareLink'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminUpsertOrgUnit'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminUpsertProvider'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'adminUpsertUser'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'availableProfilesList'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'completeSignIn'
-            covers:
-              - 'expectedNonce'
-          - code: PARAM_OPTIONALITY
-            spec: web_portal_impl
-            at: 'getGraph'
-            covers:
-              - 'projectId'
-          - code: UNREALIZED_PARAM
-            spec: web_portal_impl
-            at: 'getLoginOptions'
-            covers:
-              - 'request'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'listAgentTokens'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'loginWithPassword'
-            covers:
-              - 'res'
-              - 'secureCookie'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'mintAgentToken'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectCreate'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectDestroy'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectGitBind'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectGitCommit'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectGitStatus'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectGitSyncConfig'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectGitSync'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectGitUnbind'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectList'
-            covers:
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectLock'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectPackAdopt'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectPackInstallArchive'
-            covers:
-              - 'req'
-              - 'url'
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectPackInstall'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectPackRemove'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectPacksAdoptable'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectPacksList'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectPolicyEvaluate'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectPolicyReconcile'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectProducerConfigure'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectProducerRemove'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectProducerRun'
-            covers:
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectProducersList'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectProfilesList'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectTreeExport'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'projectTreeImport'
-            covers:
-              - 'url'
-              - 'body'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'revokeAgentToken'
-            covers:
-              - 'body'
-              - 'res'
-          - code: PARAM_NAME_MISMATCH
-            spec: web_portal_impl
-            at: 'serveApp'
-            covers:
-              - 'path'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'serveProjectCanvas'
-            covers:
-              - 'projectId'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'webGetProjectConfig'
-            covers:
-              - 'url'
-              - 'res'
-          - code: UNDECLARED_PARAM
-            spec: web_portal_impl
-            at: 'webSetProjectConfig'
-            covers:
-              - 'body'
-              - 'res'
 createdAt: '2026-06-10T20:23:10.714Z'
 updatedAt: '2026-06-10T20:23:10.714Z'

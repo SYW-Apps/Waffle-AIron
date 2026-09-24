@@ -43,13 +43,18 @@ methods:
       grant filtered out, so no SSO path can ever yield a *:* session. Append a best-effort
       web.signin (security) audit event and return the new session id (which the portal sets as the
       session cookie). Unauthenticated by nature.
-    signature: 'completeSignIn(state: string, code: string): string'
+    signature: 'completeSignIn(state: string, code: string, expectedNonce: string): string'
     returns: string
     params:
       - name: state
         type: string
       - name: code
         type: string
+      - name: expectedNonce
+        type: string
+        description: >-
+          The sign-in nonce the browser's pre-auth cookie carried, which the identity token must
+          echo — the login-CSRF check. Null when the cookie is absent, which fails the sign-in.
   - name: signOut
     description: >-
       End a browser session: remove it through the web session repository and append a best-effort
@@ -127,4 +132,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-11T11:33:17.127Z'
-updatedAt: '2026-09-18T16:54:29.179Z'
+updatedAt: '2026-09-24T13:20:11.554Z'

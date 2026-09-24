@@ -44,8 +44,14 @@ fields:
     type: boolean
     description: Skip the confirmation prompt (for scripts / CI)
     optional: true
+  - name: allowPartial
+    type: boolean
+    description: >-
+      Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left out,
+      instead of refusing the whole export
+    optional: true
 methods: []
 componentClass: cli_runner
 sourcePath: src/commands/remote.ts
 createdAt: '2026-08-12T18:33:33.586Z'
-updatedAt: '2026-09-19T11:07:15.438Z'
+updatedAt: '2026-09-24T13:20:14.430Z'
