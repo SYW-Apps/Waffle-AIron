@@ -123,6 +123,36 @@ export interface ParameterFact {
 }
 
 /**
+ * One route a router function handles, rebuilt from the conditions that guard
+ * the branch serving it — the branch's own AND every enclosing one on the path
+ * taken, because routers nest: an outer check on the first segment, an inner
+ * one on the rest. Reading only the innermost guard would turn every route
+ * into `/*` followed by whatever the inner branch happened to check.
+ *
+ * A segment is the literal the code compares it to, or `*` where nothing
+ * constrains it. A leading `*` is usually the segment the listener's mount
+ * already guarantees, which the router never re-checks — so it is left open
+ * here and completed by whoever knows the mount.
+ *
+ * Only one idiom is read: a method comparison together with comparisons on the
+ * path's split segments and their count. A router written another way yields
+ * nothing, and the reader reports that as unread rather than passing it — a
+ * check that cannot see a router must say so rather than stay quiet.
+ */
+export interface RouteFact {
+  /** The HTTP method the branch requires. */
+  verb: string;
+  /** The path's segments in order: the literal compared against, or `*` where nothing constrains it. */
+  segments: string[];
+  /**
+   * Whether the branch pins the number of segments. When it does not, the path
+   * may continue past the last one read, so the route covers any longer path
+   * with the same leading segments.
+   */
+  exactLength: boolean;
+}
+
+/**
  * The members of one named shape a file declares — what a data type IS, read
  * off the code so a type spec's claim about it can be checked.
  *
@@ -283,6 +313,20 @@ export interface SourceFileFacts {
    * `methodRealization`'s finding.
    */
   functionParams?: Record<string, ParameterFact[][]>;
+  /**
+   * The routes each named function-like in the file handles, by name (see
+   * RouteFact) — what lets a listener's mount be read against the contract
+   * endpoints of the portal it serves, so a route the router answers that no
+   * contract declares cannot go unnoticed again. EXACT grade only: reading a
+   * guard as a route needs the conditions as expressions, not as text.
+   *
+   * A function with no recognisable route records NO entry rather than an
+   * empty one — an empty guess would read as "a router with no routes", and
+   * the reader needs to tell a router it could not read from one it read.
+   * Same-named bodies union their routes; nested NAMED functions carry their
+   * own entries, while anonymous callbacks count into the enclosing one.
+   */
+  functionRoutes?: Record<string, RouteFact[]>;
   /**
    * Module-scope mutable bindings (`let`/`var` at the top level of the file).
    * EXACT grade only. The static approximation of held state a logic

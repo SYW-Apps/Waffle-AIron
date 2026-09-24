@@ -9,9 +9,10 @@
  *  - EXCESSIVE_METHODS: maxInterfaceMethods caps methods per interface.
  *  - EXCESSIVE_METHOD_PARAMS: maxMethodParams caps params per method.
  *  - EXCESSIVE_DEPENDENCIES: maxComponentDependencies caps dependsOn size,
- *    except on a PURE FORWARDER (every narrated method a single hand-off),
- *    which the cap would otherwise punish for the size of the subsystem behind
- *    it. A component with NO narrated method is not exempt.
+ *    except on a ROUTING TABLE (every narrated method that reaches a
+ *    collaborator a single hand-off; one reaching none is neutral), which the
+ *    cap would otherwise punish for the size of the subsystem behind it. A
+ *    component with NO narrated method is not exempt.
  *  - EXCESSIVE_SUBSYSTEM_COMPONENTS: maxSubsystemComponents caps direct
  *    components per subsystem.
  * Every cap fires only ABOVE the limit; controls sit exactly AT it.
@@ -78,6 +79,20 @@ const COUNTER_INTERFACE = {
   id: 'iintake_counter',
   component: 'intake-counter',
   methods: COUNTER_CHECKS.map(c => ({ name: c.method, description: `Hand the ${c.method} command to the check that owns it.` })),
+};
+
+/** The counter's contract once it also prints the patient's queue ticket. */
+const TICKETING_COUNTER_INTERFACE = {
+  ...COUNTER_INTERFACE,
+  methods: [...COUNTER_INTERFACE.methods, { name: 'printTicket', description: 'Print the queue ticket the patient takes to the waiting room.' }],
+};
+
+/** A counter method that reaches NO check: the ticket is laid out and printed in the counter itself. */
+const PRINTS_TICKET = {
+  name: 'printTicket',
+  narrative: [
+    { stepNumber: 1, description: 'Lay out the next queue number and print it on the counter\'s ticket printer.', type: 'local' },
+  ],
 };
 
 export default [
@@ -377,6 +392,57 @@ export default [
               ],
             },
             ...COUNTER_CHECKS.filter(c => c.method !== 'check').map(handsOff),
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'EXCESSIVE_DEPENDENCIES',
+    expectFire: false,
+    reason:
+      'Every counter method that reaches a check is a single hand-off; printing the queue ticket reaches none of the three dependencies the cap counts, so it is neutral and the counter is still a routing table.',
+    scenario:
+      'With component dependencies capped at two, an intake counter hands each of its three commands straight to the check that owns it and also prints the patient\'s queue ticket itself.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [{ id: 'patient-intake', description: 'Patient intake, eligibility, and consent handling.' }],
+      rules: { complexity: { maxComponentDependencies: 2 } },
+      components: [COUNTER_COMPONENT, ...INTAKE_CHECKS.map(s => ({ ...s, subsystem: 'patient-intake' }))],
+      interfaces: [TICKETING_COUNTER_INTERFACE, ...checkInterfaces],
+      implementations: [
+        { id: 'intake_counter_impl', contract: 'iintake_counter', methods: [...COUNTER_CHECKS.map(handsOff), PRINTS_TICKET] },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'EXCESSIVE_DEPENDENCIES',
+    severity: 'warning',
+    anchoredTo: 'intake-counter',
+    expectFire: true,
+    scenario:
+      'The ticket-printing intake counter also normalises the insurance member number itself before asking the eligibility checker — flow of its own with a collaborator.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [{ id: 'patient-intake', description: 'Patient intake, eligibility, and consent handling.' }],
+      rules: { complexity: { maxComponentDependencies: 2 } },
+      components: [COUNTER_COMPONENT, ...INTAKE_CHECKS.map(s => ({ ...s, subsystem: 'patient-intake' }))],
+      interfaces: [TICKETING_COUNTER_INTERFACE, ...checkInterfaces],
+      implementations: [
+        {
+          id: 'intake_counter_impl',
+          contract: 'iintake_counter',
+          methods: [
+            {
+              name: 'check',
+              narrative: [
+                { stepNumber: 1, description: 'Strip the spaces and the insurer prefix from the member number the receptionist typed.', type: 'local' },
+                { stepNumber: 2, description: 'Ask eligibility-checker whether the insurance covers this visit.', type: 'call', targetComponent: 'eligibility-checker', targetMethod: 'check' },
+                { stepNumber: 3, description: 'Return what eligibility-checker answered.', type: 'return', outcome: 'check result' },
+              ],
+            },
+            ...COUNTER_CHECKS.filter(c => c.method !== 'check').map(handsOff),
+            PRINTS_TICKET,
           ],
         },
       ],

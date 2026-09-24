@@ -170,6 +170,7 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/share/refresh',
   '/web/admin/share/update',
   '/web/admin/share/remove',
+  '/web/admin/approvals/decide',
   '/web/projects/packs',
   '/web/projects/packs/upload',
   '/web/projects/packs/remove',

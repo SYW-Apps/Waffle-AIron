@@ -1,0 +1,31 @@
+kind: value-object
+id: route_fact
+name: RouteFact
+description: >-
+  One route a router function handles, rebuilt from the conditions that guard the branch serving it
+  — the branch's own and every enclosing one, since routers nest (an outer check on the first
+  segment, an inner one on the rest). A segment is the literal the code compares it to, or `*` where
+  nothing constrains it; a leading `*` is usually the segment the listener's mount guarantees and
+  the router never re-checks. Only one idiom is read: a method comparison together with comparisons
+  on the path's split segments and their count. A router written another way yields nothing, and
+  that is reported as unread rather than passed.
+subsystem: sdd_validator
+fields:
+  - name: verb
+    type: string
+    description: The HTTP method the branch requires
+    optional: false
+  - name: segments
+    type: string[]
+    description: 'The path''s segments in order: the literal compared against, or `*` where nothing constrains it'
+    optional: false
+  - name: exactLength
+    type: boolean
+    description: >-
+      Whether the branch pins the number of segments; when it does not, the path may continue past
+      the last one read
+    optional: false
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-09-24T20:30:22.052Z'
+updatedAt: '2026-09-24T20:30:22.561Z'
