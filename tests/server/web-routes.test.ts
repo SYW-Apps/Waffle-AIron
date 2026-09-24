@@ -455,6 +455,22 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       expect(json(r)).toEqual({ error: 'missing X-Wairon-Web header' });
       expect(json(await get('/web/admin/roles', cookie)).roles).toEqual([]);
     });
+
+    it('the approval decision is a cookie write too: refused without the CSRF header, dispatched with it', async () => {
+      const cookie = adminCookie();
+      const decision = { requestId: 'no-such-request', approved: true };
+      const bare = await raw({
+        method: 'POST',
+        path: '/web/admin/approvals/decide',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify(decision),
+      });
+      expect(bare.status).toBe(403);
+      expect(json(bare)).toEqual({ error: 'missing X-Wairon-Web header' });
+      // With the header it reaches the router, which judges the request itself.
+      const sent = await post('/web/admin/approvals/decide', decision, cookie);
+      expect(json(sent)).not.toEqual({ error: 'missing X-Wairon-Web header' });
+    });
   });
 
   // ── Permission assignments ────────────────────────────────────────────────
