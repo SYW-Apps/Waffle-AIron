@@ -827,23 +827,27 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       const cookie = adminCookie();
       createPlacedProject(cfg, MASTER, 'demo');
 
-      // Current behaviour: opsRunProducer is async and the router returns its
-      // promise un-awaited inside handleWebRequest's try, so a rejection escapes the
-      // error→status mapping and http.ts answers 500 with String(err).
+      // The router awaits opsRunProducer inside handleWebRequest's try, so a
+      // rejection goes through the error→status mapping (it once escaped as a 500).
       // An unconfigured target: the producer names the decoded target.
       const unconfigured = await post('/web/projects/producers/run', { projectId: 'demo', target: 'miro' }, cookie);
-      expect(unconfigured.status).toBe(500);
-      expect(json(unconfigured)).toEqual({ error: 'Error: Producer "miro" is not configured for this project.' });
+      expect(unconfigured.status).toBe(400);
+      expect(json(unconfigured)).toEqual({ error: 'Producer "miro" is not configured for this project.' });
+
+      // A target no producer exists for: refused through the mapping as well.
+      const bogus = await post('/web/projects/producers/run', { projectId: 'demo', target: 'bogus' }, cookie);
+      expect(bogus.status).toBe(400);
+      expect(json(bogus)).toEqual({ error: 'Producer "bogus" is not configured for this project.' });
 
       // A configured notion target with no token fails before any network call.
       await post('/web/projects/producers', { projectId: 'demo', target: 'notion', parentPageId: 'page-123' }, cookie);
       const noToken = await post('/web/projects/producers/run', { projectId: 'demo', target: 'notion' }, cookie);
-      expect(noToken.status).toBe(500);
-      expect(json(noToken).error).toMatch(/^Error: No Notion token/);
+      expect(noToken.status).toBe(400);
+      expect(json(noToken).error).toMatch(/^No Notion token/);
 
-      // The decoded projectId reaches the producer too: an unknown project, still 500.
+      // The decoded projectId reaches the producer too: an unknown project is 404.
       const ghost = await post('/web/projects/producers/run', { projectId: 'ghost', target: 'notion' }, cookie);
-      expect(ghost.status).toBe(500);
+      expect(ghost.status).toBe(404);
       expect(json(ghost).error).toMatch(/Unknown project "ghost"/);
 
       // The success envelope, with the external call stubbed out.
@@ -865,11 +869,17 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       expect(json(anon)).toEqual({ error: 'forbidden' });
       expect((await post('/web/projects/producers', { projectId: 'demo', target: 'notion', parentPageId: 'p' })).status).toBe(403);
       expect((await post('/web/projects/producers/remove', { projectId: 'demo', target: 'notion' })).status).toBe(403);
-      // run: the async escape again — 500 rather than 403.
-      expect((await post('/web/projects/producers/run', { projectId: 'demo', target: 'notion' })).status).toBe(500);
+      // run: awaited, so a missing session maps like its siblings.
+      const anonRun = await post('/web/projects/producers/run', { projectId: 'demo', target: 'notion' });
+      expect(anonRun.status).toBe(403);
+      expect(json(anonRun)).toEqual({ error: 'forbidden' });
       const vc = viewerCookie();
       expect((await get('/web/projects/producers?projectId=demo', vc)).status).toBe(403);
       expect((await post('/web/projects/producers', { projectId: 'demo', target: 'notion', parentPageId: 'p' }, vc)).status).toBe(403);
+      // run: a viewer without the grant is refused through the mapping, not a 500.
+      const viewerRun = await post('/web/projects/producers/run', { projectId: 'demo', target: 'notion' }, vc);
+      expect(viewerRun.status).toBe(403);
+      expect(json(viewerRun)).toEqual({ error: 'forbidden' });
     });
   });
 
