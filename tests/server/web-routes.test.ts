@@ -743,19 +743,19 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       expect((await post('/web/projects/config', { projectId: 'demo', projectType: 'backend' }, vc)).status).toBe(403);
     });
 
-    it('current behaviour: a cookie POST WITHOUT the CSRF header is dispatched (not in the CSRF set)', async () => {
-      // SUSPECTED BUG (pinned, not fixed): '/web/projects/config' is missing from
-      // http.ts WEB_MUTATION_PATHS, so this cookie-authenticated write carries no
-      // X-Wairon-Web requirement, unlike every sibling /web/projects mutation.
+    it('a cookie POST WITHOUT the CSRF header is refused before dispatch, like every sibling project write', async () => {
       const cookie = adminCookie();
       createPlacedProject(cfg, MASTER, 'demo');
+      const before = json(await get('/web/projects/config?projectId=demo', cookie));
       const r = await raw({
         method: 'POST',
         path: '/web/projects/config',
         headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify({ projectId: 'demo', projectType: 'backend' }),
       });
-      expect(r.status).toBe(200);
+      expect(r.status).toBe(403);
+      expect(json(r)).toEqual({ error: 'missing X-Wairon-Web header' });
+      expect(json(await get('/web/projects/config?projectId=demo', cookie))).toEqual(before);
     });
   });
 
