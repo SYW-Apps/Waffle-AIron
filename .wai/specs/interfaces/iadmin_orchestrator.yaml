@@ -84,7 +84,7 @@ methods:
       the .wai/ tree inside the repo — commits are .wai/-scoped, so the repository can be shared
       with the project's own codebase.
     signature: >-
-      enableGit(credential: string, project: string, remote: string, branch: string):
+      enableGit(credential: string, project: string, remote: string, branch: string, pat?: string):
       HostedProjectRecord
     returns: HostedProjectRecord
     params:
@@ -96,6 +96,12 @@ methods:
         type: string
       - name: branch
         type: string
+      - name: pat
+        type: string
+        description: >-
+          A personal access token for the remote, when reaching it needs one. Stored as a secret
+          under the binding's credential reference, never kept on the binding.
+        optional: true
   - name: disableGit
     description: >-
       Authenticate, require project:admin over the project, and disable its git backing (the
@@ -292,7 +298,7 @@ methods:
       credential narrowed to one child exports exactly that child.
     signature: >-
       exportProjectTree(credential: string, project: string, subproject?: string, includeDerived?:
-      boolean): TreeExportResult
+      boolean, allowPartial?: boolean): TreeExportResult
     returns: TreeExportResult
     params:
       - name: credential
@@ -307,6 +313,12 @@ methods:
         optional: true
       - name: includeDerived
         type: boolean
+        optional: true
+      - name: allowPartial
+        type: boolean
+        description: >-
+          Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left
+          out in the result, instead of refusing the whole export.
         optional: true
   - name: importProjectTree
     description: >-
@@ -335,4 +347,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-17T16:41:48.808Z'
+updatedAt: '2026-09-24T13:20:02.415Z'

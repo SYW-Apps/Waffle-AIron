@@ -401,6 +401,54 @@ methods:
         type: return
         outcome: unit removed
     detail: full
+  - name: setSecret
+    narrative:
+      - stepNumber: 1
+        description: Resolve the browser session to a Principal
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: Decide whether the principal may manage instance secrets
+        type: branch
+        condition: the principal lacks an instance-wide admin grant
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        label: deny
+        description: Reject the write
+        type: throw
+        error: Forbidden — instance-admin required
+      - stepNumber: 4
+        label: check-key
+        description: Decide whether a key was given
+        type: branch
+        condition: the trimmed key is empty
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        label: no-key
+        description: Reject a write with no key, since a secret nobody can name is one nothing can use
+        type: throw
+        error: A secret key is required
+      - stepNumber: 6
+        label: store
+        description: >-
+          Store the value under the trimmed key through the secret repository, replacing any earlier
+          value — write-only, never read back
+        type: call
+        targetComponent: secret_repository
+        targetMethod: write
+      - stepNumber: 7
+        description: Record the change at security level, naming the key and never the value
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: Done
+        type: return
+        outcome: secret stored
+    detail: full
 detail: full
 lint:
   allow:
@@ -415,4 +463,4 @@ lint:
         the pretence this allow exists instead of.
 status: complete
 createdAt: '2026-09-18T16:57:28.238Z'
-updatedAt: '2026-09-23T21:20:17.062Z'
+updatedAt: '2026-09-24T13:19:42.634Z'

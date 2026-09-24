@@ -184,6 +184,7 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/projects/git/sync',
   '/web/projects/git/commit',
   '/web/projects/git/sync-config',
+  '/web/projects/config',
   '/web/tokens',
   '/web/tokens/revoke',
   '/web/projects',

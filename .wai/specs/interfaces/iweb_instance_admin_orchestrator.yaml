@@ -77,6 +77,24 @@ methods:
         type: string
       - name: disposition
         type: UnitDisposition
+  - name: setSecret
+    description: >-
+      Resolve the session to a Principal, require an instance-wide admin grant, and set or replace
+      one integration secret by key — e.g. `git-token`, the personal access token the git adapters
+      inject into an https remote. The value is stored write-only: it is never read back over the
+      API, only its key name is listable, and setting the same key again replaces it, so rotating a
+      token is a re-set. Audited at security level with the key and never the value.
+    signature: 'setSecret(sessionId: string, key: string, value: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: key
+        type: string
+        description: The secret's name; required and trimmed
+      - name: value
+        type: string
+        description: The secret itself; stored, never returned
 status: complete
 createdAt: '2026-09-18T16:56:30.596Z'
-updatedAt: '2026-09-18T16:58:21.908Z'
+updatedAt: '2026-09-24T13:19:38.000Z'
