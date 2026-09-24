@@ -1,21 +1,12 @@
 id: iauthoring_core_adapter
 name: Authoring Core Client Adapter Interface
 description: >-
-  Client adapter to sdd_core: the spec writes the gated workflow performs, and the project settings
-  it judges with. Nothing else of the core's surface is needed on this side of the boundary — the
-  seam reads no spec of its own, because the store's own update loads the spec a delta applies to.
+  Client adapter to sdd_core: the spec reads and writes the gated workflow performs, and the project
+  settings it judges with. A delta update and a method move let the store load what they apply to; a
+  whole-spec restatement and a delete read the stored spec here, because it is the seam that decides
+  what the restatement carries and which methods a deletion takes away.
 component: authoring_core_adapter
 methods:
-  - name: saveComponentSpec
-    description: >-
-      Persist one judged L2 component spec, returning the store's placement notices. Forwarded to
-      the core portal.
-    signature: 'saveComponentSpec(spec: ComponentSpec): string[]'
-    returns: string[]
-    params:
-      - name: spec
-        type: ComponentSpec
-        description: The component to persist, already judged
   - name: updateSpec
     description: >-
       Apply a delta to one stored spec and persist the result, with the caller's judgement passed in
@@ -86,6 +77,67 @@ methods:
         type: boolean
         description: Report what the move would do and write nothing
         optional: true
+  - name: loadSpec
+    description: >-
+      One stored spec of the named kind, or null — the spec a restatement is applied to, the parent
+      it cannot be written without, or the spec a delete is about to remove. Forwarded to the core
+      portal.
+    signature: >-
+      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
+      | ImplementationSpec | TypeSpec | null
+    returns: >-
+      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
+      null
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id; informational for the L0
+    guarantees:
+      - idempotent
+  - name: saveSpec
+    description: >-
+      Persist one judged spec of the named kind, returning the store's placement notices. Forwarded
+      to the core portal.
+    signature: >-
+      saveSpec(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
+      ImplementationSpec | TypeSpec): string[]
+    returns: string[]
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: spec
+        type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+        description: The spec to persist, already judged
+  - name: deleteSpec
+    description: >-
+      Delete one spec document of the named kind; false when none was stored. Forwarded to the core
+      portal.
+    signature: 'deleteSpec(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id
+  - name: createChainedSubsystem
+    description: >-
+      Write a subsystem that names a projectPath and scaffold its child project there, so a chained
+      subsystem never points at an empty directory. Forwarded to the core portal.
+    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
+    returns: void
+    params:
+      - name: subsystem
+        type: SubsystemSpec
+        description: The judged subsystem, carrying its projectPath
+      - name: projectName
+        type: string
+        description: The child project's display name
 status: complete
 createdAt: '2026-09-18T21:41:49.125Z'
-updatedAt: '2026-09-20T12:04:50.408Z'
+updatedAt: '2026-09-24T22:26:07.111Z'

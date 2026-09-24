@@ -208,6 +208,58 @@ methods:
         type: string
         description: The type id (namespaced if needed)
     effect: write
+  - name: loadSpec
+    description: >-
+      Load one spec of the named kind by id, or null when none is stored. The one place the store
+      turns a kind into its typed loader, so a caller that holds the kind as data (a gated write, a
+      delete by kind) never repeats the switch. The L0 is a singleton: its id is informational.
+    signature: >-
+      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
+      | ImplementationSpec | TypeSpec | null
+    returns: >-
+      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
+      null
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed); informational for the L0
+    effect: read
+  - name: saveSpec
+    description: >-
+      Persist one spec through the typed writer of its kind and answer with that writer's placement
+      notices (none for the L0 and a subsystem, whose writers raise none). A spec arriving at draft,
+      or without a status, keeps the status already stored unless the caller states the demotion,
+      exactly as the typed writers do.
+    signature: >-
+      saveSpec(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
+      ImplementationSpec | TypeSpec): string[]
+    returns: string[]
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: spec
+        type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+        description: The spec to persist, of that kind
+    effect: write
+  - name: deleteSpec
+    description: >-
+      Delete one spec document of the named kind through the file store, and invalidate the index
+      cache. Answers false when no such document existed. The L0 cannot be deleted: a kind of system
+      is refused.
+    signature: 'deleteSpec(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed)
+    effect: write
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-23T12:56:09.535Z'
+updatedAt: '2026-09-24T22:26:01.412Z'

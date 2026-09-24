@@ -96,6 +96,24 @@ methods:
       - name: id
         type: string
         description: The type's id, qualified when it lives in a chained subproject
+  - name: load
+    description: >-
+      Load one spec of the named kind by id through the typed loader of that kind, or null when none
+      is stored. The L0 is a singleton: its id is informational.
+    signature: >-
+      load(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
+      ImplementationSpec | TypeSpec | null
+    returns: >-
+      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
+      null
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed)
+    effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-09-19T23:04:52.703Z'
+updatedAt: '2026-09-24T22:26:02.901Z'

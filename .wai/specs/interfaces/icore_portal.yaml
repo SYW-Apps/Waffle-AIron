@@ -948,6 +948,52 @@ methods:
         type: string
         description: A specific version, or every version when omitted
     effect: write
+  - name: loadSpec
+    description: >-
+      Load one spec of the named kind by id, or null when none is stored — for a caller that holds
+      the kind as data. Routed through the core orchestrator.
+    signature: >-
+      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
+      | ImplementationSpec | TypeSpec | null
+    returns: >-
+      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
+      null
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed); informational for the L0
+  - name: saveSpec
+    description: >-
+      Persist one spec of the named kind, answering with the store's placement notices. Ungated: the
+      authoring seam judges before it calls this, and a mechanical write calls it without judgement.
+      Routed through the core orchestrator.
+    signature: >-
+      saveSpec(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
+      ImplementationSpec | TypeSpec): string[]
+    returns: string[]
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: spec
+        type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+        description: The spec to persist, of that kind
+  - name: deleteSpec
+    description: >-
+      Delete one spec document of the named kind. False when it was not there; the L0 cannot be
+      deleted. Routed through the core orchestrator.
+    signature: 'deleteSpec(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed)
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T15:17:58.560Z'
+updatedAt: '2026-09-24T22:25:56.312Z'

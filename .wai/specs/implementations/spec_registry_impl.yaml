@@ -194,6 +194,40 @@ methods:
         description: Invalidate the index cache when something was removed, and answer whether it was
         type: return
         outcome: removed
+  - name: save
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Turn the kind into this registry's typed writer of that kind, whose pipeline qualifies and
+          relativizes ids, keeps the stored status on a draft or status-less save, stamps updatedAt,
+          re-parses through the writer schema and collects placement notices
+        type: local
+      - stepNumber: 2
+        description: The typed writer persists the serialized document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: write
+      - stepNumber: 3
+        description: Answer with the writer's placement notices; none for the L0 and a subsystem
+        type: return
+        outcome: saved
+  - name: delete
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse a kind of system — the L0 cannot be deleted — and otherwise turn the kind into this
+          registry's typed delete of that kind, which qualifies the id and resolves the document
+          path
+        type: local
+      - stepNumber: 2
+        description: The typed delete removes the document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: remove
+      - stepNumber: 3
+        description: Invalidate the index cache when something was removed, and answer whether it was
+        type: return
+        outcome: removed
 lint:
   allow:
     - code: UNNARRATED_COMPLEXITY
@@ -204,4 +238,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-09-20T14:33:20.227Z'
+updatedAt: '2026-09-24T22:25:40.104Z'

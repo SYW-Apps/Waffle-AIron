@@ -1447,6 +1447,27 @@ methods:
           covers rather than implying the whole
         type: return
         outcome: paths
+  - name: loadSpec
+    narrative:
+      - stepNumber: 1
+        description: Load the spec of that kind through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSpec
+  - name: saveSpec
+    narrative:
+      - stepNumber: 1
+        description: Persist the spec of that kind through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: Delete the spec document of that kind through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteSpec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-24T19:57:42.837Z'
+updatedAt: '2026-09-24T22:23:13.134Z'

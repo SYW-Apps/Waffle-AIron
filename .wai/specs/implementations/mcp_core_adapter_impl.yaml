@@ -21,20 +21,6 @@ methods:
         targetComponent: core_portal
         targetMethod: resolveAgentTopology
     symbol: coreLoadRegistry
-  - name: saveSystemSpec
-    narrative:
-      - stepNumber: 1
-        description: Call saveSystemSpec on core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: saveSystemSpec
-  - name: saveSubsystemSpec
-    narrative:
-      - stepNumber: 1
-        description: Call saveSubsystemSpec on core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: saveSubsystemSpec
   - name: loadSubsystemSpec
     narrative:
       - stepNumber: 1
@@ -57,13 +43,6 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadComponentSpec
-  - name: saveInterfaceSpec
-    narrative:
-      - stepNumber: 1
-        description: Call saveInterfaceSpec on core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: saveInterfaceSpec
   - name: loadInterfaceSpec
     narrative:
       - stepNumber: 1
@@ -71,20 +50,6 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadInterfaceSpec
-  - name: saveImplementationSpec
-    narrative:
-      - stepNumber: 1
-        description: Call saveImplementationSpec on core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: saveImplementationSpec
-  - name: createChainedSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Call createChainedSubsystem on core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: createChainedSubsystem
   - name: moveSubsystemProject
     narrative:
       - stepNumber: 1
@@ -155,48 +120,6 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadTypeSpec
-  - name: saveTypeSpec
-    narrative:
-      - stepNumber: 1
-        description: Call saveTypeSpec on core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: saveTypeSpec
-  - name: deleteSubsystemSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: deleteSubsystemSpec
-  - name: deleteComponentSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: deleteComponentSpec
-  - name: deleteInterfaceSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: deleteInterfaceSpec
-  - name: deleteImplementationSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: deleteImplementationSpec
-  - name: deleteTypeSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: deleteTypeSpec
   - name: getStatusReport
     narrative:
       - stepNumber: 1
@@ -214,4 +137,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T12:24:41.923Z'
+updatedAt: '2026-09-24T22:25:06.399Z'

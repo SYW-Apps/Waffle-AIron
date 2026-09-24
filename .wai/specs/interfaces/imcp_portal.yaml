@@ -296,8 +296,8 @@ methods:
       Portal, and run after sdd_define_interface. The caller picks a transport and fills that
       transport's address fields; the binding is checked against the endpoint schema before the
       contract is saved.
-    signature: 'sdd_set_endpoints(interfaceId: string, endpoints: EndpointBinding[]): string'
-    returns: string
+    signature: 'sdd_set_endpoints(interfaceId: string, endpoints: EndpointBinding[]): SpecChangeReport'
+    returns: SpecChangeReport
     params:
       - name: interfaceId
         type: string
@@ -316,8 +316,10 @@ methods:
       and optionally the contract, that realizes it. The tool for backfilling bindings once a
       subsystem's components exist, because a cross-subsystem dependency may only target a published
       public component.
-    signature: 'sdd_set_public_interfaces(subsystemId: string, publicInterfaces: PublicInterface[]): string'
-    returns: string
+    signature: >-
+      sdd_set_public_interfaces(subsystemId: string, publicInterfaces: PublicInterface[]):
+      SpecChangeReport
+    returns: SpecChangeReport
     params:
       - name: subsystemId
         type: string
@@ -333,8 +335,8 @@ methods:
       Tool: set, or clear, an L1 subsystem's projectPath — the chaining link to an external
       subproject root, given as a path relative to this project. It rewrites the link only;
       sdd_move_subsystem_project is what relocates the directory with it.
-    signature: 'sdd_set_subsystem_project_path(subsystemId: string, projectPath?: string): string'
-    returns: string
+    signature: 'sdd_set_subsystem_project_path(subsystemId: string, projectPath?: string): SpecChangeReport'
+    returns: SpecChangeReport
     params:
       - name: subsystemId
         type: string
@@ -429,8 +431,8 @@ methods:
       there is reported as such rather than as a failure. Deleting a spec other specs still
       reference leaves the tree invalid by design: the validator is what says so, and this tool does
       not refuse on its behalf.
-    signature: 'sdd_delete_spec(kind: string, id: string): boolean'
-    returns: boolean
+    signature: 'sdd_delete_spec(kind: string, id: string): SpecDeletion'
+    returns: SpecDeletion
     params:
       - name: kind
         type: string
@@ -468,4 +470,4 @@ methods:
       address: mcp tools/call getProjectConfig
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T14:31:55.119Z'
+updatedAt: '2026-09-24T22:23:57.126Z'

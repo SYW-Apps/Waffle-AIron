@@ -1,24 +1,14 @@
 id: iauthoring_portal
 name: Authoring Portal Interface
 description: >-
-  The published gated writes, shared by every access path. A write that violates an intrinsic rule
-  throws with the rule codes and nothing reaches disk, so the remedy is to fix the arguments and
-  call again rather than to repair a saved spec. A write that changes nothing writes nothing and
-  says so.
+  The published spec writes, shared by every access path: every write an author makes — a whole spec
+  restated, a delta, a method move, a delete — enters here, and only mechanical writes (status
+  promotion at lock, layout normalization, migrations, doctor repairs, renames, subproject
+  relocation) stay on sdd_core. A write that violates an intrinsic rule throws with the rule codes
+  and nothing reaches disk, so the remedy is to fix the arguments and call again rather than to
+  repair a saved spec. A write that changes nothing writes nothing and says so.
 component: authoring_portal
 methods:
-  - name: addComponent
-    description: >-
-      Author a NEW L2 component through the gate: the candidate is judged against the intrinsic
-      rules with the project's own severities and refused on an error before anything touches disk,
-      and otherwise persisted. Answers with the candidate's warnings as notices, followed by the
-      store's placement notices. Routed to the gated workflow.
-    signature: 'addComponent(candidate: ComponentSpec): string[]'
-    returns: string[]
-    params:
-      - name: candidate
-        type: ComponentSpec
-        description: The component as the caller authored it
   - name: updateSpecGated
     description: >-
       Patch an existing spec at any level through the same gate. An update can introduce a misplaced
@@ -70,6 +60,32 @@ methods:
         type: boolean
         description: Answer with what the move would do and write nothing
         optional: true
+  - name: writeSpec
+    description: >-
+      Write a whole spec as a create tool states it, at any level, through the gate. On an existing
+      id it re-authors in place: what the input expresses is replaced, what it cannot express is
+      carried and named, what an omission cleared and a restatement removed is named, and the stored
+      status is never lowered. Answers with the write receipt, carrying the tests a changed or
+      removed method invalidated. Routed to the gated workflow.
+    signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: restatement
+        type: SpecRestatement
+        description: The spec as stated, with the fields its caller's input can express
+  - name: deleteSpec
+    description: >-
+      Delete one spec of the named kind, answering with whether anything was removed and the tests
+      that encode a method the deletion took away. Routed to the gated workflow.
+    signature: 'deleteSpec(kind: string, id: string): SpecDeletion'
+    returns: SpecDeletion
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id
 status: complete
 createdAt: '2026-09-18T21:41:27.211Z'
-updatedAt: '2026-09-20T12:02:35.811Z'
+updatedAt: '2026-09-24T22:21:46.235Z'

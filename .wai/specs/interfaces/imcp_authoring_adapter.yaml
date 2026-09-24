@@ -1,22 +1,11 @@
 id: imcp_authoring_adapter
 name: MCP Authoring Client Adapter Interface
 description: >-
-  Client adapter contract for the MCP subsystem's hop into sdd_authoring: the gated component write,
-  reached through the authoring portal instead of the spec store (in-process today; swappable for a
-  remote transport).
+  Client adapter contract for the MCP subsystem's hop into sdd_authoring: every spec write an MCP
+  tool makes on an author's behalf, reached through the authoring portal instead of the spec store
+  (in-process today; swappable for a remote transport).
 component: mcp_authoring_adapter
 methods:
-  - name: addComponent
-    description: >-
-      Forward the sdd_add_component write to the authoring portal's gate: the intrinsic rules judge
-      the candidate and refuse a misplaced field before anything reaches disk, and the write is
-      performed only if it passes.
-    signature: 'addComponent(candidate: ComponentSpec): string[]'
-    returns: string[]
-    params:
-      - name: candidate
-        type: ComponentSpec
-        description: The component as the tool's arguments describe it
   - name: updateSpecGated
     description: >-
       Forward the sdd_update_spec patch to the authoring portal's gate: the intrinsic rules judge
@@ -61,6 +50,29 @@ methods:
         type: boolean
         description: Answer with what the move would do and write nothing
         optional: true
+  - name: writeSpec
+    description: >-
+      Forward a create tool's whole-spec restatement to the authoring portal: the seam applies it to
+      the stored spec, judges it and writes it, and answers with the write receipt.
+    signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: restatement
+        type: SpecRestatement
+        description: The spec as the tool's arguments state it, with the fields the tool's input can express
+  - name: deleteSpec
+    description: >-
+      Forward the sdd_delete_spec request to the authoring portal, which deletes the spec and
+      reports the tests a removed method invalidated.
+    signature: 'deleteSpec(kind: string, id: string): SpecDeletion'
+    returns: SpecDeletion
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id
 status: complete
 createdAt: '2026-09-18T21:42:03.998Z'
-updatedAt: '2026-09-20T12:02:40.458Z'
+updatedAt: '2026-09-24T22:22:00.086Z'

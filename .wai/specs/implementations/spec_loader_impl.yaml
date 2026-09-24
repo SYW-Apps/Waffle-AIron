@@ -203,8 +203,29 @@ methods:
         type: call
         targetComponent: spec_registry
         targetMethod: deleteTypeSpec
+  - name: loadSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: load
+  - name: saveSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: save
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: delete
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-23T12:56:10.593Z'
+updatedAt: '2026-09-24T22:23:10.633Z'

@@ -9,13 +9,6 @@ description: >-
 contract: iauthoring_core_adapter
 sourcePath: src/core/authoring.ts
 methods:
-  - name: saveComponentSpec
-    narrative:
-      - stepNumber: 1
-        description: Persist the judged component through the core subsystem's published write
-        type: call
-        targetComponent: core_portal
-        targetMethod: saveComponentSpec
   - name: updateSpec
     narrative:
       - stepNumber: 1
@@ -46,6 +39,34 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: moveMethods
+  - name: loadSpec
+    narrative:
+      - stepNumber: 1
+        description: Call loadSpec on the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSpec
+  - name: saveSpec
+    narrative:
+      - stepNumber: 1
+        description: Call saveSpec on the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: saveSpec
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: Call deleteSpec on the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: deleteSpec
+  - name: createChainedSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Call createChainedSubsystem on the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: createChainedSubsystem
 status: complete
 createdAt: '2026-09-18T21:43:38.007Z'
-updatedAt: '2026-09-20T12:05:53.879Z'
+updatedAt: '2026-09-24T22:22:53.950Z'

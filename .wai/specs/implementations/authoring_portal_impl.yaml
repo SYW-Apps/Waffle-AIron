@@ -8,15 +8,6 @@ description: >-
 contract: iauthoring_portal
 sourcePath: src/core/authoring.ts
 methods:
-  - name: addComponent
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Hand the candidate to the gated create workflow, which judges it before anything reaches
-          disk and answers with the notices
-        type: call
-        targetComponent: authoring_orchestrator
-        targetMethod: addComponent
   - name: updateSpecGated
     narrative:
       - stepNumber: 1
@@ -35,6 +26,24 @@ methods:
         type: call
         targetComponent: authoring_orchestrator
         targetMethod: moveMethods
+  - name: writeSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the restatement to the gated whole-spec workflow, which applies it to the stored
+          spec, judges it before anything reaches disk and answers with the write receipt
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: writeSpec
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the delete to the workflow, which removes the spec and reports the tests a removed
+          method invalidated
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: deleteSpec
 status: complete
 createdAt: '2026-09-18T21:43:28.738Z'
-updatedAt: '2026-09-20T12:06:02.659Z'
+updatedAt: '2026-09-24T22:22:07.337Z'

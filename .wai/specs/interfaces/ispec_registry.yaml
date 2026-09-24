@@ -127,6 +127,37 @@ methods:
         type: string
         description: The type id
     effect: write
+  - name: save
+    description: >-
+      Persist one spec through the typed writer of its kind, answering with that writer's placement
+      notices; the stored status is kept on a draft or status-less save unless the caller states the
+      demotion.
+    signature: >-
+      save(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
+      ImplementationSpec | TypeSpec): string[]
+    returns: string[]
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: spec
+        type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+        description: The spec to persist, of that kind
+    effect: write
+  - name: delete
+    description: >-
+      Delete one spec document of the named kind through the typed delete of that kind; false when
+      none existed. A kind of system is refused: the L0 cannot be deleted.
+    signature: 'delete(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed)
+    effect: write
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-09-20T14:33:10.313Z'
+updatedAt: '2026-09-24T22:26:04.552Z'
