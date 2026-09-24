@@ -318,12 +318,33 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       expect(unknown.status).toBe(404);
       expect(json(unknown).error).toMatch(/Unknown organization unit "nope"/);
 
-      // Current behaviour: an absent disposition decodes to {} (kind undefined),
-      // which falls through to the 'absorb' branch — a root unit cannot absorb.
+      // An absent disposition decodes to {} (kind undefined) and is refused by
+      // name — it no longer falls through to the 'absorb' branch.
       seedUnit(dataDir, 'rooted');
       const noDisp = await post('/web/admin/org/units/remove', { unitId: 'rooted' }, cookie);
       expect(noDisp.status).toBe(400);
-      expect(json(noDisp).error).toMatch(/Cannot absorb a root unit/);
+      expect(json(noDisp).error).toBe('A disposition kind is required: migrate, alternative, absorb or cascade');
+      expect(getOrganizationUnit(dataDir, 'rooted')).not.toBeNull();
+    });
+
+    it('POST /web/admin/org/units/remove refuses an unknown disposition kind on a non-root unit and moves nothing', async () => {
+      const cookie = adminCookie();
+      const parent = seedUnit(dataDir, 'parent');
+      const child = seedUnit(dataDir, 'child', { parentId: parent.id });
+      const grandchild = seedUnit(dataDir, 'grandchild', { parentId: child.id });
+      createPlacedProject(cfg, MASTER, 'kept', child);
+      const before = json(await get('/web/admin/org/units', cookie)).units;
+
+      // A typo of 'absorb' used to absorb: the child's contents moved to its parent.
+      const typo = await post('/web/admin/org/units/remove', { unitId: child.id, disposition: { kind: 'absorbb' } }, cookie);
+      expect(typo.status).toBe(400);
+      expect(json(typo).error).toBe('A disposition kind is required: migrate, alternative, absorb or cascade');
+
+      // The unit, its subtree and its placement are exactly as they were.
+      expect(getOrganizationUnit(dataDir, child.id)).not.toBeNull();
+      expect(getOrganizationUnit(dataDir, grandchild.id)?.parentId).toBe(child.id);
+      expect(listProjectPlacements(dataDir, 'kept').map((p) => p.unitId)).toEqual([child.id]);
+      expect(json(await get('/web/admin/org/units', cookie)).units).toEqual(before);
     });
 
     it('current behaviour: no session is 403 (not 401) on these instance-admin routes; a viewer session: 403', async () => {
