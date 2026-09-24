@@ -1340,7 +1340,7 @@ rules:
             at: 'readResource'
             covers:
               - '1:skills_portal.readResource'
-      # 34 finding(s), 74 unit(s).
+      # 36 finding(s), 78 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of export-conformance, after the 90 realization handles that
@@ -1355,6 +1355,13 @@ rules:
           exporting it - and which one is right depends on what the name is FOR, which nobody has read
           file by file yet. None of it is a limit of the reader: every finding names an import that
           resolves, at exact grade, from a file realizing none of the accused components.
+          Four of them are one shape the model has no place for: a portal’s HTTP ENTRY POINT
+          (handleIdentityRequest, handlePolicyRequest, handleLandscapeRequest, handleOperationsRequest,
+          and handleWebRequest before them), which the listener in http.ts calls to mount that portal’s
+          routes. Each portal’s routes are modelled as endpoint bindings, but nothing says which
+          listener hands them their requests, so the call that mounts them crosses a boundary no
+          contract describes. That is the unmodelled router, and it is owed a design of its own rather
+          than a contract method per portal.
         findings:
           - code: UNDECLARED_EXPORT
             spec: cli_skills_adapter_impl
@@ -1506,6 +1513,7 @@ rules:
               - 'ForbiddenError'
               - 'buildSsoAuditEvent'
               - 'isInAdminGroup'
+              - 'handleIdentityRequest'
           - code: UNDECLARED_EXPORT
             spec: identity_provider_adapter_impl
             at: 'src/server/idp.ts'
@@ -1521,6 +1529,7 @@ rules:
             at: 'src/server/policy.ts'
             covers:
               - 'COMPATIBLE_DEFAULT_EXPOSURE'
+              - 'handlePolicyRequest'
           - code: UNDECLARED_EXPORT
             spec: project_index_impl
             at: 'src/server/projects.ts'
@@ -1566,6 +1575,16 @@ rules:
             covers:
               - 'resolveGitToken'
               - 'resolveSecret'
+          - code: UNDECLARED_EXPORT
+            spec: diagnostics_impl
+            at: 'src/server/operations.ts'
+            covers:
+              - 'handleOperationsRequest'
+          - code: UNDECLARED_EXPORT
+            spec: landscape_graph_impl
+            at: 'src/server/landscape.ts'
+            covers:
+              - 'handleLandscapeRequest'
       # 45 finding(s), 85 unit(s).
       - kind: undecided
         why: >-

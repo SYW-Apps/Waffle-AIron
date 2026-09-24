@@ -1295,11 +1295,16 @@ methods:
         onFalseStep: 10
       - stepNumber: 6
         description: >-
-          Walk every other analysed file that realizes a component, and read its runtime import
-          bindings — the local name, and the name the module published it under when the import
-          renamed it. Resolve each binding's OWN module specifier and keep only the bindings that
-          land in this file: a name is not taken from here merely because somebody elsewhere binds
-          the same word, and an accusation that cannot name the import it rests on is not one
+          Walk every other analysed file that realizes a component, and read what it takes from
+          others. A named import takes the name it binds — the local name, and the name the module
+          published it under when the import renamed it. A namespace import takes each name the file
+          CALLS on it: `webadmin.setSecret(…)` written against `import * as webadmin` names the
+          export `setSecret` exactly as a named import would, and the call site already records the
+          receiver it was called on. A namespace bound and never called through takes nothing,
+          because nothing names what it reaches. Resolve each import's OWN module specifier and keep
+          only what lands in this file: a name is not taken from here merely because somebody
+          elsewhere uses the same word, and an accusation that cannot name the import it rests on is
+          not one
         type: local
       - stepNumber: 7
         description: Decide whether that consumer is a different component at all
@@ -1498,4 +1503,4 @@ methods:
     exportedVia: paramConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-23T21:06:40.440Z'
+updatedAt: '2026-09-24T14:21:28.341Z'

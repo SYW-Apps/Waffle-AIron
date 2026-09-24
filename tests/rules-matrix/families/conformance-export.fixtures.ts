@@ -20,6 +20,10 @@
  *    OUTSIDE takes it, and two files realizing the SAME component are one
  *    component's implementation spread over two files (overlap, not subset),
  *    which the source-path model has always allowed;
+ *  - a NAMESPACE import takes each name the file calls through it, exactly as
+ *    a named import takes the name it binds, and one bound but never called
+ *    through takes nothing — each quiet shape above is asserted again through
+ *    a namespace, so its silence is the rule's verdict and not a blind spot;
  *  - a handle the file DOES export is a route a consumer can import, and the
  *    name it publishes is promised surface — one tree, asserted from both
  *    sides, because silence on either half alone would leave the other free.
@@ -119,6 +123,101 @@ const COMPOSED_QUOTE_ORCHESTRATOR: FixtureTree = {
     ].join('\n'),
   },
 };
+
+/**
+ * The quote orchestrator and a label orchestrator that reaches it through a
+ * NAMESPACE import (`import * as quotes`), with the label module's source
+ * supplied per fixture. The quote module exports its declared pricing method
+ * and a postal-code normalizer no contract declares; what the label module
+ * CALLS through the namespace is what decides whether anything crossed. When
+ * the label orchestrator calls the declared method its narrative says so, and
+ * it depends on the quote orchestrator.
+ */
+function namespaceLabelTree(labelSource: string[], callsDeclaredQuote: boolean): FixtureTree {
+  return {
+    subsystems: [{ id: 'shipping', description: 'Rate quotes and carrier labels for outbound parcels.' }],
+    components: [
+      {
+        id: 'quote-orchestrator',
+        componentType: 'Orchestrator',
+        subsystem: 'shipping',
+        description: 'Prices an outbound parcel against the carrier rate card.',
+      },
+      {
+        id: 'label-orchestrator',
+        componentType: 'Orchestrator',
+        subsystem: 'shipping',
+        description: 'Renders the carrier label for a booked shipment.',
+        ...(callsDeclaredQuote ? { dependsOn: ['quote-orchestrator'] } : {}),
+      },
+    ],
+    interfaces: [
+      {
+        id: 'iquote_orchestrator',
+        component: 'quote-orchestrator',
+        methods: [{ name: 'calculateQuote', description: 'Price an outbound parcel for a destination.' }],
+      },
+      {
+        id: 'ilabel_orchestrator',
+        component: 'label-orchestrator',
+        methods: [{ name: 'generateLabel', description: 'Render the carrier label for a booked shipment.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'quote_orchestrator_impl',
+        contract: 'iquote_orchestrator',
+        sourcePath: 'src/shipping/quote-orchestrator.ts',
+        methods: [
+          {
+            name: 'calculateQuote',
+            narrative: [
+              { stepNumber: 1, type: 'local', description: 'Normalize the destination postal code to its canonical form.' },
+              { stepNumber: 2, type: 'local', description: 'Multiply the rate-card band for that code by the parcel weight.' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'label_orchestrator_impl',
+        contract: 'ilabel_orchestrator',
+        sourcePath: 'src/shipping/label-orchestrator.ts',
+        methods: [
+          {
+            name: 'generateLabel',
+            narrative: callsDeclaredQuote
+              ? [
+                {
+                  stepNumber: 1,
+                  type: 'call',
+                  description: 'Ask the quote orchestrator for the price to print on the label.',
+                  targetComponent: 'quote-orchestrator',
+                  targetMethod: 'calculateQuote',
+                },
+                { stepNumber: 2, type: 'local', description: 'Render the quoted price onto the label line.' },
+              ]
+              : [
+                { stepNumber: 1, type: 'local', description: 'Normalize the destination postal code and render it onto the label line.' },
+              ],
+          },
+        ],
+      },
+    ],
+    files: {
+      'src/shipping/quote-orchestrator.ts': [
+        'export function normalizePostalCode(raw: string): string {',
+        '  return raw.trim().toUpperCase();',
+        '}',
+        '',
+        'export function calculateQuote(destination: string, grams: number): number {',
+        '  return normalizePostalCode(destination).length * grams;',
+        '}',
+        '',
+      ].join('\n'),
+      'src/shipping/label-orchestrator.ts': labelSource.join('\n'),
+    },
+  };
+}
 
 export default [
   // -------------------------------------------------------------------------
@@ -380,6 +479,157 @@ export default [
           '',
           'export function calculateQuote(band: string, grams: number): number {',
           '  return parseRateRow(band) * grams;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // UNDECLARED_EXPORT — fire: the private helper reached through a NAMESPACE.
+  // The call names the export exactly as a named import would.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_EXPORT',
+    severity: 'warning',
+    anchoredTo: 'quote_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The shipping label orchestrator imports the quote orchestrator\'s whole module as a namespace and calls its postal-code normalizer through it, a name the module exports but no contract of the quote orchestrator declares.',
+    tree: namespaceLabelTree(
+      [
+        'import * as quotes from \'./quote-orchestrator.js\';',
+        '',
+        'export function generateLabel(destination: string): string {',
+        '  return \'LABEL:\' + quotes.normalizePostalCode(destination);',
+        '}',
+        '',
+      ],
+      false,
+    ),
+  }),
+
+  // -------------------------------------------------------------------------
+  // UNDECLARED_EXPORT — control: a namespace bound and never called through
+  // names nothing, so it takes nothing.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_EXPORT',
+    expectFire: false,
+    reason:
+      'The label orchestrator binds the quote module as a namespace but never calls anything through it — it only files the module in its table of pricing sources — so no call site names an export and nothing is taken. A namespace is read as taking what it provably names, never as taking everything the module publishes.',
+    scenario:
+      'The shipping label orchestrator imports the quote orchestrator\'s module as a namespace only to list it among its pricing sources, and renders the label without calling into it.',
+    tree: namespaceLabelTree(
+      [
+        'import * as quotes from \'./quote-orchestrator.js\';',
+        '',
+        'const pricingSources = { standard: quotes };',
+        '',
+        'export function generateLabel(destination: string): string {',
+        '  return \'LABEL:\' + destination + \':\' + Object.keys(pricingSources).join(\',\');',
+        '}',
+        '',
+      ],
+      false,
+    ),
+  }),
+
+  // -------------------------------------------------------------------------
+  // UNDECLARED_EXPORT — control: the name called through the namespace IS a
+  // contract method.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_EXPORT',
+    expectFire: false,
+    reason:
+      'The one name the label orchestrator calls through the quote namespace is calculateQuote, a method the quote orchestrator\'s contract declares, so the surface it reaches was promised by the design. The postal-code normalizer is exported too, but nothing outside the module calls it.',
+    scenario:
+      'The shipping label orchestrator imports the quote orchestrator\'s module as a namespace and calls its declared calculateQuote method through it to price the label.',
+    tree: namespaceLabelTree(
+      [
+        'import * as quotes from \'./quote-orchestrator.js\';',
+        '',
+        'export function generateLabel(destination: string, grams: number): string {',
+        '  return \'LABEL:\' + quotes.calculateQuote(destination, grams);',
+        '}',
+        '',
+      ],
+      true,
+    ),
+  }),
+
+  // -------------------------------------------------------------------------
+  // UNDECLARED_EXPORT — control: overlap, not subset, through a namespace.
+  // One component written across two files calls its own helper.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_EXPORT',
+    expectFire: false,
+    reason:
+      'Both files realize the quote orchestrator, so the entry point calling the rate-card module\'s parser through a namespace shares a component with the exporter and has crossed nothing — the call is seen, and it is that component\'s own implementation spread over two files.',
+    scenario:
+      'The quote orchestrator is written across two modules, and its entry point imports the rate-card module as a namespace and calls a rate-row parser through it that no contract names.',
+    tree: {
+      subsystems: [{ id: 'shipping', description: 'Rate quotes and carrier labels for outbound parcels.' }],
+      components: [
+        {
+          id: 'quote-orchestrator',
+          componentType: 'Orchestrator',
+          subsystem: 'shipping',
+          description: 'Prices an outbound parcel against the carrier rate card and keeps that card fresh.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'iquote_orchestrator',
+          component: 'quote-orchestrator',
+          methods: [
+            { name: 'calculateQuote', description: 'Price an outbound parcel for a destination.' },
+            { name: 'refreshRateCard', description: 'Reload the carrier rate card from the published tariff.' },
+          ],
+        },
+      ],
+      implementations: [
+        {
+          id: 'quote_orchestrator_impl',
+          contract: 'iquote_orchestrator',
+          sourcePath: 'src/shipping/quote-orchestrator.ts',
+          methods: [
+            {
+              name: 'calculateQuote',
+              narrative: [
+                { stepNumber: 1, type: 'local', description: 'Parse the rate row for the destination band.' },
+                { stepNumber: 2, type: 'local', description: 'Multiply the parsed band by the parcel weight.' },
+              ],
+            },
+            {
+              name: 'refreshRateCard',
+              sourcePath: 'src/shipping/rate-card.ts',
+              narrative: [
+                { stepNumber: 1, type: 'local', description: 'Read the published tariff lines and parse each rate row.' },
+              ],
+            },
+          ],
+        },
+      ],
+      files: {
+        'src/shipping/rate-card.ts': [
+          'export function parseRateRow(row: string): number {',
+          '  return Number(row.split(\':\')[1] ?? 0);',
+          '}',
+          '',
+          'export function refreshRateCard(tariff: string[]): number[] {',
+          '  return tariff.map(parseRateRow);',
+          '}',
+          '',
+        ].join('\n'),
+        'src/shipping/quote-orchestrator.ts': [
+          'import * as rateCard from \'./rate-card.js\';',
+          '',
+          'export function calculateQuote(band: string, grams: number): number {',
+          '  return rateCard.parseRateRow(band) * grams;',
           '}',
           '',
         ].join('\n'),

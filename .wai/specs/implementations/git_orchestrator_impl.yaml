@@ -20,14 +20,21 @@ methods:
         targetComponent: git_adapter
         targetMethod: ensureWorkingBranch
       - stepNumber: 3
+        description: >-
+          Keep the container's local connection config out of commits, and make sure the approval
+          record is not — it must reach the remote
+        type: call
+        targetComponent: git_adapter
+        targetMethod: excludeLocalFiles
+      - stepNumber: 4
         description: Build the GitConfig (enabled, remote, defaultBranch, workingBranch)
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Persist the git config
         type: call
         targetComponent: git_config_store
         targetMethod: write
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return once enabled
         type: return
         outcome: enabled
@@ -185,4 +192,4 @@ methods:
         outcome: sync setting persisted
 status: complete
 createdAt: '2026-07-04T16:33:44.730Z'
-updatedAt: '2026-07-16T15:25:13.846Z'
+updatedAt: '2026-09-24T14:31:53.804Z'

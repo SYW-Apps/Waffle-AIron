@@ -1,4 +1,4 @@
-import { pathKey, resolveImport } from '../../../models/index.js';
+import { importBindingOf, pathKey, resolveImport } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -74,9 +74,17 @@ import { RuleContext, SddRule } from '../types.js';
 // whether the file actually publishes them is `typeRealization`'s question,
 // and this rule only needs to stop reporting its answers a second time.
 //
-// A namespace import (`import * as codec from …`) binds the whole module and
-// names no export of it at all, so it can never honestly accuse a particular
-// name: it is read as taking nothing rather than as taking everything.
+// A namespace import (`import * as webadmin from …`) binds the whole module,
+// and the BINDING names no export of it. The CALL does: `webadmin.setSecret(…)`
+// names the export `setSecret` exactly as `import { setSecret }` would, and the
+// analyzer records the receiver of every member call, so a namespace import
+// takes each name the file calls through it. A namespace bound and never
+// called through takes nothing, because nothing names what it reaches — it is
+// read as taking what it provably names rather than everything or nothing.
+// Reading the binding alone once kept this rule blind to the whole of
+// `web.ts`, which reaches all four of its orchestrators through namespace
+// imports; `webadmin.setSecret` was declared by no contract at either layer
+// and nothing fired.
 // ---------------------------------------------------------------------------
 
 /** The answer for a file whose components promised nothing at all. */
@@ -189,20 +197,48 @@ export const exportConformanceRule: SddRule = {
     // and `imported` — the name the module published it under when the import
     // renamed it — because a rename hides the published name behind the local
     // one and either way the same file reached for the same surface.
+    //
+    // A namespace binding takes nothing by itself — it names no export — but
+    // each call written THROUGH it names one: `webadmin.setSecret(…)` against
+    // `import * as webadmin` takes `setSecret` exactly as a named import would.
+    // A namespace bound and never called through therefore takes nothing.
+    //
+    // A site a re-export barrel CARRIES (`from` set) was written in another
+    // file, and its receiver is a binding of THAT file's scope, never the
+    // barrel's — so it is resolved there, against the imports and the
+    // directory of the file that wrote it, and skipped when that file's facts
+    // are not in hand. It is still taken BY the barrel: the barrel publishes
+    // the body as its own, so the components it realizes are the ones that
+    // reached through the namespace.
     const takenFrom = new Map<string, Map<string, Set<string>>>();
+    const take = (consumer: string, writtenIn: string, specifier: string, names: (string | undefined)[]): void => {
+      const target = resolveImport(writtenIn, specifier, code.paths);
+      if (!target) return;
+      let byName = takenFrom.get(target);
+      if (!byName) takenFrom.set(target, (byName = new Map<string, Set<string>>()));
+      for (const name of names) {
+        if (!name) continue;
+        let takers = byName.get(name);
+        if (!takers) byName.set(name, (takers = new Set<string>()));
+        takers.add(consumer);
+      }
+    };
     for (const consumer of realization.paths) {
       if (!code.exactPaths.has(consumer)) continue;
-      for (const [local, binding] of Object.entries(code.factsAt(consumer)?.importBindings ?? {})) {
+      const facts = code.factsAt(consumer);
+      if (!facts) continue;
+      for (const [local, binding] of Object.entries(facts.importBindings ?? {})) {
         if (binding.namespace) continue;
-        const target = resolveImport(consumer, binding.from, code.paths);
-        if (!target) continue;
-        let names = takenFrom.get(target);
-        if (!names) takenFrom.set(target, (names = new Map<string, Set<string>>()));
-        for (const name of [local, binding.imported]) {
-          if (!name) continue;
-          let takers = names.get(name);
-          if (!takers) names.set(name, (takers = new Set<string>()));
-          takers.add(consumer);
+        take(consumer, consumer, binding.from, [local, binding.imported]);
+      }
+      for (const sites of Object.values(facts.functionCallSites ?? {})) {
+        for (const site of sites) {
+          if (!site.member || !site.via) continue;
+          const writtenIn = site.from ? pathKey(site.from) : consumer;
+          const scope = site.from ? code.factsAt(writtenIn) : facts;
+          if (!scope) continue;
+          const binding = importBindingOf(scope, site.via);
+          if (binding?.namespace) take(consumer, writtenIn, binding.from, [site.name]);
         }
       }
     }

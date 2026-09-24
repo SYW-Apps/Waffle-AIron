@@ -1,14 +1,14 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "8bb6f7db0455e53b58d72583a36261861c517d7c573a8bcfc89e573879079dfe"
+    "digest": "e27edd45b66b31fcbe1bf65188ac5be6c19c788ef1af4aaf512199a2913f5c59"
   },
-  "lockedAt": "2026-09-24T13:53:17.242Z",
+  "lockedAt": "2026-09-24T19:04:29.383Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "5.1.1-dev.66",
+  "validatorVersion": "5.1.1-dev.67",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -305,7 +305,7 @@
     ".wai/specs/implementations/cli_surfaces_client_adapter_impl.yaml": "6cce12f4eb57adb998ddaeec1deec5d3377e0721ee07953e1aecc5b0d14d90e2",
     ".wai/specs/implementations/cli_validator_adapter_impl.yaml": "8155aaf7f11aee4c526b49583c1e3fb32b7575484a1fa798779351c890a267fe",
     ".wai/specs/implementations/cli_variants_adapter_impl.yaml": "92c2e00e17920ebc92349edabdc53edc09f6bda131f7c3fd091d2822855757ba",
-    ".wai/specs/implementations/conformance_rules_impl.yaml": "2accf06e95286262d8bf778a6e653675ae750268e99abff191cbd80af9d8e453",
+    ".wai/specs/implementations/conformance_rules_impl.yaml": "a0584bf2d9e1c648fe11fee6c7bb60165826a931b378ad5152e2c9368acc09d0",
     ".wai/specs/implementations/context_composer_impl.yaml": "9df80a596cb15114c710f441abb118307ce019647b923a53d21aebc5477a10e7",
     ".wai/specs/implementations/context_store_impl.yaml": "4971bf6ce70fd006c849862a6e80e57ff35aac9443cf61adb026ae7ccba23e93",
     ".wai/specs/implementations/core_orchestrator_impl.yaml": "96d2261d0ee7cdf429d3c89e4364fb1018535c107603f663eb8e574b71a1e2aa",
@@ -330,7 +330,7 @@
     ".wai/specs/implementations/extension_rules_impl.yaml": "aab72fab37667abb6ba676a5c9108183944c30320470446ceee5f411cf45df6c",
     ".wai/specs/implementations/gate_identity_impl.yaml": "32fa5f197481bcd138ee78e35d9925aeb3f6625df1857dd7bd048378e38a29da",
     ".wai/specs/implementations/gemini_exporter_impl.yaml": "a44b439003c50d30a4f4dcd794a82e2d1479a622f6128b52d8a4f7f4b5dea120",
-    ".wai/specs/implementations/git_adapter_impl.yaml": "98afce387d1d962cd89dd2b07e03ae2251e7faf7655644da4db28fdfbd1f90f4",
+    ".wai/specs/implementations/git_adapter_impl.yaml": "258c22c8c7474da128fd8ef2639b5c75f85ad2511fef7934588a760c79f74933",
     ".wai/specs/implementations/git_backing_adapter_impl.yaml": "496cdc6760ae9b09eb7f656bd408af421e8632db16951b5fefb83b08ce2b34ac",
     ".wai/specs/implementations/git_backing_index_impl.yaml": "c701c2a0623632dce227b1426b634380828b0fbb9dc6e99f497eec59342ac87f",
     ".wai/specs/implementations/git_backing_orchestrator_impl.yaml": "138d9a5a123c91127bca0e99774c2389426f1a9c72a64e3b49229963073167af",
@@ -338,7 +338,7 @@
     ".wai/specs/implementations/git_backing_repository_impl.yaml": "b9939d9cee93c3d32b572b7629e3267230fbfe068716ba7c2810cefd4a045bfb",
     ".wai/specs/implementations/git_backing_store_impl.yaml": "b992e8ed7275ebd657ed1f6ed1eda181144d50d4acfdbbdb0e3954384e600e48",
     ".wai/specs/implementations/git_config_store_impl.yaml": "b0b70572eab416c5ae5fd3a849f98ab4b8e8f8e96f0a39bb89587f50b4b71bce",
-    ".wai/specs/implementations/git_orchestrator_impl.yaml": "b1523b7f3e089f4d2f3f57b28ad558113ac8a824e93874d5cbe2e01ff260507b",
+    ".wai/specs/implementations/git_orchestrator_impl.yaml": "9c3a3608dad86ba2d61b0634986a2d6bb582fb50a0c7c31367bcfb8c5fd7fe82",
     ".wai/specs/implementations/git_portal_impl.yaml": "e7ace31435255ad4cff7af9ed1f90970365e565dfdf4fd0e5541d27e005a9927",
     ".wai/specs/implementations/heuristic_rules_impl.yaml": "4aa1e890b02a5baa543e2caa772b56420ac4617cc52d033d2c18c27fdd8ad9b4",
     ".wai/specs/implementations/host_core_adapter_impl.yaml": "e049d2dc4d3812e1aa86c6c3a892a5f001ca99d81cda98855da56f42099cd92f",
@@ -579,7 +579,7 @@
     ".wai/specs/interfaces/iextension_rules.yaml": "2b83794ff0f947c83498ac8a8b1d2f871ebf3e5c7d2b9ce1977197ad31a55965",
     ".wai/specs/interfaces/igate_identity.yaml": "17b990a04259d05c840b084e6588c807712a133367252e57f7095b42cad09c6e",
     ".wai/specs/interfaces/igemini_exporter.yaml": "0fc360b2551b3eac4e0c1bd515955f07c7bbbc1b2f02b8979bcc11ad71ddc406",
-    ".wai/specs/interfaces/igit_adapter.yaml": "fa0ca7894857b5dcc9ee637e1f85eda790d96f32a70caad239d702aeb02c1ae4",
+    ".wai/specs/interfaces/igit_adapter.yaml": "8de0c09bac52bb4df4288ea2e3a8dbfde7e95a544f1fe2abbd560bd1644108b1",
     ".wai/specs/interfaces/igit_backing_adapter.yaml": "57007445f56e974e0c05c8c8ae76e192e7135d6ae7b0d0770720d9e0c27d0919",
     ".wai/specs/interfaces/igit_backing_index.yaml": "ea81ad13ad46d1ac1d1b13b4ffca2fc781cc27502c7eee4d5b6f8514a22b7770",
     ".wai/specs/interfaces/igit_backing_orchestrator.yaml": "53fccb19c1cd8b1217630fe8c6360d9d0c0de6dce55b77a2338041999b006b3e",

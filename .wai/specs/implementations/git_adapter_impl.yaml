@@ -52,6 +52,15 @@ methods:
       - stepNumber: 1
         description: Run `git status --porcelain -- <subpath>` and report true when it prints nothing
         type: local
+  - name: excludeLocalFiles
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the repository's `.git/info/exclude`, creating its directory if needed; drop any
+          `.wai/lock.json` line an earlier version wrote, warning that approvals now ship; add
+          `.wai/git.json` if it is not already there; and write the file back, so running it twice
+          changes nothing
+        type: local
 lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
@@ -62,4 +71,4 @@ lint:
         cross-subsystem reach. The per-project git adapter reads the git bot token through it.
 status: complete
 createdAt: '2026-07-04T16:33:28.728Z'
-updatedAt: '2026-09-19T20:28:41.083Z'
+updatedAt: '2026-09-24T14:31:52.311Z'
