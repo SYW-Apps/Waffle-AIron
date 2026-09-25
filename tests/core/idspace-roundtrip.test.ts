@@ -19,6 +19,7 @@ import {
   workspaceFor,
 } from '../../src/core/specs.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
+import { validateSddTree } from '../../src/core/validation.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -811,5 +812,65 @@ describe('a flat chained child is its mount at every depth', () => {
     saveComponentSpec(loadComponentSpec('kid::extra::extra-comp')!);
     invalidateSpecCache();
     expect(workspaceFor(extraDir).loadComponentSpec('extra-comp')?.subsystem).toBe('extra');
+  });
+});
+
+describe('public_interface.consumers are subsystem references in a chained subproject', () => {
+  let rootDir: string;
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+  });
+
+  /** A child project mounted as "pharmacy" whose dispensing surface is published to its sibling "stock". */
+  function buildFixture(): string {
+    rootDir = makeRoot();
+    createChainedSubsystem(subsystem('pharmacy', { projectPath: 'services/pharmacy' }), 'pharmacy');
+    const childDir = path.join(rootDir, 'services', 'pharmacy');
+    const child = workspaceFor(childDir);
+    child.saveSubsystemSpec(subsystem('stock', { parentSystem: 'pharmacy' }));
+    child.saveSubsystemSpec(subsystem('dispensing', {
+      parentSystem: 'pharmacy',
+      publicInterfaces: [{ type: 'Custom', details: 'dispense orders', component: 'dispensing-portal', consumers: ['stock'] }],
+    }));
+    child.saveComponentSpec(component('dispensing-portal', 'dispensing', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    invalidateSpecCache();
+    return childDir;
+  }
+
+  const storedConsumers = (childDir: string): string => fs.readFileSync(
+    path.join(childDir, '.wai', 'specs', 'dispensing', '.index.yaml'), 'utf8');
+
+  it('qualifies each consumers id into the subproject namespace on load, like the entry component', () => {
+    buildFixture();
+    const dispensing = loadSubsystemSpec('pharmacy::dispensing');
+    expect(dispensing?.publicInterfaces).toEqual([
+      { type: 'Custom', details: 'dispense orders', component: 'pharmacy::dispensing-portal', consumers: ['pharmacy::stock'] },
+    ]);
+  });
+
+  it('resolves them from the parent: the sibling is a subsystem of the tree, not an unknown consumer', () => {
+    buildFixture();
+    const codes = validateSddTree({ recursive: true }).issues.map((i) => i.code);
+    expect(codes).not.toContain('PUBLIC_INTERFACE_UNKNOWN_CONSUMER');
+  });
+
+  it('writes them back relative to the subproject, so load → save → load is a fixpoint', () => {
+    const childDir = buildFixture();
+    saveSubsystemSpec(loadSubsystemSpec('pharmacy::dispensing')!);
+    invalidateSpecCache();
+    expect(storedConsumers(childDir)).toMatch(/consumers:\s*\n\s*- stock/);
+    expect(loadSubsystemSpec('pharmacy::dispensing')?.publicInterfaces[0].consumers).toEqual(['pharmacy::stock']);
+  });
+
+  it('qualifies a delta\'s consumers with local names, exactly as the loader would', () => {
+    const childDir = buildFixture();
+    updateSpec('subsystem', 'pharmacy::dispensing', {
+      publicInterfaces: [{ component: 'dispensing-portal', consumers: ['stock', 'dispensing'] }],
+    });
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('pharmacy::dispensing')?.publicInterfaces[0].consumers).toEqual(['pharmacy::stock', 'pharmacy::dispensing']);
+    expect(storedConsumers(childDir)).toMatch(/- stock\s*\n\s*- dispensing/);
   });
 });

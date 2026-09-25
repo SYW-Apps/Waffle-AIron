@@ -577,6 +577,9 @@ function stripNamespaceFromSubsystem(spec: SubsystemSpec, prefix: string): Subsy
       ...pi,
       component: pi.component ? relMember(pi.component) : undefined,
       interface: pi.interface ? relMember(pi.interface) : undefined,
+      // consumers name SUBSYSTEMS — peers of this one, so they are relative to
+      // the namespace the subsystem itself is declared in, never its members'.
+      ...(pi.consumers ? { consumers: pi.consumers.map(c => (c.includes('::') ? relativizeId(c, prefix) : c)) } : {}),
     })),
     lifecycle: spec.lifecycle?.map(le => ({
       ...le,
@@ -1617,6 +1620,9 @@ export class SpecWorkspace {
           ...p,
           component: p.component ? qualifyId(p.component, componentPrefix, this.rootSubsystems) : undefined,
           interface: p.interface ? qualifyId(p.interface, componentPrefix, this.rootSubsystems) : undefined,
+          // Each consumer is a subsystem reference: qualified into the namespace
+          // this subsystem is declared in, like a component's `subsystem` field.
+          ...(p.consumers ? { consumers: p.consumers.map(c => qualifySubsystemRef(c, namespacePrefix, this.rootSubsystems)) } : {}),
         })),
         lifecycle: sub.lifecycle?.map(le => ({
           ...le,
@@ -3683,6 +3689,9 @@ export class SpecWorkspace {
               ...pi,
               ...(typeof pi?.component === 'string' ? { component: qm(pi.component) } : {}),
               ...(typeof pi?.interface === 'string' ? { interface: qm(pi.interface) } : {}),
+              ...(Array.isArray(pi?.consumers)
+                ? { consumers: pi.consumers.map((c: unknown) => (typeof c === 'string' ? qualifySubsystemRef(c, prefix, this.rootSubsystems) : c)) }
+                : {}),
             }));
           }
           if (Array.isArray(out.lifecycle)) {
