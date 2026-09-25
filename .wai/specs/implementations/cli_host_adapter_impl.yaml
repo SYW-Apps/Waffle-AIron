@@ -1,65 +1,233 @@
 id: cli_host_adapter_impl
 name: CLI Host Client Adapter Implementation
-description: In-process CLI client of the admin portal; pure 1:1 forwarding.
+description: >-
+  In-process CLI client of the local admin portal, in a module of its own
+  (src/commands/adapters/host.ts): identity re-exports of the portal, pure 1:1 forwarding.
+  src/commands/host.ts imports the admin operations from here.
 contract: icli_host_adapter
-sourcePath: src/commands/host.ts
+sourcePath: src/commands/adapters/host.ts
+injectedParams:
+  - cfg
+  - _cfg
+  - dataDir
 methods:
   - name: createProject
     narrative:
       - stepNumber: 1
-        description: Forward to the admin portal
+        description: Forward to the local admin portal
         type: call
-        targetComponent: admin_portal
+        targetComponent: local_admin_portal
         targetMethod: createProject
-    symbol: runHostProject
   - name: destroyProject
     narrative:
       - stepNumber: 1
-        description: Forward to the admin portal
+        description: Forward to the local admin portal
         type: call
-        targetComponent: admin_portal
+        targetComponent: local_admin_portal
         targetMethod: destroyProject
-    symbol: runHostProject
   - name: listProjects
     narrative:
       - stepNumber: 1
-        description: Forward to the admin portal
+        description: Forward to the local admin portal
         type: call
-        targetComponent: admin_portal
+        targetComponent: local_admin_portal
         targetMethod: listProjects
-    symbol: runHostProject
-  - name: mintKey
-    narrative:
-      - stepNumber: 1
-        description: Forward to the admin portal
-        type: call
-        targetComponent: admin_portal
-        targetMethod: mintKey
-    symbol: runHostKey
-  - name: revokeKey
-    narrative:
-      - stepNumber: 1
-        description: Forward to the admin portal
-        type: call
-        targetComponent: admin_portal
-        targetMethod: revokeKey
-    symbol: runHostKey
-  - name: listKeys
-    narrative:
-      - stepNumber: 1
-        description: Forward to the admin portal
-        type: call
-        targetComponent: admin_portal
-        targetMethod: listKeys
-    symbol: runHostKey
   - name: lockProject
     narrative:
       - stepNumber: 1
-        description: Forward to the admin portal
+        description: Forward to the local admin portal
         type: call
-        targetComponent: admin_portal
+        targetComponent: local_admin_portal
         targetMethod: lockProject
-    symbol: runHostLock
+  - name: mintKey
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: mintKey
+  - name: revokeKey
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: revokeKey
+  - name: listKeys
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: listKeys
+  - name: configureProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: configureProducer
+  - name: produceProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: produceProducer
+  - name: removeProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: removeProducer
+  - name: listProducers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: listProducers
+  - name: setSecret
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: setSecret
+  - name: listSecrets
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: listSecrets
+  - name: enableGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: enableGit
+  - name: disableGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: disableGit
+  - name: syncGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: syncGit
+  - name: commitProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: commitProject
+  - name: getGitBinding
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: getGitBinding
+  - name: configureGitSync
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: configureGitSync
+  - name: listGlobalPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: listGlobalPacks
+  - name: installGlobalPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: installGlobalPack
+  - name: removeGlobalPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: removeGlobalPack
+  - name: listProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: listProjectPacks
+  - name: installProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: installProjectPack
+  - name: removeProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: removeProjectPack
+  - name: setAssignment
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: setAssignment
+  - name: removeAssignment
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: removeAssignment
+  - name: listAssignments
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: listAssignments
+  - name: existingProjectRoot
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: existingProjectRoot
+  - name: registerLocalDevProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: registerLocalDevProject
+  - name: seedIdentityProviderSecret
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: seedIdentityProviderSecret
 status: complete
 createdAt: '2026-07-04T12:53:10.615Z'
-updatedAt: '2026-09-11T21:00:24.655Z'
+updatedAt: '2026-09-25T22:41:32.519Z'

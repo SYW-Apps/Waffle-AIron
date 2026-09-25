@@ -5,6 +5,8 @@ description: >-
   resolution.
 contract: iproject_index
 sourcePath: src/server/projects.ts
+injectedParams:
+  - dataDir
 methods:
   - name: resolveRoot
     narrative:
@@ -129,6 +131,14 @@ methods:
     detail: full
     intent: ''
     symbol: resolveProjectBinding
+  - name: existingRoot
+    narrative: []
+    intent: >-
+      Refuses a malformed id with null, then loads the persisted set and returns the rootPath of the
+      record holding the id, or null when none does.
+    calls:
+      - project_store.read
+    symbol: existingProjectRoot
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-09-19T21:26:57.846Z'
+updatedAt: '2026-09-25T22:45:10.653Z'

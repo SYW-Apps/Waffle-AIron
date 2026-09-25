@@ -1,0 +1,234 @@
+id: local_admin_portal_impl
+name: Local Admin Portal Implementation
+description: >-
+  Realized by src/server/local-admin.ts, a module of its own that republishes each owning workflow
+  by identity (and the admin plane's two failure classes). No method holds logic; the HTTP admin
+  portal in src/server/http.ts is untouched.
+contract: ilocal_admin_portal
+sourcePath: src/server/local-admin.ts
+injectedParams:
+  - cfg
+  - _cfg
+  - dataDir
+methods:
+  - name: createProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: createProject
+  - name: destroyProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: destroyProject
+  - name: listProjects
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: listProjects
+  - name: lockProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: lockProject
+  - name: mintKey
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: mintKey
+  - name: revokeKey
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: revokeKey
+  - name: listKeys
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: listKeys
+  - name: configureProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: configureProducer
+  - name: produceProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: produceProducer
+  - name: removeProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: removeProducer
+  - name: listProducers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: listProducers
+  - name: setSecret
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: setSecret
+  - name: listSecrets
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: listSecrets
+  - name: enableGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: enableGit
+  - name: disableGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: disableGit
+  - name: syncGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: syncGit
+  - name: commitProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: commitProject
+  - name: getGitBinding
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: getGitBinding
+  - name: configureGitSync
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: configureGitSync
+  - name: registerLocalDevProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: registerLocalDevProject
+  - name: seedIdentityProviderSecret
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: seedIdentityProviderSecret
+  - name: listGlobalPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: listGlobalPacks
+  - name: installGlobalPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: installGlobalPack
+  - name: removeGlobalPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: removeGlobalPack
+  - name: listProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: listProjectPacks
+  - name: installProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: installProjectPack
+  - name: removeProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: removeProjectPack
+  - name: setAssignment
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission admin orchestrator
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: setAssignment
+  - name: removeAssignment
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission admin orchestrator
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: removeAssignment
+  - name: listAssignments
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission admin orchestrator
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: listAssignments
+  - name: existingProjectRoot
+    narrative:
+      - stepNumber: 1
+        description: Read through the project repository's read face
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+detail: calls-only
+status: complete
+createdAt: '2026-09-25T22:40:16.874Z'
+updatedAt: '2026-09-25T22:40:16.888Z'

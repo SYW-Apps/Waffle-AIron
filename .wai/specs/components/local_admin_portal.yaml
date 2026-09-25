@@ -1,0 +1,29 @@
+id: local_admin_portal
+name: Local Admin Portal
+description: >-
+  In-process administration front door for the local operator's CLI (`wairon host`, `wairon serve`,
+  `wairon dev`), published only to sdd_cli beside the HTTP admin_portal, which stays the remote
+  surface. Every method forwards by identity to the workflow that owns it — project, key, producer,
+  secret, git-backing and lock workflows on admin_orchestrator, instance and project packs on
+  pack_orchestrator, permission assignments on permission_admin_orchestrator — and those workflows
+  authenticate and authorize the credential the caller presents themselves; the portal adds no gate
+  of its own and holds no logic. Two boot-time writes run before any credential exists and are kept
+  as narrow as the boot they serve: the development server's project registration (admitted only for
+  a development-mode configuration) and the default identity provider's secret seeding (key fixed,
+  value read from the server process's own environment). The one read that goes past a workflow —
+  whether a project id is registered — goes through the project repository's read face. The admin
+  plane's failure classes (the authorization refusal and the lock's validation refusal) are
+  republished here, since an in-process caller catches the class where an HTTP caller reads a status
+  code.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - admin_orchestrator
+  - pack_orchestrator
+  - permission_admin_orchestrator
+  - project_repository
+portalType: Custom
+status: complete
+createdAt: '2026-09-25T22:39:10.822Z'
+updatedAt: '2026-09-25T22:39:10.838Z'

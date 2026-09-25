@@ -29,6 +29,16 @@ methods:
       rootPath projection.
     signature: 'resolveBinding(principal: Principal, selector: string): ProjectBinding | null'
     returns: ProjectBinding | null
+  - name: existingRoot
+    description: >-
+      The root path of the hosted project registered under this id, or null when the id is malformed
+      or no record holds it. Unscoped by design: an existence lookup for callers that have already
+      authorized the operation it serves, never a resolution a request selector reaches.
+    signature: 'existingRoot(id: string): string | null'
+    returns: string | null
+    params:
+      - name: id
+        type: string
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-07-24T20:50:21.064Z'
+updatedAt: '2026-09-25T22:38:34.737Z'

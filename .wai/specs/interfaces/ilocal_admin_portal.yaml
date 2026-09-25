@@ -1,11 +1,12 @@
-id: icli_host_adapter
-name: CLI Host Client Adapter Interface
+id: ilocal_admin_portal
+name: Local Admin Portal Interface
 description: >-
-  Contract for the CLI's in-process client of sdd_host's administration: every admin operation
-  `wairon host`, `wairon serve` and `wairon dev` use, each a pure 1:1 identity re-export of the
-  local admin portal. The credential is passed through from the caller (read from the environment by
-  the CLI runner, null when unset); the host's workflows authorize it.
-component: cli_host_adapter
+  In-process administration contract published to sdd_cli. Each method is the owning workflow
+  itself, forwarded by identity; the credential is whatever the caller holds (null when none is
+  configured) and the workflow authenticates and authorizes it, refusing with the admin plane's
+  authorization failure. The host configuration is wiring the caller supplies ahead of the
+  contract's own parameters.
+component: local_admin_portal
 methods:
   - name: createProject
     description: >-
@@ -325,7 +326,7 @@ methods:
   - name: existingProjectRoot
     description: >-
       The root path of the project registered under an id, or null — the existence check `wairon
-      host demo` makes before it reseeds.
+      host demo` makes before it reseeds. A read through the project repository's read face.
     signature: 'existingProjectRoot(id: string): string | null'
     returns: string | null
     params:
@@ -350,5 +351,5 @@ methods:
     returns: string | null
     params: []
 status: complete
-createdAt: '2026-07-04T12:49:25.392Z'
-updatedAt: '2026-09-25T22:41:06.672Z'
+createdAt: '2026-09-25T22:39:47.086Z'
+updatedAt: '2026-09-25T22:39:47.102Z'
