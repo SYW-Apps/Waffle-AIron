@@ -1,7 +1,13 @@
 import {
+  ComponentSpecSchema,
+  ImplementationSpecSchema,
+  InterfaceSpecSchema,
   MethodImplementationSchema,
   MethodSignatureSchema,
+  SubsystemSpecSchema,
+  SystemSpecSchema,
   TypeMethodSchema,
+  TypeSpecSchema,
   type ComponentSpec,
   type ImplementationSpec,
   type InterfaceSpec,
@@ -297,12 +303,66 @@ export function applyRestatement(
   if (labelErrors.length) {
     return refused(restatement, replacedExisting, `Unresolved narrative label references — nothing was saved:\n- ${labelErrors.join('\n- ')}`);
   }
+  const parsed = parseCandidate(restatement.kind, candidate);
+  if ('refusal' in parsed) return refused(restatement, replacedExisting, parsed.refusal);
   return {
-    spec: candidate as Spec,
+    spec: parsed.spec,
     ...(status.status ? { status: status.status } : {}),
     replacedExisting,
     notices: existing ? rewriteNotices(restatement.kind, existing, candidate, carried, cleared) : [],
     changedMethods: changedMethodsOf(restatement.kind, existing, candidate),
+  };
+}
+
+/** The canonical schema each writable kind is stored through. */
+const SPEC_SCHEMA = {
+  system: SystemSpecSchema,
+  subsystem: SubsystemSpecSchema,
+  component: ComponentSpecSchema,
+  interface: InterfaceSpecSchema,
+  implementation: ImplementationSpecSchema,
+  type: TypeSpecSchema,
+} as const;
+
+/**
+ * The candidate parsed through its kind's canonical schema, so a NEW spec
+ * arrives with the defaults for every list and flag the door did not state —
+ * a door that states only the fields it owns gets the same spec as one that
+ * states everything — or the refusal naming what does not parse.
+ *
+ * The candidate is in LOAD form: an id reference inside a chained subproject
+ * is namespace-qualified (`billing::invoice_portal`), which the writer schema
+ * refuses because the store relativizes it on the way to disk. So every string
+ * carrying `::` is masked with a token the id schema accepts for the parse and
+ * restored afterwards: the parse judges the shape and fills the defaults, and
+ * never rewrites a reference the store still has to relativize.
+ */
+function parseCandidate(kind: WritableSpecKind, candidate: Record<string, unknown>): { spec: Spec } | { refusal: string } {
+  const masked = new Map<string, string>();
+  const mask = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      if (!value.includes('::')) return value;
+      const token = `nsref_${masked.size}_masked`;
+      masked.set(token, value);
+      return token;
+    }
+    if (Array.isArray(value)) return value.map(mask);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, mask(v)]));
+    return value;
+  };
+  const restore = (value: unknown): unknown => {
+    if (typeof value === 'string') return masked.get(value) ?? value;
+    if (Array.isArray(value)) return value.map(restore);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, restore(v)]));
+    return value;
+  };
+  const result = SPEC_SCHEMA[kind].safeParse(mask(candidate));
+  if (result.success) return { spec: restore(result.data) as Spec };
+  const id = kind === 'system' ? 'system' : String(candidate.id);
+  const issues = result.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+  return {
+    refusal: `Refusing to write ${kind} "${id}": the spec it would become does not parse — ${issues}. `
+      + 'Nothing was written. State the missing or malformed field and call again.',
   };
 }
 
