@@ -12,7 +12,7 @@
  * contract changes. What it refuses is a name on the public surface that no
  * spec accounts for: not a contract method, not a method of a TYPE the barrel
  * publishes (a method travels with its type), not the shared rule vocabulary,
- * and not one of the seven diagram functions this wave REPORTED as unmodelled
+ * and not one of the six diagram functions this wave REPORTED as unmodelled
  * rather than quietly forwarding.
  */
 import * as fs from 'node:fs';
@@ -95,8 +95,9 @@ function typeMethodNames(): Set<string> {
 }
 
 /**
- * The seven diagram functions `wairon diagram --all|--sequence|--subsystem` and
- * `wairon host demo` are built out of. No contract names them —
+ * The six diagram functions `wairon diagram --all|--sequence|--subsystem` is
+ * built out of. (buildCanvasDataModel was the seventh: it is a spec_tree_portal
+ * method now, which is the shrink this ratchet exists for.) No contract names them —
  * `ispec_tree_portal` names `renderDiagram`, `iarchitecture_diagrams` names `render`
  * and `buildGraphModel` — and cli_core_adapter depends on core's portals alone, so
  * this barrel is the only route that does not make sdd_cli import an sdd_core
@@ -107,7 +108,6 @@ function typeMethodNames(): Set<string> {
  * name here becomes a contract method, so a fix cannot leave a stale entry.
  */
 const REPORTED_UNMODELLED = [
-  'buildCanvasDataModel',
   'diagramSetIndex',
   'generateComponentDiagram',
   'generateDiagramSet',
@@ -116,16 +116,24 @@ const REPORTED_UNMODELLED = [
   'toMarkdown',
 ] as const;
 
-/** The 14 shared value shapes the barrel publishes as types, by name. */
+/** The shared value shapes the barrel publishes as types, by name. */
 const DECLARED_TYPES = [
   'ComponentRename',
   'ForeignFieldRepair',
   'GenerateOptions',
   'GenerateSummary',
   'InstalledPack',
+  'LegacySpecFile',
+  'LoadedExtensions',
+  'LoadedPackSkill',
   'LockRecord',
   'LockStatus',
   'MethodRename',
+  'PackDiagnosis',
+  'PackRef',
+  'PackScope',
+  'SpecIndex',
+  'SpecScanOptions',
   'SpecialistRetirement',
   'StateId',
   'SyncResult',
@@ -134,13 +142,17 @@ const DECLARED_TYPES = [
   'TreeImportResult',
 ] as const;
 
-/** The five files outside src/core that take symbols off the barrel. */
+/**
+ * The files that IMPORT from the barrel. Most consumers outside sdd_core reach
+ * it through an adapter module that re-exports by identity (an adapters/ folder beside its consumers),
+ * which this import scan does not read; these are the ones that import.
+ */
 const CONSUMER_FILES = [
-  'src/commands/subsystem.ts',
   'src/commands/lock.ts',
   'src/commands/packs.ts',
-  'src/mcp/server.ts',
-  'src/server/adapters.ts',
+  'src/commands/validate.ts',
+  'src/commands/rules.ts',
+  'src/commands/patterns.ts',
 ] as const;
 
 /** Names a file imports from the core barrel, split into values and types. */
@@ -230,7 +242,7 @@ describe('core barrel surface (src/core/index.ts)', () => {
   });
 });
 
-describe('the five consumer files outside src/core', () => {
+describe('the files that import from the barrel', () => {
   for (const relPath of CONSUMER_FILES) {
     it(`${relPath} resolves everything it takes off the barrel`, () => {
       const { values, types } = barrelImports(relPath);

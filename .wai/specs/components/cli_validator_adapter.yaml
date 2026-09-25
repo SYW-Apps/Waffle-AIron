@@ -7,6 +7,8 @@ owns: []
 dependsOn:
   - validator_portal
   - project_config_portal
+  - agent_context_portal
+  - spec_maintenance_portal
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:35:33.433Z'
+updatedAt: '2026-09-25T21:10:04.024Z'

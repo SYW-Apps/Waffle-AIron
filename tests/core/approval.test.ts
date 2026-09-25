@@ -583,7 +583,11 @@ describe('the approval, published on core_portal', () => {
     // assertion a type-check cannot make - both spellings compile.
     const source = fs.readFileSync(path.join(REPO_ROOT, 'src/core/validation.ts'), 'utf8');
     expect(source).not.toContain("import { settledSpecPaths } from './approval.js'");
-    expect(source).toContain("import { settledSpecPaths } from './index.js'");
+    // Through the validator's own client adapter, which re-exports the core
+    // portal's forward by identity.
+    expect(source).toContain('  settledSpecPaths,');
+    expect(source).toContain("} from './adapters/validator-core.js';");
+    expect(fs.readFileSync(path.join(REPO_ROOT, 'src/core/adapters/validator-core.ts'), 'utf8')).toContain("} from '../index.js';");
   });
   it('is how the commands reach it — neither imports the module', () => {
     // The one assertion a type-check cannot make: every spelling compiles, so
@@ -604,7 +608,7 @@ describe('the approval, published on core_portal', () => {
     expect(lockSource).toMatch(/from '\.\.\/core\/index\.js'/);
 
     const statusSource = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/status.ts'), 'utf8');
-    expect(statusSource).toContain("import { getStatusReport, approvalVerdict } from './subsystem.js';");
+    expect(statusSource).toContain("import { getStatusReport, approvalVerdict } from './adapters/core.js';");
     expect(statusSource).not.toMatch(/^import .*from '\.\.\/core\/index\.js';$/m);
   });
 });

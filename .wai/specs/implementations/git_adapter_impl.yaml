@@ -6,13 +6,16 @@ description: >-
   that made a shared real repository unsafe).
 contract: igit_adapter
 sourcePath: src/git/adapter.ts
+injectedParams:
+  - token
 methods:
   - name: clone
     narrative:
       - stepNumber: 1
         description: >-
-          Run git clone of the remote (at branch) into the bound project directory, using
-          WAIRON_GIT_TOKEN
+          Run git clone of the remote (at branch) into the bound project directory, the INJECTED
+          token — resolved and handed in by whoever wires the clone up, none for a public remote —
+          put into an https remote so origin carries it
         type: local
   - name: fetch
     narrative:
@@ -61,14 +64,6 @@ methods:
           `.wai/git.json` if it is not already there; and write the file back, so running it twice
           changes nothing
         type: local
-lint:
-  allow:
-    - code: UNDECLARED_DEPENDENCY
-      at: src/git/adapter.ts -> src/utils/secrets.ts
-      reason: >-
-        Uses the shared secrets utility (src/utils/secrets.ts), which is spec-homed under sdd_host's
-        secret_repository — placement debt: a shared-infrastructure candidate, not a sanctioned
-        cross-subsystem reach. The per-project git adapter reads the git bot token through it.
 status: complete
 createdAt: '2026-07-04T16:33:28.728Z'
-updatedAt: '2026-09-24T14:31:52.311Z'
+updatedAt: '2026-09-25T22:00:45.016Z'

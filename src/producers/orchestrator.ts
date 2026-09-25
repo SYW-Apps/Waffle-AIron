@@ -17,15 +17,20 @@ export function configure(target: string, parentPageId: string): void {
   writeProducerConfig({ target, parentPageId });
 }
 
-export async function produce(target: string, diagramUrl: string): Promise<void> {
+/**
+ * Project the bound project and push it to the target, authenticating with the
+ * token the CALLER resolved and handed in: this subsystem never asks anyone for
+ * a secret by name.
+ */
+export async function produce(target: string, diagramUrl: string, token: string): Promise<void> {
   const config = readProducerConfig(target);
   if (!config) throw new Error(`Producer "${target}" is not configured for this project.`);
   switch (target) {
     case 'notion':
-      await notion.sync(project(diagramUrl), config.parentPageId);
+      await notion.sync(token, project(diagramUrl), config.parentPageId);
       return;
     case 'miro':
-      await miro.sync(projectGraph(), config.parentPageId);
+      await miro.sync(token, projectGraph(), config.parentPageId);
       return;
     default:
       throw new Error(`Unknown producer target "${target}".`);

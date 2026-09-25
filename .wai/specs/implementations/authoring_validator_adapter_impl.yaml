@@ -1,12 +1,10 @@
 id: authoring_validator_adapter_impl
 name: Authoring Validator Adapter Implementation
 description: >-
-  Pure 1:1 forwarding out of sdd_authoring into sdd_validator's front door. An in-process import
-  seam inside src/core/authoring.ts today; swappable for a remote validator without changing the
-  workflow that calls it. The hop runs outward only — the validator reads the spec tree through
-  sdd_core and never calls back here.
+  sdd_authoring's client hop into sdd_validator, in a module of its own: identity re-exports of the
+  validator portal. The seam imports this module, so its calls into the validator land here.
 contract: iauthoring_validator_adapter
-sourcePath: src/core/authoring.ts
+sourcePath: src/core/adapters/authoring-validator.ts
 methods:
   - name: validateComponentCandidate
     narrative:
@@ -26,4 +24,4 @@ methods:
         targetMethod: findTestsReferencing
 status: complete
 createdAt: '2026-09-18T21:13:03.714Z'
-updatedAt: '2026-09-20T13:27:09.859Z'
+updatedAt: '2026-09-25T20:49:16.586Z'

@@ -63,6 +63,90 @@ methods:
         type: call
         targetComponent: extension_orchestrator
         targetMethod: uninstallPack
+  - name: globalPacksDir
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: globalPacksDir
+  - name: discoverPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: discoverPacks
+  - name: packDirEntry
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: packDirEntry
+  - name: loadExtensionPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadPacks
+  - name: checkDeclarativePack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: checkDeclarativePack
+  - name: packEntryRef
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: packEntryRef
+  - name: packEntryLabel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: packEntryLabel
+  - name: globalPacksEnabled
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: globalPacksEnabled
+  - name: diagnoseProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: diagnoseProjectPacks
+  - name: pinInstalledPacksAsSelections
+    narrative:
+      - stepNumber: 1
+        description: Forward the write to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: pinInstalledPacksAsSelections
+  - name: loadProjectVariants
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadProjectVariants
+  - name: resolveVariantGuidance
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveVariantGuidance
 status: complete
 createdAt: '2026-09-25T17:33:11.897Z'
-updatedAt: '2026-09-25T17:33:36.673Z'
+updatedAt: '2026-09-25T21:08:34.081Z'

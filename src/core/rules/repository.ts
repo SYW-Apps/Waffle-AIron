@@ -74,6 +74,7 @@ import { findingRealizationRule } from './conformance/finding-realization.js';
 import { callConformanceRule } from './conformance/call-conformance.js';
 import { hiddenStateRule } from './conformance/hidden-state.js';
 import { dependencyConformanceRule } from './conformance/dependency-conformance.js';
+import { portalImportsRule } from './conformance/portal-imports.js';
 import { integrationSimDeclarationRule } from './conformance/integration-sim-declaration.js';
 import { integrationSimFileRule } from './conformance/integration-sim-file.js';
 import { integrationSimWiringRule } from './conformance/integration-sim-wiring.js';
@@ -258,6 +259,8 @@ export const SDD_RULES: SddRule[] = [
   // The fields-vs-Store criterion: mutable module state in logic-only files.
   hiddenStateRule,
   dependencyConformanceRule,
+  // Where a declared crossing LANDS: on the target subsystem's portal file.
+  portalImportsRule,
   // Integration wiring proof rides after the code↔spec family: it consumes
   // the same code model and speaks about the same sourcePath modules. Four
   // questions about one harness, in the order a reader meets them: is one

@@ -296,6 +296,18 @@ export type LoadedInstructionBlock = PackInstructionBlock & { pack: string };
  */
 export const GLOBAL_PACKS_DEFAULT = false;
 
+/**
+ * extension_orchestrator.checkDeclarativePack — judge a parsed manifest as a
+ * DECLARATIVE pack: the first schema error's message, or null when it is one.
+ * How a caller that must refuse rule and code packs (the hosted pack store,
+ * which accepts packs over the API) tells them apart before installing
+ * anything. The schema is this module's, so the judgement is too.
+ */
+export function checkDeclarativePack(manifest: unknown): string | null {
+  const result = DeclarativePackSchema.safeParse(manifest);
+  return result.success ? null : (result.error.issues[0]?.message ?? 'shape mismatch');
+}
+
 /** Does this project apply machine-wide packs on top of its own selections? */
 export function globalPacksEnabled(config: { extensions?: { useGlobalPacks?: boolean } }): boolean {
   return config.extensions?.useGlobalPacks ?? GLOBAL_PACKS_DEFAULT;

@@ -5,7 +5,8 @@ import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
 import { authorize } from './authorization.js';
 import { WEB_SESSION_PREFIX } from './types.js';
 import { resolveProjectBinding, existingProjectRoot, SUBPROJECT_SEPARATOR } from './projects.js';
-import { createScopedServer, hostCore } from './adapters.js';
+import { createScopedServer } from './adapters/mcp.js';
+import * as hostCore from './adapters/core.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import {
   initializeProject,

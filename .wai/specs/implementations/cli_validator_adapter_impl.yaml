@@ -42,24 +42,35 @@ methods:
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
       - stepNumber: 2
-        description: Resolve the agent registry, scoped to a subsystem when one was named.
-        type: local
+        description: >-
+          Resolve the agent registry through the core portal, scoped to a subsystem when one was
+          named.
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: loadRegistry
       - stepNumber: 3
+        description: >-
+          List the spec files still stored under a legacy name through the core portal, and warn
+          that `wairon doctor --fix` migrates them.
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: findLegacySpecFiles
+      - stepNumber: 4
         description: Check the registry's topology rules.
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateRegistry
-      - stepNumber: 4
+      - stepNumber: 5
         description: Check the project configuration.
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateProjectConfig
-      - stepNumber: 5
+      - stepNumber: 6
         description: Check the SDD spec tree.
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateSddTree
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Render every finding, say out loud how much conformance debt the project's register
           carries and how it splits across the three kinds, and exit non-zero when errors were
@@ -75,4 +86,4 @@ methods:
         targetMethod: computeGateStateId
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:33:35.399Z'
+updatedAt: '2026-09-25T21:10:03.203Z'

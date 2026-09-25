@@ -53,15 +53,13 @@ methods:
         type: number
   - name: globalPacksDir
     description: >-
-      Resolve the server-global instance packs directory (WAIRON_PACKS_DIR), forwarded to the core
-      extension loader.
+      Resolve the server-global instance packs directory (WAIRON_PACKS_DIR), forwarded to the
+      extension portal.
     signature: 'globalPacksDir(): string'
     returns: string
     params: []
   - name: discoverPacks
-    description: >-
-      List the pack refs in a directory (sorted, deterministic), forwarded to the core extension
-      loader.
+    description: List the pack refs in a directory (sorted, deterministic), forwarded to the extension portal.
     signature: 'discoverPacks(dir: string): string[]'
     returns: string[]
     params:
@@ -69,54 +67,36 @@ methods:
         type: string
   - name: loadExtensionPacks
     description: >-
-      Load the given pack refs against a project root into a LoadedExtensions, forwarded to the core
-      extension loader (used by the hosted pack store to probe a pack in isolation).
-    signature: 'loadExtensionPacks(refs: Json, projectRoot: string): LoadedExtensions'
+      Load the given pack refs against a project root into a LoadedExtensions, forwarded to the
+      extension portal (used by the hosted pack store to probe a pack in isolation).
+    signature: 'loadExtensionPacks(refs: PackRef[], projectRoot: string): LoadedExtensions'
     returns: LoadedExtensions
     params:
       - name: refs
-        type: Json
+        type: PackRef[]
       - name: projectRoot
         type: string
   - name: checkDeclarativePack
     description: >-
-      Validate a parsed manifest against the declarative-pack schema; returns the first error
-      message, or null when it is a valid declarative pack.
+      Judge a parsed manifest as a declarative pack, forwarded to the extension portal: the first
+      schema error's message, or null when it is one.
     signature: 'checkDeclarativePack(manifest: Json): string | null'
     returns: string | null
     params:
       - name: manifest
         type: Json
-  - name: builtinProfileIds
+  - name: assertContainedProjectPath
     description: >-
-      List the ids of wairon's built-in architectural profiles (backend, frontend-reactive, …),
-      forwarded to the core rules registry — the built-in half of the selectable-profile catalog.
-    signature: 'builtinProfileIds(): string[]'
-    returns: string[]
-    params: []
-  - name: resolveContainedProjectPath
-    description: >-
-      Resolve a subsystem's projectPath WITHIN the given root through the core containment guard —
-      absolute and '..'-escaping paths rejected. The hosted mount-resolution seam: the project
-      repository never touches core modules directly.
-    signature: 'resolveContainedProjectPath(projectRoot: string, projectPath: string): string'
+      Resolve a subsystem's projectPath WITHIN the given root, forwarded to the spec tree portal's
+      containment check — absolute and escaping paths refused. The hosted mount-resolution seam: the
+      project repository never touches core modules directly.
+    signature: 'assertContainedProjectPath(projectRoot: string, projectPath: string): string'
     returns: string
     params:
       - name: projectRoot
         type: string
       - name: projectPath
         type: string
-  - name: builtinProjectKinds
-    description: >-
-      The ids of wairon's built-in COMPOSITE PROJECT KINDS (fullstack, system-of-systems, monorepo)
-      — legal projectType values that are not architectural profiles and carry no profile doctrine
-      of their own, read from the core rules registry's bundled constant. A pure, side-effect-free
-      read, and the counterpart of builtinProfileIds: the hosted profile-application path must
-      recognize a project kind as resolvable-as-is (no contributing pack to adopt) instead of
-      refusing it as an unknown profile.
-    signature: 'builtinProjectKinds(): string[]'
-    returns: string[]
-    params: []
   - name: readLockState
     description: Forward to core_portal.readLockState with the gate identity the caller computed now
     signature: 'readLockState(current: StateId): LockStatus'
@@ -235,6 +215,31 @@ methods:
         description: The exact project-relative pack path reference to drop
     guarantees:
       - idempotent
+  - name: buildCanvasDataModel
+    description: >-
+      The bound project's canvas model as data, forwarded to the spec tree portal — what the web
+      app's canvas and a share snapshot mount.
+    signature: 'buildCanvasDataModel(): CanvasModel'
+    returns: CanvasModel
+    params: []
+  - name: packEntryRef
+    description: >-
+      The loadable ref for one configured pack entry, or null when a selection does not resolve,
+      forwarded to the extension portal.
+    signature: 'packEntryRef(entry: PackSelection, projectRoot: string): string | null'
+    returns: string | null
+    params:
+      - name: entry
+        type: PackSelection
+      - name: projectRoot
+        type: string
+  - name: packEntryLabel
+    description: A stable human label for one configured pack entry, forwarded to the extension portal.
+    signature: 'packEntryLabel(entry: PackSelection): string'
+    returns: string
+    params:
+      - name: entry
+        type: PackSelection
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -250,4 +255,4 @@ lint:
         instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-19T21:29:24.621Z'
+updatedAt: '2026-09-25T21:33:45.417Z'

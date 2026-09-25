@@ -3,7 +3,7 @@ import { logger } from '../utils/logger.js';
 import { assertProjectInitialized } from '../config/paths.js';
 import { WaironError } from '../utils/errors.js';
 import { AgentRecord } from '../models/agent.js';
-import { resolveAgentTopology } from './subsystem.js';
+import { resolveAgentTopology } from './adapters/core.js';
 
 // ---------------------------------------------------------------------------
 // show command

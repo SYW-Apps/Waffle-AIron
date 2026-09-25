@@ -1,8 +1,12 @@
 id: validator_core_adapter_impl
 name: Validator Core Adapter Implementation
-description: Concrete implementation forwarding validator load calls to core portal.
+description: >-
+  sdd_validator's client hop into sdd_core, in a module of its own: identity re-exports of the core
+  portals. The validator imports this module, so its calls into core land here — before, the
+  forwards were local wrappers inside the validator's own file and the calls resolved straight into
+  core's modules.
 contract: ivalidator_core_adapter
-sourcePath: src/core/validation.ts
+sourcePath: src/core/adapters/validator-core.ts
 simPath: tests/core/validation.test.ts
 methods:
   - name: loadSystemSpec
@@ -84,6 +88,55 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: consumedContractInputs
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Call resolveChainingParent on the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveChainingParent
+  - name: findChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Call findChainingParent on the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: findChainingParent
+  - name: settledSpecPaths
+    narrative:
+      - stepNumber: 1
+        description: Call settledSpecPaths on the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: settledSpecPaths
+  - name: getLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Call getLoaderIssues on the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: getLoaderIssues
+  - name: clearLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Call clearLoaderIssues on the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: clearLoaderIssues
+  - name: scanAllSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call scanAllSpecs on the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: scanAllSpecs
+  - name: loadProjectVariants
+    narrative:
+      - stepNumber: 1
+        description: Call loadProjectVariants on the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: loadProjectVariants
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:33:37.370Z'
+updatedAt: '2026-09-25T21:09:23.090Z'

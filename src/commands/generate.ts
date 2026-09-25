@@ -16,8 +16,8 @@ import {
   reinjectLocalGuides,
   hasContext,
   syncContextFiles,
-} from './subsystem.js';
-import { exportSddSkills } from './skills.js';
+} from './adapters/core.js';
+import { exportSddSkills } from './adapters/skills.js';
 import { WAIRON_MANAGED_MARKER } from '../exporters/base.js';
 import { getProjectRoot, runWithProjectRoot, pathExists } from '../utils/fs.js';
 import { activeTargetTypes } from '../models/project.js';

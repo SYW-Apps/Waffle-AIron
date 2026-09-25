@@ -433,6 +433,43 @@ methods:
         description: The subsystem id
     guarantees:
       - idempotent
+  - name: findLegacySpecFiles
+    description: >-
+      Forward to spec_maintenance_portal.findLegacySpecFiles: the spec files `wairon doctor` reports
+      as stored under a legacy name
+    signature: 'findLegacySpecFiles(): LegacySpecFile[]'
+    returns: LegacySpecFile[]
+    params: []
+  - name: findChainingSubprojectsMissingConfig
+    description: >-
+      Forward to spec_maintenance_portal.findChainingSubprojectsMissingConfig: the chained
+      subprojects `wairon doctor` reports as unrunnable standalone
+    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): string[]'
+    returns: string[]
+    params:
+      - name: projectRoot
+        type: string
+  - name: backfillChainedSubprojectConfigs
+    description: >-
+      Forward to spec_maintenance_portal.backfillChainedSubprojectConfigs: the `wairon doctor --fix`
+      repair
+    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): string[]'
+    returns: string[]
+    params:
+      - name: projectRoot
+        type: string
+  - name: diagnoseProjectPacks
+    description: 'Forward to extension_portal.diagnoseProjectPacks: the pack situation `wairon doctor` reports'
+    signature: 'diagnoseProjectPacks(): PackDiagnosis'
+    returns: PackDiagnosis
+    params: []
+  - name: pinInstalledPacksAsSelections
+    description: >-
+      Forward to extension_portal.pinInstalledPacksAsSelections: the `wairon doctor --fix` pack
+      migration
+    signature: 'pinInstalledPacksAsSelections(): string[]'
+    returns: string[]
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T19:35:42.651Z'
+updatedAt: '2026-09-25T21:10:17.390Z'

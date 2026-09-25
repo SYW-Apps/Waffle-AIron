@@ -530,6 +530,28 @@ methods:
         summary: >-
           A mounted portal's router yields no route this analysis can read, so its routes were not
           checked against the contract at all
+  - name: portalImports
+    description: >-
+      Rule portal-imports. A runtime import that crosses a subsystem boundary must land on a file
+      that realizes one of the target subsystem's PUBLISHED components — its portal file.
+      dependency-conformance asks whether the hop is declared; this asks where it lands. An import
+      that reaches past the portal into a concrete module can use anything that module exports,
+      published or not, so the portal stops being the boundary and names no contract ever promised
+      leak across it — which is how a surface grows that nobody designed. In-process it is cosmetic
+      at runtime; it is not cosmetic for the contract. Only exact-grade component-mapped files
+      participate; type-only imports are exempt; chained subprojects validate standalone.
+    signature: 'portalImports(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: IMPORT_BYPASSES_PORTAL
+        severity: warning
+        summary: >-
+          A runtime import crosses into another subsystem through a file that realizes none of its
+          published components
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-24T20:30:33.684Z'
+updatedAt: '2026-09-25T20:48:17.532Z'

@@ -41,9 +41,9 @@ export const integrationSimWiringRule: SddRule = {
     };
     // Files realizing each component / each subsystem (reach targets), read
     // from the shared realization index. The subsystem set exists for
-    // cross-subsystem dependencies: the published portal's barrel is cosmetic
-    // at runtime (same doctrine as dependency-conformance), so wiring is
-    // proven by reaching ANY module of the target subsystem. Chained
+    // cross-subsystem dependencies: as in dependency-conformance, wiring is
+    // proven by reaching ANY module of the target subsystem (where a hop
+    // lands is portal-imports' question). Chained
     // subprojects are absent from the index, as in dependency-conformance:
     // their sourcePaths are relative to the child's own root, and the child
     // validates them in its own run.
@@ -82,9 +82,8 @@ export const integrationSimWiringRule: SddRule = {
       for (const dep of deps) {
         if (isTechBoundary(dep)) continue;
         const depComp = ctx.componentMap.get(dep)!;
-        // Cross-subsystem: the sanctioned hop is the published surface whose
-        // barrel is cosmetic — any reached module of the target subsystem
-        // proves the real wiring.
+        // Cross-subsystem: any reached module of the target subsystem proves
+        // the real wiring exists; where it lands is portal-imports' question.
         const depFiles = depComp.subsystem !== comp.subsystem
           ? modulesIn(depComp.subsystem)
           : modulesOf(dep);

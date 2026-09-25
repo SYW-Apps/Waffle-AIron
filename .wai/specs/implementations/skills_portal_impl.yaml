@@ -32,6 +32,20 @@ methods:
         type: call
         targetComponent: skills_resource_orchestrator
         targetMethod: buildServerInstructions
+  - name: listSkillNames
+    narrative:
+      - stepNumber: 1
+        description: Forward to the skills orchestrator
+        type: call
+        targetComponent: skills_orchestrator
+        targetMethod: listNames
+  - name: checkSkillFreshness
+    narrative:
+      - stepNumber: 1
+        description: Forward to the skills orchestrator
+        type: call
+        targetComponent: skills_orchestrator
+        targetMethod: checkFreshness
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-29T10:53:20.020Z'
+updatedAt: '2026-09-25T21:13:57.657Z'

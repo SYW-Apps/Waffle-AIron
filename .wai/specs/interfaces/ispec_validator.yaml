@@ -148,6 +148,21 @@ methods:
         description: Project-relative test directories; empty answers empty
     guarantees:
       - idempotent
+  - name: builtinProfileIds
+    description: >-
+      The ids of wairon's built-in architectural profiles — the built-in half of the profiles a
+      projectType may name. A read of a bundled constant; never fails.
+    signature: 'builtinProfileIds(): string[]'
+    returns: string[]
+    params: []
+  - name: builtinProjectKinds
+    description: >-
+      The ids of wairon's built-in composite project kinds (fullstack, system-of-systems, monorepo):
+      legal projectType values that are not architectural profiles and carry no doctrine of their
+      own. A read of a bundled constant; never fails.
+    signature: 'builtinProjectKinds(): string[]'
+    returns: string[]
+    params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T14:27:03.842Z'
+updatedAt: '2026-09-25T21:08:57.357Z'

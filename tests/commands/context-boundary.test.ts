@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import * as adapter from '../../src/commands/subsystem.js';
+import * as adapter from '../../src/commands/adapters/core.js';
 import * as portal from '../../src/core/index.js';
 import * as store from '../../src/core/context.js';
 import { versionStamp } from '../../src/core/stamp.js';
@@ -293,22 +293,22 @@ describe('the three commands reach the context documents through cli_core_adapte
       const text = source(file);
       expect(text, file).not.toContain("from '../core/context.js'");
       expect(text, file).not.toContain("require('../core/context.js')");
-      expect(text, file).toContain("} from './subsystem.js';");
+      expect(text, file).toContain("} from './adapters/core.js';");
     });
   }
 
   it('generate takes both of its context calls off the adapter', () => {
-    const block = importBlock('src/commands/generate.ts', './subsystem.js');
+    const block = importBlock('src/commands/generate.ts', './adapters/core.js');
     expect(block).toContain('  hasContext,');
     expect(block).toContain('  syncContextFiles,');
   });
 
   it('init takes the seeding refresh off the adapter', () => {
-    expect(importBlock('src/commands/init.ts', './subsystem.js')).toContain('  syncContextFiles,');
+    expect(importBlock('src/commands/init.ts', './adapters/core.js')).toContain('  syncContextFiles,');
   });
 
   it('doctor takes the refresh and the path list off the adapter, and spells out no paths of its own', () => {
-    const block = importBlock('src/commands/doctor.ts', './subsystem.js');
+    const block = importBlock('src/commands/doctor.ts', './adapters/core.js');
     expect(block).toContain('  syncContextFiles,');
     expect(block).toContain('  derivedDocPaths,');
 
@@ -359,13 +359,15 @@ describe('the Portal publishes three context operations, not a module', () => {
   });
 
   it('cli_core_adapter forwards each one 1:1, in the shape the contract names', () => {
-    const text = source('src/commands/subsystem.ts');
-    expect(text).toContain('export function syncContextFiles(): SyncResult {');
-    expect(text).toContain('  return coreSyncContextFiles();');
-    expect(text).toContain('export function hasContext(): boolean {');
-    expect(text).toContain('  return coreHasContext();');
-    expect(text).toContain('export function derivedDocPaths(): string[] {');
-    expect(text).toContain('  return coreDerivedDocPaths();');
+    // The adapter is a module of its own now, and a forward is an IDENTITY
+    // re-export of the core portal: the contract method and the portal's
+    // function are one function, so there is no wrapper body to read.
+    const block = source('src/commands/adapters/core.ts');
+    expect(block).toContain("} from '../../core/index.js';");
+    expect(block).toContain('  syncContextFiles,');
+    expect(block).toContain('  hasContext,');
+    expect(block).toContain('  derivedDocPaths,');
+    expect(source('src/commands/adapters/core.ts')).not.toContain('export function');
   });
 });
 

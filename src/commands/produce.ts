@@ -39,12 +39,13 @@ export async function runProduce(target: string, options: ProduceOptions = {}): 
     token = ans.token;
   }
   if (!token) throw new WaironError(`A ${t.label} token is required.`);
-  process.env[t.envKey] = token; // read via resolveSecret during this run
 
   producerPortal.configure(target, options.page);
   logger.info(`Projecting the spec tree to ${chalk.bold(t.label)}…`);
   try {
-    await producerPortal.produce(target, '');
+    // The token goes straight into the call that presents it: never into the
+    // environment, where anything else this process runs could read it.
+    await producerPortal.produce(target, '', token);
   } catch (e) {
     throw new WaironError(e instanceof Error ? e.message : String(e));
   }

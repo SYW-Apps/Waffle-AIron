@@ -4,7 +4,7 @@ description: >-
   Forwards spec-tree operations to the core portal for provisioning, lock records, and the approval
   baseline.
 contract: ihost_core_adapter
-sourcePath: src/server/adapters.ts
+sourcePath: src/server/adapters/core.ts
 methods:
   - name: provisionProject
     narrative:
@@ -64,55 +64,46 @@ methods:
         targetMethod: buildProjectGraph
     detail: calls-only
   - name: globalPacksDir
-    narrative: []
-    detail: intent
-    intent: >-
-      Forwards to the core extension loader's global-packs-directory resolution (WAIRON_PACKS_DIR,
-      else the default), so the hosted pack store never reaches into sdd_core directly.
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: globalPacksDir
+    detail: calls-only
   - name: discoverPacks
-    narrative: []
-    detail: intent
-    intent: >-
-      Forwards to the core extension loader's directory discovery, returning the pack refs found in
-      the given directory (empty for a missing/unreadable directory, never an error).
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: discoverPacks
+    detail: calls-only
   - name: loadExtensionPacks
-    narrative: []
-    detail: intent
-    intent: >-
-      Forwards to the core extension loader, loading the given refs against the project root into a
-      LoadedExtensions (a failed pack rides on the result's errors rather than throwing).
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: loadExtensionPacks
+    detail: calls-only
   - name: checkDeclarativePack
-    narrative: []
-    detail: intent
-    intent: >-
-      Validates the parsed manifest against the declarative-pack schema via the core loader,
-      returning the first schema error message or null when valid — so the hosted store can reject
-      non-declarative (rule/code) packs over the API.
-  - name: builtinProfileIds
-    narrative: []
-    detail: intent
-    intent: >-
-      Return the ids of wairon's built-in architectural profiles by reading the core rules
-      registry's built-in profile set (BUILTIN_PROFILES). A pure, side-effect-free read of a bundled
-      constant; never fails.
-  - name: resolveContainedProjectPath
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: checkDeclarativePack
+    detail: calls-only
+  - name: assertContainedProjectPath
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve and assert the projectPath within the root via the core containment guard
-          (assertContainedProjectPath — a pure path utility of the core module, not a portal
-          workflow), returning the contained absolute child root
-        type: local
-  - name: builtinProjectKinds
-    narrative: []
-    detail: intent
-    intent: >-
-      Return the ids of wairon's built-in composite project kinds by reading the core rules
-      registry's bundled PROJECT_KINDS constant (fullstack, system-of-systems, monorepo). A pure,
-      side-effect-free read of a bundled constant; never fails. Kept beside builtinProfileIds so the
-      two halves of a legal projectType value — architectural profiles and composite project kinds —
-      come from the same core source instead of being restated in the hosting layer, where they
-      would drift.
+          Forward to the spec tree portal's containment check, which answers the contained absolute
+          child root
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: assertContainedProjectPath
   - name: readLockState
     narrative:
       - stepNumber: 1
@@ -192,6 +183,27 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: deregisterPackRef
+  - name: buildCanvasDataModel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: buildCanvasDataModel
+  - name: packEntryRef
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packEntryRef
+  - name: packEntryLabel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packEntryLabel
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-09-25T17:33:35.582Z'
+updatedAt: '2026-09-25T21:33:45.524Z'

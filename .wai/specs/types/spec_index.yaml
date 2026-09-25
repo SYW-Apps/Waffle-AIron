@@ -1,0 +1,41 @@
+kind: value-object
+id: spec_index
+name: SpecIndex
+description: >-
+  The bound tree as one scan read it: every loaded spec by kind, and the file each one is stored in.
+  What a reader outside the loader needs to relate a spec to its file — the validator matches
+  approved files to specs through it.
+subsystem: sdd_core
+fields:
+  - name: subsystems
+    type: SubsystemSpec[]
+    description: Every loaded subsystem spec
+    optional: false
+  - name: components
+    type: ComponentSpec[]
+    description: Every loaded component spec
+    optional: false
+  - name: interfaces
+    type: InterfaceSpec[]
+    description: Every loaded interface spec
+    optional: false
+  - name: implementations
+    type: ImplementationSpec[]
+    description: Every loaded implementation spec
+    optional: false
+  - name: types
+    type: TypeSpec[]
+    description: Every loaded type spec
+    optional: false
+  - name: groups
+    type: Json[]
+    description: Every loaded type group
+    optional: false
+  - name: paths
+    type: Record<string, Record<string, string>>
+    description: Per kind, each spec id's absolute file path
+    optional: false
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-09-25T21:05:18.930Z'
+updatedAt: '2026-09-25T21:08:41.061Z'

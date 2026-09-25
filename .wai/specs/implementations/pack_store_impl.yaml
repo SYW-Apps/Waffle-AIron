@@ -60,6 +60,10 @@ methods:
       that does not resolve). Never reads .wai/project.yaml — the caller loaded the configuration;
       an absent configuration yields an empty list. Assumes a project root is already bound in
       scope.
+    calls:
+      - host_core_adapter.packEntryLabel
+      - host_core_adapter.packEntryRef
+      - host_core_adapter.loadExtensionPacks
   - name: installProjectPack
     narrative: []
     detail: intent
@@ -159,14 +163,14 @@ methods:
     detail: intent
     intent: >-
       Aggregate the selectable profiles with no authentication (a pre-authorized internal read).
-      Read the built-in profile ids via the core adapter and emit each as an AvailableProfile with
-      source "builtin". Then probe the server-global packs across both tiers (reusing the two-tier
-      listing) and, for each successfully loaded pack, emit each profile id it contributes with
-      source set to the pack's canonical name and family carried through from the pack's ProfileDef
-      when present. Dedupe by (id, source). A pack that fails to load contributes nothing (its error
-      rides on its descriptor elsewhere); this read never throws. Never mutates any tier.
+      Read the built-in profile ids via the validator adapter and emit each as an AvailableProfile
+      with source "builtin". Then probe the server-global packs across both tiers (reusing the
+      two-tier listing) and, for each successfully loaded pack, emit each profile id it contributes
+      with source set to the pack's canonical name and family carried through from the pack's
+      ProfileDef when present. Dedupe by (id, source). A pack that fails to load contributes nothing
+      (its error rides on its descriptor elsewhere); this read never throws. Never mutates any tier.
     calls:
-      - host_core_adapter.builtinProfileIds
+      - host_validator_adapter.builtinProfileIds
       - host_core_adapter.globalPacksDir
       - host_core_adapter.discoverPacks
       - host_core_adapter.loadExtensionPacks
@@ -208,9 +212,9 @@ methods:
       earlier adoption re-vendors the same content and reports the same adoption, so the flow
       converges.
     calls:
-      - host_core_adapter.builtinProjectKinds
-      - host_core_adapter.builtinProfileIds
+      - host_validator_adapter.builtinProjectKinds
+      - host_validator_adapter.builtinProfileIds
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-09-23T21:19:47.152Z'
+updatedAt: '2026-09-25T21:35:36.068Z'

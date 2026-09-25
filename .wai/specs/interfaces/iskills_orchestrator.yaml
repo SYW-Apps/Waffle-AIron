@@ -14,6 +14,20 @@ methods:
         type: string[]
         description: The target types to export into; omitted means the project's enabled targets
         optional: true
+  - name: listNames
+    description: The names of the built-in SDD skills, forwarded to the exporter.
+    signature: 'listNames(): string[]'
+    returns: string[]
+    params: []
+  - name: checkFreshness
+    description: >-
+      How a target's installed skills compare with what an export would write now, forwarded to the
+      exporter.
+    signature: 'checkFreshness(type: string): SkillFreshness'
+    returns: SkillFreshness
+    params:
+      - name: type
+        type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T20:30:42.006Z'
+updatedAt: '2026-09-25T21:33:51.181Z'

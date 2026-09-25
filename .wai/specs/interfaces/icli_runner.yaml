@@ -390,6 +390,18 @@ methods:
       - name: options
         type: StatusOptions
         description: How much of the tree to cover
+  - name: runSkillsList
+    description: Handle `wairon skills list`, printing the built-in SDD skills.
+    signature: 'runSkillsList(): void'
+    returns: void
+    params: []
+  - name: runSkillsInstall
+    description: >-
+      Handle `wairon skills install`, exporting the SDD skills into every active target's skills
+      directory and reporting where they went and which targets have none.
+    signature: 'runSkillsInstall(): void'
+    returns: void
+    params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-23T14:52:50.146Z'
+updatedAt: '2026-09-25T21:14:06.861Z'

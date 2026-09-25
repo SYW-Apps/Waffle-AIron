@@ -1,10 +1,11 @@
 id: mcp_skills_adapter_impl
 name: MCP Skills Client Adapter Implementation
 description: >-
-  Forwards MCP resource list/read calls and the server-instructions composition across the subsystem
-  boundary to the published skills portal.
+  sdd_mcp's client hop into sdd_skills, in a module of its own: identity re-exports of the skills
+  portal, under the contract names. The MCP server imports this module, so its resource reads land
+  here.
 contract: imcp_skills_adapter
-sourcePath: src/mcp/server.ts
+sourcePath: src/mcp/adapters/skills.ts
 methods:
   - name: listResources
     narrative:
@@ -13,7 +14,6 @@ methods:
         type: call
         targetComponent: skills_portal
         targetMethod: listResources
-    symbol: listSkillResources
   - name: readResource
     narrative:
       - stepNumber: 1
@@ -21,7 +21,6 @@ methods:
         type: call
         targetComponent: skills_portal
         targetMethod: readResource
-    symbol: readSkillResource
   - name: buildServerInstructions
     narrative:
       - stepNumber: 1
@@ -33,4 +32,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T12:21:52.237Z'
-updatedAt: '2026-09-19T20:28:40.691Z'
+updatedAt: '2026-09-25T20:49:27.440Z'

@@ -1,8 +1,10 @@
 id: skills_core_adapter_impl
 name: Skills Core Adapter Implementation
-description: Client adapter forwarding to the core portal to load extension packs, in src/core/skills.ts.
+description: >-
+  sdd_skills' client hop into sdd_core, in a module of its own: identity re-exports of the core
+  portals. The skills workflows import this module, so their calls into core land here.
 contract: iskills_core_adapter
-sourcePath: src/core/skills.ts
+sourcePath: src/core/adapters/skills-core.ts
 methods:
   - name: loadProjectExtensions
     narrative:
@@ -21,4 +23,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T20:14:19.137Z'
-updatedAt: '2026-09-25T17:33:37.231Z'
+updatedAt: '2026-09-25T20:49:22.238Z'

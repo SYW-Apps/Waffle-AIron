@@ -7,7 +7,8 @@ import { installPackFromDirectory, uninstallPack, resolveInstalledPack } from '.
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { expandSource } from '../../src/commands/packs.js';
 import { defaultPackSelections } from '../../src/core/extensions.js';
-import { validateSddTree, loadProjectConfig as validatorLoadProjectConfig } from '../../src/core/validation.js';
+import { validateSddTree } from '../../src/core/validation.js';
+import { loadProjectConfig as validatorLoadProjectConfig } from '../../src/core/adapters/validator-core.js';
 import { loadProjectConfig } from '../../src/core/index.js';
 
 // ---------------------------------------------------------------------------

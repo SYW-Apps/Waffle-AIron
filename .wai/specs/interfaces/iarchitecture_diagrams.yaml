@@ -24,8 +24,16 @@ methods:
     params:
       - name: level
         type: number
+  - name: buildCanvasDataModel
+    description: >-
+      The canvas model render('canvas') draws, for the current project, returned as data instead of
+      a self-contained page — so a client that mounts the shared renderer itself receives the model.
+      Pure derivation.
+    signature: 'buildCanvasDataModel(): CanvasModel'
+    returns: CanvasModel
+    params: []
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T15:59:08.698Z'
-updatedAt: '2026-09-17T20:37:13.214Z'
+updatedAt: '2026-09-25T21:06:30.312Z'

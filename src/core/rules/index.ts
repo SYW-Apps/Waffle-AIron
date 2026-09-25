@@ -95,6 +95,7 @@ const DEPTH_GATED_CODES: Record<string, DesignDepth> = {
   CONFORMANCE_DEGRADED: 'implementations',
   UNDECLARED_DEPENDENCY: 'implementations',
   UNREALIZED_DEPENDENCY: 'implementations',
+  IMPORT_BYPASSES_PORTAL: 'implementations',
   MISSING_INTEGRATION_SIM: 'implementations',
   // L5 expectations: narratives and everything whose fuel is narrative edges
   // (the reachability walk and the hydration round-trip would drown a
@@ -132,6 +133,7 @@ const COMPLETENESS_RULES = new Set([
   'CONFORMANCE_ANALYSIS_SKIPPED',
   'UNDECLARED_DEPENDENCY',
   'UNREALIZED_DEPENDENCY',
+  'IMPORT_BYPASSES_PORTAL',
   // Detail sufficiency reads the realized code like the conformance family
   // does — a draft tree is allowed to disagree with its code.
   'UNNARRATED_COMPLEXITY',

@@ -15,9 +15,9 @@ import { RuleContext, SddRule } from '../types.js';
 //     Justified when the two files share a component, any component pair has
 //     a direct dependsOn/owns edge, the target is a member of a pattern the
 //     importer depends on, or — across subsystems — the importer declares an
-//     edge to the target subsystem's PUBLISHED surface (in-process imports
-//     may land in the subsystem's concrete modules; the published-portal
-//     declaration is the sanctioned hop, its barrel is cosmetic at runtime).
+//     edge to the target subsystem's PUBLISHED surface. This rule asks only
+//     whether the hop is declared; WHERE the import lands (the portal file
+//     or past it) is portal-imports' question.
 //
 //   UNREALIZED_DEPENDENCY — a declared dependsOn/owns edge between components
 //     realized in different files with NO import edge between any file of the
@@ -167,9 +167,9 @@ export const dependencyConformanceRule: SddRule = {
         const target = ctx.componentMap.get(targetId);
         if (!target) continue;
 
-        // Across subsystems the sanctioned hop is the target subsystem's
-        // published surface, whose barrel is cosmetic at runtime: ANY of its
-        // mapped files proves the wiring, minus the ones shared with the
+        // Across subsystems ANY mapped file of the target subsystem proves the
+        // hop EXISTS (where it lands is portal-imports' question), minus the
+        // ones shared with the
         // source (those satisfy trivially). Within one subsystem the target's
         // own files are the trace targets.
         const crossSubsystem = component.subsystem !== target.subsystem;

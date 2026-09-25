@@ -159,6 +159,48 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: loadSpec
+  - name: findChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's chaining walk
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: findChainingParent
+  - name: scanAllSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: scanAllSpecs
+  - name: getLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: getLoaderIssues
+  - name: clearLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: clearLoaderIssues
+  - name: assertContainedProjectPath
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's containment guard
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: assertContainedProjectPath
+  - name: buildCanvasDataModel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the architecture diagrams
+        type: call
+        targetComponent: architecture_diagrams
+        targetMethod: buildCanvasDataModel
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:33:54.287Z'
+updatedAt: '2026-09-25T21:06:46.864Z'

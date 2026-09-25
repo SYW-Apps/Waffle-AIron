@@ -158,9 +158,10 @@ methods:
       - stepNumber: 12
         description: >-
           toFiles = across subsystems, the exact-grade files of
-          realization.filesIn(target.subsystem) minus fromFiles, since the published surface's
-          barrel is cosmetic at runtime so any module of the subsystem proves the hop and a shared
-          file satisfies it trivially; within one subsystem, filesOf(targetId)
+          realization.filesIn(target.subsystem) minus fromFiles: UNREALIZED_DEPENDENCY accepts an
+          import into any module of the target subsystem as proof the hop exists, and a shared file
+          satisfies it trivially — WHERE the hop lands (the target's portal file or past it) is
+          portal-imports' question, not this one; within one subsystem, filesOf(targetId)
         type: local
       - stepNumber: 13
         label: traceGuard
@@ -1565,6 +1566,57 @@ methods:
         outcome: unjudged
     symbol: check
     exportedVia: routeCoverageRule
+  - name: portalImports
+    sourcePath: src/core/rules/conformance/portal-imports.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(); realization = ctx.realizationIndex(); mappedPaths = the
+          realization index's paths that code.exactPaths holds; graph = ctx.importGraph(mappedPaths)
+          — the same closed file set dependency-conformance judges, so the two rules read one graph
+        type: local
+      - stepNumber: 2
+        description: >-
+          portalFilesOf(subsystem) = the files in mappedPaths that realize any component
+          ctx.publicSet publishes for that subsystem. A subsystem whose published components realize
+          no exact-grade file has no portal file to land on
+        type: local
+      - stepNumber: 3
+        label: edge
+        description: For each runtime import edge between mapped files
+        type: loop
+        loopKind: forEach
+        over: >-
+          each import edge fromPath to toPath: for every path in mappedPaths, its graph.importsOf
+          targets
+        endStep: 6
+      - stepNumber: 4
+        description: >-
+          crossed = the subsystems of the components realization.componentsAt(toPath) that no
+          component of realization.componentsAt(fromPath) shares — an import between files of one
+          subsystem, or into a file the importer's own subsystem also realizes, crosses nothing
+        type: local
+      - stepNumber: 5
+        description: Does the import cross into a subsystem somewhere other than its portal file?
+        type: branch
+        condition: some subsystem in crossed has toPath outside portalFilesOf(it)
+        onFalseStep: 3
+      - stepNumber: 6
+        label: bypass
+        description: >-
+          Report IMPORT_BYPASSES_PORTAL (warning; spec the first of
+          realization.implementationsAt(fromPath); draft context when any implementation naming
+          either file is ctx.isImplementationDraft) naming fromPath, toPath, the subsystem crossed
+          into and its portal files: import the name from the portal file instead, and when no
+          portal of that subsystem publishes it, it is a surface the provider never promised —
+          publish it on the contract of the portal whose capability it is, or stop depending on it
+        type: local
+      - stepNumber: 7
+        description: 'Done: every crossing import judged'
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: portalImportsRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-24T20:49:49.747Z'
+updatedAt: '2026-09-25T21:52:00.070Z'

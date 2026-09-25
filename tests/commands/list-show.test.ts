@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import { ProjectNotInitializedError } from '../../src/utils/errors.js';
-import { resolveAgentTopology } from '../../src/commands/subsystem.js';
+import { resolveAgentTopology } from '../../src/commands/adapters/core.js';
 import { runList } from '../../src/commands/list.js';
 import { runShow } from '../../src/commands/show.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
@@ -18,8 +18,8 @@ import type { SubsystemSpec } from '../../src/models/index.js';
 // adapter.
 // ---------------------------------------------------------------------------
 
-vi.mock('../../src/commands/subsystem.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/commands/subsystem.js')>();
+vi.mock('../../src/commands/adapters/core.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/commands/adapters/core.js')>();
   return { ...actual, resolveAgentTopology: vi.fn(actual.resolveAgentTopology) };
 });
 

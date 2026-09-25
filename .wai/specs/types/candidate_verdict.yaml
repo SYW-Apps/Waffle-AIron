@@ -13,7 +13,15 @@ fields:
     type: ValidationIssue[]
     description: Intrinsic advisories such as MISSING_DURABILITY; surfaced, never blocking
     optional: false
-methods: []
-sourcePath: src/core/rules/candidate.ts
+methods:
+  - name: formatCandidateRefusal
+    signature: 'formatCandidateRefusal(): string'
+    returns: string
+    description: >-
+      The refusal an agent reads when the verdict holds errors: each error's code and message, then
+      the remedy — nothing was written, fix the fields and retry, and on an existing spec remove a
+      field with sdd_update_spec's unset rather than null. Pure over the verdict's own errors;
+      written as one message because the authoring seam's channel is a thrown error's text.
+sourcePath: src/models/candidate.ts
 createdAt: '2026-09-14T06:03:51.301Z'
-updatedAt: '2026-09-19T11:07:05.841Z'
+updatedAt: '2026-09-25T21:05:28.932Z'

@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { listVariants } from '../../src/commands/variants.js';
+import { listVariants } from '../../src/commands/adapters/variants.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 
 // ---------------------------------------------------------------------------

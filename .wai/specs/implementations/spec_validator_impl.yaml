@@ -10,39 +10,48 @@ methods:
   - name: validateSddTree
     narrative:
       - stepNumber: 1
-        description: Clear loader issues
-        type: local
+        description: Set the loader's recursion depth for the run's reads, through the core adapter
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: scanAllSpecs
       - stepNumber: 2
+        description: >-
+          Clear the loader's diagnostics and cached index through the core adapter, so the run reads
+          the tree from disk
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: clearLoaderIssues
+      - stepNumber: 3
         description: Load system spec
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadSystemSpec
-      - stepNumber: 3
+      - stepNumber: 4
         description: Load subsystem specs
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadSubsystemSpecs
-      - stepNumber: 4
+      - stepNumber: 5
         description: Load component specs
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadComponentSpecs
-      - stepNumber: 5
+      - stepNumber: 6
         description: Load interface specs
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadInterfaceSpecs
-      - stepNumber: 6
+      - stepNumber: 7
         description: Load implementation specs
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 7
+      - stepNumber: 8
         description: Load type specs
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadTypeSpecs
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Load the available surface snapshots via the surfaces adapter — unresolved cross-tree and
           remote adapter references resolve against them, matched by provider: a reference that
@@ -52,8 +61,8 @@ methods:
           (CROSS_TREE_REF_UNRESOLVED remains only for references no snapshot covers)
         type: call
         targetComponent: validator_surfaces_adapter
-        targetMethod: loadSurfaceSnapshots
-      - stepNumber: 9
+        targetMethod: listSnapshots
+      - stepNumber: 10
         description: >-
           Load the surface snapshots each chained mount holds, keyed by mount namespace. A reference
           made from INSIDE a mount in a super::/:: form collapses to a bare id at this root, and
@@ -61,8 +70,8 @@ methods:
           the error it was, and the bound root's own references never consult a mount's surfaces
         type: call
         targetComponent: validator_surfaces_adapter
-        targetMethod: loadMountSurfaceSnapshots
-      - stepNumber: 10
+        targetMethod: listMountSnapshots
+      - stepNumber: 11
         description: >-
           Build the source code model via the source analysis adapter — every distinct source path
           (each implementation's sourcePath, each method's own sourcePath, each simPath) resolved
@@ -72,22 +81,37 @@ methods:
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: buildCodeModel
-      - stepNumber: 11
-        description: Integrate Zod schema loader errors
-        type: local
       - stepNumber: 12
+        description: >-
+          Read, through the core adapter, the spec files unchanged since the approval — the specs
+          the rules are shown as complete (none when the tree was never approved, and an unreadable
+          approval never breaks validation)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: settledSpecPaths
+      - stepNumber: 13
+        description: Relate each settled file to the spec stored in it through the core adapter's spec index
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 14
+        description: Integrate the loader's schema and parse diagnostics, read through the core adapter
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: getLoaderIssues
+      - stepNumber: 15
         description: >-
           Reject a --subsystem scope that names no loaded subsystem (SUBSYSTEM_NOT_FOUND, listing
           the known subsystems) and return early
         type: local
-      - stepNumber: 13
+      - stepNumber: 16
         description: >-
           Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
           and pattern definitions — to populate the rule context's ext for this run
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectExtensions
-      - stepNumber: 14
+      - stepNumber: 17
         description: >-
           Gather the round-trip findings: dry-run every in-scope spec through the writer's
           relativization and schema pipeline via the core adapter (no I/O) and keep the findings for
@@ -96,24 +120,24 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
-      - stepNumber: 15
+      - stepNumber: 18
         description: Seed the built-in SDD conformance rule set into the in-memory rule set
         type: call
         targetComponent: rule_repository
         targetMethod: registerBuiltinRules
-      - stepNumber: 16
+      - stepNumber: 19
         description: >-
           Register the loaded programmatic pack rules after the built-ins (project pack order is
           precedence)
         type: call
         targetComponent: rule_repository
         targetMethod: registerPackRules
-      - stepNumber: 17
+      - stepNumber: 20
         description: Read the composed, ordered rule run sequence to execute
         type: call
         targetComponent: rule_repository
         targetMethod: ruleSequence
-      - stepNumber: 18
+      - stepNumber: 21
         description: >-
           Gather the known issue codes of every registered rule and declarative assertion for the
           rule context, so the lint-allows rule validates lint.allow references against every code
@@ -123,7 +147,7 @@ methods:
         type: call
         targetComponent: rule_repository
         targetMethod: knownIssueCodes
-      - stepNumber: 19
+      - stepNumber: 22
         description: >-
           Read the bound project's configuration through the core adapter for its by-name pack
           selections, which the pack-reproducibility rule checks from the rule context (legacy path
@@ -133,7 +157,14 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 20
+      - stepNumber: 23
+        description: >-
+          Load the component-variant registry through the core adapter, for the variant rules in the
+          rule context
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectVariants
+      - stepNumber: 24
         description: >-
           Build the rule context from the gathered inputs: the loaded specs and their lookup maps,
           the surface snapshots, the code model, the round-trip findings, the known issue codes, the
@@ -142,19 +173,28 @@ methods:
           else the draft-context downgrade, else the rule default), and lets a matching lint allow
           silence a warning
         type: local
-      - stepNumber: 21
+      - stepNumber: 25
         description: For each rule in the run sequence
         type: loop
         loopKind: forEach
         over: the rule run sequence read in step 17 (built-ins, then pack rules, lint-allows last)
-        endStep: 22
-      - stepNumber: 22
+        endStep: 26
+      - stepNumber: 26
         label: run-rule
         description: >-
           Run the rule's check against the rule context; the rule reports its findings through
           ctx.addIssue
         type: local
-      - stepNumber: 23
+      - stepNumber: 27
+        description: >-
+          When this root still holds a reference-resolution failure no surface snapshot covers,
+          detect the parent through the core adapter's reach-gated resolveChainingParent, so a
+          request whose credential is narrowed to the child reads nothing above its root, not even
+          to discover the parent
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 28
         description: >-
           Resolve a chained subproject's verdict through its parent. When this root still holds a
           reference-resolution failure no surface snapshot covers — an unresolved cross-tree
@@ -167,7 +207,7 @@ methods:
         type: call
         targetComponent: spec_validator
         targetMethod: resolveThroughParent
-      - stepNumber: 24
+      - stepNumber: 29
         description: >-
           Merge what the parent judged with this run's own findings: a child finding gives way only
           where the parent reported the same code on the same spec at least as severely, or where it
@@ -179,7 +219,7 @@ methods:
           evidence judges a pinned edge depends on whether some resolution failure triggered the
           walk. The result records the root and scope it was resolved through.
         type: local
-      - stepNumber: 25
+      - stepNumber: 30
         description: Return the aggregated validation result
         type: return
         outcome: ValidationResult
@@ -243,12 +283,12 @@ methods:
           validateSddTree
         type: call
         targetComponent: validator_surfaces_adapter
-        targetMethod: loadSurfaceSnapshots
+        targetMethod: listSnapshots
       - stepNumber: 9
         description: Load the surface snapshots each chained mount holds, identical to validateSddTree
         type: call
         targetComponent: validator_surfaces_adapter
-        targetMethod: loadMountSurfaceSnapshots
+        targetMethod: listMountSnapshots
       - stepNumber: 10
         description: Build the source code model via the source analysis adapter, identical to validateSddTree
         type: call
@@ -427,9 +467,14 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Walk up to the TOP root collecting the mount chain (never above the bound request's top
-          project root). With no hop reachable there is nothing to resolve through.
-        type: local
+          Refuse to walk when the bound request's reach forbids reading above its root; otherwise
+          walk up to the TOP root collecting the mount chain, one hop at a time through the core
+          adapter's findChainingParent with the request's top project root as the ceiling (the walk
+          itself is not reach-gated, which is why the gate comes first). With no hop reachable there
+          is nothing to resolve through.
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: findChainingParent
       - stepNumber: 2
         description: >-
           When the walk reached a top root: with that root bound — the call runs as the parent
@@ -468,6 +513,32 @@ methods:
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: findTestsReferencing
+  - name: builtinProfileIds
+    narrative:
+      - stepNumber: 1
+        description: Return a copy of the rule set's built-in profile ids
+        type: return
+        outcome: success
+  - name: builtinProjectKinds
+    narrative:
+      - stepNumber: 1
+        description: Return a copy of the rule set's built-in project kinds
+        type: return
+        outcome: success
+lint:
+  allow:
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: >-
+        validateSddTree gathers every input the rule context needs before it runs a single rule, and
+        since its core reads became calls on the validator's own client adapter (a module of its
+        own) each one is a narrated call rather than an unnamed local: the recursion depth, the
+        loader reset, six spec reads, two surface reads, the code model, the approval's settled
+        files and their index, the loader diagnostics, the packs, the round-trip findings, four
+        rule-repository reads, the configuration and the variant registry — 23 of its 30 steps are
+        one call each, and the remaining seven are the scope refusal, the context build, the rule
+        loop and the parent resolution. Folding calls into prose would hide exactly the
+        cross-subsystem hops this adapter exists to make visible; the count tracks how many inputs a
+        validation run has.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T13:27:03.407Z'
+updatedAt: '2026-09-25T21:38:19.237Z'

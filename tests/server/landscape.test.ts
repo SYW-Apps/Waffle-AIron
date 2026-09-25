@@ -25,7 +25,7 @@ import { createWebSession } from '../../src/server/websessions.js';
 import { createProject } from '../../src/server/admin.js';
 import { mintUserToken, allow, seedUnit } from './helpers.js';
 import { createProjectRecord } from '../../src/server/projects.js';
-import { hostCore } from '../../src/server/adapters.js';
+import * as hostCore from '../../src/server/adapters/core.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { upsertProjectRelation } from '../../src/server/relations.js';

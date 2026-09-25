@@ -74,8 +74,24 @@ export {
   resolveSubprojectForNamespace,
   computeStateIdAt,
   readLockState,
+  // The loader's own reads (spec_tree_portal scanAllSpecs / getLoaderIssues /
+  // clearLoaderIssues): the index relating each spec to its file, and the
+  // diagnostics a read of the tree recorded. The validator needs both to run.
+  scanAllSpecs,
+  getLoaderIssues,
+  clearLoaderIssues,
+  // spec_tree_portal findChainingParent: the walk up from a root the caller
+  // names. Not gated on any request's reach — resolveChainingParent above is —
+  // so a caller gates on its own reach before it calls this one.
+  findChainingParent,
+  // spec_tree_portal assertContainedProjectPath: a mount's projectPath resolved
+  // within its root.
+  assertContainedProjectPath,
+  // spec_maintenance_portal findLegacySpecFiles: what `doctor` and `validate`
+  // report before a migration.
+  findLegacySpecFiles,
 } from './specs.js';
-export type { LockStatus } from './specs.js';
+export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile } from './specs.js';
 
 // Project provisioning and the chained-subproject wiring
 // (spec_maintenance_portal provisionProject … internalizeSubsystem;
@@ -91,6 +107,10 @@ export {
   moveSubsystemProject,
   externalizeSubsystem,
   internalizeSubsystem,
+  // spec_maintenance_portal findChainingSubprojectsMissingConfig /
+  // backfillChainedSubprojectConfigs: what `wairon doctor` reports and repairs.
+  findChainingSubprojectsMissingConfig,
+  backfillChainedSubprojectConfigs,
 } from './provision.js';
 
 // The tree's identity (approval_portal computeStateId) — what a lock is taken
@@ -108,6 +128,11 @@ export type { LockRecord } from './lockfile.js';
 // for `wairon diagram`, which is the only thing that command needs from the
 // four core modules it used to build its artifacts out of.
 export { renderDiagram } from './diagram.js';
+
+// The same canvas as data (spec_tree_portal buildCanvasDataModel), for a client
+// that mounts the shared renderer itself — the hosted web app and share
+// snapshots.
+export { buildCanvasDataModel } from './diagram.js';
 
 // THE REST OF THE DIAGRAM SURFACE — NOT contract methods, and reported as a
 // gap rather than papered over.
@@ -132,7 +157,6 @@ export {
   diagramSetIndex,
   toMarkdown,
   loadSpecGraph,
-  buildCanvasDataModel,
 } from './diagram.js';
 
 // Domain detection (agent_context_portal detectDomainCandidates) — the detector is its
@@ -154,6 +178,32 @@ export { detectDomainCandidates } from './detection.js';
 // Portal that reached the store adapter for it would be taking the persistence
 // shortcut the standard names by code. `wairon packs` goes through here.
 export { loadProjectExtensions, defaultPackSelections } from './extensions.js';
+
+// The pack sources and entries (extension_portal globalPacksDir …
+// pinInstalledPacksAsSelections): where machine-wide packs live, what a
+// directory holds, a pack loaded on its own, a manifest judged as declarative,
+// what a configured entry resolves to and is called, and the doctor's pack
+// diagnosis and its one repair. The sdd_cli pack commands, `wairon doctor` and
+// sdd_host's pack plane all read these; before, each imported them straight out
+// of ./extensions.js.
+export {
+  globalPacksDir,
+  discoverPacks,
+  packDirEntry,
+  loadExtensionPacks,
+  checkDeclarativePack,
+  packEntryRef,
+  packEntryLabel,
+  globalPacksEnabled,
+  diagnoseProjectPacks,
+  pinInstalledPacksAsSelections,
+} from './extensions.js';
+export type { LoadedExtensions, LoadedPackSkill, PackRef, PackScope, PackDiagnosis } from './extensions.js';
+
+// The component-variant registry (extension_portal loadProjectVariants /
+// resolveVariantGuidance): the variant rules judge against it, and the MCP
+// server attaches a component's guidance to its spec.
+export { loadProjectVariants, resolveVariantGuidance } from './variants.js';
 
 // The machine's pack store (extension_portal packStoreDir … uninstallPack) —
 // forwarded from the module that HOLDS them, which is the store adapter. The
@@ -317,7 +367,7 @@ export {
 } from './specs.js';
 
 // The project_config type's own behaviour, for callers deriving from a loaded configuration.
-export { declaredPackNames, declaredProfileIds } from '../config/project-config.js';
+export { declaredPackNames, declaredProfileIds } from '../models/project.js';
 
 // What an agent's work is LIKE, and what that work earns (agent_context_portal
 // deriveExecutionProfile / resolveBudget) — pure 1:1 forwards to the execution

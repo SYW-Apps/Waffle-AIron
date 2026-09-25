@@ -4,7 +4,7 @@ description: >-
   Forwards the as-complete conformance run and the gate identity computation to the validator
   portal.
 contract: ihost_validator_adapter
-sourcePath: src/server/adapters.ts
+sourcePath: src/server/adapters/validator.ts
 methods:
   - name: validateAsComplete
     narrative:
@@ -20,7 +20,6 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: validateAsComplete
-    symbol: validateProjectAsComplete
   - name: computeGateStateId
     narrative:
       - stepNumber: 1
@@ -28,6 +27,22 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: computeGateStateId
+  - name: builtinProfileIds
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: builtinProfileIds
+    detail: calls-only
+  - name: builtinProjectKinds
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: builtinProjectKinds
+    detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:08.409Z'
-updatedAt: '2026-09-15T17:56:02.837Z'
+updatedAt: '2026-09-25T21:11:27.689Z'

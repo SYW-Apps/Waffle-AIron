@@ -33,12 +33,12 @@ methods:
     signature: 'filesIn(subsystemId: string): string[]'
     returns: string[]
     description: >-
-      The files named across a whole subsystem — what a cross-subsystem hop is proven against, the
-      published surface's barrel being cosmetic at runtime
+      The files named across a whole subsystem — what proves a cross-subsystem hop EXISTS (any
+      module of the target subsystem does); where the hop lands is portal-imports' question
   - name: componentsAt
     signature: 'componentsAt(path: string): ComponentSpec[]'
     returns: ComponentSpec[]
     description: The components a file realizes, in the order their implementations named it
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:17.484Z'
-updatedAt: '2026-09-19T11:07:15.132Z'
+updatedAt: '2026-09-25T21:52:17.616Z'

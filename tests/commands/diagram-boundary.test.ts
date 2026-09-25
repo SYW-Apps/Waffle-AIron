@@ -9,7 +9,7 @@ import {
   saveComponentSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
-import * as adapter from '../../src/commands/subsystem.js';
+import * as adapter from '../../src/commands/adapters/core.js';
 import * as portal from '../../src/core/index.js';
 import { runDiagram } from '../../src/commands/diagram.js';
 
@@ -177,7 +177,7 @@ describe('wairon diagram renders through cli_core_adapter, not through sdd_core 
     expect(source).not.toContain("from '../core/diagram.js'");
     expect(source).not.toContain("from '../core/diagram-export.js'");
     expect(source).not.toContain("from '../core/validation.js'");
-    expect(source).toContain("from './subsystem.js'");
+    expect(source).toContain("from './adapters/core.js'");
   });
 
   it('is how `wairon host demo` counts its seeded tree too', () => {

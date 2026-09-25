@@ -62,6 +62,20 @@ methods:
         type: call
         targetComponent: spec_validator
         targetMethod: findTestsReferencing
+  - name: builtinProfileIds
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec validator
+        type: call
+        targetComponent: spec_validator
+        targetMethod: builtinProfileIds
+  - name: builtinProjectKinds
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec validator
+        type: call
+        targetComponent: spec_validator
+        targetMethod: builtinProjectKinds
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T13:27:06.380Z'
+updatedAt: '2026-09-25T21:09:02.597Z'

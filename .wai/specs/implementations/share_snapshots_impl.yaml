@@ -10,10 +10,10 @@ methods:
         description: Start an empty snapshot payload set stamped with the project id, view, and capture time.
         type: local
       - stepNumber: 2
-        description: Render the bound project's view into the canvas-model payload the shared engine renders.
+        description: Build the bound project's canvas model as data — the payload the shared engine renders.
         type: call
         targetComponent: host_core_adapter
-        targetMethod: renderDiagram
+        targetMethod: buildCanvasDataModel
       - stepNumber: 3
         description: An HTML export was requested for this link.
         type: branch
@@ -37,7 +37,7 @@ methods:
           portal exists. Never collapse several portals to one document or to an empty placeholder.
         type: call
         targetComponent: host_surfaces_adapter
-        targetMethod: exportBoundSurface
+        targetMethod: exportSurface
       - stepNumber: 7
         description: The immutable snapshot payload set, ready to persist.
         type: return
@@ -45,4 +45,4 @@ methods:
     symbol: captureSnapshot
 status: complete
 createdAt: '2026-07-18T09:30:49.067Z'
-updatedAt: '2026-09-17T20:29:55.665Z'
+updatedAt: '2026-09-25T21:35:27.759Z'

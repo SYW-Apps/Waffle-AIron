@@ -1,0 +1,27 @@
+kind: value-object
+id: skill_freshness
+name: SkillFreshness
+description: >-
+  How one target's installed SDD skills compare with what an export would write now: the skills
+  missing on disk, those that differ, and those that match.
+fields:
+  - name: dir
+    type: string | null
+    description: The target's skills directory, or null when the target has none
+    optional: false
+  - name: missing
+    type: string[]
+    description: Skills missing on disk
+    optional: false
+  - name: stale
+    type: string[]
+    description: Skills present but differing from what an export would write
+    optional: false
+  - name: ok
+    type: string[]
+    description: Skills present and identical to what an export would write
+    optional: false
+methods: []
+sourcePath: src/core/skills.ts
+createdAt: '2026-09-25T21:13:41.731Z'
+updatedAt: '2026-09-25T21:13:41.735Z'

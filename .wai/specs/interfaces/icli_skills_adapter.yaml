@@ -14,6 +14,20 @@ methods:
         type: string[]
         description: The target types to export into; omitted means the project's enabled targets
         optional: true
+  - name: listSkillNames
+    description: 'Forward to skills_portal.listSkillNames: the built-in skills `wairon skills list` prints'
+    signature: 'listSkillNames(): string[]'
+    returns: string[]
+    params: []
+  - name: checkSkillFreshness
+    description: >-
+      Forward to skills_portal.checkSkillFreshness: what `wairon doctor` reports about a target's
+      installed skills
+    signature: 'checkSkillFreshness(type: string): SkillFreshness'
+    returns: SkillFreshness
+    params:
+      - name: type
+        type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T23:11:57.236Z'
+updatedAt: '2026-09-25T21:13:59.756Z'

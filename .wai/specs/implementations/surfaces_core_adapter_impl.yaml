@@ -1,8 +1,10 @@
 id: surfaces_core_adapter_impl
 name: Surfaces Core Adapter Implementation
-description: Spec-tree reads forwarded to the core portal.
+description: >-
+  sdd_surfaces' client hop into sdd_core, in a module of its own: identity re-exports of the core
+  portals. The surface workflows import this module, so their calls into core land here.
 contract: isurfaces_core_adapter
-sourcePath: src/core/surfaces.ts
+sourcePath: src/core/adapters/surfaces-core.ts
 methods:
   - name: loadSystemSpec
     narrative:
@@ -53,6 +55,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: resolveSubprojectForNamespace
+  - name: computeStateId
+    narrative:
+      - stepNumber: 1
+        description: Call computeStateId on the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: computeStateId
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-09-12T17:43:22.125Z'
+updatedAt: '2026-09-25T21:09:31.546Z'

@@ -18,6 +18,8 @@ import {
   methodTypeRefs,
   BUILTIN_TYPES,
 } from '../models/index.js';
+// surfaces_core_adapter: every name this subsystem takes from sdd_core lands on
+// the adapter's own module, which re-exports it from the core portals.
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -26,10 +28,9 @@ import {
   loadTypeSpecs,
   resolveChainingParent,
   resolveSubprojectForNamespace,
-  invalidateSpecCache,
-  type ChainingParentRef,
-} from './specs.js';
-import { computeStateId } from './statehash.js';
+  computeStateId,
+} from './adapters/surfaces-core.js';
+import type { ChainingParentRef } from './specs.js';
 import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
 
 // ---------------------------------------------------------------------------
@@ -392,7 +393,10 @@ export function removeSnapshot(projectName: string, rootDir: string = getProject
   return false;
 }
 
-/** Validator-facing load (validator_surfaces_adapter realization). */
+/**
+ * surface_fs_adapter.readAllSnapshots (and the registry's and repository's
+ * hydrate, which read through it) — every stored snapshot of the bound root.
+ */
 export function loadSurfaceSnapshots(): SurfaceSnapshot[] {
   return listSnapshots();
 }
@@ -419,11 +423,6 @@ export function listMountSnapshots(mounts: string[]): { namespace: string; snaps
     if (snapshots.length > 0) out.push({ namespace, snapshots });
   }
   return out;
-}
-
-/** validator_surfaces_adapter.loadMountSurfaceSnapshots — the validator's face of listMountSnapshots. */
-export function loadMountSurfaceSnapshots(mounts: string[]): { namespace: string; snapshots: SurfaceSnapshot[] }[] {
-  return listMountSnapshots(mounts);
 }
 
 // ---------------------------------------------------------------------------
@@ -546,9 +545,9 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
  */
 function projectFamilySurfaces(parent: ChainingParentRef): SurfaceSnapshot[] {
   return runWithProjectRoot(parent.parentRoot, () => {
-    // The parent is read as it is NOW — its tree may have moved since this
-    // process last looked, and projecting a stale cache would report the past.
-    invalidateSpecCache();
+    // The parent is read as it is NOW without asking for it here: a write in
+    // this process drops every workspace's cache, and the loader re-checks a
+    // cached tree's file signature against the disk before it serves it.
     const siblings = loadSubsystemSpecs()
       .filter((s) => !s.id.includes('::') && s.id !== parent.subsystemId);
     return [projectChildSurface(), ...siblings.map((s) => projectSubsystemSurface(s.id))];

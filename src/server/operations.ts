@@ -13,7 +13,9 @@ import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import * as packs from './packs.js';
 import { listProjectRelations } from './relations.js';
 import { getPublicSurfaceSnapshot } from './surfaces.js';
-import { hostCore } from './adapters.js';
+import * as hostCore from './adapters/core.js';
+// The project_config type's own behaviour, which travels with the type.
+import { declaredPackNames, declaredProfileIds } from '../models/project.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import type { ProjectConfig } from '../models/project.js';
 import type {
@@ -378,9 +380,9 @@ function declaredReferences(project: HostedProjectRecord): ProjectPackReference 
   }
   const reference: ProjectPackReference = {
     projectId: project.id,
-    packNames: config ? hostCore.declaredPackNames(config) : [],
+    packNames: config ? declaredPackNames(config) : [],
   };
-  const profileIds = config ? hostCore.declaredProfileIds(config) : [];
+  const profileIds = config ? declaredProfileIds(config) : [];
   if (profileIds.length > 0) reference.profileIds = profileIds;
   return reference;
 }

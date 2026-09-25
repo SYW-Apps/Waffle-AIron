@@ -14,7 +14,8 @@ import {
 } from '../../src/server/projectlifecycle.js';
 import { createProject, executeApprovedLock, LockValidationError } from '../../src/server/admin.js';
 import { setPackPolicyRecord } from '../../src/server/policy.js';
-import { hostCore, computeGateStateId } from '../../src/server/adapters.js';
+import * as hostCore from '../../src/server/adapters/core.js';
+import { computeGateStateId } from '../../src/server/adapters/validator.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';

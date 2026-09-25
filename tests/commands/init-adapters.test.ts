@@ -8,8 +8,8 @@ import {
   createProjectConfig,
   defaultPackSelections,
   ensureProjectInitialized,
-} from '../../src/commands/subsystem.js';
-import { exportSddSkills } from '../../src/commands/skills.js';
+} from '../../src/commands/adapters/core.js';
+import { exportSddSkills } from '../../src/commands/adapters/skills.js';
 import { runInit } from '../../src/commands/init.js';
 
 // ---------------------------------------------------------------------------
@@ -24,8 +24,8 @@ import { runInit } from '../../src/commands/init.js';
 
 const { SEEDED } = vi.hoisted(() => ({ SEEDED: [] as { name: string }[] }));
 
-vi.mock('../../src/commands/subsystem.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/commands/subsystem.js')>();
+vi.mock('../../src/commands/adapters/core.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/commands/adapters/core.js')>();
   return {
     ...actual,
     createProjectConfig: vi.fn(actual.createProjectConfig),
@@ -34,8 +34,8 @@ vi.mock('../../src/commands/subsystem.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/commands/skills.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/commands/skills.js')>();
+vi.mock('../../src/commands/adapters/skills.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/commands/adapters/skills.js')>();
   return { ...actual, exportSddSkills: vi.fn(actual.exportSddSkills) };
 });
 

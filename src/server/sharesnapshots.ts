@@ -3,7 +3,8 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { resolveProjectRoot } from './projects.js';
-import { hostCore, hostSurfaces } from './adapters.js';
+import * as hostCore from './adapters/core.js';
+import * as hostSurfaces from './adapters/surfaces.js';
 import { ForbiddenError } from './errors.js';
 import type { Principal, ShareSnapshot } from './types.js';
 import { openApiIndexDocument } from './openapiindex.js';
@@ -182,7 +183,7 @@ export function captureSnapshot(
       // exists, which is also what pre-existing links carry. Capturing nothing is
       // honest when the project publishes no portal; an empty `{}` placeholder
       // standing in for real APIs is not.
-      const result = hostSurfaces.exportBoundSurface('project', 'openapi');
+      const result = hostSurfaces.exportSurface('project', 'openapi');
       const specs = result.renderedSet ?? [];
       if (specs.length) {
         snapshot.openapiSet = specs;

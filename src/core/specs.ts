@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { aiPathsAt, WaiPaths } from '../config/paths.js';
 import { projectConfigRepository } from '../config/project-config.js';
 import type { ProjectConfig, PackSelection, ProjectProfileSelection } from '../models/project.js';
-import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
+import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
@@ -64,7 +64,8 @@ import type { WebGraphModel } from '../server/types.js';
 // delegate to the workspace of the current project root.
 // ---------------------------------------------------------------------------
 
-interface SpecIndex {
+/** spec_index — the bound tree as one scan read it: every spec by kind, and the file each is stored in. */
+export interface SpecIndex {
   subsystems: SubsystemSpec[];
   components: ComponentSpec[];
   interfaces: InterfaceSpec[];
@@ -79,6 +80,17 @@ interface SpecIndex {
     type: Record<string, string>;
     group: Record<string, string>;
   };
+}
+
+/** spec_scan_options — how deep a scan reads into chained subprojects. */
+export interface SpecScanOptions {
+  recursive?: boolean | number;
+}
+
+/** legacy_spec_file — a spec file stored under a legacy (undotted) name, and the name the current layout expects. */
+export interface LegacySpecFile {
+  path: string;
+  expected: string;
 }
 
 function emptyIndex(): SpecIndex {
@@ -1437,6 +1449,16 @@ export class SpecWorkspace {
   constructor(rootDir: string) {
     this.rootDir = path.resolve(rootDir);
     this.paths = aiPathsAt(this.rootDir);
+  }
+
+  /**
+   * The next scan re-verifies the tree's file signature whatever the TTL says.
+   * Called when the bound project root switches to this workspace: a caller that
+   * just bound a root reads it as it is NOW, even if another process changed it
+   * a moment after this workspace last looked.
+   */
+  expireFreshness(): void {
+    this.lastSignatureCheckMs = 0;
   }
 
   invalidate(): void {
@@ -4480,9 +4502,28 @@ export function workspaceFor(rootDir: string): SpecWorkspace {
   return ws;
 }
 
-/** The workspace for the current project root (override, else resolved cwd). */
+/** The binding (or, outside any binding, the root) the last read was served under. */
+let lastServedBinding: object | string | null = null;
+
+/**
+ * The workspace for the current project root (override, else resolved cwd).
+ *
+ * A new root BINDING expires the workspace's freshness window: the first read
+ * inside each runWithProjectRoot / runWithProjectBinding (or, with no binding,
+ * after the resolved root changes) re-checks that tree's file signature instead
+ * of trusting a scan up to SIGNATURE_TTL_MS old. That is what lets a caller
+ * reading another project's tree (a chained child resolving through its parent,
+ * a pin projecting the parent's surfaces) see an edit made outside this process
+ * without invalidating the cache itself.
+ */
 function current(): SpecWorkspace {
-  return workspaceFor(getProjectRoot());
+  const ws = workspaceFor(getProjectRoot());
+  const binding = currentRootBinding() ?? ws.rootDir;
+  if (binding !== lastServedBinding) {
+    lastServedBinding = binding;
+    ws.expireFreshness();
+  }
+  return ws;
 }
 
 /**
@@ -4510,7 +4551,7 @@ export function clearLoaderIssues(): void {
   invalidateSpecCache();
 }
 
-export function scanAllSpecs(options?: { recursive?: boolean | number }): SpecIndex {
+export function scanAllSpecs(options?: SpecScanOptions): SpecIndex {
   return current().scanAll(options);
 }
 
@@ -4860,7 +4901,7 @@ export function restoreSpecFiles(snapshot: Map<string, string>): void {
   }
 }
 
-export function findLegacySpecFiles(): { path: string; expected: string }[] {
+export function findLegacySpecFiles(): LegacySpecFile[] {
   return current().findLegacySpecFiles();
 }
 

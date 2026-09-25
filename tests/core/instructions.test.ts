@@ -8,7 +8,7 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import { loadProjectExtensions } from '../../src/core/extensions.js';
 import { buildServerInstructions } from '../../src/core/instructions.js';
 import { createMcpServer } from '../../src/mcp/server.js';
-import { createScopedServer } from '../../src/server/adapters.js';
+import { createScopedServer } from '../../src/server/adapters/mcp.js';
 
 // ---------------------------------------------------------------------------
 // MCP server instructions — the entrypoint wairon pushes to a connecting agent.

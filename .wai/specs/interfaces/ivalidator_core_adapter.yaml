@@ -65,6 +65,64 @@ methods:
     signature: 'consumedContractInputs(): string[]'
     returns: string[]
     params: []
+  - name: resolveChainingParent
+    description: >-
+      Forward to spec_tree_portal.resolveChainingParent: the parent that mounts the bound root,
+      within the request's reach
+    signature: 'resolveChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+    params: []
+  - name: findChainingParent
+    description: >-
+      Forward to spec_tree_portal.findChainingParent: the parent mounting a named root, below a
+      ceiling. Not reach-gated — the validator gates on the request's reach itself before it walks
+    signature: 'findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+    params:
+      - name: childRoot
+        type: string
+      - name: ceiling
+        type: string
+        optional: true
+  - name: settledSpecPaths
+    description: >-
+      Forward to approval_portal.settledSpecPaths: the spec files unchanged since the approval, or
+      null when the tree was never approved
+    signature: 'settledSpecPaths(root?: string): Set<string> | null'
+    returns: Set<string> | null
+    params:
+      - name: root
+        type: string
+        optional: true
+  - name: getLoaderIssues
+    description: 'Forward to spec_tree_portal.getLoaderIssues: the loader''s diagnostics for the tree just read'
+    signature: 'getLoaderIssues(): ValidationIssue[]'
+    returns: ValidationIssue[]
+    params: []
+  - name: clearLoaderIssues
+    description: >-
+      Forward to spec_tree_portal.clearLoaderIssues: start the run's read from disk with no stale
+      diagnostics
+    signature: 'clearLoaderIssues(): void'
+    returns: void
+    params: []
+  - name: scanAllSpecs
+    description: >-
+      Forward to spec_tree_portal.scanAllSpecs: set the run's recursion depth, and read the index
+      relating each spec to its file
+    signature: 'scanAllSpecs(options?: SpecScanOptions): SpecIndex'
+    returns: SpecIndex
+    params:
+      - name: options
+        type: SpecScanOptions
+        optional: true
+  - name: loadProjectVariants
+    description: >-
+      Forward to extension_portal.loadProjectVariants: the variant registry the variant rules judge
+      against
+    signature: 'loadProjectVariants(): VariantDef[]'
+    returns: VariantDef[]
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T10:51:49.709Z'
+updatedAt: '2026-09-25T21:09:18.037Z'

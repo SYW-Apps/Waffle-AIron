@@ -20,8 +20,6 @@ import {
   projectConfigExists,
   loadSystemSpec,
   loadSubsystemSpec,
-  // cli_authoring_adapter: authoring the subsystem goes through the gated seam.
-  writeSpec,
   defaultPackSelections,
   ensureProjectInitialized,
   // Through the core adapter, never ../utils/ai-guide.js: writing a tool's
@@ -31,8 +29,10 @@ import {
   injectGuide,
   writeRootGuideDelegator,
   syncContextFiles,
-} from './subsystem.js';
-import { exportSddSkills } from './skills.js';
+} from './adapters/core.js';
+import { exportSddSkills } from './adapters/skills.js';
+// cli_authoring_adapter: authoring the subsystem goes through the gated seam.
+import { writeSpec } from './adapters/authoring.js';
 import { defaultTargetConfig } from '../config/defaults.js';
 import { ProjectConfig, TargetConfig, activeTargetTypes } from '../models/project.js';
 

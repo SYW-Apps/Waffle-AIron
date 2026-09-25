@@ -1,5 +1,6 @@
 import type { LoadedInstructionBlock } from './extensions.js';
-import { listSkillResources, loadProjectConfig, loadProjectExtensions, type SkillResourceDescriptor } from './skills.js';
+import { listSkillResources, type SkillResourceDescriptor } from './skills.js';
+import { loadProjectConfig, loadProjectExtensions } from './adapters/skills-core.js';
 
 // ---------------------------------------------------------------------------
 // MCP server instructions — what wairon PUSHES to a connecting agent.

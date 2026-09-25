@@ -12,7 +12,7 @@ import {
   SkillResourceNotFoundError,
 } from '../../src/core/skills.js';
 import { createMcpServer } from '../../src/mcp/server.js';
-import { createScopedServer } from '../../src/server/adapters.js';
+import { createScopedServer } from '../../src/server/adapters/mcp.js';
 
 // ---------------------------------------------------------------------------
 // Phase 5c — SDD skills published as read-only MCP resources.

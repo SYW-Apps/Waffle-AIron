@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { loadProjectExtensions } from '../core/extensions.js';
+import { loadProjectExtensions } from '../core/index.js';
 
 // ---------------------------------------------------------------------------
 // patterns command — the reusable, versioned architecture patterns declared by

@@ -4,7 +4,9 @@ import { runWithProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { parseYaml } from '../utils/yaml.js';
 import type { PackScope } from '../core/extensions.js';
 import type { PackSelection, ProjectConfig } from '../models/project.js';
-import { hostCore, hostSdk } from './adapters.js';
+import * as hostCore from './adapters/core.js';
+import * as hostValidator from './adapters/validator.js';
+import * as hostSdk from './adapters/sdk.js';
 import { authenticateCredential } from './auth.js';
 import { authorize } from './authorization.js';
 import { AdminAuthError, UnauthenticatedError } from './errors.js';
@@ -280,7 +282,7 @@ export function storeListAvailableProfiles(): AvailableProfile[] {
     out.push(family ? { id, source, family } : { id, source });
   };
 
-  for (const id of hostCore.builtinProfileIds()) emit(id, 'builtin');
+  for (const id of hostValidator.builtinProfileIds()) emit(id, 'builtin');
   for (const c of scanGlobalPackProfiles()) emit(c.id, c.source, c.family);
   return out;
 }
@@ -313,7 +315,7 @@ function storeListProjectProfiles(config?: ProjectConfig | null): AvailableProfi
     out.push({ id, source, ...(family ? { family } : {}), installed });
   };
 
-  for (const id of hostCore.builtinProfileIds()) emit(id, 'builtin', true);
+  for (const id of hostValidator.builtinProfileIds()) emit(id, 'builtin', true);
   for (const c of scanProjectPackProfiles(config)) emit(c.id, c.source, true, c.family);
   for (const c of scanGlobalPackProfiles()) emit(c.id, c.source, false, c.family);
   return out;
@@ -750,7 +752,7 @@ export function executeApprovedEnsureProfileInstalled(
 ): ProfileApplication {
   // A composite project kind or a built-in profile governs as-is — no
   // contributing pack exists to adopt.
-  if (hostCore.builtinProjectKinds().includes(profileId) || hostCore.builtinProfileIds().includes(profileId)) {
+  if (hostValidator.builtinProjectKinds().includes(profileId) || hostValidator.builtinProfileIds().includes(profileId)) {
     return { profileId, source: 'builtin' };
   }
 

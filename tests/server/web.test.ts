@@ -39,7 +39,7 @@ import { createUnit as createOrgUnit, placeProject, listProjectPlacements } from
 import * as webadmin from '../../src/server/webadmin.js';
 import { replacePublicSurfaceSnapshot } from '../../src/server/surfaces.js';
 import { upsertProjectRelation } from '../../src/server/relations.js';
-import { validateProjectAsComplete } from '../../src/server/adapters.js';
+import { validateAsComplete as validateProjectAsComplete } from '../../src/server/adapters/validator.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { provisionProject } from '../../src/core/provision.js';
 import {

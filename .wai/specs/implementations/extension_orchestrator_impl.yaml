@@ -356,7 +356,87 @@ methods:
         type: call
         targetComponent: pack_store_adapter
         targetMethod: uninstallPack
+  - name: globalPacksDir
+    narrative:
+      - stepNumber: 1
+        description: Resolve the machine-wide packs directory through the pack source
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: globalPacksDir
+  - name: discoverPacks
+    narrative:
+      - stepNumber: 1
+        description: List the directory's pack refs through the pack source
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: discoverPacks
+  - name: packDirEntry
+    narrative:
+      - stepNumber: 1
+        description: For each pack entry-file name, in order
+        type: loop
+        loopKind: forEach
+        over: the pack entry-file names
+        endStep: 3
+      - stepNumber: 2
+        description: Does the directory hold a file of that name?
+        type: branch
+        condition: the file exists in the directory
+        onFalseStep: 1
+      - stepNumber: 3
+        description: Return that entry file
+        type: return
+        outcome: found
+      - stepNumber: 4
+        description: The directory is not a pack
+        type: return
+        outcome: not a pack
+  - name: loadPacks
+    narrative:
+      - stepNumber: 1
+        description: For each ref, under its scope
+        type: loop
+        loopKind: forEach
+        over: refs
+        endStep: 3
+      - stepNumber: 2
+        description: Resolve the ref against the project root to a load target
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: resolvePackRef
+      - stepNumber: 3
+        description: >-
+          Read the target's manifest, validate it and merge it into the accumulated result; a pack
+          that fails is recorded as an EXTENSION_LOAD_ERROR on the result instead of aborting the
+          load
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: readManifest
+      - stepNumber: 4
+        description: Return the merged extensions
+        type: return
+        outcome: success
+    symbol: loadExtensionPacks
+  - name: checkDeclarativePack
+    narrative:
+      - stepNumber: 1
+        description: Parse the manifest against the declarative-pack schema
+        type: local
+      - stepNumber: 2
+        description: Did it parse?
+        type: branch
+        condition: the manifest matches the schema
+        onFalseStep: 4
+      - stepNumber: 3
+        description: A valid declarative pack
+        type: return
+        outcome: 'null'
+      - stepNumber: 4
+        label: refused
+        description: Return the first schema error's message
+        type: return
+        outcome: refused
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-09-23T12:55:18.423Z'
+updatedAt: '2026-09-25T21:08:40.745Z'

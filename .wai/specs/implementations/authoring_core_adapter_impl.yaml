@@ -1,13 +1,13 @@
 id: authoring_core_adapter_impl
 name: Authoring Core Adapter Implementation
 description: >-
-  The outward hop into sdd_core, as the import seam inside src/core/authoring.ts. All three methods
-  forward straight to the core's published surface: the two writes, and the configuration read the
-  module's own `candidateOptions` wraps — deliberately defensively, because an uninitialized or
-  unreadable project must yield the default severities rather than fail a write closed. Swappable
-  for a remote spec store without changing the workflow that calls it.
+  sdd_authoring's client hop into sdd_core, in a module of its own: identity re-exports of the core
+  portals, plus the one forward that is more than a name — the configuration read answers nothing
+  for an uninitialized or unreadable project instead of throwing, because a configuration read must
+  never be what fails a write closed. The seam imports this module, so its calls into core land
+  here.
 contract: iauthoring_core_adapter
-sourcePath: src/core/authoring.ts
+sourcePath: src/core/adapters/authoring-core.ts
 methods:
   - name: updateSpec
     narrative:
@@ -29,7 +29,6 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
-    symbol: candidateOptions
   - name: moveMethods
     narrative:
       - stepNumber: 1
@@ -69,4 +68,4 @@ methods:
         targetMethod: createChainedSubsystem
 status: complete
 createdAt: '2026-09-18T21:43:38.007Z'
-updatedAt: '2026-09-25T17:33:34.582Z'
+updatedAt: '2026-09-25T20:49:15.293Z'

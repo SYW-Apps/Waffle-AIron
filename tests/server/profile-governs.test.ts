@@ -6,7 +6,7 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import { loadProjectConfig } from '../../src/core/index.js';
 import { validateSddTree } from '../../src/core/validation.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
-import { hostCore } from '../../src/server/adapters.js';
+import * as hostCore from '../../src/server/adapters/core.js';
 import { installGlobalPack } from '../../src/server/packs.js';
 import { setProjectType, getProjectConfig } from '../../src/server/policy.js';
 import { createPlacedProject } from './helpers.js';

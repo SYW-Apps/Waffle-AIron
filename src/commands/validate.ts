@@ -1,11 +1,12 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { loadRegistry } from '../core/agent_resolver.js';
 import { assertProjectInitialized } from '../config/paths.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
-import { loadProjectConfig } from '../core/index.js';
+// The core reads this adapter makes land on the core portals: the configuration,
+// the agent registry, and the legacy spec filenames a migration would rename.
+import { loadProjectConfig, loadRegistry, findLegacySpecFiles } from '../core/index.js';
 import type { CarriedDebt } from '../models/project.js';
-import { validateRegistry, validateProjectConfig, validateAsComplete, validateSddTree, computeGateStateId, ValidationIssue } from '../core/validation.js';
+import { validateRegistry, validateProjectConfig, validateAsComplete, validateSddTree, computeGateStateId, type ValidationIssue } from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
 // validate command (cli_validator_adapter)
@@ -118,7 +119,6 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   let waivedWarnings = 0;
 
   // --- Legacy spec filenames check ---
-  const { findLegacySpecFiles } = require('../core/specs.js') as typeof import('../core/specs.js');
   const legacySpecs = findLegacySpecFiles();
   if (legacySpecs.length > 0) {
     logger.warn(`Warning: ${legacySpecs.length} legacy spec filename(s) detected (e.g., component.yaml). These are deprecated. Please run \`wairon doctor --fix\` to migrate them to the new unified .index.yaml schema.`);
@@ -167,7 +167,6 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   const { pathExists: sddPathExists } = require('../utils/fs.js') as typeof import('../utils/fs.js');
   if (sddPathExists(sddPaths.specsSystem())) {
     logger.header('SDD Architectural Specs');
-    const { validateSddTree } = require('../core/validation.js') as typeof import('../core/validation.js');
     const sddResult = validateSddTree({
       rules: projectConfig.rules,
       projectType: projectConfig.projectType,

@@ -143,6 +143,54 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: loadComponentSpecs
+    description: 'Forward to spec_tree_portal.loadComponentSpecs: every component of the bound tree'
+    signature: 'loadComponentSpecs(): ComponentSpec[]'
+    returns: ComponentSpec[]
+    params: []
+  - name: loadRegistry
+    description: 'Forward to agent_context_portal.loadRegistry: the agent registry the topology tools read'
+    signature: 'loadRegistry(): Registry'
+    returns: Registry
+    params: []
+    invokedBy:
+      kind: external
+      caller: >-
+        A connected AI client calling the MCP server's agent-topology tools (listAgents, getAgent,
+        validateTopology). Those tools are registered by createMcpServer but not yet modelled on
+        mcp_portal, so no narrative carries this hop.
+  - name: resolveDomains
+    description: 'Forward to agent_context_portal.resolveDomains: the project''s domains'
+    signature: 'resolveDomains(): Domain[]'
+    returns: Domain[]
+    params: []
+    invokedBy:
+      kind: external
+      caller: >-
+        A connected AI client calling the MCP server's listDomains tool, which createMcpServer
+        registers but mcp_portal does not yet model, so no narrative carries this hop.
+  - name: loadProjectVariants
+    description: >-
+      Forward to extension_portal.loadProjectVariants: the variant registry a variant-tagged
+      component's guidance is resolved against
+    signature: 'loadProjectVariants(): VariantDef[]'
+    returns: VariantDef[]
+    params: []
+  - name: resolveVariantGuidance
+    description: >-
+      Forward to extension_portal.resolveVariantGuidance: one component's variant guidance and
+      same-variant siblings
+    signature: >-
+      resolveVariantGuidance(component: ComponentSpec, allComponents: ComponentSpec[], variantsById:
+      VariantDef[]): VariantDef
+    returns: VariantDef
+    params:
+      - name: component
+        type: ComponentSpec
+      - name: allComponents
+        type: ComponentSpec[]
+      - name: variantsById
+        type: VariantDef[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-24T22:25:04.141Z'
+updatedAt: '2026-09-25T21:36:24.770Z'

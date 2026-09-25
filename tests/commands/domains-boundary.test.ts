@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
-import * as adapter from '../../src/commands/subsystem.js';
+import * as adapter from '../../src/commands/adapters/core.js';
 import * as portal from '../../src/core/index.js';
 import * as projector from '../../src/core/domain_projector.js';
 import * as curator from '../../src/core/domain_curator.js';
@@ -189,7 +189,7 @@ describe('wairon domains reaches the topology through cli_core_adapter, not thro
     expect(source).not.toContain("from '../core/topology.js'");
     expect(source).not.toContain("from '../core/domain_projector.js'");
     expect(source).not.toContain("from '../core/domain_curator.js'");
-    expect(source).toContain("from './subsystem.js'");
+    expect(source).toContain("from './adapters/core.js'");
     expect(source).toContain('  resolveDomains,');
     expect(source).toContain('  addDomain,');
     expect(source).toContain('  removeDomain,');

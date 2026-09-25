@@ -12,6 +12,7 @@ dependsOn:
   - spec_maintenance_portal
   - approval_portal
   - project_config_portal
+  - extension_portal
 status: complete
 createdAt: '2026-07-04T12:33:54.676Z'
-updatedAt: '2026-09-25T17:35:35.182Z'
+updatedAt: '2026-09-25T21:11:04.134Z'

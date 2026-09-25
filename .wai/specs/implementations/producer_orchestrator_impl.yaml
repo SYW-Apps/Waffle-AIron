@@ -50,7 +50,9 @@ methods:
         targetComponent: spec_doc_pages
         targetMethod: project
       - stepNumber: 6
-        description: Push the DocPage tree to Notion
+        description: >-
+          Push the DocPage tree to Notion, handing the adapter the token the caller resolved (its
+          injected credential)
         type: call
         targetComponent: notion_adapter
         targetMethod: sync
@@ -64,7 +66,9 @@ methods:
         targetComponent: spec_doc_pages
         targetMethod: projectGraph
       - stepNumber: 9
-        description: Render the graph onto the Miro board
+        description: >-
+          Render the graph onto the Miro board, handing the adapter the token the caller resolved
+          (its injected credential)
         type: call
         targetComponent: miro_adapter
         targetMethod: sync
@@ -96,4 +100,4 @@ methods:
         targetMethod: list
 status: complete
 createdAt: '2026-07-04T17:40:06.027Z'
-updatedAt: '2026-07-04T18:04:32.210Z'
+updatedAt: '2026-09-25T22:02:02.913Z'

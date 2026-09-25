@@ -2,16 +2,17 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
-import { resolveGitToken } from '../utils/secrets.js';
 
 // ---------------------------------------------------------------------------
 // Git Client Adapter (sdd_git)
 //
 // The only block doing git I/O. Runs the git CLI against the bound project's
-// checkout using the container's bot identity (WAIRON_GIT_TOKEN + committer
-// name/email). The token is injected into the clone URL, so `origin` carries it
-// for later fetch/push — this lives only in the container-local .git/config,
-// never in the repo.
+// checkout using the container's bot identity (committer name/email). The
+// token is INJECTED by whoever wires the clone up — the caller resolves it
+// (the hosted plane from its own secret repository); this module never asks
+// anyone for a secret by name. It goes into the clone URL, so `origin` carries
+// it for later fetch/push — only in the container-local .git/config, never in
+// the repo.
 // ---------------------------------------------------------------------------
 
 function git(args: string[], cwd?: string): string {
@@ -29,10 +30,8 @@ function gitEmail(): string {
   return process.env['WAIRON_GIT_EMAIL'] || 'wairon-bot@localhost';
 }
 
-/** Inject the connection's token into an https remote so fetch/push authenticate.
- *  Resolves the connection's own credentialRef first, then the shared git-token. */
-function authRemote(remote: string, credentialRef?: string): string {
-  const token = resolveGitToken(credentialRef);
+/** Inject the token into an https remote so fetch/push authenticate. */
+function authRemote(remote: string, token: string | null): string {
   if (!token || !/^https:\/\//.test(remote)) return remote;
   return remote.replace(/^https:\/\//, `https://x-access-token:${token}@`);
 }
@@ -40,8 +39,8 @@ function authRemote(remote: string, credentialRef?: string): string {
 /** Clone the remote (at branch) into the bound (empty) project directory. The
  *  token is injected into the clone URL, so `origin` carries it for later
  *  fetch/push (container-local .git/config only, never the repo). */
-export function clone(remote: string, branch: string, credentialRef?: string): void {
-  git(['clone', '--branch', branch, authRemote(remote, credentialRef), '.']);
+export function clone(token: string | null, remote: string, branch: string): void {
+  git(['clone', '--branch', branch, authRemote(remote, token), '.']);
   git(['config', 'user.name', gitName()]);
   git(['config', 'user.email', gitEmail()]);
 }

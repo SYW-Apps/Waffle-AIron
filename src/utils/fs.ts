@@ -106,6 +106,16 @@ interface RequestScope {
 }
 const requestRootStore = new AsyncLocalStorage<RequestScope>();
 
+/**
+ * The active root BINDING itself — a fresh object for every runWithProjectRoot /
+ * runWithProjectBinding call, undefined outside one. Its identity is what says
+ * "a caller just bound this root", which the spec index uses to re-read a tree
+ * as it is now on the first read of each binding.
+ */
+export function currentRootBinding(): object | undefined {
+  return requestRootStore.getStore();
+}
+
 /** Run `fn` with `dir` as the active project root for the current async context
  *  (and everything it awaits). The hosting server wraps each request in this so
  *  its sdd_* handlers resolve to the authenticated project's .wai/ tree without a

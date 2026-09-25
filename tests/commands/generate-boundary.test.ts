@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
-import * as adapter from '../../src/commands/subsystem.js';
+import * as adapter from '../../src/commands/adapters/core.js';
 import * as portal from '../../src/core/index.js';
 import * as generator from '../../src/exporters/generate.js';
 import { runGenerate } from '../../src/commands/generate.js';
@@ -164,7 +164,7 @@ describe('wairon generate reaches the generator through cli_core_adapter, not th
     // three times.
     const source = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/generate.ts'), 'utf8');
     expect(source).not.toContain("from '../exporters/generate.js'");
-    expect(source).toContain("from './subsystem.js'");
+    expect(source).toContain("from './adapters/core.js'");
     expect(source).toContain('  generateAll,');
     expect(source).toContain('  resolveExpectedOutputPaths,');
   });

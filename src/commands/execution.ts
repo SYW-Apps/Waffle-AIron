@@ -9,7 +9,7 @@ import {
   resolveAgentTopology,
   deriveExecutionProfile,
   resolveBudget,
-} from './subsystem.js';
+} from './adapters/core.js';
 import {
   BUDGET_TIER_DESCRIPTIONS,
   BudgetTier,

@@ -43,6 +43,13 @@ methods:
     params:
       - name: namespace
         type: string
+  - name: computeStateId
+    description: >-
+      Forward to approval_portal.computeStateId: the spec tree's content identity a snapshot is
+      stamped with
+    signature: 'computeStateId(): StateId'
+    returns: StateId
+    params: []
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-09-12T17:43:21.175Z'
+updatedAt: '2026-09-25T21:09:24.181Z'
