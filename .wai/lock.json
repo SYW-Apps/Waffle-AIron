@@ -1,9 +1,9 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "107ddfe3130a70a8b9619b9c2e5a31cf21c3798c9d11d53f4675e88037e9c088"
+    "digest": "48e4f5d73108e3ef3e0a194c85dbddc1d7b939a04786db8ed1d11d5a01aebc6c"
   },
-  "lockedAt": "2026-09-24T22:35:07.359Z",
+  "lockedAt": "2026-09-25T13:46:17.221Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -12,7 +12,7 @@
   "validationResult": {
     "valid": true,
     "errors": 0,
-    "warnings": 41
+    "warnings": 0
   },
   "status": "ready",
   "specs": {
@@ -368,7 +368,7 @@
     ".wai/specs/implementations/lock_store_impl.yaml": "c5c027b6782d64ec2a94efa74f14a0035fc1586d0d74028134c4397d8d352e35",
     ".wai/specs/implementations/mcp_authoring_adapter_impl.yaml": "326f33faeba42e483c69613e7c9ca03dd61e2d8cde4bba1995993ad9e9f13bd1",
     ".wai/specs/implementations/mcp_core_adapter_impl.yaml": "8525dd73395e37290cf1d55f581c43cd6a040754ff58ee0e5019daead6eabac9",
-    ".wai/specs/implementations/mcp_orchestrator_impl.yaml": "5be8eb25a67564954261c9ad4844e1aa3887da4a71fe48b68b1a9b114b89aa61",
+    ".wai/specs/implementations/mcp_orchestrator_impl.yaml": "14e6f7c02fbc716d0937af38ed0a3ecb20658647ed246ad740ad38ae46bcc47c",
     ".wai/specs/implementations/mcp_portal_impl.yaml": "9846675d7c079b73b5b6deac4e64cf841bdd0a0a9ef5caee2e71e98a43dcb589",
     ".wai/specs/implementations/mcp_server_impl.yaml": "391c81f863a393a6915aa0b0c0c7ec397768a2db07004b385c7d832034154e99",
     ".wai/specs/implementations/mcp_skills_adapter_impl.yaml": "cff792f9e4d23728388cef59c7ad16910cfab3228a5ae9f57bec4af67036e420",
@@ -997,9 +997,9 @@
     ".wai/specs/types/spec_read_result.yaml": "32a9990a69b4387895e51f24d821c830701a300893ab4a1766f933790a2b4a29",
     ".wai/specs/types/spec_rename.yaml": "f36881ad59e6e1a75c9abb85cde6c5ba946351eb79fb0e15fad45f51e243eff3",
     ".wai/specs/types/spec_restatement.yaml": "7a2ae392059d010b486be0f8d980a0dc2769bb87cc2f3da822a09721c560a5a2",
-    ".wai/specs/types/spec_restatement_application.yaml": "ca8797a0f357a9479566ad3e09dfb822be260da4f27ec58bdab49079c419fda7",
+    ".wai/specs/types/spec_restatement_application.yaml": "c8a1684b4bc6bd0cd34ebab960be057c5d82d714af14906300fd920746442ae1",
     ".wai/specs/types/spec_write_hooks.yaml": "cb082bae366c1a69f0b97ad59f246833206d1461c932f6013f00efb1d9716517",
-    ".wai/specs/types/spec_write_receipt.yaml": "3cd31eb78492603fa882c0bc6acfaec7ca952fc463c860e22354e545e0c9ec65",
+    ".wai/specs/types/spec_write_receipt.yaml": "73980f8fa1a709152f61e4a21b474f58354855630a8a411f2ba82335dd6698e0",
     ".wai/specs/types/specialist_retirement.yaml": "0a6e3c9c01cb7506a250cd0a7e15d430cf6b75df6114f17520e9c6e226f42c85",
     ".wai/specs/types/specialist_retype.yaml": "790459255daf5485f703b925f1b35ffdd68276c09ecb3baddbb932c5822e4f67",
     ".wai/specs/types/state_id.yaml": "21871268f11923927730d17c27305861bd2e64d63f61b4a3d0879283499a83df",
