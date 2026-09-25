@@ -158,9 +158,10 @@ methods:
       - stepNumber: 12
         description: >-
           toFiles = across subsystems, the exact-grade files of
-          realization.filesIn(target.subsystem) minus fromFiles, since the published surface's
-          barrel is cosmetic at runtime so any module of the subsystem proves the hop and a shared
-          file satisfies it trivially; within one subsystem, filesOf(targetId)
+          realization.filesIn(target.subsystem) minus fromFiles: UNREALIZED_DEPENDENCY accepts an
+          import into any module of the target subsystem as proof the hop exists, and a shared file
+          satisfies it trivially — WHERE the hop lands (the target's portal file or past it) is
+          portal-imports' question, not this one; within one subsystem, filesOf(targetId)
         type: local
       - stepNumber: 13
         label: traceGuard
@@ -1618,4 +1619,4 @@ methods:
     exportedVia: portalImportsRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-25T20:48:25.032Z'
+updatedAt: '2026-09-25T21:52:00.070Z'

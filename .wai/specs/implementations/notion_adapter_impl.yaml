@@ -3,16 +3,16 @@ name: Notion Client Adapter Implementation
 description: Pushes a DocPage tree into a wairon-specs subsection under a Notion parent page via the REST API.
 contract: inotion_adapter
 sourcePath: src/producers/notion.ts
+injectedParams:
+  - token
 methods:
   - name: sync
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the Notion token through the host's secret portal (secret store, then env); reject
-          if absent
-        type: call
-        targetComponent: secret_portal
-        targetMethod: resolve
+          Reject an empty injected token — whoever wires the sync up resolved it and handed it in;
+          this adapter never asks anyone for a secret by name
+        type: local
       - stepNumber: 2
         description: Find or create the 'wairon specs' child page under the parent page
         type: local
@@ -28,4 +28,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-07-04T17:39:24.124Z'
-updatedAt: '2026-09-25T21:12:55.615Z'
+updatedAt: '2026-09-25T22:00:51.896Z'

@@ -615,12 +615,25 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
+          Resolve the clone's token from the host's own secret repository: the connection's own
+          credential ref first, when it has one, so each connection can carry a distinct PAT
+        type: call
+        targetComponent: secret_repository
+        targetMethod: resolve
+      - stepNumber: 7
+        description: Otherwise fall back to the shared git-token (none at all for a public remote)
+        type: call
+        targetComponent: secret_repository
+        targetMethod: resolve
+      - stepNumber: 8
+        description: >-
           Bind the project to its REAL repository (clone the remote onto the isolated working
-          branch); wairon will commit ONLY .wai/ inside it
+          branch), handing the git plane the resolved token as an argument; wairon will commit ONLY
+          .wai/ inside it
         type: call
         targetComponent: host_git_adapter
         targetMethod: enable
-      - stepNumber: 7
+      - stepNumber: 9
         description: Return the project record
         type: return
         outcome: project record
@@ -918,11 +931,42 @@ methods:
         description: Compose the canvas link from the public base URL and token
         type: local
       - stepNumber: 8
-        description: Project and push the project to the target
+        description: Read the project's configured producers
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: list
+      - stepNumber: 9
+        description: Is the target configured? An unconfigured target needs no token
+        type: branch
+        condition: the target is configured
+        onFalseStep: 13
+      - stepNumber: 10
+        description: >-
+          Resolve the target's token (<target>-token) from the host's own secret repository — the
+          value never leaves the host except as this one call's argument
+        type: call
+        targetComponent: secret_repository
+        targetMethod: resolve
+      - stepNumber: 11
+        description: Is a token stored?
+        type: branch
+        condition: no token is stored for the target
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Refuse the run before the producer does anything, naming the environment variable and the
+          host secret to set
+        type: throw
+        error: No <Target> token
+      - stepNumber: 13
+        label: produce
+        description: >-
+          Project and push the project to the target, handing the producer the token resolved above
+          as an argument (none for an unconfigured target, which the producer refuses by name)
         type: call
         targetComponent: host_producer_adapter
         targetMethod: produce
-      - stepNumber: 9
+      - stepNumber: 14
         description: Return once produced
         type: return
         outcome: produced
@@ -1073,4 +1117,4 @@ methods:
         outcome: imported tree
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-23T21:19:35.412Z'
+updatedAt: '2026-09-25T22:02:33.334Z'

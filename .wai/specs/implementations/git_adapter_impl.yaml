@@ -6,20 +6,16 @@ description: >-
   that made a shared real repository unsafe).
 contract: igit_adapter
 sourcePath: src/git/adapter.ts
+injectedParams:
+  - token
 methods:
   - name: clone
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the git token through the host's secret portal: the connection's own credential
-          ref first, when it has one, then the shared git-token
-        type: call
-        targetComponent: secret_portal
-        targetMethod: resolve
-      - stepNumber: 2
-        description: >-
-          Run git clone of the remote (at branch) into the bound project directory, the token
-          injected into an https remote so origin carries it
+          Run git clone of the remote (at branch) into the bound project directory, the INJECTED
+          token — resolved and handed in by whoever wires the clone up, none for a public remote —
+          put into an https remote so origin carries it
         type: local
   - name: fetch
     narrative:
@@ -70,4 +66,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-07-04T16:33:28.728Z'
-updatedAt: '2026-09-25T21:12:54.206Z'
+updatedAt: '2026-09-25T22:00:45.016Z'

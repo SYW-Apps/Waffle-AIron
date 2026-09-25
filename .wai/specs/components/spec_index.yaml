@@ -3,7 +3,11 @@ name: Spec Index
 description: >-
   Read/lookup face of the spec repository: resolves spec ids and kinds to their file locations
   across flat and per-subsystem layouts, reads documents through the file store, and parses them
-  against the level schemas — collecting loader issues instead of throwing on a bad file.
+  against the level schemas — collecting loader issues instead of throwing on a bad file. Its
+  per-root scan is a cache the index keeps fresh itself: every spec write drops it, a cached scan is
+  re-verified against the tree's file signature at most once per short TTL, and a root switch (a
+  caller binding this project root after another) re-verifies it on the first read regardless of the
+  TTL, so no caller has to invalidate it to read a tree as it is now.
 subsystem: sdd_core
 componentType: Index
 owns: []
@@ -11,4 +15,4 @@ dependsOn:
   - spec_file_store
 status: complete
 createdAt: '2026-07-18T22:57:53.159Z'
-updatedAt: '2026-07-18T22:57:53.892Z'
+updatedAt: '2026-09-25T21:53:08.348Z'

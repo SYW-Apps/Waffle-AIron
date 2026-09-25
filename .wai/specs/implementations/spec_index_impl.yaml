@@ -25,7 +25,11 @@ methods:
       - stepNumber: 1
         description: >-
           Walk the specs tree for subsystem documents (the workspace scan is recursive across flat
-          and per-subsystem layouts)
+          and per-subsystem layouts). A workspace serves its cached scan while the tree's file
+          signature (paths, mtimes, sizes) is unchanged, re-checking the signature at most once per
+          short TTL — and ALWAYS on the first read after the bound project root switches to this
+          workspace, so a tree changed outside the process (an editor save, a git pull) is never
+          served stale to a caller that just bound it
         type: call
         targetComponent: spec_file_store
         targetMethod: listTree
@@ -243,4 +247,4 @@ methods:
         outcome: loaded
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-24T22:25:39.274Z'
+updatedAt: '2026-09-25T21:53:06.009Z'

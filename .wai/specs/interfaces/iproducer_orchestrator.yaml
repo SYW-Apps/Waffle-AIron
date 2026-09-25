@@ -8,9 +8,19 @@ methods:
     signature: 'configure(target: string, parentPageId: string): void'
     returns: void
   - name: produce
-    description: Project the spec tree and push it to the target.
-    signature: 'produce(target: string, diagramUrl: string): void'
+    description: >-
+      Project the spec tree and push it to the target, handing the target's adapter the token the
+      caller resolved.
+    signature: 'produce(target: string, diagramUrl: string, token: string): void'
     returns: void
+    params:
+      - name: target
+        type: string
+      - name: diagramUrl
+        type: string
+      - name: token
+        type: string
+        description: The target service's credential, resolved by the caller
   - name: remove
     description: Remove a target's config.
     signature: 'remove(target: string): void'
@@ -21,4 +31,4 @@ methods:
     returns: ProducerConfig[]
 status: complete
 createdAt: '2026-07-04T17:37:33.877Z'
-updatedAt: '2026-07-04T17:42:04.158Z'
+updatedAt: '2026-09-25T22:01:48.221Z'

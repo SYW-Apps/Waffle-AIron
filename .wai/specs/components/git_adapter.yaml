@@ -3,13 +3,13 @@ name: Git Client Adapter
 description: >-
   The only block doing git I/O: clone, fetch, ensure/checkout the working branch, integrate the
   default branch, commit the working tree, push, read the head commit, and compute the host-agnostic
-  compare URL. Runs git against the bound project's checkout using the container's bot identity
-  (WAIRON_GIT_TOKEN + committer name/email).
+  compare URL. Runs git against the bound project's checkout using the container's bot committer
+  identity. The clone's token is INJECTED by whoever wires the adapter up: this subsystem never asks
+  anyone for a secret by name.
 subsystem: sdd_git
 componentType: Adapter
 owns: []
-dependsOn:
-  - secret_portal
+dependsOn: []
 status: complete
 createdAt: '2026-07-04T16:31:18.263Z'
-updatedAt: '2026-09-25T21:12:34.408Z'
+updatedAt: '2026-09-25T22:00:46.565Z'
