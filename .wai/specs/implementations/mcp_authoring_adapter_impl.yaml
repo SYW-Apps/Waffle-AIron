@@ -7,15 +7,6 @@ description: >-
 contract: imcp_authoring_adapter
 sourcePath: src/mcp/server.ts
 methods:
-  - name: addComponent
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Call addComponent on the authoring portal: the gate judges the candidate and refuses it
-          before anything reaches disk, and performs the write only if it passes
-        type: call
-        targetComponent: authoring_portal
-        targetMethod: addComponent
   - name: updateSpecGated
     narrative:
       - stepNumber: 1
@@ -33,6 +24,22 @@ methods:
         type: call
         targetComponent: authoring_portal
         targetMethod: moveMethods
+  - name: writeSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Call writeSpec on the authoring portal: the seam applies the restatement, judges it and
+          writes it, or refuses before anything reaches disk
+        type: call
+        targetComponent: authoring_portal
+        targetMethod: writeSpec
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: Call deleteSpec on the authoring portal
+        type: call
+        targetComponent: authoring_portal
+        targetMethod: deleteSpec
 status: complete
 createdAt: '2026-09-18T21:43:42.731Z'
-updatedAt: '2026-09-20T12:06:05.394Z'
+updatedAt: '2026-09-24T22:22:02.388Z'

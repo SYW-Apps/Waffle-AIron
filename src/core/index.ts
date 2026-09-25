@@ -54,6 +54,11 @@ export {
   loadTypeSpec,
   saveTypeSpec,
   deleteTypeSpec,
+  // Kind-generic access (icore_portal loadSpec / saveSpec / deleteSpec), for a
+  // caller that holds the kind as data — the authoring seam above all.
+  loadSpec,
+  saveSpec,
+  deleteSpec,
   updateSpec,
   moveMethods,
   dryRunSerializeSpecs,

@@ -1,8 +1,11 @@
 id: mcp_orchestrator_impl
 name: MCP Orchestrator Implementation
 description: >-
-  The sdd_* tool workflows: input verification against existing parents, spec persistence via the
-  core client adapter, and conformance runs via the validator client adapter. Realized today inside
+  The sdd_* tool workflows: turning each tool's arguments into the write the authoring seam
+  performs, reads through the core client adapter, and conformance runs via the validator client
+  adapter. A tool knows its own input schema, so it states which fields that input can express; what
+  a write does with that knowledge — status, carry, clear, removal, the gate, the tests it
+  invalidates — is decided by the seam, identically for every door. Realized today inside
   src/mcp/server.ts tool handlers (pending the code-side split).
 contract: imcp_orchestrator
 sourcePath: src/mcp/server.ts
@@ -10,57 +13,84 @@ methods:
   - name: initializeSystem
     narrative:
       - stepNumber: 1
-        description: Persist the L0 system spec via the core client adapter
+        description: >-
+          State the restatement: the L0 as the tool's arguments give it, and the fields this tool's
+          input can express
+        type: local
+      - stepNumber: 2
+        description: >-
+          Write it through the authoring client adapter, which re-authors an existing L0 in place
+          and carries what this input cannot express (databases, the project gateway
+          publicInterfaces, diagram defaults)
         type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveSystemSpec
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: >-
+          Answer with the receipt: the sentence and its notices as text, the receipt itself as
+          structured content
+        type: return
+        outcome: written
     symbol: sdd_initialize_system
   - name: addComponent
     narrative:
       - stepNumber: 1
-        description: Verify the parent subsystem exists
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpec
+        description: >-
+          State the restatement: the component as the tool's arguments give it, the fields this
+          tool's input can express, and the status stated, if any
+        type: local
       - stepNumber: 2
         description: >-
-          Persist the L2 component spec through the authoring client adapter, so the intrinsic rules
-          judge the candidate before anything reaches disk
+          Write it through the authoring client adapter, which requires the subsystem and judges the
+          candidate against the intrinsic rules before anything reaches disk
         type: call
         targetComponent: mcp_authoring_adapter
-        targetMethod: addComponent
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: Answer with the receipt
+        type: return
+        outcome: written
     symbol: sdd_add_component
   - name: defineInterface
     narrative:
       - stepNumber: 1
-        description: Verify the owning component exists
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadComponentSpec
+        description: >-
+          State the restatement: the contract as the tool's arguments give it, the spec-level and
+          per-method fields this tool's input can express, and the status stated, if any
+        type: local
       - stepNumber: 2
-        description: Persist the L3 interface spec via the core client adapter
+        description: >-
+          Write it through the authoring client adapter, which requires the component, carries each
+          method's endpoint binding, names every method a restatement removed, and reports the tests
+          a changed or removed method invalidated
         type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveInterfaceSpec
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: Answer with the receipt
+        type: return
+        outcome: written
     symbol: sdd_define_interface
   - name: writeNarrative
     narrative:
       - stepNumber: 1
-        description: Verify the contract interface exists
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadInterfaceSpec
+        description: >-
+          State the restatement: the implementation as the tool's arguments give it, each step
+          numbered by its position where the input left the number out, with the spec-level and
+          per-method fields this tool's input can express, and the status stated, if any
+        type: local
       - stepNumber: 2
         description: >-
-          Resolve symbolic step-label references (*Label twins of the jump-by-number flow fields)
-          against the authored steps' label anchors, rejecting the write on unknown or duplicate
-          labels so a typo never becomes a dangling numeric jump
-        type: local
-      - stepNumber: 3
-        description: Persist the L4 implementation spec via the core client adapter
+          Write it through the authoring client adapter, which requires the contract, resolves every
+          *Label reference (an unresolved one refuses the whole write), names every method a
+          restatement removed, and reports the tests a changed or removed method invalidated
         type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveImplementationSpec
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: Answer with the receipt
+        type: return
+        outcome: written
     symbol: sdd_write_narrative
   - name: validateTree
     narrative:
@@ -80,32 +110,21 @@ methods:
   - name: addSubsystem
     narrative:
       - stepNumber: 1
-        description: Verify the system spec exists (parent gate)
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadSystemSpec
-      - stepNumber: 2
-        description: Route external subprojects through the chained-subsystem path
-        type: branch
-        condition: the subsystem spec carries a projectPath
-        onTrueStep: 3
-        onFalseStep: 5
-      - stepNumber: 3
         description: >-
-          Scaffold the child project and wire the parent subsystem (idempotent when the child
-          already exists)
+          State the restatement: the subsystem as the tool's arguments give it, the fields this
+          tool's input can express, and the status stated, if any
+        type: local
+      - stepNumber: 2
+        description: >-
+          Write it through the authoring client adapter, which requires the L0, derives parentSystem
+          from it, and scaffolds the child project when a projectPath is given
         type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: createChainedSubsystem
-      - stepNumber: 4
-        description: External subproject subsystem created and wired
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: Answer with the receipt, naming the scaffolded child project when there was one
         type: return
-        outcome: external subsystem created
-      - stepNumber: 5
-        description: Persist the in-tree L1 subsystem spec via the core client adapter
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveSubsystemSpec
+        outcome: written
     symbol: sdd_add_subsystem
   - name: moveSubsystemProject
     narrative:
@@ -258,57 +277,74 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Load the L3 contract the bindings attach to; an id no contract holds is refused before
-          anything is built
+          Read the L3 contract the bindings attach to; an id no contract holds is refused, and so is
+          a binding to a method it does not declare — a delta would otherwise add a bare method
+          under that name
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadInterfaceSpec
       - stepNumber: 2
         description: >-
-          For each binding, resolve the method on the contract and build the raw endpoint from that
-          transport's own address fields, then parse it against the endpoint schema — a method the
-          contract does not declare, or an endpoint the schema rejects, refuses the whole write with
-          the offending field named, so a half-bound contract is never saved
+          For each binding, build the raw endpoint from that transport's own address fields and
+          parse it against the endpoint schema; a binding the schema rejects refuses the whole write
+          with the offending field named, so a half-bound contract is never saved
         type: local
       - stepNumber: 3
-        description: Persist the contract with every binding attached and its updatedAt restamped
+        description: >-
+          Bind them through the authoring client adapter as one delta naming each method with its
+          endpoint, so the write is judged and reported like any other
         type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveInterfaceSpec
+        targetComponent: mcp_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 4
+        description: >-
+          Answer with the change report: every binding the write set or changed, and that nothing
+          changed when every binding already held
+        type: return
+        outcome: reported
     symbol: sdd_set_endpoints
   - name: setPublicInterfaces
     narrative:
       - stepNumber: 1
         description: >-
-          Load the L1 subsystem whose published surface is being set; an id no subsystem holds is
+          Read the L1 subsystem whose published surface is being set; an id no subsystem holds is
           refused
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadSubsystemSpec
       - stepNumber: 2
         description: >-
-          Persist the subsystem with its publicInterfaces REPLACED by the list given and updatedAt
-          restamped — a replacement, not a merge, so an entry left out is gone
+          Express the replacement as one delta: a delete for every stored entry the list does not
+          restate (an entry is its component and interface), then the list itself — so the write
+          stays a single judged write and an entry left out is gone, which is what this tool
+          promises
+        type: local
+      - stepNumber: 3
+        description: Apply it through the authoring client adapter
         type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveSubsystemSpec
+        targetComponent: mcp_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 4
+        description: 'Answer with the change report: every entry added, changed or removed'
+        type: return
+        outcome: reported
     symbol: sdd_set_public_interfaces
   - name: setSubsystemProjectPath
     narrative:
       - stepNumber: 1
         description: >-
-          Load the L1 subsystem whose chaining link is being rewritten; an id no subsystem holds is
-          refused
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpec
+          Express the change as a delta: projectPath set to the path given, or unset when none was —
+          only the link moves, never the directory it names
+        type: local
       - stepNumber: 2
-        description: >-
-          Persist the subsystem with projectPath set to the path given — or cleared when none was —
-          and updatedAt restamped; only the link moves, never the directory it names
+        description: Apply it through the authoring client adapter, which refuses an id no subsystem holds
         type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveSubsystemSpec
+        targetComponent: mcp_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 3
+        description: Answer with the change report
+        type: return
+        outcome: reported
     symbol: sdd_set_subsystem_project_path
   - name: getSpec
     narrative:
@@ -432,31 +468,20 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Read the stored type under that id through the core client adapter: a define is an upsert,
-          so this is what decides between added and re-authored, and what carries the stored
-          createdAt and group forward
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadTypeSpec
+          State the restatement: the type as the tool's arguments give it, each field's optional
+          flag defaulted to false, and the fields this tool's input can express
+        type: local
       - stepNumber: 2
         description: >-
-          Build the type document from the input: its fields with their identity markers and foreign
-          references, its pure intrinsic methods, its declared invariants, its database, table and
-          linked-entity bindings, and the sourcePath and symbol that turn it into a claim on code.
-          Note every field the input does not express so it can be carried forward, and every list
-          an omission clears
-        type: local
-      - stepNumber: 3
-        description: Persist the type through the core client adapter and take the store's placement notices
+          Write it through the authoring client adapter, which names every field or method a
+          restatement removed; a type carries no lifecycle status, so the receipt states none
         type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveTypeSpec
-      - stepNumber: 4
-        description: >-
-          Compose the write receipt: whether a spec already held the id, and one notice per thing a
-          restatement did — what was carried forward, which field or method it removed, what an
-          omission cleared. A type carries no lifecycle status, so the receipt states none
-        type: local
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: Answer with the receipt
+        type: return
+        outcome: written
     symbol: sdd_add_type
   - name: moveMethods
     narrative:
@@ -483,50 +508,16 @@ methods:
   - name: deleteSpec
     narrative:
       - stepNumber: 1
-        description: Choose the delete for the named kind
-        type: switch
-        'on': the spec kind
-        cases:
-          - value: subsystem
-            step: 2
-          - value: component
-            step: 3
-          - value: interface
-            step: 4
-          - value: implementation
-            step: 5
-          - value: type
-            step: 6
-        defaultStep: 7
-      - stepNumber: 2
-        description: Delete the subsystem's document
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: deleteSubsystemSpec
-      - stepNumber: 3
-        description: Delete the component's document
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: deleteComponentSpec
-      - stepNumber: 4
-        description: Delete the interface's document
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: deleteInterfaceSpec
-      - stepNumber: 5
-        description: Delete the implementation's document
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: deleteImplementationSpec
-      - stepNumber: 6
-        description: Delete the type's document
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: deleteTypeSpec
-      - stepNumber: 7
         description: >-
-          Answer whether a document was actually removed — false says the spec was not there, which
-          is not a failure but is not a deletion either
+          Delete the spec through the authoring client adapter, which reports the tests a removed
+          method invalidated
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: deleteSpec
+      - stepNumber: 2
+        description: >-
+          Answer with the deletion: false says the spec was not there, which is not a failure but is
+          not a deletion either
         type: return
         outcome: answered
     symbol: sdd_delete_spec
@@ -579,4 +570,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-23T12:24:47.572Z'
+updatedAt: '2026-09-24T23:00:57.093Z'

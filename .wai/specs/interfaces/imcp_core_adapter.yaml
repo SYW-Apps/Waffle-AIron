@@ -13,14 +13,6 @@ methods:
     description: Calls resolveAgentTopology on core portal
     signature: 'resolveAgentTopology(): AgentRecord[]'
     returns: AgentRecord[]
-  - name: saveSystemSpec
-    description: Calls saveSystemSpec on core portal
-    signature: 'saveSystemSpec(spec: SystemSpec): void'
-    returns: void
-  - name: saveSubsystemSpec
-    description: Calls saveSubsystemSpec on core portal
-    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
-    returns: void
   - name: loadSubsystemSpec
     description: Calls loadSubsystemSpec on core portal
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
@@ -33,24 +25,10 @@ methods:
     description: Calls loadComponentSpec on core portal
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
     returns: ComponentSpec | null
-  - name: saveInterfaceSpec
-    description: Calls saveInterfaceSpec on core portal
-    signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
-    returns: void
   - name: loadInterfaceSpec
     description: Calls loadInterfaceSpec on core portal
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
     returns: InterfaceSpec | null
-  - name: saveImplementationSpec
-    description: Calls saveImplementationSpec on core portal
-    signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
-    returns: void
-  - name: createChainedSubsystem
-    description: >-
-      Calls createChainedSubsystem on core portal to scaffold the child subproject and wire the
-      parent subsystem with its projectPath.
-    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
-    returns: void
   - name: moveSubsystemProject
     description: >-
       Calls moveSubsystemProject on core portal to relocate an external subsystem's directory and
@@ -143,54 +121,6 @@ methods:
       - name: id
         type: string
         description: The type's id
-  - name: saveTypeSpec
-    description: Calls saveTypeSpec on core portal, answering with the placement notices the write owes
-    signature: 'saveTypeSpec(spec: TypeSpec): string[]'
-    returns: string[]
-    params:
-      - name: spec
-        type: TypeSpec
-        description: The type to persist
-  - name: deleteSubsystemSpec
-    description: Calls deleteSubsystemSpec on core portal
-    signature: 'deleteSubsystemSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The subsystem id
-  - name: deleteComponentSpec
-    description: Calls deleteComponentSpec on core portal
-    signature: 'deleteComponentSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The component id
-  - name: deleteInterfaceSpec
-    description: Calls deleteInterfaceSpec on core portal
-    signature: 'deleteInterfaceSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The interface id
-  - name: deleteImplementationSpec
-    description: Calls deleteImplementationSpec on core portal
-    signature: 'deleteImplementationSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The implementation id
-  - name: deleteTypeSpec
-    description: Calls deleteTypeSpec on core portal
-    signature: 'deleteTypeSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The type id
   - name: getStatusReport
     description: >-
       How complete the spec tree is, for the MCP status tool. Answers the text and whether the tree
@@ -215,4 +145,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-23T15:18:02.949Z'
+updatedAt: '2026-09-24T22:25:04.141Z'

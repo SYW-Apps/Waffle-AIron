@@ -21,11 +21,46 @@ reaches now that the detail dial no longer does that for them. A
 scripted `sdd_update_spec` delta can also behave differently, where it was
 relying on a merge rule that was silently wrong (item 10), and a scripted call
 to a create tool that carries an unknown key inside a method, a param or a
-narrative step is now refused where it used to be stripped (item 13). Nine
+narrative step is now refused where it used to be stripped (item 13). Thirteen
 `sdd_*` tools now declare an `outputSchema`, which changes what a conforming MCP
 client expects back from them (item 14). The library surface narrows too:
 `@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
 (item 4). Nothing here is purely additive, so `[minor]` would understate it.
+
+### Every authored write goes through the authoring seam
+
+`sdd_authoring` called itself the one place that decides what may be written and
+then writes it, and every door was meant to reuse it. Only three MCP tools did:
+`sdd_add_component`, `sdd_update_spec` and `sdd_move_methods`. The other create
+tools, the three setters and `sdd_delete_spec` saved through the store directly,
+and the rules for re-authoring a spec — the stored status is never lowered, what
+the input cannot express is carried, what an omission cleared and a restatement
+removed is named, the parent must exist, narrative labels must resolve — lived in
+the MCP transport handlers, six times over. The visible symptom: redefining a
+contract with `sdd_define_interface` so that a method disappeared named no tests
+to revisit, while the same change through `sdd_update_spec` did.
+
+- **The seam has one whole-spec write.** `writeSpec` takes a restatement — the
+  spec as the tool states it, plus the fields that tool's input can express — and
+  does everything above in one place, for every level from the L0 down. The
+  receipt now carries `testsToRevisit`, so a create that drops or rewrites a
+  method names the tests encoding it, exactly as a delta does.
+- **A delete goes through the seam too**, and reports the tests a removed
+  contract or implementation took with it.
+- **The setters are gated deltas.** `sdd_set_endpoints`,
+  `sdd_set_public_interfaces` and `sdd_set_subsystem_project_path` answer with a
+  change report, write nothing when nothing changes, and no longer restamp
+  `updatedAt` on a no-op. `sdd_set_public_interfaces` still replaces the list.
+- **An unbound public interface has an identity.** An entry not yet bound to a
+  component is addressed by its type and details, so two unbound surfaces (a REST
+  and a MessageBus one, say) no longer collapse into one in `sdd_update_spec`'s
+  merge — that collapse predates this change and was silent. A list naming one
+  identity twice is refused as a genuine duplicate.
+- **The core store answers by kind.** `loadSpec`, `saveSpec` and `deleteSpec`
+  take the kind as data, replacing the kind switches callers repeated.
+- Mechanical writes stay ungated, as before: lock status promotion, migrations,
+  doctor repairs, provisioning, and — because they change identity, not what a
+  component owns — renames and subproject relocation.
 
 ### The status dashboard and the status report are one renderer
 
@@ -3453,13 +3488,17 @@ same as not knowing whether the next one an author writes will.
       is the one place the shapes nest further than a boundary schema should
       restate. It now reports what it dropped instead, under `NO EFFECT` in the
       answer — read that list where you would have read a refusal.
-14. **MCP clients: nine tools now declare an `outputSchema`.**
+14. **MCP clients: thirteen tools now declare an `outputSchema`.**
     `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_add_component`,
     `sdd_define_interface`, `sdd_write_narrative`, `sdd_add_type`,
-    `sdd_update_spec`, `sdd_get_spec` and `sdd_validate_tree` return
-    `structuredContent` alongside the text block they always returned. **The text
-    block is unchanged**, so a client that ignores structured content needs no
-    action at all. What changes is what a CONFORMING client expects: per the MCP
+    `sdd_update_spec`, `sdd_get_spec`, `sdd_validate_tree`, `sdd_set_endpoints`,
+    `sdd_set_public_interfaces`, `sdd_set_subsystem_project_path` and
+    `sdd_delete_spec` return `structuredContent` alongside the text block they
+    always returned. **The text block is unchanged** for the first nine, so a
+    client that ignores structured content needs no action for them; the three
+    setters keep their first sentence and now follow it with the change report,
+    and a delete or a create that invalidated tests adds a `TESTS TO REVISIT`
+    block. What changes is what a CONFORMING client expects: per the MCP
     specification a tool declaring an `outputSchema` must return structured
     content on every non-error result, and an SDK client validates it on arrival.
     - A client whose SDK predates structured output ignores the field entirely;

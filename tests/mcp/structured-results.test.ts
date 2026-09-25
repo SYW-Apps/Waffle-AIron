@@ -48,6 +48,10 @@ const STRUCTURED_TOOLS = [
   'sdd_write_narrative',
   'sdd_add_type',
   'sdd_update_spec',
+  'sdd_set_endpoints',
+  'sdd_set_public_interfaces',
+  'sdd_set_subsystem_project_path',
+  'sdd_delete_spec',
   'sdd_get_spec',
   'sdd_validate_tree',
 ];
@@ -132,6 +136,8 @@ describe('the tools answer with data, and still with the same sentence', () => {
       replacedExisting: false,
       status: 'design',
       notices: [],
+      // A new spec changed no stored method, so it invalidated no test.
+      testsToRevisit: [],
     });
   }, 60_000);
 

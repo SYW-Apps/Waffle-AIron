@@ -1,0 +1,69 @@
+kind: value-object
+id: spec_restatement
+name: SpecRestatement
+description: >-
+  A whole spec as a create tool states it, together with WHICH fields the tool could state. A create
+  is an upsert: on an existing id it re-authors in place, replacing what the input expresses and
+  carrying forward what it cannot express (lint, ext, endpoint bindings), so the write cannot be
+  judged without knowing the difference between a field left out and a field the door has no way to
+  say. The door knows its own input schema and passes that knowledge here; everything decided from
+  it — status, carry, clear, removal, notices — is decided once, here, for every door.
+subsystem: sdd_authoring
+fields:
+  - name: kind
+    type: string
+    description: system, subsystem, component, interface, implementation or type
+    optional: false
+  - name: spec
+    type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+    description: The spec as the caller stated it, before anything is carried into it
+    optional: false
+  - name: fields
+    type: string[]
+    description: >-
+      The spec-level fields this caller's input can express. A field on the list and absent from
+      spec is cleared by omission (and reported); a field off the list is carried from the stored
+      spec
+    optional: false
+  - name: memberFields
+    type: string[] | undefined
+    description: >-
+      The per-method fields this caller's input can express, for the kinds whose methods carry
+      fields of their own (interface, implementation): a method's unexpressed fields are carried
+      from the stored method of the same name
+    optional: true
+  - name: status
+    type: string | undefined
+    description: >-
+      The lifecycle status the caller stated: draft, design or complete. Absent keeps the stored
+      status, and draft for a new spec
+    optional: true
+methods:
+  - name: parent
+    signature: 'parent(): SpecParent | null'
+    returns: SpecParent | null
+    description: >-
+      The spec this one cannot be written without: the L0 for a subsystem, the subsystem named by a
+      component, the component named by an interface, the contract named by an implementation. None
+      for the L0 itself and for a type, whose subsystem is an ownership label and not a container.
+    symbol: restatementParent
+  - name: applyTo
+    signature: >-
+      applyTo(existing: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
+      ImplementationSpec | TypeSpec | null, parent: SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | null): SpecRestatementApplication
+    returns: SpecRestatementApplication
+    description: >-
+      What this restatement becomes over the stored spec, computed without touching disk — the way a
+      delta applies itself: the status, the candidate with every unexpressed field carried and
+      createdAt kept, the fields derived from the parent (a subsystem's parentSystem is the L0's
+      name), every narrative *Label reference resolved to its step number
+      (method_implementation.resolveLabels), and the notices naming what was carried, removed and
+      cleared. It REFUSES instead, with the sentence that says why and how to proceed, when the
+      parent the restatement needs is absent, when the stated status would lower the stored one (a
+      restatement never reopens a frozen spec), or when a narrative label does not resolve. A new
+      spec carries nothing and raises no notices.
+    symbol: applyRestatement
+sourcePath: src/core/authoring.ts
+createdAt: '2026-09-24T22:20:24.425Z'
+updatedAt: '2026-09-24T22:26:09.154Z'

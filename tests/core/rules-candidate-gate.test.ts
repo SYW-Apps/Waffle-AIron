@@ -6,7 +6,9 @@ import { validateComponentCandidate, formatCandidateRefusal } from '../../src/co
 import { specScopedRules, registerBuiltinRules } from '../../src/core/rules/repository.js';
 import { validateSddTree } from '../../src/core/validation.js';
 import { invalidateSpecCache, loadComponentSpec, saveComponentSpec } from '../../src/core/specs.js';
-import { addComponent, updateSpecGated } from '../../src/core/authoring.js';
+// The whole-spec write, aliased: this file's own temp-project helper is also
+// called writeSpec, and it writes raw YAML rather than through the seam.
+import { writeSpec as authorSpec, updateSpecGated } from '../../src/core/authoring.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import type { ComponentSpec } from '../../src/models/specs.js';
 
@@ -39,6 +41,12 @@ function comp(overrides: Partial<ComponentSpec> & Pick<ComponentSpec, 'component
 }
 
 const codes = (issues: { code: string }[]): string[] => issues.map(i => i.code);
+
+/** The component fields a create tool states — sdd_add_component's input, which is what the seam replaces. */
+const COMPONENT_FIELDS = [
+  'id', 'name', 'description', 'subsystem', 'componentType', 'owns', 'dependsOn', 'portalType', 'basePath',
+  'dispatch', 'mounts', 'durability', 'dependencyClass', 'emits', 'subscribesTo', 'ext', 'status',
+] as const;
 
 describe('candidate gate — what it refuses', () => {
   it('refuses a Portal-only field on a non-Portal, as an error', () => {
@@ -208,7 +216,7 @@ describe('the split is behaviour-preserving for a tree run', () => {
 // tested at the layer every access path reaches.
 // ---------------------------------------------------------------------------
 
-describe('authoring: addComponent', () => {
+describe('authoring: writeSpec for a component (the retired addComponent)', () => {
   function bootstrap() {
     const { tempDir, writeSpec } = createTempProject();
     setProjectRoot(tempDir);
@@ -218,8 +226,9 @@ describe('authoring: addComponent', () => {
 
   it('refuses a misplaced field and writes nothing at all', () => {
     const { tempDir } = bootstrap();
-    expect(() => addComponent(comp({ id: 'orch', componentType: 'Orchestrator', basePath: '/api' })))
-      .toThrow(/UNEXPECTED_PORTAL_FIELD/);
+    expect(() => authorSpec({
+      kind: 'component', spec: comp({ id: 'orch', componentType: 'Orchestrator', basePath: '/api' }), fields: [...COMPONENT_FIELDS],
+    })).toThrow(/UNEXPECTED_PORTAL_FIELD/);
 
     invalidateSpecCache();
     expect(loadComponentSpec('orch')).toBeNull();
@@ -228,7 +237,7 @@ describe('authoring: addComponent', () => {
 
   it('writes a clean component and returns intrinsic warnings as notices', () => {
     const { tempDir } = bootstrap();
-    const notices = addComponent(comp({ id: 'store1', componentType: 'Store' }));
+    const { notices } = authorSpec({ kind: 'component', spec: comp({ id: 'store1', componentType: 'Store' }), fields: [...COMPONENT_FIELDS] });
     expect(notices.some(n => n.startsWith('MISSING_DURABILITY'))).toBe(true);
 
     invalidateSpecCache();

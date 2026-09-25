@@ -2,15 +2,16 @@ kind: value-object
 id: spec_write_receipt
 name: SpecWriteReceipt
 description: >-
-  What a create tool answers with, as data rather than as a sentence to be parsed: which spec it
-  wrote, at what status, and whether a spec already held that id. A create is an upsert, so "added"
-  and "re-authored in place" are different outcomes with the same call, and only this receipt tells
-  them apart without reading English.
-subsystem: sdd_mcp
+  What a whole-spec write answers with, as data rather than as a sentence to be parsed: which spec
+  it wrote, at what status, whether a spec already held that id, and the tests the write
+  invalidated. A create is an upsert, so "added" and "re-authored in place" are different outcomes
+  with the same call, and only this receipt tells them apart without reading English. Every door
+  answers a create with this one receipt, because it is the authoring seam that produces it.
+subsystem: sdd_authoring
 fields:
   - name: kind
     type: string
-    description: 'The spec kind written: subsystem, component, interface, implementation or type.'
+    description: 'The spec kind written: system, subsystem, component, interface, implementation or type.'
     optional: false
   - name: id
     type: string
@@ -29,8 +30,8 @@ fields:
   - name: status
     type: string | undefined
     description: >-
-      The lifecycle status written — draft, design or complete. Absent for a type, which carries
-      none.
+      The lifecycle status written — draft, design or complete. Absent for the L0 and for a type,
+      neither of which carries one.
     optional: true
   - name: notices
     type: string[]
@@ -44,13 +45,15 @@ fields:
       The child project directory a chained subsystem's create scaffolded; absent for every other
       write.
     optional: true
-  - name: staleServer
-    type: boolean | undefined
+  - name: testsToRevisit
+    type: TestsToRevisit[]
     description: >-
-      True when the build on disk changed after this server started — the structured twin of the
-      text answer's STALE SERVER warning, so an agent reading only structured content still sees the
-      guard.
-    optional: true
+      The tests that encode a method this write changed or removed, one entry per such method. A
+      re-authoring that drops or rewrites a method invalidates its tests as surely as a delta does,
+      so the create reports them the same way. Empty for a new spec, when no method changed, when
+      the project declares no test roots, or when nothing references them.
+    optional: false
 methods: []
+sourcePath: src/core/authoring.ts
 createdAt: '2026-09-19T07:48:15.465Z'
-updatedAt: '2026-09-19T07:48:15.665Z'
+updatedAt: '2026-09-24T23:00:59.243Z'

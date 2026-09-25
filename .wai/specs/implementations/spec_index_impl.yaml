@@ -225,6 +225,22 @@ methods:
           Parse each against TypeSpecSchema and answer with the one whose id matches, or null when
           none does
         type: local
+  - name: load
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Turn the kind into this index's typed loader of that kind — the one switch every
+          kind-holding caller used to repeat; the L0 ignores the id
+        type: local
+      - stepNumber: 2
+        description: The typed loader reads the document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: Answer with the parsed spec, or null when no document is stored
+        type: return
+        outcome: loaded
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-19T23:04:52.844Z'
+updatedAt: '2026-09-24T22:25:39.274Z'

@@ -1,0 +1,22 @@
+kind: value-object
+id: spec_parent
+name: SpecParent
+description: >-
+  The spec a restatement cannot be written without: the L0 for a subsystem, the subsystem for a
+  component, the component for an interface, the contract for an implementation. A write whose
+  parent is missing is refused before anything reaches disk, because a child stored under a parent
+  that does not exist is a spec no loader can place.
+subsystem: sdd_authoring
+fields:
+  - name: kind
+    type: string
+    description: 'The parent''s spec kind: system, subsystem, component or interface'
+    optional: false
+  - name: id
+    type: string
+    description: The parent's id as the child names it; "system" for the L0 singleton
+    optional: false
+methods: []
+sourcePath: src/core/authoring.ts
+createdAt: '2026-09-24T22:20:02.729Z'
+updatedAt: '2026-09-24T22:26:11.152Z'

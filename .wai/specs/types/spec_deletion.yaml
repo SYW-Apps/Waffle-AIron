@@ -1,0 +1,33 @@
+kind: value-object
+id: spec_deletion
+name: SpecDeletion
+description: >-
+  What a delete answers with, as data: which spec, whether a file was actually removed, and the
+  tests that encode a method the deletion took away. Deleting a contract or an implementation
+  removes every method it held, which invalidates their tests exactly as removing one method by
+  delta does — so the delete reports them the same way.
+subsystem: sdd_authoring
+fields:
+  - name: kind
+    type: string
+    description: 'The spec kind deleted: subsystem, component, interface, implementation or type'
+    optional: false
+  - name: id
+    type: string
+    description: The id the spec was stored under
+    optional: false
+  - name: deleted
+    type: boolean
+    description: 'False when no spec held the id: nothing was removed'
+    optional: false
+  - name: testsToRevisit
+    type: TestsToRevisit[]
+    description: >-
+      The tests that encode a method this deletion removed, one entry per such method. Empty when
+      the spec held no methods, when the project declares no test roots, or when nothing references
+      them
+    optional: false
+methods: []
+sourcePath: src/core/authoring.ts
+createdAt: '2026-09-24T22:20:44.394Z'
+updatedAt: '2026-09-24T22:26:11.955Z'

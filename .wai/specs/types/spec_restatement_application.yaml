@@ -1,0 +1,48 @@
+kind: value-object
+id: spec_restatement_application
+name: SpecRestatementApplication
+description: >-
+  A restatement applied to the stored spec, before any judgement or write: the candidate to judge
+  and persist, or the refusal that stops it, and everything the answer must say about the
+  difference.
+subsystem: sdd_authoring
+fields:
+  - name: spec
+    type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+    description: >-
+      The candidate: the restated spec with unexpressed fields carried, createdAt kept,
+      parent-derived fields set and the resolved status written
+    optional: false
+  - name: status
+    type: string | undefined
+    description: >-
+      The status the candidate is written at; absent for the L0 and for a type, neither of which
+      carries a lifecycle status
+    optional: true
+  - name: refusal
+    type: string | undefined
+    description: >-
+      Set when the restatement may not be written, as the sentence that says why and how to proceed:
+      its parent is absent, the stated status would LOWER the stored one, or a narrative label does
+      not resolve. Nothing may be written when it is set
+    optional: true
+  - name: replacedExisting
+    type: boolean
+    description: True when a spec already held the id, so this is a re-authoring in place
+    optional: false
+  - name: notices
+    type: string[]
+    description: >-
+      What a re-authoring did beyond what the input says: the fields carried forward, the methods or
+      members a restatement removed, the fields an omission cleared. Empty for a new spec
+    optional: false
+  - name: changedMethods
+    type: string[]
+    description: >-
+      The methods the candidate changes or removes against the stored spec — the subject of the
+      tests-to-revisit search. Empty for a new spec and for a kind without methods
+    optional: false
+methods: []
+sourcePath: src/core/authoring.ts
+createdAt: '2026-09-24T22:20:29.854Z'
+updatedAt: '2026-09-24T23:00:58.113Z'

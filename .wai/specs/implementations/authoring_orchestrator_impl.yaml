@@ -2,49 +2,16 @@ id: authoring_orchestrator_impl
 name: Authoring Orchestrator Implementation
 description: >-
   The gated write composition in src/core/authoring.ts. It holds no state and owns no merge logic:
-  it resolves the settings to judge with, runs the candidate judgement, and hands the write outward
-  to sdd_core — as a direct call for a create, and as an injected hook for a delta update, because
-  the store must not import the rule engine that already reads it. Both collaborators are peers of
-  this subsystem, not members of it, which is why each hop is named by its own client adapter.
+  it resolves the settings to judge with, reads what a write is applied to, runs the candidate
+  judgement, and hands the write outward to sdd_core — as a direct save for a whole-spec
+  restatement, and as an injected hook for a delta update or a method move, because the store must
+  not import the rule engine that already reads it. What a restatement becomes over the stored spec
+  is the restatement's own pure behaviour (spec_restatement.applyTo), not this workflow's. Both
+  collaborators are peers of this subsystem, not members of it, which is why each hop is named by
+  its own client adapter.
 contract: iauthoring_orchestrator
 sourcePath: src/core/authoring.ts
 methods:
-  - name: addComponent
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Read the bound project's configuration for the rule severities and project type to judge
-          the candidate with; a project that has none, or whose configuration cannot be read, is
-          judged on the default severities
-        type: call
-        targetComponent: authoring_core_adapter
-        targetMethod: loadProjectConfig
-      - stepNumber: 2
-        description: Judge the candidate against the spec-scoped rules with those settings
-        type: call
-        targetComponent: authoring_validator_adapter
-        targetMethod: validateComponentCandidate
-      - stepNumber: 3
-        description: Decide on the verdict
-        type: branch
-        condition: the verdict holds at least one error
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: >-
-          Refuse the write with the formatted refusal, naming every rule code the candidate broke —
-          nothing has reached disk, so the remedy is to fix the arguments and call again
-        type: throw
-        error: intrinsic rule violation
-      - stepNumber: 5
-        description: Persist the candidate through the core client adapter
-        type: call
-        targetComponent: authoring_core_adapter
-        targetMethod: saveComponentSpec
-      - stepNumber: 6
-        description: Return the verdict's warnings as notices, followed by the store's placement notices
-        type: return
-        outcome: written
   - name: updateSpecGated
     narrative:
       - stepNumber: 1
@@ -125,6 +92,174 @@ methods:
           which rule refused it and where these methods could live instead
         type: return
         outcome: reported
+  - name: writeSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration: the rule severities and project type a component
+          candidate is judged with, and the test roots the receipt searches. A project that has
+          none, or whose configuration cannot be read, is judged on the defaults and searches
+          nothing
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: Ask the restatement which spec it cannot be written without (spec_restatement.parent)
+        type: local
+      - stepNumber: 3
+        description: Decide whether there is a parent to read
+        type: branch
+        condition: the restatement names a parent
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Read the parent through the core client adapter; an absent parent is the restatement's to
+          refuse, below
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: loadSpec
+      - stepNumber: 5
+        label: existing
+        description: Read the spec this restatement re-authors, if one already holds the id
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: loadSpec
+      - stepNumber: 6
+        description: >-
+          Apply the restatement to the stored spec (spec_restatement.applyTo): the status, the
+          candidate with every unexpressed field carried, the parent-derived fields, the narrative
+          labels resolved, the notices, and the methods it changes or removes — or the refusal that
+          stops it
+        type: local
+      - stepNumber: 7
+        description: Decide whether the restatement may be written at all
+        type: branch
+        condition: the application carries a refusal
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Refuse with the application's own sentence — a missing parent, a status the write would
+          lower, or a label that does not resolve — before anything reaches disk
+        type: throw
+        error: restatement refused
+      - stepNumber: 9
+        label: judge
+        description: >-
+          Decide whether the candidate is a component, the one kind the intrinsic rules judge at the
+          write boundary
+        type: branch
+        condition: the restatement's kind is component
+        onTrueStep: 10
+        onFalseStep: 13
+      - stepNumber: 10
+        description: >-
+          Judge the candidate — the spec that will actually be written, carried fields included, so
+          retyping a Portal carries its auth into the judgement instead of letting it vanish unseen
+          — against the spec-scoped rules with the project's own settings
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateComponentCandidate
+      - stepNumber: 11
+        description: Decide on the verdict
+        type: branch
+        condition: the verdict holds at least one error
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Refuse the write with the formatted refusal, naming every rule code the candidate broke —
+          nothing has reached disk, so the remedy is to fix the arguments and call again
+        type: throw
+        error: intrinsic rule violation
+      - stepNumber: 13
+        label: persist
+        description: Decide how the candidate reaches disk
+        type: branch
+        condition: the candidate is a subsystem that names a projectPath
+        onTrueStep: 14
+        onFalseStep: 16
+      - stepNumber: 14
+        description: >-
+          Write the chained subsystem and scaffold its child project, so the projectPath never
+          points at an empty directory
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: createChainedSubsystem
+      - stepNumber: 15
+        description: Continue to the test search
+        type: jump
+        toStep: 17
+      - stepNumber: 16
+        label: save
+        description: >-
+          Persist the candidate through the core client adapter, collecting the store's placement
+          notices
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: saveSpec
+      - stepNumber: 17
+        label: tests
+        description: Decide whether this write invalidated any test
+        type: branch
+        condition: the application names a changed or removed method and the project declares test roots
+        onTrueStep: 18
+        onFalseStep: 19
+      - stepNumber: 18
+        description: >-
+          Find the tests that encode those methods, so the restatement that drops or rewrites a
+          method reports the collision exactly as a delta that does the same does, each method
+          searched by its stored symbol when it has one
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: findTestsReferencing
+      - stepNumber: 19
+        label: receipt
+        description: >-
+          Return the write receipt: the kind, id and name written, whether a spec already held the
+          id, the status written, the notices — the gate's warnings, the application's re-authoring
+          notices and the store's placement notices — and the tests to revisit
+        type: return
+        outcome: written
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration for the test roots the report searches; a project
+          that has none searches nothing
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: Read the spec about to be removed, for the methods the deletion takes away with it
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: loadSpec
+      - stepNumber: 3
+        description: Delete the spec document through the core client adapter
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: deleteSpec
+      - stepNumber: 4
+        description: Decide whether this deletion invalidated any test
+        type: branch
+        condition: a spec was deleted, it held methods, and the project declares test roots
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Find the tests that encode the removed methods, each searched by its symbol when it
+          declared one
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: findTestsReferencing
+      - stepNumber: 6
+        description: >-
+          Return the deletion: the kind and id, whether anything was removed, and the tests to
+          revisit
+        type: return
+        outcome: reported
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-09-20T14:04:07.952Z'
+updatedAt: '2026-09-24T22:22:47.655Z'

@@ -811,6 +811,9 @@ export interface SpecWriteHooks {
 export type WritableSpecKind =
   'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
 
+/** One stored spec of any level — what the kind-generic load answers and save takes. */
+type StoredSpec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec;
+
 /**
  * ONE change a write made to a stored spec, addressed by a dotted path with
  * names and indexes: `methods.createChainedSubsystem.narrative.step 7.type`,
@@ -1153,6 +1156,7 @@ function identityKeyOf(field: string, item: unknown): string | null {
   const o = item as Record<string, unknown>;
   const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
   switch (field) {
+    case 'publicInterfaces':   return publicInterfaceKey(o);
     case 'dispatch':           return str(o.capability);
     // A listener mounts each portal once, so the portal IS the mount's identity.
     case 'mounts':             return str(o.portal);
@@ -1181,6 +1185,26 @@ function identityKeyOf(field: string, item: unknown): string | null {
     case 'catches':            return str(o.error);
     default:                   return str(o.name) ?? str(o.id);
   }
+}
+
+/**
+ * A published interface's identity: the component it is bound to (and the
+ * interface, when it names one). An entry NOT YET BOUND — the design-first state
+ * a subsystem is authored in before its components exist — names no component,
+ * so it is identified by the only things it does say, its type and details.
+ * Keyed by component + interface alone, every unbound entry shared one identity
+ * and a delta naming one of them folded it into the first.
+ *
+ * Binding an unbound entry therefore changes its identity: a delta that adds a
+ * component adds a bound entry beside the unbound one, which stays until it is
+ * deleted by its type and details.
+ */
+function publicInterfaceKey(o: Record<string, unknown>): string | null {
+  const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  const component = str(o.component);
+  if (component) return str(o.interface) ? `${component}.${String(o.interface)}` : component;
+  if (typeof o.type === 'string' && typeof o.details === 'string') return `${o.type} ${o.details}`;
+  return null;
 }
 
 /**
@@ -1275,6 +1299,8 @@ const LABEL_TWIN_CONTAINERS = new Set(['cases', 'catches', 'branches']);
 function identityFieldsOf(field: string): string[] {
   switch (field) {
     case 'dispatch':           return ['capability'];
+    // Bound: component + interface; not yet bound: type + details.
+    case 'publicInterfaces':   return ['component', 'interface', 'type', 'details'];
     case 'lifecycle':          return ['phase', 'component', 'method'];
     case 'emits':
     case 'subscribesTo':       return ['topic', 'event'];
@@ -2699,6 +2725,62 @@ export class SpecWorkspace {
   }
 
   // -------------------------------------------------------------------------
+  // Kind-generic access (spec_index.load, spec_registry.save / delete)
+  //
+  // The one place a kind held as DATA becomes the typed loader, writer or
+  // delete of that kind. Every caller that holds the kind as a value — the
+  // gated whole-spec write, a delete by kind, the delta update, the method
+  // move — used to repeat this switch, and each copy could drift from the
+  // others (one of them forgot that a type's writer takes no status).
+  // -------------------------------------------------------------------------
+
+  /** One stored spec of the named kind, or null. The L0 is a singleton: its id is informational. */
+  load(kind: WritableSpecKind, id: string): StoredSpec | null {
+    switch (kind) {
+      case 'system':         return this.loadSystemSpec();
+      case 'subsystem':      return this.loadSubsystemSpec(id);
+      case 'component':      return this.loadComponentSpec(id);
+      case 'interface':      return this.loadInterfaceSpec(id);
+      case 'implementation': return this.loadImplementationSpec(id);
+      case 'type':           return this.loadTypeSpec(id);
+    }
+  }
+
+  /**
+   * Persist one spec through the typed writer of its kind, answering with that
+   * writer's placement notices (none for the L0 and a subsystem). A draft or
+   * status-less save keeps the stored status, exactly as the typed writers do.
+   */
+  save(kind: WritableSpecKind, spec: StoredSpec): string[] {
+    return this.saveOfKind(kind, spec);
+  }
+
+  /** The typed writer of a kind, with the caller's save options — the delta update and the move state a demotion. */
+  private saveOfKind(kind: WritableSpecKind, spec: StoredSpec, opts?: SaveSpecOptions): string[] {
+    switch (kind) {
+      case 'system':         this.saveSystemSpec(spec as SystemSpec); return [];
+      case 'subsystem':      this.saveSubsystemSpec(spec as SubsystemSpec, opts); return [];
+      case 'component':      return this.saveComponentSpec(spec as ComponentSpec, opts);
+      case 'interface':      return this.saveInterfaceSpec(spec as InterfaceSpec, opts);
+      case 'implementation': return this.saveImplementationSpec(spec as ImplementationSpec, opts);
+      case 'type':           return this.saveTypeSpec(spec as TypeSpec, opts);
+    }
+  }
+
+  /** Delete one spec document of the named kind; false when none was stored. The L0 cannot be deleted. */
+  delete(kind: WritableSpecKind, id: string): boolean {
+    switch (kind) {
+      case 'system':
+        throw new Error('The L0 system spec cannot be deleted: it is the root every other spec hangs from.');
+      case 'subsystem':      return this.deleteSubsystemSpec(id);
+      case 'component':      return this.deleteComponentSpec(id);
+      case 'interface':      return this.deleteInterfaceSpec(id);
+      case 'implementation': return this.deleteImplementationSpec(id);
+      case 'type':           return this.deleteTypeSpec(id);
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Spec status promotion (draft/design → complete)
   // -------------------------------------------------------------------------
 
@@ -2926,16 +3008,8 @@ export class SpecWorkspace {
     dryRun = false,
   ): SpecChangeReport {
     const notices: string[] = [];
-    const result = (() => {
-      switch (kind) {
-        case 'system':         return this.loadSystemSpec(); // singleton — id is informational
-        case 'subsystem':      return this.loadSubsystemSpec(id);
-        case 'component':      return this.loadComponentSpec(id);
-        case 'interface':      return this.loadInterfaceSpec(id);
-        case 'implementation': return this.loadImplementationSpec(id);
-        case 'type':           return this.loadTypeSpec(id);
-      }
-    })();
+    // The L0 is a singleton — its id is informational to the load.
+    const result = this.load(kind, id);
 
     if (!result) {
       throw new Error(`Spec of kind "${kind}" with ID "${id}" does not exist. Define it first.`);
@@ -3487,9 +3561,11 @@ export class SpecWorkspace {
     const mergePublicInterfaces = (existing: any[], delta: any[]): any[] => {
       const merged = [...existing];
       for (const deltaItem of delta) {
-        const piKey = (i: any) => `${i?.component}.${i?.interface}`;
+        // Bound: component + interface; not yet bound: type + details (publicInterfaceKey).
+        const piKey = (i: any): string => String(identityKeyOf('publicInterfaces', i));
         assertDeltaMarkers(deltaItem, `publicInterface "${piKey(deltaItem)}"`);
-        const idx = merged.findIndex(item => item.component === deltaItem.component && item.interface === deltaItem.interface);
+        const key = identityKeyOf('publicInterfaces', deltaItem);
+        const idx = key === null ? -1 : merged.findIndex(item => identityKeyOf('publicInterfaces', item) === key);
         if (idx !== -1) {
           if (deltaItem.remove === true || deltaItem.action === 'delete') {
             merged.splice(idx, 1);
@@ -3774,14 +3850,7 @@ export class SpecWorkspace {
       allowStatusDemotion: Object.prototype.hasOwnProperty.call(delta, 'status'),
     };
 
-    switch (kind) {
-      case 'system':         this.saveSystemSpec(mergedResult); break;
-      case 'subsystem':      this.saveSubsystemSpec(mergedResult, opts); break;
-      case 'component':      notices.push(...this.saveComponentSpec(mergedResult, opts)); break;
-      case 'interface':      notices.push(...this.saveInterfaceSpec(mergedResult, opts)); break;
-      case 'implementation': notices.push(...this.saveImplementationSpec(mergedResult, opts)); break;
-      case 'type':           notices.push(...this.saveTypeSpec(mergedResult)); break;
-    }
+    notices.push(...this.saveOfKind(kind, mergedResult, opts));
 
     return {
       kind,
@@ -4212,15 +4281,7 @@ export class SpecWorkspace {
 
   /** Persist one moved spec through the store's own writer, and answer with its placement notices. */
   private saveMovedSpec(kind: WritableSpecKind, spec: any): string[] {
-    const opts: SaveSpecOptions = { allowStatusDemotion: true };
-    switch (kind) {
-      case 'system':         this.saveSystemSpec(spec); return [];
-      case 'subsystem':      this.saveSubsystemSpec(spec, opts); return [];
-      case 'component':      return this.saveComponentSpec(spec, opts);
-      case 'interface':      return this.saveInterfaceSpec(spec, opts);
-      case 'implementation': return this.saveImplementationSpec(spec, opts);
-      case 'type':           return this.saveTypeSpec(spec);
-    }
+    return this.saveOfKind(kind, spec, { allowStatusDemotion: true });
   }
 }
 
@@ -4792,6 +4853,35 @@ export function restoreSpecFiles(snapshot: Map<string, string>): void {
 
 export function findLegacySpecFiles(): { path: string; expected: string }[] {
   return current().findLegacySpecFiles();
+}
+
+/**
+ * spec_loader.loadSpec / icore_orchestrator.loadSpec — one stored spec of the
+ * named kind in the bound tree, or null: for a caller that holds the kind as
+ * data. The L0 is a singleton, so its id is informational.
+ */
+export function loadSpec(kind: WritableSpecKind, id: string): StoredSpec | null {
+  const workspace: SpecWorkspace = current();
+  return workspace.load(kind, id);
+}
+
+/**
+ * spec_loader.saveSpec / icore_orchestrator.saveSpec — persist one spec through
+ * the typed writer of its kind and answer with its placement notices. Ungated:
+ * the authoring seam judges before it calls this.
+ */
+export function saveSpec(kind: WritableSpecKind, spec: StoredSpec): string[] {
+  const workspace: SpecWorkspace = current();
+  return workspace.save(kind, spec);
+}
+
+/**
+ * spec_loader.deleteSpec / icore_orchestrator.deleteSpec — delete one spec
+ * document of the named kind; false when none was stored. The L0 is refused.
+ */
+export function deleteSpec(kind: WritableSpecKind, id: string): boolean {
+  const workspace: SpecWorkspace = current();
+  return workspace.delete(kind, id);
 }
 
 export function updateSpec(

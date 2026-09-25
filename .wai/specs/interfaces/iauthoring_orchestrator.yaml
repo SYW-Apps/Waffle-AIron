@@ -6,18 +6,6 @@ description: >-
   and reports that it did not.
 component: authoring_orchestrator
 methods:
-  - name: addComponent
-    description: >-
-      Author a NEW L2 component: resolve the project's own rule severities, judge the candidate
-      against the intrinsic rules, refuse it on an error before anything touches disk, and otherwise
-      persist it. Returns the candidate's warnings as notices, followed by the store's placement
-      notices.
-    signature: 'addComponent(candidate: ComponentSpec): string[]'
-    returns: string[]
-    params:
-      - name: candidate
-        type: ComponentSpec
-        description: The component as the caller authored it
   - name: updateSpecGated
     description: >-
       Patch an existing spec of any level through the same judgement, by injecting it into the
@@ -72,6 +60,33 @@ methods:
           Run the whole move, gate included, and answer with the report it would have produced
           without touching disk
         optional: true
+  - name: writeSpec
+    description: >-
+      Write a whole spec as a create tool states it, at any level: require its parent, apply the
+      restatement to the stored spec (status, carry, clear, removal), resolve narrative labels,
+      judge a component candidate against the intrinsic rules, and persist — scaffolding the child
+      project of a chained subsystem. A refused status, a missing parent, an unresolved label or an
+      intrinsic error throws before anything touches disk. Answers with the write receipt, carrying
+      the tests a changed or removed method invalidated.
+    signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: restatement
+        type: SpecRestatement
+        description: The spec as stated, with the fields its caller's input can express
+  - name: deleteSpec
+    description: >-
+      Delete one spec of the named kind and report the tests that encode a method the deletion took
+      away. The L0 cannot be deleted.
+    signature: 'deleteSpec(kind: string, id: string): SpecDeletion'
+    returns: SpecDeletion
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-09-20T12:02:29.818Z'
+updatedAt: '2026-09-24T22:21:40.981Z'

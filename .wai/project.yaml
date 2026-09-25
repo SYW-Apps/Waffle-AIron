@@ -91,7 +91,6 @@ rules:
       # 16 importers and nothing to call.
       - src/config/defaults.ts
       - src/core/demo-seed.ts
-      - src/core/narrative-labels.ts
       # Stereotype predicates shared by three doctrine rules that are themselves
       # modelled. Rule-family vocabulary.
       - src/core/rules/doctrine/stereotype-terms.ts
@@ -231,7 +230,7 @@ rules:
     # modelling decision nobody has taken, unreadable is a shape the analysis
     # cannot follow and there is nothing in the tree to fix for it.
     carried:
-      # 45 finding(s), 60 unit(s).
+      # 37 finding(s), 66 unit(s).
       - kind: drift
         why: >-
           A spec names a source file that only USES the function, and the code that holds it lives
@@ -255,14 +254,8 @@ rules:
           adapters instead MODEL the consumption itself - a component whose whole job is to reach
           the core API from this file - then the specs are right, the narratives name the wrong
           target, and part of this group is a different finding than it claims. Nobody has
-          measured which, and 46 findings ride on the answer.
+          measured which, and every finding in this group rides on the answer.
         findings:
-          - code: CALL_STEP_UNREALIZED
-            spec: authoring_orchestrator_impl
-            at: 'addComponent'
-            covers:
-              - '2:authoring_validator_adapter.validateComponentCandidate'
-              - '5:authoring_core_adapter.saveComponentSpec'
           - code: CALL_STEP_UNREALIZED
             spec: authoring_orchestrator_impl
             at: 'updateSpecGated'
@@ -419,9 +412,6 @@ rules:
               - '5:surfaces_core_adapter.loadTypeSpecs'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
-            at: 'createChainedSubsystem'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
             at: 'externalizeSubsystem'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
@@ -429,12 +419,6 @@ rules:
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
             at: 'loadComponentSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'loadImplementationSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'loadTypeSpec'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
             at: 'loadInterfaceSpec'
@@ -446,25 +430,7 @@ rules:
             at: 'loadSubsystemSpecs'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_core_adapter_impl
-            at: 'loadSystemSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
             at: 'moveSubsystemProject'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'saveImplementationSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'saveInterfaceSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'saveSubsystemSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'saveTypeSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'saveSystemSpec'
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_orchestrator_impl
             at: 'externalizeSubsystem'
@@ -477,7 +443,23 @@ rules:
           - code: METHOD_BODY_NOT_FOUND
             spec: mcp_validator_adapter_impl
             at: 'validateSddTree'
-      # 107 finding(s), 144 unit(s).
+          - code: CALL_STEP_UNREALIZED
+            spec: authoring_orchestrator_impl
+            at: 'writeSpec'
+            covers:
+              - '10:authoring_validator_adapter.validateComponentCandidate'
+              - '14:authoring_core_adapter.createChainedSubsystem'
+              - '16:authoring_core_adapter.saveSpec'
+              - '18:authoring_validator_adapter.findTestsReferencing'
+              - '4:authoring_core_adapter.loadSpec'
+              - '5:authoring_core_adapter.loadSpec'
+          - code: CALL_STEP_UNREALIZED
+            spec: authoring_orchestrator_impl
+            at: 'deleteSpec'
+            covers:
+              - '2:authoring_core_adapter.loadSpec'
+              - '5:authoring_validator_adapter.findTestsReferencing'
+      # 108 finding(s), 145 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -486,11 +468,6 @@ rules:
           hop. Paying it means adding the call step (or moving the code so the boundary is a real
           module edge), one method at a time.
         findings:
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: authoring_portal_impl
-            at: 'addComponent'
-            covers:
-              - 'authoring_core_adapter.loadProjectConfig'
           - code: UNDECLARED_COLOCATED_CALL
             spec: authoring_portal_impl
             at: 'updateSpecGated'
@@ -1058,7 +1035,17 @@ rules:
             covers:
               - 'spec_validator.resolveThroughParent'
               - 'validator_core_adapter.loadProjectConfig'
-      # 6 finding(s), 56 unit(s).
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: authoring_portal_impl
+            at: 'writeSpec'
+            covers:
+              - 'authoring_core_adapter.loadProjectConfig'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: authoring_portal_impl
+            at: 'deleteSpec'
+            covers:
+              - 'authoring_core_adapter.loadProjectConfig'
+      # 6 finding(s), 39 unit(s).
       - kind: undecided
         why: >-
           src/mcp/server.ts is one file modelled as five components (mcp_portal, mcp_server,
@@ -1085,19 +1072,10 @@ rules:
             at: 'createMcpServer'
             covers:
               - 'mcp_core_adapter.composeAgentBrief'
-              - 'mcp_core_adapter.createChainedSubsystem'
-              - 'mcp_core_adapter.loadImplementationSpec'
               - 'mcp_core_adapter.loadProjectConfig'
               - 'mcp_core_adapter.loadSubsystemSpecs'
-              - 'mcp_core_adapter.loadSystemSpec'
-              - 'mcp_core_adapter.loadTypeSpec'
-              - 'mcp_core_adapter.saveImplementationSpec'
-              - 'mcp_core_adapter.saveInterfaceSpec'
               - 'mcp_core_adapter.loadInterfaceSpec'
               - 'mcp_core_adapter.loadComponentSpec'
-              - 'mcp_core_adapter.saveSubsystemSpec'
-              - 'mcp_core_adapter.saveSystemSpec'
-              - 'mcp_core_adapter.saveTypeSpec'
               - 'mcp_orchestrator.externalizeSubsystem'
               - 'mcp_orchestrator.internalizeSubsystem'
               - 'mcp_orchestrator.moveSubsystemProject'
@@ -1127,18 +1105,10 @@ rules:
             at: 'create'
             covers:
               - 'mcp_core_adapter.composeAgentBrief'
-              - 'mcp_core_adapter.createChainedSubsystem'
-              - 'mcp_core_adapter.loadImplementationSpec'
               - 'mcp_core_adapter.loadProjectConfig'
               - 'mcp_core_adapter.loadSubsystemSpecs'
-              - 'mcp_core_adapter.loadTypeSpec'
-              - 'mcp_core_adapter.saveImplementationSpec'
-              - 'mcp_core_adapter.saveInterfaceSpec'
               - 'mcp_core_adapter.loadInterfaceSpec'
               - 'mcp_core_adapter.loadComponentSpec'
-              - 'mcp_core_adapter.saveSubsystemSpec'
-              - 'mcp_core_adapter.saveSystemSpec'
-              - 'mcp_core_adapter.saveTypeSpec'
               - 'mcp_orchestrator.externalizeSubsystem'
               - 'mcp_orchestrator.internalizeSubsystem'
               - 'mcp_orchestrator.moveSubsystemProject'
@@ -1197,7 +1167,7 @@ rules:
           - code: METHOD_BODY_NOT_FOUND
             spec: host_surfaces_adapter_impl
             at: 'exportBoundSurface'
-      # 7 finding(s), 11 unit(s).
+      # 8 finding(s), 12 unit(s).
       - kind: unreadable
         why: >-
           The step's target IS called by name, from a site written in a shape a pure model cannot
@@ -1248,6 +1218,11 @@ rules:
             at: 'validateAsComplete'
             covers:
               - '1:host_core_adapter.loadProjectConfig'
+          - code: CALL_ORIGIN_UNRESOLVED
+            spec: mcp_server_impl
+            at: 'create'
+            covers:
+              - '6:mcp_core_adapter.loadSystemSpec'
       # 1 finding(s), 1 unit(s).
       - kind: unreadable
         why: >-

@@ -122,6 +122,17 @@ methods:
       when it is not "<component>.<method>". Split at the LAST dot — a component id may be
       namespaced with "::" but never holds a dot, and a method name is alphanumeric.
     symbol: parseDeclaredCall
+  - name: resolveLabels
+    signature: 'resolveLabels(): string[]'
+    returns: string[]
+    description: >-
+      Resolve every *Label jump reference in this method's narrative to the step number its label
+      anchors, in place, and answer with what could not be resolved — an unknown label, or a number
+      and its label twin set together. Empty means every reference resolved; anything else refuses
+      the whole write, because a jump saved to the wrong step is a narrative that silently says
+      something else.
+    sourcePath: src/core/narrative-labels.ts
+    symbol: resolveNarrativeLabels
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-13T16:59:08.774Z'
-updatedAt: '2026-09-20T09:46:47.782Z'
+updatedAt: '2026-09-24T22:20:54.297Z'
