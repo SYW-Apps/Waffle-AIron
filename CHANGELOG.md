@@ -27,6 +27,39 @@ client expects back from them (item 14). The library surface narrows too:
 `@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
 (item 4). Nothing here is purely additive, so `[minor]` would understate it.
 
+### An import that crosses a subsystem boundary lands on the portal
+
+The dependency check let an in-process import land on ANY module of another
+subsystem, on the reasoning that the portal barrel is cosmetic at runtime. It is
+not cosmetic for the contract: an import past the portal can use anything the
+module exports, and 26 names no contract promised were being used across
+subsystems that way. Measured before the change: 78 crossing imports, 38 of them
+landing past the portal.
+
+- **New rule `portal-imports` (`IMPORT_BYPASSES_PORTAL`, warning).** A runtime
+  import between component-mapped files that crosses into another subsystem must
+  land on a file realizing one of that subsystem's published components.
+  `dependency-conformance` still asks whether the hop is declared; this asks
+  where it lands.
+- **Every thin client adapter has a module of its own**, re-exporting the
+  provider's portal, and its consumer imports that module. Only this makes the
+  adapter's call steps resolve to the adapter - an import-path change alone does
+  not - so the carried "thin core adapter" debt is paid: the register drops from
+  458 to 396 findings.
+- **Every name a consumer takes across a boundary is on a portal contract** -
+  published where it is a capability (pack discovery and diagnosis, variants,
+  loader diagnostics, the canvas model, the doctor's repairs), turned into
+  behaviour on a type where it is one (a candidate verdict formats its own
+  refusal), or removed where the consumer should not need it.
+- **Integration secrets are injected by the caller.** The Git backing and the
+  Notion and Miro producers take the resolved token as an argument and no
+  longer reach into the host's secret store; the host resolves it for the one
+  call it authorizes, and `wairon produce` passes the token it obtained straight
+  in instead of writing it into the process environment.
+- **Switching project roots reads the tree as it is now.** The first read under
+  a new root binding re-verifies the tree against disk, so a parent project
+  changed outside the process is never projected from a stale cache.
+
 ### Core publishes capabilities, not one front door
 
 `core_portal` published 97 methods to every caller, and measuring who called what
