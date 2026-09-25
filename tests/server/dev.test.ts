@@ -5,11 +5,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { startDevSession, getCurrentContext, serveLegacyApp } from '../../src/server/web.js';
-import {
-  registerLocalDevProject,
-  listProjectRecords,
-  resolveProjectRoot,
-} from '../../src/server/projects.js';
+import { listProjectRecords, resolveProjectRoot } from '../../src/server/projects.js';
+import { registerLocalDevProject } from '../../src/server/admin.js';
 import {
   createWebSession,
   getWebSessionById,
@@ -128,7 +125,7 @@ describe('local dev session (startDevSession) (sdd_host)', () => {
   });
 });
 
-// ── registerLocalDevProject (projects registry) ──────────────────────────────
+// ── registerLocalDevProject (admin workflow over the projects registry) ──────
 
 describe('registerLocalDevProject (sdd_host)', () => {
   let dataDir: string;
@@ -148,8 +145,25 @@ describe('registerLocalDevProject (sdd_host)', () => {
     }
   });
 
+  const devCfg = (): HostConfig => ({
+    host: '127.0.0.1',
+    port: 0,
+    adminHost: '127.0.0.1',
+    adminPort: 0,
+    dataDir,
+    authEnabled: false,
+    devMode: true,
+  });
+
+  it('refuses a host configuration that is not in development mode, and writes nothing', () => {
+    expect(() => registerLocalDevProject({ ...devCfg(), devMode: false }, 'local', cwd)).toThrow(
+      /reserved for the local development server/,
+    );
+    expect(listProjectRecords(dataDir)).toHaveLength(0);
+  });
+
   it('persists a local record at the given cwd (not under dataDir/projects); resolveProjectRoot returns it', () => {
-    const rec = registerLocalDevProject(dataDir, 'local', cwd);
+    const rec = registerLocalDevProject(devCfg(), 'local', cwd);
     expect(rec.id).toBe('local');
     expect(rec.rootPath).toBe(cwd);
     expect(rec.status).toBe('active');
@@ -158,7 +172,7 @@ describe('registerLocalDevProject (sdd_host)', () => {
 
     // Persisted, and idempotent (a second call upserts — no duplicate, createdAt preserved).
     expect(listProjectRecords(dataDir).filter((r) => r.id === 'local')).toHaveLength(1);
-    const again = registerLocalDevProject(dataDir, 'local', cwd);
+    const again = registerLocalDevProject(devCfg(), 'local', cwd);
     expect(again.createdAt).toBe(rec.createdAt);
     expect(listProjectRecords(dataDir).filter((r) => r.id === 'local')).toHaveLength(1);
 

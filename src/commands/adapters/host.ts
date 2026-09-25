@@ -1,0 +1,41 @@
+// ---------------------------------------------------------------------------
+// cli_host_adapter — sdd_cli's client hop into sdd_host's in-process
+// administration: identity re-exports of the local admin portal. `wairon host`,
+// `wairon serve` and `wairon dev` administer an instance through here, with the
+// credential they hold; the host's workflows authorize it.
+// ---------------------------------------------------------------------------
+export {
+  createProject,
+  destroyProject,
+  listProjects,
+  lockProject,
+  mintKey,
+  revokeKey,
+  listKeys,
+  configureProducer,
+  produceProducer,
+  removeProducer,
+  listProducers,
+  setSecret,
+  listSecrets,
+  enableGit,
+  disableGit,
+  syncGit,
+  commitProject,
+  getGitBinding,
+  configureGitSync,
+  listGlobalPacks,
+  installGlobalPack,
+  removeGlobalPack,
+  listProjectPacks,
+  installProjectPack,
+  removeProjectPack,
+  setAssignment,
+  removeAssignment,
+  listAssignments,
+  existingProjectRoot,
+  registerLocalDevProject,
+  seedIdentityProviderSecret,
+  AdminAuthError,
+  LockValidationError,
+} from '../../server/local-admin.js';

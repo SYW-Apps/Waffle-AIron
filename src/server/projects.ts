@@ -84,8 +84,9 @@ export function createProjectRecord(dataDir: string, id: string): HostedProjectR
 }
 
 /**
- * Register the current working directory as the single local dev project under a
- * caller-supplied rootPath. Unlike createProjectRecord — which FORCES the isolated
+ * Register a project record at a caller-supplied rootPath (the local dev
+ * server's single project — admin_orchestrator.registerLocalDevProject is the
+ * workflow that admits it). Unlike createProjectRecord — which FORCES the isolated
  * root under <dataDir>/projects/<id> — the dev server's one project IS the
  * developer's own tree (an arbitrary path outside dataDir), so the rootPath is
  * supplied verbatim and no directory is created. Idempotent: upserts by id (a
@@ -94,7 +95,7 @@ export function createProjectRecord(dataDir: string, id: string): HostedProjectR
  * returns this rootPath for a principal scoped to the id, so the whole hosted graph
  * pipeline resolves the id → the cwd unchanged. The id must be a valid project id.
  */
-export function registerLocalDevProject(
+export function registerProjectRecord(
   dataDir: string,
   id: string,
   rootPath: string,

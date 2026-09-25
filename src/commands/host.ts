@@ -6,15 +6,14 @@ import { spawn } from 'child_process';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
-import * as admin from '../server/admin.js';
-import * as packs from '../server/packs.js';
-import * as permissionadmin from '../server/permissionadmin.js';
+// sdd_host's admin workflows are reached in-process through cli_host_adapter,
+// which re-exports the host's local admin portal — never past it into the
+// modules that realize the workflows.
+import * as localAdmin from './adapters/host.js';
 import { mintToken } from '../server/identity.js';
 import { upsertUnit as landscapeUpsertUnit } from '../server/landscape.js';
 import { migratePermissionModel } from '../server/migration.js';
-import { AdminAuthError, LockValidationError } from '../server/admin.js';
 import { startHostServer } from '../server/http.js';
-import { registerLocalDevProject, existingProjectRoot } from '../server/projects.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 // The demo census crosses into sdd_core through cli_core_adapter, like every
 // other sdd_core call the CLI makes — `../core/canvas.js` was this file
@@ -22,7 +21,6 @@ import { runWithProjectRoot } from '../utils/fs.js';
 import { buildCanvasDataModel } from './subsystem.js';
 import { seedDemoTree } from '../core/demo-seed.js';
 import { upsertIdentityProviderRecord } from '../server/policy.js';
-import { setSecret } from '../utils/secrets.js';
 import type {
   Capability,
   DisplayRole,
@@ -109,10 +107,10 @@ function masterCredential(): string | null {
 }
 
 function mapAdminError(e: unknown): WaironError {
-  if (e instanceof AdminAuthError) {
+  if (e instanceof localAdmin.AdminAuthError) {
     return new WaironError('Forbidden: set WAIRON_ADMIN_TOKEN to the server\'s admin credential to run host commands.');
   }
-  if (e instanceof LockValidationError) {
+  if (e instanceof localAdmin.LockValidationError) {
     const lines = e.errors.map((x) => `  • ${x.specId ? `[${x.specId}] ` : ''}[${x.code}] ${x.message}`).join('\n');
     return new WaironError(`${e.message}\n${lines}`);
   }
@@ -162,13 +160,11 @@ export function seedIdentityProviderFromEnv(cfg: HostConfig): void {
   }
 
   let clientSecretRef = envTrim('WAIRON_OIDC_CLIENT_SECRET_REF');
-  const rawSecret = process.env['WAIRON_OIDC_CLIENT_SECRET'];
-  if (rawSecret) {
-    // RAW secret shipped in env: store it under the fixed ref and point the
-    // provider at it — the raw value never lands on the provider record.
-    setSecret('oidc-default', rawSecret);
-    clientSecretRef = 'oidc-default';
-  }
+  // A RAW secret shipped in env is stored by the host under its fixed ref, and
+  // the provider points at that ref — the raw value never lands on the provider
+  // record. The host reads the value from its own environment; nothing is passed.
+  const seededRef = localAdmin.seedIdentityProviderSecret();
+  if (seededRef) clientSecretRef = seededRef;
 
   const config: IdentityProviderConfig = {
     id: 'default', // matches the sign-in screen's default provider id
@@ -283,11 +279,6 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   const dataDir = path.join(os.tmpdir(), 'wairon-dev', hash);
   fs.mkdirSync(dataDir, { recursive: true });
 
-  // Register the cwd as the single local project 'local' (idempotent upsert). Its
-  // rootPath is the cwd itself, so resolveProjectRoot('local') → the cwd, and the
-  // whole hosted graph pipeline resolves against the developer's own .wai/ tree.
-  registerLocalDevProject(dataDir, 'local', cwd);
-
   const port = options.port ? Number(options.port) : 8080;
   // A permissive-but-loopback exposure: the web UI on, TLS not required (plain http
   // on 127.0.0.1). devMode independently forces the web UI on in http.ts, so this is
@@ -313,6 +304,12 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
     devMode: true,
     exposurePolicy,
   };
+
+  // Register the cwd as the single local project 'local' (idempotent upsert). Its
+  // rootPath is the cwd itself, so resolveProjectRoot('local') → the cwd, and the
+  // whole hosted graph pipeline resolves against the developer's own .wai/ tree.
+  // The host admits this registration only for the dev-mode config built above.
+  localAdmin.registerLocalDevProject(cfg, 'local', cwd);
 
   let handle;
   try {
@@ -356,12 +353,12 @@ export async function runHostProject(action: string, options: HostOptions = {}):
             '`--unit <unitId>` is required for `host project create` — every project is placed in an organization unit at creation.',
           );
         }
-        const rec = admin.createProject(cfg, cred, options.id, options.unit);
+        const rec = localAdmin.createProject(cfg, cred, options.id, options.unit);
         logger.success(`Created project "${rec.id}" at ${chalk.gray(rec.rootPath)}`);
         break;
       }
       case 'list': {
-        const list = admin.listProjects(cfg, cred);
+        const list = localAdmin.listProjects(cfg, cred);
         if (!list.length) {
           logger.info('No projects.');
         } else {
@@ -371,7 +368,7 @@ export async function runHostProject(action: string, options: HostOptions = {}):
       }
       case 'destroy': {
         if (!options.id) throw new WaironError('`--id <id>` is required for `host project destroy`.');
-        admin.destroyProject(cfg, cred, options.id);
+        localAdmin.destroyProject(cfg, cred, options.id);
         logger.success(`Destroyed project "${options.id}".`);
         break;
       }
@@ -411,14 +408,14 @@ export async function runHostDemo(options: HostOptions = {}): Promise<void> {
       createdBy: { userId: 'master', kind: 'service', issuer: 'local' },
     });
 
-    const existing = existingProjectRoot(cfg.dataDir, id);
+    const existing = localAdmin.existingProjectRoot(cfg.dataDir, id);
     if (existing && !options.force) {
       throw new WaironError(
         `Project "${id}" already exists at ${existing}. Re-run with --force to destroy and reseed it.`,
       );
     }
-    if (existing) admin.destroyProject(cfg, cred, id);
-    const rec = admin.createProject(cfg, cred, id, unitId);
+    if (existing) localAdmin.destroyProject(cfg, cred, id);
+    const rec = localAdmin.createProject(cfg, cred, id, unitId);
 
     const summary = runWithProjectRoot(rec.rootPath, () => {
       seedDemoTree();
@@ -536,7 +533,7 @@ export async function runHostPermission(action: string, options: HostOptions = {
           throw new WaironError(`\`--value\` must be one of: ${PERMISSION_VALUES.join(', ')}.`);
         }
         const scope = resolveScopeOptions(options);
-        const stored = permissionadmin.setAssignment(cfg, cred, {
+        const stored = localAdmin.setAssignment(cfg, cred, {
           id: '',
           subjectKind: 'user',
           subjectId: options.user,
@@ -553,7 +550,7 @@ export async function runHostPermission(action: string, options: HostOptions = {
       }
       case 'list': {
         const scope = resolveScopeOptions(options);
-        const list = permissionadmin.listAssignments(
+        const list = localAdmin.listAssignments(
           cfg,
           cred,
           options.project || options.unit || options.instance ? scope.kind : undefined,
@@ -573,7 +570,7 @@ export async function runHostPermission(action: string, options: HostOptions = {
       }
       case 'remove': {
         if (!options.id) throw new WaironError('`--id <assignmentId>` is required for `host permission remove`.');
-        permissionadmin.removeAssignment(cfg, cred, options.id);
+        localAdmin.removeAssignment(cfg, cred, options.id);
         logger.success(`Removed assignment "${options.id}".`);
         break;
       }
@@ -611,7 +608,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         }
         const role = (options.role ?? 'editor') as DisplayRole;
         if (role !== 'editor' && role !== 'admin') throw new WaironError('`--role` must be editor or admin.');
-        const key = admin.mintKey(cfg, cred, options.project, role);
+        const key = localAdmin.mintKey(cfg, cred, options.project, role);
         logger.success('API key minted (shown once — store it now):');
         logger.blank();
         console.log(`  ${chalk.bold(key)}`);
@@ -623,7 +620,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         break;
       }
       case 'list': {
-        const list = admin.listKeys(cfg, cred, options.project ?? '*');
+        const list = localAdmin.listKeys(cfg, cred, options.project ?? '*');
         if (!list.length) {
           logger.info('No keys.');
         } else {
@@ -633,7 +630,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
       }
       case 'revoke': {
         if (!options.id) throw new WaironError('`--id <id>` is required for `host key revoke`.');
-        admin.revokeKey(cfg, cred, options.id);
+        localAdmin.revokeKey(cfg, cred, options.id);
         logger.success(`Revoked key "${options.id}".`);
         break;
       }
@@ -651,7 +648,7 @@ export async function runHostLock(options: HostOptions = {}): Promise<void> {
   const cfg = resolveHostConfig(options);
   if (!options.project) throw new WaironError('`--project <id>` is required for `host lock`.');
   try {
-    const rec = admin.lockProject(cfg, masterCredential(), options.project);
+    const rec = localAdmin.lockProject(cfg, masterCredential(), options.project);
     logger.success(`Locked "${options.project}" @ ${rec.stateId.algorithm}:${rec.stateId.digest.slice(0, 12)}… (status ${rec.status}).`);
   } catch (e) {
     throw mapAdminError(e);
@@ -670,25 +667,25 @@ export async function runHostProducer(action: string, options: HostOptions = {})
     switch (action) {
       case 'configure': {
         if (!options.project || !options.page) throw new WaironError('`--project <id>` and `--page <id>` are required.');
-        admin.configureProducer(cfg, cred, options.project, target, options.page);
+        localAdmin.configureProducer(cfg, cred, options.project, target, options.page);
         logger.success(`Configured "${target}" for project "${options.project}".`);
         break;
       }
       case 'produce': {
         if (!options.project) throw new WaironError('`--project <id>` is required.');
-        await admin.produceProducer(cfg, cred, options.project, target);
+        await localAdmin.produceProducer(cfg, cred, options.project, target);
         logger.success(`Produced "${options.project}" to "${target}".`);
         break;
       }
       case 'remove': {
         if (!options.project) throw new WaironError('`--project <id>` is required.');
-        admin.removeProducer(cfg, cred, options.project, target);
+        localAdmin.removeProducer(cfg, cred, options.project, target);
         logger.success(`Removed "${target}" from project "${options.project}".`);
         break;
       }
       case 'list': {
         if (!options.project) throw new WaironError('`--project <id>` is required.');
-        const list = admin.listProducers(cfg, cred, options.project);
+        const list = localAdmin.listProducers(cfg, cred, options.project);
         if (!list.length) logger.info('No producers configured.');
         else for (const p of list) logger.info(`  ${p.target.padEnd(10)} → ${p.parentPageId}`);
         break;
@@ -710,12 +707,12 @@ export async function runHostSecret(action: string, options: HostOptions = {}): 
     switch (action) {
       case 'set': {
         if (!options.key || options.value === undefined) throw new WaironError('`--key <name>` and `--value <secret>` are required.');
-        admin.setSecret(cfg, cred, options.key, options.value);
+        localAdmin.setSecret(cfg, cred, options.key, options.value);
         logger.success(`Secret "${options.key}" set (read live — no restart needed).`);
         break;
       }
       case 'list': {
-        const keys = admin.listSecrets(cfg, cred);
+        const keys = localAdmin.listSecrets(cfg, cred);
         if (!keys.length) logger.info('No secrets set.');
         else for (const k of keys) logger.info(`  ${k}`);
         break;
@@ -738,7 +735,7 @@ export async function runHostPacks(action: string, options: HostOptions = {}): P
   try {
     switch (action) {
       case 'list': {
-        const list = project ? packs.listProjectPacks(cfg, cred, project) : packs.listGlobalPacks(cfg, cred);
+        const list = project ? localAdmin.listProjectPacks(cfg, cred, project) : localAdmin.listGlobalPacks(cfg, cred);
         if (!list.length) {
           logger.info(`No ${scope} packs.`);
           break;
@@ -755,16 +752,16 @@ export async function runHostPacks(action: string, options: HostOptions = {}): P
         const name = options.name ?? path.basename(options.file).replace(/\.(ya?ml)$/i, '');
         const content = fs.readFileSync(path.resolve(options.file), 'utf8');
         const desc = project
-          ? packs.installProjectPack(cfg, cred, project, name, content)
-          : packs.installGlobalPack(cfg, cred, name, content);
+          ? localAdmin.installProjectPack(cfg, cred, project, name, content)
+          : localAdmin.installGlobalPack(cfg, cred, name, content);
         logger.success(`Installed ${scope} pack "${desc.name}" (${desc.profiles} profile(s), ${desc.languages} language(s)).`);
         if (project) logger.info('Committed with the project — every clone and CI will enforce it.');
         break;
       }
       case 'remove': {
         if (!options.name) throw new WaironError('`--name <name>` is required for `host packs remove`.');
-        if (project) packs.removeProjectPack(cfg, cred, project, options.name);
-        else packs.removeGlobalPack(cfg, cred, options.name);
+        if (project) localAdmin.removeProjectPack(cfg, cred, project, options.name);
+        else localAdmin.removeGlobalPack(cfg, cred, options.name);
         logger.success(`Removed ${scope} pack "${options.name}".`);
         break;
       }
@@ -785,25 +782,25 @@ export async function runHostGit(action: string, options: HostOptions = {}): Pro
         if (!options.project || !options.remote) {
           throw new WaironError('`--project <id>` and `--remote <url>` are required for `host git enable`.');
         }
-        admin.enableGit(cfg, cred, options.project, options.remote, options.branch ?? 'main');
+        localAdmin.enableGit(cfg, cred, options.project, options.remote, options.branch ?? 'main');
         logger.success(`Git backing enabled for "${options.project}" (cloned ${options.remote}).`);
         break;
       }
       case 'disable': {
         if (!options.project) throw new WaironError('`--project <id>` is required for `host git disable`.');
-        admin.disableGit(cfg, cred, options.project);
+        localAdmin.disableGit(cfg, cred, options.project);
         logger.success(`Git backing disabled for "${options.project}".`);
         break;
       }
       case 'sync': {
         if (!options.project) throw new WaironError('`--project <id>` is required for `host git sync`.');
-        admin.syncGit(cfg, cred, options.project);
+        localAdmin.syncGit(cfg, cred, options.project);
         logger.success(`Synced "${options.project}" (default → working branch).`);
         break;
       }
       case 'commit': {
         if (!options.project) throw new WaironError('`--project <id>` is required for `host git commit`.');
-        const publish = admin.commitProject(cfg, cred, options.project, options.subsystem, options.message);
+        const publish = localAdmin.commitProject(cfg, cred, options.project, options.subsystem, options.message);
         if (!publish.published) {
           logger.info('Nothing to publish — the scoped .wai/ path is clean (or the project is not git-backed).');
         } else {
@@ -813,7 +810,7 @@ export async function runHostGit(action: string, options: HostOptions = {}): Pro
       }
       case 'status': {
         if (!options.project) throw new WaironError('`--project <id>` is required for `host git status`.');
-        const s = admin.getGitBinding(cfg, cred, options.project);
+        const s = localAdmin.getGitBinding(cfg, cred, options.project);
         if (!s.enabled) {
           logger.info('Not git-backed.');
         } else {
@@ -828,7 +825,7 @@ export async function runHostGit(action: string, options: HostOptions = {}): Pro
       case 'sync-config': {
         if (!options.project) throw new WaironError('`--project <id>` is required for `host git sync-config`.');
         const minutes = options.interval !== undefined ? Number(options.interval) : undefined;
-        admin.configureGitSync(cfg, cred, options.project, minutes, options.skipIfClean);
+        localAdmin.configureGitSync(cfg, cred, options.project, minutes, options.skipIfClean);
         logger.success(
           minutes !== undefined
             ? `Periodic sync every ${minutes}m for "${options.project}".`
