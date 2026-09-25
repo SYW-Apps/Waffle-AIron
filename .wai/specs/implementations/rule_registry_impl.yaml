@@ -370,134 +370,139 @@ methods:
         targetComponent: conformance_rules
         targetMethod: dependencyConformance
       - stepNumber: 73
+        description: Register portal-imports
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: portalImports
+      - stepNumber: 74
         description: Register integration-sim-declaration
         type: register
         targetComponent: conformance_rules
         targetMethod: integrationSimDeclaration
-      - stepNumber: 74
+      - stepNumber: 75
         description: Register integration-sim-file
         type: register
         targetComponent: conformance_rules
         targetMethod: integrationSimFile
-      - stepNumber: 75
+      - stepNumber: 76
         description: Register integration-sim-wiring
         type: register
         targetComponent: conformance_rules
         targetMethod: integrationSimWiring
-      - stepNumber: 76
+      - stepNumber: 77
         description: Register integration-sim-coverage
         type: register
         targetComponent: conformance_rules
         targetMethod: integrationSimCoverage
-      - stepNumber: 77
+      - stepNumber: 78
         description: Register type-realization
         type: register
         targetComponent: conformance_rules
         targetMethod: typeRealization
-      - stepNumber: 78
+      - stepNumber: 79
         description: Register type-shape
         type: register
         targetComponent: conformance_rules
         targetMethod: typeShape
-      - stepNumber: 79
+      - stepNumber: 80
         description: Register param-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: paramConformance
-      - stepNumber: 80
+      - stepNumber: 81
         description: Register route-coverage
         type: register
         targetComponent: conformance_rules
         targetMethod: routeCoverage
-      - stepNumber: 81
+      - stepNumber: 82
         description: Register unclaimed-source
         type: register
         targetComponent: conformance_rules
         targetMethod: unclaimedSource
-      - stepNumber: 82
+      - stepNumber: 83
         description: Register export-conformance
         type: register
         targetComponent: conformance_rules
         targetMethod: exportConformance
-      - stepNumber: 83
+      - stepNumber: 84
         description: Register coupling-health
         type: register
         targetComponent: heuristic_rules
         targetMethod: couplingHealth
-      - stepNumber: 84
+      - stepNumber: 85
         description: Register signature-language-builtins
         type: register
         targetComponent: heuristic_rules
         targetMethod: signatureLanguageBuiltins
-      - stepNumber: 85
+      - stepNumber: 86
         description: Register narrative-language-constructs
         type: register
         targetComponent: heuristic_rules
         targetMethod: narrativeLanguageConstructs
-      - stepNumber: 86
+      - stepNumber: 87
         description: Register technology-binding
         type: register
         targetComponent: heuristic_rules
         targetMethod: technologyBinding
-      - stepNumber: 87
+      - stepNumber: 88
         description: Register technology-boundaries
         type: register
         targetComponent: heuristic_rules
         targetMethod: technologyBoundaries
-      - stepNumber: 88
+      - stepNumber: 89
         description: Register naming-conventions
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingConventions
-      - stepNumber: 89
+      - stepNumber: 90
         description: Register complexity-and-metadata
         type: register
         targetComponent: heuristic_rules
         targetMethod: complexityAndMetadata
-      - stepNumber: 90
+      - stepNumber: 91
         description: Register narrative-complexity
         type: register
         targetComponent: heuristic_rules
         targetMethod: narrativeComplexity
-      - stepNumber: 91
+      - stepNumber: 92
         description: Register naming-discipline
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingDiscipline
-      - stepNumber: 92
+      - stepNumber: 93
         description: Register method-cohesion
         type: register
         targetComponent: heuristic_rules
         targetMethod: methodCohesion
-      - stepNumber: 93
+      - stepNumber: 94
         description: Register pack-resolution
         type: register
         targetComponent: extension_rules
         targetMethod: packResolution
-      - stepNumber: 94
+      - stepNumber: 95
         description: Register pack-reproducibility
         type: register
         targetComponent: extension_rules
         targetMethod: packReproducibility
-      - stepNumber: 95
+      - stepNumber: 96
         description: >-
           Register carried-debt (the rule index later moves it, with lint-allows, after any pack
           rules)
         type: register
         targetComponent: conformance_rules
         targetMethod: carriedDebt
-      - stepNumber: 96
+      - stepNumber: 97
         description: Register lint-allows (the rule index later moves it after any pack rules)
         type: register
         targetComponent: integrity_rules
         targetMethod: lintAllows
-      - stepNumber: 97
+      - stepNumber: 98
         description: For each registered built-in rule, in that order
         type: loop
         loopKind: forEach
         over: the registered built-in rules
-        endStep: 98
-      - stepNumber: 98
+        endStep: 99
+      - stepNumber: 99
         label: append-builtin
         description: Append the rule to the store
         type: call
@@ -536,4 +541,4 @@ lint:
         ruleSequence reads. A new rule adds one step here, which is the point.
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-09-25T17:39:34.925Z'
+updatedAt: '2026-09-25T20:48:30.567Z'

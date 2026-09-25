@@ -2,7 +2,7 @@ id: cli_surfaces_client_adapter_impl
 name: CLI Surfaces Client Adapter Implementation
 description: CLI surface-command forwarding.
 contract: icli_surfaces_client_adapter
-sourcePath: src/commands/surface.ts
+sourcePath: src/commands/adapters/surfaces.ts
 methods:
   - name: exportSurface
     narrative:
@@ -41,4 +41,4 @@ methods:
         targetMethod: pinFamilySurfaces
 status: complete
 createdAt: '2026-07-10T23:16:03.846Z'
-updatedAt: '2026-09-12T12:38:13.407Z'
+updatedAt: '2026-09-25T20:49:41.140Z'

@@ -1,8 +1,10 @@
 id: mcp_surfaces_adapter_impl
 name: MCP Surfaces Adapter Implementation
-description: In-process forwarding to the surface portal, alongside the server's other client adapters.
+description: >-
+  sdd_mcp's client hop into sdd_surfaces, in a module of its own: identity re-exports of the surface
+  portal. The MCP server imports this module.
 contract: imcp_surfaces_adapter
-sourcePath: src/mcp/server.ts
+sourcePath: src/mcp/adapters/surfaces.ts
 methods:
   - name: listExternalInterfaces
     narrative:
@@ -13,4 +15,4 @@ methods:
         targetMethod: listExternalInterfaces
 status: complete
 createdAt: '2026-07-24T18:14:33.463Z'
-updatedAt: '2026-07-24T20:48:49.566Z'
+updatedAt: '2026-09-25T20:49:28.738Z'

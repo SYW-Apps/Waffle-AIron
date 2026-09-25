@@ -2,7 +2,7 @@ id: cli_variants_adapter_impl
 name: CLI Variants Adapter Implementation
 description: The `wairon variants list` command in src/commands/variants.ts.
 contract: icli_variants_adapter
-sourcePath: src/commands/variants.ts
+sourcePath: src/commands/adapters/variants.ts
 methods:
   - name: listVariants
     narrative: []
@@ -14,4 +14,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-15T12:24:27.080Z'
-updatedAt: '2026-09-15T18:44:55.309Z'
+updatedAt: '2026-09-25T20:49:41.825Z'

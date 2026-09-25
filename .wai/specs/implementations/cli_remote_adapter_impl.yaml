@@ -5,7 +5,7 @@ description: >-
   authenticated JSON-RPC tools/call per capability, with the tool-result envelope unwrapped so a
   hosted refusal surfaces as a CLI error instead of a silent success.
 contract: icli_remote_adapter
-sourcePath: src/commands/remote.ts
+sourcePath: src/commands/adapters/remote.ts
 methods:
   - name: exportRemoteTree
     narrative:
@@ -166,4 +166,4 @@ lint:
         resolves import graphs within a single build.
 status: complete
 createdAt: '2026-08-12T18:32:35.043Z'
-updatedAt: '2026-09-19T20:28:40.780Z'
+updatedAt: '2026-09-25T20:49:39.376Z'

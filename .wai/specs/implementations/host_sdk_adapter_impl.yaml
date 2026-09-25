@@ -4,7 +4,7 @@ description: >-
   src/server/adapters.ts — thin client onto @wairon/sdk (sdk_portal): forwards inspect +
   safe-extract for hosted ZIP pack handling.
 contract: ihost_sdk_adapter
-sourcePath: src/server/adapters.ts
+sourcePath: src/server/adapters/sdk.ts
 methods:
   - name: inspectArchive
     narrative:
@@ -33,4 +33,4 @@ lint:
         boundary, in src/server/adapters.ts.
 status: complete
 createdAt: '2026-07-21T18:42:54.336Z'
-updatedAt: '2026-09-19T20:28:41.549Z'
+updatedAt: '2026-09-25T20:49:35.442Z'

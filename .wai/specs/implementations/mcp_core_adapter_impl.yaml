@@ -1,10 +1,12 @@
 id: mcp_core_adapter_impl
 name: MCP Core Adapter Implementation
 description: >-
-  Pure 1:1 forwarding into sdd_core's front door (core portal). In-process require() seam today
-  inside src/mcp/server.ts; swappable for a remote transport without changing callers.
+  sdd_mcp's client hop into sdd_core, in a module of its own: identity re-exports of the core
+  portals, under their contract names. The MCP server imports this module, so its calls into core
+  land here — before, the server reached core through destructures of whole-module namespaces the
+  analysis could not follow.
 contract: imcp_core_adapter
-sourcePath: src/mcp/server.ts
+sourcePath: src/mcp/adapters/core.ts
 methods:
   - name: loadSystemSpec
     narrative:
@@ -20,7 +22,6 @@ methods:
         type: call
         targetComponent: agent_context_portal
         targetMethod: resolveAgentTopology
-    symbol: coreLoadRegistry
   - name: loadSubsystemSpec
     narrative:
       - stepNumber: 1
@@ -35,7 +36,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadSubsystemSpecs
-    symbol: loadSubsystemSpec
   - name: loadComponentSpec
     narrative:
       - stepNumber: 1
@@ -137,4 +137,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:33:38.427Z'
+updatedAt: '2026-09-25T20:49:24.402Z'

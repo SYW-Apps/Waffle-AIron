@@ -1,16 +1,18 @@
-schemaVersion: "1.0.0"
-id: "mcp_validator_adapter_impl"
-name: "MCP Validator Adapter Implementation"
-description: "Concrete implementation forwarding MCP validate requests to validator portal."
-contract: "imcp_validator_adapter"
-sourcePath: "src/mcp/server.ts"
+id: mcp_validator_adapter_impl
+name: MCP Validator Adapter Implementation
+description: >-
+  sdd_mcp's client hop into sdd_validator, in a module of its own: identity re-exports of the
+  validator portal. The MCP server imports this module.
+contract: imcp_validator_adapter
+sourcePath: src/mcp/adapters/validator.ts
 methods:
-  - name: "validateSddTree"
+  - name: validateSddTree
     narrative:
       - stepNumber: 1
-        description: "Call validateSddTree on validator portal"
-        type: "call"
-        targetComponent: "validator_portal"
-        targetMethod: "validateSddTree"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+        description: Call validateSddTree on validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: validateSddTree
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-09-25T20:49:30.041Z'

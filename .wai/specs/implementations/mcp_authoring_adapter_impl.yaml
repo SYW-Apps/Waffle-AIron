@@ -1,11 +1,10 @@
 id: mcp_authoring_adapter_impl
 name: MCP Authoring Adapter Implementation
 description: >-
-  Pure 1:1 forwarding into sdd_authoring's front door. An in-process import seam inside
-  src/mcp/server.ts — the one import that made the seam's inbound edge real instead of a sentence on
-  its contract; swappable for a remote transport without changing the tool handler that calls it.
+  sdd_mcp's client hop into sdd_authoring, in a module of its own: identity re-exports of the
+  authoring portal. The MCP server imports this module, so its writes land here.
 contract: imcp_authoring_adapter
-sourcePath: src/mcp/server.ts
+sourcePath: src/mcp/adapters/authoring.ts
 methods:
   - name: updateSpecGated
     narrative:
@@ -42,4 +41,4 @@ methods:
         targetMethod: deleteSpec
 status: complete
 createdAt: '2026-09-18T21:43:42.731Z'
-updatedAt: '2026-09-24T22:22:02.388Z'
+updatedAt: '2026-09-25T20:49:25.740Z'

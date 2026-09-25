@@ -4,7 +4,7 @@ description: >-
   Forwards spec-tree operations to the core portal for provisioning, lock records, and the approval
   baseline.
 contract: ihost_core_adapter
-sourcePath: src/server/adapters.ts
+sourcePath: src/server/adapters/core.ts
 methods:
   - name: provisionProject
     narrative:
@@ -194,4 +194,4 @@ methods:
         targetMethod: deregisterPackRef
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-09-25T17:33:35.582Z'
+updatedAt: '2026-09-25T20:49:30.890Z'

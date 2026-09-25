@@ -1,8 +1,10 @@
 id: validator_surfaces_adapter_impl
 name: Validator Surfaces Adapter Implementation
-description: Surface loading for validation-time resolution.
+description: >-
+  sdd_validator's client hop into sdd_surfaces, in a module of its own: identity re-exports of the
+  surface portal. The validator imports this module, so its calls into surfaces land here.
 contract: ivalidator_surfaces_adapter
-sourcePath: src/core/validation.ts
+sourcePath: src/core/adapters/validator-surfaces.ts
 simPath: tests/core/validation.test.ts
 methods:
   - name: loadSurfaceSnapshots
@@ -21,4 +23,4 @@ methods:
         targetMethod: listMountSnapshots
 status: complete
 createdAt: '2026-07-10T23:16:00.415Z'
-updatedAt: '2026-09-12T11:59:33.725Z'
+updatedAt: '2026-09-25T20:49:19.589Z'

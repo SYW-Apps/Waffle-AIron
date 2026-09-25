@@ -1,8 +1,12 @@
 id: validator_core_adapter_impl
 name: Validator Core Adapter Implementation
-description: Concrete implementation forwarding validator load calls to core portal.
+description: >-
+  sdd_validator's client hop into sdd_core, in a module of its own: identity re-exports of the core
+  portals. The validator imports this module, so its calls into core land here — before, the
+  forwards were local wrappers inside the validator's own file and the calls resolved straight into
+  core's modules.
 contract: ivalidator_core_adapter
-sourcePath: src/core/validation.ts
+sourcePath: src/core/adapters/validator-core.ts
 simPath: tests/core/validation.test.ts
 methods:
   - name: loadSystemSpec
@@ -86,4 +90,4 @@ methods:
         targetMethod: consumedContractInputs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:33:37.370Z'
+updatedAt: '2026-09-25T20:49:18.285Z'
