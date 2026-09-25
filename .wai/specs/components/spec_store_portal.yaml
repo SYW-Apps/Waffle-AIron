@@ -1,0 +1,19 @@
+id: spec_store_portal
+name: Spec Store Portal
+description: >-
+  The raw spec writes of sdd_core: save or delete a spec of any kind, apply a delta with the
+  caller's judgement injected as a write hook, move methods, and write a chained subsystem with its
+  scaffolded child project. Ungated by construction — the store must not import the rule engine that
+  reads it — which is exactly why this surface is published only to the gated authoring seam
+  (sdd_authoring), the one caller that judges before it writes. An author's write that reached these
+  methods from any other door would skip that judgement. In-process today: realized by
+  src/core/index.ts alongside core's other portals.
+subsystem: sdd_core
+componentType: Portal
+owns: []
+dependsOn:
+  - core_orchestrator
+portalType: Custom
+status: complete
+createdAt: '2026-09-25T17:32:45.576Z'
+updatedAt: '2026-09-25T17:33:23.058Z'

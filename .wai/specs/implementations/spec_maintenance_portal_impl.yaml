@@ -1,0 +1,82 @@
+id: spec_maintenance_portal_impl
+name: Spec Maintenance Portal Implementation
+description: >-
+  Realized by src/core/index.ts, the module that republishes core's portals, alongside core's other
+  portals (N:1). Each method is an identity re-export or a one-call forward to the component that
+  holds the workflow.
+contract: ispec_maintenance_portal
+sourcePath: src/core/index.ts
+methods:
+  - name: provisionProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: provisionProject
+  - name: moveSubsystemProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: moveSubsystemProject
+  - name: externalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: externalizeSubsystem
+  - name: internalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: internalizeSubsystem
+  - name: importSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the tree transfer orchestrator.
+        type: call
+        targetComponent: tree_transfer_orchestrator
+        targetMethod: importSpecTree
+  - name: ensureProjectInitialized
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: ensureProjectInitialized
+  - name: renameComponent
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameComponent
+  - name: retireSpecialists
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: retireSpecialists
+  - name: renameMethod
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameMethod
+  - name: repairForeignStepFields
+    narrative:
+      - stepNumber: 1
+        description: Forward the narrative-step repair to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: repairForeignStepFields
+status: complete
+createdAt: '2026-09-25T17:33:05.650Z'
+updatedAt: '2026-09-25T17:33:24.356Z'

@@ -1,0 +1,126 @@
+id: iproject_config_portal
+name: Project Config Portal Interface
+description: Published reads and writes of the bound project's configuration.
+component: project_config_portal
+methods:
+  - name: loadProjectConfig
+    description: >-
+      Published read: the bound project's configuration, or null when it has none — straight through
+      the project config Repository.
+    signature: 'loadProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    guarantees:
+      - idempotent
+  - name: projectConfigExists
+    description: 'Published read: whether the bound project has a configuration file.'
+    signature: 'projectConfigExists(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: declaresGlobalPacks
+    description: >-
+      Published read: whether the bound project's configuration sets `extensions.useGlobalPacks`
+      explicitly.
+    signature: 'declaresGlobalPacks(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: createProjectConfig
+    description: >-
+      Published write: write a fresh configuration for a project that has none. Routed through the
+      core orchestrator.
+    signature: 'createProjectConfig(config: ProjectConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: upsertPackSelection
+    description: >-
+      Published write: select a pack by name, moving a re-selected pack last; returns whether an
+      earlier selection was replaced. Routed through the core orchestrator.
+    signature: 'upsertPackSelection(selection: PackSelection): boolean'
+    returns: boolean
+    params:
+      - name: selection
+        type: PackSelection
+    guarantees:
+      - idempotent
+  - name: removePackSelection
+    description: >-
+      Published write: deselect a pack by name, leaving path references alone; returns whether
+      anything was dropped. Routed through the core orchestrator.
+    signature: 'removePackSelection(packName: string): boolean'
+    returns: boolean
+    params:
+      - name: packName
+        type: string
+    guarantees:
+      - idempotent
+  - name: setProjectType
+    description: 'Published write: set the governing `projectType`. Routed through the core orchestrator.'
+    signature: 'setProjectType(projectType: string): void'
+    returns: void
+    params:
+      - name: projectType
+        type: string
+    guarantees:
+      - idempotent
+  - name: recordProfileSelection
+    description: >-
+      Published write: record the profile selection hosted policy applied. Routed through the core
+      orchestrator.
+    signature: 'recordProfileSelection(selection: ProjectProfileSelection): void'
+    returns: void
+    params:
+      - name: selection
+        type: ProjectProfileSelection
+    guarantees:
+      - idempotent
+  - name: setExecutionTier
+    description: 'Published write: set `execution.tier`. Routed through the core orchestrator.'
+    signature: 'setExecutionTier(tier: string): void'
+    returns: void
+    params:
+      - name: tier
+        type: string
+    guarantees:
+      - idempotent
+  - name: registerPackRef
+    description: >-
+      Published write: register a legacy pack path reference when it is absent; returns whether it
+      was added. Routed through the core orchestrator.
+    signature: 'registerPackRef(ref: string): boolean'
+    returns: boolean
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: deregisterPackRef
+    description: >-
+      Published write: drop a legacy pack path reference that matches exactly; returns whether
+      anything was dropped. Routed through the core orchestrator.
+    signature: 'deregisterPackRef(ref: string): boolean'
+    returns: boolean
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: markSelectionsBundled
+    description: >-
+      Published write: record bundled packs on their selections in place, in one write. Routed
+      through the core orchestrator.
+    signature: 'markSelectionsBundled(bundled: PackSelection[]): void'
+    returns: void
+    params:
+      - name: bundled
+        type: PackSelection[]
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-25T17:33:06.947Z'
+updatedAt: '2026-09-25T17:33:34.030Z'

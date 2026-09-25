@@ -1,9 +1,9 @@
 /**
- * Public-surface fixtures — the family's three rules under
+ * Public-surface fixtures — the family's four rules under
  * src/core/rules/integrity/: public-surface-binding.ts (UNBOUND,
  * INVALID_COMPONENT, FOREIGN_COMPONENT), public-surface-declared-type.ts
- * (TYPE_MISMATCH, EVENT_MISTYPED) and public-surface-bound-contract.ts
- * (INVALID_INTERFACE).
+ * (TYPE_MISMATCH, EVENT_MISTYPED), public-surface-bound-contract.ts
+ * (INVALID_INTERFACE), and public-surface-consumers.ts (UNKNOWN_CONSUMER).
  *
  * Documented intents pinned here:
  *  - PUBLIC_INTERFACE_UNBOUND (error): every declared publicInterface names a
@@ -22,6 +22,8 @@
  *  - PUBLIC_INTERFACE_EVENT_MISTYPED (warning): a Custom entry whose prose
  *    implies eventing must be backed by an event-capable component (Observer
  *    or Portal/MessageBus).
+ *  - PUBLIC_INTERFACE_UNKNOWN_CONSUMER (error): every subsystem a published
+ *    surface names as its consumer must exist in the tree.
  */
 import { defineRuleFixture } from '../harness.js';
 
@@ -444,6 +446,55 @@ export default [
         },
       ],
       components: [INVOICE_ORCH],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // PUBLIC_INTERFACE_UNKNOWN_CONSUMER
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'PUBLIC_INTERFACE_UNKNOWN_CONSUMER',
+    severity: 'error',
+    anchoredTo: 'billing',
+    expectFire: true,
+    scenario:
+      'The billing subsystem publishes its invoice API portal to a "claim" subsystem — a typo for the claims subsystem, so the surface is locked against a caller nobody can be.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'claims', description: 'Insurance claim submission for billed visits.' },
+        {
+          id: 'billing',
+          description: 'Invoicing and payment collection for booked visits.',
+          publicInterfaces: [
+            { type: 'REST', details: 'Invoice REST API for the claims pipeline.', component: 'invoice-api-portal', consumers: ['claim'] },
+          ],
+        },
+      ],
+      components: [INVOICE_PORTAL],
+      interfaces: [INVOICE_API_INTERFACE],
+    },
+  }),
+  defineRuleFixture({
+    code: 'PUBLIC_INTERFACE_UNKNOWN_CONSUMER',
+    expectFire: false,
+    reason: 'Every consumers id names a subsystem of the tree.',
+    scenario:
+      'The billing subsystem publishes its invoice API portal to the claims subsystem, which exists in the tree.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'claims', description: 'Insurance claim submission for billed visits.' },
+        {
+          id: 'billing',
+          description: 'Invoicing and payment collection for booked visits.',
+          publicInterfaces: [
+            { type: 'REST', details: 'Invoice REST API for the claims pipeline.', component: 'invoice-api-portal', consumers: ['claims'] },
+          ],
+        },
+      ],
+      components: [INVOICE_PORTAL],
+      interfaces: [INVOICE_API_INTERFACE],
     },
   }),
 ];

@@ -1,0 +1,26 @@
+id: agent_context_portal
+name: Agent Context Portal
+description: >-
+  Published agent context of sdd_core: the agent topology the spec tree derives and the live brief
+  for one agent, the agent files it generates and where they go, the domains and domain detection,
+  the execution profile and budget a delegation runs under, and the context documents wairon writes
+  for AI tools — the guides, the version stamp and the synced context files. In-process today:
+  realized by src/core/index.ts alongside core's other portals.
+subsystem: sdd_core
+componentType: Portal
+owns: []
+dependsOn:
+  - agent_file_generator
+  - agent_resolver
+  - ai_tool_guide
+  - budget_policy
+  - context_composer
+  - domain_curator
+  - domain_detector
+  - domain_projector
+  - execution_profiler
+  - version_stamp
+portalType: Custom
+status: complete
+createdAt: '2026-09-25T17:32:56.472Z'
+updatedAt: '2026-09-25T17:33:38.162Z'

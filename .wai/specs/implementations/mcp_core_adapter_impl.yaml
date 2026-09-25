@@ -11,14 +11,14 @@ methods:
       - stepNumber: 1
         description: Call loadSystemSpec on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSystemSpec
   - name: resolveAgentTopology
     narrative:
       - stepNumber: 1
         description: Call resolveAgentTopology on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: agent_context_portal
         targetMethod: resolveAgentTopology
     symbol: coreLoadRegistry
   - name: loadSubsystemSpec
@@ -26,14 +26,14 @@ methods:
       - stepNumber: 1
         description: Call loadSubsystemSpec on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSubsystemSpec
   - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
         description: Call loadSubsystemSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSubsystemSpecs
     symbol: loadSubsystemSpec
   - name: loadComponentSpec
@@ -41,100 +41,100 @@ methods:
       - stepNumber: 1
         description: Call loadComponentSpec on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadComponentSpec
   - name: loadInterfaceSpec
     narrative:
       - stepNumber: 1
         description: Call loadInterfaceSpec on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadInterfaceSpec
   - name: moveSubsystemProject
     narrative:
       - stepNumber: 1
         description: Call moveSubsystemProject on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_maintenance_portal
         targetMethod: moveSubsystemProject
   - name: externalizeSubsystem
     narrative:
       - stepNumber: 1
         description: Call externalizeSubsystem on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_maintenance_portal
         targetMethod: externalizeSubsystem
   - name: internalizeSubsystem
     narrative:
       - stepNumber: 1
         description: Call internalizeSubsystem on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_maintenance_portal
         targetMethod: internalizeSubsystem
   - name: resolveChainingParent
     narrative:
       - stepNumber: 1
         description: Forward chaining-parent detection to the core subsystem's published portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: resolveChainingParent
   - name: composeAgentBrief
     narrative:
       - stepNumber: 1
         description: Forward the brief composition to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: agent_context_portal
         targetMethod: composeAgentBrief
   - name: loadProjectConfig
     narrative:
       - stepNumber: 1
         description: Forward the configuration read to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
   - name: renameComponent
     narrative:
       - stepNumber: 1
         description: Call renameComponent on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_maintenance_portal
         targetMethod: renameComponent
   - name: renameMethod
     narrative:
       - stepNumber: 1
         description: Call renameMethod on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_maintenance_portal
         targetMethod: renameMethod
   - name: loadImplementationSpec
     narrative:
       - stepNumber: 1
         description: Call loadImplementationSpec on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadImplementationSpec
   - name: loadTypeSpec
     narrative:
       - stepNumber: 1
         description: Call loadTypeSpec on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadTypeSpec
   - name: getStatusReport
     narrative:
       - stepNumber: 1
         description: Forward 1:1 to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: getStatusReport
   - name: approvalVerdict
     narrative:
       - stepNumber: 1
         description: Forward 1:1 to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: approval_portal
         targetMethod: approvalVerdict
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-24T22:25:06.399Z'
+updatedAt: '2026-09-25T17:33:38.427Z'

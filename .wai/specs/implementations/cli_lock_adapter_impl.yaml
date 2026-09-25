@@ -21,7 +21,7 @@ methods:
       - stepNumber: 2
         description: Persist the commit-scoped lock record
         type: call
-        targetComponent: core_portal
+        targetComponent: approval_portal
         targetMethod: writeLockRecord
       - stepNumber: 3
         description: Return the written lock record
@@ -37,7 +37,7 @@ methods:
           design to approve, and must be told so — judged as "unapproved" it would start failing
           every strict consumer that merely has no tree yet.
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSystemSpec
       - stepNumber: 2
         label: tree-present
@@ -69,7 +69,7 @@ methods:
           Resolve the committed record against that identity through the core portal, the one
           authority on the question: unlocked, locked or stale.
         type: call
-        targetComponent: core_portal
+        targetComponent: approval_portal
         targetMethod: readLockState
       - stepNumber: 6
         label: dispatch-state
@@ -105,4 +105,4 @@ methods:
         outcome: unlocked
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-09-19T12:24:52.397Z'
+updatedAt: '2026-09-25T17:32:38.318Z'

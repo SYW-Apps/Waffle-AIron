@@ -9,16 +9,16 @@ methods:
       - stepNumber: 1
         description: Forward to the core portal to load and merge the governing extension packs.
         type: call
-        targetComponent: core_portal
+        targetComponent: extension_portal
         targetMethod: loadProjectExtensions
   - name: loadProjectConfig
     narrative:
       - stepNumber: 1
         description: Forward to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T20:14:19.137Z'
-updatedAt: '2026-09-13T11:19:59.723Z'
+updatedAt: '2026-09-25T17:33:37.231Z'

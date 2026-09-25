@@ -247,7 +247,8 @@ function qualifiedComponentId(id: string): string {
  * duplicate the list restates once loses its surplus copy). A list naming one
  * identity twice is a genuine duplicate — the merge would fold the second entry
  * into the first — so it is answered with the refusal instead of being written
- * as something other than what was asked.
+ * as something other than what was asked. A restated entry that no longer
+ * states a field its stored twin holds unsets it, for the same reason.
  */
 function publicInterfacesReplacement(
   subsystem: string,
@@ -278,7 +279,15 @@ function publicInterfacesReplacement(
         : { type: pi.type, details: pi.details, action: 'delete' });
     }
   }
-  return { publicInterfaces: [...deletes, ...list] };
+  // A restated entry merges INTO the stored one by identity, so a field the
+  // stored entry holds and the list no longer states (consumers above all)
+  // would survive the "replacement" — each is unset explicitly instead.
+  const restatedEntries = list.map((pi) => {
+    const prev = stored.find((s) => identity(s) === identity(pi));
+    const dropped = prev ? Object.keys(prev).filter((f) => (prev as Record<string, unknown>)[f] !== undefined && (pi as Record<string, unknown>)[f] === undefined) : [];
+    return dropped.length ? { ...pi, unset: dropped } : pi;
+  });
+  return { publicInterfaces: [...deletes, ...restatedEntries] };
 }
 
 
@@ -1159,6 +1168,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           details: z.string(),
           component: z.string().optional().describe('The L2 component id that realizes this interface (this subsystem\'s published surface)'),
           interface: z.string().optional().describe('Optional L3 interface id on that component backing this entry'),
+          consumers: z.array(z.string()).optional().describe('The subsystem ids this surface is published to. Absent, any subsystem may depend on the component; present, only these may — when every entry publishing the component names consumers, the union of the lists is the whole set, and a dependency from any other subsystem is CROSS_SUBSYSTEM_UNLISTED_CONSUMER. Every id must name a subsystem of the tree (PUBLIC_INTERFACE_UNKNOWN_CONSUMER).'),
         }).strict()).optional().describe('Public entrypoints exposed by this subsystem, each bound to a realizing component'),
         projectPath: z.string().optional().describe('Relative path to external project root for subsystem chaining'),
         targetLanguage: z.string().optional().describe('Override of the system-level targetLanguage for this subsystem'),
@@ -1178,7 +1188,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   };
   const subsystemInputFields = [...Object.keys(subsystemInput), 'parentSystem'];
 
-  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string; targetLanguage?: string; profile?: string; designDepth?: 'components' | 'interfaces' | 'implementations' | 'narratives'; trustedLinks?: { subsystem: string; reason: string }[]; lifecycle?: { phase: 'init' | 'shutdown' | 'cyclic' | 'interrupt' | 'scheduled'; component: string; method: string; description?: string }[]; status?: StatedStatus }>(server,
+  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string; consumers?: string[] }[]; projectPath?: string; targetLanguage?: string; profile?: string; designDepth?: 'components' | 'interfaces' | 'implementations' | 'narratives'; trustedLinks?: { subsystem: string; reason: string }[]; lifecycle?: { phase: 'init' | 'shutdown' | 'cyclic' | 'interrupt' | 'scheduled'; component: string; method: string; description?: string }[]; status?: StatedStatus }>(server,
     'sdd_add_subsystem',
     {
       description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced, lint/ext are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the child project directory a chained subsystem scaffolded.',
@@ -1223,7 +1233,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ subsystem: string; publicInterfaces: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[] }>(server,
+  reg<{ subsystem: string; publicInterfaces: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string; consumers?: string[] }[] }>(server,
     'sdd_set_public_interfaces',
     {
       description: 'Set (replace) an existing subsystem\'s publicInterfaces, binding each to the component (and optional interface) that realizes it. Use this to backfill bindings once the subsystem\'s components exist — cross-subsystem dependencies may only target a published public component. A replacement, not a merge: an entry left out is removed. An entry\'s identity is its component and interface, so a list naming one identity twice is refused. Written through the authoring seam as one gated delta, and answered with the change report — every entry added, changed or removed, or that nothing changed — as structured content beside the sentence.',
@@ -1234,6 +1244,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           details: z.string(),
           component: z.string().optional().describe('The L2 component id that realizes this interface'),
           interface: z.string().optional().describe('Optional L3 interface id on that component'),
+          consumers: z.array(z.string()).optional().describe('The subsystem ids this surface is published to. Absent, any subsystem may depend on the component; present, only these may — when every entry publishing the component names consumers, the union of the lists is the whole set, and a dependency from any other subsystem is CROSS_SUBSYSTEM_UNLISTED_CONSUMER. Every id must name a subsystem of the tree (PUBLIC_INTERFACE_UNKNOWN_CONSUMER).'),
         }).strict()).describe('The full replacement list of public interfaces for this subsystem'),
       },
       outputSchema: specChangeReportOutput,

@@ -1,0 +1,164 @@
+id: spec_tree_portal_impl
+name: Core Portal Implementation
+description: Concrete implementation forwarding portal requests to core orchestrators.
+contract: ispec_tree_portal
+sourcePath: src/core/index.ts
+methods:
+  - name: loadSystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadSystemSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSystemSpec
+  - name: loadSubsystemSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadSubsystemSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSubsystemSpecs
+  - name: loadComponentSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadComponentSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadComponentSpecs
+  - name: loadInterfaceSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadInterfaceSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadInterfaceSpecs
+  - name: loadImplementationSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadImplementationSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadImplementationSpecs
+  - name: loadSubsystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadSubsystemSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSubsystemSpec
+  - name: loadComponentSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadComponentSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadComponentSpec
+  - name: loadInterfaceSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadInterfaceSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadInterfaceSpec
+  - name: loadImplementationSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadImplementationSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadImplementationSpec
+  - name: renderDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renderDiagram
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadTypeSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadTypeSpecs
+  - name: dryRunSerializeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward dryRunSerializeSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: dryRunSerializeSpecs
+  - name: buildProjectGraph
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: buildProjectGraph
+    detail: calls-only
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's chaining detection
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveChainingParent
+  - name: exportSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the tree transfer orchestrator.
+        type: call
+        targetComponent: tree_transfer_orchestrator
+        targetMethod: exportSpecTree
+  - name: resolveSubprojectForNamespace
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's mount resolution
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveSubprojectForNamespace
+  - name: listDirectChainedSubprojects
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: listDirectChainedSubprojects
+  - name: consumedContractInputs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: consumedContractInputs
+  - name: loadTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadTypeSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadTypeSpec
+  - name: getStatusReport
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the project status
+        type: call
+        targetComponent: project_status
+        targetMethod: report
+  - name: specPathsInScope
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: specPathsInScope
+  - name: loadSpec
+    narrative:
+      - stepNumber: 1
+        description: Call loadSpec on core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSpec
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-09-25T17:33:54.287Z'

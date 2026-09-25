@@ -44,7 +44,7 @@ methods:
       - stepNumber: 8
         description: 'Project vendoring requires a project: is this inside an initialized wairon project?'
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: projectConfigExists
       - stepNumber: 9
         description: Project vendoring requires a project.
@@ -65,7 +65,7 @@ methods:
           when absent, the write records useGlobalPacks itself, and the result says whether it was
           added.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: registerPackRef
       - stepNumber: 13
         description: First registration vs refresh.
@@ -103,14 +103,14 @@ methods:
           Is this inside an initialized wairon project? Outside one, nothing is read and only the
           global tier is listed.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: projectConfigExists
       - stepNumber: 2
         description: >-
           Inside a project, read its configuration through the core portal: the declared pack
           entries and whether machine-wide packs apply.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
       - stepNumber: 3
         description: >-
@@ -165,7 +165,7 @@ methods:
       - stepNumber: 7
         description: 'Project deregistration requires a project: is this inside an initialized wairon project?'
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: projectConfigExists
       - stepNumber: 8
         description: Project deregistration requires a project.
@@ -180,7 +180,7 @@ methods:
       - stepNumber: 10
         description: Read the project configuration through the core portal for its registered pack entries.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
       - stepNumber: 11
         description: >-
@@ -199,7 +199,7 @@ methods:
           Deregister exactly the matched legacy ref through the core portal; by-name selections are
           untouched.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: deregisterPackRef
       - stepNumber: 14
         description: Only vendored files are deleted.
@@ -324,7 +324,7 @@ methods:
       - stepNumber: 1
         description: Is this inside an initialized wairon project?
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: projectConfigExists
       - stepNumber: 2
         description: Selecting a pack requires a project.
@@ -357,7 +357,7 @@ methods:
           is dropped and this one is appended last, the highest precedence. The result says whether
           a selection was replaced.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: upsertPackSelection
       - stepNumber: 8
         description: >-
@@ -383,7 +383,7 @@ methods:
       - stepNumber: 1
         description: Is this inside an initialized wairon project?
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: projectConfigExists
       - stepNumber: 2
         description: Deselecting a pack requires a project.
@@ -400,7 +400,7 @@ methods:
           Deselect the pack: only same-name selections are dropped — legacy path refs are untouched
           — and nothing is written when none matched. The result says whether anything was dropped.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: removePackSelection
       - stepNumber: 5
         description: Only a selected pack can be deselected.
@@ -431,7 +431,7 @@ methods:
       - stepNumber: 1
         description: Is this inside an initialized wairon project?
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: projectConfigExists
       - stepNumber: 2
         description: Bundling requires a project.
@@ -446,7 +446,7 @@ methods:
       - stepNumber: 4
         description: Read the project's pack selections.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
       - stepNumber: 5
         description: >-
@@ -480,7 +480,7 @@ methods:
       - stepNumber: 10
         description: 'Record every bundled pack''s exact version and bundle: true on its selection, in one write.'
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: markSelectionsBundled
       - stepNumber: 11
         description: >-
@@ -506,7 +506,7 @@ methods:
       - stepNumber: 1
         description: Is this inside an initialized wairon project?
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: projectConfigExists
       - stepNumber: 2
         description: Sync writes into this project's store selections, so it needs a project.
@@ -520,7 +520,7 @@ methods:
       - stepNumber: 4
         description: Read the project's pack selections through the core portal.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
       - stepNumber: 5
         description: >-
@@ -607,4 +607,4 @@ lint:
         limitation at the workspace-package boundary, in src/commands/packs.ts.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-09-19T20:28:41.456Z'
+updatedAt: '2026-09-25T17:33:35.076Z'

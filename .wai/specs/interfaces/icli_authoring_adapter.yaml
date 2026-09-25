@@ -1,0 +1,21 @@
+id: icli_authoring_adapter
+name: CLI Authoring Client Adapter Interface
+description: >-
+  Client adapter contract for the CLI's authored spec writes, reached through the authoring portal
+  instead of the spec store.
+component: cli_authoring_adapter
+methods:
+  - name: writeSpec
+    description: >-
+      Forward a command's whole-spec restatement to the authoring portal: the seam applies it to the
+      stored spec, judges it and writes it — scaffolding the child project of a chained subsystem —
+      and answers with the write receipt.
+    signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: restatement
+        type: SpecRestatement
+        description: The spec as the command states it, with the fields the command can express
+status: complete
+createdAt: '2026-09-25T17:35:09.087Z'
+updatedAt: '2026-09-25T17:35:09.097Z'

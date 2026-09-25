@@ -1,5 +1,5 @@
 /**
- * The core barrel publishes core_portal's contract — and states the rest.
+ * The core barrel publishes its seven portal contracts — and states the rest.
  *
  * `src/core/index.ts` used to carry seventeen `export * from` lines. Sixteen of
  * them republished modules realizing 39 components, so the barrel offered 240
@@ -8,7 +8,7 @@
  * kept being found one symbol at a time.
  *
  * This suite is the thing that keeps it closed. It does NOT freeze a list of
- * names — it reads `icore_portal` and compares, so it keeps holding as the
+ * names — it reads the seven portal contracts and compares, so it keeps holding as the
  * contract changes. What it refuses is a name on the public surface that no
  * spec accounts for: not a contract method, not a method of a TYPE the barrel
  * publishes (a method travels with its type), not the shared rule vocabulary,
@@ -47,15 +47,34 @@ function walkYaml(dir: string): string[] {
 }
 
 /**
- * The names `icore_portal` declares, spelled the way the CODE spells them: a
- * per-method `symbol` on the implementation wins over the contract's name.
+ * The seven capability portals `src/core/index.ts` realizes (N:1) — core's
+ * surface split by capability, every one of them published from this file.
+ */
+const PORTALS = [
+  'spec_tree_portal',
+  'spec_store_portal',
+  'spec_maintenance_portal',
+  'approval_portal',
+  'project_config_portal',
+  'extension_portal',
+  'agent_context_portal',
+] as const;
+
+/**
+ * The names the seven portal contracts declare, spelled the way the CODE
+ * spells them: a per-method `symbol` on the implementation wins over the
+ * contract's name.
  */
 function contractNames(): Set<string> {
-  const iface = readYaml<SpecDoc>(path.join(SPECS, 'interfaces', 'icore_portal.yaml'));
-  const impl = readYaml<SpecDoc>(path.join(SPECS, 'implementations', 'core_portal_impl.yaml'));
-  const symbolOf = new Map<string, string>();
-  for (const m of impl.methods ?? []) if (m.symbol) symbolOf.set(m.name, m.symbol);
-  return new Set((iface.methods ?? []).map((m) => symbolOf.get(m.name) ?? m.name));
+  const names = new Set<string>();
+  for (const portal of PORTALS) {
+    const iface = readYaml<SpecDoc>(path.join(SPECS, 'interfaces', `i${portal}.yaml`));
+    const impl = readYaml<SpecDoc>(path.join(SPECS, 'implementations', `${portal}_impl.yaml`));
+    const symbolOf = new Map<string, string>();
+    for (const m of impl.methods ?? []) if (m.symbol) symbolOf.set(m.name, m.symbol);
+    for (const m of iface.methods ?? []) names.add(symbolOf.get(m.name) ?? m.name);
+  }
+  return names;
 }
 
 /**
@@ -78,8 +97,8 @@ function typeMethodNames(): Set<string> {
 /**
  * The seven diagram functions `wairon diagram --all|--sequence|--subsystem` and
  * `wairon host demo` are built out of. No contract names them —
- * `icore_portal` names `renderDiagram`, `iarchitecture_diagrams` names `render`
- * and `buildGraphModel` — and cli_core_adapter dependsOn core_portal alone, so
+ * `ispec_tree_portal` names `renderDiagram`, `iarchitecture_diagrams` names `render`
+ * and `buildGraphModel` — and cli_core_adapter depends on core's portals alone, so
  * this barrel is the only route that does not make sdd_cli import an sdd_core
  * module.
  *
@@ -153,7 +172,7 @@ const RULE_VOCABULARY = new Set(Object.keys(ruleBarrel));
 const PUBLISHED = Object.keys(barrel);
 
 describe('core barrel surface (src/core/index.ts)', () => {
-  it('publishes no name icore_portal does not account for', () => {
+  it('publishes no name the seven portal contracts do not account for', () => {
     const unaccounted = PUBLISHED.filter(
       (name) =>
         !CONTRACT.has(name)
@@ -163,13 +182,13 @@ describe('core barrel surface (src/core/index.ts)', () => {
     );
     expect(
       unaccounted,
-      'The core Portal publishes its contract. A name here is on the public surface with no '
-      + 'spec behind it — model it (on icore_portal, or on the type it belongs to) rather than '
+      'The core Portals publish their contracts. A name here is on the public surface with no '
+      + 'spec behind it — model it (on one of the portal contracts, or on the type it belongs to) rather than '
       + 'widening this test.',
     ).toEqual([]);
   });
 
-  it('publishes every method icore_portal declares', () => {
+  it('publishes every method the seven portal contracts declare', () => {
     const missing = [...CONTRACT].filter((name) => !PUBLISHED.includes(name)).sort();
     expect(
       missing,
@@ -233,7 +252,7 @@ describe('the five consumer files outside src/core', () => {
  * `docs/extending-wairon.md` documents these by name and
  * `examples/wrapper/wrapper.js` runs on them; `iextension_orchestrator.load`
  * records the contract in the spec tree (`invokedBy: external` — "no internal
- * call chain exists by design"). None of them is on `icore_portal`, so they
+ * call chain exists by design"). None of them is on a core portal contract, so they
  * used to reach the package only because the core barrel starred the module
  * that held them. They are named on the LIBRARY entry now — and this is what
  * says so, because losing a documented API as a side effect of narrowing a

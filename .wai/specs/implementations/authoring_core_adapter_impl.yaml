@@ -17,7 +17,7 @@ methods:
           judgement in as the write hook so it runs on the merged spec at the last point before
           anything reaches disk
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_store_portal
         targetMethod: updateSpec
   - name: loadProjectConfig
     narrative:
@@ -27,7 +27,7 @@ methods:
           answering with nothing when the project has none or cannot be read — a configuration read
           must never be the thing that fails a write closed
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
     symbol: candidateOptions
   - name: moveMethods
@@ -37,36 +37,36 @@ methods:
           Forward the move to the core portal with the caller's hooks and dry-run request carried
           through unchanged
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_store_portal
         targetMethod: moveMethods
   - name: loadSpec
     narrative:
       - stepNumber: 1
         description: Call loadSpec on the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSpec
   - name: saveSpec
     narrative:
       - stepNumber: 1
         description: Call saveSpec on the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_store_portal
         targetMethod: saveSpec
   - name: deleteSpec
     narrative:
       - stepNumber: 1
         description: Call deleteSpec on the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_store_portal
         targetMethod: deleteSpec
   - name: createChainedSubsystem
     narrative:
       - stepNumber: 1
         description: Call createChainedSubsystem on the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_store_portal
         targetMethod: createChainedSubsystem
 status: complete
 createdAt: '2026-09-18T21:43:38.007Z'
-updatedAt: '2026-09-24T22:22:53.950Z'
+updatedAt: '2026-09-25T17:33:34.582Z'

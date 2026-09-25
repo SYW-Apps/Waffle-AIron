@@ -1,0 +1,19 @@
+id: approval_portal
+name: Approval Portal
+description: >-
+  Published approval surface of sdd_core: the gate identity of the tree (state ids), the committed
+  lock record and the lock state it implies, the approval verdict and diff against the approved
+  specs, the approved snapshot a lock captures, the chained children's pins, and the local approver
+  identity. Every caller that asks "is this design the approved one, and what changed since" reaches
+  core here. In-process today: realized by src/core/index.ts alongside core's other portals.
+subsystem: sdd_core
+componentType: Portal
+owns: []
+dependsOn:
+  - approval_comparison
+  - core_orchestrator
+  - local_approver
+portalType: Custom
+status: complete
+createdAt: '2026-09-25T17:32:17.292Z'
+updatedAt: '2026-09-25T17:32:37.993Z'

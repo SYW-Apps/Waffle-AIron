@@ -8,7 +8,7 @@ subsystem: sdd_cli
 componentType: Adapter
 owns: []
 dependsOn:
-  - core_portal
+  - extension_portal
 status: complete
 createdAt: '2026-07-14T20:09:01.451Z'
-updatedAt: '2026-07-14T20:16:14.035Z'
+updatedAt: '2026-09-25T17:35:31.783Z'

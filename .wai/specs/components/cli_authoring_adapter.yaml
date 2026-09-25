@@ -1,0 +1,17 @@
+id: cli_authoring_adapter
+name: CLI Authoring Client Adapter
+description: >-
+  Local client adapter in sdd_cli for the hop into sdd_authoring: every spec a terminal command
+  authors — `wairon subsystem add`, and `wairon init` run inside a parent project — is written
+  through the gated authoring seam, exactly as the MCP tools write theirs, so the rules for
+  re-authoring a spec (status never lowered, unexpressed fields carried, the parent required) hold
+  whichever door the author came through. In-process import seam inside src/commands/subsystem.ts
+  today, swappable for a remote transport without changing the commands that call it.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - authoring_portal
+status: complete
+createdAt: '2026-09-25T17:35:06.289Z'
+updatedAt: '2026-09-25T17:35:06.302Z'

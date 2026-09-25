@@ -16,7 +16,7 @@ componentType: Adapter
 owns: []
 dependsOn:
   - mcp_portal
-  - core_portal
+  - project_config_portal
 status: complete
 createdAt: '2026-08-12T18:42:01.746Z'
-updatedAt: '2026-09-13T11:32:11.983Z'
+updatedAt: '2026-09-25T17:35:30.132Z'

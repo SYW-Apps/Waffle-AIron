@@ -147,6 +147,38 @@ describe('applyRestatement — computed without touching disk', () => {
     expect(application.status).toBe('draft');
   });
 
+  it("parses the candidate through its kind's schema: a new spec gets the defaults the door did not state", () => {
+    const application = applyRestatement(
+      { kind: 'subsystem', spec: { id: 'billing', name: 'Billing', description: 'd', projectPath: 'services/billing' } as unknown as SubsystemSpec, fields: ['id', 'name', 'description', 'projectPath'] },
+      null,
+      { name: 'Shop System' } as SystemSpec,
+    );
+    expect(application.refusal).toBeUndefined();
+    expect(application.spec).toMatchObject({ id: 'billing', parentSystem: 'Shop System', publicInterfaces: [], trustedLinks: [], status: 'draft' });
+  });
+
+  it('refuses a candidate that does not parse, naming the field, before anything is written', () => {
+    const application = applyRestatement(component({ componentType: undefined }), null, { id: 'shop' } as SubsystemSpec);
+    expect(application.refusal).toMatch(/componentType/);
+    expect(application.refusal).toMatch(/Nothing was written/);
+  });
+
+  it('keeps namespace-qualified ids through the parse — the candidate stays in load form', () => {
+    const existing = {
+      id: 'billing', name: 'Billing', description: 'd', parentSystem: 'Shop System', projectPath: 'services/billing',
+      publicInterfaces: [{ type: 'Custom', details: 'writes', component: 'billing::invoice_portal', consumers: ['billing::ledger'] }],
+      trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now,
+    } as unknown as SubsystemSpec;
+    const application = applyRestatement(
+      { kind: 'subsystem', spec: { id: 'billing', projectPath: 'services/billing' } as unknown as SubsystemSpec, fields: ['id', 'projectPath'] },
+      existing,
+      { name: 'Shop System' } as SystemSpec,
+    );
+    expect(application.refusal).toBeUndefined();
+    expect((application.spec as SubsystemSpec).publicInterfaces).toEqual(existing.publicInterfaces);
+    expect(application.spec).toMatchObject({ name: 'Billing', description: 'd' });
+  });
+
   it('does not mutate the restatement it was handed', () => {
     const restatement = component();
     const before = JSON.stringify(restatement);

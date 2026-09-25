@@ -73,7 +73,7 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.dependencyEdges().all
-        endStep: 18
+        endStep: 20
       - stepNumber: 2
         label: liveEdge
         description: >-
@@ -194,7 +194,7 @@ methods:
         condition: >-
           ctx.publicSet for edge.to.subsystem contains edge.to.id and edge.to.componentType is not
           Portal
-        onFalseStep: 1
+        onFalseStep: 19
       - stepNumber: 18
         label: targetNonPortal
         description: >-
@@ -204,6 +204,30 @@ methods:
           target subsystem and the target with its componentType: a cross-subsystem hop must target
           the remote subsystem's Portal, which dispatches inward, and a published non-Portal of any
           stereotype leaks the boundary, so expose a Portal and point the component at it
+        type: local
+      - stepNumber: 19
+        label: consumerCheck
+        description: >-
+          Is the target published to a named set of consumers that leaves this subsystem out? A
+          component is restricted when EVERY publicInterfaces entry of edge.to.subsystem that
+          publishes it declares consumers, and the union of those lists is who may depend on it; one
+          entry without the field publishes it to anyone. A restricted surface exists so that a door
+          that must not reach it cannot — the raw spec writes, which only the gated authoring seam
+          may call
+        type: branch
+        condition: >-
+          every publicInterfaces entry of the subsystem in ctx.subsystems whose id is
+          edge.to.subsystem that names edge.to.id declares consumers, and none of those lists
+          contains edge.from.subsystem
+        onFalseStep: 1
+      - stepNumber: 20
+        label: unlistedConsumer
+        description: >-
+          Report CROSS_SUBSYSTEM_UNLISTED_CONSUMER (error, on edge.from.id; draft context
+          edge.draftContext) naming the component, its subsystem, the target and the subsystems the
+          target is published to: depend on a surface published to this subsystem instead, or — when
+          this subsystem really is a caller the provider meant to serve — add it to the entry's
+          consumers
         type: local
     symbol: check
     exportedVia: subsystemBoundaryDepsRule
@@ -1142,4 +1166,4 @@ methods:
     exportedVia: authSourceWiringRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-23T17:52:54.696Z'
+updatedAt: '2026-09-25T17:38:48.903Z'

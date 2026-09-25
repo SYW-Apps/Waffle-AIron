@@ -459,7 +459,7 @@ rules:
             covers:
               - '2:authoring_core_adapter.loadSpec'
               - '5:authoring_validator_adapter.findTestsReferencing'
-      # 108 finding(s), 145 unit(s).
+      # 93 finding(s), 130 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -494,61 +494,6 @@ rules:
             at: 'computeStateIdAt'
             covers:
               - 'spec_loader.loadSystemSpec'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'saveComponentSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'saveImplementationSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'saveInterfaceSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'saveSubsystemSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'saveSystemSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'saveTypeSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'deleteSubsystemSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'deleteComponentSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'deleteInterfaceSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'deleteImplementationSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: core_orchestrator_impl
-            at: 'deleteTypeSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
           - code: UNDECLARED_COLOCATED_CALL
             spec: credential_repository_impl
             at: 'create'
@@ -900,36 +845,6 @@ rules:
             covers:
               - 'spec_registry.invalidateCache'
           - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_loader_impl
-            at: 'saveTypeSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_loader_impl
-            at: 'deleteSubsystemSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_loader_impl
-            at: 'deleteComponentSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_loader_impl
-            at: 'deleteInterfaceSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_loader_impl
-            at: 'deleteImplementationSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_loader_impl
-            at: 'deleteTypeSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
             spec: spec_validator_impl
             at: 'resolveThroughParent'
             covers:
@@ -1045,6 +960,16 @@ rules:
             at: 'deleteSpec'
             covers:
               - 'authoring_core_adapter.loadProjectConfig'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'updateSpec'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'moveMethods'
+            covers:
+              - 'spec_registry.invalidateCache'
       # 6 finding(s), 39 unit(s).
       - kind: undecided
         why: >-
@@ -1227,7 +1152,7 @@ rules:
       - kind: unreadable
         why: >-
           The forward check does not follow a TARGET through the file that republishes it.
-          core_portal is realized by src/core/index.ts, which re-exports src/core/extensions.ts,
+          extension_portal is realized by src/core/index.ts, which re-exports src/core/extensions.ts,
           and the call is proven to land in extensions.ts. Landing-side widening already follows a
           call through a barrel to where the function lives; the same relation read from the
           target side is not read yet. Measured on this tree it is exactly 1 of the 60 call-step
@@ -1238,7 +1163,7 @@ rules:
             spec: cli_patterns_adapter_impl
             at: 'listPatterns'
             covers:
-              - '1:core_portal.loadProjectExtensions'
+              - '1:extension_portal.loadProjectExtensions'
       # 5 finding(s), 9 unit(s).
       - kind: drift
         why: >-
@@ -1363,7 +1288,7 @@ rules:
               - 'loadExtensionPacks'
               - 'packDirEntry'
           - code: UNDECLARED_EXPORT
-            spec: core_portal_impl
+            spec: agent_context_portal_impl
             at: 'src/core/index.ts'
             covers:
               - 'declaredPackNames'

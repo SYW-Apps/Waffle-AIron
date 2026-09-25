@@ -10,8 +10,9 @@ subsystem: sdd_cli
 componentType: Adapter
 owns: []
 dependsOn:
-  - core_portal
   - validator_portal
+  - spec_tree_portal
+  - approval_portal
 status: complete
 createdAt: '2026-07-24T18:05:06.885Z'
-updatedAt: '2026-09-15T18:01:04.031Z'
+updatedAt: '2026-09-25T17:35:29.283Z'

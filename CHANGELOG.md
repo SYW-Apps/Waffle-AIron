@@ -27,6 +27,37 @@ client expects back from them (item 14). The library surface narrows too:
 `@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
 (item 4). Nothing here is purely additive, so `[minor]` would understate it.
 
+### Core publishes capabilities, not one front door
+
+`core_portal` published 97 methods to every caller, and measuring who called what
+showed they cluster by capability, not by caller. It is now seven portals, each
+with its own contract — **reads** (`spec_tree_portal`), **raw writes**
+(`spec_store_portal`), **mechanical writes** (`spec_maintenance_portal`: renames,
+subproject relocation, doctor repairs, tree import, provisioning), **approval**,
+**project configuration**, **extension packs** and **agent context** — and every
+client adapter depends on exactly the ones it calls. `src/core/index.ts` still
+realizes all seven.
+
+- **A published surface can name its consumers.** A `publicInterfaces` entry's
+  new `consumers` lists the subsystems it is published to; when every entry
+  publishing a component names them, any other subsystem depending on it is
+  `CROSS_SUBSYSTEM_UNLISTED_CONSUMER` (error), and a consumer id that names no
+  subsystem is `PUBLIC_INTERFACE_UNKNOWN_CONSUMER` (error). wairon's own raw spec
+  writes are published to the authoring seam alone, so no door can reach them
+  around the gate. `sdd_add_subsystem` and `sdd_set_public_interfaces` express
+  the field; `sdd_set_public_interfaces` also no longer keeps a field a restated
+  entry dropped.
+- **`wairon subsystem add`, and `wairon init` inside a parent project, author
+  through the seam.** A re-run on an existing id re-authors it in place and
+  reports what it carried, instead of overwriting its description, published
+  surface and trusted links with a placeholder.
+- **A restatement is parsed before it is written.** A door that states only the
+  fields it owns gets the schema's defaults for the rest, and a spec that would
+  not parse is refused with the reason, instead of failing inside the store.
+- **Eleven typed save/delete methods leave the portal** — nothing called them
+  through it once every authored write went through the seam. See *Upgrading*
+  item 4 if you embed wairon as a library.
+
 ### Every authored write goes through the authoring seam
 
 `sdd_authoring` called itself the one place that decides what may be written and
@@ -3330,6 +3361,11 @@ same as not knowing whether the next one an author writes will.
    entry rather than inherited, and `examples/wrapper/wrapper.js` runs unchanged.
    If you depended on one of the 120, open an issue naming the call — it can be
    modelled onto a contract, which is the only way a surface stays a surface.
+   **Eleven more went with the capability portals**: the typed spec writes
+   `saveSystemSpec`, `saveSubsystemSpec`, `saveComponentSpec`,
+   `saveInterfaceSpec`, `saveImplementationSpec`, `saveTypeSpec` and the five
+   `delete*Spec`. Write through the kind-generic `saveSpec(kind, spec)` and
+   `deleteSpec(kind, id)` instead — the same store writes, with the kind as data.
 5. **Chained subprojects: re-run `validate --ci` in each child.** It can newly
    fail, by design — it was waving these through:
    - a reference into the parent now carries the parent's verdict; fix the edge

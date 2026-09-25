@@ -1,4 +1,4 @@
-import { SddRule } from '../types.js';
+import { SddRule, type RuleContext } from '../types.js';
 import { ambiguityMessage } from '../../../models/index.js';
 
 /**
@@ -10,7 +10,7 @@ import { ambiguityMessage } from '../../../models/index.js';
 export const subsystemBoundaryDepsRule: SddRule = {
   name: 'subsystem-boundary-dependencies',
   description:
-    'Judges every dependsOn edge that leaves its own subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way). A reference that names nothing in this tree is resolved against the stored surface snapshots: a hit is a DECLARED remote portal and the same Adapter requirement applies to it, snapshots of several providers that disagree make the reference ambiguous, and a reference authored to leave this root that no snapshot covers warns instead of erroring. Boundary rules are never relaxed by a pack profile.',
+    'Judges every dependsOn edge that leaves its own subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way). A published surface may also name the subsystems it serves (a publicInterfaces entry\'s consumers): a component every one of whose entries names consumers may be depended on only from those subsystems, which is how a provider keeps a surface — the raw spec writes — away from a door that must not reach it. A reference that names nothing in this tree is resolved against the stored surface snapshots: a hit is a DECLARED remote portal and the same Adapter requirement applies to it, snapshots of several providers that disagree make the reference ambiguous, and a reference authored to leave this root that no snapshot covers warns instead of erroring. Boundary rules are never relaxed by a pack profile.',
   codes: [
     { code: 'INVALID_DEPENDENCY_REFERENCE', defaultSeverity: 'error', summary: 'dependsOn names a non-existent component' },
     { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree dependsOn (super::/:: form) with no surface snapshot covering it' },
@@ -18,6 +18,7 @@ export const subsystemBoundaryDepsRule: SddRule = {
     { code: 'CROSS_SUBSYSTEM_NON_ADAPTER', defaultSeverity: 'error', summary: 'Non-Adapter component crossing a subsystem boundary' },
     { code: 'CROSS_SUBSYSTEM_PRIVATE_ACCESS', defaultSeverity: 'error', summary: 'Cross-subsystem dependency on an unpublished component' },
     { code: 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL', defaultSeverity: 'error', summary: 'Cross-subsystem hop entering through a non-Portal' },
+    { code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER', defaultSeverity: 'error', summary: 'Cross-subsystem dependency on a surface published only to other subsystems' },
   ],
   check(ctx) {
     for (const edge of ctx.dependencyEdges().all) {
@@ -139,6 +140,36 @@ export const subsystemBoundaryDepsRule: SddRule = {
           edge.draftContext,
         );
       }
+
+      // The consumer check runs whatever the portal check said: a surface
+      // published to a named set of subsystems may be depended on only from
+      // those — it is how a provider keeps a surface (the raw spec writes)
+      // away from a door that must not reach it.
+      const publishedTo = restrictedConsumers(ctx, depComp.subsystem, depComp.id);
+      if (publishedTo && !publishedTo.includes(comp.subsystem)) {
+        ctx.addIssue(
+          'error',
+          'CROSS_SUBSYSTEM_UNLISTED_CONSUMER',
+          `Boundary violation: "${comp.id}" (subsystem "${comp.subsystem}") depends on "${depComp.id}", which subsystem "${depComp.subsystem}" publishes only to ${publishedTo.map((s) => `"${s}"`).join(', ')}. Depend on a surface published to "${comp.subsystem}" instead, or — when "${comp.subsystem}" really is a caller the provider meant to serve — add it to the entry's consumers.`,
+          comp.id,
+          edge.draftContext,
+        );
+      }
     }
   },
 };
+
+/**
+ * Who a published component may be depended on by, or null when anyone may.
+ * A component is restricted when EVERY publicInterfaces entry of its subsystem
+ * that names it declares consumers, and the union of those lists is the set;
+ * one entry without the field publishes it to anyone. A component no entry
+ * names is not published at all — CROSS_SUBSYSTEM_PRIVATE_ACCESS's question,
+ * not this one's — so it answers null rather than an empty set.
+ */
+function restrictedConsumers(ctx: RuleContext, subsystemId: string, componentId: string): string[] | null {
+  const entries = (ctx.subsystems.find((s) => s.id === subsystemId)?.publicInterfaces ?? [])
+    .filter((pi) => pi.component === componentId);
+  if (entries.length === 0 || entries.some((pi) => pi.consumers === undefined)) return null;
+  return [...new Set(entries.flatMap((pi) => pi.consumers ?? []))];
+}

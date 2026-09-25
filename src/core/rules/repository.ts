@@ -8,6 +8,7 @@ import { typeDeclarationsRule } from './integrity/type-declarations.js';
 import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
 import { signatureTypeReferencesRule } from './integrity/signature-type-references.js';
 import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
+import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
 import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
 import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
@@ -200,10 +201,11 @@ export const SDD_RULES: SddRule[] = [
   assertionForbiddenEdgesRule,
   assertionRequiredFieldsRule,
   assertionEndpointShapesRule,
-  // The published surface in three questions: what backs the entry, whether
-  // that component's stereotype can realize the type it declares, and whether
-  // the contract it binds is that component's own.
+  // The published surface in four questions: what backs the entry, who it is
+  // published to, whether that component's stereotype can realize the type it
+  // declares, and whether the contract it binds is that component's own.
   publicSurfaceBindingRule,
+  publicSurfaceConsumersRule,
   publicSurfaceDeclaredTypeRule,
   publicSurfaceBoundContractRule,
   cyclesRule,

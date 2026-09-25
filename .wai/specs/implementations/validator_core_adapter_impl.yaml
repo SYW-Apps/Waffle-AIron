@@ -10,49 +10,49 @@ methods:
       - stepNumber: 1
         description: Call loadSystemSpec on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSystemSpec
   - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
         description: Call loadSubsystemSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSubsystemSpecs
   - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
         description: Call loadComponentSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadComponentSpecs
   - name: loadInterfaceSpecs
     narrative:
       - stepNumber: 1
         description: Call loadInterfaceSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadInterfaceSpecs
   - name: loadImplementationSpecs
     narrative:
       - stepNumber: 1
         description: Call loadImplementationSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadImplementationSpecs
   - name: loadTypeSpecs
     narrative:
       - stepNumber: 1
         description: Call loadTypeSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadTypeSpecs
   - name: dryRunSerializeSpecs
     narrative:
       - stepNumber: 1
         description: Call dryRunSerializeSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: dryRunSerializeSpecs
     conformance: 'off'
   - name: loadProjectExtensions
@@ -60,7 +60,7 @@ methods:
       - stepNumber: 1
         description: Forward to the core portal to load and merge the governing extension packs.
         type: call
-        targetComponent: core_portal
+        targetComponent: extension_portal
         targetMethod: loadProjectExtensions
     detail: calls-only
   - name: loadProjectConfig
@@ -68,22 +68,22 @@ methods:
       - stepNumber: 1
         description: Forward to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
   - name: computeStateId
     narrative:
       - stepNumber: 1
         description: Call computeStateId on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: approval_portal
         targetMethod: computeStateId
   - name: consumedContractInputs
     narrative:
       - stepNumber: 1
         description: Call consumedContractInputs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: consumedContractInputs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-15T17:55:57.489Z'
+updatedAt: '2026-09-25T17:33:37.370Z'

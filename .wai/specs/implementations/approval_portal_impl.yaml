@@ -1,0 +1,118 @@
+id: approval_portal_impl
+name: Approval Portal Implementation
+description: >-
+  Realized by src/core/index.ts, the module that republishes core's portals, alongside core's other
+  portals (N:1). Each method is an identity re-export or a one-call forward to the component that
+  holds the approval logic.
+contract: iapproval_portal
+sourcePath: src/core/index.ts
+methods:
+  - name: computeStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: computeStateId
+  - name: readLockRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: readLockRecord
+  - name: writeLockRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: writeLockRecord
+  - name: computeStateIdAt
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's read-only cross-root hash computation
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: computeStateIdAt
+  - name: readLockState
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator, with the gate identity the caller computed
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: readLockState
+  - name: currentChildPins
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Re-export the child-pin read — this Portal method and the comparison component's function
+          are the same function, so the call resolves by identity
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: currentChildPins
+  - name: captureApprovedSpecs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Capture the tree's per-spec digests for an approval record. Published here by re-export
+          rather than by wrapping, so this Portal method and the comparison component's function are
+          the same function — the call resolves by identity
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: captureApprovedSpecs
+  - name: localApprover
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the approver identity, which reads the local environment for the answer.
+          Re-exported through this Portal rather than resolved in it — reading git and the operating
+          system is work, and a Portal dispatches
+        type: call
+        targetComponent: local_approver
+        targetMethod: resolve
+    symbol: localApprover
+  - name: diffAgainstApproval
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Re-export the comparison: this Portal method and the comparison component's function are
+          the same function, so the call resolves by identity
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: diffAgainstApproval
+  - name: approvalRecord
+    narrative:
+      - stepNumber: 1
+        description: Re-export the record read
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: approvalRecord
+  - name: movedChildren
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Re-export the child-pin drift read, so sdd_cli reaches it through this Portal rather than
+          importing the approval module across a subsystem boundary
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: movedChildren
+  - name: settledSpecPaths
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Re-export the settled-path read — the same function published under this surface, so the
+          call resolves by identity
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: settledSpecPaths
+  - name: approvalVerdict
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the approval comparison
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: verdict
+status: complete
+createdAt: '2026-09-25T17:32:26.946Z'
+updatedAt: '2026-09-25T17:32:37.837Z'

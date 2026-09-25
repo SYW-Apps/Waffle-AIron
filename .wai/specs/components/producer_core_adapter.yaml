@@ -7,7 +7,7 @@ subsystem: sdd_producers
 componentType: Adapter
 owns: []
 dependsOn:
-  - core_portal
+  - spec_tree_portal
 status: complete
 createdAt: '2026-07-04T17:29:03.500Z'
 updatedAt: '2026-09-15T20:46:26.500Z'

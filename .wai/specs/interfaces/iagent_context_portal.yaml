@@ -1,0 +1,249 @@
+id: iagent_context_portal
+name: Agent Context Portal Interface
+description: >-
+  Published agent topology, briefs, generation, domains, execution profile and budget, and the
+  context documents written for AI tools.
+component: agent_context_portal
+methods:
+  - name: resolveAgentTopology
+    description: Resolves dynamic agent topology
+    signature: 'resolveAgentTopology(): AgentRecord[]'
+    returns: AgentRecord[]
+  - name: composeAgentBrief
+    description: >-
+      Compose the live delegation brief for one resolved agent (rendered instructions + scope
+      fields). Pure 1:1 forward.
+    signature: 'composeAgentBrief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
+  - name: generateAll
+    description: >-
+      Write every agent's file for every target the project configures, answering one summary per
+      agent. Published here because `wairon generate` is an sdd_cli command and the generator is an
+      sdd_core component — the CLI importing the exporters module directly is the crossing this
+      Portal exists to prevent.
+    signature: >-
+      generateAll(agents: AgentRecord[], config: ProjectConfig, options?: GenerateOptions):
+      GenerateSummary[]
+    returns: GenerateSummary[]
+    params:
+      - name: agents
+        type: AgentRecord[]
+        description: Every agent to write
+      - name: config
+        type: ProjectConfig
+        description: The project's configuration, which names the targets
+      - name: options
+        type: GenerateOptions
+        description: What this run may vary
+        optional: true
+  - name: resolveExpectedOutputPaths
+    description: >-
+      Every path a generate run would write for these agents and targets, without rendering or
+      writing any of them — how the command knows which files are wairon's own before it prunes or
+      reports.
+    signature: 'resolveExpectedOutputPaths(agents: AgentRecord[], config: ProjectConfig): Set<string>'
+    returns: Set<string>
+    params:
+      - name: agents
+        type: AgentRecord[]
+        description: The agents whose outputs to enumerate
+      - name: config
+        type: ProjectConfig
+        description: The project's configuration
+  - name: loadRegistry
+    description: >-
+      The derived agent topology in the Registry shape older callers expect. There is no registry
+      file — this wraps the resolver — and it is published here because the MCP server's topology
+      tools need the whole shape, not just the records: one of them hands it to the registry
+      validator.
+    signature: 'loadRegistry(): Registry'
+    returns: Registry
+    params: []
+  - name: resolveDomains
+    description: Every domain this project has, derived from subsystems and registered free-standing alike.
+    signature: 'resolveDomains(): Domain[]'
+    returns: Domain[]
+    params: []
+  - name: addDomain
+    description: >-
+      Register a domain the spec tree does not imply, and persist it. Refuses an id that already
+      exists in either kind.
+    signature: 'addDomain(domain: Domain): void'
+    returns: void
+    params:
+      - name: domain
+        type: Domain
+        description: The domain to register
+  - name: removeDomain
+    description: Unregister a free-standing domain. A derived one is removed by removing its subsystem.
+    signature: 'removeDomain(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+        description: The domain id to unregister
+  - name: detectDomainCandidates
+    description: >-
+      Which directories look like domains nobody has registered yet. Proposals only — nothing here
+      writes.
+    signature: >-
+      detectDomainCandidates(projectRoot: string, trackedPaths?: Set<string>, trackedIds?:
+      Set<string>): DetectedDomainCandidate[]
+    returns: DetectedDomainCandidate[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The repository root to scan
+      - name: trackedPaths
+        type: Set<string>
+        description: Paths already claimed by a registered domain
+        optional: true
+      - name: trackedIds
+        type: Set<string>
+        description: Domain ids already in use
+        optional: true
+  - name: deriveExecutionProfile
+    description: >-
+      Published read: what an agent's work is like, derived from its topology alone. Forwarded to
+      the execution profiler.
+    signature: 'deriveExecutionProfile(agent: AgentRecord): ExecutionProfile'
+    returns: ExecutionProfile
+    params:
+      - name: agent
+        type: AgentRecord
+        description: The resolved agent whose work shape is wanted
+    guarantees:
+      - idempotent
+  - name: resolveBudget
+    description: >-
+      Published read: what a work profile earns under the project's dial, or nothing when the dial
+      is off. Forwarded to the budget policy.
+    signature: >-
+      resolveBudget(profile: ExecutionProfile, config: ExecutionConfig, agentId: string):
+      ExecutionBudget | undefined
+    returns: ExecutionBudget | undefined
+    params:
+      - name: profile
+        type: ExecutionProfile
+        description: What the work is like
+      - name: config
+        type: ExecutionConfig
+        description: The project's dial and its per-agent overrides
+      - name: agentId
+        type: string
+        description: Which agent, so its override can be found
+    guarantees:
+      - idempotent
+  - name: globalGuideFilePath
+    description: >-
+      Published read: where an AI tool keeps its machine-wide configuration. Forwarded to the tool
+      guide.
+    signature: 'globalGuideFilePath(target: string): string | null'
+    returns: string | null
+    params:
+      - name: target
+        type: string
+        description: 'The AI tool: `claude` or `gemini`'
+    guarantees:
+      - idempotent
+  - name: localGuideFilePath
+    description: >-
+      Published read: where an AI tool keeps its per-project configuration. Forwarded to the tool
+      guide.
+    signature: 'localGuideFilePath(projectRoot: string, target: string): string | null'
+    returns: string | null
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: target
+        type: string
+        description: The AI tool
+    guarantees:
+      - idempotent
+  - name: injectGuide
+    description: >-
+      Published write: put the wairon guide into a tool's configuration file, replacing any section
+      already there. Forwarded to the tool guide.
+    signature: 'injectGuide(filePath: string, scope: string): void'
+    returns: void
+    params:
+      - name: filePath
+        type: string
+        description: The configuration file to write
+      - name: scope
+        type: string
+        description: '`global` or `local`'
+    effect: write
+  - name: writeRootGuideDelegator
+    description: >-
+      Published write: write the repository-root pointer at the in-project guide. Forwarded to the
+      tool guide.
+    signature: 'writeRootGuideDelegator(projectRoot: string, target: string): void'
+    returns: void
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: target
+        type: string
+        description: The AI tool
+    effect: write
+  - name: reinjectLocalGuides
+    description: >-
+      Published write: refresh the in-project guide for every target that already has one, answering
+      the paths written. Forwarded to the tool guide.
+    signature: 'reinjectLocalGuides(projectRoot: string, targets: string[]): string[]'
+    returns: string[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: targets
+        type: string[]
+        description: The AI tools to refresh
+    effect: write
+  - name: readStampVersion
+    description: >-
+      Published read: the wairon version stamped in generated content, or nothing when it carries
+      none. Forwarded to the version stamp.
+    signature: 'readStampVersion(content: string): string | null'
+    returns: string | null
+    params:
+      - name: content
+        type: string
+        description: Generated content that may carry a stamp
+    guarantees:
+      - idempotent
+  - name: syncContextFiles
+    description: >-
+      Published write: rebuild the derived context documents, writing each only if it changed.
+      Forwarded to the context composer.
+    signature: 'syncContextFiles(): SyncResult'
+    returns: SyncResult
+    params: []
+    effect: write
+  - name: hasContext
+    description: >-
+      Published read: whether this project has the human-written project document. Forwarded to the
+      context composer.
+    signature: 'hasContext(): boolean'
+    returns: boolean
+    params: []
+    guarantees:
+      - idempotent
+  - name: derivedDocPaths
+    description: >-
+      Published read: where the two derived context documents live, for callers reporting on them.
+      Forwarded to the context composer.
+    signature: 'derivedDocPaths(): string[]'
+    returns: string[]
+    params: []
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-25T17:33:13.399Z'
+updatedAt: '2026-09-25T17:33:37.865Z'

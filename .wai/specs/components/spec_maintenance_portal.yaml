@@ -1,0 +1,20 @@
+id: spec_maintenance_portal
+name: Spec Maintenance Portal
+description: >-
+  The mechanical writes of sdd_core — the ones that change identity, placement or format rather than
+  what a component owns, and so need no candidate judgement: renaming a component or a method,
+  relocating, externalizing or internalizing a chained subproject, the doctor's repairs (retiring
+  Specialists, dropping step fields a step type cannot carry), importing an archived tree, and
+  provisioning a project. Kept apart from the raw store writes so the doors that legitimately
+  perform these (the CLI, the MCP server, the hosted server) are not handed the ungated save and
+  delete as well. In-process today: realized by src/core/index.ts alongside core's other portals.
+subsystem: sdd_core
+componentType: Portal
+owns: []
+dependsOn:
+  - core_orchestrator
+  - tree_transfer_orchestrator
+portalType: Custom
+status: complete
+createdAt: '2026-09-25T17:32:49.056Z'
+updatedAt: '2026-09-25T17:33:24.567Z'

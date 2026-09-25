@@ -1,0 +1,68 @@
+id: extension_portal_impl
+name: Extension Portal Implementation
+description: >-
+  Realized by src/core/index.ts, the module that republishes core's portals, alongside core's other
+  portals (N:1). Each method is an identity re-export or a one-call forward to the extension
+  orchestrator.
+contract: iextension_portal
+sourcePath: src/core/index.ts
+methods:
+  - name: loadProjectExtensions
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the extension orchestrator, which gathers, loads, and merges the governing
+          packs.
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadProjectExtensions
+      - stepNumber: 2
+        description: Return the merged LoadedExtensions to the caller.
+        type: return
+        outcome: success
+    detail: calls-only
+  - name: defaultPackSelections
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: defaultPackSelections
+  - name: packStoreDir
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: packStoreDir
+  - name: listInstalledPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: listInstalledPacks
+  - name: resolveInstalledPack
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: resolveInstalledPack
+  - name: installPackFromDirectory
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: installPackFromDirectory
+  - name: uninstallPack
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: uninstallPack
+status: complete
+createdAt: '2026-09-25T17:33:11.897Z'
+updatedAt: '2026-09-25T17:33:36.673Z'
