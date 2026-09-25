@@ -137,6 +137,12 @@ export const PublicInterfaceSchema = z.object({
   component: SpecIdSchema.optional(),
   /** Optional L3 interface on that component backing this entry. */
   interface: SpecIdSchema.optional(),
+  /**
+   * The subsystems this surface is published to. Absent, anyone may depend on
+   * it; present, only these subsystems may — when every entry publishing the
+   * component names consumers, the union of those lists is the whole set.
+   */
+  consumers: z.array(SpecIdSchema).optional(),
 });
 
 export type PublicInterface = z.infer<typeof PublicInterfaceSchema>;
