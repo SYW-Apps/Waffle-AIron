@@ -12,13 +12,16 @@ import {
   setProjectRoot,
 } from '../utils/fs.js';
 import type { SubsystemSpec } from '../models/index.js';
+import type { SpecRestatement } from '../core/authoring.js';
 import { writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/paths.js';
 import {
   createProjectConfig,
   projectConfigExists,
   loadSystemSpec,
-  createChainedSubsystem,
+  loadSubsystemSpec,
+  // cli_authoring_adapter: authoring the subsystem goes through the gated seam.
+  writeSpec,
   defaultPackSelections,
   ensureProjectInitialized,
   // Through the core adapter, never ../utils/ai-guide.js: writing a tool's
@@ -121,8 +124,8 @@ async function runInitAsExternalSubsystem(
     subsystemId = id?.trim() || defaultId;
   }
 
-  // Resolve the parent system name and wire the subsystem against the PARENT
-  // root, while createChainedSubsystem provisions this directory as the child.
+  // Author the subsystem against the PARENT root, through the authoring seam,
+  // which wires it there and provisions this directory as the child.
   const prevOverride = getProjectRootOverride();
   setProjectRoot(parentRoot);
   try {
@@ -130,20 +133,23 @@ async function runInitAsExternalSubsystem(
     if (!system) {
       throw new WaironError(`Parent project at ${parentRoot} has no system spec.`);
     }
-    const now = new Date().toISOString();
-    const subsystem: SubsystemSpec = {
-      id: subsystemId,
-      name: subsystemId,
-      description: `External subsystem ${subsystemId}`,
-      parentSystem: system.name,
-      publicInterfaces: [],
-      projectPath: relPath,
-      trustedLinks: [],
-      status: 'draft',
-      createdAt: now,
-      updatedAt: now,
-    };
-    createChainedSubsystem(subsystem, subsystemId);
+    // Step 9: the subsystem the parent already stores under that id, if any.
+    const stored = loadSubsystemSpec(subsystemId);
+    // Step 10: the restatement, with only what this command owns — the id and
+    // the projectPath — plus, for a subsystem the parent does not store yet,
+    // the name and the placeholder description a new subsystem requires. The
+    // seam derives parentSystem from the L0, fills a new spec's lists from the
+    // schema defaults, and carries whatever an existing one already holds.
+    const spec: Record<string, unknown> = { id: subsystemId, projectPath: relPath };
+    const fields = ['id', 'projectPath'];
+    if (!stored) {
+      Object.assign(spec, { name: subsystemId, description: `External subsystem ${subsystemId}` });
+      fields.push('name', 'description');
+    }
+    const restatement: SpecRestatement = { kind: 'subsystem', spec: spec as unknown as SubsystemSpec, fields };
+    // Step 11: into the parent project through the authoring client adapter.
+    const receipt = writeSpec(restatement);
+    for (const notice of receipt.notices) logger.info(notice);
   } finally {
     setProjectRoot(prevOverride);
   }

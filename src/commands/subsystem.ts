@@ -5,7 +5,7 @@ import { getProjectRoot } from '../utils/fs.js';
 // Every sdd_core call goes through the core portal's barrel, never a core module directly.
 import {
   loadSystemSpec as coreLoadSystemSpec,
-  createChainedSubsystem as coreCreateChainedSubsystem,
+  loadSubsystemSpec as coreLoadSubsystemSpec,
   moveSubsystemProject,
   externalizeSubsystem,
   internalizeSubsystem,
@@ -56,6 +56,11 @@ import type {
   SubsystemSpec,
   SystemSpec,
 } from '../models/index.js';
+// cli_authoring_adapter — the one hop into sdd_authoring: the gated seam every
+// authored spec write goes through, reached through the authoring portal's own
+// file exactly as the MCP server reaches it.
+import { writeSpec as authoringWriteSpec } from '../core/authoring.js';
+import type { SpecRestatement, SpecWriteReceipt } from '../core/authoring.js';
 // The execution vocabulary is a type spec's, not a component's: shared value
 // shapes, so naming them here is vocabulary rather than a reach into sdd_core.
 import type { ExecutionBudget, ExecutionConfig, ExecutionProfile } from '../models/execution.js';
@@ -65,9 +70,10 @@ import type { ExecutionBudget, ExecutionConfig, ExecutionProfile } from '../mode
 //
 // The AI authors in-tree subsystems through the sdd_* tools; this CLI surface is
 // specifically for the *external* case, where a subsystem lives in its own
-// sibling wairon project wired by `projectPath`. Both actions delegate to the
-// core chained-subsystem helpers so the parent link and the child project stay
-// in sync.
+// sibling wairon project wired by `projectPath`. `add` AUTHORS the subsystem,
+// so it writes through the authoring seam (which wires the parent link and
+// scaffolds the child project in one write); the relocations are mechanical
+// and go to core's maintenance portal.
 // ---------------------------------------------------------------------------
 
 // cli_core_adapter.composeAgentBrief — 1:1 forward of the live delegation-brief
@@ -114,15 +120,25 @@ export function projectConfigExists(): boolean {
   return coreProjectConfigExists();
 }
 
-// cli_core_adapter.loadSystemSpec / createChainedSubsystem — 1:1 forwards to the
-// core portal: the bound project's system spec, and wiring a chained subsystem in
-// the parent together with its scaffolded child project.
+// cli_core_adapter.loadSystemSpec / loadSubsystemSpec — 1:1 forwards to the
+// spec tree portal: the bound project's system spec, and the subsystem stored
+// under an id (null when none is) — which is how `wairon subsystem add` and
+// `wairon init` in a subdirectory tell a first write from a re-run.
 export function loadSystemSpec(): SystemSpec | null {
   return coreLoadSystemSpec();
 }
 
-export function createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void {
-  coreCreateChainedSubsystem(subsystem, projectName);
+export function loadSubsystemSpec(id: string): SubsystemSpec | null {
+  return coreLoadSubsystemSpec(id);
+}
+
+// cli_authoring_adapter.writeSpec — 1:1 forward to the authoring portal. Every
+// spec a terminal command AUTHORS goes through the gated seam, never through
+// core's raw chained-subsystem write: the seam requires the L0, derives
+// parentSystem from it, carries what the command cannot express, never lowers
+// a stored status, and scaffolds a chained subsystem's child project.
+export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
+  return authoringWriteSpec(restatement);
 }
 
 // cli_core_adapter.resolveAgentTopology — 1:1 forward: the live agent records
@@ -392,6 +408,34 @@ export function approvalVerdict(): ApprovalVerdict {
   return coreApprovalVerdict();
 }
 
+/**
+ * The restatement `wairon subsystem add` states: only what the command owns —
+ * the id, the projectPath, and the display name when --name is given — plus,
+ * for a subsystem not yet stored, the name (--name or the id) and the
+ * placeholder description a new subsystem requires. `fields` lists exactly
+ * those, so a re-run carries the stored description, published surface,
+ * trusted links and status instead of overwriting them; the seam derives
+ * parentSystem and fills a new spec's lists from the schema defaults.
+ */
+function subsystemAddRestatement(
+  id: string,
+  projectPath: string,
+  name: string | undefined,
+  stored: SubsystemSpec | null,
+): SpecRestatement {
+  const spec: Record<string, unknown> = { id, projectPath };
+  const fields = ['id', 'projectPath'];
+  if (name !== undefined || !stored) {
+    spec.name = name ?? id;
+    fields.push('name');
+  }
+  if (!stored) {
+    spec.description = `External subsystem ${spec.name}`;
+    fields.push('description');
+  }
+  return { kind: 'subsystem', spec: spec as unknown as SubsystemSpec, fields };
+}
+
 interface SubsystemAddOptions {
   projectPath?: string;
   name?: string;
@@ -418,25 +462,20 @@ export async function runSubsystemAdd(id: string, options: SubsystemAddOptions =
     throw new WaironError('System spec is missing. Run `wairon init` first.');
   }
 
-  const displayName = options.name ?? id;
-  const now = new Date().toISOString();
-  const subsystem: SubsystemSpec = {
-    id,
-    name: displayName,
-    description: `External subsystem ${displayName}`,
-    parentSystem: system.name,
-    publicInterfaces: [],
-    projectPath: options.projectPath,
-    trustedLinks: [],
-    status: 'draft',
-    createdAt: now,
-    updatedAt: now,
-  };
+  // Step 4: the subsystem already stored under that id, if any — a re-run
+  // must not overwrite what the author set since.
+  const stored = loadSubsystemSpec(id);
 
-  createChainedSubsystem(subsystem, displayName);
+  // Step 5: the restatement, with only what this command owns.
+  const restatement = subsystemAddRestatement(id, options.projectPath, options.name, stored);
 
+  // Step 6: through the authoring client adapter into the seam.
+  const receipt = writeSpec(restatement);
+
+  // Step 7: the confirmation, and what a re-authoring did beyond the input.
   const childDir = path.resolve(getProjectRoot(), options.projectPath);
-  logger.success(`Added external subsystem "${id}" → ${options.projectPath}`);
+  logger.success(`${receipt.replacedExisting ? 'Re-authored' : 'Added'} external subsystem "${id}" → ${options.projectPath}`);
+  for (const notice of receipt.notices) logger.info(notice);
   logger.info(`Scaffolded child project at ${path.relative(process.cwd(), childDir) || '.'}`);
   logger.info(`Design its spec tree from this parent using namespaced ids (e.g. ${id}::<component>).`);
 }
