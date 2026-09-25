@@ -59,11 +59,16 @@ methods:
       createdAt kept, the fields derived from the parent (a subsystem's parentSystem is the L0's
       name), every narrative *Label reference resolved to its step number
       (method_implementation.resolveLabels), and the notices naming what was carried, removed and
-      cleared. It REFUSES instead, with the sentence that says why and how to proceed, when the
-      parent the restatement needs is absent, when the stated status would lower the stored one (a
-      restatement never reopens a frozen spec), or when a narrative label does not resolve. A new
-      spec carries nothing and raises no notices.
+      cleared. The candidate is then parsed through its kind's canonical schema, so a NEW spec
+      arrives with the schema's defaults for every list and flag the door did not state — a door
+      that states only the fields it owns (the CLI adding a chained subsystem) gets the same spec a
+      door that states everything does, and nothing downstream sees a half-formed spec. It REFUSES
+      instead, with the sentence that says why and how to proceed, when the parent the restatement
+      needs is absent, when the stated status would lower the stored one (a restatement never
+      reopens a frozen spec), when a narrative label does not resolve, or when the candidate does
+      not parse (a new spec missing a field its kind requires). A new spec carries nothing and
+      raises no notices.
     symbol: applyRestatement
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:24.425Z'
-updatedAt: '2026-09-24T22:26:09.154Z'
+updatedAt: '2026-09-25T19:35:38.212Z'

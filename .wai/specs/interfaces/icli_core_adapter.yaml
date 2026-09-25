@@ -419,6 +419,20 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: loadSubsystemSpec
+    description: >-
+      The stored subsystem under an id, or null. `wairon subsystem add` and `wairon init` in a
+      subdirectory read it to tell a first write from a re-run: a re-run states only what the
+      command owns, so what the author set since (the description, the published surface, the
+      trusted links) is carried rather than overwritten. Forwarded to the spec tree portal.
+    signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
+    returns: SubsystemSpec | null
+    params:
+      - name: id
+        type: string
+        description: The subsystem id
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:35:21.824Z'
+updatedAt: '2026-09-25T19:35:42.651Z'

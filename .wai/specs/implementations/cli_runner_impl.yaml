@@ -414,19 +414,27 @@ methods:
         error: '--project-path is required (use the sdd_add_subsystem tool for in-tree subsystems)'
       - stepNumber: 4
         description: >-
-          State the restatement: the SubsystemSpec (id, display name from --name or id, description
-          placeholder, projectPath from options) and the fields this command expresses — so
-          re-running it on an existing id re-authors that subsystem in place, carrying what the
-          command cannot say, instead of overwriting it
-        type: local
+          Read the subsystem already stored under that id, if any, through the core adapter — a
+          re-run must not overwrite what the author set since
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadSubsystemSpec
       - stepNumber: 5
+        description: >-
+          State the restatement with only what this command owns — the id, the projectPath, and the
+          display name when --name is given — plus, for a subsystem not yet stored, the name (--name
+          or the id) and the placeholder description a new subsystem requires. A re-run therefore
+          carries the stored description, published surface and trusted links instead of overwriting
+          them
+        type: local
+      - stepNumber: 6
         description: >-
           Write it through the authoring client adapter, which requires the L0, derives parentSystem
           from it, and scaffolds the child project
         type: call
         targetComponent: cli_authoring_adapter
         targetMethod: writeSpec
-      - stepNumber: 6
+      - stepNumber: 7
         description: Print confirmation (parent subsystem id + child project path) and next steps
         type: local
   - name: runInit
@@ -449,7 +457,7 @@ methods:
         type: branch
         condition: a parent project root was found above cwd (root differs from cwd)
         onTrueStep: 5
-        onFalseStep: 12
+        onFalseStep: 13
       - stepNumber: 5
         description: >-
           Prompt the user to create this subdirectory as an external subsystem of the detected
@@ -473,43 +481,52 @@ methods:
         targetMethod: loadSystemSpec
       - stepNumber: 9
         description: >-
-          State the restatement: the SubsystemSpec (id from --name or directory name, projectPath =
-          relative path from the parent root to cwd) and the fields this command expresses
-        type: local
+          Read the subsystem the parent project already stores under that id, if any, through the
+          core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadSubsystemSpec
       - stepNumber: 10
+        description: >-
+          State the restatement with only what this command owns — the id (from --name or the
+          directory name) and the projectPath (the relative path from the parent root to cwd) —
+          plus, for a subsystem the parent does not store yet, the name and the placeholder
+          description a new subsystem requires
+        type: local
+      - stepNumber: 11
         description: >-
           Write it into the parent project through the authoring client adapter, which wires the
           parent subsystem and scaffolds this directory's child project
         type: call
         targetComponent: cli_authoring_adapter
         targetMethod: writeSpec
-      - stepNumber: 11
+      - stepNumber: 12
         description: Report the external subsystem was created and stop
         type: return
         outcome: external subsystem created
-      - stepNumber: 12
+      - stepNumber: 13
         description: Bootstrap the standard .wai directory structure
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: Does this folder already hold a project configuration (a half-finished init)?
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Complete only what is missing: a folder that already holds a configuration keeps it as it
           is
         type: branch
         condition: the folder has no project configuration yet
-        onFalseStep: 17
-      - stepNumber: 15
+        onFalseStep: 18
+      - stepNumber: 16
         description: >-
           Read the store packs that apply by default, to seed as the new configuration's pack
           selections
         type: call
         targetComponent: cli_core_adapter
         targetMethod: defaultPackSelections
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           Compose the new project's configuration — the chosen targets and projectType, execution
           budgets off, component-implementer and agent-file generation off, the store packs
@@ -518,7 +535,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createProjectConfig
-      - stepNumber: 17
+      - stepNumber: 18
         label: bootstrap_l0
         description: >-
           Bootstrap the L0 system spec through core, completing only what is missing (the same
@@ -526,25 +543,25 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: ensureProjectInitialized
-      - stepNumber: 18
+      - stepNumber: 19
         label: export_skills
         description: Export SDD skills templates
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 19
+      - stepNumber: 20
         description: >-
           For each tool the person chose to install machine-wide, find its global configuration file
           through the core adapter
         type: call
         targetComponent: cli_core_adapter
         targetMethod: globalGuideFilePath
-      - stepNumber: 20
+      - stepNumber: 21
         description: Find each tool's in-project configuration file as well
         type: call
         targetComponent: cli_core_adapter
         targetMethod: localGuideFilePath
-      - stepNumber: 21
+      - stepNumber: 22
         description: >-
           Write the guide into each one the plan asked for — the machine-wide guide into the global
           file, the in-project one into the local file. They say different things on purpose: the
@@ -552,7 +569,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: injectGuide
-      - stepNumber: 22
+      - stepNumber: 23
         description: >-
           Write the repository-root pointer for every target that got a local guide, and for the
           targets that want only a root file. A pointer rather than a copy, so there is one document
@@ -560,7 +577,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: writeRootGuideDelegator
-      - stepNumber: 23
+      - stepNumber: 24
         description: Report what was created and where, and name the next command to run
         type: return
         outcome: initialized
@@ -1911,4 +1928,4 @@ lint:
         routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-25T17:35:18.195Z'
+updatedAt: '2026-09-25T19:36:04.824Z'

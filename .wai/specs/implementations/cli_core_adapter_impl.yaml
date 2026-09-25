@@ -273,6 +273,13 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: approvalVerdict
+  - name: loadSubsystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Call loadSubsystemSpec on the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadSubsystemSpec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:35:22.565Z'
+updatedAt: '2026-09-25T19:35:43.878Z'
