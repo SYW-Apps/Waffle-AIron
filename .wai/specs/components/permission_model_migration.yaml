@@ -1,0 +1,27 @@
+id: permission_model_migration
+name: Permission Model Migration
+description: >-
+  The permission-model rollout migration of a hosted data dir (`wairon host doctor`, and the
+  boot-time dry-run warning of an unmigrated instance). A workflow over the instance-identity,
+  organization, permission, user and project repositories: it seeds the instance identity, backfills
+  unit slugs and qualified ids with every reference remapped, turns stored grants into grid
+  assignments, binds ownerless API keys to synthesized service owners carrying their old authority,
+  drops or narrows legacy sessions, places unplaced projects in an 'unassigned' root unit, and
+  removes duplicate owner placements. Legacy shapes the typed repositories no longer model (stored
+  grants on users, keys and sessions; slug-less units) are read and rewritten raw in the same data
+  files, which is why that part is narrated as local steps. A dry run reports and writes nothing;
+  applying is idempotent. It takes no credential: its authority is the operator's access to the data
+  directory.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - instance_identity_repository
+  - organization_repository
+  - permission_repository
+  - user_repository
+  - project_repository
+  - authentication
+status: complete
+createdAt: '2026-09-25T22:56:32.813Z'
+updatedAt: '2026-09-25T23:00:20.102Z'

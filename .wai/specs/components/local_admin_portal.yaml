@@ -1,0 +1,37 @@
+id: local_admin_portal
+name: Local Admin Portal
+description: >-
+  In-process administration front door for the local operator's CLI (`wairon host`, `wairon serve`,
+  `wairon dev`), published only to sdd_cli beside the HTTP admin_portal, which stays the remote
+  surface. It is the one surface the local operator's in-process path uses: every method forwards by
+  identity to the workflow that owns it — project, key, producer, secret, git-backing and lock
+  workflows and the dev server's project registration on admin_orchestrator, instance and project
+  packs on pack_orchestrator, permission assignments on permission_admin_orchestrator, owner-bound
+  tokens on identity_orchestrator, the default identity provider's boot seeding on
+  identity_provider_bootstrap, organization units on landscape_orchestrator, the rollout migration
+  on permission_model_migration — and starting the listeners goes to host_server. The workflows
+  authenticate and authorize the credential the caller presents; the portal adds no gate of its own
+  and holds no logic. The boot-time writes run before any credential exists and are kept as narrow
+  as the boot they serve: the dev project registration admits only a development-mode configuration,
+  and the provider seeding takes nothing but the host configuration (every value comes from the
+  server process's own environment). The one read past a workflow — whether a project id is
+  registered — goes through the project repository's read face. The admin plane's failure classes
+  are republished here, since an in-process caller catches the class where an HTTP caller reads a
+  status code.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - admin_orchestrator
+  - pack_orchestrator
+  - permission_admin_orchestrator
+  - identity_orchestrator
+  - identity_provider_bootstrap
+  - landscape_orchestrator
+  - permission_model_migration
+  - project_repository
+  - host_server
+portalType: Custom
+status: complete
+createdAt: '2026-09-25T22:39:10.822Z'
+updatedAt: '2026-09-25T23:00:19.065Z'

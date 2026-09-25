@@ -1,0 +1,56 @@
+id: identity_provider_bootstrap_impl
+name: Identity Provider Bootstrap Implementation
+description: Realized by src/server/identity-provider-bootstrap.ts (seedDefaultProvider).
+contract: iidentity_provider_bootstrap
+sourcePath: src/server/identity-provider-bootstrap.ts
+injectedParams:
+  - cfg
+methods:
+  - name: seedDefault
+    narrative:
+      - stepNumber: 1
+        description: Read the issuer from the server process environment
+        type: local
+      - stepNumber: 2
+        description: Seeding activates only when an issuer is set
+        type: branch
+        condition: no issuer is set
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Nothing to seed
+        type: return
+        outcome: 'null'
+      - stepNumber: 4
+        description: Read the named secret reference and any raw client secret from the environment
+        type: local
+      - stepNumber: 5
+        description: Is a raw client secret shipped?
+        type: branch
+        condition: a raw client secret is shipped
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Store the raw secret under the fixed reference, which the provider then names
+        type: call
+        targetComponent: secret_repository
+        targetMethod: write
+      - stepNumber: 7
+        description: >-
+          Build the default provider record from the environment (label, client id, secret
+          reference, admin groups, redirect and domain allowlists, endpoint overrides)
+        type: local
+      - stepNumber: 8
+        description: Upsert the provider through the policy repository
+        type: call
+        targetComponent: policy_repository
+        targetMethod: upsertIdentityProvider
+      - stepNumber: 9
+        description: Return the stored provider
+        type: return
+        outcome: the seeded provider
+    detail: full
+    symbol: seedDefaultProvider
+status: complete
+createdAt: '2026-09-25T23:00:10.891Z'
+updatedAt: '2026-09-25T23:00:10.906Z'

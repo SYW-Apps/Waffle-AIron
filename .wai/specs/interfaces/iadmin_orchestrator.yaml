@@ -345,6 +345,19 @@ methods:
       - name: replaceExisting
         type: boolean
         optional: true
+  - name: registerLocalDevProject
+    description: >-
+      Register the local development server's single project: a record pointing at the developer's
+      own working directory instead of an allocated root. No credential exists in that mode, so the
+      workflow admits only a development-mode host configuration and refuses every other. Idempotent
+      across restarts.
+    signature: 'registerLocalDevProject(id: string, rootPath: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+    params:
+      - name: id
+        type: string
+      - name: rootPath
+        type: string
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-24T13:20:02.415Z'
+updatedAt: '2026-09-25T22:55:52.955Z'

@@ -1,0 +1,20 @@
+id: identity_provider_bootstrap
+name: Identity Provider Bootstrap
+description: >-
+  Boot-time declarative seeding of the `default` OIDC identity provider from the server process's
+  own WAIRON_OIDC_* environment, so a whole SSO setup ships with the deployment. Run by `wairon
+  serve` before the listeners bind and before any credential exists, so it authorizes nothing: it
+  takes only the host configuration from its caller, and every value it writes is read from the
+  environment. A raw client secret shipped there is written through the secret repository under a
+  fixed reference, which is all the provider record carries; the provider is upserted through the
+  policy repository idempotently, so every boot re-seeds. Kept apart from identity_orchestrator,
+  whose provider administration is credential-checked and audited.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - secret_repository
+  - policy_repository
+status: complete
+createdAt: '2026-09-25T23:00:02.839Z'
+updatedAt: '2026-09-25T23:00:02.855Z'

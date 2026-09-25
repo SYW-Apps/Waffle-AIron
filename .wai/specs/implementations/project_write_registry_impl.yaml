@@ -3,6 +3,8 @@ name: Project Write Registry Implementation
 description: 'Write path over the project store''s backing file: root allocation and record create/remove.'
 contract: iproject_write_registry
 sourcePath: src/server/projects.ts
+injectedParams:
+  - dataDir
 methods:
   - name: create
     narrative: []
@@ -20,6 +22,16 @@ methods:
       - project_store.read
       - project_store.write
     symbol: removeProjectRecord
+  - name: register
+    narrative: []
+    intent: >-
+      Validates the id shape and refuses a malformed one, loads the persisted set, and replaces the
+      record holding the id (keeping its createdAt) or appends a new active record pointing at the
+      given rootPath, then persists the set.
+    calls:
+      - project_store.read
+      - project_store.write
+    symbol: registerProjectRecord
 status: complete
 createdAt: '2026-07-19T09:00:09.975Z'
-updatedAt: '2026-09-19T21:26:57.943Z'
+updatedAt: '2026-09-25T22:45:12.266Z'

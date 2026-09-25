@@ -85,6 +85,17 @@ publicInterfaces:
       API.
     component: operations_portal
     interface: ioperations_portal
+  - type: Custom
+    details: >-
+      In-process administration for the local operator's CLI: project, key, producer, secret,
+      git-backing and lock workflows, instance and project packs, permission assignments, and the
+      two boot-time writes of `wairon serve` and `wairon dev`. Each method is the owning workflow
+      forwarded by identity, and the workflow authorizes the credential presented. Published only to
+      sdd_cli; the HTTP admin API stays the remote surface.
+    component: local_admin_portal
+    interface: ilocal_admin_portal
+    consumers:
+      - sdd_cli
 lifecycle:
   - phase: init
     component: host_server
@@ -92,4 +103,4 @@ lifecycle:
 trustedLinks: []
 status: complete
 createdAt: '2026-07-04T12:33:06.563Z'
-updatedAt: '2026-09-25T22:01:00.901Z'
+updatedAt: '2026-09-25T22:40:21.048Z'

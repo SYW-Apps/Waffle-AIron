@@ -301,55 +301,6 @@ methods:
         description: Return on unknown action
         type: return
         outcome: unknown action
-  - name: runHostKey
-    sourcePath: src/commands/host.ts
-    narrative:
-      - stepNumber: 1
-        description: Read the master credential from the environment
-        type: local
-      - stepNumber: 2
-        description: Dispatch on the action
-        type: switch
-        'on': action
-        cases:
-          - value: mint
-            step: 3
-          - value: revoke
-            step: 5
-          - value: list
-            step: 7
-        defaultStep: 9
-      - stepNumber: 3
-        description: Mint a key via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: mintKey
-      - stepNumber: 4
-        description: Return after mint
-        type: return
-        outcome: minted
-      - stepNumber: 5
-        description: Revoke a key via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: revokeKey
-      - stepNumber: 6
-        description: Return after revoke
-        type: return
-        outcome: revoked
-      - stepNumber: 7
-        description: List keys via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: listKeys
-      - stepNumber: 8
-        description: Return after list
-        type: return
-        outcome: listed
-      - stepNumber: 9
-        description: Return on unknown action
-        type: return
-        outcome: unknown action
   - name: runHostLock
     sourcePath: src/commands/host.ts
     narrative:
@@ -1980,6 +1931,640 @@ methods:
         description: Warn that no active target has a skills directory, naming the ones skipped
         type: return
         outcome: nothing installed
+  - name: runHostProducer
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: configure
+            step: 3
+          - value: produce
+            step: 5
+          - value: remove
+            step: 7
+          - value: list
+            step: 9
+        defaultStep: 11
+      - stepNumber: 3
+        label: configure
+        description: Configure the producer target via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: configureProducer
+      - stepNumber: 4
+        description: Return after configure
+        type: return
+        outcome: configured
+      - stepNumber: 5
+        label: produce
+        description: Run the producer target via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: produceProducer
+      - stepNumber: 6
+        description: Return after produce
+        type: return
+        outcome: produced
+      - stepNumber: 7
+        label: remove
+        description: Remove the producer target via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: removeProducer
+      - stepNumber: 8
+        description: Return after remove
+        type: return
+        outcome: removed
+      - stepNumber: 9
+        label: list
+        description: List the producer targets via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listProducers
+      - stepNumber: 10
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 11
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostSecret
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: set
+            step: 3
+          - value: list
+            step: 5
+        defaultStep: 7
+      - stepNumber: 3
+        label: set
+        description: Store the secret via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: setSecret
+      - stepNumber: 4
+        description: Return after set
+        type: return
+        outcome: set
+      - stepNumber: 5
+        label: list
+        description: List the secret key names via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listSecrets
+      - stepNumber: 6
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 7
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostPermission
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: set
+            step: 3
+          - value: list
+            step: 6
+          - value: remove
+            step: 8
+        defaultStep: 10
+      - stepNumber: 3
+        label: set
+        description: Validate the capability and value, and resolve the scope from the flags
+        type: local
+      - stepNumber: 4
+        description: Store the assignment via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: setAssignment
+      - stepNumber: 5
+        description: Return after set
+        type: return
+        outcome: assigned
+      - stepNumber: 6
+        label: list
+        description: List the assignments narrowed by scope and user via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listAssignments
+      - stepNumber: 7
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 8
+        label: remove
+        description: Remove the assignment via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: removeAssignment
+      - stepNumber: 9
+        description: Return after remove
+        type: return
+        outcome: removed
+      - stepNumber: 10
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostPacks
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: list
+            step: 3
+          - value: install
+            step: 8
+          - value: remove
+            step: 14
+        defaultStep: 19
+      - stepNumber: 3
+        label: list
+        description: Is a project named?
+        type: branch
+        condition: '--project is given'
+        onTrueStep: 4
+        onFalseStep: 6
+      - stepNumber: 4
+        label: list_project
+        description: List the project packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listProjectPacks
+      - stepNumber: 5
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 6
+        label: list_instance
+        description: List the instance packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listGlobalPacks
+      - stepNumber: 7
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 8
+        label: install
+        description: Read the pack file the flags name
+        type: local
+      - stepNumber: 9
+        description: Is a project named?
+        type: branch
+        condition: '--project is given'
+        onTrueStep: 10
+        onFalseStep: 12
+      - stepNumber: 10
+        label: install_project
+        description: Install the project packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: installProjectPack
+      - stepNumber: 11
+        description: Return after install
+        type: return
+        outcome: installed
+      - stepNumber: 12
+        label: install_instance
+        description: Install the instance packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: installGlobalPack
+      - stepNumber: 13
+        description: Return after install
+        type: return
+        outcome: installed
+      - stepNumber: 14
+        label: remove
+        description: Is a project named?
+        type: branch
+        condition: '--project is given'
+        onTrueStep: 15
+        onFalseStep: 17
+      - stepNumber: 15
+        label: remove_project
+        description: Remove the project packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: removeProjectPack
+      - stepNumber: 16
+        description: Return after remove
+        type: return
+        outcome: removed
+      - stepNumber: 17
+        label: remove_instance
+        description: Remove the instance packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: removeGlobalPack
+      - stepNumber: 18
+        description: Return after remove
+        type: return
+        outcome: removed
+      - stepNumber: 19
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostGit
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: enable
+            step: 3
+          - value: disable
+            step: 5
+          - value: sync
+            step: 7
+          - value: commit
+            step: 9
+          - value: status
+            step: 11
+          - value: sync-config
+            step: 13
+        defaultStep: 15
+      - stepNumber: 3
+        label: enable
+        description: Bind the project to its git remote via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: enableGit
+      - stepNumber: 4
+        description: Return after enable
+        type: return
+        outcome: enabled
+      - stepNumber: 5
+        label: disable
+        description: Remove the git binding via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: disableGit
+      - stepNumber: 6
+        description: Return after disable
+        type: return
+        outcome: disabled
+      - stepNumber: 7
+        label: sync
+        description: Sync with the remote via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: syncGit
+      - stepNumber: 8
+        description: Return after sync
+        type: return
+        outcome: synced
+      - stepNumber: 9
+        label: commit
+        description: Commit and publish via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: commitProject
+      - stepNumber: 10
+        description: Return after commit
+        type: return
+        outcome: committed
+      - stepNumber: 11
+        label: status
+        description: Read the binding status via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: getGitBinding
+      - stepNumber: 12
+        description: Return after status
+        type: return
+        outcome: reported
+      - stepNumber: 13
+        label: sync-config
+        description: Configure periodic sync via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: configureGitSync
+      - stepNumber: 14
+        description: Return after sync-config
+        type: return
+        outcome: configured
+      - stepNumber: 15
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runServe
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the host configuration from flags and environment
+        type: local
+      - stepNumber: 2
+        description: Seed the default identity provider from the environment; a failure aborts the boot
+        type: try
+        endStep: 3
+        catches:
+          - error: Error
+            step: 5
+      - stepNumber: 3
+        label: seed
+        description: >-
+          Have the host seed the default identity provider from its own environment via the host
+          adapter (a no-op without an issuer)
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: seedDefaultProvider
+      - stepNumber: 4
+        description: Skip the failure handler
+        type: jump
+        toStep: 6
+      - stepNumber: 5
+        label: seed_failed
+        description: Refuse to boot with the seeding error
+        type: throw
+        error: WaironError
+      - stepNumber: 6
+        label: start
+        description: Start the hosting server via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: startHostServer
+      - stepNumber: 7
+        description: Print the planes and run until signalled, closing the server on shutdown
+        type: local
+      - stepNumber: 8
+        description: Return on shutdown
+        type: return
+        outcome: stopped
+    detail: full
+  - name: runDev
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Is there a .wai/ in the working directory?
+        type: branch
+        condition: no .wai/ in the working directory
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        label: no_project
+        description: 'Refuse: not a wairon project root'
+        type: throw
+        error: WaironError
+      - stepNumber: 3
+        label: config
+        description: >-
+          Build the per-cwd ephemeral data dir and the loopback, auth-off, development-mode host
+          configuration
+        type: local
+      - stepNumber: 4
+        description: Register the working directory as the single dev project via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: registerLocalDevProject
+      - stepNumber: 5
+        description: Start the server via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: startHostServer
+      - stepNumber: 6
+        description: Optionally open the browser, and run until signalled
+        type: local
+      - stepNumber: 7
+        description: Return on shutdown
+        type: return
+        outcome: stopped
+    detail: full
+  - name: runHostDemo
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the host configuration and read the master credential
+        type: local
+      - stepNumber: 2
+        description: Ensure the owner organization unit exists (idempotent upsert) via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: upsertUnit
+      - stepNumber: 3
+        description: Look up whether the demo project id is already registered via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: existingProjectRoot
+      - stepNumber: 4
+        description: Is it registered?
+        type: branch
+        condition: the project exists
+        onTrueStep: 5
+        onFalseStep: 8
+      - stepNumber: 5
+        label: exists
+        description: Without --force, refuse to reseed
+        type: branch
+        condition: '--force is not given'
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        label: refuse
+        description: 'Refuse: the project already exists'
+        type: throw
+        error: WaironError
+      - stepNumber: 7
+        label: destroy
+        description: Destroy the existing project via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: destroyProject
+      - stepNumber: 8
+        label: create
+        description: Create the project via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: createProject
+      - stepNumber: 9
+        description: Seed the example tree into the new project and count its census
+        type: local
+      - stepNumber: 10
+        description: Print the census
+        type: return
+        outcome: seeded
+    detail: full
+  - name: runHostKey
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: mint
+            step: 3
+          - value: revoke
+            step: 8
+          - value: list
+            step: 10
+        defaultStep: 12
+      - stepNumber: 3
+        label: mint
+        description: Is an owner named?
+        type: branch
+        condition: '--owner is given'
+        onTrueStep: 4
+        onFalseStep: 6
+      - stepNumber: 4
+        label: mint_owned
+        description: Mint an owner-bound token via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: mintToken
+      - stepNumber: 5
+        description: Return after mint
+        type: return
+        outcome: minted
+      - stepNumber: 6
+        label: mint_ownerless
+        description: Mint an ownerless key via the host adapter, warning that it resolves to no permissions
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: mintKey
+      - stepNumber: 7
+        description: Return after mint
+        type: return
+        outcome: minted
+      - stepNumber: 8
+        label: revoke
+        description: Revoke a key via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: revokeKey
+      - stepNumber: 9
+        description: Return after revoke
+        type: return
+        outcome: revoked
+      - stepNumber: 10
+        label: list
+        description: List keys via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listKeys
+      - stepNumber: 11
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 12
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostUnit
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: create
+            step: 3
+        defaultStep: 6
+      - stepNumber: 3
+        label: create
+        description: Derive the unit's qualified id from its parent and slug
+        type: local
+      - stepNumber: 4
+        description: Create the unit via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: upsertUnit
+      - stepNumber: 5
+        description: Return after create
+        type: return
+        outcome: created
+      - stepNumber: 6
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostDoctor
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the host configuration
+        type: local
+      - stepNumber: 2
+        description: Run the permission-model migration via the host adapter, applying it only with --fix
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: migratePermissionModel
+      - stepNumber: 3
+        description: Nothing to migrate?
+        type: branch
+        condition: the report has no findings
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        label: clean
+        description: Report the data as migrated
+        type: return
+        outcome: nothing to migrate
+      - stepNumber: 5
+        label: report
+        description: Print every finding, warning when it was a dry run
+        type: local
+      - stepNumber: 6
+        description: Return after the report
+        type: return
+        outcome: reported
+    detail: full
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -1995,4 +2580,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-25T21:33:39.687Z'
+updatedAt: '2026-09-25T22:58:42.000Z'

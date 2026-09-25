@@ -16,7 +16,7 @@ import {
 } from '../../src/server/operations.js';
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
-import { registerLocalDevProject } from '../../src/server/projects.js';
+import { registerProjectRecord } from '../../src/server/projects.js';
 import { provisionProject } from '../../src/core/provision.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
@@ -450,7 +450,7 @@ describe('operations orchestrator (sdd_host)', () => {
         ...(readYamlFile(file) as Record<string, unknown>),
         extensions: { packs: ['.wai/packs/ghost-dev.yaml'], useGlobalPacks: false },
       });
-      registerLocalDevProject(dataDir, 'local', devRoot);
+      registerProjectRecord(dataDir, 'local', devRoot);
 
       const missing = getHealthReport(cfg, MASTER).checks.find((c) => c.id === 'missing-pack-references')!;
       expect(missing.status).toBe('fail');

@@ -27,6 +27,25 @@ client expects back from them (item 14). The library surface narrows too:
 `@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
 (item 4). Nothing here is purely additive, so `[minor]` would understate it.
 
+### `wairon host` administers through an in-process portal
+
+The local operator's CLI administers an instance in-process — it calls the admin
+workflows directly with the master credential, and they authorize it themselves —
+but sdd_host published those workflows only through the HTTP admin plane, so
+`wairon host` imported past it into five internal modules.
+
+- **sdd_host publishes a second, in-process portal**, `local_admin_portal`, to
+  sdd_cli alone (`consumers`). It forwards by identity to the workflows the HTTP
+  plane already uses, adds no authorization of its own, and leaves the HTTP
+  surface unchanged. `wairon host` now imports nothing from sdd_host but it.
+- **Two writes got stricter on the way.** Registering the local dev project is
+  refused unless the host configuration is in dev mode, and seeding the default
+  identity provider at boot writes only the fixed provider secret from the
+  server's own environment — a caller can choose neither the key nor the value.
+- **The permission-model migration has an owner**, and the identity-provider
+  seeding moved out of the CLI into a workflow of its own, so the policy write it
+  makes goes through a workflow rather than straight to the registry.
+
 ### An import that crosses a subsystem boundary lands on the portal
 
 The dependency check let an in-process import land on ANY module of another

@@ -1115,6 +1115,29 @@ methods:
         description: Return what was written and where the replaced tree was backed up
         type: return
         outcome: imported tree
+  - name: registerLocalDevProject
+    narrative:
+      - stepNumber: 1
+        description: Admit only a development-mode host configuration
+        type: branch
+        condition: the host configuration is not in development mode
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Refuse: registration at a caller-named directory is reserved for the local development
+          server
+        type: throw
+        error: Error
+      - stepNumber: 3
+        description: Register the project record at the working directory
+        type: call
+        targetComponent: project_repository
+        targetMethod: register
+      - stepNumber: 4
+        description: Return the registered record
+        type: return
+        outcome: project record
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-25T22:02:33.334Z'
+updatedAt: '2026-09-25T22:55:53.888Z'

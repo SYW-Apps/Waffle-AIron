@@ -125,7 +125,6 @@ rules:
       # Request and response plumbing shared by the hosted handlers — reading a body,
       # writing a status. The handlers are modelled; this is how they speak HTTP.
       - src/server/httpio.ts
-      - src/server/migration.ts
       - src/server/realtime.ts
       - src/server/swagger.ts
       - src/server/websocket.ts
@@ -230,78 +229,17 @@ rules:
     # modelling decision nobody has taken, unreadable is a shape the analysis
     # cannot follow and there is nothing in the tree to fix for it.
     carried:
-      # 5 finding(s).
-      - kind: drift
-        why: >-
-          `wairon host` is the local operator's CLI, and it administers an instance in-process:
-          it calls the admin workflows with the master credential, which authorize it themselves.
-          sdd_host publishes those workflows only through the HTTP admin plane, so every import
-          the command makes lands on a module past it. The decided fix is an in-process admin
-          portal published to sdd_cli beside the HTTP one, and it is the next pull request (3b),
-          which pays exactly these five edges.
-        findings:
-          - code: IMPORT_BYPASSES_PORTAL
-            spec: cli_host_adapter_impl
-            at: 'src/commands/host.ts -> src/server/admin.ts'
-          - code: IMPORT_BYPASSES_PORTAL
-            spec: cli_host_adapter_impl
-            at: 'src/commands/host.ts -> src/server/packs.ts'
-          - code: IMPORT_BYPASSES_PORTAL
-            spec: cli_host_adapter_impl
-            at: 'src/commands/host.ts -> src/server/permissionadmin.ts'
-          - code: IMPORT_BYPASSES_PORTAL
-            spec: cli_host_adapter_impl
-            at: 'src/commands/host.ts -> src/server/projects.ts'
-          - code: IMPORT_BYPASSES_PORTAL
-            spec: cli_host_adapter_impl
-            at: 'src/commands/host.ts -> src/utils/secrets.ts'
-      # 9 finding(s), 11 unit(s).
+      # 2 finding(s), 4 unit(s).
       - kind: drift
         why: >-
           A narrative names a call target whose code lives in another file than the target's own.
           The largest shape here - the thin client adapters realized by the file that CONSUMES the
           provider's API - was measured and paid: each adapter now has a module of its own that
           re-exports the provider's portal, and its call steps resolve to it (the spike showed a
-          bare import-path change does not). What remains is cli_host_adapter, whose seven steps
-          name the HTTP admin_portal while `wairon host` calls the admin workflows in-process -
-          paid by the in-process admin portal of the next pull request (3b) - and two CLI steps
-          whose calls land in the command's own file rather than the adapter's.
+          bare import-path change does not). cli_host_adapter's steps were paid by the in-process
+          local admin portal. What remains is two CLI steps whose calls land in the command's own
+          file rather than the adapter's.
         findings:
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_host_adapter_impl
-            at: 'createProject'
-            covers:
-              - '1:admin_portal.createProject'
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_host_adapter_impl
-            at: 'destroyProject'
-            covers:
-              - '1:admin_portal.destroyProject'
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_host_adapter_impl
-            at: 'listKeys'
-            covers:
-              - '1:admin_portal.listKeys'
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_host_adapter_impl
-            at: 'listProjects'
-            covers:
-              - '1:admin_portal.listProjects'
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_host_adapter_impl
-            at: 'lockProject'
-            covers:
-              - '1:admin_portal.lockProject'
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_host_adapter_impl
-            at: 'mintKey'
-            covers:
-              - '1:admin_portal.mintKey'
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_host_adapter_impl
-            at: 'revokeKey'
-            covers:
-              - '1:admin_portal.revokeKey'
           - code: CALL_STEP_UNREALIZED
             spec: cli_runner_impl
             at: 'runDoctor'
@@ -314,7 +252,7 @@ rules:
               - '4:cli_validator_adapter.validateRegistry'
               - '5:cli_validator_adapter.validateProjectConfig'
               - '6:cli_validator_adapter.validateSddTree'
-      # 88 finding(s), 121 unit(s).
+      # 90 finding(s), 124 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -796,6 +734,17 @@ rules:
             at: 'saveSubsystemSpec'
             covers:
               - 'core_orchestrator.assertContainedProjectPath'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_repository_impl
+            at: 'existingRoot'
+            covers:
+              - 'project_store.read'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: project_repository_impl
+            at: 'register'
+            covers:
+              - 'project_store.read'
+              - 'project_store.write'
       # 1 finding(s), 2 unit(s).
       - kind: undecided
         why: >-
@@ -919,7 +868,7 @@ rules:
             at: 'hydrateFromFiles'
             covers:
               - '3:surface_store.put'
-      # 26 finding(s), 46 unit(s).
+      # 26 finding(s), 48 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of export-conformance, after the 90 realization handles that
@@ -1007,6 +956,10 @@ rules:
             at: 'src/server/auth.ts'
             covers:
               - 'localDevSubject'
+              - 'LEGACY_LOCALDEV_USER_ID'
+              - 'LEGACY_LOCALDEV_USER_ID'
+              - 'LEGACY_SUPERADMIN_USER_ID'
+              - 'LEGACY_SUPERADMIN_USER_ID'
           - code: UNDECLARED_EXPORT
             spec: authorization_impl
             at: 'src/server/authorization.ts'
@@ -1048,10 +1001,8 @@ rules:
             covers:
               - 'SUBPROJECT_SEPARATOR'
               - 'assertMintableNarrowingEntry'
-              - 'existingProjectRoot'
               - 'isValidProjectId'
               - 'parseQualifiedSelector'
-              - 'registerLocalDevProject'
               - 'resolveSubprojectMounts'
           - code: UNDECLARED_EXPORT
             spec: role_index_impl

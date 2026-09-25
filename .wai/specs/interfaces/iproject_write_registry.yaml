@@ -15,6 +15,18 @@ methods:
       id.
     signature: 'remove(id: string): void'
     returns: void
+  - name: register
+    description: >-
+      Upsert a project record pointing at an existing directory the caller names, instead of
+      allocating one under the data root; the first registration's creation time is kept across
+      repeats. Refuses a malformed id.
+    signature: 'register(id: string, rootPath: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+    params:
+      - name: id
+        type: string
+      - name: rootPath
+        type: string
 status: complete
 createdAt: '2026-07-19T09:00:02.108Z'
-updatedAt: '2026-07-19T09:00:49.562Z'
+updatedAt: '2026-09-25T22:38:36.829Z'

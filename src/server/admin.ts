@@ -15,6 +15,7 @@ import {
 } from './credentials.js';
 import {
   createProjectRecord,
+  registerProjectRecord,
   listProjectRecords,
   removeProjectRecord,
   existingProjectRoot,
@@ -27,7 +28,11 @@ import * as hostProducer from './adapters/producer.js';
 import { validateAsComplete, computeGateStateId } from './adapters/validator.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
-import { setSecret as storeSecret, listSecretKeys, resolveSecret } from '../utils/secrets.js';
+// The secret store's write is reached through its module namespace: this module
+// exports its own credential-checked setSecret, and a call written through an
+// import alias is one the call-graph conformance analysis cannot follow.
+import * as secretStore from '../utils/secrets.js';
+import { listSecretKeys, resolveSecret } from '../utils/secrets.js';
 import type { ProducerConfig } from '../producers/index.js';
 import type {
   ApiKeyRecord,
@@ -44,7 +49,8 @@ import type {
 // The control-plane workflows: master-credential auth, then project/key
 // lifecycle and the state-scoped lock. Exported as plain functions so BOTH
 // entry points reach the same logic — the HTTP admin portal
-// (src/server/http.ts) and the in-process CLI adapter (src/commands/host.ts).
+// (src/server/http.ts) and the in-process local admin portal
+// (src/server/local-admin.ts), which the CLI reaches through its adapter.
 // Never performs a merge: a lock records an approval, and a human merges the PR
 // the git-backed publish opens.
 // ---------------------------------------------------------------------------
@@ -167,6 +173,21 @@ export function destroyProject(cfg: HostConfig, credential: string | null, id: s
     throw new AdminAuthError('Forbidden — destroying a project requires project:admin over it');
   }
   removeProjectRecord(cfg.dataDir, id);
+}
+
+/**
+ * Register the local development server's single project at the developer's
+ * own working directory (upsert by id). `wairon dev` runs with auth off and no
+ * credential exists, so the workflow admits only a development-mode host
+ * configuration and refuses every other.
+ */
+export function registerLocalDevProject(cfg: HostConfig, id: string, rootPath: string): HostedProjectRecord {
+  // Step 1–2: only a development-mode configuration may register a project at a caller-named directory
+  if (!cfg.devMode) {
+    throw new Error('Registering a project at a working directory is reserved for the local development server.');
+  }
+  // Step 3–4: register the record and return it
+  return registerProjectRecord(cfg.dataDir, id, rootPath);
 }
 
 export function listProjects(cfg: HostConfig, credential: string | null): HostedProjectRecord[] {
@@ -387,7 +408,7 @@ export function enableGit(
   let credentialRef: string | undefined;
   if (pat && pat.trim()) {
     credentialRef = projectGitCredentialKey(project);
-    storeSecret(credentialRef, pat.trim());
+    secretStore.setSecret(credentialRef, pat.trim());
   }
   const rec = createProjectRecord(cfg.dataDir, project); // empty dir + record (no native provisioning)
   // The clone authenticates with the token the host resolves and hands in: the
@@ -570,7 +591,7 @@ export function listProducers(cfg: HostConfig, credential: string | null, projec
 
 export function setSecret(_cfg: HostConfig, credential: string | null, key: string, value: string): void {
   requireAdmin(credential);
-  storeSecret(key, value);
+  secretStore.setSecret(key, value);
 }
 
 export function listSecrets(_cfg: HostConfig, credential: string | null): string[] {
