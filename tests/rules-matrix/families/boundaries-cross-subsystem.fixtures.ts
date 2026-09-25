@@ -11,6 +11,9 @@
  *    only target the peer's published public surface.
  *  - CROSS_SUBSYSTEM_TARGET_NON_PORTAL (error): the published target must be
  *    the peer's inbound Portal (its front door), never a published internal.
+ *  - CROSS_SUBSYSTEM_UNLISTED_CONSUMER (error): a component every one of
+ *    whose publicInterfaces entries names consumers may be depended on only
+ *    from those subsystems; one entry without the field publishes it to anyone.
  *  - CROSS_TREE_REF_UNRESOLVED (warning): a `::`/`super::` cross-tree
  *    dependsOn with no surface snapshot covering it; a stored snapshot in
  *    .wai/surfaces/ resolves it (and then the Adapter-crosser shape applies).
@@ -248,6 +251,105 @@ export default [
         },
         INVOICE_PORTAL,
         INVOICE_LEDGER_ORCH,
+      ],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // CROSS_SUBSYSTEM_UNLISTED_CONSUMER
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER',
+    severity: 'error',
+    anchoredTo: 'billing-client-adapter',
+    expectFire: true,
+    scenario:
+      'The billing subsystem publishes its invoice portal only to the claims subsystem, and the scheduling subsystem\'s billing client adapter depends on it anyway.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'scheduling', description: 'Appointment booking and slot management.' },
+        { id: 'claims', description: 'Insurance claim submission for billed visits.' },
+        {
+          id: 'billing',
+          description: 'Invoicing and payment collection for booked visits.',
+          publicInterfaces: [
+            { type: 'Custom', details: 'Invoice submission surface for the claims pipeline.', component: 'invoice-portal', consumers: ['claims'] },
+          ],
+        },
+      ],
+      components: [
+        {
+          id: 'billing-client-adapter',
+          componentType: 'Adapter',
+          subsystem: 'scheduling',
+          description: 'Client adapter abstracting the hop to the billing subsystem\'s invoice surface.',
+          dependsOn: ['invoice-portal'],
+        },
+        INVOICE_PORTAL,
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER',
+    expectFire: false,
+    reason: 'The scheduling subsystem is named in the entry\'s consumers, so the provider meant to serve it.',
+    scenario:
+      'The billing subsystem publishes its invoice portal to the claims and scheduling subsystems, and the scheduling billing client adapter depends on it.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'scheduling', description: 'Appointment booking and slot management.' },
+        { id: 'claims', description: 'Insurance claim submission for billed visits.' },
+        {
+          id: 'billing',
+          description: 'Invoicing and payment collection for booked visits.',
+          publicInterfaces: [
+            { type: 'Custom', details: 'Invoice submission surface for claims and scheduling.', component: 'invoice-portal', consumers: ['claims', 'scheduling'] },
+          ],
+        },
+      ],
+      components: [
+        {
+          id: 'billing-client-adapter',
+          componentType: 'Adapter',
+          subsystem: 'scheduling',
+          description: 'Client adapter abstracting the hop to the billing subsystem\'s invoice surface.',
+          dependsOn: ['invoice-portal'],
+        },
+        INVOICE_PORTAL,
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER',
+    expectFire: false,
+    reason: 'One entry publishing the invoice portal declares no consumers, which publishes it to anyone — a restriction holds only when EVERY entry naming the component declares consumers.',
+    scenario:
+      'The billing subsystem publishes its invoice portal twice — once to the claims subsystem alone and once, for its read contract, to anyone — and the scheduling billing client adapter depends on it.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'scheduling', description: 'Appointment booking and slot management.' },
+        { id: 'claims', description: 'Insurance claim submission for billed visits.' },
+        {
+          id: 'billing',
+          description: 'Invoicing and payment collection for booked visits.',
+          publicInterfaces: [
+            { type: 'Custom', details: 'Invoice submission surface for the claims pipeline.', component: 'invoice-portal', consumers: ['claims'] },
+            { type: 'Custom', details: 'Invoice lookup surface for any sibling subsystem.', component: 'invoice-portal' },
+          ],
+        },
+      ],
+      components: [
+        {
+          id: 'billing-client-adapter',
+          componentType: 'Adapter',
+          subsystem: 'scheduling',
+          description: 'Client adapter abstracting the hop to the billing subsystem\'s invoice surface.',
+          dependsOn: ['invoice-portal'],
+        },
+        INVOICE_PORTAL,
       ],
     },
   }),
