@@ -10,8 +10,8 @@
 // HTTP caller reads the status code it maps to.
 // ---------------------------------------------------------------------------
 
-// Project, key, producer, secret, git-backing and lock workflows, and the two
-// boot-time writes of `wairon dev` / `wairon serve` (admin_orchestrator).
+// Project, key, producer, secret, git-backing and lock workflows, and the dev
+// server's project registration (admin_orchestrator).
 export {
   createProject,
   destroyProject,
@@ -33,7 +33,6 @@ export {
   getGitBinding,
   configureGitSync,
   registerLocalDevProject,
-  seedIdentityProviderSecret,
   LockValidationError,
 } from './admin.js';
 
@@ -49,6 +48,23 @@ export {
 
 // Permission assignments (permission_admin_orchestrator).
 export { setAssignment, removeAssignment, listAssignments } from './permissionadmin.js';
+
+// Owner-bound API tokens (identity_orchestrator).
+export { mintToken } from './identity.js';
+
+// Boot-time seeding of the default identity provider from the server's own
+// environment (identity_provider_bootstrap).
+export { seedDefaultProvider } from './identity-provider-bootstrap.js';
+
+// Organization units (landscape_orchestrator).
+export { upsertUnit } from './landscape.js';
+
+// The permission-model rollout migration behind `wairon host doctor`
+// (permission_model_migration).
+export { migratePermissionModel } from './migration.js';
+
+// Starting the hosting server's listeners (host_server).
+export { startHostServer } from './http.js';
 
 // Whether a project id is registered — a read through the project repository.
 export { existingProjectRoot } from './projects.js';

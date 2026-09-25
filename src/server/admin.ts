@@ -190,27 +190,6 @@ export function registerLocalDevProject(cfg: HostConfig, id: string, rootPath: s
   return registerProjectRecord(cfg.dataDir, id, rootPath);
 }
 
-/** The fixed secret reference the env-seeded default identity provider names. */
-const IDENTITY_PROVIDER_SECRET_REF = 'oidc-default';
-
-/**
- * Boot-time seeding of the default identity provider's client secret, run by
- * `wairon serve` before any credential exists. The value comes only from the
- * server process's own environment and lands only under the fixed reference;
- * the caller names neither. Answers the reference, or null when no secret is
- * shipped (nothing is written).
- */
-export function seedIdentityProviderSecret(): string | null {
-  // Step 1: read the raw client secret from the process environment
-  const raw = process.env['WAIRON_OIDC_CLIENT_SECRET'];
-  // Step 2–3: nothing shipped, nothing to seed
-  if (!raw) return null;
-  // Step 4: store it under the fixed reference
-  secretStore.setSecret(IDENTITY_PROVIDER_SECRET_REF, raw);
-  // Step 5: the reference the provider record names
-  return IDENTITY_PROVIDER_SECRET_REF;
-}
-
 export function listProjects(cfg: HostConfig, credential: string | null): HostedProjectRecord[] {
   requireAdmin(credential);
   return listProjectRecords(cfg.dataDir);

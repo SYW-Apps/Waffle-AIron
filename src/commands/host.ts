@@ -10,23 +10,17 @@ import { WaironError } from '../utils/errors.js';
 // which re-exports the host's local admin portal — never past it into the
 // modules that realize the workflows.
 import * as localAdmin from './adapters/host.js';
-import { mintToken } from '../server/identity.js';
-import { upsertUnit as landscapeUpsertUnit } from '../server/landscape.js';
-import { migratePermissionModel } from '../server/migration.js';
-import { startHostServer } from '../server/http.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 // The demo census crosses into sdd_core through cli_core_adapter, like every
 // other sdd_core call the CLI makes — `../core/canvas.js` was this file
 // reaching past the Portal into another subsystem's module.
 import { buildCanvasDataModel } from './subsystem.js';
 import { seedDemoTree } from '../core/demo-seed.js';
-import { upsertIdentityProviderRecord } from '../server/policy.js';
 import type {
   Capability,
   DisplayRole,
   HostConfig,
   HostExposurePolicy,
-  IdentityProviderConfig,
   PermissionValue,
   ScopeKind,
 } from '../server/types.js';
@@ -119,85 +113,23 @@ function mapAdminError(e: unknown): WaironError {
 
 // ── declarative env-based identity-provider seeding ─────────────────────────
 
-/** A trimmed env value, or undefined when unset/blank. */
-function envTrim(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value ? value : undefined;
-}
-
-/** Split a comma-separated env value into trimmed, non-empty entries. */
-function envCsv(name: string): string[] {
-  return (process.env[name] ?? '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
 /**
  * Declarative env-based seeding of the `default` OIDC identity provider, so a
  * whole SSO setup ships in the compose file with no post-deploy clicking.
- * Activates ONLY when WAIRON_OIDC_ISSUER is set; otherwise a no-op. Builds an
- * IdentityProviderConfig (id `default` — the sign-in screen's default provider
- * id — enabled, fields from the WAIRON_OIDC_* env vars), stores a RAW
- * WAIRON_OIDC_CLIENT_SECRET into the host secret store under the fixed ref
- * `oidc-default` (the provider carries only that clientSecretRef — never the
- * raw secret; an existing stored ref may be named via
- * WAIRON_OIDC_CLIENT_SECRET_REF instead), and UPSERTS the provider through the
- * policy repository — the same store the identity plane's
- * upsertProvider writes to. Server-side bootstrap: no credential is
- * involved, and the upsert is idempotent, so every boot re-seeds declaratively
- * (env is the source of truth for the `default` provider; the web UI still
- * manages providers on top). Exported for tests.
+ * Activates ONLY when WAIRON_OIDC_ISSUER is set; otherwise a no-op. The host
+ * does the seeding itself from its own environment (a raw
+ * WAIRON_OIDC_CLIENT_SECRET lands in the secret store under the fixed ref
+ * `oidc-default`; the provider record carries only the ref) — this command
+ * passes nothing but its configuration. Idempotent, so every boot re-seeds.
+ * Exported for tests.
  */
 export function seedIdentityProviderFromEnv(cfg: HostConfig): void {
-  const issuer = envTrim('WAIRON_OIDC_ISSUER');
-  if (!issuer) return; // seeding activates only when the issuer is set
-
   // The secret store keys off WAIRON_DATA_DIR — anchor it to the resolved data
-  // dir when unset (same precedent as WAIRON_PACKS_DIR in resolveHostConfig).
-  if (!process.env['WAIRON_DATA_DIR']) {
+  // dir when seeding will run (same precedent as WAIRON_PACKS_DIR in resolveHostConfig).
+  if (process.env['WAIRON_OIDC_ISSUER']?.trim() && !process.env['WAIRON_DATA_DIR']) {
     process.env['WAIRON_DATA_DIR'] = cfg.dataDir;
   }
-
-  let clientSecretRef = envTrim('WAIRON_OIDC_CLIENT_SECRET_REF');
-  // A RAW secret shipped in env is stored by the host under its fixed ref, and
-  // the provider points at that ref — the raw value never lands on the provider
-  // record. The host reads the value from its own environment; nothing is passed.
-  const seededRef = localAdmin.seedIdentityProviderSecret();
-  if (seededRef) clientSecretRef = seededRef;
-
-  const config: IdentityProviderConfig = {
-    id: 'default', // matches the sign-in screen's default provider id
-    providerType: envTrim('WAIRON_OIDC_PROVIDER_TYPE') ?? 'oidc',
-    issuerUrl: issuer,
-    enabled: true,
-    updatedAt: '', // stamped server-side by the policy registry
-  };
-  // Login-button label (WAIRON_OIDC_DISPLAY_NAME): the sign-in screen renders
-  // "Sign in with <displayName>", defaulting to the provider id when unset.
-  const displayName = envTrim('WAIRON_OIDC_DISPLAY_NAME');
-  if (displayName) config.displayName = displayName;
-  const clientId = envTrim('WAIRON_OIDC_CLIENT_ID');
-  if (clientId) config.clientId = clientId;
-  if (clientSecretRef) config.clientSecretRef = clientSecretRef;
-  const adminGroups = envCsv('WAIRON_OIDC_ADMIN_GROUPS');
-  if (adminGroups.length) config.adminGroupClaims = adminGroups;
-  const redirectUris = envCsv('WAIRON_OIDC_ALLOWED_REDIRECT_URIS');
-  if (redirectUris.length) config.allowedRedirectUris = redirectUris;
-  const domains = envCsv('WAIRON_OIDC_ALLOWED_DOMAINS');
-  if (domains.length) config.allowedDomains = domains;
-  // Split-horizon endpoint overrides (public authorize vs VPC-internal back-channel).
-  const authorizationEndpoint = envTrim('WAIRON_OIDC_AUTHORIZATION_ENDPOINT');
-  if (authorizationEndpoint) config.authorizationEndpoint = authorizationEndpoint;
-  const tokenEndpoint = envTrim('WAIRON_OIDC_TOKEN_ENDPOINT');
-  if (tokenEndpoint) config.tokenEndpoint = tokenEndpoint;
-  const jwksUri = envTrim('WAIRON_OIDC_JWKS_URI');
-  if (jwksUri) config.jwksUri = jwksUri;
-  const userinfoEndpoint = envTrim('WAIRON_OIDC_USERINFO_ENDPOINT');
-  if (userinfoEndpoint) config.userinfoEndpoint = userinfoEndpoint;
-
-  upsertIdentityProviderRecord(cfg.dataDir, config);
-  logger.info("seeded identity provider 'default' from env");
+  if (localAdmin.seedDefaultProvider(cfg)) logger.info("seeded identity provider 'default' from env");
 }
 
 // ── wairon serve ────────────────────────────────────────────────────────────
@@ -215,7 +147,7 @@ export async function runServe(options: HostOptions = {}): Promise<void> {
   }
   let handle;
   try {
-    handle = startHostServer(cfg);
+    handle = localAdmin.startHostServer(cfg);
   } catch (e) {
     throw new WaironError(e instanceof Error ? e.message : String(e));
   }
@@ -313,7 +245,7 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
 
   let handle;
   try {
-    handle = startHostServer(cfg);
+    handle = localAdmin.startHostServer(cfg);
   } catch (e) {
     throw new WaironError(e instanceof Error ? e.message : String(e));
   }
@@ -398,7 +330,7 @@ export async function runHostDemo(options: HostOptions = {}): Promise<void> {
   try {
     // Ensure the owner unit exists (idempotent — updates it if already present).
     // A root unit must be a business_entity per the org-unit hierarchy.
-    landscapeUpsertUnit(cfg, cred, {
+    localAdmin.upsertUnit(cfg, cred, {
       id: unitId,
       name: unitId,
       slug: unitId,
@@ -458,7 +390,7 @@ export async function runHostUnit(action: string, options: HostOptions = {}): Pr
         // A unit's qualified dot-path id is its parent's id + '.' + slug; a root
         // unit's id IS its slug.
         const qualifiedId = options.parent ? `${options.parent}.${options.slug}` : options.slug;
-        const stored = landscapeUpsertUnit(cfg, cred, {
+        const stored = localAdmin.upsertUnit(cfg, cred, {
           id: qualifiedId,
           name: options.name ?? options.slug,
           slug: options.slug,
@@ -492,7 +424,7 @@ export async function runHostUnit(action: string, options: HostOptions = {}): Pr
  */
 export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {}): Promise<void> {
   const cfg = resolveHostConfig(options);
-  const report = migratePermissionModel(cfg.dataDir, options.fix === true);
+  const report = localAdmin.migratePermissionModel(cfg.dataDir, options.fix === true);
   if (report.findings.length === 0) {
     logger.success('Hosted data is on the permission model — nothing to migrate.');
     return;
@@ -595,7 +527,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         // permissions — it acts as the owner's LIVE permission, narrowed to the
         // named project. Seed the owner's authority with `host permission set`.
         if (options.owner) {
-          const key = mintToken(cfg, cred, {
+          const key = localAdmin.mintToken(cfg, cred, {
             ownerUserId: options.owner,
             label: options.label ?? `cli token (${options.project})`,
             projects: options.project === '*' ? ['*'] : [options.project],

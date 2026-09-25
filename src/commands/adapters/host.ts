@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
 // cli_host_adapter — sdd_cli's client hop into sdd_host's in-process
 // administration: identity re-exports of the local admin portal. `wairon host`,
-// `wairon serve` and `wairon dev` administer an instance through here, with the
-// credential they hold; the host's workflows authorize it.
+// `wairon serve` and `wairon dev` administer and start an instance through here,
+// with the credential they hold; the host's workflows authorize it.
 // ---------------------------------------------------------------------------
 export {
   createProject,
@@ -35,7 +35,11 @@ export {
   listAssignments,
   existingProjectRoot,
   registerLocalDevProject,
-  seedIdentityProviderSecret,
+  mintToken,
+  seedDefaultProvider,
+  upsertUnit,
+  migratePermissionModel,
+  startHostServer,
   AdminAuthError,
   LockValidationError,
 } from '../../server/local-admin.js';

@@ -9,6 +9,13 @@ import * as packs from '../../src/server/packs.js';
 import * as permissionadmin from '../../src/server/permissionadmin.js';
 import * as projects from '../../src/server/projects.js';
 import * as errors from '../../src/server/errors.js';
+import * as identity from '../../src/server/identity.js';
+import * as identityProviderBootstrap from '../../src/server/identity-provider-bootstrap.js';
+import * as landscape from '../../src/server/landscape.js';
+import * as migration from '../../src/server/migration.js';
+import * as http from '../../src/server/http.js';
+import { listIdentityProviderRecords } from '../../src/server/policy.js';
+import type { HostConfig } from '../../src/server/types.js';
 import { listSecretKeys, resolveSecret } from '../../src/utils/secrets.js';
 
 // ---------------------------------------------------------------------------
@@ -18,7 +25,7 @@ import { listSecretKeys, resolveSecret } from '../../src/utils/secrets.js';
 // identity — it adds no gate and no logic, so the workflows' own authorization
 // is the only one there is — and the CLI adapter is the portal republished by
 // identity. Both pinned here, plus the one boot-time write that runs before any
-// credential exists: it takes neither key nor value from its caller.
+// credential exists: the caller hands it nothing but the host configuration.
 // ---------------------------------------------------------------------------
 
 const OWNERS: Record<string, Record<string, unknown>> = {
@@ -27,6 +34,11 @@ const OWNERS: Record<string, Record<string, unknown>> = {
   permissionadmin,
   projects,
   errors,
+  identity,
+  identityProviderBootstrap,
+  landscape,
+  migration,
+  http,
 };
 
 const PORTAL_SOURCES: Record<string, string> = {
@@ -50,7 +62,6 @@ const PORTAL_SOURCES: Record<string, string> = {
   getGitBinding: 'admin',
   configureGitSync: 'admin',
   registerLocalDevProject: 'admin',
-  seedIdentityProviderSecret: 'admin',
   LockValidationError: 'admin',
   listGlobalPacks: 'packs',
   installGlobalPack: 'packs',
@@ -63,6 +74,11 @@ const PORTAL_SOURCES: Record<string, string> = {
   listAssignments: 'permissionadmin',
   existingProjectRoot: 'projects',
   AdminAuthError: 'errors',
+  mintToken: 'identity',
+  seedDefaultProvider: 'identityProviderBootstrap',
+  upsertUnit: 'landscape',
+  migratePermissionModel: 'migration',
+  startHostServer: 'http',
 };
 
 describe('local_admin_portal (sdd_host)', () => {
@@ -93,14 +109,16 @@ describe('cli_host_adapter (sdd_cli)', () => {
   });
 });
 
-describe('seedIdentityProviderSecret (sdd_host boot write)', () => {
+describe('seedDefaultProvider (sdd_host boot write)', () => {
   let dataDir: string;
+  let cfg: HostConfig;
   const savedEnv = { ...process.env };
 
   beforeEach(() => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-local-admin-'));
     process.env.WAIRON_DATA_DIR = dataDir;
-    delete process.env.WAIRON_OIDC_CLIENT_SECRET;
+    for (const key of Object.keys(process.env)) if (key.startsWith('WAIRON_OIDC_')) delete process.env[key];
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
   });
   afterEach(() => {
     process.env = { ...savedEnv };
@@ -111,19 +129,24 @@ describe('seedIdentityProviderSecret (sdd_host boot write)', () => {
     }
   });
 
-  it('writes nothing and answers null when the environment ships no secret', () => {
-    expect(localAdmin.seedIdentityProviderSecret()).toBeNull();
+  it('writes nothing and answers null when the environment names no issuer', () => {
+    process.env.WAIRON_OIDC_CLIENT_SECRET = 'raw-client-secret';
+    expect(localAdmin.seedDefaultProvider(cfg)).toBeNull();
     expect(listSecretKeys()).toEqual([]);
+    expect(listIdentityProviderRecords(dataDir)).toEqual([]);
   });
 
-  it('stores the environment value under the fixed reference only', () => {
+  it('stores the environment secret under the fixed reference only, and the provider names the reference', () => {
+    process.env.WAIRON_OIDC_ISSUER = 'https://sso.example.com/';
     process.env.WAIRON_OIDC_CLIENT_SECRET = 'raw-client-secret';
-    expect(localAdmin.seedIdentityProviderSecret()).toBe('oidc-default');
+    const seeded = localAdmin.seedDefaultProvider(cfg);
+    expect(seeded?.id).toBe('default');
+    expect(seeded?.clientSecretRef).toBe('oidc-default');
     expect(listSecretKeys()).toEqual(['oidc-default']);
     expect(resolveSecret('oidc-default')).toBe('raw-client-secret');
   });
 
-  it('takes no key or value from its caller', () => {
-    expect(localAdmin.seedIdentityProviderSecret.length).toBe(0);
+  it('takes nothing from its caller but the host configuration', () => {
+    expect(localAdmin.seedDefaultProvider.length).toBe(1);
   });
 });
