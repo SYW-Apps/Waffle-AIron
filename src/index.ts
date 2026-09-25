@@ -34,8 +34,8 @@ export function loadProjectConfig(): ProjectConfig {
 // shares the name, so the intended one is chosen explicitly.
 //
 // Taken from ./core/skills.js rather than the core barrel because the barrel
-// now publishes core_portal's contract and nothing else, and no contract names
-// this function — not `icore_portal`, not `iskills_portal`. Naming the module
+// now publishes core's seven portal contracts and nothing else, and no contract
+// names this function — none of those seven, not `iskills_portal`. Naming the module
 // keeps the public library's behaviour byte-identical while making it visible
 // that this export rides on code no spec designed.
 export { activeTargetTypes } from './core/skills.js';
@@ -48,8 +48,8 @@ export { activeTargetTypes } from './core/skills.js';
 // and `iextension_orchestrator.load` records that contract in the spec tree
 // (`invokedBy: external` — "no internal call chain exists by design"). They
 // used to arrive here inside `export * from './core/index.js'`, which is the
-// wrong reason for a public API to exist: the core barrel publishes
-// `core_portal`'s contract, and none of these is on it. So the LIBRARY entry
+// wrong reason for a public API to exist: the core barrel publishes core's
+// seven portal contracts, and none of these is on them. So the LIBRARY entry
 // names its own surface, from the modules that hold it. Removing one from here
 // is a deliberate break of a documented API; losing one because a Portal
 // stopped starring a module is not.
