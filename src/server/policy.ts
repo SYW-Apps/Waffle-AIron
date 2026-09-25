@@ -11,7 +11,9 @@ import { authorize } from './authorization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { sendJson } from './httpio.js';
 import * as packs from './packs.js';
-import { hostCore, computeGateStateId } from './adapters.js';
+import * as hostCore from './adapters/core.js';
+import * as hostValidator from './adapters/validator.js';
+import { computeGateStateId } from './adapters/validator.js';
 import type {
   AuditEvent,
   AuditRetentionPolicy,
@@ -485,8 +487,8 @@ function classifyProfile(
   catalog: AvailableProfile[],
 ): { source?: string; resolvable: boolean } {
   if (
-    hostCore.builtinProfileIds().includes(projectType) ||
-    hostCore.builtinProjectKinds().includes(projectType)
+    hostValidator.builtinProfileIds().includes(projectType) ||
+    hostValidator.builtinProjectKinds().includes(projectType)
   ) {
     return { source: 'builtin', resolvable: true };
   }
@@ -504,7 +506,7 @@ function classifyProfile(
  * resolve must never fail project creation.
  */
 function firstApplicableProfileId(candidates: string[], catalog: AvailableProfile[]): string | undefined {
-  const kinds = hostCore.builtinProjectKinds();
+  const kinds = hostValidator.builtinProjectKinds();
   const catalogIds = new Set(catalog.map((p) => p.id));
   return candidates.find((id) => kinds.includes(id) || catalogIds.has(id));
 }

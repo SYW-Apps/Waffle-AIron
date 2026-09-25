@@ -1,11 +1,13 @@
 import chalk from 'chalk';
-import { logger } from '../utils/logger.js';
-import { loadProjectVariants } from '../core/variants.js';
+import { logger } from '../../utils/logger.js';
+// The registry is read through sdd_core's extension portal.
+import { loadProjectVariants } from '../../core/index.js';
 
 // ---------------------------------------------------------------------------
-// variants command — the component variant registry governing this project:
-// wairon's built-in variants, then global (WAIRON_VARIANTS_DIR), then project
-// (.wai/variants/), a later layer overriding by id. A dynamic layer ON TOP of
+// cli_variants_adapter — `wairon variants list`: the component variant
+// registry governing this project: wairon's built-in variants, then global
+// (WAIRON_VARIANTS_DIR), then project (.wai/variants/), a later layer overriding
+// by id. A dynamic layer ON TOP of
 // packs — define a variant on demand without touching a pack, share it
 // anywhere. Each variant is a base-anchored kind + implementation guidance a
 // component opts into via `variant: <id>`.

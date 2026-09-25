@@ -25,18 +25,30 @@ import {
   // store's to state, not a list this command spells out for itself.
   syncContextFiles,
   derivedDocPaths,
-} from './subsystem.js';
+  // The filename migration, the chained-subproject repair and the pack
+  // diagnosis are sdd_core's too, and reach it the same way.
+  findLegacySpecFiles,
+  findChainingSubprojectsMissingConfig,
+  backfillChainedSubprojectConfigs,
+  diagnoseProjectPacks,
+  pinInstalledPacksAsSelections,
+} from './adapters/core.js';
 import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../utils/fs.js';
-import { backfillChainedSubprojectConfigs } from '../core/provision.js';
-import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
-import { findLegacySpecFiles } from '../core/specs.js';
+import { checkSkillFreshness, exportSddSkills } from './adapters/skills.js';
+// A configuration's enabled targets are the project_config type's own behaviour.
+import { activeTargetTypes } from '../models/project.js';
 import { computeGateStateId, validateSddTree } from './validate.js';
 // The approver's own projection, taken from the models rather than from
 // sdd_core's lock store: rendering a name is the value object's behaviour, and
 // a command has no business reaching a Store to get it.
 import { describeApprover } from '../models/lock.js';
-import { diagnoseProjectPacks, pinInstalledPacksAsSelections } from '../core/extensions.js';
 import { claudeMcpConfigPath } from './mcp.js';
+
+/** The bound project's enabled targets; none for a project without a configuration. */
+function enabledTargets(): string[] {
+  const config = loadProjectConfig();
+  return config ? activeTargetTypes(config) : [];
+}
 
 // ---------------------------------------------------------------------------
 // doctor command
@@ -139,7 +151,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     line(tally, 'error', `.wai/project.yaml is invalid: ${e instanceof Error ? e.message : String(e)}`);
   }
   if (configOk) {
-    try { targets = activeTargetTypes(); } catch { /* leave empty */ }
+    try { targets = enabledTargets(); } catch { /* leave empty */ }
   }
 
   const hasSystemSpec = pathExists(AI_PATHS.specsSystem());
@@ -159,7 +171,6 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   // Chained subprojects that have specs but no project.yaml are un-runnable
   // standalone (`wairon` reports "No wairon project found"). Detect + point at --fix.
   try {
-    const { findChainingSubprojectsMissingConfig } = require('../core/provision.js') as typeof import('../core/provision.js');
     const missing = findChainingSubprojectsMissingConfig(getProjectRoot());
     if (missing.length > 0) {
       line(tally, 'warn', `${missing.length} chained subproject(s) have specs but no project.yaml (un-runnable standalone): ${missing.map(d => path.relative(getProjectRoot(), d) || '.').join(', ')}. Run \`wairon doctor --fix\` to initialize them.`);
@@ -406,7 +417,7 @@ async function applyFixes(): Promise<void> {
   let targets: string[];
   try {
     if (!loadProjectConfig()) throw new ProjectNotInitializedError();
-    targets = activeTargetTypes();
+    targets = enabledTargets();
   } catch (e) {
     logger.warn(`--fix skipped: .wai/project.yaml is invalid (${e instanceof Error ? e.message : String(e)}). Fix it first.`);
     logger.blank();

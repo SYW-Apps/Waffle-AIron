@@ -1,4 +1,6 @@
-import { resolveSecret } from '../utils/secrets.js';
+// The token is sdd_host's stored secret, reached through its published secret
+// portal — never through the host's secret module itself.
+import * as secretPortal from '../server/secret-portal.js';
 import type { GraphModel, GraphNode } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -14,7 +16,7 @@ const FRAME_TITLE = 'wairon architecture';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 function authHeaders(): Record<string, string> {
-  const token = resolveSecret('miro-token');
+  const token = secretPortal.resolve('miro-token');
   if (!token) {
     throw new Error('No Miro token — set WAIRON_MIRO_TOKEN or run `wairon host secret set miro-token <secret>`.');
   }

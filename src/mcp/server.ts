@@ -17,77 +17,51 @@ import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
-// mcp_core_adapter's completeness report (icore_portal getStatusReport) and the
-// lock's verdict on the tree (icore_portal approvalVerdict), taken from the core
-// barrel like every other core call this file makes. The report used to come out
-// of src/commands/status.ts — sdd_mcp reaching into an sdd_cli command file for a
-// report that was never CLI-specific — and the verdict used to live there as a
-// PRIVATE helper, which is why this server could only ever answer with silence
-// about a tree that had drifted from its approval. Both are taken BY IDENTITY,
-// unrenamed: each is a method this file's mcp_core_adapter contract names, and a
-// renamed binding would leave the narrative's call site pointing at a symbol the
-// contract does not carry.
-import { getStatusReport, approvalVerdict } from '../core/index.js';
-import type { ProjectConfig } from '../models/project.js';
-// mcp_core_adapter's project configuration read (icore_portal loadProjectConfig,
-// null when the project has none) and the renames (icore_portal
-// renameComponent / renameMethod). STATIC, not lazily required: same reasoning
-// as requireValidation below — a static binding stays correct per bound project, and
-// a lazy require of a relative path does not resolve under the test runner or
-// inside the bundled hosted server.
-import {
-  loadProjectConfig as coreLoadProjectConfig,
-  renameComponent as coreRenameComponent,
-  renameMethod as coreRenameMethod,
-  type ComponentRename,
-  type MethodRename,
-} from '../core/index.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
-import type { ValidationIssue } from '../core/validation.js';
+import type { ValidationIssue, TestsToRevisit } from '../core/validation.js';
 import { EndpointSchema, type Endpoint, type PublicInterface, type SubsystemSpec, type SystemSpec, type TypeSpec, type InterfaceSpec, type ImplementationSpec } from '../models/specs.js';
-import {
-  listResources as coreListSkillResources,
-  readResource as coreReadSkillResource,
-  buildServerInstructions as coreBuildServerInstructions,
-  type SkillResourceDescriptor,
-} from '../core/skills.js';
-import { resolveChainingParent, loadComponentSpecs } from '../core/specs.js';
-import * as specsModule from '../core/specs.js';
-import * as pathsModule from '../config/paths.js';
-import * as validationModule from '../core/validation.js';
-import * as provisionModule from '../core/provision.js';
-// Through the core Portal, like every other sdd_core call this server makes —
-// ../core/domains.js is a member of the topology Repository, and naming it here
-// reached two subsystems deep for a read the Portal already publishes.
-import { resolveDomains } from '../core/index.js';
-// The gated authoring seam — shared by every access path (see core/authoring.ts).
-// Statically imported for the same reason as the core adapters below: it reads
-// the request-scoped project root at CALL time.
-// Only the seam's PORTAL names cross at runtime (writeSpec, deleteSpec,
-// updateSpecGated, moveMethods); its value shapes come across as types.
-import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from '../core/authoring.js';
-import type { SpecDeletion, SpecRestatement, SpecWriteReceipt } from '../core/authoring.js';
-import type { TestsToRevisit } from '../core/validation.js';
-import type { SpecChange, SpecChangeReport } from '../core/specs.js';
 import type { ComponentSpec } from '../models/specs.js';
-// Statically imported for the same reason as the skills adapter: these read the
-// request-scoped project root at CALL time, so a static binding stays correct per
-// bound project — and a lazy require of a relative path does not resolve under the
-// test runner, which silently turned this hop into a tool error.
-import { loadProjectVariants, resolveVariantGuidance } from '../core/variants.js';
-import {
-  composeAgentBrief as coreComposeAgentBrief,
-  resolveAgentTopology as coreResolveAgentTopology,
-} from '../core/agent_resolver.js';
-// Through the Portal, not the module: the registry shape this server hands to
-// the registry validator is sdd_core's to publish, and icore_portal names it.
-import { loadRegistry as coreLoadRegistry } from '../core/index.js';
+import type { SpecDeletion, SpecRestatement, SpecWriteReceipt } from '../core/authoring.js';
+import type { SpecChange, SpecChangeReport } from '../core/specs.js';
+import * as pathsModule from '../config/paths.js';
 import { summarize } from '../models/execution.js';
-import type { AgentBrief, AgentRecord } from '../models/agent.js';
+import type { AgentBrief } from '../models/agent.js';
+// The server's client adapters, one module per provider subsystem. Every name
+// this server takes from another subsystem lands on one of these modules, which
+// re-export the provider's portal by identity under the adapter's contract
+// names. They are STATIC imports, not lazy requires: each call reads the
+// request-scoped project root at CALL time, so a static binding stays correct per
+// bound project, while a lazy require of a relative path resolves neither under
+// the test runner nor inside the bundled hosted server.
 import {
-  listExternalInterfaces as coreListExternalInterfaces,
-  type ExternalSurfaceEntry,
-} from '../core/surfaces.js';
+  loadSystemSpec,
+  loadSubsystemSpec,
+  loadSubsystemSpecs,
+  loadComponentSpec,
+  loadComponentSpecs,
+  loadInterfaceSpec,
+  loadImplementationSpec,
+  loadTypeSpec,
+  resolveChainingParent,
+  moveSubsystemProject,
+  externalizeSubsystem,
+  internalizeSubsystem,
+  renameComponent,
+  renameMethod,
+  loadProjectConfig,
+  getStatusReport,
+  approvalVerdict,
+  composeAgentBrief,
+  resolveAgentTopology,
+  loadRegistry,
+  resolveDomains,
+  loadProjectVariants,
+  resolveVariantGuidance,
+} from './adapters/core.js';
+import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from './adapters/authoring.js';
+import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
+import { listExternalInterfaces } from './adapters/surfaces.js';
+import { validateSddTree, validateRegistry } from './adapters/validator.js';
 
 // ---------------------------------------------------------------------------
 // wairon MCP Server
@@ -123,7 +97,7 @@ export function statusFamilyContext(): string {
           'the surfaces it can consume are listed by sdd_list_external_interfaces.',
       );
     }
-    const mounts = specsModule.loadSubsystemSpecs().filter((s) => s.projectPath && !s.id.includes('::'));
+    const mounts = loadSubsystemSpecs().filter((s) => s.projectPath && !s.id.includes('::'));
     if (mounts.length > 0) {
       lines.push(`Family: chained subprojects mounted here — ${mounts.map((s) => `${s.id} (${s.projectPath})`).join(', ')}.`);
     }
@@ -131,91 +105,14 @@ export function statusFamilyContext(): string {
   return lines.length > 0 ? `${lines.join('\n')}\n\n` : '';
 }
 
-// STATIC, not lazily required — for the reason spelled out on requireSpecs
-// below: these modules read the request-scoped project root at CALL time, so a
-// static binding stays correct per bound project, while a lazy
-// `require('../config/loader.js')` fails to resolve both under the test runner
-// AND inside the bundled hosted server (the bundle's directory has no such
-// file). Every sdd_* tool built on them then answered "Cannot find module"
-// instead of running.
-function requireValidation() {
-  return validationModule;
-}
-
 /**
- * The core spec surface. STATIC, not lazily required: the loaders read the
- * request-scoped project root at call time, so a static binding stays correct per
- * bound project (this module already imports core/specs.js eagerly for
- * resolveChainingParent, so nothing is loaded that was not loaded before).
- *
- * It matters because a lazy `require('../core/specs.js')` does not resolve under
- * the test runner — which made every sdd_* tool built on it fail with a module
- * error instead of running, so none of them could be driven end-to-end from a
- * test through an MCP client.
- */
-function requireSpecs(): typeof specsModule {
-  return specsModule;
-}
-
-function requireProvision() {
-  return provisionModule;
-}
-
-/**
- * mcp_core_adapter — resolve a component's variant guidance across the boundary
- * into sdd_core. Lazily required like the other project-root-sensitive core hops:
- * the variant registry is read per bound project.
+ * mcp_orchestrator — a variant-tagged component's guidance, resolved against
+ * the bound project's variant registry through the core adapter.
  */
 function resolveComponentVariantGuidance(component: { id: string; variant?: string }) {
   if (!component.variant) return null;
   const byId = new Map(loadProjectVariants().map((v) => [v.id, v]));
   return resolveVariantGuidance(component, loadComponentSpecs(), byId);
-}
-
-// mcp_surfaces_adapter — thin forwarder across the boundary into the surface
-// portal. Statically imported (like the skills adapter below, not lazily
-// required): the portal function reads the request-scoped project root at
-// call time, so a static binding stays correct per bound project.
-function listExternalInterfaces(): ExternalSurfaceEntry[] {
-  return coreListExternalInterfaces();
-}
-
-// mcp_core_adapter.composeAgentBrief — forward the live delegation-brief
-// composition to the core portal. Statically imported like the other core hops:
-// it resolves against the request-scoped project root at call time, so every
-// call sees the CURRENT topology (a re-lock changes the next call).
-function composeAgentBrief(agentId: string): AgentBrief {
-  return coreComposeAgentBrief(agentId);
-}
-
-// mcp_core_adapter.resolveAgentTopology — the same forward for the topology
-// read backing the wairon-agent:// resource listing.
-function resolveAgentTopology(): AgentRecord[] {
-  return coreResolveAgentTopology();
-}
-
-// mcp_core_adapter.loadProjectConfig — the same forward for the project
-// configuration read (null when the project has none). validateTopology,
-// getProjectConfig, and sdd_validate_tree all call this rather than the
-// statically-imported binding directly, so the contract method has its own
-// realized function at the anchored conformance tier.
-function loadProjectConfig(): ProjectConfig | null {
-  return coreLoadProjectConfig();
-}
-
-// mcp_core_adapter.renameComponent — the same forward for a component rename:
-// core moves the component with the interface and implementation named after
-// it, rewrites every reference to it in the bound tree, and reports both.
-function renameComponent(componentId: string, newId: string): ComponentRename {
-  return coreRenameComponent(componentId, newId);
-}
-
-// mcp_core_adapter.renameMethod — the same forward for a contract-method
-// rename: core moves the method on the component's contracts and their
-// implementations, retargets every reference to it, and reports what it moved,
-// what it retargeted and what still merely names it.
-function renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean): MethodRename {
-  return coreRenameMethod(componentId, methodName, newName, pinSymbol);
 }
 
 /**
@@ -777,26 +674,6 @@ const statusInput = z.enum(STATUS_VALUES).optional().describe(
 
 const SKILL_RESOURCE_MIME = 'text/markdown';
 
-// mcp_skills_adapter — thin forwarders across the boundary into the skills
-// portal. Statically imported (not lazily required like the project-root-
-// sensitive core adapters) because the skills templates resolve relative to the
-// package, independent of the request-scoped project root.
-function listSkillResources(): SkillResourceDescriptor[] {
-  return coreListSkillResources();
-}
-function readSkillResource(resourceId: string): string {
-  return coreReadSkillResource(resourceId);
-}
-/**
- * mcp_skills_adapter.buildServerInstructions — the composed briefing the server
- * returns on `initialize`. Unlike the two forwarders above, this one DOES read
- * the request-scoped project root (it reports the bound project's profile and
- * packs); resolving it per createMcpServer call is what keeps the hosted
- * per-request scoped server correct.
- */
-function buildServerInstructions(): string {
-  return coreBuildServerInstructions();
-}
 
 /** Resolve an MCP resource URI (wairon-skill://<id>) back to its skill id. */
 function skillIdFromResourceUri(uri: string): string {
@@ -884,7 +761,7 @@ function registerSkillResources(server: McpServer, listChanged: boolean): void {
 
   server.server.setRequestHandler(ListResourcesRequestSchema, () => ({
     resources: [
-      ...listSkillResources().map((d) => ({
+      ...listResources().map((d) => ({
         uri: d.resourceUri,
         name: d.name,
         description: d.description,
@@ -906,7 +783,7 @@ function registerSkillResources(server: McpServer, listChanged: boolean): void {
       }
     }
     try {
-      const content = readSkillResource(skillIdFromResourceUri(uri));
+      const content = readResource(skillIdFromResourceUri(uri));
       return { contents: [{ uri, mimeType: SKILL_RESOURCE_MIME, text: content }] };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -930,7 +807,7 @@ function registerSkillPrompts(server: McpServer, listChanged: boolean): void {
   server.server.registerCapabilities({ prompts: listChanged ? { listChanged: true } : {} });
 
   server.server.setRequestHandler(ListPromptsRequestSchema, () => ({
-    prompts: listSkillResources().map((d) => ({
+    prompts: listResources().map((d) => ({
       name: d.id,
       title: d.name,
       description: d.description,
@@ -940,7 +817,7 @@ function registerSkillPrompts(server: McpServer, listChanged: boolean): void {
   server.server.setRequestHandler(GetPromptRequestSchema, (request) => {
     const name = request.params.name;
     try {
-      const content = readSkillResource(name);
+      const content = readResource(name);
       return {
         description: `The wairon "${name}" skill.`,
         messages: [{ role: 'user' as const, content: { type: 'text' as const, text: content } }],
@@ -1003,7 +880,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ domainId }) => {
       try {
-        const registry = coreLoadRegistry();
+        const registry = loadRegistry();
         const agents = domainId
           ? registry.agents.filter((a) => a.domainRoot === domainId)
           : registry.agents;
@@ -1030,7 +907,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ id }) => {
       try {
-        const registry = coreLoadRegistry();
+        const registry = loadRegistry();
         const agent = registry.agents.find((a) => a.id === id);
         if (!agent) return errText(`Agent "${id}" not found.`);
         return json(agent);
@@ -1047,7 +924,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     () => {
       try {
-        // Static import (see requireValidation): a lazy require never resolves in
+        // Static import (see the adapter imports above): a lazy require never resolves in
         // the bundled server, so listDomains failed there instead of answering.
         return json(resolveDomains());
       } catch (e) {
@@ -1066,8 +943,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ subsystem }) => {
       try {
-        const { validateRegistry } = requireValidation();
-        let registry = coreLoadRegistry();
+        let registry = loadRegistry();
         if (subsystem) {
           registry = {
             ...registry,
@@ -1253,7 +1129,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       try {
         // mcp_orchestrator.setPublicInterfaces step 1: the subsystem whose
         // published surface is being set.
-        const { loadSubsystemSpec } = requireSpecs();
         const sub = loadSubsystemSpec(subsystem);
         if (!sub) return errText(`Subsystem "${subsystem}" does not exist.`);
         // Step 2: the replacement as ONE delta, so it stays a single judged write.
@@ -1310,7 +1185,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ subsystem, newProjectPath }) => {
       try {
-        const { moveSubsystemProject } = requireProvision();
         moveSubsystemProject(subsystem, newProjectPath);
         return text(`Moved subsystem "${subsystem}" to: ${newProjectPath}`);
       } catch (e) {
@@ -1330,7 +1204,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ subsystem, projectPath }) => {
       try {
-        const { externalizeSubsystem } = requireProvision();
         externalizeSubsystem(subsystem, projectPath);
         return text(`Externalized subsystem "${subsystem}" into subproject: ${projectPath}. Move its source code there and re-validate.`);
       } catch (e) {
@@ -1349,7 +1222,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ subsystem }) => {
       try {
-        const { internalizeSubsystem } = requireProvision();
         internalizeSubsystem(subsystem);
         return text(`Internalized subsystem "${subsystem}" back into this project (child .wai removed).`);
       } catch (e) {
@@ -1416,7 +1288,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // mcp_orchestrator.moveMethods steps 1-2: both components are resolved
         // and read HERE, so a mistyped id reads as a mistyped id rather than as
         // a rule refusing the design.
-        const { loadComponentSpec } = requireSpecs();
         const source = qualifiedComponentId(from);
         const target = qualifiedComponentId(to);
         if (!loadComponentSpec(source)) return errText(`no component has the id "${from}".`);
@@ -1627,7 +1498,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     ({ interface: interfaceId, endpoints }) => {
       try {
         // mcp_orchestrator.setEndpoints step 1: the contract the bindings attach to.
-        const { loadInterfaceSpec } = requireSpecs();
         const intf = loadInterfaceSpec(interfaceId);
         if (!intf) return errText(`Interface "${interfaceId}" does not exist.`);
 
@@ -1894,7 +1764,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // A missing config errored before (the loader's loadProjectConfig threw);
         // keep that outcome now that the adapter reads null instead of throwing.
         if (!config) throw new ProjectNotInitializedError();
-        const { validateSddTree } = requireValidation();
         const result = validateSddTree({
           rules: config.rules,
           projectType: config.projectType,
@@ -1928,17 +1797,16 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ kind, id, methods }) => {
       try {
-        const specs = requireSpecs();
         let result: unknown = null;
         /** The filter marker, when `methods` narrowed the read; null when it read whole. */
         let partial: { shown: string[]; omitted: number; warning: string } | null = null;
         switch (kind) {
-          case 'system':         result = specs.loadSystemSpec(); break;
-          case 'subsystem':      result = specs.loadSubsystemSpec(id); break;
-          case 'component':      result = specs.loadComponentSpec(id); break;
-          case 'interface':      result = specs.loadInterfaceSpec(id); break;
-          case 'implementation': result = specs.loadImplementationSpec(id); break;
-          case 'type':           result = specs.loadTypeSpec(id); break;
+          case 'system':         result = loadSystemSpec(); break;
+          case 'subsystem':      result = loadSubsystemSpec(id); break;
+          case 'component':      result = loadComponentSpec(id); break;
+          case 'interface':      result = loadInterfaceSpec(id); break;
+          case 'implementation': result = loadImplementationSpec(id); break;
+          case 'type':           result = loadTypeSpec(id); break;
         }
         if (!result) return errText(`Spec of kind "${kind}" with ID "${id}" does not exist.`);
         // A filter that quietly returned nothing, or quietly returned everything,

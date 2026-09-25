@@ -7,8 +7,8 @@ import { ensureDir } from '../utils/fs.js';
 // directly — the same boundary `wairon lock` and `wairon status` were taught.
 // renderDiagram is the whole of the four-format path; the scoped Mermaid and
 // the --all set come through the adapter too.
+import { renderDiagram } from './adapters/core.js';
 import {
-  renderDiagram,
   generateComponentDiagram,
   generateSequenceDiagram,
   generateDiagramSet,

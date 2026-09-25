@@ -9,7 +9,7 @@ import { assertProjectInitialized } from '../config/paths.js';
 // approval verdict existed in one of them and not the other, so `wairon status`
 // and `sdd_get_status` disagreed about whether the tree had moved away from its
 // lock. There is one renderer now, and this file only says what the colours are.
-import { getStatusReport, approvalVerdict } from './subsystem.js';
+import { getStatusReport, approvalVerdict } from './adapters/core.js';
 import type { StatusDecor, StatusOptions } from '../core/status.js';
 
 // ---------------------------------------------------------------------------

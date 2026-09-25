@@ -438,28 +438,3 @@ export const projectConfigRepository: ProjectConfigRepository = {
   markSelectionsBundled(bundled) { bound().markSelectionsBundled(bundled); },
   pinGlobalPacksAsSelections(selections) { bound().pinGlobalPacksAsSelections(selections); },
 };
-
-// ── project_config type behaviour ───────────────────────────────────────────
-
-/** The extension a pack path reference carries — the pattern server/packs.ts's stem() strips. */
-const PACK_EXT_RE = /\.(ya?ml|cjs|js)$/i;
-
-/**
- * The names of the packs a configuration declares, deduplicated in first-seen order:
- * each `extensions.packs` entry (a selection's name, or a path reference's file stem),
- * then the required and default pack names its profile selection records.
- */
-export function declaredPackNames(config: Pick<ProjectConfig, 'extensions' | 'profileSelection'>): string[] {
-  const selection = config.profileSelection;
-  return [...new Set([
-    ...(config.extensions?.packs ?? []).map((entry) =>
-      (typeof entry === 'string' ? path.basename(entry).replace(PACK_EXT_RE, '') : entry.name)),
-    ...(selection?.requiredPackNames ?? []),
-    ...(selection?.defaultPackNames ?? []),
-  ])];
-}
-
-/** The profile ids a configuration's profile selection records, deduplicated; never `projectType`. */
-export function declaredProfileIds(config: Pick<ProjectConfig, 'profileSelection'>): string[] {
-  return [...new Set(config.profileSelection?.profileIds ?? [])];
-}

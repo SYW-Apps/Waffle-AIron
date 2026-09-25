@@ -15,7 +15,7 @@ import {
 import { createChainedSubsystem } from '../../src/core/provision.js';
 import { retireSpecialists, type SpecialistRetirement } from '../../src/core/stereotype-migration.js';
 import * as corePortal from '../../src/core/index.js';
-import { retireSpecialists as cliRetireSpecialists } from '../../src/commands/subsystem.js';
+import { retireSpecialists as cliRetireSpecialists } from '../../src/commands/adapters/core.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';
 

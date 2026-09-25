@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as adapter from '../../src/commands/subsystem.js';
+import * as adapter from '../../src/commands/adapters/core.js';
 import * as portal from '../../src/core/index.js';
 import { GUIDE_MARKER_START, GUIDE_MARKER_END, stripGuideSection } from '../../src/utils/ai-guide.js';
 import { versionStamp } from '../../src/core/stamp.js';
@@ -437,19 +437,19 @@ describe('the three commands reach the guide and the stamp through cli_core_adap
       expect(text, file).not.toContain("from '../core/stamp.js'");
       expect(text, file).not.toContain("require('../utils/ai-guide.js')");
       expect(text, file).not.toContain("require('../core/stamp.js')");
-      expect(text, file).toContain("} from './subsystem.js';");
+      expect(text, file).toContain("} from './adapters/core.js';");
     });
   }
 
   it('doctor takes the stamp and both guide calls off the adapter', () => {
-    const block = importBlock('src/commands/doctor.ts', './subsystem.js');
+    const block = importBlock('src/commands/doctor.ts', './adapters/core.js');
     expect(block).toContain('  readStampVersion,');
     expect(block).toContain('  localGuideFilePath,');
     expect(block).toContain('  reinjectLocalGuides,');
   });
 
   it('init takes all four write-side guide calls off the adapter', () => {
-    const block = importBlock('src/commands/init.ts', './subsystem.js');
+    const block = importBlock('src/commands/init.ts', './adapters/core.js');
     expect(block).toContain('  globalGuideFilePath,');
     expect(block).toContain('  localGuideFilePath,');
     expect(block).toContain('  injectGuide,');
@@ -460,7 +460,7 @@ describe('the three commands reach the guide and the stamp through cli_core_adap
     // The lazy form did two things at once: it hid the crossing from a reader,
     // and it does not resolve once the module is bundled — src/core/context.ts
     // carries that same note about that same form.
-    expect(importBlock('src/commands/generate.ts', './subsystem.js')).toContain('  reinjectLocalGuides,');
+    expect(importBlock('src/commands/generate.ts', './adapters/core.js')).toContain('  reinjectLocalGuides,');
     const text = source('src/commands/generate.ts');
     expect(text).not.toContain('const { reinjectLocalGuides } = require(');
     expect(text).toContain('reinjectLocalGuides(getProjectRoot(), activeTargetTypes(projectConfig));');
@@ -485,19 +485,17 @@ describe('the Portal publishes the six, and the adapter forwards them', () => {
   });
 
   it('cli_core_adapter forwards each one 1:1, in the shape the contract names', () => {
-    const text = source('src/commands/subsystem.ts');
-    expect(text).toContain('export function globalGuideFilePath(target: string): string | null {');
-    expect(text).toContain('  return coreGlobalGuideFilePath(target);');
-    expect(text).toContain('export function localGuideFilePath(projectRoot: string, target: string): string | null {');
-    expect(text).toContain('  return coreLocalGuideFilePath(projectRoot, target);');
-    expect(text).toContain("export function injectGuide(filePath: string, scope: 'global' | 'local'): void {");
-    expect(text).toContain('  coreInjectGuide(filePath, scope);');
-    expect(text).toContain('export function writeRootGuideDelegator(projectRoot: string, target: string): void {');
-    expect(text).toContain('  coreWriteRootGuideDelegator(projectRoot, target);');
-    expect(text).toContain('export function reinjectLocalGuides(projectRoot: string, targets: string[]): string[] {');
-    expect(text).toContain('  return coreReinjectLocalGuides(projectRoot, targets);');
-    expect(text).toContain('export function readStampVersion(content: string): string | null {');
-    expect(text).toContain('  return coreReadStampVersion(content);');
+    // The adapter is a module of its own now, and a forward is an IDENTITY
+    // re-export of the core portal: the contract method and the portal's
+    // function are one function, so there is no wrapper body to read.
+    const block = namedBlock('src/commands/adapters/core.ts', 'export {', '../../core/index.js');
+    expect(block).toContain('  globalGuideFilePath,');
+    expect(block).toContain('  localGuideFilePath,');
+    expect(block).toContain('  injectGuide,');
+    expect(block).toContain('  writeRootGuideDelegator,');
+    expect(block).toContain('  reinjectLocalGuides,');
+    expect(block).toContain('  readStampVersion,');
+    expect(source('src/commands/adapters/core.ts')).not.toContain('export function');
   });
 
   it('offers nothing the contract does not name — hasWaironGuide is gone', () => {

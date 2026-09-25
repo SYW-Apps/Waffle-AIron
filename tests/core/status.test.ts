@@ -556,7 +556,12 @@ updatedAt: '2026-06-10T22:00:00Z'
     // say about a tree that had drifted.
     const source = fs.readFileSync(path.join(REPO_ROOT, 'src/mcp/server.ts'), 'utf8');
     expect(source).not.toContain('commands/status.js');
-    expect(source).toMatch(/import \{ getStatusReport[^}]*\} from '\.\.\/core\/index\.js';/);
+    // Through the MCP server's own core adapter, which re-exports the core
+    // portal's forward by identity.
+    const block = source.slice(source.indexOf('  getStatusReport,'));
+    const close = block.indexOf('}');
+    expect(block.slice(0, close)).toContain('  approvalVerdict,');
+    expect(block.slice(close)).toMatch(/^\} from '\.\/adapters\/core\.js';/);
   });
 
   it('leaves the CLI command with no second declaration of the report vocabulary', () => {

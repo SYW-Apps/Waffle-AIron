@@ -8,15 +8,13 @@ import {
   projectConfigRepositoryAt,
   projectConfigRepositoryOver,
   projectConfigFsAdapterAt,
-  declaredPackNames,
-  declaredProfileIds,
   type ProjectConfigFsAdapter,
   type ProjectConfigRepository,
 } from '../../src/config/project-config.js';
 import { GLOBAL_PACKS_DEFAULT } from '../../src/core/extensions.js';
 import { ProjectNotInitializedError, WaironError } from '../../src/utils/errors.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
-import type { ProjectConfig } from '../../src/models/project.js';
+import { declaredPackNames, declaredProfileIds, type ProjectConfig } from '../../src/models/project.js';
 
 // ---------------------------------------------------------------------------
 // The project configuration Repository (stage 2a-0): the only way into

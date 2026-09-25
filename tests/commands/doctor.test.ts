@@ -15,7 +15,7 @@ import {
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';
 import { runLock } from '../../src/commands/lock.js';
-import * as subsystemAdapter from '../../src/commands/subsystem.js';
+import * as subsystemAdapter from '../../src/commands/adapters/core.js';
 import * as validateAdapter from '../../src/commands/validate.js';
 
 // ---------------------------------------------------------------------------
@@ -33,8 +33,8 @@ import * as validateAdapter from '../../src/commands/validate.js';
 // tests/commands/init-adapters.test.ts), so a real Node process is required.
 // ---------------------------------------------------------------------------
 
-vi.mock('../../src/commands/subsystem.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/commands/subsystem.js')>();
+vi.mock('../../src/commands/adapters/core.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/commands/adapters/core.js')>();
   return {
     ...actual,
     projectConfigExists: vi.fn(actual.projectConfigExists),

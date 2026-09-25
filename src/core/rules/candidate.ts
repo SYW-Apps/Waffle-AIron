@@ -26,13 +26,10 @@ import { registerBuiltinRules, registerPackRules, knownIssueCodes, specScopedRul
 // precisely so an undeclared rule can never leak into this path.
 // ---------------------------------------------------------------------------
 
-/** A candidate's verdict, split by severity — errors refuse the write, warnings ride along as notices. */
-export interface CandidateVerdict {
-  /** Intrinsic violations. The write must be refused; each names its rule code. */
-  errors: ValidationIssue[];
-  /** Intrinsic advisories (e.g. MISSING_DURABILITY). Surface, but never block. */
-  warnings: ValidationIssue[];
-}
+// The verdict is the data model's (src/models/candidate.ts), where its refusal
+// text travels with it.
+import type { CandidateVerdict } from '../../models/candidate.js';
+export type { CandidateVerdict };
 
 export interface CandidateOptions {
   /**
@@ -124,17 +121,4 @@ export function validateComponentCandidate(
     errors: own.filter(i => i.severity === 'error'),
     warnings: own.filter(i => i.severity === 'warning'),
   };
-}
-
-/**
- * Format a refused candidate for an agent: the codes, the messages, and the
- * remedy. Written as one message because the caller's channel is a tool error
- * string — and it names `unset` explicitly, since "remove the field" is the fix
- * an agent most often cannot guess.
- */
-export function formatCandidateRefusal(verdict: CandidateVerdict): string {
-  const lines = verdict.errors.map(e => `- ${e.code}: ${e.message}`);
-  return `Refused: this component's fields do not match its componentType.\n${lines.join('\n')}\n\n`
-    + 'Nothing was written. Fix the fields and retry — on an EXISTING spec, remove a field with '
-    + 'sdd_update_spec\'s "unset" (e.g. {"unset": ["basePath"]}); passing null leaves it in place.';
 }

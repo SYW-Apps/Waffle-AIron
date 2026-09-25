@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized } from '../config/paths.js';
 import { AgentRecord } from '../models/agent.js';
-import { resolveAgentTopology } from './subsystem.js';
+import { resolveAgentTopology } from './adapters/core.js';
 
 // ---------------------------------------------------------------------------
 // list command

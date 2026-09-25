@@ -17,8 +17,8 @@ import {
   packEntryLabel,
   packEntryRef,
   globalPacksEnabled,
-  PackScope,
-} from '../core/extensions.js';
+  type PackScope,
+} from '../core/index.js';
 // The pack store and the project configuration reached through sdd_core's
 // PUBLISHED surface (the core barrel is core_portal's realization) rather than by
 // importing the store or configuration modules — same shape as every other cli_*

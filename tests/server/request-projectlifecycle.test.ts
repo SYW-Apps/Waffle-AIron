@@ -8,7 +8,7 @@ import * as crypto from 'node:crypto';
 import { handleMcpRequest } from '../../src/server/request.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
 import { createProjectRecord, existingProjectRoot } from '../../src/server/projects.js';
-import { hostCore } from '../../src/server/adapters.js';
+import * as hostCore from '../../src/server/adapters/core.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';

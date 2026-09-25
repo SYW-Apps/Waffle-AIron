@@ -19,9 +19,10 @@ import {
 } from '../models/specs.js';
 import type { RulesConfig } from '../models/project.js';
 import type { MethodMoveReport, SpecChangeReport, SpecWriteHooks, WritableSpecKind } from './specs.js';
-// authoring_core_adapter — every hop into sdd_core lands on the core PORTAL,
-// never on the module behind it: the seam is a peer of sdd_core, and a peer
-// reaches another subsystem through what that subsystem publishes.
+// authoring_core_adapter and authoring_validator_adapter — every hop out of the
+// seam lands on the adapter's own module, which re-exports the provider's
+// portal by identity. The seam is a peer of sdd_core and sdd_validator, and a
+// peer reaches another subsystem through what that subsystem publishes.
 import {
   createChainedSubsystem,
   deleteSpec as coreDeleteSpec,
@@ -30,9 +31,10 @@ import {
   moveMethods as coreMoveMethods,
   saveSpec,
   updateSpec,
-} from './index.js';
-import { validateComponentCandidate, findTestsReferencing, type TestsToRevisit } from './validation.js';
-import { formatCandidateRefusal, type CandidateVerdict } from './rules/candidate.js';
+} from './adapters/authoring-core.js';
+import { validateComponentCandidate, findTestsReferencing } from './adapters/authoring-validator.js';
+import type { TestsToRevisit } from './validation.js';
+import { formatCandidateRefusal, type CandidateVerdict } from '../models/candidate.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
 import { getProjectRoot } from '../utils/fs.js';
 
@@ -156,14 +158,10 @@ export interface SpecWriteReceipt {
  * the test roots a change report searches.
  */
 function candidateOptions(): { rules?: RulesConfig; projectType?: string } {
-  try {
-    const config = loadProjectConfig();
-    return config ? { rules: config.rules, projectType: config.projectType } : {};
-  } catch {
-    // An uninitialized or unreadable project gets default severities. A config
-    // read must never be the thing that fails a write closed.
-    return {};
-  }
+  // The adapter answers null for an uninitialized or unreadable project, so the
+  // gate judges at the default severities rather than failing the write closed.
+  const config = loadProjectConfig();
+  return config ? { rules: config.rules, projectType: config.projectType } : {};
 }
 
 /** Intrinsic warnings, as the notice strings the authoring surfaces already return. */

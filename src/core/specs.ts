@@ -64,7 +64,8 @@ import type { WebGraphModel } from '../server/types.js';
 // delegate to the workspace of the current project root.
 // ---------------------------------------------------------------------------
 
-interface SpecIndex {
+/** spec_index — the bound tree as one scan read it: every spec by kind, and the file each is stored in. */
+export interface SpecIndex {
   subsystems: SubsystemSpec[];
   components: ComponentSpec[];
   interfaces: InterfaceSpec[];
@@ -79,6 +80,17 @@ interface SpecIndex {
     type: Record<string, string>;
     group: Record<string, string>;
   };
+}
+
+/** spec_scan_options — how deep a scan reads into chained subprojects. */
+export interface SpecScanOptions {
+  recursive?: boolean | number;
+}
+
+/** legacy_spec_file — a spec file stored under a legacy (undotted) name, and the name the current layout expects. */
+export interface LegacySpecFile {
+  path: string;
+  expected: string;
 }
 
 function emptyIndex(): SpecIndex {
@@ -4510,7 +4522,7 @@ export function clearLoaderIssues(): void {
   invalidateSpecCache();
 }
 
-export function scanAllSpecs(options?: { recursive?: boolean | number }): SpecIndex {
+export function scanAllSpecs(options?: SpecScanOptions): SpecIndex {
   return current().scanAll(options);
 }
 
@@ -4860,7 +4872,7 @@ export function restoreSpecFiles(snapshot: Map<string, string>): void {
   }
 }
 
-export function findLegacySpecFiles(): { path: string; expected: string }[] {
+export function findLegacySpecFiles(): LegacySpecFile[] {
   return current().findLegacySpecFiles();
 }
 

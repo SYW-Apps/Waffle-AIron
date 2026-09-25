@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as adapter from '../../src/commands/subsystem.js';
+import * as adapter from '../../src/commands/adapters/core.js';
 import * as portal from '../../src/core/index.js';
 import { deriveExecutionProfile as coreDerive } from '../../src/core/execution_profile.js';
 import { resolveBudget as coreResolve } from '../../src/core/budget_policy.js';
@@ -177,7 +177,7 @@ describe('wairon execution reaches the resource axis through cli_core_adapter, n
     expect(source).not.toContain("from '../core/execution_profile.js'");
     expect(source).not.toContain("from '../core/budget_policy.js'");
     expect(source).not.toContain("from '../core/index.js'");
-    expect(source).toContain("} from './subsystem.js';");
+    expect(source).toContain("} from './adapters/core.js';");
     expect(source).toContain('  resolveAgentTopology,');
     expect(source).toContain('  deriveExecutionProfile,');
     expect(source).toContain('  resolveBudget,');
@@ -188,11 +188,13 @@ describe('wairon execution reaches the resource axis through cli_core_adapter, n
     expect(portalSource).toContain("export { deriveExecutionProfile } from './execution_profile.js';");
     expect(portalSource).toContain("export { resolveBudget } from './budget_policy.js';");
 
-    const adapterSource = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/subsystem.ts'), 'utf8');
-    expect(adapterSource).toContain('export function deriveExecutionProfile(agent: AgentRecord): ExecutionProfile {');
-    expect(adapterSource).toContain('  return coreDeriveExecutionProfile(agent);');
-    expect(adapterSource).toContain('export function resolveBudget(');
-    expect(adapterSource).toContain('  return coreResolveBudget(profile, config, agentId);');
+    // The adapter forwards by IDENTITY now, from a module of its own: the
+    // contract method and the portal's function are one function.
+    const adapterSource = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/adapters/core.ts'), 'utf8');
+    expect(adapterSource).toContain('  deriveExecutionProfile,');
+    expect(adapterSource).toContain('  resolveBudget,');
+    expect(adapterSource).toContain("} from '../../core/index.js';");
+    expect(adapterSource).not.toContain('export function');
   });
 
   it('leaves the two printers holding a budget and nothing of sdd_core', () => {

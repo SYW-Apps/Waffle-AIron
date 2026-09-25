@@ -21,7 +21,10 @@ import {
   resolveSubprojectMounts,
   SUBPROJECT_SEPARATOR,
 } from './projects.js';
-import { hostCore, hostGit, hostProducer, validateProjectAsComplete, computeGateStateId } from './adapters.js';
+import * as hostCore from './adapters/core.js';
+import * as hostGit from './adapters/git.js';
+import * as hostProducer from './adapters/producer.js';
+import { validateAsComplete, computeGateStateId } from './adapters/validator.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import { setSecret as storeSecret, listSecretKeys } from '../utils/secrets.js';
@@ -284,7 +287,7 @@ export function executeApprovedLock(
     // lock (and PR) is based on the latest. No-op for native projects.
     hostGit.sync();
 
-    const result = validateProjectAsComplete();
+    const result = validateAsComplete();
     const errors = result.issues.filter((i) => i.severity === 'error');
     if (errors.length) {
       throw new LockValidationError(errors.map((e) => ({ code: e.code, message: e.message, specId: e.specId })));

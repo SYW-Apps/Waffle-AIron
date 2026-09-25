@@ -6,7 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createMcpServer } from '../../src/mcp/server.js';
-import { createScopedServer } from '../../src/server/adapters.js';
+import { createScopedServer } from '../../src/server/adapters/mcp.js';
 import { resolveVariantGuidance, composeVariantGuidance, type VariantDef } from '../../src/core/variants.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 

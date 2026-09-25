@@ -13,7 +13,7 @@ import {
   addDomain,
   removeDomain,
   detectDomainCandidates,
-} from './subsystem.js';
+} from './adapters/core.js';
 import { Domain, DomainSchema } from '../models/domain.js';
 
 // ---------------------------------------------------------------------------

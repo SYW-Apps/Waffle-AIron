@@ -2,7 +2,9 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
-import { resolveGitToken } from '../utils/secrets.js';
+// The git token is sdd_host's stored secret, reached through its published
+// secret portal — never through the host's secret module itself.
+import * as secretPortal from '../server/secret-portal.js';
 
 // ---------------------------------------------------------------------------
 // Git Client Adapter (sdd_git)
@@ -29,10 +31,17 @@ function gitEmail(): string {
   return process.env['WAIRON_GIT_EMAIL'] || 'wairon-bot@localhost';
 }
 
-/** Inject the connection's token into an https remote so fetch/push authenticate.
- *  Resolves the connection's own credentialRef first, then the shared git-token. */
+/** The git token for one connection: its OWN credential ref first, when it has
+ *  one, so each connection can carry a distinct PAT (another org or account),
+ *  then the shared instance-wide `git-token`. Null when neither is set. */
+function gitToken(credentialRef?: string): string | null {
+  const own = credentialRef ? secretPortal.resolve(credentialRef) : null;
+  return own ?? secretPortal.resolve('git-token');
+}
+
+/** Inject the connection's token into an https remote so fetch/push authenticate. */
 function authRemote(remote: string, credentialRef?: string): string {
-  const token = resolveGitToken(credentialRef);
+  const token = gitToken(credentialRef);
   if (!token || !/^https:\/\//.test(remote)) return remote;
   return remote.replace(/^https:\/\//, `https://x-access-token:${token}@`);
 }

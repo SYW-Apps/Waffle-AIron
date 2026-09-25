@@ -27,7 +27,7 @@ import { runDoctor } from '../commands/doctor.js';
 import { runDiagram } from '../commands/diagram.js';
 import { listRules } from '../commands/rules.js';
 import { listPatterns } from '../commands/patterns.js';
-import { listVariants } from '../commands/variants.js';
+import { listVariants } from '../commands/adapters/variants.js';
 import { addPack, listPacks, removePack, initPack, buildPack, installPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack, syncPacks } from '../commands/packs.js';
 import {
   runServe,
@@ -61,10 +61,8 @@ import {
   runSubsystemMove,
   runSubsystemExternalize,
   runSubsystemInternalize,
-  composeAgentBrief,
-  loadProjectConfig,
-  resolveAgentTopology,
 } from '../commands/subsystem.js';
+import { composeAgentBrief, loadProjectConfig, resolveAgentTopology } from '../commands/adapters/core.js';
 import { summarize } from '../models/execution.js';
 import { showExecution, setExecutionTier } from '../commands/execution.js';
 

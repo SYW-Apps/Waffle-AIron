@@ -8,11 +8,11 @@ import {
   listSnapshots,
   listExternalInterfaces,
   pinFamilySurfaces,
-} from '../core/surfaces.js';
+} from './adapters/surfaces.js';
 import { SURFACE_AUDIENCES, SurfaceOrigin } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
-// CLI Surfaces Client Adapter + `wairon surface` (sdd_cli → sdd_surfaces)
+// `wairon surface` (sdd_cli → sdd_surfaces, through the surfaces client adapter)
 //
 // export           — project the own L0 gateway surface (native | openapi)
 // import           — store a foreign surface (native snapshot or OpenAPI)

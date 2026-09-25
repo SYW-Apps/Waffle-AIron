@@ -6,7 +6,7 @@ import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { resolveProjectRoot, listProjectRecords } from './projects.js';
-import { hostCore } from './adapters.js';
+import * as hostCore from './adapters/core.js';
 import {
   createUnit,
   updateUnit,
@@ -35,7 +35,7 @@ import {
   actionableUnitIds,
 } from './authorization.js';
 import { resolveVisibility, isVisible, audienceDistance, audienceCovers } from './visibility.js';
-import { hostSurfaces } from './adapters.js';
+import * as hostSurfaces from './adapters/surfaces.js';
 import * as yamlLib from 'js-yaml';
 import { safeFilenamePart } from '../utils/filenames.js';
 import { openApiIndexDocument } from './openapiindex.js';
@@ -967,7 +967,7 @@ export function getProjectSurfaceForMcp(
   const record = listProjectRecords(cfg.dataDir).find((p) => p.id === targetProjectId);
   if (!record?.rootPath) throw new Error(`Unknown project "${targetProjectId}".`);
   const result = runWithProjectRoot(record.rootPath, () =>
-    hostSurfaces.exportBoundSurface(maxAudience, 'native'));
+    hostSurfaces.exportSurface(maxAudience, 'native'));
   return { ...result.snapshot, origin: 'exchanged' };
 }
 
@@ -1005,7 +1005,7 @@ export function exportProjectSurface(
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
   if (!root) throw new Error(`Unknown project "${projectId}".`);
 
-  const result = runWithProjectRoot(root, () => hostSurfaces.exportBoundSurface(maxAudience, format));
+  const result = runWithProjectRoot(root, () => hostSurfaces.exportSurface(maxAudience, format));
   if (format === 'openapi') {
     const specs = result.renderedSet ?? [];
     if (portalId) {

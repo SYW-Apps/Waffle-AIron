@@ -2,8 +2,7 @@ import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { listRules as listActiveRules } from '../core/validation.js';
 import type { SddRule } from '../core/rules/index.js';
-import { loadProjectExtensions } from '../core/extensions.js';
-import { loadProjectConfig, projectConfigExists } from '../core/index.js';
+import { loadProjectConfig, projectConfigExists, loadProjectExtensions } from '../core/index.js';
 
 // ---------------------------------------------------------------------------
 // rules command

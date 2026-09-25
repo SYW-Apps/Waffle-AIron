@@ -32,7 +32,9 @@ import {
 import { resolveProjectRoot } from './projects.js';
 import * as shareadmin from './shareadmin.js';
 import { runWithProjectRoot } from '../utils/fs.js';
-import { hostCore, hostSurfaces, validateProjectAsComplete } from './adapters.js';
+import * as hostCore from './adapters/core.js';
+import * as hostSurfaces from './adapters/surfaces.js';
+import { validateAsComplete } from './adapters/validator.js';
 import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
 import { sendJson } from './httpio.js';
@@ -580,7 +582,7 @@ export function getWebGraph(
       // steps 7–11: bind the root for the host-core reads that follow.
       return runWithProjectRoot(root, () => {
         const graph = hostCore.buildProjectGraph(level); // step 8
-        const validation = validateProjectAsComplete(); // step 9
+        const validation = validateAsComplete(); // step 9
         return overlayProjectIssues(graph, validation.issues, projectId, level); // steps 10–11
       });
     }
@@ -656,7 +658,7 @@ export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, project
   }
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
   if (!root) throw new ForbiddenError('project not authorized or unknown');
-  const result = runWithProjectRoot(root, () => hostSurfaces.exportBoundSurface('project', 'openapi')) as {
+  const result = runWithProjectRoot(root, () => hostSurfaces.exportSurface('project', 'openapi')) as {
     rendered?: string;
     renderedSet?: { portalId: string; name: string; document: string }[];
   };

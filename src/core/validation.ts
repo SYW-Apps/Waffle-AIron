@@ -2,6 +2,9 @@ import { AgentRecord } from '../models/agent.js';
 import { ProjectConfig, RulesConfig } from '../models/project.js';
 import { Registry } from '../models/registry.js';
 
+// validator_core_adapter and validator_surfaces_adapter: every name this
+// validator takes from another subsystem lands on the adapter's own module,
+// which re-exports it by identity from the provider's portal.
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -12,9 +15,17 @@ import {
   clearLoaderIssues,
   getLoaderIssues,
   scanAllSpecs,
-  invalidateSpecCache,
   dryRunSerializeSpecs,
-} from './specs.js';
+  loadProjectExtensions,
+  loadProjectConfig,
+  computeStateId,
+  consumedContractInputs,
+  resolveChainingParent,
+  findChainingParent,
+  settledSpecPaths,
+  loadProjectVariants,
+} from './adapters/validator-core.js';
+import { listSnapshots, listMountSnapshots } from './adapters/validator-surfaces.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes } from './rules/repository.js';
 
@@ -23,45 +34,11 @@ import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes 
 // rules/candidate.ts; it is published here, on the validator's entry point, so
 // callers reach it through the portal.
 export { validateComponentCandidate } from './rules/candidate.js';
-import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
+import type { LoadedExtensions } from './extensions.js';
 import type { PackSelection } from '../models/project.js';
-import {
-  loadProjectConfig as loadCoreProjectConfig,
-  computeStateId as coreComputeStateId,
-  consumedContractInputs as coreConsumedContractInputs,
-} from './index.js';
 import { computeGateIdentity, type GateConfig } from './rules/gate-identity.js';
+import { BUILTIN_PROFILES, PROJECT_KINDS } from './rules/types.js';
 import type { StateId } from './statehash.js';
-
-/**
- * validator_core_adapter: forward to the core surface's project configuration
- * read — null when the project has none. This file is itself re-exported BY
- * index.ts's barrel (`export * from './validation.js'`), so this import is a
- * real cycle — safe because the binding is only dereferenced inside a
- * function body at call time, by which point the barrel has finished
- * initializing (the same shape as the skills.ts/instructions.ts cycle).
- */
-export function loadProjectConfig(): ProjectConfig | null {
-  return loadCoreProjectConfig();
-}
-
-/**
- * validator_core_adapter: forward to the core surface's content identity of
- * the spec tree. Module-private, as consumedContractInputs below: the core
- * barrel republishes this file, and both names are already core's own there.
- */
-function computeStateId(): StateId {
-  return coreComputeStateId();
-}
-
-/**
- * validator_core_adapter: forward to the core surface's consumed contract
- * inputs — every stored surface snapshot of this root and its chained mounts,
- * as canonical content keys.
- */
-function consumedContractInputs(): string[] {
-  return coreConsumedContractInputs();
-}
 
 /**
  * The project's BY-NAME pack selections, for the reproducibility rule. Legacy
@@ -76,17 +53,13 @@ function projectPackSelections(): PackSelection[] {
     return [];
   }
 }
-import { loadProjectVariants } from './variants.js';
-import { loadSurfaceSnapshots, loadMountSurfaceSnapshots } from './surfaces.js';
 import {
   buildCodeModel,
   findTestsReferencing as findTestsUnderRoots,
   type TestsToRevisit,
 } from './source-analysis.js';
-import { findChainingParent, resolveChainingParent } from './specs.js';
 import { getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import * as path from 'path';
-import { settledSpecPaths } from './index.js';
 import type {
   SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, MethodImplementation,
 } from '../models/index.js';
@@ -429,7 +402,7 @@ export function validateSddTree(
   const types = loadTypeSpecs();
   // Stored surface snapshots (.wai/surfaces/): declared contracts that
   // unresolved cross-tree/remote references validate against.
-  const surfaceSnapshots = loadSurfaceSnapshots();
+  const surfaceSnapshots = listSnapshots();
   // Source-code model (per-sourcePath declaration/export/import/anchor facts)
   // — what structural conformance checks realization against. The declared
   // source roots widen the walked set with the files no spec names yet, which
@@ -525,7 +498,7 @@ export function validateSddTree(
     // child imported decides only that child's references (see
     // RuleContext.mountSurfaceSnapshots). Loaded after the loader issues were
     // collected: resolving a mount that escapes the root raises its issue again.
-    const mountSurfaceSnapshots = loadMountSurfaceSnapshots(
+    const mountSurfaceSnapshots = listMountSnapshots(
       subsystems.filter((s) => s.projectPath).map((s) => s.id),
     );
 
@@ -671,9 +644,10 @@ function resolveThroughParent(
   const scope = chain.join('::');
 
   const inner = runWithProjectRoot(top, () => {
-    // Read the parent as it is NOW — the child was probably just edited, and a
-    // cached parent tree would judge it against the past.
-    invalidateSpecCache();
+    // The parent is read as it is NOW without asking for it here: every spec
+    // write drops every workspace's cache, and validateSddTree below starts by
+    // clearing the loader (clearLoaderIssues), which drops them again before it
+    // reads a single spec.
     // The parent's doctrine and profile decide what is judged; each rule's
     // severity is the stricter of the parent's and the child's, so the parent's
     // configuration can make the child's verdict stricter, never quieter.
@@ -797,6 +771,25 @@ function settledStatusBearing(loaded: {
  */
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
   return validateSddTree({ ...(options ?? {}), treatAllAsComplete: true });
+}
+
+/**
+ * ispec_validator/ivalidator_portal.builtinProfileIds — the ids of wairon's
+ * built-in architectural profiles: the built-in half of the profiles a
+ * projectType may name. A copy of the rule set's own constant, so a caller can
+ * never mutate it.
+ */
+export function builtinProfileIds(): string[] {
+  return [...BUILTIN_PROFILES];
+}
+
+/**
+ * ispec_validator/ivalidator_portal.builtinProjectKinds — the built-in
+ * composite project kinds: legal projectType values that are not
+ * architectural profiles and carry no doctrine of their own.
+ */
+export function builtinProjectKinds(): string[] {
+  return [...PROJECT_KINDS];
 }
 
 /**

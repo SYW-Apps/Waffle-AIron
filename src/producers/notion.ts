@@ -1,4 +1,6 @@
-import { resolveSecret } from '../utils/secrets.js';
+// The token is sdd_host's stored secret, reached through its published secret
+// portal — never through the host's secret module itself.
+import * as secretPortal from '../server/secret-portal.js';
 import type { DocPage } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -14,7 +16,7 @@ const NOTION_VERSION = '2022-06-28';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 function authHeaders(): Record<string, string> {
-  const token = resolveSecret('notion-token');
+  const token = secretPortal.resolve('notion-token');
   if (!token) {
     throw new Error('No Notion token — set WAIRON_NOTION_TOKEN or run `wairon host secret set notion-token <secret>`.');
   }

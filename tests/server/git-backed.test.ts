@@ -20,7 +20,7 @@ import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import * as admin from '../../src/server/admin.js';
 import { AdminAuthError } from '../../src/server/admin.js';
-import { hostCore } from '../../src/server/adapters.js';
+import * as hostCore from '../../src/server/adapters/core.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
 import { seedChainedMount } from './helpers.js';
 import type { HostConfig } from '../../src/server/types.js';
