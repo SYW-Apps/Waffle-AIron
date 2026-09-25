@@ -197,7 +197,7 @@ export interface RealizationIndex {
   implementationsAt(path: string): ImplementationSpec[];
   /** The files a component's implementations name, in declaration order. */
   filesOf(compId: string): string[];
-  /** The files named across a whole subsystem — what a cross-subsystem hop is proven against, the published barrel being cosmetic at runtime. */
+  /** The files named across a whole subsystem — what proves a cross-subsystem hop EXISTS (any module of the target subsystem); where it lands is portal-imports' question. */
   filesIn(subsystemId: string): string[];
   /** The components a file realizes, in the order their implementations named it. */
   componentsAt(path: string): ComponentSpec[];

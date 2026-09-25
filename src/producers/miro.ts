@@ -1,6 +1,3 @@
-// The token is sdd_host's stored secret, reached through its published secret
-// portal — never through the host's secret module itself.
-import * as secretPortal from '../server/secret-portal.js';
 import type { GraphModel, GraphNode } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -8,6 +5,11 @@ import type { GraphModel, GraphNode } from './types.js';
 // a Miro board as native shapes + connectors via the REST API (raw fetch, no
 // SDK). Idempotent: a "wairon architecture" frame is cleared and rebuilt, other
 // board content is untouched.
+//
+// The token is INJECTED: whoever wires this adapter up resolves it and hands it
+// in (the hosted admin plane from its own secret repository, `wairon produce`
+// from --token, the environment or a prompt). This module never asks anyone for
+// a secret by name, and knows nothing of where secrets are stored.
 // ---------------------------------------------------------------------------
 
 const API = 'https://api.miro.com/v2';
@@ -15,18 +17,14 @@ const FRAME_TITLE = 'wairon architecture';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-function authHeaders(): Record<string, string> {
-  const token = secretPortal.resolve('miro-token');
-  if (!token) {
-    throw new Error('No Miro token — set WAIRON_MIRO_TOKEN or run `wairon host secret set miro-token <secret>`.');
-  }
+function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', accept: 'application/json' };
 }
 
-async function api(method: string, pathname: string, body?: unknown): Promise<any> {
+async function api(token: string, method: string, pathname: string, body?: unknown): Promise<any> {
   const res = await fetch(`${API}${pathname}`, {
     method,
-    headers: authHeaders(),
+    headers: authHeaders(token),
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
@@ -35,12 +33,13 @@ async function api(method: string, pathname: string, body?: unknown): Promise<an
   return res.status === 204 ? {} : res.json();
 }
 
-export async function sync(graph: GraphModel, boardId: string): Promise<void> {
-  await clearFrame(boardId);
+export async function sync(token: string, graph: GraphModel, boardId: string): Promise<void> {
+  if (!token) throw new Error('No Miro token — the caller must hand one in.');
+  await clearFrame(token, boardId);
 
   const positions = layout(graph.nodes);
   const b = bounds(positions);
-  const frame = await api('POST', `/boards/${boardId}/frames`, {
+  const frame = await api(token, 'POST', `/boards/${boardId}/frames`, {
     data: { title: FRAME_TITLE, type: 'freeform', format: 'custom' },
     position: { x: b.cx, y: b.cy },
     geometry: { width: b.width, height: b.height },
@@ -49,7 +48,7 @@ export async function sync(graph: GraphModel, boardId: string): Promise<void> {
   const shapeIds = new Map<string, string>();
   for (const node of graph.nodes) {
     const p = positions.get(node.id)!;
-    const shape = await api('POST', `/boards/${boardId}/shapes`, {
+    const shape = await api(token, 'POST', `/boards/${boardId}/shapes`, {
       data: { content: `<b>${node.label}</b><br>${node.componentType}`, shape: 'round_rectangle' },
       position: { x: p.x, y: p.y },
       geometry: { width: 200, height: 80 },
@@ -62,17 +61,17 @@ export async function sync(graph: GraphModel, boardId: string): Promise<void> {
     const from = shapeIds.get(edge.from);
     const to = shapeIds.get(edge.to);
     if (from && to) {
-      await api('POST', `/boards/${boardId}/connectors`, { startItem: { id: from }, endItem: { id: to } });
+      await api(token, 'POST', `/boards/${boardId}/connectors`, { startItem: { id: from }, endItem: { id: to } });
     }
   }
 }
 
 /** Delete the wairon frame and its children, if present (idempotency). */
-async function clearFrame(boardId: string): Promise<void> {
+async function clearFrame(token: string, boardId: string): Promise<void> {
   const items: any[] = [];
   let cursor: string | undefined;
   do {
-    const data = await api('GET', `/boards/${boardId}/items?limit=50${cursor ? `&cursor=${cursor}` : ''}`);
+    const data = await api(token, 'GET', `/boards/${boardId}/items?limit=50${cursor ? `&cursor=${cursor}` : ''}`);
     items.push(...(data.data ?? []));
     cursor = data.cursor;
   } while (cursor);
@@ -80,9 +79,9 @@ async function clearFrame(boardId: string): Promise<void> {
   const frame = items.find((i) => i.type === 'frame' && i.data?.title === FRAME_TITLE);
   if (!frame) return;
   for (const item of items) {
-    if (item.parent?.id === frame.id) await api('DELETE', `/boards/${boardId}/items/${item.id}`);
+    if (item.parent?.id === frame.id) await api(token, 'DELETE', `/boards/${boardId}/items/${item.id}`);
   }
-  await api('DELETE', `/boards/${boardId}/items/${frame.id}`);
+  await api(token, 'DELETE', `/boards/${boardId}/items/${frame.id}`);
 }
 
 /** Simple grid: subsystems as columns, components stacked in each column. */

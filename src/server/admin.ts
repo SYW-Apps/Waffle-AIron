@@ -27,7 +27,7 @@ import * as hostProducer from './adapters/producer.js';
 import { validateAsComplete, computeGateStateId } from './adapters/validator.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
-import { setSecret as storeSecret, listSecretKeys } from '../utils/secrets.js';
+import { setSecret as storeSecret, listSecretKeys, resolveSecret } from '../utils/secrets.js';
 import type { ProducerConfig } from '../producers/index.js';
 import type {
   ApiKeyRecord,
@@ -390,8 +390,22 @@ export function enableGit(
     storeSecret(credentialRef, pat.trim());
   }
   const rec = createProjectRecord(cfg.dataDir, project); // empty dir + record (no native provisioning)
-  runWithProjectRoot(rec.rootPath, () => hostGit.enable(remote, branch || 'main', credentialRef));
+  // The clone authenticates with the token the host resolves and hands in: the
+  // connection's own PAT when it has one, else the shared git-token.
+  const token = gitToken(credentialRef);
+  runWithProjectRoot(rec.rootPath, () => hostGit.enable(remote, branch || 'main', token, credentialRef));
   return rec;
+}
+
+/**
+ * The git token for one connection, resolved from the host's own secret
+ * repository: the connection's own credential ref first, when it has one, so
+ * each connection can carry a distinct PAT, then the shared `git-token`. Null
+ * when neither is set (a public remote clones without one).
+ */
+function gitToken(credentialRef?: string): string | null {
+  const own = credentialRef ? resolveSecret(credentialRef) : null;
+  return own ?? resolveSecret('git-token');
 }
 
 /** Disable git backing for a project (clears the binding; the checkout stays). */
@@ -530,7 +544,16 @@ export async function produceProducer(cfg: HostConfig, credential: string | null
   const root = boundProject(cfg, project);
   const base = process.env['WAIRON_PUBLIC_URL'] || `http://${cfg.host}:${cfg.port}`;
   const diagramUrl = `${base}/view/diagram?token=${signViewToken(project, 'canvas')}`;
-  await runWithProjectRoot(root, () => hostProducer.produce(target, diagramUrl));
+  // The host resolves the target's token from its own secret repository and
+  // hands it to the one call it authorizes; the producer never asks for it. An
+  // unconfigured target needs no token: the producer refuses it by name.
+  const configured = runWithProjectRoot(root, () => hostProducer.list()).some((p) => p.target === target);
+  const token = configured ? resolveSecret(`${target}-token`) : null;
+  if (configured && !token) {
+    const label = target.charAt(0).toUpperCase() + target.slice(1);
+    throw new Error(`No ${label} token — set WAIRON_${target.toUpperCase()}_TOKEN or run \`wairon host secret set ${target}-token <secret>\`.`);
+  }
+  await runWithProjectRoot(root, () => hostProducer.produce(target, diagramUrl, token ?? ''));
 }
 
 export function removeProducer(cfg: HostConfig, credential: string | null, project: string, target: string): void {

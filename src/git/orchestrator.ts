@@ -18,12 +18,14 @@ const WORKING_BRANCH = 'wairon/work';
  *  repository, so the repo can be shared with the project's own codebase. */
 const DEFAULT_SCOPE = '.wai/';
 
-/** Clone the remote onto the isolated working branch and persist the config. An
- *  optional credentialRef names this connection's own PAT (else the shared
- *  git-token authenticates the clone). */
-export function enable(remote: string, branch: string, credentialRef?: string): void {
+/** Clone the remote onto the isolated working branch and persist the config.
+ *  The clone authenticates with the token the CALLER resolved and handed in
+ *  (null for a public remote); this subsystem never asks anyone for a secret by
+ *  name. An optional credentialRef records which of the caller's secrets the
+ *  connection uses, for its status. */
+export function enable(remote: string, branch: string, token: string | null, credentialRef?: string): void {
   const defaultBranch = branch || 'main';
-  adapter.clone(remote, defaultBranch, credentialRef);
+  adapter.clone(token, remote, defaultBranch);
   adapter.ensureWorkingBranch(WORKING_BRANCH);
   adapter.excludeLocalFiles();
   const config: GitConfig = { enabled: true, remote, defaultBranch, workingBranch: WORKING_BRANCH };
