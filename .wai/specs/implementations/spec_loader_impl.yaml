@@ -161,48 +161,6 @@ methods:
         type: call
         targetComponent: spec_index
         targetMethod: loadTypeSpec
-  - name: saveTypeSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the registry write face
-        type: call
-        targetComponent: spec_registry
-        targetMethod: saveTypeSpec
-  - name: deleteSubsystemSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the registry write face
-        type: call
-        targetComponent: spec_registry
-        targetMethod: deleteSubsystemSpec
-  - name: deleteComponentSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the registry write face
-        type: call
-        targetComponent: spec_registry
-        targetMethod: deleteComponentSpec
-  - name: deleteInterfaceSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the registry write face
-        type: call
-        targetComponent: spec_registry
-        targetMethod: deleteInterfaceSpec
-  - name: deleteImplementationSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the registry write face
-        type: call
-        targetComponent: spec_registry
-        targetMethod: deleteImplementationSpec
-  - name: deleteTypeSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the registry write face
-        type: call
-        targetComponent: spec_registry
-        targetMethod: deleteTypeSpec
   - name: loadSpec
     narrative:
       - stepNumber: 1
@@ -228,4 +186,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-24T22:23:10.633Z'
+updatedAt: '2026-09-25T17:36:32.865Z'

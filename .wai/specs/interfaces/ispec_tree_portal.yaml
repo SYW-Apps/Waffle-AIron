@@ -1,0 +1,162 @@
+id: ispec_tree_portal
+name: Core Portal Interface
+description: Inbound Portal contract for the core subsystem, exposing services to client adapters.
+component: spec_tree_portal
+methods:
+  - name: loadSystemSpec
+    description: Loads the system spec
+    signature: 'loadSystemSpec(): SystemSpec | null'
+    returns: SystemSpec | null
+  - name: loadSubsystemSpecs
+    description: Loads subsystem specs
+    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
+    returns: SubsystemSpec[]
+  - name: loadComponentSpecs
+    description: Loads component specs
+    signature: 'loadComponentSpecs(): ComponentSpec[]'
+    returns: ComponentSpec[]
+  - name: loadInterfaceSpecs
+    description: Loads interface specs
+    signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
+    returns: InterfaceSpec[]
+  - name: loadImplementationSpecs
+    description: Loads implementation specs
+    signature: 'loadImplementationSpecs(): ImplementationSpec[]'
+    returns: ImplementationSpec[]
+  - name: loadSubsystemSpec
+    description: Loads a single subsystem spec by id
+    signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
+    returns: SubsystemSpec | null
+  - name: loadComponentSpec
+    description: Loads a single component spec by id
+    signature: 'loadComponentSpec(id: string): ComponentSpec | null'
+    returns: ComponentSpec | null
+  - name: loadInterfaceSpec
+    description: Loads a single interface spec by id
+    signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
+    returns: InterfaceSpec | null
+  - name: loadImplementationSpec
+    description: Loads a single implementation spec by id
+    signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
+    returns: ImplementationSpec | null
+  - name: renderDiagram
+    description: >-
+      Render the current project's spec tree into the requested diagram format and return the
+      artifact string.
+    signature: 'renderDiagram(format: string): string'
+    returns: string
+  - name: loadTypeSpecs
+    description: Loads type specs
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: TypeSpec[]
+  - name: dryRunSerializeSpecs
+    description: >-
+      Re-serialize every loaded spec in memory through the exact save-path pipeline (relativization
+      + writer schema, no I/O) and return the refusal issues (ROUNDTRIP_SERIALIZATION). Accepts an
+      optional scope predicate so scoped validation skips out-of-scope specs before serializing.
+    signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
+    returns: ValidationIssue[]
+  - name: buildProjectGraph
+    description: >-
+      Project the current project's spec tree into a level-filtered WebGraphModel and return it (the
+      live JSON graph the hosting server serves to the web UI).
+    signature: 'buildProjectGraph(level: number): WebGraphModel'
+    returns: WebGraphModel
+    params:
+      - name: level
+        type: number
+  - name: resolveChainingParent
+    description: >-
+      Report the chaining-mount context of the bound root (parent root + mounting subsystem id), or
+      null — including when the bound request may not read above its root. Pure 1:1 forward.
+    signature: 'resolveChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+  - name: exportSpecTree
+    description: >-
+      Packs the bound project's whole spec tree (its own .wai plus every chained subproject) into a
+      .waitree archive with provenance
+    signature: 'exportSpecTree(includeDerived?: boolean): TreeExportResult'
+    returns: TreeExportResult
+    params:
+      - name: includeDerived
+        type: boolean
+        optional: true
+  - name: resolveSubprojectForNamespace
+    description: Resolve a chained mount's namespace to its project root, or null. Pure 1:1 forward.
+    signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
+    returns: string | null
+    params:
+      - name: namespace
+        type: string
+  - name: listDirectChainedSubprojects
+    description: 'Published read: the direct chained subprojects of a project root, one level deep.'
+    signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
+    returns: ChainedSubprojectDir[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose own spec tree declares the mounts
+    guarantees:
+      - idempotent
+  - name: consumedContractInputs
+    description: >-
+      Forward to core_orchestrator.consumedContractInputs: the consumed contract inputs a verdict
+      can consult
+    signature: 'consumedContractInputs(): string[]'
+    returns: string[]
+    params: []
+  - name: loadTypeSpec
+    description: Read one type specification by id.
+    signature: 'loadTypeSpec(id: string): TypeSpec | null'
+    returns: TypeSpec | null
+    params:
+      - name: id
+        type: string
+        description: The type's id
+  - name: getStatusReport
+    description: >-
+      Published read: how complete the spec tree is, marked up however the caller asked, and whether
+      it could be reported on at all. Forwarded to the project status.
+    signature: 'getStatusReport(options: StatusOptions, decor?: StatusDecor): StatusReport'
+    returns: StatusReport
+    params:
+      - name: options
+        type: StatusOptions
+        description: How much of the tree to cover
+      - name: decor
+        type: StatusDecor
+        description: How to mark up each kind of thing, or nothing for plain text
+    guarantees:
+      - idempotent
+  - name: specPathsInScope
+    description: >-
+      Published read: every spec file path inside a scope, for an approval taken over part of a
+      tree. Forwarded to the spec loader.
+    signature: 'specPathsInScope(scopeSubsystem?: string): string[]'
+    returns: string[]
+    params:
+      - name: scopeSubsystem
+        type: string
+        description: The subsystem to scope to, or the whole tree when omitted
+    guarantees:
+      - idempotent
+  - name: loadSpec
+    description: >-
+      Load one spec of the named kind by id, or null when none is stored — for a caller that holds
+      the kind as data. Routed through the core orchestrator.
+    signature: >-
+      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
+      | ImplementationSpec | TypeSpec | null
+    returns: >-
+      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
+      null
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed); informational for the L0
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-09-25T17:33:54.064Z'

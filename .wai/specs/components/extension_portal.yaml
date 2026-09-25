@@ -1,0 +1,16 @@
+id: extension_portal
+name: Extension Portal
+description: >-
+  Published extension packs of sdd_core: the extensions a project loads, the pack selections a new
+  project starts with, and the machine's installed-pack store — where it lives, what it holds,
+  resolving one pack, installing from a directory and uninstalling. In-process today: realized by
+  src/core/index.ts alongside core's other portals.
+subsystem: sdd_core
+componentType: Portal
+owns: []
+dependsOn:
+  - extension_orchestrator
+portalType: Custom
+status: complete
+createdAt: '2026-09-25T17:32:53.962Z'
+updatedAt: '2026-09-25T17:33:36.810Z'

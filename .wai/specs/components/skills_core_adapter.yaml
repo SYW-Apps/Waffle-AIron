@@ -8,7 +8,8 @@ subsystem: sdd_skills
 componentType: Adapter
 owns: []
 dependsOn:
-  - core_portal
+  - project_config_portal
+  - extension_portal
 status: complete
 createdAt: '2026-07-14T20:13:58.361Z'
-updatedAt: '2026-09-15T20:46:35.435Z'
+updatedAt: '2026-09-25T17:35:37.082Z'

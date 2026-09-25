@@ -80,7 +80,7 @@ methods:
           its enabled targets; a configuration that cannot be read contributes nothing, so the
           Claude default applies.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
       - stepNumber: 3
         description: >-
@@ -169,4 +169,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-09-13T11:32:58.906Z'
+updatedAt: '2026-09-25T17:33:34.901Z'

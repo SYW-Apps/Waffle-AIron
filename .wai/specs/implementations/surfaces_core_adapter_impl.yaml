@@ -9,49 +9,49 @@ methods:
       - stepNumber: 1
         description: Call loadSystemSpec on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSystemSpec
   - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
         description: Call loadSubsystemSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSubsystemSpecs
   - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
         description: Call loadComponentSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadComponentSpecs
   - name: loadInterfaceSpecs
     narrative:
       - stepNumber: 1
         description: Call loadInterfaceSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadInterfaceSpecs
   - name: loadTypeSpecs
     narrative:
       - stepNumber: 1
         description: Call loadTypeSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadTypeSpecs
   - name: resolveChainingParent
     narrative:
       - stepNumber: 1
         description: Forward chaining detection to the core subsystem's published portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: resolveChainingParent
   - name: resolveSubprojectForNamespace
     narrative:
       - stepNumber: 1
         description: Forward mount resolution to the core subsystem's published portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: resolveSubprojectForNamespace
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'

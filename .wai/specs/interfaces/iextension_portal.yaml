@@ -1,0 +1,86 @@
+id: iextension_portal
+name: Extension Portal Interface
+description: Published extension-pack loading, default selections and the installed-pack store.
+component: extension_portal
+methods:
+  - name: loadProjectExtensions
+    description: >-
+      Load and merge the extension packs governing the current project (global then project scope)
+      into a single LoadedExtensions — the published surface other subsystems (validator, skills,
+      CLI) consume for pack rules, profiles, languages, skills, and pattern definitions.
+    signature: 'loadProjectExtensions(): LoadedExtensions'
+    returns: LoadedExtensions
+    params: []
+  - name: defaultPackSelections
+    description: >-
+      Published read: the store packs that apply by default, as selections for a new project's
+      configuration.
+    signature: 'defaultPackSelections(): PackSelection[]'
+    returns: PackSelection[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: packStoreDir
+    description: >-
+      Published read: where installed packs live on this machine. Forwarded to the extension
+      orchestrator.
+    signature: 'packStoreDir(): string'
+    returns: string
+    params: []
+    guarantees:
+      - idempotent
+  - name: listInstalledPacks
+    description: >-
+      Published read: every pack installed on this machine, whatever any project declares. Forwarded
+      to the extension orchestrator.
+    signature: 'listInstalledPacks(): InstalledPack[]'
+    returns: InstalledPack[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveInstalledPack
+    description: >-
+      Published read: one installed pack by name and optional version. Forwarded to the extension
+      orchestrator.
+    signature: 'resolveInstalledPack(name: string, version?: string): InstalledPack | null'
+    returns: InstalledPack | null
+    params:
+      - name: name
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: A specific version, or the newest when omitted
+    guarantees:
+      - idempotent
+  - name: installPackFromDirectory
+    description: >-
+      Published write: install a pack from a directory on disk. Forwarded to the extension
+      orchestrator.
+    signature: 'installPackFromDirectory(sourceDir: string, origin?: string): InstalledPack'
+    returns: InstalledPack
+    params:
+      - name: sourceDir
+        type: string
+        description: The directory holding the pack
+      - name: origin
+        type: string
+        description: Where it came from, for the record
+    effect: write
+  - name: uninstallPack
+    description: >-
+      Published write: remove an installed pack, answering whether there was one. Forwarded to the
+      extension orchestrator.
+    signature: 'uninstallPack(name: string, version?: string): boolean'
+    returns: boolean
+    params:
+      - name: name
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: A specific version, or every version when omitted
+    effect: write
+status: complete
+createdAt: '2026-09-25T17:33:10.144Z'
+updatedAt: '2026-09-25T17:33:36.520Z'

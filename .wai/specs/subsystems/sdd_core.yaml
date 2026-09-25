@@ -4,9 +4,46 @@ description: Handles physical spec tree reading, parsing, writing, and dynamic a
 parentSystem: Waffle-AIron
 publicInterfaces:
   - type: Custom
-    details: Provides spec loading and topology resolution services.
-    component: core_portal
+    details: >-
+      Spec-tree reads: every spec, the project graph and diagram, the completeness report, chaining
+      resolution, and tree export.
+    component: spec_tree_portal
+    interface: ispec_tree_portal
+  - type: Custom
+    details: >-
+      Raw, ungated spec writes — save, delete, delta update, method move, chained-subsystem write —
+      for the gated authoring seam.
+    component: spec_store_portal
+    interface: ispec_store_portal
+  - type: Custom
+    details: >-
+      Mechanical spec writes: renames, subproject relocation, doctor repairs, tree import and
+      provisioning.
+    component: spec_maintenance_portal
+    interface: ispec_maintenance_portal
+  - type: Custom
+    details: >-
+      Approval: the gate identity, the lock record and lock state, the approval verdict and diff,
+      and chained-child pins.
+    component: approval_portal
+    interface: iapproval_portal
+  - type: Custom
+    details: 'Project configuration: read, create, and change what the project selects.'
+    component: project_config_portal
+    interface: iproject_config_portal
+  - type: Custom
+    details: >-
+      Extension packs: the extensions a project loads, default selections, and the installed-pack
+      store.
+    component: extension_portal
+    interface: iextension_portal
+  - type: Custom
+    details: >-
+      Agent context: topology, briefs, generated agent files, domains, execution profile and budget,
+      and the context documents written for AI tools.
+    component: agent_context_portal
+    interface: iagent_context_portal
 trustedLinks: []
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-18T21:41:01.383Z'
+updatedAt: '2026-09-25T17:35:48.845Z'

@@ -39,26 +39,6 @@ methods:
     description: Delegate loading a single implementation spec to spec loader
     signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
     returns: ImplementationSpec | null
-  - name: saveSystemSpec
-    description: Delegate persisting the L0 system spec to spec loader
-    signature: 'saveSystemSpec(spec: SystemSpec): void'
-    returns: void
-  - name: saveSubsystemSpec
-    description: Delegate persisting an L1 subsystem spec to spec loader
-    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
-    returns: void
-  - name: saveComponentSpec
-    description: Delegate persisting an L2 component spec to spec loader
-    signature: 'saveComponentSpec(spec: ComponentSpec): void'
-    returns: void
-  - name: saveInterfaceSpec
-    description: Delegate persisting an L3 interface spec to spec loader
-    signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
-    returns: void
-  - name: saveImplementationSpec
-    description: Delegate persisting an L4 implementation spec to spec loader
-    signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
-    returns: void
   - name: provisionProject
     description: >-
       Bootstrap a fresh isolated project at the bound root: default project.yaml plus an L0 system
@@ -468,16 +448,6 @@ methods:
       - name: id
         type: string
         description: The type's id
-  - name: saveTypeSpec
-    description: >-
-      Persist a type specification through the spec repository, answering with the placement notices
-      the write owes.
-    signature: 'saveTypeSpec(spec: TypeSpec): string[]'
-    returns: string[]
-    params:
-      - name: spec
-        type: TypeSpec
-        description: The type to persist
   - name: moveMethods
     description: >-
       Move contract methods from one component to another, and every reference with them. Each
@@ -519,49 +489,6 @@ methods:
           Run the whole move, hook included, and answer with the report it would have produced
           without writing
         optional: true
-  - name: deleteSubsystemSpec
-    description: >-
-      Delete a subsystem's spec document through the loader. False when it was not there. Deleting a
-      spec other specs still reference leaves the tree invalid by design — the validator is the
-      authority on that, and this write does not refuse on its behalf.
-    signature: 'deleteSubsystemSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The subsystem id
-  - name: deleteComponentSpec
-    description: Delete a component's spec document through the loader. False when it was not there.
-    signature: 'deleteComponentSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The component id
-  - name: deleteInterfaceSpec
-    description: Delete an interface's spec document through the loader. False when it was not there.
-    signature: 'deleteInterfaceSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The interface id
-  - name: deleteImplementationSpec
-    description: Delete an implementation's spec document through the loader. False when it was not there.
-    signature: 'deleteImplementationSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The implementation id
-  - name: deleteTypeSpec
-    description: Delete a type's spec document through the loader. False when it was not there.
-    signature: 'deleteTypeSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The type id
   - name: specPathsInScope
     description: >-
       Every spec file path inside a scope, or the whole tree when no subsystem is named. Used when
@@ -618,4 +545,4 @@ methods:
         description: The spec id
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-24T22:25:58.865Z'
+updatedAt: '2026-09-25T17:36:27.170Z'

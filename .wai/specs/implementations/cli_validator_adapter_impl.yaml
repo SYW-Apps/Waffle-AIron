@@ -39,7 +39,7 @@ methods:
           Read the project configuration through the core portal: its rules and projectType govern
           the tree check, and the configuration itself is checked below.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
       - stepNumber: 2
         description: Resolve the agent registry, scoped to a subsystem when one was named.
@@ -75,4 +75,4 @@ methods:
         targetMethod: computeGateStateId
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-19T19:07:01.973Z'
+updatedAt: '2026-09-25T17:33:35.399Z'

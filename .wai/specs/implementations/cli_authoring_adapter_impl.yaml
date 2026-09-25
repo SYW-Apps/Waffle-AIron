@@ -1,0 +1,18 @@
+id: cli_authoring_adapter_impl
+name: CLI Authoring Adapter Implementation
+description: >-
+  Pure 1:1 forwarding into sdd_authoring's front door, in src/commands/subsystem.ts beside the CLI's
+  core forwarders.
+contract: icli_authoring_adapter
+sourcePath: src/commands/subsystem.ts
+methods:
+  - name: writeSpec
+    narrative:
+      - stepNumber: 1
+        description: Call writeSpec on the authoring portal
+        type: call
+        targetComponent: authoring_portal
+        targetMethod: writeSpec
+status: complete
+createdAt: '2026-09-25T17:35:11.409Z'
+updatedAt: '2026-09-25T17:35:11.425Z'

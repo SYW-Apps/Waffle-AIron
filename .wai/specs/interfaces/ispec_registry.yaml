@@ -58,75 +58,6 @@ methods:
     guarantees:
       - idempotent
     effect: write
-  - name: saveTypeSpec
-    description: >-
-      Validates and persists a type specification, returning the placement notices it owes. A
-      re-save updates fields in place and NEVER relocates an existing file, and under the flat
-      layout a subsystem is recorded as a field while the document stays in the shared types
-      directory — both are by design, and silent they would read as a parameter that was ignored, so
-      each is reported.
-    signature: 'saveTypeSpec(spec: TypeSpec): string[]'
-    returns: string[]
-    params:
-      - name: spec
-        type: TypeSpec
-        description: The type to persist
-  - name: deleteSubsystemSpec
-    description: >-
-      Resolve the subsystem's document path and remove it through the file store, then invalidate
-      the index cache so the next read does not serve a document that no longer exists. False when
-      there was nothing to remove.
-    signature: 'deleteSubsystemSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The subsystem id
-    effect: write
-  - name: deleteComponentSpec
-    description: >-
-      Resolve the component's document path and remove it through the file store, then invalidate
-      the index cache. False when there was nothing to remove.
-    signature: 'deleteComponentSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The component id
-    effect: write
-  - name: deleteInterfaceSpec
-    description: >-
-      Resolve the interface's document path and remove it through the file store, then invalidate
-      the index cache. False when there was nothing to remove.
-    signature: 'deleteInterfaceSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The interface id
-    effect: write
-  - name: deleteImplementationSpec
-    description: >-
-      Resolve the implementation's document path and remove it through the file store, then
-      invalidate the index cache. False when there was nothing to remove.
-    signature: 'deleteImplementationSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The implementation id
-    effect: write
-  - name: deleteTypeSpec
-    description: >-
-      Resolve the type's document path and remove it through the file store, then invalidate the
-      index cache. False when there was nothing to remove.
-    signature: 'deleteTypeSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The type id
-    effect: write
   - name: save
     description: >-
       Persist one spec through the typed writer of its kind, answering with that writer's placement
@@ -160,4 +91,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-09-24T22:26:04.552Z'
+updatedAt: '2026-09-25T17:36:34.511Z'

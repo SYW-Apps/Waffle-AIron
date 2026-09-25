@@ -210,6 +210,23 @@ methods:
         summary: >-
           lint.allow entry matched no finding this run — the code never fired, or it fired at sites
           this allow does not name
+  - name: publicSurfaceConsumers
+    description: >-
+      Rule public-surface-consumers. Every subsystem a published surface names as its consumer must
+      exist in the tree. A consumers list restricts who may depend on the surface, so an id that
+      names nothing locks the surface against a caller nobody can be — and a typo there silently
+      locks out the caller that was meant, which the boundary rule would then report against the
+      wrong party.
+    signature: 'publicSurfaceConsumers(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PUBLIC_INTERFACE_UNKNOWN_CONSUMER
+        severity: error
+        summary: A published surface names as its consumer a subsystem the tree does not have
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-19T20:32:40.806Z'
+updatedAt: '2026-09-25T17:39:00.991Z'

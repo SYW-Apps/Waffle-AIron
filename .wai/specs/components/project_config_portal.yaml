@@ -1,0 +1,18 @@
+id: project_config_portal
+name: Project Config Portal
+description: >-
+  Published project configuration of sdd_core: read the bound project's configuration and whether it
+  has one, create it, and change what it selects — pack selections and pack references, the project
+  type, the profile selection, the execution tier, which selections are bundled, and whether it
+  declares machine-wide packs. In-process today: realized by src/core/index.ts alongside core's
+  other portals.
+subsystem: sdd_core
+componentType: Portal
+owns: []
+dependsOn:
+  - core_orchestrator
+  - project_config_repository
+portalType: Custom
+status: complete
+createdAt: '2026-09-25T17:32:51.511Z'
+updatedAt: '2026-09-25T17:33:34.402Z'

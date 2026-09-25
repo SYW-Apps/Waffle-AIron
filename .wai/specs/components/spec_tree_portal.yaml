@@ -1,0 +1,20 @@
+id: spec_tree_portal
+name: Spec Tree Portal
+description: >-
+  Published spec-tree reads of sdd_core: every spec of every kind, one at a time or all together;
+  the project graph and the rendered diagram; the completeness report; chaining resolution (the
+  chaining parent, a namespace's subproject, the direct chained children); the contract inputs the
+  tree consumes; the paths a scope covers; the round-trip serialization dry run; and a tree archive
+  export. Anyone may read here — the writes live on the spec store and maintenance portals.
+  In-process today: realized by src/core/index.ts alongside core's other portals.
+subsystem: sdd_core
+componentType: Portal
+owns: []
+dependsOn:
+  - core_orchestrator
+  - tree_transfer_orchestrator
+  - project_status
+portalType: Custom
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-09-25T17:35:40.518Z'

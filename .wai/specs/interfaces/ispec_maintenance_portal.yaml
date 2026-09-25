@@ -1,0 +1,112 @@
+id: ispec_maintenance_portal
+name: Spec Maintenance Portal Interface
+description: >-
+  The mechanical spec writes of sdd_core: renames, subproject relocation, doctor repairs, tree
+  import and provisioning.
+component: spec_maintenance_portal
+methods:
+  - name: provisionProject
+    description: >-
+      Bootstrap a fresh isolated project at the bound root: default project.yaml plus an L0 system
+      spec named `name`.
+    signature: 'provisionProject(name: string): void'
+    returns: void
+  - name: moveSubsystemProject
+    description: >-
+      Write path for relocating an external subsystem (wairon subsystem move /
+      sdd_move_subsystem_project): move the subproject directory and update its projectPath link.
+    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+    returns: void
+  - name: externalizeSubsystem
+    description: >-
+      Write path for externalizing an internal subsystem into a standalone subproject (wairon
+      subsystem externalize / sdd_externalize_subsystem): move its spec subtree out, mount it via
+      projectPath, and rewrite cross-subsystem references.
+    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
+    returns: void
+  - name: internalizeSubsystem
+    description: >-
+      Write path for internalizing an external subsystem back into the parent tree (wairon subsystem
+      internalize / sdd_internalize_subsystem): move its spec subtree back, drop projectPath, delete
+      the child project, and rewrite references.
+    signature: 'internalizeSubsystem(subsystemId: string): void'
+    returns: void
+  - name: importSpecTree
+    description: >-
+      Imports a .waitree archive into a project root under an explicit import policy, backing up any
+      tree it replaces
+    signature: 'importSpecTree(archive: bytes, options: TreeImportOptions): TreeImportResult'
+    returns: TreeImportResult
+    params:
+      - name: archive
+        type: bytes
+      - name: options
+        type: tree_import_options
+  - name: ensureProjectInitialized
+    description: >-
+      Write path for completing a project's bootstrap non-destructively (wairon init, the generate
+      cascade): the default configuration and the L0 system spec, each only when absent.
+    signature: 'ensureProjectInitialized(fallbackName: string): ProjectBootstrap'
+    returns: ProjectBootstrap
+    params:
+      - name: fallbackName
+        type: string
+        description: The project name to use when no system spec names one yet
+    guarantees:
+      - idempotent
+  - name: renameComponent
+    description: 'Forward to core_orchestrator.renameComponent: rename a component and every reference to it'
+    signature: 'renameComponent(componentId: string, newId: string): ComponentRename'
+    returns: ComponentRename
+    params:
+      - name: componentId
+        type: string
+        description: The component to rename
+      - name: newId
+        type: string
+        description: Its new id
+  - name: retireSpecialists
+    description: >-
+      Forward to core_orchestrator.retireSpecialists: plan, and with apply write, the migration off
+      the retired Specialist stereotype
+    signature: 'retireSpecialists(apply: boolean): SpecialistRetirement'
+    returns: SpecialistRetirement
+    params:
+      - name: apply
+        type: boolean
+        description: Write the plan; false plans without writing
+  - name: renameMethod
+    description: 'Forward to core_orchestrator.renameMethod: rename a contract method and every reference to it'
+    signature: >-
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean):
+      MethodRename
+    returns: MethodRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method is renamed
+      - name: methodName
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: Its new name, a camel-case identifier
+      - name: pinSymbol
+        type: boolean
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name; true when
+          omitted
+        optional: true
+  - name: repairForeignStepFields
+    description: >-
+      Forward to core_orchestrator.repairForeignStepFields: plan, and with apply write, the removal
+      of every narrative-step field its own step type cannot have. Without apply nothing is written.
+    signature: 'repairForeignStepFields(apply: boolean): ForeignFieldRepair[]'
+    returns: ForeignFieldRepair[]
+    params:
+      - name: apply
+        type: boolean
+        description: Write the repair; false plans without writing
+status: complete
+createdAt: '2026-09-25T17:33:03.747Z'
+updatedAt: '2026-09-25T17:33:24.165Z'

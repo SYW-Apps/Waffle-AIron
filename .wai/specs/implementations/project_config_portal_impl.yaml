@@ -1,0 +1,96 @@
+id: project_config_portal_impl
+name: Project Config Portal Implementation
+description: >-
+  Realized by src/core/index.ts, the module that republishes core's portals, alongside core's other
+  portals (N:1). Each method is an identity re-export or a one-call forward to the project
+  configuration Repository or the workflow that edits it.
+contract: iproject_config_portal
+sourcePath: src/core/index.ts
+methods:
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Read straight through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+  - name: projectConfigExists
+    narrative:
+      - stepNumber: 1
+        description: Read straight through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: exists
+  - name: declaresGlobalPacks
+    narrative:
+      - stepNumber: 1
+        description: Read straight through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declaresGlobalPacks
+  - name: createProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: createProjectConfig
+  - name: upsertPackSelection
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: upsertPackSelection
+  - name: removePackSelection
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: removePackSelection
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: setProjectType
+  - name: recordProfileSelection
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: recordProfileSelection
+  - name: setExecutionTier
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: setExecutionTier
+  - name: registerPackRef
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: registerPackRef
+  - name: deregisterPackRef
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: deregisterPackRef
+  - name: markSelectionsBundled
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: markSelectionsBundled
+status: complete
+createdAt: '2026-09-25T17:33:08.848Z'
+updatedAt: '2026-09-25T17:33:34.226Z'

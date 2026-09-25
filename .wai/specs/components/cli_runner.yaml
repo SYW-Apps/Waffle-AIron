@@ -6,6 +6,7 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - cli_core_adapter
+  - cli_authoring_adapter
   - cli_validator_adapter
   - cli_lock_adapter
   - cli_host_adapter
@@ -31,10 +32,10 @@ lint:
         facade, would add a hop without separating any real responsibility.
     - code: EXCESSIVE_DEPENDENCIES
       reason: >-
-        Same deliberate hub shape as the GOD_COMPONENT allow: fourteen dependencies fanned out from
-        the one CLI entry orchestrator, of which twelve are thin command adapters and two are
-        sdd_cli's own workflow and held state. The count tracks how many command families the
-        terminal exposes, not how much this component knows.
+        Same deliberate hub shape as the GOD_COMPONENT allow: fifteen dependencies fanned out from
+        the one CLI entry orchestrator, of which thirteen are thin command adapters and two are
+        sdd_cli's own workflow and held state. The count tracks how many command families and
+        subsystem hops the terminal exposes, not how much this component knows.
     - code: INCOHESIVE_METHODS
       reason: >-
         NOT the pure forwarder the rule now exempts, and this allow does not claim to be one: most
@@ -45,4 +46,4 @@ lint:
         mint one dispatcher per command family and separate no responsibility.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-22T21:19:43.271Z'
+updatedAt: '2026-09-25T17:35:20.990Z'

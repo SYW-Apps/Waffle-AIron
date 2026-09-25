@@ -142,72 +142,6 @@ methods:
       - name: id
         type: string
         description: The type's id
-  - name: saveTypeSpec
-    description: >-
-      Saves a type specification, answering with the placement notices the write owes — a re-save
-      never relocates the existing file, and under the flat layout subsystem ownership is the field,
-      not the folder.
-    signature: 'saveTypeSpec(spec: TypeSpec): string[]'
-    returns: string[]
-    params:
-      - name: spec
-        type: TypeSpec
-        description: The type to persist
-  - name: deleteSubsystemSpec
-    description: >-
-      Delete a subsystem's spec document through the file store, and invalidate the index cache.
-      Answers false when no such document existed.
-    signature: 'deleteSubsystemSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The subsystem id (namespaced if needed)
-    effect: write
-  - name: deleteComponentSpec
-    description: >-
-      Delete a component's spec document through the file store, and invalidate the index cache.
-      Answers false when no such document existed.
-    signature: 'deleteComponentSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The component id (namespaced if needed)
-    effect: write
-  - name: deleteInterfaceSpec
-    description: >-
-      Delete an interface's spec document through the file store, and invalidate the index cache.
-      Answers false when no such document existed.
-    signature: 'deleteInterfaceSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The interface id (namespaced if needed)
-    effect: write
-  - name: deleteImplementationSpec
-    description: >-
-      Delete an implementation's spec document through the file store, and invalidate the index
-      cache. Answers false when no such document existed.
-    signature: 'deleteImplementationSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The implementation id (namespaced if needed)
-    effect: write
-  - name: deleteTypeSpec
-    description: >-
-      Delete a type's spec document through the file store, and invalidate the index cache. Answers
-      false when no such document existed.
-    signature: 'deleteTypeSpec(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The type id (namespaced if needed)
-    effect: write
   - name: loadSpec
     description: >-
       Load one spec of the named kind by id, or null when none is stored. The one place the store
@@ -262,4 +196,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-24T22:26:01.412Z'
+updatedAt: '2026-09-25T17:36:31.210Z'

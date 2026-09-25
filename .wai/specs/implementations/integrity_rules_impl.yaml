@@ -664,6 +664,36 @@ methods:
         type: local
     symbol: check
     exportedVia: publicSurfaceBoundContractRule
+  - name: publicSurfaceConsumers
+    sourcePath: src/core/rules/integrity/public-surface-consumers.ts
+    narrative:
+      - stepNumber: 1
+        label: entry
+        description: >-
+          For each loaded subsystem, each of its publicInterfaces entries, and each subsystem id
+          that entry's consumers names
+        type: loop
+        loopKind: forEach
+        over: every consumers id of every publicInterfaces entry of every subsystem in ctx.subsystems
+        endStep: 3
+      - stepNumber: 2
+        description: Does the id name a subsystem of this tree?
+        type: branch
+        condition: no subsystem in ctx.subsystems has that id
+        onFalseStep: 1
+      - stepNumber: 3
+        label: unknown
+        description: >-
+          Report PUBLIC_INTERFACE_UNKNOWN_CONSUMER (error, on the declaring subsystem's id; draft
+          context when that subsystem is draft) naming the entry's component and the consumer id
+          that resolves to no subsystem
+        type: local
+      - stepNumber: 4
+        description: 'Done: every consumers id resolved or reported'
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: publicSurfaceConsumersRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-23T17:53:08.980Z'
+updatedAt: '2026-09-25T17:39:04.665Z'

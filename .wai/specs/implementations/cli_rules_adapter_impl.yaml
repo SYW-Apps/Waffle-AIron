@@ -13,7 +13,7 @@ methods:
           Is this inside an initialized wairon project? Outside one, no configuration is read and
           only the default severities show.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: projectConfigExists
       - stepNumber: 2
         description: >-
@@ -21,7 +21,7 @@ methods:
           overrides (rules.sddRuleSeverity); a configuration that cannot be read shows the defaults
           only.
         type: call
-        targetComponent: core_portal
+        targetComponent: project_config_portal
         targetMethod: loadProjectConfig
       - stepNumber: 3
         description: Fetch the active conformance rule set via the validator portal.
@@ -34,4 +34,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T20:10:06.420Z'
-updatedAt: '2026-09-13T12:28:30.656Z'
+updatedAt: '2026-09-25T17:33:35.242Z'

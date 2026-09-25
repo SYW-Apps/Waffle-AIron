@@ -1,0 +1,49 @@
+id: spec_store_portal_impl
+name: Spec Store Portal Implementation
+description: >-
+  Realized by src/core/index.ts, the module that republishes core's portals, alongside core's other
+  portals (N:1). Each method is an identity re-export or a one-call forward to the component that
+  holds the write.
+contract: ispec_store_portal
+sourcePath: src/core/index.ts
+methods:
+  - name: createChainedSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: createChainedSubsystem
+  - name: updateSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the delta write, and the caller's write hook when one is given, to the core
+          orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: updateSpec
+  - name: moveMethods
+    narrative:
+      - stepNumber: 1
+        description: Forward the move to the orchestrator, which computes every edit before writing any of them
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: moveMethods
+  - name: saveSpec
+    narrative:
+      - stepNumber: 1
+        description: Call saveSpec on core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: saveSpec
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: Call deleteSpec on core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: deleteSpec
+status: complete
+createdAt: '2026-09-25T17:33:02.197Z'
+updatedAt: '2026-09-25T17:33:22.870Z'

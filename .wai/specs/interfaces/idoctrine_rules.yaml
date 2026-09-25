@@ -92,12 +92,15 @@ methods:
       Rule subsystem-boundary-dependencies. Judges every dependsOn edge that leaves its own
       subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter
       → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on
-      the SOURCE subsystem (the published-Portal target requirement applies either way). A reference
-      that names nothing in this tree is resolved against the stored surface snapshots: a hit is a
-      DECLARED remote portal and the same Adapter requirement applies to it, snapshots of several
-      providers that disagree make the reference ambiguous, and a reference authored to leave this
-      root that no snapshot covers warns instead of erroring. Boundary rules are never relaxed by a
-      pack profile.
+      the SOURCE subsystem (the published-Portal target requirement applies either way). A published
+      surface may also name the subsystems it serves (a publicInterfaces entry's consumers): a
+      component every one of whose entries names consumers may be depended on only from those
+      subsystems, which is how a provider keeps a surface — the raw spec writes — away from a door
+      that must not reach it. A reference that names nothing in this tree is resolved against the
+      stored surface snapshots: a hit is a DECLARED remote portal and the same Adapter requirement
+      applies to it, snapshots of several providers that disagree make the reference ambiguous, and
+      a reference authored to leave this root that no snapshot covers warns instead of erroring.
+      Boundary rules are never relaxed by a pack profile.
     signature: 'subsystemBoundaryDependencies(ctx: RuleContext): void'
     returns: void
     params:
@@ -125,6 +128,9 @@ methods:
       - code: CROSS_SUBSYSTEM_TARGET_NON_PORTAL
         severity: error
         summary: Cross-subsystem hop entering through a non-Portal
+      - code: CROSS_SUBSYSTEM_UNLISTED_CONSUMER
+        severity: error
+        summary: Cross-subsystem dependency on a surface published only to other subsystems
   - name: logicDependencyClass
     description: >-
       Rule logic-dependency-class. Bounds an Orchestrator's dependencies by the dependencyClass it
@@ -352,4 +358,4 @@ methods:
         summary: Pattern facade narrative is not a single call to an owned member
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-09-18T20:21:14.791Z'
+updatedAt: '2026-09-25T17:38:57.949Z'

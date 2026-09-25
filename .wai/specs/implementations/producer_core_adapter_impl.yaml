@@ -9,42 +9,42 @@ methods:
       - stepNumber: 1
         description: Forward to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSystemSpec
   - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
         description: Forward to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSubsystemSpecs
   - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
         description: Forward to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadComponentSpecs
   - name: loadInterfaceSpecs
     narrative:
       - stepNumber: 1
         description: Forward to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadInterfaceSpecs
   - name: loadImplementationSpecs
     narrative:
       - stepNumber: 1
         description: Forward to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadImplementationSpecs
   - name: renderDiagram
     narrative:
       - stepNumber: 1
         description: Forward to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: renderDiagram
 status: complete
 createdAt: '2026-07-04T17:39:19.585Z'
