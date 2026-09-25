@@ -230,38 +230,43 @@ rules:
     # modelling decision nobody has taken, unreadable is a shape the analysis
     # cannot follow and there is nothing in the tree to fix for it.
     carried:
-      # 37 finding(s), 66 unit(s).
+      # 5 finding(s).
       - kind: drift
         why: >-
-          A spec names a source file that only USES the function, and the code that holds it lives
-          somewhere else. Both checks prove it rather than guess: the call resolves, and it
-          resolves outside the target's own file; the method name is declared, and the declaration
-          is an import or a destructured binding with no body under it. Two shapes. One, the thin
-          "core adapter" components (mcp_core_adapter, validator_core_adapter,
-          surfaces_core_adapter, cli_core_adapter, authoring_core_adapter and their neighbours)
-          are realized by the file that CONSUMES the core API; that file imports the functions and
-          neither writes nor republishes them, so every step routed through such an adapter lands
-          in src/core/specs.ts or src/core/extensions.ts instead. Two, a portal's methods are
-          claimed by one file and written in another: admin_portal is realized by
-          src/server/http.ts while createProject and its siblings live in src/server/admin.ts.
-          Paying it means pointing each spec at the module that holds the code, or narrating the
-          target the code actually reaches. Either way an author's edit, not a limit of the
-          reader.
-        revisit: >-
-          Challenge the first shape hardest: "the thin core adapter components are realized by the
-          file that CONSUMES the core API". If that is true the fix is to point each adapter spec
-          at the module that holds the code, and every finding here is real drift. If those
-          adapters instead MODEL the consumption itself - a component whose whole job is to reach
-          the core API from this file - then the specs are right, the narratives name the wrong
-          target, and part of this group is a different finding than it claims. Nobody has
-          measured which, and every finding in this group rides on the answer.
+          `wairon host` is the local operator's CLI, and it administers an instance in-process:
+          it calls the admin workflows with the master credential, which authorize it themselves.
+          sdd_host publishes those workflows only through the HTTP admin plane, so every import
+          the command makes lands on a module past it. The decided fix is an in-process admin
+          portal published to sdd_cli beside the HTTP one, and it is the next pull request (3b),
+          which pays exactly these five edges.
         findings:
-          - code: CALL_STEP_UNREALIZED
-            spec: authoring_orchestrator_impl
-            at: 'updateSpecGated'
-            covers:
-              - '3:authoring_core_adapter.updateSpec'
-              - '5:authoring_validator_adapter.findTestsReferencing'
+          - code: IMPORT_BYPASSES_PORTAL
+            spec: cli_host_adapter_impl
+            at: 'src/commands/host.ts -> src/server/admin.ts'
+          - code: IMPORT_BYPASSES_PORTAL
+            spec: cli_host_adapter_impl
+            at: 'src/commands/host.ts -> src/server/packs.ts'
+          - code: IMPORT_BYPASSES_PORTAL
+            spec: cli_host_adapter_impl
+            at: 'src/commands/host.ts -> src/server/permissionadmin.ts'
+          - code: IMPORT_BYPASSES_PORTAL
+            spec: cli_host_adapter_impl
+            at: 'src/commands/host.ts -> src/server/projects.ts'
+          - code: IMPORT_BYPASSES_PORTAL
+            spec: cli_host_adapter_impl
+            at: 'src/commands/host.ts -> src/utils/secrets.ts'
+      # 9 finding(s), 11 unit(s).
+      - kind: drift
+        why: >-
+          A narrative names a call target whose code lives in another file than the target's own.
+          The largest shape here - the thin client adapters realized by the file that CONSUMES the
+          provider's API - was measured and paid: each adapter now has a module of its own that
+          re-exports the provider's portal, and its call steps resolve to it (the spike showed a
+          bare import-path change does not). What remains is cli_host_adapter, whose seven steps
+          name the HTTP admin_portal while `wairon host` calls the admin workflows in-process -
+          paid by the in-process admin portal of the next pull request (3b) - and two CLI steps
+          whose calls land in the command's own file rather than the adapter's.
+        findings:
           - code: CALL_STEP_UNREALIZED
             spec: cli_host_adapter_impl
             at: 'createProject'
@@ -301,165 +306,15 @@ rules:
             spec: cli_runner_impl
             at: 'runDoctor'
             covers:
-              - '5:cli_skills_adapter.exportSddSkills'
-              - '9:cli_mcp_adapter.installMcpServer'
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_runner_impl
-            at: 'runSubsystemExternalize'
-            covers:
-              - '4:cli_core_adapter.externalizeSubsystem'
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_runner_impl
-            at: 'runSubsystemInternalize'
-            covers:
-              - '2:cli_core_adapter.internalizeSubsystem'
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_runner_impl
-            at: 'runSubsystemMove'
-            covers:
-              - '4:cli_core_adapter.moveSubsystemProject'
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_runner_impl
-            at: 'runSurface'
-            covers:
-              - '10:cli_surfaces_client_adapter.pinFamilySurfaces'
-              - '2:cli_surfaces_client_adapter.exportSurface'
-              - '4:cli_surfaces_client_adapter.importSurface'
-              - '6:cli_surfaces_client_adapter.listSnapshots'
-              - '8:cli_surfaces_client_adapter.listExternalInterfaces'
+              - '12:cli_mcp_adapter.installMcpServer'
           - code: CALL_STEP_UNREALIZED
             spec: cli_validator_adapter_impl
             at: 'runValidation'
             covers:
-              - '3:cli_validator_adapter.validateRegistry'
-              - '4:cli_validator_adapter.validateProjectConfig'
-              - '5:cli_validator_adapter.validateSddTree'
-          - code: CALL_STEP_UNREALIZED
-            spec: mcp_server_impl
-            at: 'create'
-            covers:
-              - '9:mcp_core_adapter.resolveChainingParent'
-          - code: CALL_STEP_UNREALIZED
-            spec: spec_validator_impl
-            at: 'computeGateStateId'
-            covers:
-              - '2:validator_core_adapter.loadProjectExtensions'
-          - code: CALL_STEP_UNREALIZED
-            spec: spec_validator_impl
-            at: 'listRules'
-            covers:
-              - '1:validator_core_adapter.loadProjectExtensions'
-          - code: CALL_STEP_UNREALIZED
-            spec: spec_validator_impl
-            at: 'validateAsComplete'
-            covers:
-              - '11:validator_core_adapter.dryRunSerializeSpecs'
-              - '2:validator_core_adapter.loadSystemSpec'
-              - '3:validator_core_adapter.loadSubsystemSpecs'
-              - '4:validator_core_adapter.loadComponentSpecs'
-              - '5:validator_core_adapter.loadInterfaceSpecs'
-              - '6:validator_core_adapter.loadImplementationSpecs'
-              - '7:validator_core_adapter.loadTypeSpecs'
-              - '8:validator_surfaces_adapter.loadSurfaceSnapshots'
-              - '9:validator_surfaces_adapter.loadMountSurfaceSnapshots'
-          - code: CALL_STEP_UNREALIZED
-            spec: spec_validator_impl
-            at: 'validateSddTree'
-            covers:
-              - '13:validator_core_adapter.loadProjectExtensions'
-              - '14:validator_core_adapter.dryRunSerializeSpecs'
-              - '2:validator_core_adapter.loadSystemSpec'
-              - '3:validator_core_adapter.loadSubsystemSpecs'
-              - '4:validator_core_adapter.loadComponentSpecs'
-              - '5:validator_core_adapter.loadInterfaceSpecs'
-              - '6:validator_core_adapter.loadImplementationSpecs'
-              - '7:validator_core_adapter.loadTypeSpecs'
-              - '8:validator_surfaces_adapter.loadSurfaceSnapshots'
-              - '9:validator_surfaces_adapter.loadMountSurfaceSnapshots'
-          - code: CALL_STEP_UNREALIZED
-            spec: surface_orchestrator_impl
-            at: 'listExternalInterfaces'
-            covers:
-              - '2:surfaces_core_adapter.resolveChainingParent'
-          - code: CALL_STEP_UNREALIZED
-            spec: surface_orchestrator_impl
-            at: 'listMountSnapshots'
-            covers:
-              - '2:surfaces_core_adapter.resolveSubprojectForNamespace'
-          - code: CALL_STEP_UNREALIZED
-            spec: surface_orchestrator_impl
-            at: 'pinFamilySurfaces'
-            covers:
-              - '1:surfaces_core_adapter.resolveChainingParent'
-              - '5:surfaces_core_adapter.loadSubsystemSpecs'
-          - code: CALL_STEP_UNREALIZED
-            spec: surface_projector_impl
-            at: 'projectOwnSurface'
-            covers:
-              - '1:surfaces_core_adapter.loadSystemSpec'
-              - '2:surfaces_core_adapter.loadSubsystemSpecs'
-              - '3:surfaces_core_adapter.loadComponentSpecs'
-              - '4:surfaces_core_adapter.loadInterfaceSpecs'
-              - '5:surfaces_core_adapter.loadTypeSpecs'
-          - code: CALL_STEP_UNREALIZED
-            spec: surface_projector_impl
-            at: 'projectSubsystemSurface'
-            covers:
-              - '1:surfaces_core_adapter.loadSystemSpec'
-              - '2:surfaces_core_adapter.loadSubsystemSpecs'
-              - '3:surfaces_core_adapter.loadComponentSpecs'
-              - '4:surfaces_core_adapter.loadInterfaceSpecs'
-              - '5:surfaces_core_adapter.loadTypeSpecs'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'externalizeSubsystem'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'internalizeSubsystem'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'loadComponentSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'loadInterfaceSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'loadSubsystemSpec'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'loadSubsystemSpecs'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_core_adapter_impl
-            at: 'moveSubsystemProject'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_orchestrator_impl
-            at: 'externalizeSubsystem'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_orchestrator_impl
-            at: 'internalizeSubsystem'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_orchestrator_impl
-            at: 'moveSubsystemProject'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: mcp_validator_adapter_impl
-            at: 'validateSddTree'
-          - code: CALL_STEP_UNREALIZED
-            spec: authoring_orchestrator_impl
-            at: 'writeSpec'
-            covers:
-              - '10:authoring_validator_adapter.validateComponentCandidate'
-              - '14:authoring_core_adapter.createChainedSubsystem'
-              - '16:authoring_core_adapter.saveSpec'
-              - '18:authoring_validator_adapter.findTestsReferencing'
-              - '4:authoring_core_adapter.loadSpec'
-              - '5:authoring_core_adapter.loadSpec'
-          - code: CALL_STEP_UNREALIZED
-            spec: authoring_orchestrator_impl
-            at: 'deleteSpec'
-            covers:
-              - '2:authoring_core_adapter.loadSpec'
-              - '5:authoring_validator_adapter.findTestsReferencing'
-      # 93 finding(s), 130 unit(s).
+              - '4:cli_validator_adapter.validateRegistry'
+              - '5:cli_validator_adapter.validateProjectConfig'
+              - '6:cli_validator_adapter.validateSddTree'
+      # 88 finding(s), 121 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -469,26 +324,11 @@ rules:
           module edge), one method at a time.
         findings:
           - code: UNDECLARED_COLOCATED_CALL
-            spec: authoring_portal_impl
-            at: 'updateSpecGated'
-            covers:
-              - 'authoring_core_adapter.loadProjectConfig'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: authoring_portal_impl
-            at: 'moveMethods'
-            covers:
-              - 'authoring_core_adapter.loadProjectConfig'
-          - code: UNDECLARED_COLOCATED_CALL
             spec: cli_runner_impl
             at: 'runRemote'
             covers:
               - 'remote_orchestrator.listStoredInstances'
               - 'remote_orchestrator.resolveTarget'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: cli_runner_impl
-            at: 'runSubsystemAdd'
-            covers:
-              - 'cli_core_adapter.loadSystemSpec'
           - code: UNDECLARED_COLOCATED_CALL
             spec: core_orchestrator_impl
             at: 'computeStateIdAt'
@@ -792,18 +632,6 @@ rules:
             covers:
               - 'secret_store.read'
           - code: UNDECLARED_COLOCATED_CALL
-            spec: skills_orchestrator_impl
-            at: 'export'
-            covers:
-              - 'skills_core_adapter.loadProjectConfig'
-              - 'skills_core_adapter.loadProjectExtensions'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: skills_portal_impl
-            at: 'exportSddSkills'
-            covers:
-              - 'skills_core_adapter.loadProjectConfig'
-              - 'skills_core_adapter.loadProjectExtensions'
-          - code: UNDECLARED_COLOCATED_CALL
             spec: skills_portal_impl
             at: 'listResources'
             covers:
@@ -839,6 +667,7 @@ rules:
             at: 'saveSubsystemSpec'
             covers:
               - 'spec_registry.invalidateCache'
+              - 'core_orchestrator.assertContainedProjectPath'
           - code: UNDECLARED_COLOCATED_CALL
             spec: spec_loader_impl
             at: 'saveSystemSpec'
@@ -939,27 +768,9 @@ rules:
               - 'user_store.replaceAll'
           - code: UNDECLARED_COLOCATED_CALL
             spec: validator_portal_impl
-            at: 'computeGateStateId'
-            covers:
-              - 'validator_core_adapter.computeStateId'
-              - 'validator_core_adapter.consumedContractInputs'
-              - 'validator_core_adapter.loadProjectConfig'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: validator_portal_impl
             at: 'validateSddTree'
             covers:
               - 'spec_validator.resolveThroughParent'
-              - 'validator_core_adapter.loadProjectConfig'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: authoring_portal_impl
-            at: 'writeSpec'
-            covers:
-              - 'authoring_core_adapter.loadProjectConfig'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: authoring_portal_impl
-            at: 'deleteSpec'
-            covers:
-              - 'authoring_core_adapter.loadProjectConfig'
           - code: UNDECLARED_COLOCATED_CALL
             spec: core_orchestrator_impl
             at: 'updateSpec'
@@ -970,7 +781,22 @@ rules:
             at: 'moveMethods'
             covers:
               - 'spec_registry.invalidateCache'
-      # 6 finding(s), 39 unit(s).
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: core_orchestrator_impl
+            at: 'clearLoaderIssues'
+            covers:
+              - 'spec_registry.invalidateCache'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: secret_repository_impl
+            at: 'resolve'
+            covers:
+              - 'secret_store.read'
+          - code: UNDECLARED_COLOCATED_CALL
+            spec: spec_registry_impl
+            at: 'saveSubsystemSpec'
+            covers:
+              - 'core_orchestrator.assertContainedProjectPath'
+      # 1 finding(s), 2 unit(s).
       - kind: undecided
         why: >-
           src/mcp/server.ts is one file modelled as five components (mcp_portal, mcp_server,
@@ -982,69 +808,12 @@ rules:
           question, not as work somebody forgot.
         findings:
           - code: UNDECLARED_COLOCATED_CALL
-            spec: mcp_orchestrator_impl
-            at: 'listResources'
-            covers:
-              - 'mcp_core_adapter.composeAgentBrief'
-              - 'mcp_skills_adapter.readResource'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: mcp_orchestrator_impl
-            at: 'readResource'
-            covers:
-              - 'mcp_skills_adapter.listResources'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: mcp_portal_impl
-            at: 'createMcpServer'
-            covers:
-              - 'mcp_core_adapter.composeAgentBrief'
-              - 'mcp_core_adapter.loadProjectConfig'
-              - 'mcp_core_adapter.loadSubsystemSpecs'
-              - 'mcp_core_adapter.loadInterfaceSpec'
-              - 'mcp_core_adapter.loadComponentSpec'
-              - 'mcp_orchestrator.externalizeSubsystem'
-              - 'mcp_orchestrator.internalizeSubsystem'
-              - 'mcp_orchestrator.moveSubsystemProject'
-              - 'mcp_orchestrator.renameComponent'
-              - 'mcp_orchestrator.renameMethod'
-              - 'mcp_skills_adapter.buildServerInstructions'
-              - 'mcp_skills_adapter.listResources'
-              - 'mcp_skills_adapter.readResource'
-              - 'mcp_surfaces_adapter.listExternalInterfaces'
-              - 'mcp_validator_adapter.validateSddTree'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: mcp_portal_impl
-            at: 'listResources'
-            covers:
-              - 'mcp_core_adapter.composeAgentBrief'
-              - 'mcp_skills_adapter.listResources'
-              - 'mcp_skills_adapter.readResource'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: mcp_portal_impl
-            at: 'readResource'
-            covers:
-              - 'mcp_core_adapter.composeAgentBrief'
-              - 'mcp_skills_adapter.listResources'
-              - 'mcp_skills_adapter.readResource'
-          - code: UNDECLARED_COLOCATED_CALL
             spec: mcp_server_impl
             at: 'create'
             covers:
-              - 'mcp_core_adapter.composeAgentBrief'
-              - 'mcp_core_adapter.loadProjectConfig'
-              - 'mcp_core_adapter.loadSubsystemSpecs'
-              - 'mcp_core_adapter.loadInterfaceSpec'
-              - 'mcp_core_adapter.loadComponentSpec'
-              - 'mcp_orchestrator.externalizeSubsystem'
-              - 'mcp_orchestrator.internalizeSubsystem'
-              - 'mcp_orchestrator.moveSubsystemProject'
-              - 'mcp_orchestrator.renameComponent'
-              - 'mcp_orchestrator.renameMethod'
               - 'mcp_portal.advertiseHostedTools'
               - 'mcp_portal.readResource'
-              - 'mcp_skills_adapter.listResources'
-              - 'mcp_skills_adapter.readResource'
-              - 'mcp_surfaces_adapter.listExternalInterfaces'
-      # 12 finding(s).
+      # 1 finding(s).
       - kind: unreadable
         why: >-
           The contract is realized by a FORWARDING BINDING, and the check reads function-like
@@ -1057,42 +826,9 @@ rules:
           nothing in the tree to fix for it.
         findings:
           - code: METHOD_BODY_NOT_FOUND
-            spec: host_git_adapter_impl
-            at: 'configureSync'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: host_git_adapter_impl
-            at: 'disable'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: host_git_adapter_impl
-            at: 'enable'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: host_git_adapter_impl
-            at: 'publish'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: host_git_adapter_impl
-            at: 'status'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: host_git_adapter_impl
-            at: 'sync'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: host_producer_adapter_impl
-            at: 'configure'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: host_producer_adapter_impl
-            at: 'list'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: host_producer_adapter_impl
-            at: 'produce'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: host_producer_adapter_impl
-            at: 'remove'
-          - code: METHOD_BODY_NOT_FOUND
             spec: host_server_impl
             at: 'init'
-          - code: METHOD_BODY_NOT_FOUND
-            spec: host_surfaces_adapter_impl
-            at: 'exportBoundSurface'
-      # 8 finding(s), 12 unit(s).
+      # 6 finding(s), 10 unit(s).
       - kind: unreadable
         why: >-
           The step's target IS called by name, from a site written in a shape a pure model cannot
@@ -1138,32 +874,6 @@ rules:
             at: 'extractArchive'
             covers:
               - '1:sdk_portal.extractPack'
-          - code: CALL_ORIGIN_UNRESOLVED
-            spec: host_validator_adapter_impl
-            at: 'validateAsComplete'
-            covers:
-              - '1:host_core_adapter.loadProjectConfig'
-          - code: CALL_ORIGIN_UNRESOLVED
-            spec: mcp_server_impl
-            at: 'create'
-            covers:
-              - '6:mcp_core_adapter.loadSystemSpec'
-      # 1 finding(s), 1 unit(s).
-      - kind: unreadable
-        why: >-
-          The forward check does not follow a TARGET through the file that republishes it.
-          extension_portal is realized by src/core/index.ts, which re-exports src/core/extensions.ts,
-          and the call is proven to land in extensions.ts. Landing-side widening already follows a
-          call through a barrel to where the function lives; the same relation read from the
-          target side is not read yet. Measured on this tree it is exactly 1 of the 60 call-step
-          units — the other 59 are real drift — so it is recorded as the narrow reader gap it is
-          and not used to excuse them.
-        findings:
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_patterns_adapter_impl
-            at: 'listPatterns'
-            covers:
-              - '1:extension_portal.loadProjectExtensions'
       # 5 finding(s), 9 unit(s).
       - kind: drift
         why: >-
@@ -1209,38 +919,7 @@ rules:
             at: 'hydrateFromFiles'
             covers:
               - '3:surface_store.put'
-      # 2 finding(s), 2 unit(s).
-      - kind: unreadable
-        why: >-
-          The MCP server's two skill-resource forwarders DO call the portal's methods at runtime.
-          src/mcp/server.ts imports them RENAMED - "listResources as coreListSkillResources" and
-          "readResource as coreReadSkillResource", from src/core/skills.ts, which realizes
-          skills_portal - and forwards each one to one. The callee name at the call site is
-          therefore the local alias, while the forward check looks for the target method's own
-          name, so the call is reported as absent. Nothing here is overclaimed and nothing is
-          wired wrong; what is missing is either a per-method symbol on the spec or an import
-          rename the reader follows.
-        revisit: >-
-          Prove which of the two it is before anybody acts on it: the aliased binding the reader
-          cannot follow (then this is unreadable and the fix belongs in the reader), or a step
-          pointed at the wrong component (skills_portal and skill_resources are both realized by
-          src/core/skills.ts - then it is drift and the fix is one narrative edit). The
-          classification these two entries replace - "skill resources are served from the embedded
-          exported skill set inside the MCP server, not by calling the skills portal at runtime" -
-          was measured FALSE in this wave: the forwarders do call core at runtime. A reason that
-          confident and that wrong is the reason to distrust this one until somebody checks it.
-        findings:
-          - code: CALL_STEP_UNREALIZED
-            spec: mcp_skills_adapter_impl
-            at: 'listResources'
-            covers:
-              - '1:skills_portal.listResources'
-          - code: CALL_STEP_UNREALIZED
-            spec: mcp_skills_adapter_impl
-            at: 'readResource'
-            covers:
-              - '1:skills_portal.readResource'
-      # 34 finding(s), 73 unit(s).
+      # 26 finding(s), 46 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of export-conformance, after the 90 realization handles that
@@ -1257,12 +936,6 @@ rules:
           resolves, at exact grade, from a file realizing none of the accused components.
         findings:
           - code: UNDECLARED_EXPORT
-            spec: cli_skills_adapter_impl
-            at: 'src/commands/skills.ts'
-            covers:
-              - 'runSkillsInstall'
-              - 'runSkillsList'
-          - code: UNDECLARED_EXPORT
             spec: project_config_fs_adapter_impl
             at: 'src/config/project-config.ts'
             covers:
@@ -1274,25 +947,9 @@ rules:
             covers:
               - 'UPDATE_CHANNELS'
           - code: UNDECLARED_EXPORT
-            spec: architecture_diagrams_impl
-            at: 'src/core/diagram.ts'
-            covers:
-              - 'buildCanvasDataModel'
-          - code: UNDECLARED_EXPORT
-            spec: extension_orchestrator_impl
-            at: 'src/core/extensions.ts'
-            covers:
-              - 'DeclarativePackSchema'
-              - 'LoadedPackSkill'
-              - 'PackScope'
-              - 'loadExtensionPacks'
-              - 'packDirEntry'
-          - code: UNDECLARED_EXPORT
             spec: agent_context_portal_impl
             at: 'src/core/index.ts'
             covers:
-              - 'declaredPackNames'
-              - 'declaredProfileIds'
               - 'diffSize'
           - code: UNDECLARED_EXPORT
             spec: openapi_codec_impl
@@ -1301,45 +958,18 @@ rules:
               - 'isOpenApiDocument'
           - code: UNDECLARED_EXPORT
             spec: core_orchestrator_impl
-            at: 'src/core/provision.ts'
-            covers:
-              - 'backfillChainedSubprojectConfigs'
-          - code: UNDECLARED_EXPORT
-            spec: spec_validator_impl
-            at: 'src/core/rules/candidate.ts'
-            covers:
-              - 'formatCandidateRefusal'
-          - code: UNDECLARED_EXPORT
-            spec: skill_resources_impl
-            at: 'src/core/skills.ts'
-            covers:
-              - 'activeTargetTypes'
-              - 'checkSkillFreshness'
-              - 'listSkillNames'
-          - code: UNDECLARED_EXPORT
-            spec: core_orchestrator_impl
             at: 'src/core/specs.ts'
             covers:
-              - 'assertContainedProjectPath'
-              - 'clearLoaderIssues'
-              - 'findLegacySpecFiles'
               - 'getComponentPath'
               - 'getImplementationPath'
               - 'getInterfacePath'
-              - 'getLoaderIssues'
               - 'getSubsystemPath'
-              - 'scanAllSpecs'
               - 'snapshotSpecFiles'
           - code: UNDECLARED_EXPORT
             spec: state_hash_impl
             at: 'src/core/statehash.ts'
             covers:
               - 'stateIdEquals'
-          - code: UNDECLARED_EXPORT
-            spec: surface_fs_adapter_impl
-            at: 'src/core/surfaces.ts'
-            covers:
-              - 'loadMountSurfaceSnapshots'
           - code: UNDECLARED_EXPORT
             spec: template_source_adapter_impl
             at: 'src/core/templates.ts'
@@ -1360,15 +990,6 @@ rules:
             at: 'src/exporters/gemini.ts'
             covers:
               - 'GeminiExporter'
-          - code: UNDECLARED_EXPORT
-            spec: host_core_adapter_impl
-            at: 'src/server/adapters.ts'
-            covers:
-              - 'hostCore'
-              - 'hostGit'
-              - 'hostProducer'
-              - 'hostSdk'
-              - 'hostSurfaces'
           - code: UNDECLARED_EXPORT
             spec: admin_orchestrator_impl
             at: 'src/server/admin.ts'
@@ -1464,7 +1085,6 @@ rules:
             at: 'src/utils/secrets.ts'
             covers:
               - 'resolveGitToken'
-              - 'resolveSecret'
       # 45 finding(s), 85 unit(s).
       - kind: undecided
         why: >-
@@ -1748,7 +1368,7 @@ rules:
             at: 'WebSession'
             covers:
               - 'projects'
-      # 214 finding(s), 244 unit(s).
+      # 209 finding(s), 237 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of param-conformance on the signatures the contracts describe in
@@ -1839,16 +1459,6 @@ rules:
             at: 'list'
             covers:
               - 'requestedBy'
-          - code: UNREALIZED_PARAM
-            spec: authoring_core_adapter_impl
-            at: 'moveMethods'
-            covers:
-              - 'dryRun'
-          - code: PARAM_OPTIONALITY
-            spec: cli_core_adapter_impl
-            at: 'getStatusReport'
-            covers:
-              - 'decor'
           - code: UNDECLARED_PARAM
             spec: cli_lock_adapter_impl
             at: 'lockTree'
@@ -2011,12 +1621,6 @@ rules:
               - 'res'
               - 'body'
               - 'credential'
-          - code: UNREALIZED_PARAM
-            spec: host_validator_adapter_impl
-            at: 'validateAsComplete'
-            covers:
-              - 'options'
-              - 'projectType'
           - code: PARAM_NAME_MISMATCH
             spec: instance_bootstrap_impl
             at: 'seed'
@@ -2144,17 +1748,6 @@ rules:
             at: 'readResource'
             covers:
               - 'listChanged'
-          - code: PARAM_NAME_MISMATCH
-            spec: mcp_orchestrator_impl
-            at: 'renameComponent'
-            covers:
-              - 'id'
-          - code: PARAM_NAME_MISMATCH
-            spec: mcp_orchestrator_impl
-            at: 'renameMethod'
-            covers:
-              - 'id'
-              - 'method'
           - code: UNDECLARED_PARAM
             spec: mcp_portal_impl
             at: 'readResource'
