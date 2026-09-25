@@ -40,7 +40,23 @@ methods:
         description: Return the export result (destinations, file count, skipped targets).
         type: return
         outcome: skills installed
+  - name: listSkillNames
+    narrative: []
+    detail: intent
+    intent: >-
+      Returns a copy of the bundled list of built-in SDD skill names; a pure read of a constant that
+      never fails.
+  - name: checkSkillFreshness
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolves the target's skills directory (none: every list empty). Otherwise loads the project's
+      pack skills for that target through the core adapter and, for each built-in skill, compares
+      the installed file with the skill composed with its extending pack skills: absent is missing,
+      different is stale, identical is ok. Reads only; never writes a file.
+    calls:
+      - skills_core_adapter.loadProjectExtensions
 detail: calls-only
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-13T11:32:14.425Z'
+updatedAt: '2026-09-25T21:13:46.560Z'

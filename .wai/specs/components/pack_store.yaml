@@ -26,6 +26,7 @@ owns: []
 dependsOn:
   - host_core_adapter
   - host_sdk_adapter
+  - host_validator_adapter
 durability: read-through
 lint:
   allow:
@@ -37,4 +38,4 @@ lint:
         level3 branch merges (the enum value does not exist in this branch's schema).
 status: complete
 createdAt: '2026-07-04T18:42:27.572Z'
-updatedAt: '2026-09-17T16:34:45.174Z'
+updatedAt: '2026-09-25T21:11:25.701Z'

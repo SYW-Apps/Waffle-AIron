@@ -13,6 +13,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: validateSddTree
+  - name: validateRegistry
+    narrative:
+      - stepNumber: 1
+        description: Call validateRegistry on validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: validateRegistry
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T20:49:30.041Z'
+updatedAt: '2026-09-25T21:09:46.193Z'

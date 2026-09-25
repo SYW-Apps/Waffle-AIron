@@ -8,7 +8,8 @@ description: >-
 subsystem: sdd_producers
 componentType: Adapter
 owns: []
-dependsOn: []
+dependsOn:
+  - secret_portal
 status: complete
 createdAt: '2026-07-04T18:03:51.034Z'
-updatedAt: '2026-07-04T18:06:52.396Z'
+updatedAt: '2026-09-25T21:12:35.879Z'

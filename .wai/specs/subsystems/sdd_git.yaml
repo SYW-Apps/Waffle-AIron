@@ -14,7 +14,14 @@ publicInterfaces:
       In-process git-backing services (enable/disable/sync/isEnabled/publish) consumed by the
       hosting server.
     component: git_portal
-trustedLinks: []
+trustedLinks:
+  - subsystem: sdd_host
+    reason: >-
+      The one hop back into the host that hosts this subsystem: the git adapter reads the git token
+      (a connection's own credential ref, else the shared git-token) through sdd_host's secret
+      portal, because the container's integration secrets are the host's to store. The host calls
+      git_portal for everything else, so the pair is mutual by design; the hop back is a single read
+      of one key and nothing else.
 status: complete
 createdAt: '2026-07-04T16:31:09.691Z'
-updatedAt: '2026-07-04T16:37:37.088Z'
+updatedAt: '2026-09-25T21:33:55.998Z'

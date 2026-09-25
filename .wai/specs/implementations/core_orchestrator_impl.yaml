@@ -1391,6 +1391,113 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: deleteSpec
+  - name: findChainingParent
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk up from the child root, below the ceiling when one is given, through the spec
+          loader's chaining detection
+        type: call
+        targetComponent: spec_loader
+        targetMethod: findChainingParent
+  - name: scanAllSpecs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's workspace index at the requested recursion depth: the cached one
+          while the tree's file signature is unchanged, else a fresh scan
+        type: local
+      - stepNumber: 2
+        description: Return the index
+        type: return
+        outcome: success
+  - name: getLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Return the bound root workspace's recorded loader issues
+        type: return
+        outcome: success
+  - name: clearLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Empty the bound root workspace's recorded loader issues
+        type: local
+      - stepNumber: 2
+        description: Drop every cached spec index so the next read starts from disk
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+  - name: findLegacySpecFiles
+    narrative:
+      - stepNumber: 1
+        description: >-
+          List the bound tree's spec files, and pair each one stored under a legacy (undotted) file
+          name with the name the current layout expects
+        type: local
+      - stepNumber: 2
+        description: Return the pairs
+        type: return
+        outcome: success
+  - name: findChainingSubprojectsMissingConfig
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the chained subprojects recursively from the root and keep each directory that holds
+          a spec tree but no project configuration
+        type: local
+      - stepNumber: 2
+        description: Return the directories
+        type: return
+        outcome: success
+  - name: backfillChainedSubprojectConfigs
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the chained subprojects recursively from the root; for each that holds a spec tree
+          but no project configuration, write a default configuration named for its mount, leaving
+          its specs untouched
+        type: local
+      - stepNumber: 2
+        description: Return the directories repaired
+        type: return
+        outcome: success
+  - name: assertContainedProjectPath
+    narrative:
+      - stepNumber: 1
+        description: Resolve the projectPath against the root
+        type: local
+      - stepNumber: 2
+        description: Does the path escape the root — absolute, parent-escaping or through a link?
+        type: branch
+        condition: the resolved path escapes the root
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse the path, naming it and the root
+        type: throw
+        error: Error
+      - stepNumber: 4
+        label: contained
+        description: Return the contained absolute child root
+        type: return
+        outcome: success
+  - name: loadProjectVariants
+    sourcePath: src/core/variants.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the layered variant registry
+        type: call
+        targetComponent: variant_registry_adapter
+        targetMethod: loadProjectVariants
+  - name: resolveVariantGuidance
+    sourcePath: src/core/variants.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the component's variant guidance and siblings
+        type: call
+        targetComponent: variant_registry_adapter
+        targetMethod: resolveVariantGuidance
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:36:29.581Z'
+updatedAt: '2026-09-25T21:08:33.952Z'

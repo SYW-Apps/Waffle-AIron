@@ -543,6 +543,105 @@ methods:
       - name: id
         type: string
         description: The spec id
+  - name: findChainingParent
+    description: >-
+      Walk up from a child root for the ancestor project that mounts it as a chained subsystem,
+      stopping at an optional ceiling. Pure detection that is NOT gated on any request's reach: a
+      caller that must not read above a bound root passes that root as the ceiling and gates on its
+      own reach before calling.
+    signature: 'findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+    params:
+      - name: childRoot
+        type: string
+        description: The root to start the walk from
+      - name: ceiling
+        type: string
+        description: A root the walk never climbs above
+        optional: true
+  - name: scanAllSpecs
+    description: >-
+      The bound tree's spec index at the given recursion depth: every loaded spec by kind and the
+      file each is stored in. Sets the depth the following spec reads use.
+    signature: 'scanAllSpecs(options?: SpecScanOptions): SpecIndex'
+    returns: SpecIndex
+    params:
+      - name: options
+        type: SpecScanOptions
+        description: How deep into chained subprojects the scan reads
+        optional: true
+  - name: getLoaderIssues
+    description: >-
+      The issues the loader recorded while reading the bound tree: files that failed their schema or
+      could not be parsed.
+    signature: 'getLoaderIssues(): ValidationIssue[]'
+    returns: ValidationIssue[]
+    params: []
+  - name: clearLoaderIssues
+    description: >-
+      Forget the loader's recorded issues and drop the cached index, so the next read starts from
+      disk and records afresh.
+    signature: 'clearLoaderIssues(): void'
+    returns: void
+    params: []
+  - name: findLegacySpecFiles
+    description: >-
+      The bound tree's spec files stored under a legacy (undotted) name, each with the name the
+      current layout expects. Pure read.
+    signature: 'findLegacySpecFiles(): LegacySpecFile[]'
+    returns: LegacySpecFile[]
+    params: []
+  - name: findChainingSubprojectsMissingConfig
+    description: >-
+      The chained subproject directories, found recursively from a root, that hold a spec tree but
+      no project configuration — the state that leaves one unrunnable standalone. Pure read.
+    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): string[]'
+    returns: string[]
+    params:
+      - name: projectRoot
+        type: string
+  - name: backfillChainedSubprojectConfigs
+    description: >-
+      Write a project configuration for every chained subproject found recursively from a root that
+      has a spec tree but none; existing specs are never touched. Returns the directories repaired.
+    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): string[]'
+    returns: string[]
+    params:
+      - name: projectRoot
+        type: string
+  - name: assertContainedProjectPath
+    description: >-
+      Resolve a subsystem's projectPath within a project root, refusing an absolute, parent-escaping
+      or link-escaping path, and return the contained absolute child root.
+    signature: 'assertContainedProjectPath(projectRoot: string, projectPath: string): string'
+    returns: string
+    params:
+      - name: projectRoot
+        type: string
+      - name: projectPath
+        type: string
+  - name: loadProjectVariants
+    description: >-
+      The component-variant registry governing the current project, forwarded from the variant
+      registry.
+    signature: 'loadProjectVariants(): VariantDef[]'
+    returns: VariantDef[]
+    params: []
+  - name: resolveVariantGuidance
+    description: >-
+      One component's variant guidance and its same-variant siblings, forwarded from the variant
+      registry; null when the component declares no variant or one that does not resolve.
+    signature: >-
+      resolveVariantGuidance(component: ComponentSpec, allComponents: ComponentSpec[], variantsById:
+      VariantDef[]): VariantDef
+    returns: VariantDef
+    params:
+      - name: component
+        type: ComponentSpec
+      - name: allComponents
+        type: ComponentSpec[]
+      - name: variantsById
+        type: VariantDef[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:36:27.170Z'
+updatedAt: '2026-09-25T21:08:49.845Z'

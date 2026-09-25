@@ -10,6 +10,7 @@ owns: []
 dependsOn:
   - validator_portal
   - project_config_portal
+  - extension_portal
 status: complete
 createdAt: '2026-07-14T20:08:58.947Z'
-updatedAt: '2026-09-25T17:35:32.635Z'
+updatedAt: '2026-09-25T21:11:03.311Z'

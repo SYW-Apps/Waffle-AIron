@@ -280,6 +280,41 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadSubsystemSpec
+  - name: findLegacySpecFiles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: findLegacySpecFiles
+  - name: findChainingSubprojectsMissingConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: findChainingSubprojectsMissingConfig
+  - name: backfillChainedSubprojectConfigs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: backfillChainedSubprojectConfigs
+  - name: diagnoseProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: diagnoseProjectPacks
+  - name: pinInstalledPacksAsSelections
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: pinInstalledPacksAsSelections
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T20:49:38.492Z'
+updatedAt: '2026-09-25T21:10:21.239Z'

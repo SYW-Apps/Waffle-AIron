@@ -1,12 +1,28 @@
-schemaVersion: "1.0.0"
-id: "imcp_validator_adapter"
-name: "MCP Validator Adapter Interface"
-description: "Adapter contract for MCP to run spec validations."
-component: "mcp_validator_adapter"
+id: imcp_validator_adapter
+name: MCP Validator Adapter Interface
+description: Adapter contract for MCP to run spec validations.
+component: mcp_validator_adapter
 methods:
-  - name: "validateSddTree"
-    description: "Calls validateSddTree on validator portal"
-    signature: "validateSddTree(): ValidationResult"
-    returns: "ValidationResult"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - name: validateSddTree
+    description: Calls validateSddTree on validator portal
+    signature: 'validateSddTree(): ValidationResult'
+    returns: ValidationResult
+  - name: validateRegistry
+    description: >-
+      Forward to validator_portal.validateRegistry: judge the agent registry under the project's
+      rule severities
+    signature: 'validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: registry
+        type: Registry
+      - name: rules
+        type: RulesConfig
+    invokedBy:
+      kind: external
+      caller: >-
+        A connected AI client calling the MCP server's validateTopology tool, which createMcpServer
+        registers but mcp_portal does not yet model, so no narrative carries this hop.
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-09-25T21:36:25.369Z'

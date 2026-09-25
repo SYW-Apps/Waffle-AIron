@@ -7,8 +7,12 @@ methods:
   - name: sync
     narrative:
       - stepNumber: 1
-        description: Resolve the Notion token (secret store, then env); reject if absent
-        type: local
+        description: >-
+          Resolve the Notion token through the host's secret portal (secret store, then env); reject
+          if absent
+        type: call
+        targetComponent: secret_portal
+        targetMethod: resolve
       - stepNumber: 2
         description: Find or create the 'wairon specs' child page under the parent page
         type: local
@@ -22,14 +26,6 @@ methods:
           Create the DocPage tree under it: each page's markdown body converted to Notion blocks,
           child pages recursively
         type: local
-lint:
-  allow:
-    - code: UNDECLARED_DEPENDENCY
-      at: src/producers/notion.ts -> src/utils/secrets.ts
-      reason: >-
-        Uses the shared secrets utility (src/utils/secrets.ts), which is spec-homed under sdd_host's
-        secret_repository — placement debt: a shared-infrastructure candidate, not a sanctioned
-        cross-subsystem reach. The Notion producer reads its API token through it.
 status: complete
 createdAt: '2026-07-04T17:39:24.124Z'
-updatedAt: '2026-09-19T20:28:41.364Z'
+updatedAt: '2026-09-25T21:12:55.615Z'

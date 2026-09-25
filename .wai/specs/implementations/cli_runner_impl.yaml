@@ -1454,7 +1454,7 @@ methods:
         description: With --fix, apply the repairs before the report, so the report shows the repaired state
         type: branch
         condition: '--fix was given'
-        onFalseStep: 11
+        onFalseStep: 14
       - stepNumber: 2
         description: 'Read the configuration: the fixes need an initialized project whose configuration is valid'
         type: call
@@ -1464,7 +1464,7 @@ methods:
         description: Skip the fixes otherwise, warning when the configuration is invalid; the report flags both
         type: branch
         condition: the project is initialized and its configuration is valid
-        onFalseStep: 11
+        onFalseStep: 14
       - stepNumber: 4
         description: >-
           Rebuild the derived context documents through the core adapter, each written only if it
@@ -1486,6 +1486,27 @@ methods:
         targetMethod: reinjectLocalGuides
       - stepNumber: 7
         description: >-
+          Pin the installed-but-unapplied packs as explicit selections for a project that never
+          declared a position on machine-wide packs, and print the names recorded
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: pinInstalledPacksAsSelections
+      - stepNumber: 8
+        description: >-
+          List the spec files stored under a legacy name and rename each to the name the current
+          layout expects
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: findLegacySpecFiles
+      - stepNumber: 9
+        description: >-
+          Write a project configuration for each chained subproject with specs but none, and print
+          the directories repaired
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: backfillChainedSubprojectConfigs
+      - stepNumber: 10
+        description: >-
           Retire the Specialists with apply true: each becomes an Orchestrator with the
           dependencyClass its dependencies decide, and each Specialist-based variant rebases onto
           Orchestrator; print what was retyped. Runs after the filename migration, so the retyped
@@ -1493,7 +1514,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 8
+      - stepNumber: 11
         description: >-
           Repair the narrative steps carrying a field their own type cannot have, with apply true:
           each foreign field is dropped and nothing else about the step changes; print what was
@@ -1501,49 +1522,59 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 9
+      - stepNumber: 12
         description: Register or repair the MCP server for each active backend
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
-      - stepNumber: 10
+      - stepNumber: 13
         description: >-
           For a Gemini or Antigravity target, remove the legacy global Antigravity plugin whose name
           collides with the MCP server
         type: local
-      - stepNumber: 11
+      - stepNumber: 14
         label: report
         description: 'Project: is this an initialized wairon project?'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
-      - stepNumber: 12
+      - stepNumber: 15
         description: Stop at a folder that is not a wairon project
         type: branch
         condition: the project is not initialized
-        onFalseStep: 14
-      - stepNumber: 13
+        onFalseStep: 17
+      - stepNumber: 16
         description: Report it, naming `wairon init`, print the summary and exit non-zero
         type: return
         outcome: not a wairon project
-      - stepNumber: 14
+      - stepNumber: 17
         description: Report whether the configuration is valid, and read its active targets
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 15
+      - stepNumber: 18
+        description: 'Spec filenames: list the spec files still stored under a legacy name'
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: findLegacySpecFiles
+      - stepNumber: 19
+        description: 'Chained subprojects: list the ones with specs but no project.yaml'
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: findChainingSubprojectsMissingConfig
+      - stepNumber: 20
         description: >-
           Report whether the system spec is present, whether the spec filenames are current, and any
           chained subproject with specs but no project.yaml
         type: local
-      - stepNumber: 16
+      - stepNumber: 21
         description: >-
           Spec tree: with a system spec and a valid configuration, run the conformance gate and
           report its error and warning counts
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateSddTree
-      - stepNumber: 17
+      - stepNumber: 22
         description: >-
           Stereotypes: plan the Specialist retirement with apply false and report each Specialist
           with the dependencyClass it would take as an Orchestrator, and each variant to rebase,
@@ -1551,7 +1582,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 18
+      - stepNumber: 23
         description: >-
           Narrative steps: plan the foreign-field repair with apply false and report each step
           carrying a field its own type cannot have — the implementation, the method, the step and
@@ -1559,14 +1590,14 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 19
+      - stepNumber: 24
         description: >-
           Ask where the derived context documents live, so the staleness check reports on the
           generated pair and never on the two a person wrote
         type: call
         targetComponent: cli_core_adapter
         targetMethod: derivedDocPaths
-      - stepNumber: 20
+      - stepNumber: 25
         description: >-
           Generated files and skills: read the version each one was stamped with and compare it
           against the running build, so a file written by an older wairon is reported as stale
@@ -1574,12 +1605,19 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readStampVersion
-      - stepNumber: 21
+      - stepNumber: 26
+        description: >-
+          Skills: for each active target, compare the installed SDD skills with what an export would
+          write now, reporting the missing and stale ones
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: checkSkillFreshness
+      - stepNumber: 27
         description: 'Lock: compute the gate identity as it stands now'
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 22
+      - stepNumber: 28
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
           frozen, warning when it predates per-spec approval; a stale one warns to re-lock; a
@@ -1587,18 +1625,25 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readLockState
-      - stepNumber: 23
+      - stepNumber: 29
+        description: >-
+          Extension packs: diagnose the project's pack situation — unresolved selections, installed
+          packs not applied, packs applied from the machine-wide store
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: diagnoseProjectPacks
+      - stepNumber: 30
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed but not applied, and those applied from
           the machine-wide store
         type: local
-      - stepNumber: 24
+      - stepNumber: 31
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and flag a legacy global Antigravity plugin
         type: local
-      - stepNumber: 25
+      - stepNumber: 32
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -1890,6 +1935,51 @@ methods:
         type: return
         outcome: printed
     symbol: runStatus
+  - name: runSkillsList
+    sourcePath: src/commands/skills.ts
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside an initialized project
+        type: local
+      - stepNumber: 2
+        description: Read the built-in skill names through the skills adapter
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: listSkillNames
+      - stepNumber: 3
+        description: Print each name under a header counting them
+        type: return
+        outcome: listed
+  - name: runSkillsInstall
+    sourcePath: src/commands/skills.ts
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside an initialized project
+        type: local
+      - stepNumber: 2
+        description: Export the skills for the project's enabled targets through the skills adapter
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: exportSddSkills
+      - stepNumber: 3
+        description: Did any target have a skills directory?
+        type: branch
+        condition: the export wrote to at least one destination
+        onFalseStep: 6
+      - stepNumber: 4
+        description: Count the built-in skills for the success line
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: listSkillNames
+      - stepNumber: 5
+        description: Report each destination written, and the targets skipped for having no skills directory
+        type: return
+        outcome: installed
+      - stepNumber: 6
+        label: none
+        description: Warn that no active target has a skills directory, naming the ones skipped
+        type: return
+        outcome: nothing installed
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -1903,29 +1993,6 @@ lint:
         and every `pack` subcommand's action calls runPack directly, so scope-based sub-dispatchers
         would be invented here rather than named in the code. Adding a pack subcommand adds two
         steps, which is the point.
-    - code: UNDECLARED_DEPENDENCY
-      at: src/commands/doctor.ts -> src/core/specs.ts
-      reason: >-
-        doctor reaches core directly for work no spec models yet: findLegacySpecFiles, the legacy
-        spec-filename check. Track D designs that area and routes doctor through a modelled adapter.
-    - code: UNDECLARED_DEPENDENCY
-      at: src/commands/doctor.ts -> src/core/provision.ts
-      reason: >-
-        doctor reaches core directly for work no spec models yet: backfillChainedSubprojectConfigs,
-        the chained-subproject config backfill. Track D designs that area and routes doctor through
-        a modelled adapter.
-    - code: UNDECLARED_DEPENDENCY
-      at: src/commands/doctor.ts -> src/core/skills.ts
-      reason: >-
-        doctor reaches core directly for work no spec models yet: activeTargetTypes,
-        checkSkillFreshness and exportSddSkills — skill freshness and the active targets. Track D
-        designs that area and routes doctor through a modelled adapter.
-    - code: UNDECLARED_DEPENDENCY
-      at: src/commands/doctor.ts -> src/core/extensions.ts
-      reason: >-
-        doctor reaches core directly for work no spec models yet: diagnoseProjectPacks and
-        pinInstalledPacksAsSelections — pack diagnosis and pinning. Track D designs that area and
-        routes doctor through a modelled adapter.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-25T19:36:04.824Z'
+updatedAt: '2026-09-25T21:33:39.687Z'

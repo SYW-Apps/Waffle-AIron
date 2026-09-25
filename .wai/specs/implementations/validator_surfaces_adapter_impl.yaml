@@ -7,14 +7,14 @@ contract: ivalidator_surfaces_adapter
 sourcePath: src/core/adapters/validator-surfaces.ts
 simPath: tests/core/validation.test.ts
 methods:
-  - name: loadSurfaceSnapshots
+  - name: listSnapshots
     narrative:
       - stepNumber: 1
         description: Call listSnapshots on the surface portal
         type: call
         targetComponent: surface_portal
         targetMethod: listSnapshots
-  - name: loadMountSurfaceSnapshots
+  - name: listMountSnapshots
     narrative:
       - stepNumber: 1
         description: Call listMountSnapshots on the surface portal
@@ -23,4 +23,4 @@ methods:
         targetMethod: listMountSnapshots
 status: complete
 createdAt: '2026-07-10T23:16:00.415Z'
-updatedAt: '2026-09-25T20:49:19.589Z'
+updatedAt: '2026-09-25T21:33:44.765Z'

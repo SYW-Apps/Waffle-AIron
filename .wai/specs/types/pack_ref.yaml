@@ -1,0 +1,20 @@
+kind: value-object
+id: pack_ref
+name: PackRef
+description: >-
+  One extension pack to load and the scope it loads under: a path or module ref, and whether it
+  governs globally or for the project.
+subsystem: sdd_core
+fields:
+  - name: ref
+    type: string
+    description: A path-like ref (resolved against the project root) or a Node module id
+    optional: false
+  - name: scope
+    type: string
+    description: global or project — which layer the pack loads into
+    optional: false
+methods: []
+sourcePath: src/core/extensions.ts
+createdAt: '2026-09-25T21:05:21.121Z'
+updatedAt: '2026-09-25T21:05:21.123Z'

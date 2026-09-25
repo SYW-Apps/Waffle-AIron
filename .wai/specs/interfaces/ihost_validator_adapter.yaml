@@ -10,21 +10,12 @@ methods:
   - name: validateAsComplete
     description: >-
       Run the conformance gate at full strictness (treating all specs as complete) under the bound
-      project's own rule severities and projectType, and return the result. Those settings are what
-      the options carry — a hosted project is judged by its own configuration, never the host's.
-    signature: 'validateAsComplete(options?: ValidationOptions, projectType?: string): ValidationResult'
+      project's own rule severities and projectType, read through the host core adapter, and return
+      the result. A hosted project is judged by its own configuration, never the host's, so the
+      caller passes nothing; a root with no configuration is refused as uninitialized.
+    signature: 'validateAsComplete(): ValidationResult'
     returns: ValidationResult
-    params:
-      - name: options
-        type: ValidationOptions
-        description: >-
-          The bound project's rules and scope; full strictness is the gate's own and not the
-          caller's to unset
-        optional: true
-      - name: projectType
-        type: string
-        description: The bound project's type, whose doctrine applies
-        optional: true
+    params: []
   - name: computeGateStateId
     description: >-
       Forward to validator_portal.computeGateStateId: the gate identity a lock records and every
@@ -32,6 +23,23 @@ methods:
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
+  - name: builtinProfileIds
+    description: >-
+      List the ids of wairon's built-in architectural profiles (backend, frontend-reactive, …),
+      forwarded to the validator portal — the built-in half of the selectable-profile catalog.
+    signature: 'builtinProfileIds(): string[]'
+    returns: string[]
+    params: []
+  - name: builtinProjectKinds
+    description: >-
+      The ids of wairon's built-in COMPOSITE PROJECT KINDS (fullstack, system-of-systems, monorepo)
+      — legal projectType values that are not architectural profiles and carry no profile doctrine
+      of their own, forwarded to the validator portal. The counterpart of builtinProfileIds: the
+      hosted profile-application path must recognize a project kind as resolvable-as-is (no
+      contributing pack to adopt) instead of refusing it as an unknown profile.
+    signature: 'builtinProjectKinds(): string[]'
+    returns: string[]
+    params: []
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-09-20T14:27:14.564Z'
+updatedAt: '2026-09-25T21:39:08.840Z'

@@ -107,6 +107,20 @@ methods:
         description: Project-relative test directories; empty answers empty
     guarantees:
       - idempotent
+  - name: builtinProfileIds
+    description: >-
+      Published read: the ids of wairon's built-in architectural profiles, the built-in half of what
+      a projectType may name.
+    signature: 'builtinProfileIds(): string[]'
+    returns: string[]
+    params: []
+  - name: builtinProjectKinds
+    description: >-
+      Published read: the ids of wairon's built-in composite project kinds — projectType values that
+      are not architectural profiles.
+    signature: 'builtinProjectKinds(): string[]'
+    returns: string[]
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T14:26:44.497Z'
+updatedAt: '2026-09-25T21:09:00.951Z'

@@ -134,7 +134,42 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: approvalVerdict
+  - name: loadComponentSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadComponentSpecs
+  - name: loadRegistry
+    narrative:
+      - stepNumber: 1
+        description: Forward to the agent context portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: loadRegistry
+  - name: resolveDomains
+    narrative:
+      - stepNumber: 1
+        description: Forward to the agent context portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: resolveDomains
+  - name: loadProjectVariants
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: loadProjectVariants
+  - name: resolveVariantGuidance
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: resolveVariantGuidance
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T20:49:24.402Z'
+updatedAt: '2026-09-25T21:09:40.205Z'

@@ -8,6 +8,7 @@ componentType: Adapter
 owns: []
 dependsOn:
   - spec_tree_portal
+  - approval_portal
 status: complete
 createdAt: '2026-07-10T23:12:29.792Z'
-updatedAt: '2026-07-11T09:04:02.037Z'
+updatedAt: '2026-09-25T21:09:32.390Z'

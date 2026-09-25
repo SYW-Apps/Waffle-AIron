@@ -50,9 +50,14 @@ methods:
         description: Compute the transitive type closure of every exported signature and embed the definitions
         type: local
       - stepNumber: 10
+        description: Read the spec tree's current StateId through the core adapter
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 11
         description: Stamp identity, origin generated, the current StateId, and generatedAt
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: Return the self-contained snapshot
         type: return
         outcome: SurfaceSnapshot
@@ -128,14 +133,19 @@ methods:
         description: Compute the transitive type closure of every exported signature and embed the definitions
         type: local
       - stepNumber: 9
+        description: Read the spec tree's current StateId through the core adapter
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 10
         description: >-
           Stamp projectName '<systemName>::<subsystemId>', origin generated, the current StateId,
           and generatedAt
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Return the self-contained sibling snapshot
         type: return
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-09-15T17:59:24.008Z'
+updatedAt: '2026-09-25T21:36:52.471Z'

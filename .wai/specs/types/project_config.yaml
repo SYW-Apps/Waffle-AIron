@@ -63,14 +63,12 @@ methods:
       `extensions.packs` entry (a selection's name, or a legacy path reference's file stem — its
       basename without a pack extension), then the required and default pack names recorded in
       `profileSelection`. Empty when nothing is declared.
-    sourcePath: src/config/project-config.ts
   - name: declaredProfileIds
     signature: 'declaredProfileIds(): string[]'
     returns: string[]
     description: >-
       The profile ids recorded in `profileSelection`, deduplicated in first-seen order; empty when
       no selection is recorded. The governing `projectType` is not included.
-    sourcePath: src/config/project-config.ts
   - name: activeTargetTypes
     signature: 'activeTargetTypes(): string[]'
     returns: string[]
@@ -79,4 +77,4 @@ methods:
       configuration with no enabled targets.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-23T18:36:01.487Z'
+updatedAt: '2026-09-25T21:05:24.706Z'

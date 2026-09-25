@@ -81,6 +81,126 @@ methods:
         type: string
         description: A specific version, or every version when omitted
     effect: write
+  - name: globalPacksDir
+    description: >-
+      Published read: where machine-wide packs live on this machine. Forwarded to the extension
+      orchestrator.
+    signature: 'globalPacksDir(): string'
+    returns: string
+    params: []
+  - name: discoverPacks
+    description: >-
+      Published read: the pack refs in a directory, sorted; empty for a missing or unreadable one.
+      Forwarded to the extension orchestrator.
+    signature: 'discoverPacks(dir: string): string[]'
+    returns: string[]
+    params:
+      - name: dir
+        type: string
+  - name: packDirEntry
+    description: >-
+      Published read: the entry file that makes a directory a pack, or null. Forwarded to the
+      extension orchestrator.
+    signature: 'packDirEntry(dir: string): string | null'
+    returns: string | null
+    params:
+      - name: dir
+        type: string
+  - name: loadExtensionPacks
+    description: >-
+      Published read: load the given packs, each under its scope, against a project root — how a
+      pack is probed in isolation before it is installed. Forwarded to the extension orchestrator.
+    signature: 'loadExtensionPacks(refs: PackRef[], projectRoot: string): LoadedExtensions'
+    returns: LoadedExtensions
+    params:
+      - name: refs
+        type: PackRef[]
+      - name: projectRoot
+        type: string
+  - name: checkDeclarativePack
+    description: >-
+      Published read: judge a parsed manifest as a declarative pack — the first schema error's
+      message, or null when it is one. Forwarded to the extension orchestrator.
+    signature: 'checkDeclarativePack(manifest: Json): string | null'
+    returns: string | null
+    params:
+      - name: manifest
+        type: Json
+        description: The parsed manifest document, untyped until this judges it
+  - name: packEntryRef
+    description: >-
+      Published read: the loadable ref for one configured pack entry, or null when a selection does
+      not resolve. Forwarded to the extension orchestrator.
+    signature: 'packEntryRef(entry: PackSelection, projectRoot: string): string | null'
+    returns: string | null
+    params:
+      - name: entry
+        type: PackSelection
+      - name: projectRoot
+        type: string
+  - name: packEntryLabel
+    description: >-
+      Published read: a stable human label for one configured pack entry, for messages and listings.
+      Forwarded to the extension orchestrator.
+    signature: 'packEntryLabel(entry: PackSelection): string'
+    returns: string
+    params:
+      - name: entry
+        type: PackSelection
+  - name: globalPacksEnabled
+    description: >-
+      Published read: whether machine-wide packs also apply to a project that has not said.
+      Forwarded to the extension orchestrator.
+    signature: 'globalPacksEnabled(config: ProjectConfig): boolean'
+    returns: boolean
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: diagnoseProjectPacks
+    description: >-
+      Published read: this project's pack situation for `wairon doctor`. Forwarded to the extension
+      orchestrator.
+    signature: 'diagnoseProjectPacks(): PackDiagnosis'
+    returns: PackDiagnosis
+    params: []
+  - name: pinInstalledPacksAsSelections
+    description: >-
+      Published write: for a project that never declared a position on machine-wide packs, record
+      the installed-but-unapplied packs as explicit selections and turn machine-wide loading off;
+      answers the names recorded. Forwarded to the extension orchestrator.
+    signature: 'pinInstalledPacksAsSelections(): string[]'
+    returns: string[]
+    params: []
+  - name: loadProjectVariants
+    description: >-
+      Published read: the component-variant registry governing the current project. Forwarded to the
+      extension orchestrator.
+    signature: 'loadProjectVariants(): VariantDef[]'
+    returns: VariantDef[]
+    params: []
+  - name: resolveVariantGuidance
+    description: >-
+      Published read: one component's variant guidance and its same-variant siblings, or null.
+      Forwarded to the extension orchestrator.
+    signature: >-
+      resolveVariantGuidance(component: ComponentSpec, allComponents: ComponentSpec[], variantsById:
+      VariantDef[]): VariantDef
+    returns: VariantDef
+    params:
+      - name: component
+        type: ComponentSpec
+      - name: allComponents
+        type: ComponentSpec[]
+      - name: variantsById
+        type: VariantDef[]
+lint:
+  allow:
+    - code: UNTYPED_SEAM
+      reason: >-
+        checkDeclarativePack's manifest is a parsed YAML/JSON document that has not been judged yet
+        — deciding whether it has the declarative-pack shape is that method's whole job, so typing
+        the parameter as that shape would assert the answer before the check runs. The finding names
+        no site, so this allow is spec-wide; it is the only untyped parameter on this contract.
 status: complete
 createdAt: '2026-09-25T17:33:10.144Z'
-updatedAt: '2026-09-25T17:33:36.520Z'
+updatedAt: '2026-09-25T21:33:31.915Z'

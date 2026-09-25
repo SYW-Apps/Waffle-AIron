@@ -85,6 +85,16 @@ publicInterfaces:
       API.
     component: operations_portal
     interface: ioperations_portal
+  - type: Custom
+    details: >-
+      In-process resolution of one integration secret (stored, else its environment fallback) for
+      the adapters that present a credential to an outside service: sdd_git's clone and
+      sdd_producers' Notion and Miro sync.
+    component: secret_portal
+    interface: isecret_portal
+    consumers:
+      - sdd_git
+      - sdd_producers
 lifecycle:
   - phase: init
     component: host_server
@@ -92,4 +102,4 @@ lifecycle:
 trustedLinks: []
 status: complete
 createdAt: '2026-07-04T12:33:06.563Z'
-updatedAt: '2026-09-11T23:40:24.297Z'
+updatedAt: '2026-09-25T21:12:33.519Z'

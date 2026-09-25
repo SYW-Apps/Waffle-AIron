@@ -14,7 +14,8 @@ dependsOn:
   - core_orchestrator
   - tree_transfer_orchestrator
   - project_status
+  - architecture_diagrams
 portalType: Custom
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:35:40.518Z'
+updatedAt: '2026-09-25T21:06:51.498Z'

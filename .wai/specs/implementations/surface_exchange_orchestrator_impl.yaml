@@ -219,7 +219,7 @@ methods:
           target's bound root
         type: call
         targetComponent: host_surfaces_adapter
-        targetMethod: exportBoundSurface
+        targetMethod: exportSurface
       - stepNumber: 14
         description: Stamp the snapshot origin exchanged for the consumer's import
         type: local
@@ -265,7 +265,7 @@ methods:
           set.
         type: call
         targetComponent: host_surfaces_adapter
-        targetMethod: exportBoundSurface
+        targetMethod: exportSurface
       - stepNumber: 7
         description: >-
           The requested format is openapi — the orchestrator selects among the rendered per-portal

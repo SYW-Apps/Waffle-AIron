@@ -152,6 +152,17 @@ methods:
         type: return
         outcome: web graph model
     detail: full
+  - name: buildCanvasDataModel
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the canvas model from the loaded specs and the tree's current findings — the same
+          model the canvas render embeds
+        type: local
+      - stepNumber: 2
+        description: Return it as data
+        type: return
+        outcome: success
 lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
@@ -168,4 +179,4 @@ lint:
         above, in the same refactor.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-09-20T18:29:18.745Z'
+updatedAt: '2026-09-25T21:06:31.745Z'

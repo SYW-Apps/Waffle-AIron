@@ -157,6 +157,65 @@ methods:
       - name: id
         type: string
         description: The spec id (namespaced if needed); informational for the L0
+  - name: findChainingParent
+    description: >-
+      Published read: the ancestor project that mounts a child root as a chained subsystem, found by
+      walking up from it below an optional ceiling. Unlike resolveChainingParent it answers for any
+      root the caller names and does NOT consult the request's reach, so a caller must gate on its
+      own reach before it calls and pass the root it may not climb above as the ceiling.
+    signature: 'findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+    params:
+      - name: childRoot
+        type: string
+        description: The root to start the walk from
+      - name: ceiling
+        type: string
+        description: A root the walk never climbs above
+        optional: true
+  - name: scanAllSpecs
+    description: >-
+      Published read: the bound tree's spec index at the given recursion depth — every loaded spec
+      by kind and the file each is stored in. Sets the depth the following spec reads use.
+    signature: 'scanAllSpecs(options?: SpecScanOptions): SpecIndex'
+    returns: SpecIndex
+    params:
+      - name: options
+        type: SpecScanOptions
+        description: How deep into chained subprojects the scan reads
+        optional: true
+  - name: getLoaderIssues
+    description: >-
+      Published read: the loader's diagnostics for the bound tree — the files that failed their
+      schema or could not be parsed while it was read.
+    signature: 'getLoaderIssues(): ValidationIssue[]'
+    returns: ValidationIssue[]
+    params: []
+  - name: clearLoaderIssues
+    description: >-
+      Forget the loader's diagnostics and drop the cached index, so the next read of the tree starts
+      from disk and records its diagnostics afresh. Writes no spec.
+    signature: 'clearLoaderIssues(): void'
+    returns: void
+    params: []
+  - name: assertContainedProjectPath
+    description: >-
+      Published read: a subsystem's projectPath resolved within a project root, refusing a path that
+      is absolute or escapes the root, and answering the contained absolute child root.
+    signature: 'assertContainedProjectPath(projectRoot: string, projectPath: string): string'
+    returns: string
+    params:
+      - name: projectRoot
+        type: string
+      - name: projectPath
+        type: string
+  - name: buildCanvasDataModel
+    description: >-
+      Published read: the canvas model renderDiagram('canvas') draws, returned as data for a client
+      that mounts the shared renderer itself.
+    signature: 'buildCanvasDataModel(): CanvasModel'
+    returns: CanvasModel
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T17:33:54.064Z'
+updatedAt: '2026-09-25T21:08:48.496Z'

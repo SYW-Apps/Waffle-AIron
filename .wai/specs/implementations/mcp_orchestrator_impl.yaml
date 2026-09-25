@@ -224,9 +224,12 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the tool's id, namespaced if needed, to the qualified component id in the bound
-          tree, so core can refuse a component inside a chained subproject
-        type: local
+          Read the bound tree's components through the core client adapter, and resolve the tool's
+          id, namespaced if needed, to the qualified component id among them, so core can refuse a
+          component inside a chained subproject
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpecs
       - stepNumber: 2
         description: Rename the component and rewrite every reference to it via the core client adapter
         type: call
@@ -242,9 +245,12 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the tool's id, namespaced if needed, to the qualified component id in the bound
-          tree, so core can refuse a component inside a chained subproject
-        type: local
+          Read the bound tree's components through the core client adapter, and resolve the tool's
+          id, namespaced if needed, to the qualified component id among them, so core can refuse a
+          component inside a chained subproject
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpecs
       - stepNumber: 2
         description: Rename the contract method and retarget every reference to it via the core client adapter
         type: call
@@ -447,16 +453,26 @@ methods:
         description: Decide whether the spec read carries variant guidance
         type: branch
         condition: the spec is a component that declares a variant
-        onFalseStep: 19
+        onFalseStep: 21
       - stepNumber: 18
+        description: Load the variant registry through the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectVariants
+      - stepNumber: 19
+        description: Read every component, for the same-variant siblings
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 20
         description: >-
           Resolve the component's variant guidance — the variant's base, its implementation
-          guidance, and the same-variant sibling components — and attach it as clearly derived and
-          read-only. The resolution reaches sdd_core over its published barrel surface rather than a
-          modeled component edge, which is why the variant registry's own contract declares this
-          caller as an invokedBy seed instead of the graph carrying the hop
-        type: local
-      - stepNumber: 19
+          guidance, and the same-variant sibling components — through the core client adapter, and
+          attach it as clearly derived and read-only
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: resolveVariantGuidance
+      - stepNumber: 21
         description: >-
           Answer with the STORED spec and the derived markers beside it, so nothing derived can be
           mistaken for something stored and written back; the text rendering folds them in, as it
@@ -570,4 +586,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-24T23:00:57.093Z'
+updatedAt: '2026-09-25T21:36:17.148Z'

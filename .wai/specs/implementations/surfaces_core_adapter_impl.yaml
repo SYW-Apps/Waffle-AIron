@@ -55,6 +55,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: resolveSubprojectForNamespace
+  - name: computeStateId
+    narrative:
+      - stepNumber: 1
+        description: Call computeStateId on the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: computeStateId
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-09-25T20:49:20.939Z'
+updatedAt: '2026-09-25T21:09:31.546Z'

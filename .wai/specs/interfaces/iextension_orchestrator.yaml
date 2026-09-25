@@ -40,12 +40,6 @@ methods:
       - name: entry
         type: PackSelection
         description: A configured pack entry (a legacy path ref string, or a selection).
-    invokedBy:
-      kind: sibling-subsystem
-      caller: >-
-        sdd_cli pack commands (cli_packs_adapter) and sdd_host's pack plane (host_core_adapter
-        forwarder into pack_store/pack_orchestrator) label pack entries for listings and messages,
-        crossing over sdd_core's published barrel surface.
   - name: packEntryRef
     description: >-
       The loadable ref for one configured pack entry: a legacy path/module ref passes through
@@ -59,12 +53,6 @@ methods:
         type: PackSelection
       - name: projectRoot
         type: string
-    invokedBy:
-      kind: sibling-subsystem
-      caller: >-
-        sdd_cli pack commands (cli_packs_adapter) and sdd_host's pack plane (host_core_adapter
-        forwarder) resolve a selection entry to its loadable ref, crossing over sdd_core's published
-        barrel surface.
   - name: globalPacksEnabled
     description: >-
       Whether machine-wide packs (the pack store) ALSO apply to a project that has not said. False
@@ -76,11 +64,6 @@ methods:
     params:
       - name: config
         type: ProjectConfig
-    invokedBy:
-      kind: sibling-subsystem
-      caller: >-
-        sdd_cli pack commands and sdd_host's pack plane read the useGlobalPacks gate when rewriting
-        extensions config, crossing over sdd_core's published barrel surface.
   - name: diagnoseProjectPacks
     description: >-
       Report this project's pack situation for `wairon doctor`: selections that do not resolve,
@@ -92,11 +75,6 @@ methods:
     signature: 'diagnoseProjectPacks(): PackDiagnosis'
     returns: PackDiagnosis
     params: []
-    invokedBy:
-      kind: sibling-subsystem
-      caller: >-
-        The `wairon doctor` command (sdd_cli, commands/doctor.ts) runs the project pack diagnosis
-        over sdd_core's published barrel surface rather than a modeled component edge.
   - name: pinInstalledPacksAsSelections
     description: >-
       The migration action behind `wairon doctor --fix`: for a project that never declared a
@@ -108,12 +86,6 @@ methods:
     signature: 'pinInstalledPacksAsSelections(): string[]'
     returns: string[]
     params: []
-    invokedBy:
-      kind: sibling-subsystem
-      caller: >-
-        The `wairon doctor --fix` flow (sdd_cli, commands/doctor.ts) pins installed packs as
-        explicit selections over sdd_core's published barrel surface rather than a modeled component
-        edge.
   - name: defaultPackSelections
     description: >-
       The store packs whose manifests declare `applyByDefault: true`, shaped as selections ready to
@@ -189,8 +161,54 @@ methods:
         type: string
         description: A specific version, or every version when omitted
     effect: write
+  - name: globalPacksDir
+    description: >-
+      Where machine-wide packs live (WAIRON_PACKS_DIR, else the default under the home directory),
+      forwarded from the pack source.
+    signature: 'globalPacksDir(): string'
+    returns: string
+    params: []
+  - name: discoverPacks
+    description: >-
+      The pack refs in a directory, sorted for a deterministic load order; empty for a missing or
+      unreadable directory. Forwarded from the pack source.
+    signature: 'discoverPacks(dir: string): string[]'
+    returns: string[]
+    params:
+      - name: dir
+        type: string
+  - name: packDirEntry
+    description: The entry file that makes a directory a pack, or null when the directory is not one.
+    signature: 'packDirEntry(dir: string): string | null'
+    returns: string | null
+    params:
+      - name: dir
+        type: string
+  - name: loadPacks
+    description: >-
+      Load the given packs, each under its scope, against a project root into one LoadedExtensions —
+      a failed pack rides on the result's errors rather than throwing. What a caller uses to probe a
+      pack in isolation.
+    signature: 'loadPacks(refs: PackRef[], projectRoot: string): LoadedExtensions'
+    returns: LoadedExtensions
+    params:
+      - name: refs
+        type: PackRef[]
+      - name: projectRoot
+        type: string
+  - name: checkDeclarativePack
+    description: >-
+      Judge a parsed manifest against the declarative-pack schema: the first schema error's message,
+      or null when the manifest is a valid declarative pack. How a caller that must refuse rule and
+      code packs tells them apart before installing anything.
+    signature: 'checkDeclarativePack(manifest: Json): string | null'
+    returns: string | null
+    params:
+      - name: manifest
+        type: Json
+        description: The parsed manifest document, untyped until this judges it
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-09-23T12:55:09.836Z'
+updatedAt: '2026-09-25T21:08:40.634Z'

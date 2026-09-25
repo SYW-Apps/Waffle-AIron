@@ -27,6 +27,22 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: computeGateStateId
+  - name: builtinProfileIds
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: builtinProfileIds
+    detail: calls-only
+  - name: builtinProjectKinds
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: builtinProjectKinds
+    detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:08.409Z'
-updatedAt: '2026-09-25T20:49:31.942Z'
+updatedAt: '2026-09-25T21:11:27.689Z'

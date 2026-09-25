@@ -34,6 +34,20 @@ methods:
     signature: 'buildServerInstructions(): string'
     returns: string
     params: []
+  - name: listSkillNames
+    description: 'Published read: the names of the built-in SDD skills.'
+    signature: 'listSkillNames(): string[]'
+    returns: string[]
+    params: []
+  - name: checkSkillFreshness
+    description: >-
+      Published read: how a target's installed skills compare with what an export would write now —
+      what `wairon doctor` reports as missing or stale.
+    signature: 'checkSkillFreshness(type: string): SkillFreshness'
+    returns: SkillFreshness
+    params:
+      - name: type
+        type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-13T23:11:55.313Z'
+updatedAt: '2026-09-25T21:13:55.805Z'

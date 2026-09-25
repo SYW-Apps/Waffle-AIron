@@ -107,6 +107,32 @@ methods:
       - name: apply
         type: boolean
         description: Write the repair; false plans without writing
+  - name: findLegacySpecFiles
+    description: >-
+      Published read: the bound tree's spec files stored under a legacy (undotted) name, each with
+      the name the current layout expects — what `wairon doctor` reports and `validate` warns about
+      before a migration.
+    signature: 'findLegacySpecFiles(): LegacySpecFile[]'
+    returns: LegacySpecFile[]
+    params: []
+  - name: findChainingSubprojectsMissingConfig
+    description: >-
+      Published read: the chained subproject directories under a root that hold a spec tree but no
+      project configuration.
+    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): string[]'
+    returns: string[]
+    params:
+      - name: projectRoot
+        type: string
+  - name: backfillChainedSubprojectConfigs
+    description: >-
+      Published repair: write a project configuration for every chained subproject under a root that
+      has a spec tree but none, leaving its specs untouched; answers the directories repaired.
+    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): string[]'
+    returns: string[]
+    params:
+      - name: projectRoot
+        type: string
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-09-25T17:33:24.165Z'
+updatedAt: '2026-09-25T21:06:55.248Z'

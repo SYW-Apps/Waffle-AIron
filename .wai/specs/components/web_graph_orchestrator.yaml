@@ -19,6 +19,7 @@ dependsOn:
   - host_core_adapter
   - host_validator_adapter
   - project_repository
+  - host_surfaces_adapter
 status: complete
 createdAt: '2026-07-11T11:31:43.700Z'
-updatedAt: '2026-09-18T16:55:07.204Z'
+updatedAt: '2026-09-25T21:34:46.795Z'

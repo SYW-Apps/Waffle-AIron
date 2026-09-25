@@ -12,6 +12,22 @@ methods:
         targetComponent: skills_exporter
         targetMethod: exportSddSkills
     symbol: exportSddSkills
+  - name: listNames
+    narrative:
+      - stepNumber: 1
+        description: Call listSkillNames on skills exporter adapter
+        type: call
+        targetComponent: skills_exporter
+        targetMethod: listSkillNames
+    symbol: listSkillNames
+  - name: checkFreshness
+    narrative:
+      - stepNumber: 1
+        description: Call checkSkillFreshness on skills exporter adapter
+        type: call
+        targetComponent: skills_exporter
+        targetMethod: checkSkillFreshness
+    symbol: checkSkillFreshness
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-17T20:30:42.201Z'
+updatedAt: '2026-09-25T21:33:51.292Z'

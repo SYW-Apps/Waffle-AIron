@@ -11,6 +11,20 @@ methods:
         type: call
         targetComponent: skills_portal
         targetMethod: exportSddSkills
+  - name: listSkillNames
+    narrative:
+      - stepNumber: 1
+        description: Call listSkillNames on the skills portal
+        type: call
+        targetComponent: skills_portal
+        targetMethod: listSkillNames
+  - name: checkSkillFreshness
+    narrative:
+      - stepNumber: 1
+        description: Call checkSkillFreshness on the skills portal
+        type: call
+        targetComponent: skills_portal
+        targetMethod: checkSkillFreshness
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T20:49:40.350Z'
+updatedAt: '2026-09-25T21:14:01.482Z'
