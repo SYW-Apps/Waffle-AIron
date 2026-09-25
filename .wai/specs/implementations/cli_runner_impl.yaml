@@ -301,55 +301,6 @@ methods:
         description: Return on unknown action
         type: return
         outcome: unknown action
-  - name: runHostKey
-    sourcePath: src/commands/host.ts
-    narrative:
-      - stepNumber: 1
-        description: Read the master credential from the environment
-        type: local
-      - stepNumber: 2
-        description: Dispatch on the action
-        type: switch
-        'on': action
-        cases:
-          - value: mint
-            step: 3
-          - value: revoke
-            step: 5
-          - value: list
-            step: 7
-        defaultStep: 9
-      - stepNumber: 3
-        description: Mint a key via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: mintKey
-      - stepNumber: 4
-        description: Return after mint
-        type: return
-        outcome: minted
-      - stepNumber: 5
-        description: Revoke a key via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: revokeKey
-      - stepNumber: 6
-        description: Return after revoke
-        type: return
-        outcome: revoked
-      - stepNumber: 7
-        description: List keys via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: listKeys
-      - stepNumber: 8
-        description: Return after list
-        type: return
-        outcome: listed
-      - stepNumber: 9
-        description: Return on unknown action
-        type: return
-        outcome: unknown action
   - name: runHostLock
     sourcePath: src/commands/host.ts
     narrative:
@@ -2343,6 +2294,88 @@ methods:
         type: throw
         error: WaironError
     detail: full
+  - name: runServe
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the host configuration from flags and environment
+        type: local
+      - stepNumber: 2
+        description: Seed the default identity provider from the environment; a failure aborts the boot
+        type: try
+        endStep: 3
+        catches:
+          - error: Error
+            step: 5
+      - stepNumber: 3
+        label: seed
+        description: >-
+          Have the host seed the default identity provider from its own environment via the host
+          adapter (a no-op without an issuer)
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: seedDefaultProvider
+      - stepNumber: 4
+        description: Skip the failure handler
+        type: jump
+        toStep: 6
+      - stepNumber: 5
+        label: seed_failed
+        description: Refuse to boot with the seeding error
+        type: throw
+        error: WaironError
+      - stepNumber: 6
+        label: start
+        description: Start the hosting server via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: startHostServer
+      - stepNumber: 7
+        description: Print the planes and run until signalled, closing the server on shutdown
+        type: local
+      - stepNumber: 8
+        description: Return on shutdown
+        type: return
+        outcome: stopped
+    detail: full
+  - name: runDev
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Is there a .wai/ in the working directory?
+        type: branch
+        condition: no .wai/ in the working directory
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        label: no_project
+        description: 'Refuse: not a wairon project root'
+        type: throw
+        error: WaironError
+      - stepNumber: 3
+        label: config
+        description: >-
+          Build the per-cwd ephemeral data dir and the loopback, auth-off, development-mode host
+          configuration
+        type: local
+      - stepNumber: 4
+        description: Register the working directory as the single dev project via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: registerLocalDevProject
+      - stepNumber: 5
+        description: Start the server via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: startHostServer
+      - stepNumber: 6
+        description: Optionally open the browser, and run until signalled
+        type: local
+      - stepNumber: 7
+        description: Return on shutdown
+        type: return
+        outcome: stopped
+    detail: full
   - name: runHostDemo
     sourcePath: src/commands/host.ts
     narrative:
@@ -2350,8 +2383,10 @@ methods:
         description: Resolve the host configuration and read the master credential
         type: local
       - stepNumber: 2
-        description: Ensure the owner organization unit exists (idempotent upsert)
-        type: local
+        description: Ensure the owner organization unit exists (idempotent upsert) via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: upsertUnit
       - stepNumber: 3
         description: Look up whether the demo project id is already registered via the host adapter
         type: call
@@ -2395,89 +2430,140 @@ methods:
         type: return
         outcome: seeded
     detail: full
-  - name: runDev
+  - name: runHostKey
     sourcePath: src/commands/host.ts
     narrative:
       - stepNumber: 1
-        description: Is there a .wai/ in the working directory?
-        type: branch
-        condition: no .wai/ in the working directory
-        onTrueStep: 2
-        onFalseStep: 3
-      - stepNumber: 2
-        label: no_project
-        description: 'Refuse: not a wairon project root'
-        type: throw
-        error: WaironError
-      - stepNumber: 3
-        label: config
-        description: >-
-          Build the per-cwd ephemeral data dir and the loopback, auth-off, development-mode host
-          configuration
+        description: Read the master credential from the environment
         type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: mint
+            step: 3
+          - value: revoke
+            step: 8
+          - value: list
+            step: 10
+        defaultStep: 12
+      - stepNumber: 3
+        label: mint
+        description: Is an owner named?
+        type: branch
+        condition: '--owner is given'
+        onTrueStep: 4
+        onFalseStep: 6
       - stepNumber: 4
-        description: Register the working directory as the single dev project via the host adapter
+        label: mint_owned
+        description: Mint an owner-bound token via the host adapter
         type: call
         targetComponent: cli_host_adapter
-        targetMethod: registerLocalDevProject
+        targetMethod: mintToken
       - stepNumber: 5
-        description: Start the server, optionally open the browser, and run until signalled
-        type: local
-      - stepNumber: 6
-        description: Return on shutdown
+        description: Return after mint
         type: return
-        outcome: stopped
-    detail: full
-  - name: runServe
-    sourcePath: src/commands/host.ts
-    narrative:
-      - stepNumber: 1
-        description: Resolve the host configuration from flags and environment
-        type: local
-      - stepNumber: 2
-        description: Seed the default identity provider from the environment; a failure aborts the boot
-        type: try
-        endStep: 5
-        catches:
-          - error: Error
-            step: 7
-      - stepNumber: 3
-        description: Is an OIDC issuer set in the environment?
-        type: branch
-        condition: no OIDC issuer is set
-        onTrueStep: 8
-        onFalseStep: 4
-      - stepNumber: 4
-        label: seed_secret
-        description: >-
-          Have the host store a shipped raw client secret under its fixed reference via the host
-          adapter
+        outcome: minted
+      - stepNumber: 6
+        label: mint_ownerless
+        description: Mint an ownerless key via the host adapter, warning that it resolves to no permissions
         type: call
         targetComponent: cli_host_adapter
-        targetMethod: seedIdentityProviderSecret
-      - stepNumber: 5
-        label: upsert
-        description: >-
-          Upsert the default provider record from the environment, pointing at the seeded or named
-          reference
-        type: local
-      - stepNumber: 6
-        description: Skip the failure handler
-        type: jump
-        toStep: 8
+        targetMethod: mintKey
       - stepNumber: 7
-        label: seed_failed
-        description: Refuse to boot with the seeding error
+        description: Return after mint
+        type: return
+        outcome: minted
+      - stepNumber: 8
+        label: revoke
+        description: Revoke a key via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: revokeKey
+      - stepNumber: 9
+        description: Return after revoke
+        type: return
+        outcome: revoked
+      - stepNumber: 10
+        label: list
+        description: List keys via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listKeys
+      - stepNumber: 11
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 12
+        label: unknown
+        description: Refuse an unknown action
         type: throw
         error: WaironError
-      - stepNumber: 8
-        label: start
-        description: Start the hosting server and run until signalled
+    detail: full
+  - name: runHostUnit
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
         type: local
-      - stepNumber: 9
-        description: Return on shutdown
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: create
+            step: 3
+        defaultStep: 6
+      - stepNumber: 3
+        label: create
+        description: Derive the unit's qualified id from its parent and slug
+        type: local
+      - stepNumber: 4
+        description: Create the unit via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: upsertUnit
+      - stepNumber: 5
+        description: Return after create
         type: return
-        outcome: stopped
+        outcome: created
+      - stepNumber: 6
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostDoctor
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the host configuration
+        type: local
+      - stepNumber: 2
+        description: Run the permission-model migration via the host adapter, applying it only with --fix
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: migratePermissionModel
+      - stepNumber: 3
+        description: Nothing to migrate?
+        type: branch
+        condition: the report has no findings
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        label: clean
+        description: Report the data as migrated
+        type: return
+        outcome: nothing to migrate
+      - stepNumber: 5
+        label: report
+        description: Print every finding, warning when it was a dry run
+        type: local
+      - stepNumber: 6
+        description: Return after the report
+        type: return
+        outcome: reported
     detail: full
 lint:
   allow:
@@ -2494,4 +2580,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-25T22:48:02.848Z'
+updatedAt: '2026-09-25T22:58:42.000Z'

@@ -1138,30 +1138,6 @@ methods:
         description: Return the registered record
         type: return
         outcome: project record
-  - name: seedIdentityProviderSecret
-    narrative:
-      - stepNumber: 1
-        description: Read the default provider's raw client secret from the server process environment
-        type: local
-      - stepNumber: 2
-        description: Is a secret shipped?
-        type: branch
-        condition: the environment ships no client secret
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Nothing to seed
-        type: return
-        outcome: 'null'
-      - stepNumber: 4
-        description: Store the secret under the default provider's fixed reference
-        type: call
-        targetComponent: secret_repository
-        targetMethod: write
-      - stepNumber: 5
-        description: Return the reference the provider record names
-        type: return
-        outcome: the fixed secret reference
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-25T22:39:02.897Z'
+updatedAt: '2026-09-25T22:55:53.888Z'

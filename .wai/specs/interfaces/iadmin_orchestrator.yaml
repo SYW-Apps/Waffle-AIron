@@ -358,15 +358,6 @@ methods:
         type: string
       - name: rootPath
         type: string
-  - name: seedIdentityProviderSecret
-    description: >-
-      Boot-time seeding of the default identity provider's client secret, run before any credential
-      exists. The value is read from the server process's own environment and stored under the fixed
-      reference the default provider names; no key or value crosses the call. Answers that
-      reference, or null when the environment ships no secret (nothing is written).
-    signature: 'seedIdentityProviderSecret(): string | null'
-    returns: string | null
-    params: []
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-25T22:38:56.870Z'
+updatedAt: '2026-09-25T22:55:52.955Z'

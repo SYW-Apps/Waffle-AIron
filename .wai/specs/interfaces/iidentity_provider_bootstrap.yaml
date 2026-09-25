@@ -1,0 +1,21 @@
+id: iidentity_provider_bootstrap
+name: Identity Provider Bootstrap Interface
+description: >-
+  Boot-time seeding of the default identity provider. The host configuration is wiring supplied
+  ahead of the contract's (empty) parameter list.
+component: identity_provider_bootstrap
+methods:
+  - name: seedDefault
+    description: >-
+      Seed the `default` provider from the server process's environment: a no-op answering null
+      unless an issuer is set; a raw client secret is stored under the fixed reference the provider
+      then names (or a stored reference the environment names is used); the provider is upserted and
+      returned.
+    signature: 'seedDefault(): IdentityProviderConfig | null'
+    returns: IdentityProviderConfig | null
+    params: []
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-25T23:00:05.593Z'
+updatedAt: '2026-09-25T23:00:05.606Z'

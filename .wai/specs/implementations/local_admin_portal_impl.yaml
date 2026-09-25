@@ -3,7 +3,8 @@ name: Local Admin Portal Implementation
 description: >-
   Realized by src/server/local-admin.ts, a module of its own that republishes each owning workflow
   by identity (and the admin plane's two failure classes). No method holds logic; the HTTP admin
-  portal in src/server/http.ts is untouched.
+  portal in src/server/http.ts is untouched, and the host server's start is reached from here only
+  as the same function the HTTP plane's module exports.
 contract: ilocal_admin_portal
 sourcePath: src/server/local-admin.ts
 injectedParams:
@@ -151,13 +152,6 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: registerLocalDevProject
-  - name: seedIdentityProviderSecret
-    narrative:
-      - stepNumber: 1
-        description: Forward to the admin orchestrator
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: seedIdentityProviderSecret
   - name: listGlobalPacks
     narrative:
       - stepNumber: 1
@@ -228,7 +222,42 @@ methods:
         type: call
         targetComponent: project_repository
         targetMethod: existingRoot
+  - name: mintToken
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: mintToken
+  - name: upsertUnit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the landscape orchestrator
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: upsertUnit
+  - name: seedDefaultProvider
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity provider bootstrap
+        type: call
+        targetComponent: identity_provider_bootstrap
+        targetMethod: seedDefault
+  - name: migratePermissionModel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission-model migration
+        type: call
+        targetComponent: permission_model_migration
+        targetMethod: run
+  - name: startHostServer
+    narrative:
+      - stepNumber: 1
+        description: Start the host server's listeners
+        type: call
+        targetComponent: host_server
+        targetMethod: start
 detail: calls-only
 status: complete
 createdAt: '2026-09-25T22:40:16.874Z'
-updatedAt: '2026-09-25T22:40:16.888Z'
+updatedAt: '2026-09-25T23:00:14.795Z'

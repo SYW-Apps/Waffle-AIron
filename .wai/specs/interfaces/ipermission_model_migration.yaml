@@ -1,0 +1,23 @@
+id: ipermission_model_migration
+name: Permission Model Migration Interface
+description: >-
+  Inspect, and in apply mode rewrite, a hosted data dir's pre-permission-model shapes. The data root
+  is wiring supplied ahead of the contract's parameters.
+component: permission_model_migration
+methods:
+  - name: run
+    description: >-
+      Report every pre-permission-model shape in the data dir, in migration order (instance
+      identity, units, users, keys, sessions, unplaced projects, duplicate owner placements); with
+      apply, rewrite each in place. A dry run writes nothing; applying twice finds nothing the
+      second time.
+    signature: 'run(apply: boolean): MigrationReport'
+    returns: MigrationReport
+    params:
+      - name: apply
+        type: boolean
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-25T22:56:35.753Z'
+updatedAt: '2026-09-25T22:56:35.767Z'

@@ -1,0 +1,150 @@
+id: permission_model_migration_impl
+name: Permission Model Migration Implementation
+description: >-
+  Realized by src/server/migration.ts (migratePermissionModel), which reads the legacy shapes raw
+  and reaches the typed repositories for everything they still model.
+contract: ipermission_model_migration
+sourcePath: src/server/migration.ts
+injectedParams:
+  - dataDir
+methods:
+  - name: run
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the assignment grid raw as the idempotence guard for every grant translation, then
+          the persisted instance identity
+        type: call
+        targetComponent: instance_identity_repository
+        targetMethod: get
+      - stepNumber: 2
+        description: A missing identity is a finding; seed it in apply mode
+        type: branch
+        condition: the identity is missing and apply mode is on
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Seed the instance identity
+        type: call
+        targetComponent: instance_identity_repository
+        targetMethod: ensureSeeded
+      - stepNumber: 4
+        description: >-
+          Read units and placements raw; derive each unit's slug and qualified id parents-first,
+          sibling-unique, recording every rename as a finding
+        type: local
+      - stepNumber: 5
+        description: Apply the unit renames?
+        type: branch
+        condition: apply mode is on and units were found
+        onTrueStep: 6
+        onFalseStep: 9
+      - stepNumber: 6
+        description: Rewrite the units and placements file raw with the remapped ids
+        type: local
+      - stepNumber: 7
+        description: Remap assignment scopes onto the renamed units
+        type: call
+        targetComponent: permission_repository
+        targetMethod: remapScope
+      - stepNumber: 8
+        description: Remap user home units and role-binding scopes
+        type: call
+        targetComponent: user_repository
+        targetMethod: remapUnitReferences
+      - stepNumber: 9
+        description: For every user carrying stored grants (read raw), record a finding
+        type: loop
+        loopKind: forEach
+        over: users with stored grants
+        endStep: 10
+      - stepNumber: 10
+        description: In apply mode, seed each translated grant as a grid assignment, skipping an identical row
+        type: call
+        targetComponent: permission_repository
+        targetMethod: setAssignment
+      - stepNumber: 11
+        description: >-
+          Rewrite the users file raw without stored grants (apply mode); read API keys raw, revoking
+          keys owned by the retired literals, turning stored grants into the projects narrowing, and
+          binding each ownerless key to a synthesized service owner
+        type: local
+      - stepNumber: 12
+        description: In apply mode, hand each synthesized owner the key's legacy authority as grid assignments
+        type: call
+        targetComponent: permission_repository
+        targetMethod: setAssignment
+      - stepNumber: 13
+        description: >-
+          Rewrite the keys file raw (apply mode); read web sessions raw, dropping those of the
+          retired literals, turning stored grants into the projects narrowing, and rewrite that file
+          (apply mode)
+        type: local
+      - stepNumber: 14
+        description: List the hosted projects
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 15
+        description: List the placements, and record every unplaced project as a finding
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 16
+        description: Place the unplaced projects?
+        type: branch
+        condition: apply mode is on and projects are unplaced
+        onTrueStep: 17
+        onFalseStep: 22
+      - stepNumber: 17
+        description: Look up the 'unassigned' root unit
+        type: call
+        targetComponent: organization_repository
+        targetMethod: getUnit
+      - stepNumber: 18
+        description: Create it when missing
+        type: branch
+        condition: the unassigned unit is missing
+        onTrueStep: 19
+        onFalseStep: 20
+      - stepNumber: 19
+        description: Create the 'unassigned' root unit
+        type: call
+        targetComponent: organization_repository
+        targetMethod: createUnit
+      - stepNumber: 20
+        description: For every unplaced project
+        type: loop
+        loopKind: forEach
+        over: unplaced projects
+        endStep: 21
+      - stepNumber: 21
+        description: Place it in the 'unassigned' unit as owner
+        type: call
+        targetComponent: organization_repository
+        targetMethod: placeProject
+      - stepNumber: 22
+        description: List the placements again and group the owner rows by project
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 23
+        description: For every stale owner row of a project with several (the newest is kept), record a finding
+        type: loop
+        loopKind: forEach
+        over: stale duplicate owner placements
+        endStep: 24
+      - stepNumber: 24
+        description: In apply mode, delete the stale owner placement
+        type: call
+        targetComponent: organization_repository
+        targetMethod: deletePlacement
+      - stepNumber: 25
+        description: Return the findings and whether they were applied
+        type: return
+        outcome: MigrationReport
+    detail: full
+    symbol: migratePermissionModel
+status: complete
+createdAt: '2026-09-25T22:56:53.266Z'
+updatedAt: '2026-09-25T23:00:36.427Z'

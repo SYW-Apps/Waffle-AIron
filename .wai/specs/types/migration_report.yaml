@@ -1,0 +1,20 @@
+kind: value-object
+id: migration_report
+name: MigrationReport
+description: >-
+  The rollout migration's answer: every legacy shape found, and whether the findings were applied
+  (--fix) or only reported (a dry run).
+subsystem: sdd_host
+fields:
+  - name: findings
+    type: MigrationFinding[]
+    description: Every legacy shape found, in migration order.
+    optional: false
+  - name: applied
+    type: boolean
+    description: True when the findings were applied, false for a dry-run report.
+    optional: false
+methods: []
+sourcePath: src/server/migration.ts
+createdAt: '2026-09-25T22:56:13.300Z'
+updatedAt: '2026-09-25T22:56:13.302Z'

@@ -1,7 +1,7 @@
 id: icli_host_adapter
 name: CLI Host Client Adapter Interface
 description: >-
-  Contract for the CLI's in-process client of sdd_host's administration: every admin operation
+  Contract for the CLI's in-process client of sdd_host's administration: every sdd_host operation
   `wairon host`, `wairon serve` and `wairon dev` use, each a pure 1:1 identity re-export of the
   local admin portal. The credential is passed through from the caller (read from the environment by
   the CLI runner, null when unset); the host's workflows authorize it.
@@ -342,13 +342,52 @@ methods:
         type: string
       - name: rootPath
         type: string
-  - name: seedIdentityProviderSecret
+  - name: mintToken
     description: >-
-      Boot-time seeding of the default identity provider's client secret from the server process's
-      own environment; answers the fixed reference, or null when nothing was shipped.
-    signature: 'seedIdentityProviderSecret(): string | null'
-    returns: string | null
+      Mint an owner-bound API token acting as its owner's live permission, narrowed to the named
+      projects (instance admin); shown once.
+    signature: 'mintToken(credential: string | null, request: TokenMintRequest): string'
+    returns: string
+    params:
+      - name: credential
+        type: string | null
+      - name: request
+        type: TokenMintRequest
+  - name: upsertUnit
+    description: >-
+      Create or update an organization unit (project:admin over its parent, or over the unit itself
+      when it exists).
+    signature: 'upsertUnit(credential: string | null, unit: OrganizationUnitRecord): OrganizationUnitRecord'
+    returns: OrganizationUnitRecord
+    params:
+      - name: credential
+        type: string | null
+      - name: unit
+        type: OrganizationUnitRecord
+  - name: seedDefaultProvider
+    description: >-
+      Boot-time seeding of the default identity provider from the server process's own environment;
+      the caller supplies only the host configuration. Answers the seeded provider, or null when no
+      issuer is set.
+    signature: 'seedDefaultProvider(): IdentityProviderConfig | null'
+    returns: IdentityProviderConfig | null
+    params: []
+  - name: migratePermissionModel
+    description: >-
+      Report, and with apply rewrite, the data dir's pre-permission-model shapes (`wairon host
+      doctor [--fix]`); a dry run writes nothing.
+    signature: 'migratePermissionModel(apply: boolean): MigrationReport'
+    returns: MigrationReport
+    params:
+      - name: apply
+        type: boolean
+  - name: startHostServer
+    description: >-
+      Start the hosting server's listeners for this configuration (the running server's close handle
+      is returned to the caller).
+    signature: 'startHostServer(): void'
+    returns: void
     params: []
 status: complete
 createdAt: '2026-07-04T12:49:25.392Z'
-updatedAt: '2026-09-25T22:41:06.672Z'
+updatedAt: '2026-09-25T22:57:43.584Z'
