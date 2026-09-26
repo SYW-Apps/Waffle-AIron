@@ -1,5 +1,5 @@
 import { SddRule, type RuleContext } from '../types.js';
-import { ambiguityMessage } from '../../../models/index.js';
+import { ambiguityMessage, isOwnComponentEntry } from '../../../models/index.js';
 
 /**
  * The bounded-context boundary: what a dependsOn id may reach once it leaves
@@ -169,7 +169,7 @@ export const subsystemBoundaryDepsRule: SddRule = {
  */
 function restrictedConsumers(ctx: RuleContext, subsystemId: string, componentId: string): string[] | null {
   const entries = (ctx.subsystems.find((s) => s.id === subsystemId)?.publicInterfaces ?? [])
-    .filter((pi) => pi.component === componentId);
+    .filter((pi) => isOwnComponentEntry(pi) && pi.component === componentId);
   if (entries.length === 0 || entries.some((pi) => pi.consumers === undefined)) return null;
   return [...new Set(entries.flatMap((pi) => pi.consumers ?? []))];
 }

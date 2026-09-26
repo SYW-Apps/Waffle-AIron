@@ -1,4 +1,5 @@
-import { SddRule } from '../types.js';
+import { SddRule, type RuleContext } from '../types.js';
+import type { ComponentSpec } from '../../../models/index.js';
 import { isPureLogic, stereotypeOf } from './stereotype-terms.js';
 
 /**
@@ -7,16 +8,51 @@ import { isPureLogic, stereotypeOf } from './stereotype-terms.js';
  * backend Adapter that serves it, with pure logic where a value must be
  * computed. An Adapter is the sink at the bottom. None of them reaches back up
  * into workflow.
+ *
+ * One exceptional edge stays inside the data layer: an Index may project
+ * another Index OF THE SAME REPOSITORY — a derived read model over a
+ * projection complex enough to be worth re-presenting (export tables over the
+ * scanned specs) — so long as no Index-to-Index edges close a cycle. Either
+ * guardrail broken, the edge is the violation it always was.
  */
+
+/** Whether an Index reaches `target` along Index-to-Index dependency edges. */
+function indexReaches(ctx: RuleContext, from: ComponentSpec, target: string, seen = new Set<string>()): boolean {
+  for (const dep of from.dependsOn) {
+    if (dep === target) return true;
+    const next = ctx.componentMap.get(dep);
+    if (!next || next.componentType !== 'Index' || seen.has(dep)) continue;
+    seen.add(dep);
+    if (indexReaches(ctx, next, target, seen)) return true;
+  }
+  return false;
+}
+
+/**
+ * Why an Index-to-Index edge breaks the exception, or undefined when it is the
+ * sanctioned derived-Index case: both owned by one Repository, and the target
+ * never reaching back to the source.
+ */
+function derivedIndexBreach(ctx: RuleContext, from: ComponentSpec, to: ComponentSpec): string | undefined {
+  const ownership = ctx.ownershipIndex();
+  const owner = ownership.ownerOf(from.id);
+  if (!owner || owner !== ownership.ownerOf(to.id)) {
+    return 'An Index may project another Index only when one Repository owns both';
+  }
+  if (indexReaches(ctx, to, from.id)) {
+    return `"${to.id}" depends back on "${from.id}" through Index edges — derived Indexes never form a cycle`;
+  }
+  return undefined;
+}
 export const dataBlockDepsRule: SddRule = {
   name: 'data-block-dependencies',
   description:
-    'Keeps the data layer facing down. A Store may depend only on another Store, a backend Adapter or pure logic — Registries and Indexes depend on the Store, never the reverse. A Registry is the write path to its Store and may depend on that Store, a backend Adapter, or the pure logic that validates the write. An Index is a read projection and a Query a computed read, each over its Store through a backend Adapter where one serves it. An Adapter is a sink toward the system: it may use pure logic, but never a Store or any other Orchestrator.',
+    'Keeps the data layer facing down. A Store may depend only on another Store, a backend Adapter or pure logic — Registries and Indexes depend on the Store, never the reverse. A Registry is the write path to its Store and may depend on that Store, a backend Adapter, or the pure logic that validates the write. An Index is a read projection and a Query a computed read, each over its Store through a backend Adapter where one serves it; as an exceptional case an Index may project another Index of the same Repository, never in a cycle. An Adapter is a sink toward the system: it may use pure logic, but never a Store or any other Orchestrator.',
   codes: [
     { code: 'ARCHITECTURE_VIOLATION_STORE_DEP', defaultSeverity: 'error', summary: 'Store depending on anything but another Store, a backend Adapter or pure logic' },
     { code: 'ARCHITECTURE_VIOLATION_REGISTRY_DEP', defaultSeverity: 'warning', summary: 'Registry depending on anything but its Store, a backend Adapter or pure logic (warning while new; aligned to the standard §7 validate→write path)' },
     { code: 'ARCHITECTURE_VIOLATION_ADAPTER_DEP', defaultSeverity: 'error', summary: 'Adapter depending on a Store or on an Orchestrator that is not pure' },
-    { code: 'ARCHITECTURE_VIOLATION_INDEX_DEP', defaultSeverity: 'error', summary: 'Index depending on anything but its Store, an Adapter or pure logic' },
+    { code: 'ARCHITECTURE_VIOLATION_INDEX_DEP', defaultSeverity: 'error', summary: 'Index depending on anything but its Store, an Adapter, pure logic or another Index of its own Repository (never in a cycle)' },
     { code: 'ARCHITECTURE_VIOLATION_QUERY_DEP', defaultSeverity: 'error', summary: 'Query depending on anything but its Store, a backend Adapter or pure logic' },
   ],
   check(ctx) {
@@ -76,12 +112,17 @@ export const dataBlockDepsRule: SddRule = {
       }
 
       // Index rule: a read projection — may depend only on its Store, a
-      // backend Adapter, or pure logic.
-      if (comp.componentType === 'Index' && ownStoreOnly) {
+      // backend Adapter, or pure logic; as the exceptional derived-Index case,
+      // on another Index of its own Repository, never in a cycle.
+      const indexBreach = comp.componentType === 'Index' && depComp.componentType === 'Index'
+        ? derivedIndexBreach(ctx, comp, depComp)
+        : undefined;
+      const derivedIndexOk = comp.componentType === 'Index' && depComp.componentType === 'Index' && !indexBreach;
+      if (comp.componentType === 'Index' && ownStoreOnly && !derivedIndexOk) {
         ctx.addIssue(
           'error',
           'ARCHITECTURE_VIOLATION_INDEX_DEP',
-          `Architectural violation: Index component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". An Index is a read projection and may depend only on its Store, a backend Adapter or pure logic.`,
+          `Architectural violation: Index component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". An Index is a read projection and may depend only on its Store, a backend Adapter or pure logic — or, as an exceptional case, on another Index of the same Repository, never in a cycle.${indexBreach ? ` ${indexBreach}.` : ''}`,
           comp.id,
           edge.draftContext,
         );

@@ -1,5 +1,5 @@
 import { SddRule } from '../types.js';
-import { isDraftSubsystem } from '../../../models/index.js';
+import { isDraftSubsystem, isOwnComponentEntry } from '../../../models/index.js';
 
 /**
  * Public surface, question one: WHAT BACKS THE ENTRY. Every declared
@@ -26,7 +26,9 @@ export const publicSurfaceBindingRule: SddRule = {
   check(ctx) {
     for (const sub of ctx.subsystems) {
       const isDraftCtx = isDraftSubsystem(sub);
-      for (const pi of sub.publicInterfaces) {
+      // Own component entries only: a re-export or a type export is the
+      // export-tables rule's to judge.
+      for (const pi of sub.publicInterfaces.filter(isOwnComponentEntry)) {
         if (!pi.component) {
           ctx.addIssue('error', 'PUBLIC_INTERFACE_UNBOUND', `Subsystem "${sub.id}" declares a ${pi.type} public interface with no backing component. Bind it to the component that realizes it (publicInterfaces[].component).`, sub.id, isDraftCtx);
           continue;

@@ -12,6 +12,7 @@ import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js'
 import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
 import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
 import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
+import { exportTablesRule } from './integrity/export-tables.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { contractSymmetryRule } from './narrative/contract-symmetry.js';
 import { narrativeTargetReferencesRule } from './narrative/narrative-target-references.js';
@@ -213,6 +214,8 @@ export const SDD_RULES: SddRule[] = [
   publicSurfaceConsumersRule,
   publicSurfaceDeclaredTypeRule,
   publicSurfaceBoundContractRule,
+  // The export tables the resolver settled: what the published names bind.
+  exportTablesRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
   // reader sees the broken edge finding next to the unused-detection fallout

@@ -412,4 +412,72 @@ fixtures.push(defineRuleFixture({
   },
 }));
 
+// The derived-Index exception the pair sweep cannot express: an Index may
+// project another Index OF THE SAME REPOSITORY, never in a cycle. The sweep's
+// standalone Index → Index pair stays the violation it always was.
+const SLOT_STORE = { id: 'slot-store', componentType: 'Store', durability: 'durable', description: 'Holds every bookable clinician slot.' };
+const SLOT_INDEX = { id: 'slot-by-clinician-index', componentType: 'Index', description: 'Clinician slots keyed by clinician id.', dependsOn: ['slot-store'] };
+const OPEN_SLOT_INDEX = {
+  id: 'open-slot-window-index',
+  componentType: 'Index',
+  description: 'The open slots per clinician, bucketed into booking windows over the clinician index.',
+  dependsOn: ['slot-by-clinician-index'],
+};
+
+fixtures.push(defineRuleFixture({
+  code: INDEX_DEP,
+  expectFire: false,
+  reason: 'Both Indexes are owned by the slot repository and the window index is not reached back, so the edge is the sanctioned derived-Index case.',
+  scenario:
+    'In the MediBook clinic-booking system, the open-slot window index re-presents the clinician slot index of the same slot repository as booking windows.',
+  tree: {
+    system: SYSTEM,
+    subsystems: [{ id: 'patient-scheduling', description: SUBSYSTEM_DESCRIPTIONS['patient-scheduling'] }],
+    components: [
+      { id: 'slot-repository', componentType: 'Repository', description: 'The clinician slot aggregate: its store and read indexes.', owns: ['slot-store', 'slot-by-clinician-index', 'open-slot-window-index'] },
+      SLOT_STORE,
+      SLOT_INDEX,
+      OPEN_SLOT_INDEX,
+    ],
+  },
+}));
+fixtures.push(defineRuleFixture({
+  code: INDEX_DEP,
+  severity: 'error',
+  anchoredTo: 'open-slot-window-index',
+  expectFire: true,
+  scenario:
+    'In the MediBook clinic-booking system, the open-slot window index belongs to the booking repository but projects the clinician slot index another repository owns.',
+  tree: {
+    system: SYSTEM,
+    subsystems: [{ id: 'patient-scheduling', description: SUBSYSTEM_DESCRIPTIONS['patient-scheduling'] }],
+    components: [
+      { id: 'slot-repository', componentType: 'Repository', description: 'The clinician slot aggregate: its store and clinician index.', owns: ['slot-store', 'slot-by-clinician-index'] },
+      { id: 'booking-repository', componentType: 'Repository', description: 'The booking aggregate and its window index.', owns: ['booking-store', 'open-slot-window-index'] },
+      { id: 'booking-store', componentType: 'Store', durability: 'durable', description: 'Holds every confirmed booking.' },
+      SLOT_STORE,
+      SLOT_INDEX,
+      OPEN_SLOT_INDEX,
+    ],
+  },
+}));
+fixtures.push(defineRuleFixture({
+  code: INDEX_DEP,
+  severity: 'error',
+  anchoredTo: 'slot-by-clinician-index',
+  expectFire: true,
+  scenario:
+    'In the MediBook clinic-booking system, the clinician slot index and the open-slot window index of one slot repository each project the other, closing an Index cycle.',
+  tree: {
+    system: SYSTEM,
+    subsystems: [{ id: 'patient-scheduling', description: SUBSYSTEM_DESCRIPTIONS['patient-scheduling'] }],
+    components: [
+      { id: 'slot-repository', componentType: 'Repository', description: 'The clinician slot aggregate: its store and read indexes.', owns: ['slot-store', 'slot-by-clinician-index', 'open-slot-window-index'] },
+      SLOT_STORE,
+      { ...SLOT_INDEX, dependsOn: ['slot-store', 'open-slot-window-index'] },
+      OPEN_SLOT_INDEX,
+    ],
+  },
+}));
+
 export default fixtures;

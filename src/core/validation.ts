@@ -25,6 +25,8 @@ import {
   settledSpecPaths,
   readLockRecord,
   loadProjectVariants,
+  resolveSubsystemExports,
+  resolveProjectExports,
 } from './adapters/validator-core.js';
 import { listSnapshots, listMountSnapshots } from './adapters/validator-surfaces.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
@@ -568,6 +570,12 @@ export function validateSddTree(
       scopeSubsystem,
       extensions,
       variants: loadProjectVariants(),
+      // Every subsystem's resolved export table, then the project's: the
+      // export-tables rule judges the problems the resolver met.
+      exportTables: [
+        ...subsystems.map((s) => resolveSubsystemExports(s.id)),
+        resolveProjectExports(),
+      ],
       // By-name selections only: a legacy path ref pins nothing to check.
       packSelections: projectPackSelections(),
       // The run that IS the parent's verdict on a chained child judges the

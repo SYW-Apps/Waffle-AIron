@@ -22,6 +22,7 @@ import type { VariantDef } from '../variants.js';
 import type { CarriedDebtKind, PackSelection, ProjectIdentity } from '../../models/project.js';
 import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
+import type { ResolvedExportTable } from '../../models/exports.js';
 
 // ---------------------------------------------------------------------------
 // Rule registry contracts
@@ -411,6 +412,13 @@ export interface RuleContext {
    * on the run that judges a chained child through its parent.
    */
   projectIdentity?: ProjectIdentity;
+  /**
+   * The resolved export tables — one per loaded subsystem, then the project's
+   * L0 table — gathered by the validator through the core adapter, so the
+   * export-tables rule judges the resolver's problems without resolving
+   * anything itself. Absent on a candidate run.
+   */
+  exportTables?: ResolvedExportTable[];
   /**
    * The snapshots each chained mount holds in its own `.wai/surfaces/`, keyed
    * by mount namespace. Consulted ONLY for references made from inside that

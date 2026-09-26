@@ -1,5 +1,5 @@
 import { SddRule } from '../types.js';
-import { isDraftSubsystem } from '../../../models/index.js';
+import { isDraftSubsystem, isOwnComponentEntry } from '../../../models/index.js';
 
 /**
  * Public surface, question three: DOES THE BOUND CONTRACT BELONG TO THE
@@ -24,7 +24,9 @@ export const publicSurfaceBoundContractRule: SddRule = {
   check(ctx) {
     for (const sub of ctx.subsystems) {
       const isDraftCtx = isDraftSubsystem(sub);
-      for (const pi of sub.publicInterfaces) {
+      // Own component entries only: a re-export or a type export is the
+      // export-tables rule's to judge.
+      for (const pi of sub.publicInterfaces.filter(isOwnComponentEntry)) {
         if (!pi.interface) continue;
         // public-surface-binding's preconditions, restated: against an entry
         // that names no component, or one that resolves to nothing, an
