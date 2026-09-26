@@ -1,0 +1,25 @@
+kind: value-object
+id: build_stamp
+name: BuildStamp
+description: >-
+  The wairon build a running MCP server stands for: its entry file as it was when the server
+  started. A rebuild changes the file's size or modification time, which is how the server learns
+  that the code on disk is no longer the code it runs.
+subsystem: sdd_mcp
+fields:
+  - name: path
+    type: string
+    description: The build entry file the server was loaded from.
+    optional: false
+  - name: mtimeMs
+    type: number
+    description: Its modification time when the server started.
+    optional: false
+  - name: size
+    type: number
+    description: Its size in bytes when the server started.
+    optional: false
+methods: []
+sourcePath: src/mcp/build.ts
+createdAt: '2026-09-26T00:23:58.755Z'
+updatedAt: '2026-09-26T00:23:58.758Z'

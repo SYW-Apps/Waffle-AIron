@@ -118,7 +118,10 @@ methods:
   - name: sdd_get_status
     description: >-
       Tool: the spec tree as a structure, with each level's completeness. Optionally narrowed to one
-      subsystem, and optionally descending into chained subprojects.
+      subsystem, and optionally descending into chained subprojects. On a stale server the answer
+      LEADS with the staleness — whether the build on disk changed and whether spec writes are
+      refused because its schemas changed — so the first call of a session surfaces it before
+      anything is written.
     signature: 'sdd_get_status(subsystem?: string, recursive?: boolean): string'
     returns: string
     params:
@@ -399,10 +402,13 @@ methods:
   - name: sdd_move_methods
     description: >-
       Tool: move contract methods from one component to another, carrying each method's narrative,
-      calls and bindings, and re-pointing every reference that named the old home. One
-      all-or-nothing gated write: if a rule refuses the move, nothing is written and the report
-      names the rule plus where these methods could live instead, cheapest legal home first. A dry
-      run runs the whole move, gate included, and reports what it would have done.
+      calls and bindings, and re-pointing every reference that named the old home. A target without
+      a contract receives one, i<target>, and a target contract without an implementation receives
+      <target>_impl (inheriting the source implementation's sourcePath) when implementation entries
+      travel; the report names what it created. One all-or-nothing gated write: if a rule refuses
+      the move, nothing is written and the report names the rule plus where these methods could live
+      instead, cheapest legal home first. A dry run runs the whole move, gate included, and reports
+      what it would have done.
     signature: >-
       sdd_move_methods(from: string, to: string, methods: string[], dryRun?: boolean):
       MethodMoveReport
@@ -470,4 +476,4 @@ methods:
       address: mcp tools/call getProjectConfig
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-24T22:23:57.126Z'
+updatedAt: '2026-09-26T00:25:16.154Z'

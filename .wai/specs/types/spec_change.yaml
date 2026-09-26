@@ -4,17 +4,26 @@ name: SpecChange
 description: >-
   One change an authoring write made to a stored spec, addressed by a dotted path with names and
   step numbers rather than array indexes — `methods.runJourney.narrative.step 7.type`, `dependsOn`,
-  `description` — so a reader can see where the edit landed without diffing the file.
+  `description` — so a reader can see where the edit landed without diffing the file. A narrative is
+  compared by step IDENTITY across a renumbering, never by position: steps are matched by their
+  content with numbers left out, then by description, label or call target, so an insert reads as
+  one step added, a delete as one step removed, the shift as `renumbered` runs, a jump that merely
+  followed its target as `relocated`, and only a step that was really edited reports its field
+  changes.
 fields:
   - name: path
     type: string
     description: >-
       Where the change landed, in dotted form: field names, element identities and `step N` for a
-      narrative step.
+      narrative step — an added or edited step by its new number (`step 47 (was 46)` when it also
+      moved), a removed one by the number it had.
     optional: false
   - name: change
     type: string
-    description: 'What happened there: `set`, `added`, `removed` or `cleared`.'
+    description: >-
+      What happened there: `set`, `added`, `removed` or `cleared`; for a narrative also `renumbered`
+      (a run of unchanged steps shifted, before and after naming the ranges) and `relocated` (a jump
+      field that followed its target to the target's new number).
     optional: false
   - name: before
     type: string
@@ -27,4 +36,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:36.917Z'
-updatedAt: '2026-09-19T11:07:17.719Z'
+updatedAt: '2026-09-26T00:25:38.876Z'

@@ -80,7 +80,15 @@ fields:
       it. Nothing here was rewritten: a move never edits prose and never changes a published wire
       address, so this is the list a human still has to read.
     optional: false
+  - name: created
+    type: string[]
+    description: >-
+      The specs the move created to receive the methods, each named with its kind and id — i<target>
+      for a target that declared no contract, <target>_impl for a receiving contract no
+      implementation realized — and, for an implementation, the sourcePath it inherited. Empty when
+      the target already had both, and on a refusal; a dry run names what it would create.
+    optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-20T12:02:20.127Z'
-updatedAt: '2026-09-20T12:05:49.238Z'
+updatedAt: '2026-09-26T00:25:34.446Z'

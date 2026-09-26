@@ -10,7 +10,8 @@ methods:
       data-plane tools to be ADVERTISED: sixteen registrations that exist so tools/list can show
       them, never to run. Their execution is served by the hosting request orchestrator before a
       call reaches this server, so the handlers registered here refuse by design outside a hosted
-      request.
+      request. Every tool is registered behind the build-freshness guard, judged against the stamp
+      of the build the server stands for: its own entry file unless the caller names another.
     signature: 'create(hostedTools?: boolean): McpServer'
     returns: McpServer
     params:
@@ -20,6 +21,34 @@ methods:
           Advertise the sixteen hosted data-plane tools in tools/list — discovery only, and false
           for the stdio server, which cannot serve any of them.
         optional: true
+  - name: schemaFingerprint
+    description: >-
+      A stable hash over everything a spec write passes through: the six canonical spec schemas and
+      the input schema of every spec-write tool, each read structurally (object keys and their
+      strictness, element types, unions, enums, literals, defaults and checks) with descriptions
+      left out, so a field added, removed, retyped or made optional anywhere a write passes through
+      changes it and reworded prose does not. The build on disk is asked for its own through this
+      method, in a child process.
+    signature: 'schemaFingerprint(): string'
+    returns: string
+    params: []
+  - name: assessBuildFreshness
+    description: >-
+      Whether this server still runs the build on disk. An unchanged entry file is fresh. A changed
+      one is compared by schema fingerprint: equal fingerprints mean the rebuild left every schema a
+      write passes through alone, so writes proceed under a warning; different ones mean the running
+      server would silently drop fields the new build knows, so every spec write is refused; a
+      fingerprint that cannot be read cannot rule that out, so writes are refused as well, naming
+      why. The answer carries the sentence to show the human, including that only a reconnect (/mcp
+      reconnect wairon) clears it.
+    signature: 'assessBuildFreshness(stamp: BuildStamp | null): BuildFreshness'
+    returns: BuildFreshness
+    params:
+      - name: stamp
+        type: BuildStamp | null
+        description: >-
+          The build the server stands for, stamped at startup; null when it could not be stamped,
+          which reads as fresh
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-19T23:12:58.949Z'
+updatedAt: '2026-09-26T00:25:59.837Z'

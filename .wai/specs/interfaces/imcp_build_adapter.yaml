@@ -1,0 +1,53 @@
+id: imcp_build_adapter
+name: MCP Build Adapter Interface
+description: >-
+  The build on disk as a running MCP server can see it: a stamp of the entry file taken at startup,
+  whether that file has changed since, and the schema fingerprint the build on disk reports for
+  itself.
+component: mcp_build_adapter
+methods:
+  - name: captureBuildStamp
+    description: >-
+      Stamp a build entry file with its size and modification time. Null when the file cannot be
+      read, as inside a packaged binary's snapshot filesystem, where no rebuild can happen
+      underneath the server.
+    signature: 'captureBuildStamp(entryPath: string): BuildStamp | null'
+    returns: BuildStamp | null
+    params:
+      - name: entryPath
+        type: string
+        description: The build entry file the server was loaded from
+    invokedBy:
+      kind: runtime
+      caller: >-
+        The MCP server module, once, when the process loads it: the stamp of its own entry file is
+        the build the process started from, which every server it builds later stands for unless
+        told otherwise.
+  - name: isBuildStale
+    description: >-
+      True once the stamped entry file has changed on disk: a rebuild or an update since the server
+      started. A missing stamp, or a file that has since vanished, answers false: the server cannot
+      tell, and saying it is stale would be a claim it cannot back.
+    signature: 'isBuildStale(stamp: BuildStamp | null): boolean'
+    returns: boolean
+    params:
+      - name: stamp
+        type: BuildStamp | null
+        description: The stamp taken at startup
+  - name: readBuildFingerprint
+    description: >-
+      The schema fingerprint the build now on disk computes for itself, read by loading that build
+      in a child process: the library entry of the package the stamped file belongs to, or the
+      stamped module itself when it is not inside a built package. Cached per on-disk version of the
+      entry file, so a rebuild costs one child process. Throws, naming why, when the build on disk
+      cannot be loaded or answers no fingerprint — a half-written build, or one older than the
+      fingerprint.
+    signature: 'readBuildFingerprint(stamp: BuildStamp): string'
+    returns: string
+    params:
+      - name: stamp
+        type: BuildStamp
+        description: The stamp of the build the server was started from; its path locates the build on disk
+status: complete
+createdAt: '2026-09-26T00:24:18.727Z'
+updatedAt: '2026-09-26T00:36:17.779Z'
