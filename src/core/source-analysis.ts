@@ -1275,6 +1275,10 @@ export function buildCodeModel(
             exportedNames: [...facts.exported],
             imports: [...facts.imports],
             reexports: [...facts.reexports],
+            reexportBindings: [
+              ...facts.namedReexports.map(({ exported, local, from }) => ({ exported, local, from })),
+              ...facts.starExports.map((from) => ({ exported: '*', local: '*', from })),
+            ],
             functionComplexity: Object.fromEntries(facts.complexity),
             functionCallSites: Object.fromEntries([...facts.calls].map(([k, v]) => [k, [...v.values()]])),
             importBindings: Object.fromEntries(facts.importBindings),
@@ -1325,6 +1329,15 @@ export function buildCodeModel(
 // So two lists, labelled, never one merged — and a name that matches more than
 // a tenth of the suite has its mention list WITHHELD with a reason, because
 // saying the name is too common is an answer and printing 187 paths is not.
+//
+// And a binding binds ONE module (F75). Removing eleven thin adapter methods
+// named like core's functions once listed ~250 test files, every one of them
+// importing CORE's function of that name — and not one tested the adapter. So
+// when the method's realizing file is known, an import counts only when its
+// specifier resolves to that file, or to a module that re-exports the name
+// from there (aliased or not, through any chain of re-exports). A test that
+// binds the name to another module is talking about that module's function:
+// it is neither an import of this method nor a mention of it.
 // ---------------------------------------------------------------------------
 
 /**
@@ -1340,12 +1353,17 @@ export interface TestsToRevisit {
   method: string;
   /** The code-level name searched for: the method's `symbol` when it declares one, else its name. */
   symbol: string;
-  /** Test files that IMPORT that symbol. The high-confidence list. */
+  /**
+   * Test files that IMPORT that symbol — from the method's own source file, or
+   * from a module re-exporting it from there, when that file is known. The
+   * high-confidence list.
+   */
   imported: string[];
   /**
    * Test files that name the symbol without importing it — usually a test
-   * driving the method through a portal or a helper. Empty when
-   * `indiscriminate` is true.
+   * driving the method through a portal or a helper. A file that binds the
+   * name to ANOTHER module is not here: the name in it is that module's.
+   * Empty when `indiscriminate` is true.
    */
   mentioned: string[];
   /**
@@ -1355,14 +1373,59 @@ export interface TestsToRevisit {
   indiscriminate: boolean;
 }
 
+/** One name a test file binds by importing it: what the module publishes, what the file writes, and where from. */
+interface ImportedBinding {
+  /** The name the module publishes; `*` for a namespace import, `default` for a default one. */
+  exported: string;
+  /** The name this file writes. */
+  local: string;
+  /** The module specifier, as written. */
+  specifier: string;
+}
+
 /** What one walked test file says about the names a search is looking for. */
 interface TestFileNames {
   /** Canonical project-relative path, as the answer names it. */
   path: string;
   /** Names bound by a named-import clause — both sides of a rename. */
   imports: Set<string>;
+  /** Every import binding with the module it came from, for the module-resolved search. */
+  bindings: ImportedBinding[];
   /** Every word-boundary identifier in the file: the universal floor, exactly as the generic grade reads one. */
   words: Set<string>;
+}
+
+/**
+ * Static import statements (`import … from 'm'`) and destructured dynamic ones
+ * (`const { a } = await import('m')`), each captured as its binding clause and
+ * its specifier. A side-effect import binds nothing and matches neither. A
+ * static import opens a statement — at the start of a line or after a `;` —
+ * so a fixture's source text quoted inside a test is not read as one of the
+ * test's own imports.
+ */
+const IMPORT_FROM_RE = /(?:^|;)[ \t]*import\s+(?!\()([^'";]*?)\s*from\s*['"]([^'"]+)['"]/gm;
+const DYNAMIC_IMPORT_RE = /\{([^{}]*)\}\s*=\s*await\s+import\(\s*['"]([^'"]+)['"]\s*\)/g;
+const IDENTIFIER_ONLY_RE = /^[A-Za-z_$][\w$]*$/;
+
+/** The bindings one import clause makes: its default, its namespace, and each named element with both sides of a rename. */
+function clauseBindings(clause: string, specifier: string): ImportedBinding[] {
+  const out: ImportedBinding[] = [];
+  const body = clause.replace(/^\s*type\s+/, '');
+  const named = /\{([^}]*)\}/.exec(body);
+  if (named) {
+    for (const piece of named[1].split(',')) {
+      const sides = piece.replace(/^\s*type\s+/, '').split(/\s+as\s+/).map((s) => s.trim());
+      const exported = sides[0];
+      const local = sides[1] ?? exported;
+      if (IDENTIFIER_ONLY_RE.test(exported) && IDENTIFIER_ONLY_RE.test(local)) out.push({ exported, local, specifier });
+    }
+  }
+  const namespace = /\*\s*as\s+([A-Za-z_$][\w$]*)/.exec(body);
+  if (namespace) out.push({ exported: '*', local: namespace[1], specifier });
+  const head = body.replace(/\{[^}]*\}/, '').replace(/\*\s*as\s+[A-Za-z_$][\w$]*/, '');
+  const defaulted = /^\s*([A-Za-z_$][\w$]*)/.exec(head);
+  if (defaulted) out.push({ exported: 'default', local: defaulted[1], specifier });
+  return out;
 }
 
 /**
@@ -1385,11 +1448,92 @@ function readTestFiles(testRoots: readonly string[], projectRoot: string): TestF
     for (const m of text.matchAll(NAMED_IMPORT_BINDINGS_RE)) {
       for (const name of boundNames(m[1] ?? '', false)) imports.add(name);
     }
+    const code = stripComments(text, JS_PATTERNS);
+    const bindings: ImportedBinding[] = [];
+    for (const m of code.matchAll(IMPORT_FROM_RE)) bindings.push(...clauseBindings(m[1], m[2]));
+    // A destructuring renames with a colon where an import clause says `as`.
+    for (const m of code.matchAll(DYNAMIC_IMPORT_RE)) bindings.push(...clauseBindings(`{${m[1].replace(/:/g, ' as ')}}`, m[2]));
     const words = new Set<string>();
     for (const m of text.matchAll(IDENTIFIER_RE)) words.add(m[0]);
-    scanned.push({ path: key, imports, words });
+    scanned.push({ path: key, imports, bindings, words });
   }
   return scanned;
+}
+
+/** The re-exports one module makes: each named one with both sides of a rename, and each star. */
+interface ModuleReexports {
+  named: { exported: string; local: string; specifier: string }[];
+  stars: string[];
+}
+
+const NAMED_REEXPORT_RE = /\bexport\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+const STAR_REEXPORT_RE = /\bexport\s+\*\s+from\s*['"]([^'"]+)['"]/g;
+
+/** A module's re-exports, read once per search and never fatal: a module that cannot be read re-exports nothing. */
+function reexportReader(): (file: string) => ModuleReexports {
+  const cache = new Map<string, ModuleReexports>();
+  return (file) => {
+    const cached = cache.get(file);
+    if (cached) return cached;
+    const found: ModuleReexports = { named: [], stars: [] };
+    try {
+      const code = stripComments(fs.readFileSync(file, 'utf8'), JS_PATTERNS);
+      for (const m of code.matchAll(NAMED_REEXPORT_RE)) {
+        for (const piece of m[1].split(',')) {
+          const sides = piece.replace(/^\s*type\s+/, '').split(/\s+as\s+/).map((s) => s.trim());
+          if (!IDENTIFIER_ONLY_RE.test(sides[0] ?? '')) continue;
+          found.named.push({ local: sides[0], exported: sides[1] ?? sides[0], specifier: m[2] });
+        }
+      }
+      for (const m of code.matchAll(STAR_REEXPORT_RE)) found.stars.push(m[1]);
+    } catch {
+      // unreadable: re-exports nothing
+    }
+    cache.set(file, found);
+    return found;
+  };
+}
+
+/**
+ * Whether the name a test imports from `module` IS the method realized in
+ * `target` under `symbol`: the module is that file and the name is the symbol,
+ * or the module re-exports the name — named, aliased or not, or through a star
+ * — from a module for which the same holds. Relative specifiers only: a package
+ * specifier names no file of this project. A cycle ends the walk.
+ */
+function publishesFrom(
+  module: string,
+  name: string,
+  target: string,
+  symbol: string,
+  readReexports: (file: string) => ModuleReexports,
+  visited: Set<string> = new Set(),
+): boolean {
+  if (path.resolve(module) === target && name === symbol) return true;
+  const key = `${module}#${name}`;
+  if (visited.has(key)) return false;
+  visited.add(key);
+  const reexports = readReexports(module);
+  for (const re of reexports.named) {
+    if (re.exported !== name) continue;
+    const next = resolveRelativeModule(module, re.specifier);
+    if (next && publishesFrom(next, re.local, target, symbol, readReexports, visited)) return true;
+  }
+  // A star re-export never republishes a module's default.
+  if (name === 'default') return false;
+  for (const specifier of reexports.stars) {
+    const next = resolveRelativeModule(module, specifier);
+    if (next && publishesFrom(next, name, target, symbol, readReexports, visited)) return true;
+  }
+  return false;
+}
+
+/** One method's search: the name looked for, and the absolute files realizing it when a spec names them. */
+interface MethodSearch {
+  method: string;
+  symbol: string;
+  /** Empty when no spec names a realizing file, which falls back to the name alone. */
+  files: string[];
 }
 
 /**
@@ -1398,17 +1542,30 @@ function readTestFiles(testRoots: readonly string[], projectRoot: string): TestF
  * Walks the declared test roots on the SOURCE walk's own containment terms —
  * an absolute or parent-escaping root is refused rather than walked,
  * node_modules and dot-directories are skipped — and searches each method's
- * `symbol`, or its name when it declares none. A file that imports that name
- * is `imported`; one that merely names it is `mentioned`, unless the name
- * matched more than a tenth of the walked files, in which case the mention
- * list is withheld and `indiscriminate` says why.
+ * `symbol`, or its name when it declares none.
+ *
+ * A method that carries its realizing `sourcePath` (resolved by the caller: the
+ * method's own, else its implementation's) is searched by MODULE. A file is
+ * `imported` only when one of its bindings comes from that file under the
+ * symbol, or from a module that re-exports it from there — aliased or not,
+ * through any chain of re-exports, so a test importing it under a republished
+ * alias counts though it never spells the symbol — or when it imports such a
+ * module as a namespace and names the symbol. A file that binds the name to any OTHER module is dropped
+ * altogether: the name in it is that module's function. A method that carries
+ * no sourcePath is searched by name alone, as it always was. A method given
+ * more than once (a contract realized in several files) is one entry, imported
+ * from any of them.
+ *
+ * A file that merely names the symbol is `mentioned`, unless the name matched
+ * more than a tenth of the walked files, in which case the mention list is
+ * withheld and `indiscriminate` says why.
  *
  * Declaring no test roots walks nothing and answers empty, which is what keeps
  * this opt-in. A method nothing references contributes no entry: the answer is
  * the tests to revisit, and an entry naming none is not one.
  */
 export function findTestsReferencing(
-  methods: ReadonlyArray<Pick<MethodImplementation, 'name' | 'symbol'>>,
+  methods: ReadonlyArray<Pick<MethodImplementation, 'name' | 'symbol' | 'sourcePath'>>,
   projectRoot: string,
   testRoots: readonly string[] = [],
 ): TestsToRevisit[] {
@@ -1420,20 +1577,58 @@ export function findTestsReferencing(
   // rather than with a number somebody once picked for theirs.
   const indiscriminateAbove = scanned.length / 10;
 
-  const found: TestsToRevisit[] = [];
+  // Step 3: the name to search for, and the files realizing it — one search
+  // per method, however many realizations named it.
+  const searches: MethodSearch[] = [];
   for (const method of methods) {
-    // Step 3: the name to search for.
     const symbol = method.symbol ?? method.name;
-    // Step 4: the binding and the bare mention, kept apart.
-    const imported = scanned.filter(f => f.imports.has(symbol)).map(f => f.path);
-    const mentioned = scanned.filter(f => !f.imports.has(symbol) && f.words.has(symbol)).map(f => f.path);
+    let search = searches.find((s) => s.method === method.name && s.symbol === symbol);
+    if (!search) {
+      search = { method: method.name, symbol, files: [] };
+      searches.push(search);
+    }
+    const file = method.sourcePath ? path.resolve(projectRoot, method.sourcePath) : undefined;
+    if (file && !search.files.includes(file)) search.files.push(file);
+  }
+
+  const readReexports = reexportReader();
+  const found: TestsToRevisit[] = [];
+  for (const { method, symbol, files } of searches) {
+    // Step 4: the binding and the bare mention, kept apart — and a binding
+    // counted only when it comes from the method's own module.
+    const imported: string[] = [];
+    const mentioned: string[] = [];
+    for (const test of scanned) {
+      if (files.length === 0) {
+        if (test.imports.has(symbol)) imported.push(test.path);
+        else if (test.words.has(symbol)) mentioned.push(test.path);
+        continue;
+      }
+      const testFile = path.resolve(projectRoot, test.path);
+      const fromMethod = (binding: ImportedBinding, name: string): boolean => {
+        const module = resolveRelativeModule(testFile, binding.specifier);
+        return module !== null && files.some((target) => publishesFrom(module, name, target, symbol, readReexports));
+      };
+      // Any binding whose module publishes the method under the name it
+      // imports — so a test that imports it through an ALIASING re-export
+      // counts even though it never spells the symbol.
+      const naming = test.bindings.filter((b) => b.exported === symbol || b.local === symbol);
+      if (test.bindings.some((b) => b.exported !== '*' && fromMethod(b, b.exported))
+        || (test.words.has(symbol) && test.bindings.some((b) => b.exported === '*' && fromMethod(b, symbol)))) {
+        imported.push(test.path);
+      } else if (naming.length === 0 && test.words.has(symbol)) {
+        // A file binding the name to another module is dropped: it is that
+        // module's function, never a mention of this method.
+        mentioned.push(test.path);
+      }
+    }
     // Steps 5-6: a name like `project` or `status` matches most of the suite,
     // and a list that long is not an answer.
     const indiscriminate = mentioned.length > indiscriminateAbove;
     if (imported.length === 0 && mentioned.length === 0) continue;
     // Step 7.
     found.push({
-      method: method.name,
+      method,
       symbol,
       imported,
       mentioned: indiscriminate ? [] : mentioned,

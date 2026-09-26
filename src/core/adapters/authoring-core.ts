@@ -11,6 +11,7 @@ export {
   updateSpec,
   moveMethods,
   loadSpec,
+  loadImplementationSpecs,
   saveSpec,
   deleteSpec,
   createChainedSubsystem,

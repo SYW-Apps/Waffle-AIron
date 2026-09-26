@@ -48,18 +48,20 @@ methods:
           anchors (exact string literals and property-access references), exported names, import
           module specifiers, and — at exact grade — the runtime import BINDINGS by local name (which
           module each came from, which were bound as a whole namespace, which the import renamed),
-          the module each TYPE-ONLY binding came from, kept apart because a type binding can never
-          be a call origin though it is what a declared type resolves through, the type names each
-          instance FIELD is declared with from class property declarations and constructor parameter
-          properties, the type names each locally BOUND name is declared with from parameters and
-          annotated variable declarations, both recording nothing where the declaration names no
-          type outright, since an inferred type is not a declared one and a destructured binding
-          binds the type's properties rather than the type, the call SITES of each named
-          function-like with the shape each call was written in — a bare name, a plain-identifier
-          receiver, the this.<field> receiver whose declared type can be followed, or the new
-          Class(...) receiver whose class name can be — and, before any republication is folded in,
-          whether the file declared nothing of its own and only re-exported, which is what makes it
-          a pure re-export barrel
+          the runtime RE-EXPORT bindings name by name (a named export-from with both sides of its
+          rename, a star with * on both sides), which is what lets a reader follow a republished
+          name — aliased or not — to the module that wrote it, the module each TYPE-ONLY binding
+          came from, kept apart because a type binding can never be a call origin though it is what
+          a declared type resolves through, the type names each instance FIELD is declared with from
+          class property declarations and constructor parameter properties, the type names each
+          locally BOUND name is declared with from parameters and annotated variable declarations,
+          both recording nothing where the declaration names no type outright, since an inferred
+          type is not a declared one and a destructured binding binds the type's properties rather
+          than the type, the call SITES of each named function-like with the shape each call was
+          written in — a bare name, a plain-identifier receiver, the this.<field> receiver whose
+          declared type can be followed, or the new Class(...) receiver whose class name can be —
+          and, before any republication is folded in, whether the file declared nothing of its own
+          and only re-exported, which is what makes it a pure re-export barrel
         type: local
       - stepNumber: 6
         label: chaseReexports
@@ -93,18 +95,28 @@ methods:
       - stepNumber: 2
         description: >-
           Walk those roots for test files, skipping node_modules and dot-directories, and read each
-          one
+          one: its named-import names (both sides of a rename), its import bindings with the module
+          each came from (static imports that open a statement, so a fixture's quoted source is not
+          read as the test's own import, and destructured dynamic imports), and its words
         type: local
       - stepNumber: 3
         description: >-
-          For each method take the name to search for: its `symbol` when it declares one, otherwise
-          its own name
+          For each method take the name to search for — its `symbol` when it declares one, otherwise
+          its own name — and the file realizing it when it carries a sourcePath; a method given more
+          than once becomes one search over every file it names
         type: local
       - stepNumber: 4
         description: >-
-          Collect the test files that IMPORT that name — a binding, not a coincidence — and
-          separately those that only mention it, which is how a test driving the method through a
-          portal shows up
+          Collect the test files that IMPORT it and, separately, those that only mention it. With no
+          realizing file, an import is any binding of the name and a mention any word, as before.
+          With one, an import counts only when the binding's module IS that file under the symbol,
+          or re-exports it from there — named, aliased or not, or through a star, followed through
+          every chain of re-exports (a module that cannot be read re-exports nothing) — or is a
+          namespace import of such a module in a file naming the symbol. A file that binds the name
+          to another module is neither: the name in it is that module's function, and counting it is
+          how removing an adapter named like its provider once listed every test of the provider. A
+          file that names the symbol and binds it nowhere is a mention — how a test driving the
+          method through a portal shows up
         type: local
       - stepNumber: 5
         description: Decide whether the bare name discriminates
@@ -128,4 +140,4 @@ methods:
         outcome: found
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-09-20T14:04:01.606Z'
+updatedAt: '2026-09-26T11:01:35.990Z'

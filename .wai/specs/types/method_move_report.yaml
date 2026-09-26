@@ -88,7 +88,15 @@ fields:
       implementation realized — and, for an implementation, the sourcePath it inherited. Empty when
       the target already had both, and on a refusal; a dry run names what it would create.
     optional: false
+  - name: carried
+    type: CarriedRekey[]
+    description: >-
+      Every edit the move made — or, on a dry run, would make — to the debt register
+      (.wai/project.yaml rules.conformance.carried): an entry anchored at a moved method on the spec
+      it left now anchors on the spec it arrived in, and a covered <from>.<method> unit names
+      <to>.<method>. Empty on a refusal
+    optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-20T12:02:20.127Z'
-updatedAt: '2026-09-26T00:25:34.446Z'
+updatedAt: '2026-09-26T10:59:15.507Z'

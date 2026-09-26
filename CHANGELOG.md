@@ -27,6 +27,25 @@ client expects back from them (item 14). The library surface narrows too:
 `@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
 (item 4). Nothing here is purely additive, so `[minor]` would understate it.
 
+### The analysis stops blaming the wrong code, and renames keep the debt they move
+
+- **Tests to revisit are matched by the module a test imports from.** A test
+  counts for a method only when it imports it from the method's own file or a
+  re-export of it; a test importing a same-named function from another module no
+  longer floods the report (removing one thin adapter's forwards listed 265 test
+  files; it now lists the 17 that mention them).
+- **An aliased re-export is followed.** `export { a as b } from 'm'` forwards
+  exactly as an unaliased re-export does, for call-step conformance and body
+  reachability, so an adapter no longer has to take its provider's names to be
+  credited.
+- **Renames and method moves rekey the debt register and lint allows.** The
+  carried entries and allows keyed by the old component, contract or method ids
+  follow the move, so unchanged debt no longer reads as both paid and new. The
+  register's comments and formatting are kept, the rewrite is verified by
+  re-parsing before anything is written, and each report lists what it rekeyed.
+- **`sdd_add_type` refuses an owning subsystem that does not exist**, as every
+  other create tool refuses an unknown parent.
+
 ### Authoring tells the truth about stale servers, narratives and moves
 
 - **A stale MCP server refuses the writes that would lose data.** The server

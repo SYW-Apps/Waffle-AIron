@@ -1,0 +1,37 @@
+kind: value-object
+id: carried_rekey
+name: CarriedRekey
+description: >-
+  One edit an identity move made to the debt register (rules.conformance.carried): which carried
+  finding — named by its code, spec and site as they stood BEFORE the edit, which is how a reader
+  finds it in the diff — which of its keys changed, and the value before and after.
+subsystem: sdd_core
+fields:
+  - name: code
+    type: string
+    description: The carried finding's code
+    optional: false
+  - name: spec
+    type: string
+    description: The spec the entry was anchored to before the edit
+    optional: false
+  - name: at
+    type: string
+    description: The entry's site before the edit
+    optional: false
+  - name: field
+    type: string
+    description: 'The key the edit changed: spec, at or covers'
+    optional: false
+  - name: from
+    type: string
+    description: The value before the edit
+    optional: false
+  - name: to
+    type: string
+    description: The value after it
+    optional: false
+methods: []
+sourcePath: src/models/identity-rename.ts
+createdAt: '2026-09-26T10:58:39.392Z'
+updatedAt: '2026-09-26T10:58:39.395Z'

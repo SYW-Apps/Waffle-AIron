@@ -1,0 +1,35 @@
+kind: value-object
+id: method_identity_move
+name: MethodIdentityMove
+description: >-
+  One contract method whose identity an identity move changes — its component, its name, or both. A
+  covered unit `[step:]component.method` follows to `[step:]toComponent.toMethod`, and a finding
+  anchored at the method on one of `specs` follows to toMethod.
+subsystem: sdd_core
+fields:
+  - name: component
+    type: string
+    description: The component the method belongs to before the move
+    optional: false
+  - name: method
+    type: string
+    description: The method name before the move
+    optional: false
+  - name: toComponent
+    type: string
+    description: The component it belongs to after the move
+    optional: false
+  - name: toMethod
+    type: string
+    description: The method name after the move
+    optional: false
+  - name: specs
+    type: string[]
+    description: >-
+      The specs whose own site names the method — the contracts and implementations it was renamed
+      on; a finding anchored on one of them at the method follows to toMethod
+    optional: true
+methods: []
+sourcePath: src/models/identity-rename.ts
+createdAt: '2026-09-26T10:58:33.644Z'
+updatedAt: '2026-09-26T10:58:33.646Z'

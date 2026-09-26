@@ -432,3 +432,134 @@ describe('renameComponent', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// F78 — the debt register and the lint allows follow the rename
+//
+// Renaming core_portal rewrote 24 specs and left `spec: core_portal_impl` and
+// `'1:core_portal.loadProjectExtensions'` in the register, so the next validate
+// read the same debt as both paid (STALE) and new. The register is keyed by
+// exactly the ids a rename exists to rewrite.
+// ---------------------------------------------------------------------------
+
+/** The project's config with a carried register naming the ledger in every key, comments and all. */
+function withRegister(root: string): string {
+  const file = path.join(root, '.wai', 'project.yaml');
+  const text = [
+    '# hand-written header',
+    'schemaVersion: 1.0.0',
+    `name: ${path.basename(root)}`,
+    'targets:',
+    '  - type: claude',
+    '    outputDir: .claude/agents',
+    '    enabled: true',
+    'rules:',
+    '  conformance:',
+    '    carried:',
+    '      # 2 finding(s), 3 unit(s).',
+    '      - kind: drift',
+    '        why: >-',
+    '          The ledger is called from a file of its own; ledger stays in prose.',
+    '        findings:',
+    '          - code: CALL_STEP_UNREALIZED',
+    '            spec: ledger_impl',
+    "            at: 'post'",
+    '            covers:',
+    "              - '1:ledger.open'",
+    '          - code: UNDECLARED_COLOCATED_CALL',
+    '            spec: books_orch_impl',
+    "            at: 'run'",
+    '            covers:',
+    "              - 'ledger.post'",
+    "              - 'books_portal.handle'",
+    'extensions:',
+    '  packs: []',
+    '  useGlobalPacks: false',
+    `createdAt: '${now}'`,
+    `updatedAt: '${now}'`,
+  ].join('\r\n') + '\r\n';
+  fs.writeFileSync(file, text);
+  return text;
+}
+
+describe('renameComponent — the debt register and the lint allows (F78)', () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  it('rekeys every register entry naming the component, changing only those scalars, and lists each edit', () => {
+    root = books();
+    const before = withRegister(root);
+
+    const report = renameComponent('ledger', 'journal');
+
+    expect(report.carried).toEqual([
+      { code: 'CALL_STEP_UNREALIZED', spec: 'ledger_impl', at: 'post', field: 'spec', from: 'ledger_impl', to: 'journal_impl' },
+      { code: 'CALL_STEP_UNREALIZED', spec: 'ledger_impl', at: 'post', field: 'covers', from: '1:ledger.open', to: '1:journal.open' },
+      { code: 'UNDECLARED_COLOCATED_CALL', spec: 'books_orch_impl', at: 'run', field: 'covers', from: 'ledger.post', to: 'journal.post' },
+    ]);
+    const after = fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8');
+    const a = before.split('\r\n');
+    const b = after.split('\r\n');
+    expect(b).toHaveLength(a.length);
+    expect(a.map((line, i) => [line, b[i]]).filter(([x, y]) => x !== y)).toEqual([
+      ['            spec: ledger_impl', '            spec: journal_impl'],
+      ["              - '1:ledger.open'", "              - '1:journal.open'"],
+      ["              - 'ledger.post'", "              - 'journal.post'"],
+    ]);
+  });
+
+  it('rekeys a lint allow naming the component on an edge or in a covered unit, and reports its spec as rewritten', () => {
+    root = books();
+    const orchImpl = stored(root, 'implementation', 'books_orch_impl')[0];
+    saveImplementationSpec({
+      ...orchImpl,
+      lint: { allow: [
+        { code: 'CALL_STEP_UNREALIZED', at: 'run', covers: ['1:ledger.post'], reason: 'the ledger is called from elsewhere' },
+        { code: 'UNREALIZED_DEPENDENCY', at: 'books_orch -> ledger', reason: 'reached through the portal' },
+      ] },
+    } as ImplementationSpec);
+    invalidateSpecCache();
+
+    const report = renameComponent('ledger', 'journal');
+
+    expect(report.rewritten).toContain('books_orch_impl');
+    expect(stored(root, 'implementation', 'books_orch_impl')[0].lint.allow).toEqual([
+      { code: 'CALL_STEP_UNREALIZED', at: 'run', covers: ['1:journal.post'], reason: 'the ledger is called from elsewhere' },
+      { code: 'UNREALIZED_DEPENDENCY', at: 'books_orch -> journal', reason: 'reached through the portal' },
+    ]);
+  });
+
+  it('answers an empty register edit list when the register names none of it', () => {
+    root = books();
+    expect(renameComponent('ledger', 'journal').carried).toEqual([]);
+  });
+
+  it('refuses before the first write when the register cannot be rewritten without disturbing it', () => {
+    root = books();
+    fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), [
+      'schemaVersion: 1.0.0',
+      `name: ${path.basename(root)}`,
+      'targets: []',
+      'rules:',
+      '  conformance:',
+      '    carried:',
+      '      - kind: drift',
+      '        why: w',
+      "        findings: [{ code: CALL_STEP_UNREALIZED, spec: ledger_impl, at: post, covers: ['1:ledger.open'] }]",
+      'extensions: { packs: [], useGlobalPacks: false }',
+      `createdAt: '${now}'`,
+      `updatedAt: '${now}'`,
+    ].join('\n') + '\n');
+    const before = snapshot(root);
+
+    expect(() => renameComponent('ledger', 'journal')).toThrow(/Cannot rewrite \.wai\/project\.yaml .*Nothing was written\./);
+
+    expect(snapshot(root)).toEqual(before);
+  });
+});

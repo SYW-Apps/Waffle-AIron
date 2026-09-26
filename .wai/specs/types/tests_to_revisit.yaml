@@ -24,16 +24,16 @@ fields:
   - name: imported
     type: string[]
     description: >-
-      Test files that import that name. The high-confidence list: an import is a binding, not a
-      coincidence. Matched by name alone — the search is not given the module the implementation
-      names, so a same-named import from elsewhere counts. Both sides of a renamed import are
-      searched.
+      Test files that IMPORT that symbol — when the method's realizing file is known, only from that
+      file or from a module re-exporting it from there (aliased or not, through any chain); a
+      same-named import from another module is not this method's. The high-confidence list
     optional: false
   - name: mentioned
     type: string[]
     description: >-
       Test files that name the symbol without importing it — usually a test driving the method
-      through a portal or a helper. Lower confidence, and empty when `indiscriminate` is true.
+      through a portal or a helper. A file that binds the name to ANOTHER module is not here: the
+      name in it is that module's function. Empty when indiscriminate is true
     optional: false
   - name: indiscriminate
     type: boolean
@@ -47,4 +47,4 @@ fields:
 methods: []
 sourcePath: src/core/source-analysis.ts
 createdAt: '2026-09-20T13:25:41.354Z'
-updatedAt: '2026-09-20T14:03:57.354Z'
+updatedAt: '2026-09-26T10:59:10.717Z'

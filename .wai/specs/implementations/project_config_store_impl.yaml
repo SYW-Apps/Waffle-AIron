@@ -51,7 +51,25 @@ methods:
     calls:
       - project_config_fs_adapter.documentExists
       - project_config_fs_adapter.readDocument
+  - name: rewriteScalars
+    narrative: []
+    intent: >-
+      Answers at once for no edits. Otherwise reads the document's text through the fs adapter
+      (refusing a project with no configuration), splits it into lines keeping each line's ending,
+      and reads the block structure off them — each key, each sequence item's dash and each inline
+      scalar with its column, block-scalar bodies skipped. Each edit's path is walked through that
+      structure (a key at the region's own column, the n-th item at it); a path that ends anywhere
+      but an inline scalar on one line — a flow collection, a multi-line value — is refused naming
+      the path. The scalar found must hold the edit's `from` (else refused), and is rewritten in its
+      own quoting: single stays single, double stays double, plain stays plain where plain reads the
+      same and becomes single-quoted where it would not; anything after it on the line, a comment
+      included, is kept. The edited text is parsed again and must equal the original document with
+      exactly those values set — otherwise refused. Every refusal names the project root and writes
+      nothing; a dry run stops there too; otherwise the text is written back through the fs adapter.
+    calls:
+      - project_config_fs_adapter.readText
+      - project_config_fs_adapter.writeText
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:15.916Z'
-updatedAt: '2026-09-19T21:26:57.476Z'
+updatedAt: '2026-09-26T10:59:45.297Z'

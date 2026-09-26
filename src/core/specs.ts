@@ -15,6 +15,7 @@ import { listSpecFiles, readSpecFile, removeSpecFile, writeSpecFile } from './sp
 // here would be the store reaching into the rule engine that already reads it
 // — the cycle `authoring` exists to keep open.
 import type { TestsToRevisit } from './source-analysis.js';
+import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
 import {
   SystemSpec,
   SystemSpecSchema,
@@ -34,6 +35,7 @@ import {
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
   splitNamespace,
+  type LintAllow,
   // One `calls` entry read apart into the component it names and the method on
   // it, so the reference table below can rewrite either half.
   parseDeclaredCall,
@@ -988,6 +990,13 @@ export interface MethodMoveReport {
    * a refusal; a dry run names what it would create.
    */
   created: string[];
+  /**
+   * Every edit to the debt register (.wai/project.yaml rules.conformance.carried)
+   * the move made — or, on a dry run, would make: an entry anchored at a moved
+   * method on the spec it left now anchors on the spec it arrived in, and a
+   * covered `<from>.<method>` unit names `<to>.<method>`. Empty on a refusal.
+   */
+  carried: CarriedRekey[];
 }
 
 // ---------------------------------------------------------------------------
@@ -4176,53 +4185,101 @@ export class SpecWorkspace {
     // methods; prose and wire addresses recorded and left alone.
     const repointed = this.repointToNewHome(from, to, methods, plan);
     const mentions = this.moveMentions(from, plan);
+    // Step 8: findings keyed on a moved method follow it — its lint allows are
+    // staged like any other reference, and the debt register is rekeyed below.
+    const rename = moveRename(from, to, methods, plan);
+    this.rekeyMoveAllows(plan, rename);
 
-    // Step 8: a judgement was injected.
+    // Step 9: a judgement was injected.
     if (hooks) {
-      // Step 9: judge the resulting source and target at the write boundary.
+      // Step 10: judge the resulting source and target at the write boundary.
       const verdict = judgeMoveResult(hooks, plan);
       plan.notices.push(...verdict.notices);
 
-      // Step 10: the hook refused.
+      // Step 11: the hook refused.
       if (verdict.refusals.length > 0) {
-        // Step 11: where these methods COULD live, asked without throwing.
+        // Step 12: where these methods COULD live, asked without throwing.
         const alternatives = this.rankMoveHomes(hooks, from, to, plan);
-        // Step 12: the refusal. Nothing has reached disk.
+        // Step 13: the refusal. Nothing has reached disk.
         return {
           moved: false, from, to, methods, edits: [], repointed: 0,
           refusals: verdict.refusals, alternatives, notices: plan.notices,
           summary: refusedMoveSummary(from, to, methods, verdict.refusals, alternatives),
-          dryRun, mentions, created: [],
+          dryRun, mentions, created: [], carried: [],
         };
       }
     }
 
-    // Step 13: the caller wanted the write.
+    // Step 14: the debt register as the move leaves it — computed, and proven
+    // editable without disturbing its formatting, before anything is written.
+    const carried = projectConfigRepository.rekeyCarried(rename, true);
+
+    // Step 15: the caller wanted the write.
     if (dryRun) {
-      // Step 14: the edits it would have made, and not one byte moved.
+      // Step 16: the edits it would have made, and not one byte moved.
       const edits = moveChangeReports([...plan.edits.values()], true);
       return {
         moved: false, from, to, methods, edits, repointed,
         refusals: [], alternatives: [], notices: plan.notices,
         summary: `Dry run: moving ${namedMethods(methods)} from "${from}" to "${to}" would touch `
-          + `${edits.length} spec${edits.length === 1 ? '' : 's'}${createdClause(plan.created, 'would create')} and re-point ${repointed} reference${repointed === 1 ? '' : 's'}. Nothing was written.`,
-        dryRun: true, mentions, created: plan.created,
+          + `${edits.length} spec${edits.length === 1 ? '' : 's'}${createdClause(plan.created, 'would create')} and re-point ${repointed} reference${repointed === 1 ? '' : 's'}`
+          + `${registerClause(carried, 'would rekey')}. Nothing was written.`,
+        dryRun: true, mentions, created: plan.created, carried,
       };
     }
 
-    // Step 15: write every edit, restoring the ones already written if one fails.
-    const edits = this.writeMoveEdits([...plan.edits.values()]);
+    // Steps 17-18: write every edit and then the register, restoring the specs
+    // already written if either fails.
+    const edits = this.writeMoveEdits([...plan.edits.values()], () => { projectConfigRepository.rekeyCarried(rename); });
 
-    // Step 16: what moved, how many references followed it, and what still
+    // Step 19: what moved, how many references followed it, and what still
     // names the old home.
     return {
       moved: true, from, to, methods, edits, repointed,
       refusals: [], alternatives: [], notices: plan.notices,
       summary: `Moved ${namedMethods(methods)} from "${from}" to "${to}": ${edits.length} spec`
         + `${edits.length === 1 ? '' : 's'} written${createdClause(plan.created, 'created')}, ${repointed} reference${repointed === 1 ? '' : 's'} re-pointed`
+        + `${registerClause(carried, 'rekeyed')}`
         + `${mentions.length ? `, ${mentions.length} still naming the old home in prose or on the wire` : ''}.`,
-      dryRun: false, mentions, created: plan.created,
+      dryRun: false, mentions, created: plan.created, carried,
     };
+  }
+
+  /**
+   * Rekey every lint allow keyed on a moved method, staging each spec it
+   * changes like any other reference the move follows. An allow anchored at a
+   * moved method on a spec the method left moves to the spec it arrived in; a
+   * covered `<from>.<method>` unit anywhere names `<to>.<method>`. An allow
+   * whose new home the plan does not stage stays where it is.
+   */
+  private rekeyMoveAllows(plan: MethodMovePlan, rename: IdentityRename): void {
+    const subjects: { kind: WritableSpecKind; id: string; spec: any }[] = [...this.everySpecInTree()];
+    for (const edit of plan.edits.values()) if (edit.before === null) subjects.push({ kind: edit.kind, id: edit.id, spec: edit.after });
+    const stagedAfter = (kind: WritableSpecKind, id: string): any => plan.edits.get(`${kind}:${id}`)?.after;
+    for (const { kind, id, spec } of subjects) {
+      if (id.includes('::')) continue;
+      const allows = (spec?.lint?.allow ?? []) as LintAllow[];
+      if (allows.length === 0) continue;
+      const staged = plan.edits.get(`${kind}:${id}`);
+      const subject = staged ? staged.after : cloneSpec(spec);
+      const kept: LintAllow[] = [];
+      let changed = false;
+      for (const allow of (subject.lint?.allow ?? []) as LintAllow[]) {
+        const next = rekeyAnchor(rename, { spec: id, ...(allow.at !== undefined ? { at: allow.at } : {}), ...(allow.covers ? { covers: allow.covers } : {}) });
+        const rekeyed: LintAllow = { ...allow, ...(next.at !== undefined ? { at: next.at } : {}), ...(next.covers ? { covers: next.covers } : {}) };
+        if (JSON.stringify(rekeyed) !== JSON.stringify(allow)) changed = true;
+        const home = next.spec !== id ? stagedAfter(kind, next.spec) : undefined;
+        if (home) {
+          home.lint = { ...(home.lint ?? {}), allow: [...(home.lint?.allow ?? []), rekeyed] };
+          changed = true;
+          continue;
+        }
+        kept.push(rekeyed);
+      }
+      if (!changed) continue;
+      subject.lint = { ...subject.lint, allow: kept };
+      if (!staged) this.stageMoveEdit(plan, kind, id, spec, subject);
+    }
   }
 
   /**
@@ -4314,8 +4371,11 @@ export class SpecWorkspace {
     const stated = this.moveTargetContract(to, contracts.filter((i) => i.component === to)) as InterfaceSpec | null;
     const implementations = this.loadImplementationSpecs();
     const plan: MethodMovePlan = {
-      edits: new Map(), source, target, reach: [], newDependencies: [], wireBound: [], notices: [], created: [],
+      edits: new Map(), source, target, reach: [], newDependencies: [], wireBound: [], notices: [], created: [], rehomed: [],
     };
+    // The implementations the moved entries leave, re-homed once the receiving
+    // implementation is known.
+    const leftImplementations: string[] = [];
     // A target with no contract yet receives i<to>, at the status of the
     // contract the methods leave: they arrive as designed as they were.
     const receiving: InterfaceSpec = stated ?? createdContract(target, source.id, methods, contracts);
@@ -4337,6 +4397,7 @@ export class SpecWorkspace {
       const remaining = cloneSpec(contract);
       remaining.methods = remaining.methods.filter((m) => !methods.includes(m.name));
       this.stageMoveEdit(plan, 'interface', contract.id, contract, remaining);
+      plan.rehomed.push({ from: contract.id, to: receiving.id });
       if (contract.methods.length === leaving.length) {
         plan.notices.push(`"${contract.id}" is left with no methods — "${source.id}" no longer declares anything on it.`);
       }
@@ -4348,6 +4409,7 @@ export class SpecWorkspace {
         const kept = cloneSpec(impl);
         kept.methods = kept.methods.filter((m) => !methods.includes(m.name));
         this.stageMoveEdit(plan, 'implementation', impl.id, impl, kept);
+        leftImplementations.push(impl.id);
       }
     }
 
@@ -4382,11 +4444,13 @@ export class SpecWorkspace {
         ...cloneSpec(targetImpl),
         methods: [...cloneSpec(targetImpl.methods), ...travelling],
       });
+      for (const id of leftImplementations) plan.rehomed.push({ from: id, to: targetImpl.id });
     } else if (travelling.length > 0) {
       // No implementation realizes the receiving contract: <to>_impl is
       // created for the entries, so no narrative is lost on the way.
       const created = createdImplementation(target, receiving.id, source.id, travelling, implementations, contracts);
       this.stageMoveEdit(plan, 'implementation', created.spec.id, null, created.spec);
+      for (const id of leftImplementations) plan.rehomed.push({ from: id, to: created.spec.id });
       plan.created.push(created.named);
       plan.notices.push(...created.notices);
     }
@@ -4545,7 +4609,7 @@ export class SpecWorkspace {
    * here: every save does it already, and a second call would only be a hop
    * across a component boundary that no narrative claims.
    */
-  private writeMoveEdits(edits: MoveEdit[]): SpecChangeReport[] {
+  private writeMoveEdits(edits: MoveEdit[], finish?: () => void): SpecChangeReport[] {
     const reports = moveChangeReports(edits, false);
     const written: MoveEdit[] = [];
     try {
@@ -4554,6 +4618,9 @@ export class SpecWorkspace {
         report.notices.push(...this.saveMovedSpec(edit.kind, edit.after));
         written.push(edit);
       }
+      // The last write of the move — the debt register — inside the same
+      // guard, so a register that cannot be written takes the specs back too.
+      finish?.();
     } catch (e) {
       for (const edit of [...written].reverse()) {
         try {
@@ -4625,6 +4692,13 @@ interface MethodMovePlan {
   notices: string[];
   /** The specs the move creates, named for the report. */
   created: string[];
+  /**
+   * Each spec the moved methods left, paired with the spec they arrived in —
+   * the source contract with the receiving one, each source implementation
+   * with the receiving implementation. How a finding keyed on a moved method
+   * follows it.
+   */
+  rehomed: { from: string; to: string }[];
 }
 
 /** A spec copied so the plan can rewrite it without touching what the cache holds. */
@@ -4737,6 +4811,24 @@ function moveChangeReports(edits: MoveEdit[], dryRun: boolean): SpecChangeReport
         : `${dryRun ? 'Would move' : 'Moved'} into ${edit.kind} "${edit.id}": `
           + `${changes.length} change${changes.length === 1 ? '' : 's'}.`,
     }));
+}
+
+/**
+ * The move as the debt register and the lint allows are keyed by it: each
+ * spec the methods left re-homes the findings anchored at a moved method to
+ * the spec they arrived in, and `<from>.<method>` becomes `<to>.<method>`
+ * wherever a unit names it.
+ */
+function moveRename(from: string, to: string, methods: string[], plan: MethodMovePlan): IdentityRename {
+  return {
+    specs: plan.rehomed.map(({ from: left, to: arrived }) => ({ from: left, to: arrived, sites: [...methods] })),
+    methods: methods.map((method) => ({ component: from, method, toComponent: to, toMethod: method })),
+  };
+}
+
+/** The register edits as a clause of the move's summary, or nothing when there were none. */
+function registerClause(carried: CarriedRekey[], verb: string): string {
+  return carried.length ? `, ${verb} ${carried.length} debt-register key${carried.length === 1 ? '' : 's'}` : '';
 }
 
 /** The created specs as a clause of the move's summary, or nothing when it created none. */

@@ -21,7 +21,18 @@ methods:
     intent: >-
       Reports whether the bound project's `project.yaml` exists; an unreadable directory counts as
       absent.
+  - name: readText
+    narrative: []
+    intent: >-
+      Reads `project.yaml` from the bound project's `.wai` directory (or legacy `.wairon`) as text,
+      byte for byte — comments, quoting and line endings included — or null when the file is absent.
+      Nothing is parsed here.
+  - name: writeText
+    narrative: []
+    intent: >-
+      Writes the given text to `project.yaml` in the bound project's `.wai` directory verbatim,
+      replacing the file. A plain replacement, as every write of this adapter is.
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:21:50.998Z'
-updatedAt: '2026-09-14T05:16:00.007Z'
+updatedAt: '2026-09-26T10:59:40.465Z'

@@ -1,0 +1,24 @@
+kind: value-object
+id: rekeyed_anchor
+name: RekeyedAnchor
+description: >-
+  Where a finding is keyed — by a debt-register entry or a lint allow: the spec it is anchored to,
+  the site inside it, and the units it covers.
+subsystem: sdd_core
+fields:
+  - name: spec
+    type: string
+    description: The spec the finding is anchored to
+    optional: false
+  - name: at
+    type: string
+    description: 'The site inside that spec: a contract method, or an edge `from -> to`'
+    optional: true
+  - name: covers
+    type: string[]
+    description: The units an aggregating finding covers
+    optional: true
+methods: []
+sourcePath: src/models/identity-rename.ts
+createdAt: '2026-09-26T10:58:36.242Z'
+updatedAt: '2026-09-26T10:58:36.244Z'

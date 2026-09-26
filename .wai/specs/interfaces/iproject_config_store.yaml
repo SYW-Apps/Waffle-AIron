@@ -53,6 +53,29 @@ methods:
       - name: field
         type: string
     effect: read
+  - name: rewriteScalars
+    description: >-
+      Replace the named scalars of the document in its TEXT and change nothing else. The document is
+      written by people as well as by wairon — its comments say why each carried group exists and
+      how many findings it holds — and a write through the parsed document drops every one of them.
+      Each scalar is located by walking its path through the block structure, checked to hold
+      `from`, and rewritten in its own quoting (plain stays plain where plain reads the same); line
+      endings are kept. The edited text is parsed again and must equal the document with exactly
+      those values changed. A layout this cannot address precisely — a flow collection, a multi-line
+      scalar — or a scalar holding anything but `from` is refused naming the path, and nothing is
+      written. A dry run does all of it and writes nothing, so a caller can prove the edit before
+      its first write. No edits writes nothing.
+    signature: 'rewriteScalars(edits: ScalarEdit[], dryRun?: boolean): void'
+    returns: void
+    params:
+      - name: edits
+        type: ScalarEdit[]
+        description: The scalars to replace, each by path, current value and new value
+      - name: dryRun
+        type: boolean
+        description: Prove the edit and write nothing
+        optional: true
+    effect: write
 status: complete
 createdAt: '2026-09-13T10:50:08.266Z'
-updatedAt: '2026-09-14T05:15:59.906Z'
+updatedAt: '2026-09-26T10:59:24.613Z'

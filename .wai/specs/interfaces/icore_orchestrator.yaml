@@ -298,12 +298,18 @@ methods:
       pattern staying under its owner; every reference in the bound tree is rewritten: dependsOn,
       owns, dispatch and lifecycle entries, published interfaces at L1 and L0 (their component and
       interface), narrative targets, auth sources naming a component, an entity's componentClass, an
-      interface's component and an implementation's contract. References from chained subprojects
-      (super::) are not rewritten: validate each child after renaming. Refuses a component that does
-      not exist, a new id already taken or outside the id grammar, and a component inside a chained
-      subproject (rename it from that project's root); every refusal happens before the first write,
-      and a failure after it leaves the rename half-applied. Human-readable names are left to the
-      author, and a lock goes stale as with any edit.
+      interface's component and an implementation's contract. Findings keyed on the component follow
+      it too, because they are keyed by exactly the ids a rename exists to rewrite and left alone
+      would read as debt both paid and new: every lint allow naming it on an edge site or in a
+      covered unit, and every entry of the debt register (.wai/project.yaml
+      rules.conformance.carried) anchored on a renamed spec or naming the component in its site or
+      covered units — rewritten in place, every comment and all other formatting of the register
+      kept, and each register edit reported. References from chained subprojects (super::) are not
+      rewritten: validate each child after renaming. Refuses a component that does not exist, a new
+      id already taken or outside the id grammar, a component inside a chained subproject (rename it
+      from that project's root), and a register that cannot be rewritten that precisely; every
+      refusal happens before the first write, and a failure after it leaves the rename half-applied.
+      Human-readable names are left to the author, and a lock goes stale as with any edit.
     signature: 'renameComponent(componentId: string, newId: string): ComponentRename'
     returns: ComponentRename
     params:
@@ -333,13 +339,17 @@ methods:
       component that declares it — its name, and the name inside its signature — and on the
       implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and
       findings unchanged. Narrative call, register and dispatch steps naming it, dispatch-table
-      bindings and lifecycle entrypoints are retargeted. An implementation that declared no symbol
-      is pinned to the old name unless pinSymbol is false, so the function it already binds to keeps
-      binding. Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming
-      a contract method must not silently rename an RPC; both are reported as mentions. Refuses,
-      before the first write: a component or method that does not exist, a name already declared on
-      that interface, a name outside the identifier grammar, and a component inside a chained
-      subproject (rename it from that project's root). A lock goes stale as with any edit.
+      bindings and lifecycle entrypoints are retargeted, and so are the findings keyed on it: a lint
+      allow at the method on a spec it moved in or covering <component>.<method>, and every
+      debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way,
+      rewritten in place with every comment and all other formatting kept and each edit reported. An
+      implementation that declared no symbol is pinned to the old name unless pinSymbol is false, so
+      the function it already binds to keeps binding. Prose is never rewritten and a gRPC endpoint
+      binding keeps its wire method — renaming a contract method must not silently rename an RPC;
+      both are reported as mentions. Refuses, before the first write: a component or method that
+      does not exist, a name already declared on that interface, a name outside the identifier
+      grammar, a component inside a chained subproject (rename it from that project's root), and a
+      register that cannot be rewritten that precisely. A lock goes stale as with any edit.
     signature: >-
       renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean):
       MethodRename
@@ -464,18 +474,23 @@ methods:
       entries come from implementations with different sourcePaths). The report names everything it
       created, and a failed write deletes what it created as it restores what it edited. Narrative
       call, register and dispatch steps naming the old home, dispatch-table bindings, lifecycle
-      entrypoints and `calls` entries are retargeted to the new one. Prose is never rewritten and a
-      wire endpoint keeps its address — moving a method between components must not silently
-      re-address an RPC; both are reported as mentions. Every edit is computed before the first is
-      written, and a write that fails restores the ones already made, because a half-moved method
-      leaves callers naming a home it no longer has. The caller's judgement runs as a write hook on
-      the resulting components at the last point before anything reaches disk, which is where a move
-      that breaks a dependency rule is refused. Refuses, before the first write: a component or
-      method that does not exist, a method name already declared on the target, a source and target
-      that are the same component, a target with several contracts none of which is named i<target>,
-      a contract or implementation to create whose id another spec already holds, and a component
-      inside a chained subproject (move it from that project's root). A lock goes stale as with any
-      edit.
+      entrypoints and `calls` entries are retargeted to the new one. Findings keyed on a moved
+      method follow it: a lint allow anchored at it moves to the receiving spec, one covering
+      <from>.<method> names <to>.<method>, and the debt register (.wai/project.yaml
+      rules.conformance.carried) is rekeyed the same way in place, every comment and all other
+      formatting kept, each register edit reported (on a dry run, the edits it would make). Prose is
+      never rewritten and a wire endpoint keeps its address — moving a method between components
+      must not silently re-address an RPC; both are reported as mentions. Every edit is computed
+      before the first is written, and a write that fails — the register's included, which is
+      written last — restores the ones already made, because a half-moved method leaves callers
+      naming a home it no longer has. The caller's judgement runs as a write hook on the resulting
+      components at the last point before anything reaches disk, which is where a move that breaks a
+      dependency rule is refused. Refuses, before the first write: a component or method that does
+      not exist, a method name already declared on the target, a source and target that are the same
+      component, a target with several contracts none of which is named i<target>, a contract or
+      implementation to create whose id another spec already holds, a component inside a chained
+      subproject (move it from that project's root), and a register that cannot be rewritten without
+      disturbing its formatting. A lock goes stale as with any edit.
     signature: >-
       moveMethods(from: string, to: string, methods: string[], hooks?: SpecWriteHooks, dryRun?:
       boolean): MethodMoveReport
@@ -655,4 +670,4 @@ methods:
         type: VariantDef[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T00:39:33.230Z'
+updatedAt: '2026-09-26T11:01:01.418Z'

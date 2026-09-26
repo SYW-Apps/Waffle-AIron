@@ -44,8 +44,12 @@ methods:
     returns: SpecParent | null
     description: >-
       The spec this one cannot be written without: the L0 for a subsystem, the subsystem named by a
-      component, the component named by an interface, the contract named by an implementation. None
-      for the L0 itself and for a type, whose subsystem is an ownership label and not a container.
+      component, the component named by an interface, the contract named by an implementation, and
+      the subsystem a type names as its owner. None for the L0 itself and for a type that names no
+      subsystem — a system-level value object belongs to no subsystem, so there is nothing to refuse
+      it for. A type's subsystem is an ownership label rather than a container, but a label naming a
+      subsystem the tree does not have owns the type to nothing, which is the same mistake a
+      component under an unknown subsystem is — so the seam refuses it the same way.
     symbol: restatementParent
   - name: applyTo
     signature: >-
@@ -71,4 +75,4 @@ methods:
     symbol: applyRestatement
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:24.425Z'
-updatedAt: '2026-09-25T19:35:38.212Z'
+updatedAt: '2026-09-26T10:59:04.935Z'

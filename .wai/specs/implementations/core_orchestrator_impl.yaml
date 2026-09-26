@@ -817,6 +817,20 @@ methods:
         type: local
       - stepNumber: 14
         description: >-
+          Describe the move as the debt register and the lint allows key findings by it
+          (identity_rename): every renamed spec with its old and new id, and the component wherever
+          a covered unit or an edge site names it
+        type: local
+      - stepNumber: 15
+        description: >-
+          Rekey the debt register as a DRY RUN, before the first write: a register that cannot be
+          rewritten without disturbing its comments and formatting refuses the rename here, so it
+          never half-lands with its debt left behind reading as both paid and new
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 16
+        description: >-
           Rewrite every reference to a renamed id across the bound tree with the provisioning
           rewriter, the moved specs' own files included: a component's dependsOn, owns and dispatch
           components, and the portal each of its listener mounts names; a subsystem's lifecycle
@@ -827,12 +841,19 @@ methods:
           matched by their old ids, are not among them). References from chained subprojects are not
           rewritten
         type: local
-      - stepNumber: 15
+      - stepNumber: 17
+        description: >-
+          Rekey every lint allow in the bound tree by the same move (identity_rename.rekeyAnchor): a
+          site on an edge naming the component and every covered unit naming it follow, and each
+          spec whose allows changed joins the rewritten specs — a spec the rename moves carries its
+          allows with it
+        type: local
+      - stepNumber: 18
         description: Drop the cached spec index, so the saves below place specs by the rewritten owns
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 16
+      - stepNumber: 19
         description: >-
           Move each renamed spec to its new id: reload it as the rewrite left it, write it under the
           new id where the loader places it, remove the file it left behind and drop the cached
@@ -840,10 +861,18 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: moveRenamedSpecs
-      - stepNumber: 17
+      - stepNumber: 20
         description: >-
-          Return renamed (each moved spec's kind with its old and new id) and rewritten (the ids of
-          the other specs whose references changed)
+          Rekey the debt register for real: every carried entry anchored on a renamed spec or naming
+          the component in its site or units, rewritten in place with every comment and all other
+          formatting kept
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 21
+        description: >-
+          Return renamed (each moved spec's kind with its old and new id), rewritten (the ids of the
+          other specs whose references or lint allows changed) and carried (each register edit)
         type: return
   - name: renameMethod
     sourcePath: src/core/provision.ts
@@ -890,42 +919,48 @@ methods:
       - stepNumber: 8
         description: >-
           Load every interface spec, for the component's own contracts and the names they already
-          declare
+          declare, and collect the contracts that move: every interface of this component that
+          declares methodName
         type: call
         targetComponent: spec_loader
         targetMethod: loadInterfaceSpecs
       - stepNumber: 9
-        description: >-
-          Collect the contracts that move: every interface of this component that declares
-          methodName
-        type: local
-      - stepNumber: 10
         description: 'Guard: the component must declare the method'
         type: branch
         condition: no contract of the component declares methodName
-        onFalseStep: 12
-      - stepNumber: 11
+        onFalseStep: 11
+      - stepNumber: 10
         label: method-missing
         description: Refuse a method the component does not declare
         type: throw
         error: 'method-missing: no contract of this component declares that method'
-      - stepNumber: 12
+      - stepNumber: 11
         description: 'Guard: the new name must be free on every contract that moves'
         type: branch
         condition: one of those contracts already declares a method under newName
-        onFalseStep: 14
-      - stepNumber: 13
+        onFalseStep: 13
+      - stepNumber: 12
         label: name-taken
         description: Refuse a new name already declared on that interface
         type: throw
         error: 'name-taken: that interface already declares a method under the new name'
-      - stepNumber: 14
+      - stepNumber: 13
         description: >-
           Load every implementation spec, for the realizations of those contracts and the narratives
           that refer to the method
         type: call
         targetComponent: spec_loader
         targetMethod: loadImplementationSpecs
+      - stepNumber: 14
+        description: >-
+          Describe the move as the debt register and the lint allows key findings by it
+          (identity_rename: the method on this component becomes newName, on the contracts that
+          declare it and the implementations of those contracts that realize it) and rekey the debt
+          register as a DRY RUN, before the first write: a register that cannot be rewritten without
+          disturbing its comments and formatting refuses the rename here
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
       - stepNumber: 15
         description: Move the method on every contract of the component that declares it
         type: loop
@@ -976,7 +1011,10 @@ methods:
           Retarget every reference to the method with the provisioning rewriter, which persists what
           it changes: narrative call, register and dispatch steps naming this component and this
           method; dispatch-table bindings routing a capability to this component and method; and
-          lifecycle entrypoints naming it for a phase. Record the specs it rewrote
+          lifecycle entrypoints naming it for a phase. Then rekey every lint allow in the bound tree
+          by the same move (identity_rename.rekeyAnchor): an allow at the method on a spec it moved
+          in follows to newName, and a covered <component>.<method> unit anywhere follows too.
+          Record the specs either rewrote
         type: local
       - stepNumber: 23
         description: >-
@@ -987,9 +1025,17 @@ methods:
         type: local
       - stepNumber: 24
         description: >-
+          Rekey the debt register for real: every carried entry anchored at the method on a spec it
+          moved in, or naming <component>.<method> in a covered unit, rewritten in place with every
+          comment and all other formatting kept
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 25
+        description: >-
           Return the report: the component, from and to, the specs the method moved in, the specs
-          whose references were retargeted, the mentions left alone, and the pinned symbol when one
-          was set
+          whose references or lint allows were retargeted, the mentions left alone, the pinned
+          symbol when one was set, and carried (each register edit)
         type: return
         outcome: renamed
   - name: moveRenamedSpecs
@@ -1311,46 +1357,65 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadImplementationSpecs
       - stepNumber: 8
+        description: >-
+          Describe the move as the debt register and the lint allows key findings by it
+          (identity_rename): each spec the methods left re-homes the findings anchored at a moved
+          method to the spec they arrived in, and <from>.<method> becomes <to>.<method> wherever a
+          unit names it. Rekey every lint allow in the tree by it (identity_rename.rekeyAnchor),
+          staging each spec it changes like any other reference: an allow at a moved method moves to
+          the receiving spec, a covered unit follows in place
+        type: local
+      - stepNumber: 9
         description: Decide whether a judgement was injected
         type: branch
         condition: the caller passed write hooks
-        onTrueStep: 9
-        onFalseStep: 13
-      - stepNumber: 9
+        onTrueStep: 10
+        onFalseStep: 14
+      - stepNumber: 10
         description: >-
           Judge the resulting source and target components at the write boundary; the hook throws to
           refuse
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Decide on the judgement
         type: branch
         condition: the hook refused the resulting target
-        onTrueStep: 11
-        onFalseStep: 13
-      - stepNumber: 11
+        onTrueStep: 12
+        onFalseStep: 14
+      - stepNumber: 12
         description: >-
           Enumerate the other components of the source's subsystem as candidate homes and ask the
           hook to assess each without throwing, recording the dependencies each would have to add
           and the rule codes that would refuse it
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Answer with the refusal: the rule codes, and the candidates ranked cheapest legal home
           first with the requested target among them so its shortfall reads beside the rest. Nothing
           has reached disk
         type: return
         outcome: refused
-      - stepNumber: 13
+      - stepNumber: 14
+        description: >-
+          Rekey the debt register as a DRY RUN: the register edits the move makes, computed and
+          proven writable without disturbing the register's comments and formatting before anything
+          is written — a register that cannot be edited that precisely refuses the move here
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 15
         description: Decide whether the caller wanted the write
         type: branch
         condition: the caller asked for a dry run
-        onTrueStep: 14
-        onFalseStep: 15
-      - stepNumber: 14
-        description: Answer with the edits the move would have made and write nothing
+        onTrueStep: 16
+        onFalseStep: 17
+      - stepNumber: 16
+        description: >-
+          Answer with the edits the move would have made, the register edits it would make, and
+          write nothing
         type: return
         outcome: previewed
-      - stepNumber: 15
+      - stepNumber: 17
         description: >-
           Write every edit in the plan — the specs it creates, both contracts, both implementations,
           and each referencing implementation — restoring the ones already written if any write
@@ -1359,10 +1424,18 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveImplementationSpec
-      - stepNumber: 16
+      - stepNumber: 18
         description: >-
-          Answer with what moved, what the move created, how many references followed it, and the
-          prose still naming the old home
+          Rekey the debt register for real, as the last write of the move and inside the same guard:
+          a register that cannot be written restores every spec already written, so nothing moves by
+          halves
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 19
+        description: >-
+          Answer with what moved, what the move created, how many references followed it, the
+          register edits it made, and the prose still naming the old home
         type: return
         outcome: moved
   - name: specPathsInScope
@@ -1508,4 +1581,4 @@ methods:
         targetMethod: resolveVariantGuidance
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T00:25:43.851Z'
+updatedAt: '2026-09-26T11:03:25.789Z'

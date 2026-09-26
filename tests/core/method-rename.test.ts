@@ -344,3 +344,94 @@ describe('renameMethod', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// F78 — the debt register and the lint allows follow a renamed method
+// ---------------------------------------------------------------------------
+
+describe('renameMethod — the debt register and the lint allows (F78)', () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  /** The register, with a count comment, naming ledger.post at a site and in units, and mailer.post (a same-named method elsewhere). */
+  const register = (dir: string): string => {
+    const text = [
+      'schemaVersion: 1.0.0',
+      `name: ${path.basename(dir)}`,
+      'targets: []',
+      'rules:',
+      '  conformance:',
+      '    carried:',
+      '      # 3 finding(s), 3 unit(s).',
+      '      - kind: undecided',
+      '        why: the post path is being redesigned',
+      '        findings:',
+      '          - code: UNDECLARED_PARAM',
+      '            spec: ledger_admin_impl',
+      "            at: 'post'",
+      '            covers:',
+      "              - 'cfg'",
+      '          - code: CALL_STEP_UNREALIZED',
+      '            spec: books_orch_impl',
+      "            at: 'run'",
+      '            covers:',
+      "              - '1:ledger.post'",
+      "              - '5:mailer.post'",
+      '          - code: UNDECLARED_PARAM',
+      '            spec: mailer_impl',
+      "            at: 'post'",
+      'extensions:',
+      '  packs: []',
+      '  useGlobalPacks: false',
+      `createdAt: '${now}'`,
+      `updatedAt: '${now}'`,
+    ].join('\n') + '\n';
+    fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), text);
+    return text;
+  };
+
+  it('rekeys the site on the specs the method moved in and every unit naming it — and leaves a same-named method of another component alone', () => {
+    root = books();
+    const before = register(root);
+
+    const report = renameMethod('ledger', 'post', 'append');
+
+    expect(report.carried).toEqual([
+      { code: 'UNDECLARED_PARAM', spec: 'ledger_admin_impl', at: 'post', field: 'at', from: 'post', to: 'append' },
+      { code: 'CALL_STEP_UNREALIZED', spec: 'books_orch_impl', at: 'run', field: 'covers', from: '1:ledger.post', to: '1:ledger.append' },
+    ]);
+    const after = fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8').split('\n');
+    const changed = before.split('\n').map((line, i) => [line, after[i]]).filter(([x, y]) => x !== y);
+    expect(changed).toEqual([
+      ["            at: 'post'", "            at: 'append'"],
+      ["              - '1:ledger.post'", "              - '1:ledger.append'"],
+    ]);
+  });
+
+  it('rekeys a lint allow at the method on a spec it moved in, and one covering it elsewhere', () => {
+    root = books();
+    const specs = path.join(root, '.wai', 'specs');
+    const iledger = readYamlFile(path.join(specs, 'interfaces', 'iledger.yaml')) as any;
+    writeYamlFile(path.join(specs, 'interfaces', 'iledger.yaml'), {
+      ...iledger, lint: { allow: [{ code: 'UNUSED_METHOD', at: 'post', reason: 'called by the runtime' }] },
+    });
+    const orch = readYamlFile(path.join(specs, 'implementations', 'books_orch_impl.yaml')) as any;
+    writeYamlFile(path.join(specs, 'implementations', 'books_orch_impl.yaml'), {
+      ...orch, lint: { allow: [{ code: 'CALL_STEP_UNREALIZED', at: 'run', covers: ['1:ledger.post', '5:mailer.post'], reason: 'r' }] },
+    });
+    invalidateSpecCache();
+
+    const report = renameMethod('ledger', 'post', 'append');
+
+    expect(stored(root, 'interface', 'iledger').lint.allow).toEqual([{ code: 'UNUSED_METHOD', at: 'append', reason: 'called by the runtime' }]);
+    expect(stored(root, 'implementation', 'books_orch_impl').lint.allow)
+      .toEqual([{ code: 'CALL_STEP_UNREALIZED', at: 'run', covers: ['1:ledger.append', '5:mailer.post'], reason: 'r' }]);
+    expect(report.rewritten).toEqual(expect.arrayContaining(['iledger', 'books_orch_impl']));
+  });
+});

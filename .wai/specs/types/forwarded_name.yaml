@@ -1,0 +1,20 @@
+kind: value-object
+id: forwarded_name
+name: ForwardedName
+description: >-
+  One (file, name) a name a module publishes resolves to, following its re-exports — the answer of
+  code_index.forwardsOf.
+subsystem: sdd_validator
+fields:
+  - name: file
+    type: string
+    description: Canonical path of the module
+    optional: false
+  - name: name
+    type: string
+    description: The name that module publishes it under
+    optional: false
+methods: []
+sourcePath: src/core/rules/types.ts
+createdAt: '2026-09-26T10:58:44.234Z'
+updatedAt: '2026-09-26T10:58:44.236Z'

@@ -1,13 +1,15 @@
 import {
   callSitesOf,
   defaultConformanceTier,
+  importBindingOf,
   methodSourceFile,
   parseDeclaredCall,
   pathKey,
+  resolveImport,
   type CallSiteFact,
   type MethodImplementation,
 } from '../../../models/index.js';
-import { CodeIndex, RuleContext, SddRule } from '../types.js';
+import { CodeIndex, ForwardedName, RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Call realization (code↔spec Level 3), both directions.
@@ -121,6 +123,42 @@ function resolveCallTarget(ctx: RuleContext, componentId: string, methodName: st
     }
   }
   return { accepted, files };
+}
+
+/**
+ * Whether one of these (file, name) pairs IS the target: a file realizing it,
+ * under a name it is realized by.
+ */
+function isTarget(pairs: readonly ForwardedName[], target: CallTarget): boolean {
+  return pairs.some(p => target.files.has(p.file) && target.accepted.has(p.name));
+}
+
+/**
+ * What a call site PROVABLY invokes, as (file, name) pairs followed through
+ * every re-export: a bare call on an import binding is the binding's module's
+ * export under the name it was imported by, and a member call through a
+ * NAMESPACE binding that module's export under the invoked name — each then
+ * followed through the module's republications, aliased or not. This is how a
+ * call to `b` through a module republishing m's `a` as `b` lands on m.a: the
+ * call's spelling is the republished name, and the identity is the module
+ * that wrote it. Every other shape, and a file below exact grade, answers
+ * nothing — the same proven tier originOf reads.
+ */
+function invokedAs(code: CodeIndex, site: CallSiteFact, file: string): ForwardedName[] {
+  const scope = pathKey(site.from ?? file);
+  const facts = code.factsAt(scope);
+  if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') return [];
+  if (!site.member) {
+    const binding = importBindingOf(facts, site.name);
+    if (!binding || binding.namespace) return [];
+    const module = resolveImport(scope, binding.from, code.paths);
+    return module ? code.forwardsOf(module, binding.imported ?? site.name) : [];
+  }
+  if (!site.via) return [];
+  const receiver = importBindingOf(facts, site.via);
+  if (!receiver?.namespace) return [];
+  const module = resolveImport(scope, receiver.from, code.paths);
+  return module ? code.forwardsOf(module, site.name) : [];
 }
 
 /**
@@ -287,6 +325,13 @@ export const callConformanceRule: SddRule = {
         // the shape of the CODE, which does not know which way the claim was
         // written.
         if (target.accepted.has(fnSymbol)) continue;
+        // The same identity, written as a republication under another name:
+        // `export { a as b } from 'm'` makes this file's `b` m's `a`, exactly
+        // as the unaliased `export { a } from 'm'` makes its `a` m's `a`. When
+        // the realized symbol forwards that way to the target's own file under
+        // a name the target is realized by, facade and target are one
+        // function and the claim is realized by identity.
+        if (isTarget(code.forwardsOf(file, fnSymbol), target)) continue;
 
         const matching = sites.filter(s => target.accepted.has(s.name));
         const ref = `${claim.component}.${claim.method}`;
@@ -311,6 +356,12 @@ export const callConformanceRule: SddRule = {
         // where a method it inherits was — so widening what a call reached can
         // only ever accept a claim: it must never turn "I cannot say" into an
         // accusation.
+        // A call spelled with a republished name — `b()` imported from a module
+        // that republishes m's `a` as `b` — lands where m.a lives. It is
+        // realized on the proven tier: an import binding and a chain of
+        // re-exports the code writes down.
+        if (sites.some(s => !target.accepted.has(s.name) && isTarget(invokedAs(code, s, file), target))) continue;
+
         const landed = new Set<string>();
         let realized = false;
         for (const site of matching) {
