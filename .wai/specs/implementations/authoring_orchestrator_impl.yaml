@@ -24,18 +24,23 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 2
         description: >-
-          Build the component candidate judgement as a write hook over those same settings. It
-          judges the MERGED spec, because a delta on its own cannot tell you the resulting
-          componentType, and it is the resulting componentType that decides whether a field belongs
-        type: local
-      - stepNumber: 3
-        description: >-
-          When the project declares test roots, read the spec as it stands before the delta: a
-          method the delta deletes is placed in its file, and named by its stored code-level symbol,
-          only by the version that still held it
+          Read the spec as it stands before the delta: the owning subsystem the judgement compares
+          against, and — when the project declares test roots — a method the delta deletes, placed
+          in its file and named by its stored code-level symbol, which only the version that still
+          held it can answer
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadSpec
+      - stepNumber: 3
+        description: >-
+          Build the judgement as a write hook over those same settings. It judges the MERGED spec,
+          because a delta on its own cannot tell you the resulting componentType, and it is the
+          resulting componentType that decides whether a field belongs. For a component or a type it
+          also refuses an owning subsystem the delta CHANGED to one the tree does not have, read
+          through the core adapter's loadSpec — as every create refuses an unknown parent; an owner
+          the delta leaves alone is not judged, so a spec already pointing at a missing subsystem
+          can still be repaired
+        type: local
       - stepNumber: 4
         description: >-
           Apply the delta through the core client adapter's update with that hook injected, so the
@@ -298,4 +303,4 @@ methods:
         outcome: reported
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-09-26T11:02:18.724Z'
+updatedAt: '2026-09-26T14:16:50.124Z'

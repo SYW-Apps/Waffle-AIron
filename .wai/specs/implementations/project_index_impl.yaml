@@ -121,7 +121,7 @@ methods:
           containment guard (escape rejected) and advance the current root
         type: call
         targetComponent: host_core_adapter
-        targetMethod: assertContainedProjectPath
+        targetMethod: resolveContainedProjectPath
       - stepNumber: 7
         description: >-
           Return the binding: bound root, TOP project id, and the joined mount chain (absent when
