@@ -454,25 +454,28 @@ methods:
       method leaves the source component's interface and arrives on the target's, carrying its
       signature, params, returns, guarantees and endpoint binding unchanged; its implementation
       entry moves with it, carrying narrative, sourcePath, symbol, detail, intent, calls and
-      findings. A target that declares no contract yet receives one, i<target>, at the source
-      contract's status; when implementation entries travel and no implementation realizes the
-      receiving contract, <target>_impl is created for them at the source implementation's status,
-      inheriting its sourcePath (left unset, with each entry keeping the file it was realized in,
-      when the entries come from implementations with different sourcePaths). The report names
-      everything it created, and a failed write deletes what it created as it restores what it
-      edited. Narrative call, register and dispatch steps naming the old home, dispatch-table
-      bindings, lifecycle entrypoints and `calls` entries are retargeted to the new one. Prose is
-      never rewritten and a wire endpoint keeps its address — moving a method between components
-      must not silently re-address an RPC; both are reported as mentions. Every edit is computed
-      before the first is written, and a write that fails restores the ones already made, because a
-      half-moved method leaves callers naming a home it no longer has. The caller's judgement runs
-      as a write hook on the resulting components at the last point before anything reaches disk,
-      which is where a move that breaks a dependency rule is refused. Refuses, before the first
-      write: a component or method that does not exist, a method name already declared on the
-      target, a source and target that are the same component, a target with several contracts none
-      of which is named i<target>, a contract or implementation to create whose id another spec
-      already holds, and a component inside a chained subproject (move it from that project's root).
-      A lock goes stale as with any edit.
+      findings. An entry with no sourcePath of its own is realized in its old implementation's
+      default file, so when the receiving implementation names a different file the entry keeps its
+      old one as its own sourcePath, and a notice says so — moving a method is not moving its code.
+      A target that declares no contract yet receives one, i<target>, at the source contract's
+      status; when implementation entries travel and no implementation realizes the receiving
+      contract, <target>_impl is created for them at the source implementation's status, inheriting
+      its sourcePath (left unset, with each entry keeping the file it was realized in, when the
+      entries come from implementations with different sourcePaths). The report names everything it
+      created, and a failed write deletes what it created as it restores what it edited. Narrative
+      call, register and dispatch steps naming the old home, dispatch-table bindings, lifecycle
+      entrypoints and `calls` entries are retargeted to the new one. Prose is never rewritten and a
+      wire endpoint keeps its address — moving a method between components must not silently
+      re-address an RPC; both are reported as mentions. Every edit is computed before the first is
+      written, and a write that fails restores the ones already made, because a half-moved method
+      leaves callers naming a home it no longer has. The caller's judgement runs as a write hook on
+      the resulting components at the last point before anything reaches disk, which is where a move
+      that breaks a dependency rule is refused. Refuses, before the first write: a component or
+      method that does not exist, a method name already declared on the target, a source and target
+      that are the same component, a target with several contracts none of which is named i<target>,
+      a contract or implementation to create whose id another spec already holds, and a component
+      inside a chained subproject (move it from that project's root). A lock goes stale as with any
+      edit.
     signature: >-
       moveMethods(from: string, to: string, methods: string[], hooks?: SpecWriteHooks, dryRun?:
       boolean): MethodMoveReport
@@ -652,4 +655,4 @@ methods:
         type: VariantDef[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T00:25:23.199Z'
+updatedAt: '2026-09-26T00:39:33.230Z'
