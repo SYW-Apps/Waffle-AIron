@@ -187,8 +187,12 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       const result = validateSddTree(cfg.rules, cfg.projectType);
       const errs = result.issues.filter((i) => i.severity === 'error').length;
       const warns = result.issues.filter((i) => i.severity === 'warning').length;
-      if (errs > 0) line(tally, 'error', `Conformance: ${errs} error(s), ${warns} warning(s) — see \`wairon validate\` (you: \`sdd_validate_tree\`)`);
-      else if (warns > 0) line(tally, 'warn', `Conformance: ${warns} warning(s) — see \`wairon validate\` (you: \`sdd_validate_tree\`)`);
+      // Notices are counted and named, but alone they leave the check passing.
+      const notes = result.issues.filter((i) => i.severity === 'notice').length;
+      const noted = notes > 0 ? `, ${notes} notice(s)` : '';
+      if (errs > 0) line(tally, 'error', `Conformance: ${errs} error(s), ${warns} warning(s)${noted} — see \`wairon validate\` (you: \`sdd_validate_tree\`)`);
+      else if (warns > 0) line(tally, 'warn', `Conformance: ${warns} warning(s)${noted} — see \`wairon validate\` (you: \`sdd_validate_tree\`)`);
+      else if (notes > 0) line(tally, 'ok', `Conformance: 0 errors, 0 warnings, ${notes} notice(s) — see \`wairon validate\` (you: \`sdd_validate_tree\`)`);
       else line(tally, 'ok', 'Conformance: 0 errors, 0 warnings');
     } catch (e) {
       line(tally, 'warn', `Could not run conformance check: ${e instanceof Error ? e.message : String(e)}`);

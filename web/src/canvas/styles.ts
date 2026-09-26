@@ -170,6 +170,8 @@ header input[type="search"]::placeholder { color:var(--dim); }
 #panel .flowbtn:hover { background:var(--hover-bg); }
 #panel .issue { border-left:3px solid var(--danger); padding:6px 9px; margin:6px 0; background:var(--card); font-size:12px; border-radius:0 7px 7px 0; }
 #panel .issue.warning { border-left-color:var(--warn); }
+#panel .issue.notice { border-left-color:var(--accent); }
+#panel .issue .sev { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; margin-left:6px; }
 #panel .issue code { font-size:10.5px; color:var(--dim); }
 
 /* Presentation mode = the canvas page, focused: the header chrome and legend

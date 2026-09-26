@@ -12,7 +12,8 @@ import { validateRegistry, validateProjectConfig, validateAsComplete, validateSd
 // validate command (cli_validator_adapter)
 //
 // Checks the project config and registry for issues.
-// Exits with code 1 if there are errors (or warnings in --ci mode).
+// Exits with code 1 if there are errors (or warnings in --ci mode). Notices are
+// printed and counted, and never fail the run — with or without --ci.
 // ---------------------------------------------------------------------------
 
 // cli_validator_adapter.validateAsComplete — the as-complete conformance gate:
@@ -27,11 +28,11 @@ import { validateRegistry, validateProjectConfig, validateAsComplete, validateSd
 //
 // cli_validator_adapter.validateSddTree — the full spec-tree conformance
 // gate, republished as the adapter's forward to the validator portal;
-// `wairon doctor` reports its error/warning counts.
+// `wairon doctor` reports its error/warning/notice counts.
 export { validateAsComplete, computeGateStateId, validateSddTree };
 
 export interface ValidateOptions {
-  ci?: boolean; // treat warnings as errors (for CI pipelines)
+  ci?: boolean; // treat warnings as errors (for CI pipelines); notices never fail
   subsystem?: string; // validate only a specific subsystem
   recursive?: boolean | number; // whether to recursively validate subprojects
 }
@@ -51,6 +52,9 @@ export interface ValidateOptions {
 //     an unused *complete* component is a real gap and stays fatal.
 // Every other warning remains fatal in --ci mode. The warnings are still
 // printed — this classifies the failure decision, it does not silence rules.
+//
+// A NOTICE is never part of the failure decision at all: it is printed and
+// counted under every mode, and `--ci` never fails on it.
 // ---------------------------------------------------------------------------
 
 /**
@@ -117,6 +121,8 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   // draft-waivable ones). `waivedWarnings` are printed but excluded from it.
   let hasFatalWarnings = false;
   let waivedWarnings = 0;
+  // Notices: printed and counted, never part of the failure decision.
+  let noticeTotal = 0;
 
   // --- Legacy spec filenames check ---
   const legacySpecs = findLegacySpecFiles();
@@ -135,6 +141,9 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       if (issue.severity === 'error') {
         logger.error(`[${issue.code}] ${issue.message}`);
         hasErrors = true;
+      } else if (issue.severity === 'notice') {
+        logger.notice(`[${issue.code}] ${issue.message}`);
+        noticeTotal++;
       } else {
         logger.warn(`[${issue.code}] ${issue.message}`);
         hasFatalWarnings = true;
@@ -155,6 +164,9 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       if (issue.severity === 'error') {
         logger.error(`${prefix}[${issue.code}] ${issue.message}`);
         hasErrors = true;
+      } else if (issue.severity === 'notice') {
+        logger.notice(`${prefix}[${issue.code}] ${issue.message}`);
+        noticeTotal++;
       } else {
         logger.warn(`${prefix}[${issue.code}] ${issue.message}`);
         hasFatalWarnings = true;
@@ -184,9 +196,11 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     } else {
       let errorCount = 0;
       let warningCount = 0;
+      let noticeCount = 0;
       const MAX_PRINT = 100;
       let skippedErrors = 0;
       let skippedWarnings = 0;
+      let skippedNotices = 0;
 
       for (const issue of sddResult.issues) {
         const prefix = issue.specId ? chalk.gray(`[${issue.specId}] `) : '';
@@ -197,6 +211,15 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
             errorCount++;
           } else {
             skippedErrors++;
+          }
+        } else if (issue.severity === 'notice') {
+          // Never part of the failure decision, --ci included.
+          noticeTotal++;
+          if (noticeCount < MAX_PRINT) {
+            logger.notice(`${prefix}[${issue.code}] ${issue.message}`);
+            noticeCount++;
+          } else {
+            skippedNotices++;
           }
         } else {
           if (isCiDraftWaivable(issue)) {
@@ -219,6 +242,9 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       if (skippedWarnings > 0) {
         logger.warn(`... and ${skippedWarnings} more warning(s) omitted. Use '--subsystem <id>' to validate a specific subsystem.`);
       }
+      if (skippedNotices > 0) {
+        logger.notice(`... and ${skippedNotices} more notice(s) omitted. Use '--subsystem <id>' to validate a specific subsystem.`);
+      }
     }
   }
 
@@ -234,6 +260,12 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   }
 
   logger.blank();
+
+  // Notices are counted on every run, and said to be outside the failure
+  // decision, so a reader of a green CI log still sees they exist.
+  if (noticeTotal > 0) {
+    logger.info(chalk.blue(`${noticeTotal} notice(s) reported — never part of the failure decision${options.ci ? ' (--ci does not fail on notices)' : ''}.`));
+  }
 
   // Draft-related warnings are surfaced above but excluded from the --ci
   // failure decision (they reflect declared drafts, not incomplete finished
@@ -254,7 +286,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     process.exit(1);
   } else {
     if (options.ci) {
-      logger.success('All checks passed (CI mode — warnings treated as errors, draft-related warnings excepted).');
+      logger.success('All checks passed (CI mode — warnings treated as errors, draft-related warnings excepted; notices never fail).');
     } else {
       logger.success('All checks passed.');
     }

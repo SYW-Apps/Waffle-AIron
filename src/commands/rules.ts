@@ -13,7 +13,7 @@ import { loadProjectConfig, projectConfigExists, loadProjectExtensions } from '.
 // ---------------------------------------------------------------------------
 
 export async function listRules(): Promise<void> {
-  let overrides: Record<string, 'error' | 'warning' | 'off'> = {};
+  let overrides: Record<string, 'error' | 'warning' | 'notice' | 'off'> = {};
   if (projectConfigExists()) {
     try {
       overrides = loadProjectConfig()?.rules.sddRuleSeverity ?? {};
@@ -22,9 +22,10 @@ export async function listRules(): Promise<void> {
     }
   }
 
-  const sevLabel = (sev: 'error' | 'warning' | 'off'): string => {
+  const sevLabel = (sev: 'error' | 'warning' | 'notice' | 'off'): string => {
     if (sev === 'error') return chalk.red('error  ');
     if (sev === 'warning') return chalk.yellow('warning');
+    if (sev === 'notice') return chalk.blue('notice ');
     return chalk.gray('off    ');
   };
 
@@ -60,7 +61,7 @@ export async function listRules(): Promise<void> {
   for (const err of ext.errors) {
     logger.error(err);
   }
-  logger.info('Override severities per project via rules.sddRuleSeverity in .wai/project.yaml (error | warning | off).');
+  logger.info('Override severities per project via rules.sddRuleSeverity in .wai/project.yaml (error | warning | notice | off). A notice is reported but never fails the gate, --ci included.');
   if (ext.packNames.length) {
     logger.info(`Extension packs loaded: ${ext.packNames.join(', ')} (.wai/project.yaml → extensions.packs).`);
   }

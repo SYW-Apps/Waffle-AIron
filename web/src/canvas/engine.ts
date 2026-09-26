@@ -78,7 +78,15 @@ export function mountCanvas(host, model, opts = {}) {
   });
   ROOT.getElementById('issueCount').textContent =
     MODEL.issues.filter(function (i) { return i.severity === 'error'; }).length + 'e/' +
-    MODEL.issues.filter(function (i) { return i.severity === 'warning'; }).length + 'w';
+    MODEL.issues.filter(function (i) { return i.severity === 'warning'; }).length + 'w/' +
+    MODEL.issues.filter(function (i) { return i.severity === 'notice'; }).length + 'n';
+  // A node is marked failing only for an error or a warning; one that holds
+  // only notices gets its own quieter mark, never the failing one.
+  function issueMark(id) {
+    var list = state.showIssues && issuesBySpec[id];
+    if (!list) return '';
+    return list.some(function (i) { return i.severity !== 'notice'; }) ? ' hasIssue' : ' hasNotice';
+  }
 
   var PATTERN_TYPES = { Repository:1, FeatureComponent:1, RouterComponent:1 };
   // A retired Specialist or Gateway renders as a plain box marked retired, so a
@@ -418,6 +426,9 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
+      // Notices only: the node keeps its own border colour and width (no layout
+      // nudge), drawn dotted so it reads as noted rather than failing.
+      { selector: '.hasNotice', style: { 'border-style': 'dotted' } },
       // Overlay only (no border) — a border changes node geometry, which nudges
       // the compound parent and makes hover flicker; overlay never affects layout.
       { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.34, 'overlay-padding': 6 } },
@@ -1207,7 +1218,7 @@ export function mountCanvas(host, model, opts = {}) {
       var kindCls = t.kind === 'entity' ? 'typeEntity' : 'typeValue';
       var dim = !typeMatches(t);
       var extra = (dim ? ' dimmed' : '')
-        + (state.showIssues && issuesBySpec[t.id] ? ' hasIssue' : '')
+        + issueMark(t.id)
         + (state.selectedKind === 'type' && state.selected === t.id ? ' sel' : '');
       if (sh.plain) {
         eles.push({
@@ -1497,7 +1508,7 @@ export function mountCanvas(host, model, opts = {}) {
       }
       classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '')
         + (dim ? ' dimmed' : '')
-        + (state.showIssues && issuesBySpec[e.id] ? ' hasIssue' : '')
+        + issueMark(e.id)
         + (state.selectedKind === e.kind && state.selected === e.id ? ' sel' : '');
       if (inner) {
         var boxNode = { data: { id: aid, label: e.kind === 'subsystem' ? nameOf(e) : nameOf(e), w: p.w, h: p.h, tw: p.w - 16 }, classes: classes };
@@ -3442,7 +3453,7 @@ export function mountCanvas(host, model, opts = {}) {
   }
   function issueHtml(list) {
     return list.map(function (i) {
-      return '<div class="issue ' + esc(i.severity) + '"><code>' + esc(i.code) + '</code><br>' + esc(i.message) + '</div>';
+      return '<div class="issue ' + esc(i.severity) + '"><code>' + esc(i.code) + '</code><span class="sev">' + esc(i.severity) + '</span><br>' + esc(i.message) + '</div>';
     }).join('');
   }
 

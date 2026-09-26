@@ -37,6 +37,16 @@ export const logger = {
     }
   },
 
+  /**
+   * A finding reported at `notice` severity: listed, never a failure. Kept
+   * visually apart from warn so a reader never mistakes one for the other.
+   */
+  notice(message: string): void {
+    if (shouldLog('info')) {
+      console.log(chalk.blue('◆') + '  ' + chalk.blue('notice ') + message);
+    }
+  },
+
   error(message: string): void {
     // Errors always surface regardless of level
     console.error(chalk.red('✖') + '  ' + chalk.red(message));

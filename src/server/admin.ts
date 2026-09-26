@@ -343,6 +343,7 @@ export function executeApprovedLock(
         valid: true,
         errors: 0,
         warnings: result.issues.filter((i) => i.severity === 'warning').length,
+        notices: result.issues.filter((i) => i.severity === 'notice').length,
       },
       status: 'ready',
       specs,

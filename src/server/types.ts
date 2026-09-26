@@ -937,8 +937,11 @@ export interface WebGraphNode {
   parentId?: string;
   projectId?: string;
   status?: string;
-  /** Count of validation issues on this node (overlaid on the project tier). */
+  /** Count of validation errors and warnings on this node (overlaid on the project tier). */
   issueCount?: number;
+  /** Count of validation notices on this node, kept apart from issueCount so a
+   *  node holding only notices is never drawn as failing. */
+  noticeCount?: number;
   /** True when the caller can act on this scope. False/absent on an ancestor
    *  breadcrumb shown read-only only so the tree stays navigable to a deeper
    *  actionable scope (the no@org + yes@one-project case). Carried through from

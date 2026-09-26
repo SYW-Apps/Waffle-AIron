@@ -168,7 +168,7 @@ export type TrustedLink = z.infer<typeof TrustedLinkSchema>;
 
 /**
  * Per-spec lint suppression — wairon's #[allow(...)]. An allow silences
- * WARNING-severity findings of the named code on THIS spec only; error
+ * WARNING- and NOTICE-severity findings of the named code on THIS spec only; error
  * findings are architecture violations and are never locally suppressible
  * (a human can still re-tune codes globally via rules.sddRuleSeverity in
  * project.yaml). Same philosophy as trustedLinks: the exception becomes

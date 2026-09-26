@@ -28,8 +28,11 @@ export interface LockRecord {
   lockedBy: ApproverIdentity;
   /** wairon version that produced the validation. */
   validatorVersion: string;
-  /** The as-complete validation outcome captured at lock time. */
-  validationResult: { valid: boolean; errors: number; warnings: number };
+  /**
+   * The as-complete validation outcome captured at lock time. `notices` is
+   * absent on a record written before the notice severity existed.
+   */
+  validationResult: { valid: boolean; errors: number; warnings: number; notices?: number };
   /** Always 'ready'. The lock IS the human gate; there is no second state. */
   status: 'ready';
   /**

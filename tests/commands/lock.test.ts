@@ -145,7 +145,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     // never a bare OS username, which names nobody in CI.
     expect(['git', 'os']).toContain(record!.lockedBy.source);
     expect(record!.lockedBy.id).toBeTruthy();
-    expect(record!.validationResult).toEqual({ valid: true, errors: 0, warnings: 1 });
+    expect(record!.validationResult).toEqual({ valid: true, errors: 0, warnings: 1, notices: 0 });
 
     // Approving writes NOTHING into the spec tree — the status ratchet that
     // used to rewrite every file is gone, and the approval rides in this one
