@@ -722,8 +722,8 @@ methods:
       - stepNumber: 5
         description: >-
           Report PROJECT_ID_DEFAULTED (notice), naming the display name and the id derived from it,
-          that the next save of the configuration writes it into project.yaml, that stage 3 requires
-          an explicit id, and how to declare one
+          that no save writes it into project.yaml for the project, that stage 3 requires an
+          explicit id, and how to declare one
         type: local
       - stepNumber: 6
         label: ambiguous
@@ -757,4 +757,4 @@ methods:
     exportedVia: projectIdentityRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-26T15:28:54.971Z'
+updatedAt: '2026-09-26T15:58:25.104Z'
