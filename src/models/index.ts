@@ -9,3 +9,4 @@ export * from './step-graph.js';
 export * from './step-config.js';
 export * from './code-model.js';
 export * from './surface-references.js';
+export * from './exports.js';

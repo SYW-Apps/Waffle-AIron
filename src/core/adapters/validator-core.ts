@@ -29,4 +29,7 @@ export {
   clearLoaderIssues,
   scanAllSpecs,
   loadProjectVariants,
+  // The resolved export tables the export-tables rule judges.
+  resolveSubsystemExports,
+  resolveProjectExports,
 } from '../index.js';

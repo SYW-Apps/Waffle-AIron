@@ -58,6 +58,10 @@ export {
   loadImplementationSpec,
   loadTypeSpecs,
   loadTypeSpec,
+  // The resolved export tables (spec_tree_portal resolveSubsystemExports /
+  // resolveProjectExports): passthrough reads of the spec repository.
+  resolveSubsystemExports,
+  resolveProjectExports,
   // Kind-generic access (spec_tree_portal loadSpec; spec_store_portal
   // saveSpec / deleteSpec / updateSpec / moveMethods), for a caller that holds
   // the kind as data — the authoring seam above all.
