@@ -375,16 +375,22 @@ methods:
       - stepNumber: 10
         label: indexDep
         description: >-
-          Does an Index, a read projection, depend on anything but its Store, a backend Adapter or
-          pure logic?
+          Does an Index, a read projection, depend on anything but its Store, a backend Adapter,
+          pure logic — or, the exceptional derived-Index case, another Index owned by the same
+          Repository that does not reach back to it through Index edges (no Index cycle)?
         type: branch
-        condition: edge.from is an Index and ownStoreOnly
+        condition: >-
+          edge.from is an Index, ownStoreOnly, and the edge is not a derived-Index edge (edge.to is
+          an Index owned by the same Repository as edge.from, and edge.to does not reach edge.from
+          through Index-to-Index edges)
         onFalseStep: 12
       - stepNumber: 11
         description: >-
           Report ARCHITECTURE_VIOLATION_INDEX_DEP (error, on edge.from.id; draft context
           edge.draftContext) naming both components: an Index may depend only on its Store, a
-          backend Adapter or pure logic
+          backend Adapter or pure logic — or, as an exceptional case, on another Index of the same
+          Repository, never in a cycle; the message says which of the two guardrails an
+          Index-to-Index edge broke
         type: local
       - stepNumber: 12
         label: queryDep
@@ -1166,4 +1172,4 @@ methods:
     exportedVia: authSourceWiringRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-25T17:38:48.903Z'
+updatedAt: '2026-09-26T16:12:25.527Z'

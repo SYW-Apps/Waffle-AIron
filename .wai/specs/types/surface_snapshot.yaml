@@ -38,8 +38,24 @@ fields:
     optional: false
   - name: types
     type: SurfaceTypeDef[]
-    description: Transitive type closure of every exported signature — the snapshot is self-contained.
+    description: >-
+      Transitive type closure of every exported signature and every exported type — the snapshot is
+      self-contained. Types are gathered by qualified id, so two subsystems' types of the same name
+      both arrive (the later one under its qualified id).
     optional: false
+  - name: projectId
+    type: string
+    description: >-
+      The producing project's effective id (project.yaml id), recorded beside the display-oriented
+      projectName; absent on snapshots written before project ids existed, and on authored or
+      imported surfaces.
+    optional: true
+  - name: exportedTypes
+    type: SurfaceTypeExport[]
+    description: >-
+      The types the producer exports by name (typeDef exports), audience-filtered like the contract
+      entries and listed apart from them; each definition is in the type closure.
+    optional: true
 methods:
   - name: isProvidedBy
     signature: 'isProvidedBy(provider: string): boolean'
@@ -51,4 +67,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-09-19T11:07:19.332Z'
+updatedAt: '2026-09-26T16:08:13.320Z'

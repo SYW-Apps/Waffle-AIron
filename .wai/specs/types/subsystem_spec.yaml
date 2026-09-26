@@ -32,8 +32,10 @@ fields:
       so a subproject is always contained by its parent.
     optional: true
   - name: publicInterfaces
-    type: object[]
-    description: 'Published surface: type + details + realizing component'
+    type: PublicInterface[]
+    description: >-
+      The subsystem's export table: own items (a component or type it owns) and re-exports from
+      other subsystems of the project
     optional: false
   - name: trustedLinks
     type: object[]
@@ -78,4 +80,4 @@ methods:
     symbol: isDraftSubsystem
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-23T18:35:52.945Z'
+updatedAt: '2026-09-26T16:07:31.405Z'

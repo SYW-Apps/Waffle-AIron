@@ -133,6 +133,27 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: resolveSubsystemExports
+    description: >-
+      Forward to spec_tree_portal.resolveSubsystemExports: one subsystem's resolved export table
+      with the problems met resolving it, which the export-tables rule judges.
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem
+    guarantees:
+      - idempotent
+  - name: resolveProjectExports
+    description: >-
+      Forward to spec_tree_portal.resolveProjectExports: the project's resolved L0 export table with
+      the problems met resolving it, which the export-tables rule judges.
+    signature: 'resolveProjectExports(): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T15:28:01.328Z'
+updatedAt: '2026-09-26T16:10:50.218Z'

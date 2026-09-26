@@ -17,16 +17,24 @@ methods:
         targetMethod: loadComponentSpecs
       - stepNumber: 2
         description: >-
+          Read the project's resolved export table, so a portal's "View OpenAPI" deep-links to the
+          section tagged with the public name its canonical target is exported under — the
+          resolver's name, not the raw L0 entry's
+        type: call
+        targetComponent: spec_loader
+        targetMethod: resolveProjectExports
+      - stepNumber: 3
+        description: >-
           Emit a node per spec with its level and containment, and an edge per dependency and
           ownership between the nodes emitted
         type: local
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
           Mark each node the passed-in findings name, keeping each finding's severity, so the canvas
           shows a judgement it did not make — and can draw a node holding only notices apart from
           one holding errors or warnings
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Answer with the model
         type: return
         outcome: built
@@ -57,4 +65,4 @@ methods:
     symbol: renderCanvasHtml
 status: complete
 createdAt: '2026-09-20T16:38:14.590Z'
-updatedAt: '2026-09-26T14:49:49.355Z'
+updatedAt: '2026-09-26T16:13:28.845Z'

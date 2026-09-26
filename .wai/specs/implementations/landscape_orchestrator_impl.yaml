@@ -193,46 +193,58 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: computeStateId
       - stepNumber: 8
-        description: Read the target project's L0 system spec at the bound root
+        description: Read the target project's L0 system spec at the bound root (its name labels the snapshot)
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadSystemSpec
       - stepNumber: 9
-        description: Read the target project's L1 subsystem specs at the bound root
+        description: >-
+          Read the target project's resolved export table through the core adapter — every public
+          name bound to its canonical target, with its audience — instead of the raw L0 YAML
         type: call
         targetComponent: host_core_adapter
-        targetMethod: loadSubsystemSpecs
+        targetMethod: resolveProjectExports
       - stepNumber: 10
         description: >-
-          Leniently read the L0 publicInterfaces, resolve each against its subsystem public
-          interface, and assemble the redacted ProjectPublicSurfaceSnapshot (never private
-          components/narratives/roots/secrets)
-        type: local
+          Read the target project's interface specs through the core adapter, for the method NAMES
+          and endpoint paths of each exported contract
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadInterfaceSpecs
       - stepNumber: 11
+        description: >-
+          Redact each exported component into a PublicInterfaceSummary — its public name, display
+          name, transport kind, audience (the resolver's default, instance, when the entry declares
+          none), version, stability and details, the method NAMES and endpoint paths of its contract
+          (narrowed to the exported interface when it narrows) and the non-builtin type names its
+          signatures reference — and assemble the ProjectPublicSurfaceSnapshot (never component ids,
+          signatures, narratives, roots or secrets)
+        type: local
+      - stepNumber: 12
         description: Replace the target project's redacted public-surface snapshot in the repository
         type: call
         targetComponent: public_surface_repository
         targetMethod: replaceSnapshot
-      - stepNumber: 12
+      - stepNumber: 13
         description: Append a redacted audit event without letting a failure fail the refresh
         type: try
-        endStep: 14
+        endStep: 15
         catches:
           - error: audit append failure
-            step: 15
-      - stepNumber: 13
+            step: 16
+      - stepNumber: 14
         description: Append the redacted surface.refresh audit event (info level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 14
+      - stepNumber: 15
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 16
-      - stepNumber: 15
+        toStep: 17
+      - stepNumber: 16
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Return the stored public-surface snapshot
         type: return
         outcome: the stored public-surface snapshot
@@ -547,4 +559,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-09T22:10:36.787Z'
-updatedAt: '2026-09-17T20:28:59.261Z'
+updatedAt: '2026-09-26T16:14:15.112Z'

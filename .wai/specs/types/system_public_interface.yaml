@@ -2,54 +2,67 @@ kind: value-object
 id: system_public_interface
 name: SystemPublicInterface
 description: >-
-  L0 public surface intentionally exposed by a system to other hosted projects or external
-  consumers. It must point to an existing subsystem public interface, so project-boundary access
-  never targets private components or internal subsystem surfaces by accident.
+  One entry of the project's L0 export table — the only thing another project may consume, like a
+  crate root's `pub use` or an `index.js` re-export. L0 owns no components, so every entry
+  re-exports what a subsystem exports: one component (optionally narrowed to one interface) or one
+  type, optionally renamed with `as`; or, with neither `component` nor `typeDef`, everything the
+  source exports (a wildcard). The export resolver follows each entry to its canonical target once
+  per scan; explicit entries shadow a name a wildcard brings in. A legacy entry `{ subsystem,
+  component, id }` reads as `{ from: subsystem, component, as: id }`, and one without a source
+  infers it from the component's owner, so existing trees keep their published names.
 fields:
   - name: id
     type: string
-    description: Stable public interface id within the system.
-    optional: false
+    description: Legacy public name, read as `as` when `as` is absent.
+    optional: true
   - name: name
     type: string
-    description: Human-readable public surface name.
-    optional: false
+    description: Human-readable public surface name; defaults to the target component's name.
+    optional: true
   - name: subsystem
     type: string
-    description: Subsystem that publishes the underlying L1 public interface.
-    optional: false
+    description: >-
+      Legacy source subsystem, read as `from` when `from` is absent; when both are absent the source
+      is inferred from the component's (or type's) owner.
+    optional: true
   - name: component
     type: string
-    description: Portal or compatible public component backing the subsystem public interface.
-    optional: false
+    description: >-
+      The component re-exported one to one. Without it and without `typeDef`, the entry re-exports
+      everything the source exports.
+    optional: true
   - name: interface
     type: string
-    description: Optional L3 interface id backing the surface.
+    description: >-
+      The L3 interface the export narrows to; the default public name when neither `as` nor `id` is
+      set.
     optional: true
   - name: type
     type: string
     description: >-
       Surface kind, aligned with subsystem publicInterfaces: REST, GraphQL, MessageBus, RPC, or
-      Custom.
-    optional: false
+      Custom; inherited from the source's entry when omitted.
+    optional: true
   - name: details
     type: string
-    description: Consumer-facing description of what the surface exposes and what remains private.
-    optional: false
+    description: >-
+      Consumer-facing description of what the surface exposes and what remains private; inherited
+      from the source's entry when omitted.
+    optional: true
   - name: audience
     type: string
     description: >-
       Exposure ceiling, ascending reach: "project" (family-internal — exported only into own chained
       children, never beyond), "department" (owning org-unit subtree), "instance" (whole hosted
-      instance), "partner" (grant-gated cross-tenant), "external" (publicly consumable /
-      3rd-party-facing). The surface projector filters snapshot entries by this ceiling; org-unit
-      grants (Stage 2) then decide direction WITHIN the ceiling — effective visibility is the
-      intersection.
-    optional: false
+      instance; the default), "partner" (grant-gated cross-tenant), "external" (publicly consumable
+      / 3rd-party-facing). A wildcard entry's audience applies to every name it brings in. The
+      surface projector filters snapshot entries by this ceiling; org-unit grants then decide
+      direction WITHIN the ceiling — effective visibility is the intersection.
+    optional: true
   - name: authPolicy
     type: string
     description: Short policy identifier or prose summary for how callers authenticate to this surface.
-    optional: false
+    optional: true
   - name: version
     type: string
     description: Optional public contract version.
@@ -58,7 +71,22 @@ fields:
     type: string
     description: 'Contract stability: "draft", "stable", or "deprecated".'
     optional: true
+  - name: from
+    type: string
+    description: 'The source the entry re-exports from: a subsystem of this project.'
+    optional: true
+  - name: typeDef
+    type: string
+    description: A type (entity, value object, enum) exported as is, giving it a public name.
+    optional: true
+  - name: as
+    type: string
+    description: >-
+      The public name consumers use. Defaults to `id`, then `interface`, then `component` or
+      `typeDef`, so an entry without it keeps today's name. Must fit [a-z0-9-_]+ (else
+      EXPORT_INVALID).
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-08T21:10:42.862Z'
-updatedAt: '2026-09-19T11:07:19.532Z'
+updatedAt: '2026-09-26T16:07:41.684Z'

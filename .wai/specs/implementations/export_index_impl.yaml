@@ -1,0 +1,181 @@
+id: export_index_impl
+name: Export Index Implementation
+description: >-
+  src/core/exports.ts. Resolves every subsystem's export table in one pass per scan — dependency
+  order, with groups of subsystems that re-export each other resolved together — and memoizes the
+  tables on the scan they projected, so a re-export chain costs one walk however many consumers read
+  it. The project table is resolved on top of them and memoized on the scan and the L0 entries it
+  read.
+contract: iexport_index
+sourcePath: src/core/exports.ts
+methods:
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Read the scanned subsystems from the Spec Index — the scan the tables are memoized on
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 2
+        description: Is there a memoized set of tables for this scan?
+        type: branch
+        condition: the memo holds tables for this scan's subsystem list
+        onTrueStep: 13
+        onFalseStep: 3
+      - stepNumber: 3
+        description: Read the scanned components (owners, stereotypes) from the Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: >-
+          Read the scanned interfaces (a narrowing must name the component's own contract) from the
+          Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Read the scanned types (typeDef exports and their owners) from the Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadTypeSpecs
+      - stepNumber: 6
+        description: >-
+          Bind every subsystem's OWN items: a component or type the subsystem owns, under `as ??
+          interface ?? component` (or `as ?? typeDef`). A public name outside [a-z0-9-_]+, a typeDef
+          the subsystem does not own, or a narrowing onto another component's contract is recorded
+          as an invalid problem; an unbound, unknown or foreign own component is left to the
+          public-surface rules and skipped
+        type: local
+      - stepNumber: 7
+        description: >-
+          Order the subsystems by their `from` edges into groups that re-export each other (strongly
+          connected), sources before the subsystems that read them
+        type: local
+      - stepNumber: 8
+        description: For each group, sources first
+        type: loop
+        loopKind: forEach
+        over: the groups in dependency order
+        endStep: 11
+      - stepNumber: 9
+        description: >-
+          Bind each NAMED re-export by its target in the source's table (the component, narrowed to
+          the interface when one is named). A missing source, an unknown item, or an item the source
+          does not export is an invalid problem; an item the source owns but does not export is
+          still bound, leniently, so no existing name moves. Inside a group whose tables are not yet
+          complete, a name that never grounds is a named-cycle problem
+        type: local
+      - stepNumber: 10
+        description: >-
+          Bring in each WILDCARD's source table under the source's public names unchanged; a group
+          whose members re-export each other through wildcards is iterated to its union and recorded
+          once as a wildcard-cycle problem naming the loop
+        type: local
+      - stepNumber: 11
+        label: group-done
+        description: >-
+          Settle each table: an own or explicit entry shadows a name a wildcard brings in; the same
+          target twice under one name is one entry; two wildcards binding one name to different
+          targets is a duplicate problem and the name is left out; a re-export whose target is
+          neither a Portal nor an Observer is an unconsumable problem
+        type: local
+      - stepNumber: 12
+        description: Memoize the settled tables on this scan
+        type: local
+      - stepNumber: 13
+        label: pick
+        description: >-
+          Pick the requested subsystem's table — an empty table owned by that id when the tree has
+          no such subsystem
+        type: local
+      - stepNumber: 14
+        description: Answer with the table
+        type: return
+        outcome: ResolvedExportTable
+    detail: full
+    symbol: resolveSubsystemExportTable
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Read the L0 system spec from the Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Is there an L0 to read exports from?
+        type: branch
+        condition: the tree has no L0 system spec
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'No L0: answer an empty project table'
+        type: return
+        outcome: empty table
+      - stepNumber: 4
+        label: entries
+        description: Read the scanned subsystems from the Spec Index — with the L0 entries, the memo key
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 5
+        description: Is the project table memoized for this scan and these L0 entries?
+        type: branch
+        condition: the memo holds a project table for this scan and these entries
+        onTrueStep: 13
+        onFalseStep: 6
+      - stepNumber: 6
+        description: >-
+          Read the scanned components (a legacy entry's source is its component's owner) from the
+          Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadComponentSpecs
+      - stepNumber: 7
+        description: >-
+          Read the scanned types (a typeDef entry without a source is its type's owner) from the
+          Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadTypeSpecs
+      - stepNumber: 8
+        description: For each L0 entry
+        type: loop
+        loopKind: forEach
+        over: the L0 publicInterfaces entries
+        endStep: 11
+      - stepNumber: 9
+        description: >-
+          Read the entry the way it was meant: `from ?? subsystem ?? owner of the component or type`
+          as its source, `as ?? id` as its name; a public name outside [a-z0-9-_]+, or no source at
+          all, is an invalid problem
+        type: local
+      - stepNumber: 10
+        description: Resolve the source subsystem's table
+        type: call
+        targetComponent: export_index
+        targetMethod: resolveSubsystemExports
+      - stepNumber: 11
+        label: bound
+        description: >-
+          Bind the entry against the source table — a named entry by its target (leniently, as for a
+          subsystem table), a wildcard under every name the source exports — carrying the entry's
+          audience (default instance), name, transport kind, details, auth policy, version and
+          stability onto every name it brings in, and recording a target that is neither a Portal
+          nor an Observer as an unconsumable problem
+        type: local
+      - stepNumber: 12
+        description: >-
+          Settle the project table as a subsystem table is settled (explicit shadows wildcard, a
+          same-target repeat is one entry, a wildcard-versus-wildcard name is a duplicate and left
+          out) and memoize it on this scan and these entries
+        type: local
+      - stepNumber: 13
+        label: answer
+        description: Answer with the project table
+        type: return
+        outcome: ResolvedExportTable
+    detail: full
+    symbol: resolveProjectExportTable
+status: complete
+createdAt: '2026-09-26T16:09:07.864Z'
+updatedAt: '2026-09-26T16:09:18.635Z'

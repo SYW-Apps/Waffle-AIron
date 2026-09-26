@@ -40,8 +40,8 @@ methods:
     params: []
   - name: loadSubsystemSpecs
     description: >-
-      Read the bound project's L1 subsystem specs. Forwarded to the core portal; used to resolve the
-      subsystem public interfaces backing the L0 public surfaces.
+      Read the bound project's L1 subsystem specs. Forwarded to the core portal; used where hosted
+      workflows read a project's subsystems (its chained children, its profiles).
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
     returns: SubsystemSpec[]
     params: []
@@ -244,6 +244,25 @@ methods:
     params:
       - name: entry
         type: PackSelection
+  - name: resolveProjectExports
+    description: >-
+      Read the bound project's resolved L0 export table — every public name bound to its canonical
+      target, with its audience. Forwarded to the core portal; the landscape builds its redacted
+      public-surface snapshot from it.
+    signature: 'resolveProjectExports(): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params: []
+    guarantees:
+      - idempotent
+  - name: loadInterfaceSpecs
+    description: >-
+      Read the bound project's L3 interface specs. Forwarded to the core portal; the landscape reads
+      the method names and endpoint paths of each exported contract from them.
+    signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
+    returns: InterfaceSpec[]
+    params: []
+    guarantees:
+      - idempotent
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -259,4 +278,4 @@ lint:
         instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-26T15:27:13.094Z'
+updatedAt: '2026-09-26T16:14:31.979Z'

@@ -1,23 +1,27 @@
 id: surface_projector_impl
 name: Surface Projector Implementation
-description: Contract-grade projection with audience filtering and type-closure computation.
+description: >-
+  Contract-grade projection over the resolved export table, with audience filtering and type-closure
+  computation.
 contract: isurface_projector
 sourcePath: src/core/surfaces.ts
 methods:
   - name: projectOwnSurface
     narrative:
       - stepNumber: 1
-        description: Load the L0 system spec (gateway publicInterfaces + name)
+        description: Load the L0 system spec (its name keys the snapshot)
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: loadSystemSpec
       - stepNumber: 2
-        description: Load subsystem specs (published surfaces backing the gateway entries)
+        description: >-
+          Read the project's resolved export table — every public name bound to its canonical
+          target, with its audience — instead of the raw L0 entries
         type: call
         targetComponent: surfaces_core_adapter
-        targetMethod: loadSubsystemSpecs
+        targetMethod: resolveProjectExports
       - stepNumber: 3
-        description: Load component specs (backing portals and their dispatch tables)
+        description: Load component specs (the canonical targets, their stereotypes and dispatch tables)
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: loadComponentSpecs
@@ -27,17 +31,19 @@ methods:
         targetComponent: surfaces_core_adapter
         targetMethod: loadInterfaceSpecs
       - stepNumber: 5
-        description: Load type specs (closure source)
+        description: Load type specs (closure source and exported types)
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: loadTypeSpecs
       - stepNumber: 6
-        description: Filter the L0 gateway entries to those at or below the audience ceiling
+        description: Filter the resolved entries to those at or below the audience ceiling
         type: local
       - stepNumber: 7
         description: >-
-          Resolve each entry to its subsystem-published Portal and copy the full contract: methods
-          with params, returns, guarantees, effect, endpoints, plus the portal's dispatch table
+          For each component entry, copy the full contract of its canonical target under the entry's
+          public name — methods with params, returns, guarantees, effect, endpoints, narrowed to the
+          entry's interface when it narrows — plus the component's dispatch table, recording the
+          target's componentType and the narrowed interface
         type: local
       - stepNumber: 8
         description: >-
@@ -47,17 +53,29 @@ methods:
           emit per-portal OpenAPI servers and securitySchemes.
         type: local
       - stepNumber: 9
-        description: Compute the transitive type closure of every exported signature and embed the definitions
+        description: >-
+          List each type entry as an exported type under its public name, and compute the transitive
+          type closure of every exported signature and every exported type, gathered by qualified id
+          so two subsystems' types of one name both arrive
         type: local
       - stepNumber: 10
+        description: >-
+          Read the project's configuration through the core adapter for its effective id
+          (project_config.effectiveId), which the snapshot records beside its name
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 11
         description: Read the spec tree's current StateId through the core adapter
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: computeStateId
-      - stepNumber: 11
-        description: Stamp identity, origin generated, the current StateId, and generatedAt
-        type: local
       - stepNumber: 12
+        description: >-
+          Stamp identity (the system name and, when the project has a configuration, its effective
+          id), origin generated, the current StateId, and generatedAt
+        type: local
+      - stepNumber: 13
         description: Return the self-contained snapshot
         type: return
         outcome: SurfaceSnapshot
@@ -148,4 +166,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-09-25T21:36:52.471Z'
+updatedAt: '2026-09-26T16:10:36.413Z'

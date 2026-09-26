@@ -204,6 +204,20 @@ methods:
         type: call
         targetComponent: extension_portal
         targetMethod: packEntryLabel
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Forward the resolved export table read to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveProjectExports
+  - name: loadInterfaceSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward the interface specs read to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadInterfaceSpecs
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-09-26T14:15:51.765Z'
+updatedAt: '2026-09-26T16:14:33.766Z'

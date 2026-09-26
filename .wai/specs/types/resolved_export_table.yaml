@@ -1,0 +1,31 @@
+kind: value-object
+id: resolved_export_table
+name: ResolvedExportTable
+description: >-
+  An export table after resolution: everything one level makes visible — a subsystem to the rest of
+  its project, or the project to other projects — flattened, with the problems met on the way.
+fields:
+  - name: owner
+    type: string
+    description: A subsystem id, or the system name for the project table.
+    optional: false
+    key: primary
+  - name: level
+    type: string
+    description: subsystem | project
+    optional: false
+  - name: entries
+    type: ResolvedExport[]
+    description: >-
+      The resolved public names, flattened: wildcards expanded (a wildcard cycle resolves to its
+      union), explicit and own entries shadowing a name a wildcard brings in, and a name two
+      wildcards bring from different targets left out.
+    optional: false
+  - name: problems
+    type: ExportProblem[]
+    description: Everything that did not resolve cleanly, for the export-tables rule to judge.
+    optional: false
+methods: []
+sourcePath: src/models/exports.ts
+createdAt: '2026-09-26T16:08:00.499Z'
+updatedAt: '2026-09-26T16:08:00.501Z'

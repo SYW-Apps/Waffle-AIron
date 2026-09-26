@@ -4,7 +4,7 @@ description: >-
   One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
   through its addIssue, and declares the codes it reports as findings. These rules judge whether the
   spec tree holds together: references, the namespace grammar, the project's identity, the writer
-  round-trip, published surfaces and lint allows.
+  round-trip, published surfaces, export tables and lint allows.
 component: integrity_rules
 methods:
   - name: hierarchyIntegrity
@@ -251,6 +251,41 @@ methods:
       - code: PROJECT_ID_DEFAULTED
         severity: notice
         summary: Project declares no id; it answers to one derived from its display name
+  - name: exportTables
+    description: >-
+      Rule export-tables. Every level's export table must resolve the way a module resolver resolves
+      `export … from`: one public name binds one target (EXPORT_ID_DUPLICATE when two wildcards bind
+      a name to different targets — the name is left out), no chain leads back to itself
+      (EXPORT_CYCLE — an error for a named chain that never reaches a component or type, a warning
+      for a wildcard cycle, which resolves to its union), every entry names a source and an item
+      that exist, that the source exports and, for an own item, that the level owns, under a public
+      name of [a-z0-9-_]+ (EXPORT_INVALID), and every exported component can serve a boundary caller
+      — a Portal, a gateway being a Portal variant, or an Observer for events (EXPORT_UNCONSUMABLE,
+      at L0 and for L1 re-exports). The rule judges the facts the export resolver gathered and
+      resolves nothing itself.
+    signature: 'exportTables(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: EXPORT_ID_DUPLICATE
+        severity: error
+        summary: Two wildcard re-exports bind one public name to different targets
+      - code: EXPORT_CYCLE
+        severity: error
+        summary: >-
+          A re-export chain leads back to itself (a warning for a wildcard cycle, which resolves to
+          its union)
+      - code: EXPORT_INVALID
+        severity: notice
+        summary: >-
+          An export entry names a missing source or item, an item its source does not export or its
+          level does not own, or a malformed public name
+      - code: EXPORT_UNCONSUMABLE
+        severity: notice
+        summary: 'An exported component no boundary caller may reach: neither a Portal nor an Observer'
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-26T15:33:38.265Z'
+updatedAt: '2026-09-26T16:11:35.714Z'
