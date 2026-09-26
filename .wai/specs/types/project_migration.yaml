@@ -46,9 +46,10 @@ fields:
     type: string[]
     description: >-
       The storage keys of its stage-1 sibling pins in .wai/surfaces: they held L1 items the parent
-      never exported, and the planned exports serve those references now. Left on disk — stage-1
-      resolution still reads them until stage 3.
+      never exported, and the planned exports serve those references now. Apply never deletes them:
+      they stay on disk until stage 3, because stage-1 resolution still reads them, and the printed
+      plan says so beside each one.
     optional: false
 methods: []
 createdAt: '2026-09-26T21:11:55.782Z'
-updatedAt: '2026-09-26T21:11:55.784Z'
+updatedAt: '2026-09-26T21:28:32.299Z'

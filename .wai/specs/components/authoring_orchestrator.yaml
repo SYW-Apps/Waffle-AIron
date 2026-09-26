@@ -8,10 +8,12 @@ description: >-
   persisted — a delta on its own cannot tell you the resulting componentType, and it is the
   resulting componentType that decides whether a field belongs. The hook is an inversion rather than
   a direct call because the rule engine already reads the spec store, so a store that called the
-  rule engine back would close the cycle. Mechanical writes stay outside this workflow by
-  construction — status promotion at lock, layout normalization, migrations and doctor repairs go
-  straight to sdd_core — which is what keeps a spec authored before a rule existed loadable and
-  repairable.
+  rule engine back would close the cycle. What a write says decides whether it comes here: a write
+  that restates what the tree already holds — status promotion at lock, layout normalization,
+  renames, a doctor repair that adds no design — goes straight to sdd_core, which is what keeps a
+  spec authored before a rule existed loadable and repairable; a write that authors new spec content
+  comes through this workflow whoever makes it, a migration included (the chaining migration's L0
+  export entries do).
 subsystem: sdd_authoring
 componentType: Orchestrator
 owns: []
@@ -20,4 +22,4 @@ dependsOn:
   - authoring_validator_adapter
 status: complete
 createdAt: '2026-09-18T21:11:54.227Z'
-updatedAt: '2026-09-18T21:40:50.970Z'
+updatedAt: '2026-09-26T21:28:07.005Z'

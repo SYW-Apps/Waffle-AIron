@@ -25,8 +25,8 @@ methods:
       keeps every key the schema does not know exactly as it was, and hands the merged document to
       the fs adapter's writeDocument — an edit of the file's YAML node tree, so comments, key order
       and the quoting of unchanged scalars survive and only the values that changed move. A field
-      the configuration newly sets (an `id`, an `externals` entry) lands after the keys already at
-      its level.
+      the configuration newly sets lands at its place in the schema's field order (a new `id` next
+      to `name`); a new `externals` alias follows the aliases already declared.
     calls:
       - project_config_fs_adapter.documentExists
       - project_config_fs_adapter.readDocument
@@ -76,4 +76,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:15.916Z'
-updatedAt: '2026-09-26T21:10:21.123Z'
+updatedAt: '2026-09-26T21:28:28.866Z'
