@@ -27,6 +27,27 @@ client expects back from them (item 14). The library surface narrows too:
 `@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
 (item 4). Nothing here is purely additive, so `[minor]` would understate it.
 
+### Authoring tells the truth about stale servers, narratives and moves
+
+- **A stale MCP server refuses the writes that would lose data.** The server
+  fingerprints the spec schemas and the write tools' inputs; when the build on
+  disk changed them, every spec write (dry runs included) is refused with the
+  reason, `writesRefused: true`, and the instruction to reconnect
+  (`/mcp reconnect wairon`) — a server running old schemas strips fields the new
+  build knows. A rebuild that changed no schema keeps writing, with the warning.
+  `sdd_get_status` leads with the staleness.
+- **Narrative changes are reported by step, not by position.** Inserting one step
+  into a 97-step narrative reported about 124 "set" changes, one per shifted
+  field; it now reads as the step added, the steps renumbered and the jumps
+  relocated. A change report's `change` can now also be `renumbered` or
+  `relocated` — a client that switches on it should handle both.
+- **`sdd_move_methods` into a component without a contract creates it** (and the
+  implementation the moved narratives need) instead of refusing, and says what it
+  created. A moved method keeps the file it is realized in when the receiving
+  implementation names a different one, with a notice, instead of silently
+  claiming the other file.
+- **Errors carry one `Error:` prefix**, on every tool.
+
 ### `wairon host` administers through an in-process portal
 
 The local operator's CLI administers an instance in-process — it calls the admin
