@@ -253,7 +253,7 @@ rules:
               - '4:cli_validator_adapter.validateRegistry'
               - '5:cli_validator_adapter.validateProjectConfig'
               - '6:cli_validator_adapter.validateSddTree'
-      # 90 finding(s), 124 unit(s).
+      # 84 finding(s), 113 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -647,41 +647,6 @@ rules:
             spec: surface_orchestrator_impl
             at: 'pinFamilySurfaces'
             covers:
-              - 'surface_store.list'
-              - 'surface_store.put'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: surface_portal_impl
-            at: 'exportSurface'
-            covers:
-              - 'surface_projector.projectOwnSurface'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: surface_portal_impl
-            at: 'getSnapshot'
-            covers:
-              - 'surface_store.list'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: surface_portal_impl
-            at: 'importSurface'
-            covers:
-              - 'surface_store.put'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: surface_portal_impl
-            at: 'listExternalInterfaces'
-            covers:
-              - 'surface_projector.projectChildSurface'
-              - 'surface_projector.projectSubsystemSurface'
-              - 'surface_store.list'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: surface_portal_impl
-            at: 'listMountSnapshots'
-            covers:
-              - 'surface_store.list'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: surface_portal_impl
-            at: 'pinFamilySurfaces'
-            covers:
-              - 'surface_projector.projectChildSurface'
-              - 'surface_projector.projectSubsystemSurface'
               - 'surface_store.list'
               - 'surface_store.put'
           - code: UNDECLARED_COLOCATED_CALL

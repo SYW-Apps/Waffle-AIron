@@ -1,8 +1,10 @@
 id: surface_portal_impl
 name: Surface Portal Implementation
-description: Pure 1:1 forwarding of surface operations to the orchestrator.
+description: >-
+  Pure 1:1 forwarding of surface operations to the orchestrator, in a module of its own so the
+  portal-to-orchestrator hop is a real import edge; client adapters import the portal from here.
 contract: isurface_portal
-sourcePath: src/core/surfaces.ts
+sourcePath: src/core/surface-portal.ts
 methods:
   - name: exportSurface
     narrative:
@@ -83,4 +85,4 @@ methods:
         targetMethod: listExternals
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-09-26T17:49:07.511Z'
+updatedAt: '2026-09-26T18:53:45.695Z'

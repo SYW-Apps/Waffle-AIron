@@ -12,4 +12,4 @@ export {
   pinExternals,
   getExternalsStatus,
   listExternals,
-} from '../../core/surfaces.js';
+} from '../../core/surface-portal.js';

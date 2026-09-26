@@ -3,4 +3,4 @@
 // artifacts generated against the CURRENTLY BOUND project root (callers bind
 // via runWithProjectRoot, exactly as they do for the core reads).
 // ---------------------------------------------------------------------------
-export { exportSurface } from '../../core/surfaces.js';
+export { exportSurface } from '../../core/surface-portal.js';
