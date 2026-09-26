@@ -152,41 +152,58 @@ methods:
           Read the bound project's configuration through the core adapter for its by-name pack
           selections, which the pack-reproducibility rule checks from the rule context (legacy path
           refs pin nothing and are excluded; a project with no readable configuration selects
-          nothing). The project's own rule severities and projectType are not read here: the caller
-          that invokes validation supplies them.
+          nothing), and for its identity. The project's own rule severities and projectType are not
+          read here: the caller that invokes validation supplies them.
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 23
+        description: >-
+          Unless this run is the parent's verdict on a chained child (crossTree off: that run judges
+          the child's specs, not the parent's identity), read the bound root's lock record through
+          the core adapter for the project id it recorded; an unlocked root, or a record written
+          before project ids existed, records none
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 24
+        description: >-
+          Resolve the project's identity with project_config.identity(the lock's projectId) — the
+          effective id, where it came from, and its problems (defaulted, ambiguous, changed) — for
+          the project-identity rule. A root with no readable configuration, and the parent's verdict
+          on a chained child, carry no identity, and the rule then reports nothing
+        type: local
+      - stepNumber: 25
         description: >-
           Load the component-variant registry through the core adapter, for the variant rules in the
           rule context
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectVariants
-      - stepNumber: 24
+      - stepNumber: 26
         description: >-
           Build the rule context from the gathered inputs: the loaded specs and their lookup maps,
           the surface snapshots, the code model, the round-trip findings, the known issue codes, the
-          pack data and the lint-allow bookkeeping. Its addIssue applies the designDepth gate, then
-          severity resolution (the project's sddRuleSeverity, else the governing pack profile's,
-          else the draft-context downgrade, which is min(rule default, warning) and so never raises
-          a notice, else the rule default), and lets a matching lint allow silence a warning or a
-          notice and the conformance debt register carry one; an error is never silenced or carried
+          pack data, the project identity and the lint-allow bookkeeping. Its addIssue applies the
+          designDepth gate, then severity resolution (the project's sddRuleSeverity, else the
+          governing pack profile's, else the draft-context downgrade, which is min(rule default,
+          warning) and so never raises a notice, else the rule default), and lets a matching lint
+          allow silence a warning or a notice and the conformance debt register carry one; an error
+          is never silenced or carried
         type: local
-      - stepNumber: 25
+      - stepNumber: 27
         description: For each rule in the run sequence
         type: loop
         loopKind: forEach
         over: the rule run sequence read in step 17 (built-ins, then pack rules, lint-allows last)
-        endStep: 26
-      - stepNumber: 26
+        endStep: 28
+      - stepNumber: 28
         label: run-rule
         description: >-
           Run the rule's check against the rule context; the rule reports its findings through
           ctx.addIssue
         type: local
-      - stepNumber: 27
+      - stepNumber: 29
         description: >-
           When this root still holds a reference-resolution failure no surface snapshot covers,
           detect the parent through the core adapter's reach-gated resolveChainingParent, so a
@@ -195,7 +212,7 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: resolveChainingParent
-      - stepNumber: 28
+      - stepNumber: 30
         description: >-
           Resolve a chained subproject's verdict through its parent. When this root still holds a
           reference-resolution failure no surface snapshot covers — an unresolved cross-tree
@@ -208,7 +225,7 @@ methods:
         type: call
         targetComponent: spec_validator
         targetMethod: resolveThroughParent
-      - stepNumber: 29
+      - stepNumber: 31
         description: >-
           Merge what the parent judged with this run's own findings: a child finding gives way only
           where the parent reported the same code on the same spec at least as severely, or where it
@@ -220,7 +237,7 @@ methods:
           evidence judges a pinned edge depends on whether some resolution failure triggered the
           walk. The result records the root and scope it was resolved through.
         type: local
-      - stepNumber: 30
+      - stepNumber: 32
         description: Return the aggregated validation result
         type: return
         outcome: ValidationResult
@@ -542,4 +559,4 @@ lint:
         validation run has.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-26T14:49:16.682Z'
+updatedAt: '2026-09-26T15:28:21.884Z'

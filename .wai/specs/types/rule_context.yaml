@@ -138,6 +138,15 @@ fields:
       Every issue code a registered rule declares CARRYABLE, gathered by the validator — what the
       debt register's entries are checked against.
     optional: false
+  - name: projectIdentity
+    type: ProjectIdentity
+    description: >-
+      The validated root's identity, resolved by the validator from its project configuration
+      against the id its lock recorded (project_config.identity), so the project-identity rule does
+      no I/O. Absent when the root has no readable configuration, and on the run that judges a
+      chained child through its parent: that run is about the child's specs, not the parent's
+      identity.
+    optional: true
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -292,4 +301,4 @@ methods:
       rule that accuses
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-19T19:04:25.085Z'
+updatedAt: '2026-09-26T15:26:28.868Z'

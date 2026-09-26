@@ -694,6 +694,67 @@ methods:
         outcome: judged
     symbol: check
     exportedVia: publicSurfaceConsumersRule
+  - name: projectIdentity
+    sourcePath: src/core/rules/integrity/project-identity.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project identity the validator resolved into the rule context
+          (ctx.projectIdentity)
+        type: local
+      - stepNumber: 2
+        description: Is there an identity to judge?
+        type: branch
+        condition: >-
+          the context carries no project identity (no readable configuration, or the parent's
+          verdict on a chained child)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no identity
+      - stepNumber: 4
+        label: defaulted
+        description: Does the identity carry a defaulted problem?
+        type: branch
+        condition: the identity's problems include one of kind defaulted
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report PROJECT_ID_DEFAULTED (notice), naming the display name and the id derived from it,
+          that the next save of the configuration writes it into project.yaml, that stage 3 requires
+          an explicit id, and how to declare one
+        type: local
+      - stepNumber: 6
+        label: ambiguous
+        description: Does the identity carry an ambiguous problem?
+        type: branch
+        condition: the identity's problems include one of kind ambiguous
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report PROJECT_ID_AMBIGUOUS (warning) with the problem's detail: the display name that
+          yields no slug, or the declared id and the grammar it breaks
+        type: local
+      - stepNumber: 8
+        label: changed
+        description: Does the identity carry a changed problem?
+        type: branch
+        condition: the identity's problems include one of kind changed
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Report PROJECT_ID_CHANGED (error), naming the id the lock approved and the id project.yaml
+          resolves to now, and the two ways out: restore the approved id, or rename deliberately and
+          re-lock
+        type: local
+      - stepNumber: 10
+        label: judged
+        description: The identity is judged
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: projectIdentityRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-25T17:39:04.665Z'
+updatedAt: '2026-09-26T15:28:54.971Z'

@@ -6,7 +6,11 @@ description: >-
 component: host_core_adapter
 methods:
   - name: provisionProject
-    description: Bootstrap a fresh isolated spec tree at the bound root.
+    description: >-
+      Bootstrap a fresh isolated spec tree at the bound root. Hosted creation passes the hosted
+      project id as the name, so the configuration's id is the hosted project id — slugified, which
+      leaves a hosted id unchanged unless it ends in '-', a character the project-id grammar does
+      not allow at the end.
     signature: 'provisionProject(name: string): void'
     returns: void
   - name: computeStateId
@@ -255,4 +259,4 @@ lint:
         instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-26T14:15:51.565Z'
+updatedAt: '2026-09-26T15:27:13.094Z'

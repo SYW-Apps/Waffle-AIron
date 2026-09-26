@@ -2,13 +2,14 @@ id: integrity_rules
 name: Integrity Rules
 description: >-
   Judges whether the spec tree holds together: every reference resolves (hierarchy, type references,
-  published surfaces), ids stay resolvable in the namespace grammar, every spec re-serializes
-  through the writer (judged from the round-trip dry-run results the validator gathers), and every
-  lint allow names a known code and actually suppresses a finding (run last, after every other rule,
-  pack rules included). Pure logic (dependencyClass: pure, the arbiter variant): it holds no state
-  (the rule set belongs to the rule Repository), does no I/O and runs no workflow. Its verdicts are
-  not type methods, because the rule set is open (packs register rules at runtime) and most verdicts
-  read many specs.
+  published surfaces), ids stay resolvable in the namespace grammar, the project's own id is
+  declared, well-formed and the one its lock approved (judged from the identity the validator
+  resolves), every spec re-serializes through the writer (judged from the round-trip dry-run results
+  the validator gathers), and every lint allow names a known code and actually suppresses a finding
+  (run last, after every other rule, pack rules included). Pure logic (dependencyClass: pure, the
+  arbiter variant): it holds no state (the rule set belongs to the rule Repository), does no I/O and
+  runs no workflow. Its verdicts are not type methods, because the rule set is open (packs register
+  rules at runtime) and most verdicts read many specs.
 subsystem: sdd_validator
 componentType: Orchestrator
 owns: []
@@ -17,4 +18,4 @@ dependencyClass: pure
 variant: arbiter
 status: complete
 createdAt: '2026-09-14T05:42:38.786Z'
-updatedAt: '2026-09-18T20:21:07.774Z'
+updatedAt: '2026-09-26T15:29:01.699Z'

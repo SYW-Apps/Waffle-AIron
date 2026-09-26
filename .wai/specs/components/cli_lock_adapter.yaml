@@ -2,10 +2,11 @@ id: cli_lock_adapter
 name: CLI Lock Adapter
 description: >-
   CLI-side forwarding of the local `wairon lock` mechanics: obtains the tree's gate identity from
-  the validator's published portal and persists the commit-scoped lock record, which carries the
-  approval, through the core subsystem's published portal. The as-complete dry-run gate runs BEFORE
-  this adapter (through the validator adapter), and the generated agent and skill outputs are
-  refreshed AFTER it; the runner owns that workflow, and this adapter owns only the lock-record hop.
+  the validator's published portal, reads the project's effective id from its configuration, and
+  persists the commit-scoped lock record, which carries the approval and that id, through the core
+  subsystem's published portal. The as-complete dry-run gate runs BEFORE this adapter (through the
+  validator adapter), and the generated agent and skill outputs are refreshed AFTER it; the runner
+  owns that workflow, and this adapter owns only the lock-record hop.
 subsystem: sdd_cli
 componentType: Adapter
 owns: []
@@ -13,6 +14,7 @@ dependsOn:
   - validator_portal
   - spec_tree_portal
   - approval_portal
+  - project_config_portal
 status: complete
 createdAt: '2026-07-24T18:05:06.885Z'
-updatedAt: '2026-09-25T17:35:29.283Z'
+updatedAt: '2026-09-26T15:27:35.606Z'

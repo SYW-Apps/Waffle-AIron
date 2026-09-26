@@ -42,7 +42,8 @@ methods:
   - name: provisionProject
     description: >-
       Bootstrap a fresh isolated project at the bound root: default project.yaml plus an L0 system
-      spec named `name`.
+      spec named `name`. The configuration declares the project's id, `name` slugified — for a
+      hosted project, whose name is its hosted id, that is the hosted id itself.
     signature: 'provisionProject(name: string): void'
     returns: void
   - name: computeStateId
@@ -261,13 +262,20 @@ methods:
     description: >-
       NON-DESTRUCTIVELY complete a project's bootstrap at the bound root: write the default project
       configuration and the L0 system spec only when each is absent, preferring the existing system
-      spec's name, and report which files it wrote. Unlike provisionProject it never overwrites.
-    signature: 'ensureProjectInitialized(fallbackName: string): ProjectBootstrap'
+      spec's name, and report which files it wrote. A configuration it writes declares the given id,
+      else the chosen name slugified. Unlike provisionProject it never overwrites.
+    signature: 'ensureProjectInitialized(fallbackName: string, id?: string): ProjectBootstrap'
     returns: ProjectBootstrap
     params:
       - name: fallbackName
         type: string
         description: The project name to use when no system spec names one yet
+      - name: id
+        type: string
+        description: >-
+          The project id a configuration written here declares — a chained child's mount subsystem
+          id; omitted, the chosen name slugified
+        optional: true
     guarantees:
       - idempotent
   - name: listDirectChainedSubprojects
@@ -670,4 +678,4 @@ methods:
         type: VariantDef[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T11:01:01.418Z'
+updatedAt: '2026-09-26T15:27:01.233Z'

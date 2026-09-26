@@ -2,7 +2,9 @@ id: project_config_registry_impl
 name: Project Config Registry Implementation
 description: >-
   The write path for `.wai/project.yaml`: one intent-level change per method, read and written back
-  through the store.
+  through the store. Every save goes through one local save step that backfills a defaulted identity
+  first: a configuration with no `id` gets project_config.effectiveId() written beside its change
+  (none when the name yields no slug).
 contract: iproject_config_registry
 sourcePath: src/config/project-config.ts
 methods:
@@ -10,8 +12,9 @@ methods:
     narrative: []
     intent: >-
       Refuses with an error naming the project root when a configuration already exists; otherwise
-      validates the given configuration against the schema and writes it through the store. It never
-      overwrites an existing configuration.
+      backfills a missing `id` with the configuration's effective id, validates the configuration
+      against the schema and writes it through the store. It never overwrites an existing
+      configuration.
     calls:
       - project_config_store.exists
       - project_config_store.write
@@ -20,8 +23,9 @@ methods:
     intent: >-
       Reads the configuration through the store, drops every `extensions.packs` selection naming the
       same pack (path references stay), appends the new selection last, records `useGlobalPacks` at
-      its effective value, and writes it back through the store, where unknown keys survive. Returns
-      whether a selection was dropped. Refuses when the project has no configuration.
+      its effective value, backfills a defaulted id, and writes it back through the store, where
+      unknown keys survive. Returns whether a selection was dropped. Refuses when the project has no
+      configuration.
     calls:
       - project_config_store.read
       - project_config_store.write
@@ -29,25 +33,27 @@ methods:
     narrative: []
     intent: >-
       Reads the configuration and drops every selection naming the pack (path references stay). When
-      something was dropped, it records `useGlobalPacks` at its effective value and writes the
-      configuration back; otherwise it writes nothing. Returns whether anything was dropped. Refuses
-      when the project has no configuration.
+      something was dropped, it records `useGlobalPacks` at its effective value, backfills a
+      defaulted id and writes the configuration back; otherwise it writes nothing. Returns whether
+      anything was dropped. Refuses when the project has no configuration.
     calls:
       - project_config_store.read
       - project_config_store.write
   - name: setProjectType
     narrative: []
     intent: >-
-      Reads the configuration, sets `projectType`, and writes it back through the store, leaving
-      every other field and key untouched. Refuses when the project has no configuration.
+      Reads the configuration, sets `projectType`, backfills a defaulted id, and writes it back
+      through the store, leaving every other field and key untouched. Refuses when the project has
+      no configuration.
     calls:
       - project_config_store.read
       - project_config_store.write
   - name: recordProfileSelection
     narrative: []
     intent: >-
-      Reads the configuration, replaces `profileSelection` with the given selection, and writes it
-      back through the store. Refuses when the project has no configuration.
+      Reads the configuration, replaces `profileSelection` with the given selection, backfills a
+      defaulted id, and writes it back through the store. Refuses when the project has no
+      configuration.
     calls:
       - project_config_store.read
       - project_config_store.write
@@ -55,8 +61,8 @@ methods:
     narrative: []
     intent: >-
       Reads the configuration, sets `execution.tier` (creating `execution` when absent, keeping its
-      overrides), and writes it back through the store. Refuses when the project has no
-      configuration.
+      overrides), backfills a defaulted id, and writes it back through the store. Refuses when the
+      project has no configuration.
     calls:
       - project_config_store.read
       - project_config_store.write
@@ -64,9 +70,9 @@ methods:
     narrative: []
     intent: >-
       Reads the configuration. When no entry equals the reference, it appends the reference, records
-      `useGlobalPacks` at its effective value, and writes the configuration back; otherwise it
-      writes nothing. Returns whether the reference was appended. Refuses when the project has no
-      configuration.
+      `useGlobalPacks` at its effective value, backfills a defaulted id, and writes the
+      configuration back; otherwise it writes nothing. Returns whether the reference was appended.
+      Refuses when the project has no configuration.
     calls:
       - project_config_store.read
       - project_config_store.write
@@ -74,9 +80,9 @@ methods:
     narrative: []
     intent: >-
       Reads the configuration and drops the path references equal to the given one (selections
-      stay). When something was dropped, it records `useGlobalPacks` at its effective value and
-      writes the configuration back; otherwise it writes nothing. Returns whether anything was
-      dropped. Refuses when the project has no configuration.
+      stay). When something was dropped, it records `useGlobalPacks` at its effective value,
+      backfills a defaulted id and writes the configuration back; otherwise it writes nothing.
+      Returns whether anything was dropped. Refuses when the project has no configuration.
     calls:
       - project_config_store.read
       - project_config_store.write
@@ -85,8 +91,8 @@ methods:
     intent: >-
       Reads the configuration. For each given pack, every selection of that pack gets the given
       version and `bundle: true` in place, so no entry moves; a pack the project does not select is
-      skipped. Records `useGlobalPacks` at its effective value and writes once. Refuses when the
-      project has no configuration.
+      skipped. Records `useGlobalPacks` at its effective value, backfills a defaulted id and writes
+      once. Refuses when the project has no configuration.
     calls:
       - project_config_store.read
       - project_config_store.write
@@ -94,7 +100,8 @@ methods:
     narrative: []
     intent: >-
       Reads the configuration, appends the given selections after the existing entries, sets
-      `useGlobalPacks` to false, and writes once. Refuses when the project has no configuration.
+      `useGlobalPacks` to false, backfills a defaulted id, and writes once. Refuses when the project
+      has no configuration.
     calls:
       - project_config_store.read
       - project_config_store.write
@@ -146,4 +153,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-09-26T11:04:27.256Z'
+updatedAt: '2026-09-26T15:26:53.884Z'
