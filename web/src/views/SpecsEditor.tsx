@@ -132,8 +132,11 @@ const CODE_FIELD_MAP: Record<string, string> = {
 
 /** Highest-severity flag per field, scoped to ONE spec's issues (the caller
  *  pre-filters by specId — see SpecsTab's openSpecFieldFlags). */
-type FieldFlags = Map<string, 'error' | 'warning'>;
+type FieldFlags = Map<string, 'error' | 'warning' | 'notice'>;
 const EMPTY_FIELD_FLAGS: FieldFlags = new Map();
+
+/** sdd_validate_tree's answer, split by severity — notices kept apart from warnings. */
+interface Validation { errors: any[]; warnings: any[]; notices: any[] }
 
 // ── Graph (picker source) ──────────────────────────────────────────────────────
 
@@ -507,7 +510,7 @@ const SCOPE_NOUN_LABEL: Record<RailScope['noun'], string> = {
  *  (CODE_FIELD_MAP, cross-checked against `openSpecId`) — the message itself
  *  is clickable to scroll to + highlight that field. */
 function ValidationRail(props: {
-  validation: { errors: any[]; warnings: any[] } | null;
+  validation: Validation | null;
   onValidate: () => Promise<void>;
   nodes: GraphNode[];
   onSelectSpec: (sel: { kind: string; id: string }) => void;
@@ -523,23 +526,28 @@ function ValidationRail(props: {
 }) {
   const toast = useToast();
   const v = props.validation;
-  const total = v ? v.errors.length + v.warnings.length : 0;
+  const total = v ? v.errors.length + v.warnings.length + v.notices.length : 0;
   const inScope = (i: any) => !props.scope || issueInScope(i.specId, props.scope);
   const scopedErrors = v ? v.errors.filter(inScope) : [];
   const scopedWarnings = v ? v.warnings.filter(inScope) : [];
-  const inScopeCount = scopedErrors.length + scopedWarnings.length;
+  const scopedNotices = v ? v.notices.filter(inScope) : [];
+  const inScopeCount = scopedErrors.length + scopedWarnings.length + scopedNotices.length;
   const elsewhereCount = total - inScopeCount;
   const showingAll = !props.scope || props.showAll;
   const displayedErrors = showingAll ? (v?.errors ?? []) : scopedErrors;
   const displayedWarnings = showingAll ? (v?.warnings ?? []) : scopedWarnings;
+  // Notices are listed apart and last: reported, never a problem that blocks
+  // anything (they never make the tree invalid and never fail --ci).
+  const displayedNotices = showingAll ? (v?.notices ?? []) : scopedNotices;
+  const labelClass = { error: 'err', warn: 'badge-warn', notice: 'finding-notice-label' } as const;
 
-  const Finding = (i: any, kindLabel: 'error' | 'warn', key: string) => {
+  const Finding = (i: any, kindLabel: 'error' | 'warn' | 'notice', key: string) => {
     const field = CODE_FIELD_MAP[i.code];
     const scrollable = !!field && !!props.openSpecId && i.specId === props.openSpecId;
     return (
       <li key={key} className={`finding f-${kindLabel}`}>
         <div className="finding-row">
-          <span className={kindLabel === 'error' ? 'err' : 'badge-warn'} style={kindLabel === 'warn' ? { padding: 0 } : undefined}>{kindLabel}</span>
+          <span className={labelClass[kindLabel]} style={kindLabel === 'warn' ? { padding: 0 } : undefined}>{kindLabel}</span>
           {i.code ? <code className="subtle">{i.code}</code> : null}
         </div>
         <div
@@ -565,8 +573,8 @@ function ValidationRail(props: {
         <span className="field-label">Validation</span>
         <AsyncButton variant="ghost" action={props.onValidate} onError={toast.bad}>Validate tree</AsyncButton>
       </div>
-      {!v && <p className="hint">Run a tree validation to list this project's errors and warnings here.</p>}
-      {v && total === 0 && <Badge tone="ok">clean — no errors or warnings</Badge>}
+      {!v && <p className="hint">Run a tree validation to list this project's errors, warnings and notices here.</p>}
+      {v && total === 0 && <Badge tone="ok">clean — no errors, warnings or notices</Badge>}
       {v && total > 0 && (
         <>
           {props.scope && (
@@ -581,14 +589,23 @@ function ValidationRail(props: {
           )}
           <div className="spec-validation-counts">
             {displayedErrors.length > 0 && <Badge tone="bad">{displayedErrors.length} errors</Badge>}{' '}
-            {displayedWarnings.length > 0 && <Badge tone="warn">{displayedWarnings.length} warnings</Badge>}
+            {displayedWarnings.length > 0 && <Badge tone="warn">{displayedWarnings.length} warnings</Badge>}{' '}
+            {displayedNotices.length > 0 && <Badge tone="neutral">{displayedNotices.length} notices</Badge>}
             {displayedErrors.length === 0 && displayedWarnings.length === 0 && (
-              <Badge tone="ok">clean — no issues on this {SCOPE_NOUN_LABEL[props.scope!.noun]}</Badge>
+              <Badge tone="ok">
+                {displayedNotices.length > 0
+                  ? 'no errors or warnings'
+                  : `clean — no issues on this ${SCOPE_NOUN_LABEL[props.scope!.noun]}`}
+              </Badge>
             )}
           </div>
+          {displayedNotices.length > 0 && (
+            <p className="hint">Notices are informational: they never make the tree invalid and never fail CI.</p>
+          )}
           <ul className="finding-list">
             {displayedErrors.map((i, n) => Finding(i, 'error', `e${n}`))}
             {displayedWarnings.map((i, n) => Finding(i, 'warn', `w${n}`))}
+            {displayedNotices.map((i, n) => Finding(i, 'notice', `n${n}`))}
           </ul>
         </>
       )}
@@ -1560,7 +1577,7 @@ export function SpecsTab({
   const enc = encodeURIComponent(projectId);
   // Tree-wide validation lives at the tab level so results persist across spec
   // selection and render in the right rail (not inline, pushing the form down).
-  const [validation, setValidation] = useState<{ errors: any[]; warnings: any[] } | null>(null);
+  const [validation, setValidation] = useState<Validation | null>(null);
 
   // The picker tree stays live on the project channel (a spec write elsewhere
   // refetches it); the selected spec is loaded WITHOUT a channel so an in-flight
@@ -1664,12 +1681,20 @@ export function SpecsTab({
       const field = CODE_FIELD_MAP[i.code];
       if (field && map.get(field) !== 'error') map.set(field, 'warning');
     }
+    // A notice flags a field only when nothing stronger does, and in its own
+    // quiet tone — it never reads as a problem.
+    for (const i of validation.notices) {
+      if (i.specId !== selected.id) continue;
+      const field = CODE_FIELD_MAP[i.code];
+      if (field && !map.has(field)) map.set(field, 'notice');
+    }
     return map;
   }, [validation, selected]);
 
   async function runValidate() {
-    const res = await mcpCall<{ errors?: any[]; warnings?: any[] }>(projectId, 'sdd_validate_tree', {});
-    setValidation({ errors: res.errors ?? [], warnings: res.warnings ?? [] });
+    const res = await mcpCall<{ errors?: any[]; warnings?: any[]; notices?: any[] }>(projectId, 'sdd_validate_tree', {});
+    // An instance older than the notice severity sends no notices list.
+    setValidation({ errors: res.errors ?? [], warnings: res.warnings ?? [], notices: res.notices ?? [] });
   }
 
   return (
