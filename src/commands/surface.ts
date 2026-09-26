@@ -111,6 +111,7 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
     }
 
     case 'externals': {
+      logger.warn('`wairon surface externals` is deprecated; use `wairon externals list` and `wairon externals status`.');
       const entries = listExternalInterfaces();
       if (!entries.length) {
         logger.info('No external surfaces available (.wai/surfaces/ holds no snapshots).');
@@ -129,6 +130,7 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
     }
 
     case 'pin': {
+      logger.warn('`wairon surface pin` is deprecated; declare the parent or sibling under `externals` in .wai/project.yaml and use `wairon externals pin`.');
       // Only CHANGED paths come back; null means this root has no parent at all.
       const written = pinFamilySurfaces();
       if (written === null) {

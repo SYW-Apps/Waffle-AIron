@@ -46,6 +46,7 @@ import {
 } from '../commands/host.js';
 import { runProduce } from '../commands/produce.js';
 import { runSurface } from '../commands/surface.js';
+import { runExternals } from '../commands/externals.js';
 import {
   runRemote,
   runLogin,
@@ -866,6 +867,19 @@ program
       origin: opts.origin,
       portal: opts.portal,
     });
+  });
+
+// ---------------------------------------------------------------------------
+// externals — the other projects this project consumes (declared in
+// .wai/project.yaml `externals`): pin, status, list
+// ---------------------------------------------------------------------------
+
+program
+  .command('externals <action> [aliases...]')
+  .description('declared externals: pin [alias…] | status | list')
+  .option('--json', 'print the structured answer instead of the table')
+  .action(async (action: string, aliases: string[] | undefined, opts) => {
+    await runExternals(action, aliases ?? [], { json: opts.json });
   });
 
 // ---------------------------------------------------------------------------

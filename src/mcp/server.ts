@@ -70,7 +70,7 @@ import {
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
-import { listExternalInterfaces } from './adapters/surfaces.js';
+import { listExternalInterfaces, pinExternals, getExternalsStatus } from './adapters/surfaces.js';
 import { validateSddTree, validateRegistry } from './adapters/validator.js';
 
 // ---------------------------------------------------------------------------
@@ -305,6 +305,37 @@ const staleServerOutput = {
     + 'spec write through this server is refused and writes nothing, because it would silently drop the '
     + 'fields only the new build knows. The human has to reconnect the server (/mcp reconnect wairon).',
   ),
+};
+
+/** sdd_pin_externals' structured answer: one outcome per alias. */
+const externalPinsOutput = {
+  pins: z.array(z.object({
+    alias: z.string(),
+    outcome: z.enum(['pinned', 'unchanged', 'unresolved', 'unreachable']),
+    project: z.string().optional(),
+    snapshot: z.string().optional(),
+    digest: z.string().optional(),
+    usedNames: z.number(),
+    unexported: z.array(z.record(z.unknown())),
+    detail: z.string().optional(),
+  })).describe('One outcome per alias pinned, in declaration order, with its unexported references.'),
+  ...staleServerOutput,
+};
+
+/** sdd_get_externals_status' structured answer: one status per declared external. */
+const externalStatusesOutput = {
+  statuses: z.array(z.object({
+    alias: z.string(),
+    project: z.string(),
+    sourceKind: z.string(),
+    pinned: z.boolean(),
+    reachable: z.boolean(),
+    stale: z.boolean(),
+    drifted: z.boolean().optional(),
+    uses: z.array(z.record(z.unknown())),
+    detail: z.string().optional(),
+  })).describe('One status per declared external, in declaration order; EXTERNAL_CHECK_UNAVAILABLE marks what could not be compared.'),
+  ...staleServerOutput,
 };
 
 /**
@@ -2167,13 +2198,54 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<Record<string, never>>(server,
     'sdd_list_external_interfaces',
     {
-      description: 'List the bound project\'s consumable external surfaces (parent family, siblings, foreign imports) as discovery entries with origin, provenance, and freshness — the tool an agent inside a subproject uses to SEE its outward world instead of discovering it by failed reference resolution. Full contracts stay in the vendored snapshots (.wai/surfaces/); each entry summarizes the interface ids it exposes.',
+      description: 'DEPRECATED — declare the projects this one consumes under `externals` in .wai/project.yaml and use sdd_pin_externals / sdd_get_externals_status instead; this tool keeps working for one release. List the bound project\'s consumable external surfaces (parent family, siblings, foreign imports) as discovery entries with origin, provenance, and freshness — the tool an agent inside a subproject uses to SEE its outward world instead of discovering it by failed reference resolution. Full contracts stay in the vendored snapshots (.wai/surfaces/); each entry summarizes the interface ids it exposes.',
     },
     () => {
       try {
         return json(listExternalInterfaces());
       } catch (e) {
         return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ aliases?: string[] }>(server,
+    'sdd_pin_externals',
+    {
+      description: 'Pin the bound project\'s declared externals (.wai/project.yaml `externals`) — the named aliases, else all — into .wai/externals/<alias>.yaml and .wai/externals.lock.yaml, recording the signature digest of every member the project\'s references use. Answers one outcome per alias (pinned, unchanged, unresolved, unreachable) with the references that land on no public name of the producer (export them from its L0 to pin them). A tree-scoped write: a producer the request may not read is reported unreachable, never read.',
+      inputSchema: {
+        aliases: z.array(z.string()).optional().describe('The aliases to pin; all declared externals when omitted'),
+      },
+      outputSchema: externalPinsOutput,
+    },
+    ({ aliases }) => {
+      try {
+        const pins = pinExternals(aliases);
+        const lines = pins.length
+          ? pins.map((p) => `${p.alias} → ${p.project ?? '?'}: ${p.outcome}${p.digest ? `, ${p.usedNames} used name(s)` : ''}${p.unexported.length ? `, ${p.unexported.length} unexported reference(s)` : ''}${p.detail ? ` — ${p.detail}` : ''}`)
+          : ['This project declares no externals.'];
+        return structured(lines.join('\n'), { pins });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<Record<string, never>>(server,
+    'sdd_get_externals_status',
+    {
+      description: 'Each declared external\'s pin compared with its live producer at signature level — per used member unchanged, changed, removed or unlocked (used now but not in the lock) — and EXTERNAL_CHECK_UNAVAILABLE for anything that cannot be compared (an unreachable producer, an unexported reference, a producer outside the family), never a pass. Stale only when a used member changed or went away. A tree-scoped read: writes nothing.',
+      outputSchema: externalStatusesOutput,
+    },
+    () => {
+      try {
+        const statuses = getExternalsStatus();
+        const lines = statuses.length
+          ? statuses.map((s) => `${s.alias} → ${s.project}: ${s.sourceKind}, ${s.pinned ? 'pinned' : 'not pinned'}, ${s.reachable ? (s.stale ? 'stale' : 'current') : 'unreachable'}${s.drifted ? ', drifted' : ''}${s.detail ? ` — ${s.detail}` : ''}`)
+          : ['This project declares no externals.'];
+        return structured(lines.join('\n'), { statuses });
+      } catch (e) {
+        return errMessage(e);
       }
     },
   );

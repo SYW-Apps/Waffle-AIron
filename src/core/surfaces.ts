@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
+import { canonicalize } from '../utils/canonical-json.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { safeFilenamePart } from '../utils/filenames.js';
 import {
@@ -20,6 +21,17 @@ import {
   matchTypeRef,
   methodTypeRefs,
   BUILTIN_TYPES,
+  contentDigest,
+  memberDigest,
+  type ExportUsage,
+  type ExternalBinding,
+  type ExternalListing,
+  type ExternalLockEntry,
+  type ExternalPin,
+  type ExternalStatus,
+  type ExternalUseStatus,
+  type ExternalsLock,
+  type ResolvedExternal,
 } from '../models/index.js';
 // surfaces_core_adapter: every name this subsystem takes from sdd_core lands on
 // the adapter's own module, which re-exports it from the core portals.
@@ -34,7 +46,11 @@ import {
   computeStateId,
   resolveProjectExports,
   loadProjectConfig,
+  resolveExternals,
 } from './adapters/surfaces-core.js';
+// The pinned-externals aggregate (externals_repository): the lock and the
+// snapshots it names, apart from the legacy .wai/surfaces snapshots.
+import { externalsRepository } from './externals.js';
 import type { ChainingParentRef } from './specs.js';
 import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
 
@@ -736,6 +752,287 @@ export function listExternalInterfaces(): ExternalSurfaceEntry[] {
       freshness,
       interfaceIds: snapshot.interfaces.map(e => e.id),
       ...(snapshot.projectId ? { projectId: snapshot.projectId } : {}),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Declared externals (surface_orchestrator pinExternals / getExternalsStatus /
+// listExternals) â€” `wairon externals` and the sdd_pin_externals /
+// sdd_get_externals_status tools. The core binds each declared external to its
+// producer (the surfaces plane never walks the family itself); this plane
+// projects the producer's export table, pins it under .wai/externals/ and
+// records in the lock the digest of every member the consumer uses.
+// ---------------------------------------------------------------------------
+
+/** The code on every comparison that could not be made â€” never a pass. */
+const CHECK_UNAVAILABLE = 'EXTERNAL_CHECK_UNAVAILABLE';
+
+/** Why nothing outside the family can be used or compared in stage 2. */
+const OUTSIDE_FAMILY = 'no stage-2 reference form reaches a project outside the family, so nothing it exports can be used or compared until stage 3\'s `alias::name`';
+
+/** An alias the project does not declare, named to pin: refused before anything is written. */
+export class UnknownExternalAliasError extends Error {
+  constructor(unknown: string[], declared: string[]) {
+    super(`Unknown external alias${unknown.length > 1 ? 'es' : ''} ${unknown.map((a) => `"${a}"`).join(', ')} â€” this project declares ${declared.length ? declared.map((a) => `"${a}"`).join(', ') : 'no externals'} in .wai/project.yaml.`);
+    this.name = 'UnknownExternalAliasError';
+  }
+}
+
+/** Whether `target` is `dir` or lies under it. */
+function isWithinDir(dir: string, target: string): boolean {
+  const rel = path.relative(path.resolve(dir), path.resolve(target));
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/**
+ * Why a producer's root cannot be read, or null when it can. The caller must
+ * gate on reach itself: a root outside the request's reach is never read.
+ */
+function producerUnreadable(directory: string | undefined): string | null {
+  if (!directory) return 'the producer has no root directory';
+  const reach = getRequestParentReach();
+  if (reach) {
+    const bound = getProjectRoot();
+    const ceiling = reach.parentReach ? reach.topRoot ?? bound : bound;
+    if (!isWithinDir(ceiling, directory)) return 'its root is outside the request\'s reach';
+  }
+  if (!fs.existsSync(directory)) return `its root ${directory} does not exist`;
+  return null;
+}
+
+/**
+ * Project the producer's resolved export table at the external's audience
+ * ceiling, the producer's root bound read-only for the projection and the
+ * consumer's binding restored afterwards; the snapshot is stamped with the
+ * audience it was filtered to. A root that holds no project throws.
+ */
+function projectProducer(external: ResolvedExternal): SurfaceSnapshot {
+  const snapshot = runWithProjectRoot(external.directory!, () => projectOwnSurface(external.audience));
+  return { ...snapshot, audience: external.audience };
+}
+
+/** The lock's `used` map for one binding: each used member's digest in the pinned snapshot. */
+function usedDigests(usage: ExportUsage | undefined, snapshot: SurfaceSnapshot): { used: Record<string, Record<string, string>>; missing: string[] } {
+  const used: Record<string, Record<string, string>> = {};
+  const missing: string[] = [];
+  for (const use of usage?.used ?? []) {
+    const members: Record<string, string> = {};
+    for (const member of use.members) {
+      const digest = memberDigest(snapshot, use.publicName, member);
+      if (digest === null) missing.push(`${use.publicName}.${member}`);
+      else members[member] = digest;
+    }
+    used[use.publicName] = members;
+  }
+  return { used, missing };
+}
+
+/** Pin one resolved binding: the snapshot written when its content moved, and the lock entry. */
+function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: ExternalPin; changed: boolean } {
+  const { external } = binding;
+  const unexported = binding.usage?.unexported ?? [];
+  // Step 8: bind the producer's root, when it can be read.
+  const unreadable = producerUnreadable(external.directory);
+  let snapshot: SurfaceSnapshot;
+  try {
+    if (unreadable) throw new Error(unreadable);
+    // Steps 9-10: project it at the audience ceiling, stamped with that audience.
+    snapshot = projectProducer(external);
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    return { pin: { alias: external.alias, outcome: 'unreachable', project: external.project, usedNames: 0, unexported, detail: `the producer could not be read: ${detail}; its previous pin stays` }, changed: false };
+  }
+  const digest = contentDigest(snapshot);
+  // Steps 11-13: the snapshot is rewritten only when its content moved.
+  const pinned = externalsRepository.readSnapshot(external.alias);
+  const snapshotChanged = !pinned || contentDigest(pinned) !== digest;
+  if (snapshotChanged) externalsRepository.saveSnapshot(external.alias, snapshot);
+  // Step 14: the lock entry â€” `used` maps each used member to its digest.
+  const { used, missing } = usedDigests(binding.usage, snapshot);
+  const entry: ExternalLockEntry = { project: external.project, snapshot: `.wai/externals/${external.alias}.yaml`, digest, used };
+  const entryChanged = canonicalize(lock.externals[external.alias] ?? null) !== canonicalize(entry);
+  lock.externals[external.alias] = entry;
+  return {
+    pin: {
+      alias: external.alias,
+      outcome: snapshotChanged || entryChanged ? 'pinned' : 'unchanged',
+      project: external.project,
+      snapshot: entry.snapshot,
+      digest,
+      usedNames: Object.keys(used).length,
+      unexported,
+      ...(missing.length ? { detail: `used members the snapshot does not carry cannot be pinned: ${missing.join(', ')}` } : {}),
+    },
+    changed: entryChanged,
+  };
+}
+
+/**
+ * surface_orchestrator.pinExternals â€” pin the bound project's declared
+ * externals (the named aliases, else all) into .wai/externals/<alias>.yaml and
+ * .wai/externals.lock.yaml. An alias the project does not declare is refused
+ * before anything is written; an unresolved or unreachable producer is
+ * reported and leaves its previous pin in place. With no aliases named, pins
+ * for aliases no longer declared are removed.
+ */
+export function pinExternals(aliases?: string[]): ExternalPin[] {
+  // Step 1: the declared externals, each bound to its producer.
+  const bindings = resolveExternals();
+  // Steps 2-4: the aliases asked for â€” an undeclared one refused before any write.
+  const declared = bindings.map((b) => b.external.alias);
+  const named = aliases && aliases.length > 0 ? aliases : undefined;
+  const unknown = (named ?? []).filter((a) => !declared.includes(a));
+  if (unknown.length) throw new UnknownExternalAliasError(unknown, declared);
+  const kept = named ? bindings.filter((b) => named.includes(b.external.alias)) : bindings;
+  // Step 5: the current lock (none yet reads as empty).
+  const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
+  const pins: ExternalPin[] = [];
+  let lockChanged = false;
+  // Steps 6-17: each external to pin.
+  for (const binding of kept) {
+    if (binding.external.sourceKind === 'unresolved') {
+      // Step 16: its previous pin stays.
+      pins.push({ alias: binding.external.alias, outcome: 'unresolved', project: binding.external.project, usedNames: 0, unexported: [], detail: binding.external.problem });
+      continue;
+    }
+    const { pin, changed } = pinBinding(binding, lock);
+    pins.push(pin);
+    lockChanged ||= changed;
+  }
+  // Steps 18-20: with no aliases named, prune the aliases no longer declared.
+  if (!named) {
+    for (const alias of Object.keys(lock.externals)) {
+      if (declared.includes(alias)) continue;
+      delete lock.externals[alias];
+      externalsRepository.removeSnapshot(alias);
+      lockChanged = true;
+    }
+  }
+  // Steps 21-22: the lock, written only when an entry was added, changed or pruned.
+  if (lockChanged) externalsRepository.saveLock(lock);
+  // Step 23: one outcome per external handled, in declaration order.
+  return pins;
+}
+
+/** Compare every used member â€” the lock's, and the one the references use now â€” with the live snapshot. */
+function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot): ExternalUseStatus[] {
+  const uses: ExternalUseStatus[] = [];
+  const locked = entry?.used ?? {};
+  const liveHas = (name: string): boolean => live.interfaces.some((e) => e.id === name) || (live.exportedTypes ?? []).some((t) => t.id === name);
+  for (const [publicName, members] of Object.entries(locked)) {
+    if (Object.keys(members).length === 0) {
+      uses.push({ publicName, state: liveHas(publicName) ? 'unchanged' : 'removed' });
+      continue;
+    }
+    for (const [member, digest] of Object.entries(members)) {
+      const now = memberDigest(live, publicName, member);
+      uses.push({ publicName, member, state: now === null ? 'removed' : now === digest ? 'unchanged' : 'changed' });
+    }
+  }
+  for (const use of usage?.used ?? []) {
+    if (!(use.publicName in locked)) {
+      uses.push({ publicName: use.publicName, state: 'unlocked', detail: 'used now, but not in the lock â€” re-pin' });
+      continue;
+    }
+    for (const member of use.members) {
+      if (!(member in locked[use.publicName])) uses.push({ publicName: use.publicName, member, state: 'unlocked', detail: 'used now, but not in the lock â€” re-pin' });
+    }
+  }
+  for (const ref of usage?.unexported ?? []) {
+    uses.push({ member: ref.member, state: 'unavailable', code: CHECK_UNAVAILABLE, detail: `"${ref.specId}" reaches "${ref.target}", which the producer does not export â€” nothing to compare` });
+  }
+  return uses;
+}
+
+/** Every locked used member â€” or, when none is locked, the external itself â€” as unavailable. */
+function unavailableUses(entry: ExternalLockEntry | undefined, reason: string): ExternalUseStatus[] {
+  const uses: ExternalUseStatus[] = [];
+  for (const [publicName, members] of Object.entries(entry?.used ?? {})) {
+    const names = Object.keys(members);
+    if (names.length === 0) uses.push({ publicName, state: 'unavailable', code: CHECK_UNAVAILABLE, detail: reason });
+    for (const member of names) uses.push({ publicName, member, state: 'unavailable', code: CHECK_UNAVAILABLE, detail: reason });
+  }
+  return uses.length ? uses : [{ state: 'unavailable', code: CHECK_UNAVAILABLE, detail: reason }];
+}
+
+/** The status of one declared external against its live producer. */
+function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): ExternalStatus {
+  const { external } = binding;
+  const entry = lock?.externals[external.alias];
+  // Step 4: its pinned snapshot, if any.
+  const pinned = entry !== undefined && externalsRepository.readSnapshot(external.alias) !== null;
+  const base = { alias: external.alias, project: external.project, sourceKind: external.sourceKind, pinned };
+  // Step 5: can the live producer be read?
+  const unreadable = external.sourceKind === 'unresolved'
+    ? `the external does not resolve: ${external.problem}`
+    : producerUnreadable(external.directory);
+  let live: SurfaceSnapshot | null = null;
+  let reason = unreadable;
+  if (!reason) {
+    try {
+      // Steps 6-7: the producer's live table at the audience ceiling.
+      live = projectProducer(external);
+    } catch (e) {
+      reason = `the producer could not be read: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+  if (!live) {
+    // Step 10: nothing could be compared â€” never a pass.
+    return { ...base, reachable: false, stale: false, uses: unavailableUses(entry, reason!), detail: reason! };
+  }
+  // Step 8: a producer outside the family has no used members to compare.
+  const drifted = entry !== undefined ? contentDigest(live) !== entry.digest : undefined;
+  if (external.sourceKind === 'path') {
+    return { ...base, reachable: true, stale: false, ...(drifted !== undefined ? { drifted } : {}), uses: [{ state: 'unavailable', code: CHECK_UNAVAILABLE, detail: OUTSIDE_FAMILY }], detail: OUTSIDE_FAMILY };
+  }
+  const uses = compareUses(entry, binding.usage, live);
+  return {
+    ...base,
+    reachable: true,
+    stale: uses.some((u) => u.state === 'changed' || u.state === 'removed'),
+    ...(drifted !== undefined ? { drifted } : {}),
+    uses,
+  };
+}
+
+/**
+ * surface_orchestrator.getExternalsStatus â€” each declared external's pin
+ * compared with its live producer at signature level (decision 19). What
+ * cannot be compared is EXTERNAL_CHECK_UNAVAILABLE, never a pass. It only
+ * reports: it writes nothing and fails nothing.
+ */
+export function getExternalsStatus(): ExternalStatus[] {
+  // Step 1: the declared externals, with the references as they are now.
+  const bindings = resolveExternals();
+  // Step 2: the lock.
+  const lock = externalsRepository.readLock();
+  // Steps 3-12: one status per declared external, in declaration order.
+  return bindings.map((binding) => externalStatus(binding, lock));
+}
+
+/**
+ * surface_orchestrator.listExternals â€” each declared external with how it
+ * resolves, the audience the consumer sees and the lock's entry when pinned.
+ * No live comparison.
+ */
+export function listExternals(): ExternalListing[] {
+  // Step 1: the declared externals.
+  const bindings = resolveExternals();
+  // Step 2: the lock.
+  const lock = externalsRepository.readLock();
+  // Steps 3-4: one row per declared external, in declaration order.
+  return bindings.map(({ external }) => {
+    const entry = lock?.externals[external.alias];
+    return {
+      alias: external.alias,
+      project: external.project,
+      sourceKind: external.sourceKind,
+      ...(external.relation ? { relation: external.relation } : {}),
+      ...(external.directory ? { directory: external.directory } : {}),
+      audience: external.audience,
+      ...(entry ? { lock: entry } : {}),
+      ...(external.problem ? { problem: external.problem } : {}),
     };
   });
 }

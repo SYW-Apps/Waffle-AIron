@@ -1502,8 +1502,91 @@ export const SurfaceSnapshotSchema = z.object({
   projectId: z.string().optional(),
   /** The types the producer exports by name, listed apart from the contract entries. */
   exportedTypes: z.array(SurfaceTypeExportSchema).optional(),
+  /**
+   * The audience ceiling the producer's export table was filtered to: project
+   * for a snapshot pinned from the family, instance for one pinned through
+   * source.path; absent on surfaces written before externals and on imports.
+   */
+  audience: z.string().optional(),
 });
 export type SurfaceSnapshot = z.infer<typeof SurfaceSnapshotSchema>;
+
+// ---------------------------------------------------------------------------
+// Pinned externals (.wai/externals.lock.yaml + .wai/externals/<alias>.yaml)
+// ---------------------------------------------------------------------------
+
+/**
+ * external_lock_entry — what `wairon externals pin` recorded for one alias:
+ * the producer, the snapshot, its content digest, and the digest of every
+ * member the consumer's references use (public name → member → sha256:…).
+ */
+export const ExternalLockEntrySchema = z.object({
+  project: z.string(),
+  snapshot: z.string(),
+  digest: z.string(),
+  used: z.record(z.record(z.string())).default({}),
+});
+export type ExternalLockEntry = z.infer<typeof ExternalLockEntrySchema>;
+
+/** externals_lock — the content of .wai/externals.lock.yaml: one entry per pinned alias. */
+export const ExternalsLockSchema = z.object({
+  externals: z.record(ExternalLockEntrySchema).default({}),
+});
+export type ExternalsLock = z.infer<typeof ExternalsLockSchema>;
+
+/** external_pin — what pinning did for one alias. */
+export interface ExternalPin {
+  alias: string;
+  /** pinned | unchanged | unresolved | unreachable */
+  outcome: 'pinned' | 'unchanged' | 'unresolved' | 'unreachable';
+  project?: string;
+  snapshot?: string;
+  digest?: string;
+  /** How many public names the lock records as used. */
+  usedNames: number;
+  /** The consumer's references into the producer that land on no public name it may see. */
+  unexported: import('./project-family.js').CrossProjectReference[];
+  /** Why an alias was unresolved or unreachable, or which used members could not be pinned. */
+  detail?: string;
+}
+
+/** external_use_status — the verdict on one used member of one pinned external. */
+export interface ExternalUseStatus {
+  publicName?: string;
+  member?: string;
+  /** unchanged | changed | removed | unlocked | unavailable */
+  state: 'unchanged' | 'changed' | 'removed' | 'unlocked' | 'unavailable';
+  /** EXTERNAL_CHECK_UNAVAILABLE on an unavailable entry — never a pass. */
+  code?: string;
+  detail?: string;
+}
+
+/** external_status — the status of one declared external. */
+export interface ExternalStatus {
+  alias: string;
+  project: string;
+  /** family | path | unresolved */
+  sourceKind: string;
+  pinned: boolean;
+  reachable: boolean;
+  stale: boolean;
+  drifted?: boolean;
+  uses: ExternalUseStatus[];
+  detail?: string;
+}
+
+/** external_listing — one row of `wairon externals list`. */
+export interface ExternalListing {
+  alias: string;
+  project: string;
+  /** family | path | unresolved */
+  sourceKind: string;
+  relation?: string;
+  directory?: string;
+  audience: string;
+  lock?: ExternalLockEntry;
+  problem?: string;
+}
 
 /** One rendered per-portal OpenAPI document (see the codec's toOpenApiSet). */
 export const NamedOpenApiSpecSchema = z.object({
