@@ -180,15 +180,32 @@ function noticesFrom(verdict: CandidateVerdict): string[] {
  */
 export function componentCandidateGate(
   options: { rules?: RulesConfig; projectType?: string } = candidateOptions(),
+  storedOwner?: string,
 ): SpecWriteHooks {
   return {
     gate: (kind, merged) => {
+      refuseUnknownOwner(kind, merged as { subsystem?: string }, storedOwner);
       if (kind !== 'component') return;
       const verdict = validateComponentCandidate(merged as ComponentSpec, options);
       if (verdict.errors.length) throw new Error(formatCandidateRefusal(verdict));
       return noticesFrom(verdict);
     },
   };
+}
+
+/**
+ * Refuse a component or a type whose owning subsystem a delta CHANGED to one the
+ * tree does not have — the same refusal a create gets for an unknown parent. An
+ * owner the delta leaves alone is not judged: a spec already pointing at a
+ * missing subsystem must still be repairable by the update that fixes it.
+ */
+function refuseUnknownOwner(kind: WritableSpecKind, merged: { subsystem?: string }, storedOwner?: string): void {
+  if (kind !== 'component' && kind !== 'type') return;
+  const owner = merged.subsystem;
+  if (!owner || owner === storedOwner) return;
+  if (loadSpec('subsystem', owner)) return;
+  const sentence = MISSING_PARENT[kind]!(owner);
+  throw new Error(`${sentence} Nothing was written.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -780,13 +797,14 @@ export function updateSpecGated(
   // type the judgement uses, and the test roots the report searches. A project
   // that has none is judged on the defaults and searches nothing.
   const bound = candidateOptions();
-  // Step 2: the judgement as a write hook over those same settings.
-  const gate = componentCandidateGate(bound);
-  // Step 3: the spec as it stands, when a test search may follow — a method the
-  // delta deletes is placed in its file, and named by its code name, only by
-  // the version that still held it.
+  // Step 2: the spec as it stands — the owner the judgement compares against,
+  // and, when a test search may follow, a method the delta deletes placed in
+  // its file and named by its code name, which only the version that still
+  // held it can answer.
   const testRoots = bound.rules?.conformance?.testRoots ?? [];
-  const stored = testRoots.length > 0 ? loadSpec(kind, id) : null;
+  const stored = loadSpec(kind, id);
+  // Step 3: the judgement as a write hook over those same settings.
+  const gate = componentCandidateGate(bound, (stored as { subsystem?: string } | null)?.subsystem);
   // Step 4: apply the delta with the hook injected, so the judgement runs on
   // the merged spec at the last point before anything reaches disk.
   const report = updateSpec(kind, id, delta, gate, dryRun);

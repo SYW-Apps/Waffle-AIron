@@ -182,6 +182,14 @@ and `admin_orchestrator`, preserving audit and approval semantics through local
 process invocation. This is what makes "all HTTP control planes off" a viable
 production posture rather than a lockout.
 
+> **Superseded (2026-09-26).** This draft portal was never implemented and was
+> retired from the spec tree. The operator's in-process surface shipped as
+> `local_admin_portal` (published to `sdd_cli` only): `wairon host` reaches the
+> admin, pack, permission, identity, landscape and server workflows through it,
+> and they authorize the credential they are given exactly as the HTTP planes do.
+> Approvals, profile init and exposure policy are not yet on it; a CLI for them
+> would extend `local_admin_portal` rather than revive a second local portal.
+
 > **Supporting, not a plane:** `skills_resource_orchestrator` /
 > `skills_resource_specialist` (subsystem `sdd_skills`) publish the built-in SDD
 > skills as MCP-readable resources (`SkillResourceDescriptor`) so **cloud-only

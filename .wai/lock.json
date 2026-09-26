@@ -1,9 +1,9 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "c22ab3dbe0134bc80256dfcd9bcece8e62906b5a7e3ebd31ef2059b2e5e2a5fe"
+    "digest": "d20af549eb4030cdd7cc17e3c8194bcea4e6d7b09e35ea2dbcc27c32f459e152"
   },
-  "lockedAt": "2026-09-26T14:07:45.524Z",
+  "lockedAt": "2026-09-26T14:22:41.629Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -120,7 +120,6 @@
     ".wai/specs/components/landscape_portal.yaml": "a1e7cf5d03489b85a777f21ff29c9cb528bff64cf50bc31f044edfa6a48aa926",
     ".wai/specs/components/local_admin_portal.yaml": "b13e873ff6d942de3030ecda4f50479fd1bb670fc1255363070de6208a9efbde",
     ".wai/specs/components/local_approver.yaml": "be7fbc3654f5c87852c36a5c64fff806097ac8c5ece8a6054887c64610761e98",
-    ".wai/specs/components/local_control_portal.yaml": "73b1b560edb2171e620007f873fea9b36efe7264121b997a26ec200d63b8b158",
     ".wai/specs/components/lock_store.yaml": "10c8d784100b89a1ead52be24def58d443d4e9c5f8f2fed538e8898e749e4d5f",
     ".wai/specs/components/mcp_authoring_adapter.yaml": "d30fcfa4c59a9ef853e04c6b211dd919457576d0196eeb8bb18992932bb38fb3",
     ".wai/specs/components/mcp_build_adapter.yaml": "c5155eba16e9cbe14d6f11eb15b00d5a93b295dad2cfd36aad9bc49f67ad5407",
@@ -297,7 +296,7 @@
     ".wai/specs/implementations/audit_store_impl.yaml": "8ad82b7f25bcd8031130ac94e9524ea4bdea45e6b5f98cbf4d58b3cbbaeab46d",
     ".wai/specs/implementations/authentication_impl.yaml": "b8f82659d1a967c1d39ba270dec10cf143f5d71f18ff0b14a475e747ca5fed20",
     ".wai/specs/implementations/authoring_core_adapter_impl.yaml": "f6263bc33aee25336a77fa703abbbd4c4279f01c7b3a7006d99de2b60d6d1fc5",
-    ".wai/specs/implementations/authoring_orchestrator_impl.yaml": "c568fbec9fa49aec68c27b8bd2590e42555ae2eec68241cf68ea413a1a4f2e2e",
+    ".wai/specs/implementations/authoring_orchestrator_impl.yaml": "35d22dc7e5b14345ba1bb0266fb5d83c00f4ffcbd967b693dee0ff9b55d0d453",
     ".wai/specs/implementations/authoring_portal_impl.yaml": "60f0bb7b5c56148ae357dc4bdf5a1451f416dceca2397023004ec0ae2a8f9a34",
     ".wai/specs/implementations/authoring_validator_adapter_impl.yaml": "baa1b89634bdfed5ec580778884645c3815f14f47d30c467226dd79e2d97dd5b",
     ".wai/specs/implementations/authorization_impl.yaml": "14f6e81e07b0441aa6c05c11c6be6017ff72f8150c8dfbb88c9fc1951c33ef42",
@@ -355,7 +354,7 @@
     ".wai/specs/implementations/git_orchestrator_impl.yaml": "2f521f4cbfb7df58d2e0cd1b6fed82a2867a418b1ee3da88993abc7b71e26753",
     ".wai/specs/implementations/git_portal_impl.yaml": "e7ace31435255ad4cff7af9ed1f90970365e565dfdf4fd0e5541d27e005a9927",
     ".wai/specs/implementations/heuristic_rules_impl.yaml": "e845b27d63f7e0622bfa50beef96f107211f9da5904540a0d9e3bbf62cd0a21c",
-    ".wai/specs/implementations/host_core_adapter_impl.yaml": "3d2f1ced698e320e08e5e0213e7993d27d4355c6d2bf3279721afa9bf379989a",
+    ".wai/specs/implementations/host_core_adapter_impl.yaml": "cd162ac878adfdd1c6bef6617d230e71c5ab96ea2ad0ff78c188f318c2bb5b02",
     ".wai/specs/implementations/host_git_adapter_impl.yaml": "40db1da8d50ed6c50e6c20aa15bf0ef05e4df178d8c5fd1a95bf5fca8b48e433",
     ".wai/specs/implementations/host_http_portal_impl.yaml": "40af5cd4f3bb7252225adddbee48fc4a1c5b2857c8a301569ffb32a3c0f38323",
     ".wai/specs/implementations/host_mcp_adapter_impl.yaml": "921f0906374af9f3da90b198f0d93a24a66fe27c9be722084e1a76d1486733b7",
@@ -430,7 +429,7 @@
     ".wai/specs/implementations/project_config_registry_impl.yaml": "97d5f5dc8b13de94e993ecc7a0b3dccd575847e2f6ad5e5e57685d72a11c3bec",
     ".wai/specs/implementations/project_config_repository_impl.yaml": "1f4b40baed167adc01ec7772a500a6c6817d626cd62298cf79ae3b897fcecb3a",
     ".wai/specs/implementations/project_config_store_impl.yaml": "8c863611cd79a0e1581921b6fd70ce4f2a5f7102fb6c72c25a988563706ce897",
-    ".wai/specs/implementations/project_index_impl.yaml": "c2921fdaef785b7421230724ee6105a666e50255dd5c97b8c139520d1512b240",
+    ".wai/specs/implementations/project_index_impl.yaml": "377affd5c5d3161bde9e00d9d6a7712b38bdb38dbd9e886c8d2483fa0a4ad2ec",
     ".wai/specs/implementations/project_lifecycle_orchestrator_impl.yaml": "a5433a3a2270c105575fb68942c304ac2bb7a47c09abeee6883d989eb9a07949",
     ".wai/specs/implementations/project_ops_orchestrator_impl.yaml": "9151af8b85de5436703daee3f1a6c813cd9ed959c7c7e6530a7ea7b283971725",
     ".wai/specs/implementations/project_policy_orchestrator_impl.yaml": "cd4a77c9773f2f1d5874ec856bc4f0db8d5b18d02baaead9c249ac0124ff2c55",
@@ -615,7 +614,7 @@
     ".wai/specs/interfaces/igit_orchestrator.yaml": "bcbca74b33e492e4d3f30591655b138b98ceaee730921df81c4fc6d6e20bab7c",
     ".wai/specs/interfaces/igit_portal.yaml": "38295ff15df2fc914512e4f69f4fb92de19b6d2b3ff1a13aa47c68a7051aabe6",
     ".wai/specs/interfaces/iheuristic_rules.yaml": "4f2713862c1f345d402ec0b2bc57640b30c3bd08bf4e9aed7b8301b527b80c77",
-    ".wai/specs/interfaces/ihost_core_adapter.yaml": "990ac90e885640f9d312d4062202c5d38c886917518818c395be80011b889bd1",
+    ".wai/specs/interfaces/ihost_core_adapter.yaml": "006f8ce58532bdef93c74b9d976d5bfb71f22843a1eeb2b29876c3a7773a5dc4",
     ".wai/specs/interfaces/ihost_git_adapter.yaml": "9dfd653aca787ca618bb4ff6ae261f6488fa7f51bec5c2177824a4e641b70027",
     ".wai/specs/interfaces/ihost_http_portal.yaml": "52926a5ce586bbd6dab67513b533c246768ef2e27c2adc9e44eb388abeaf9d9a",
     ".wai/specs/interfaces/ihost_mcp_adapter.yaml": "85a49a054e0f90717e1f3d4492900133c19e107e065fddcc8ca27b390c6697be",
@@ -641,7 +640,6 @@
     ".wai/specs/interfaces/ilandscape_portal.yaml": "a3c4263c08762da8a4857a73e063fa6660518c58854854c6ecb22d8f6b601242",
     ".wai/specs/interfaces/ilocal_admin_portal.yaml": "77405e635f27b49ea150680db38beb130d51a5586e864a120d0753749c2fc369",
     ".wai/specs/interfaces/ilocal_approver.yaml": "1e61b7f5b92bbb142116e94393c78dbfd2613b9ad579c2fbe45728c7300b2606",
-    ".wai/specs/interfaces/ilocal_control_portal.yaml": "19fc3609f8b3b60d883a11b05b5e3d20c04c9e3652481ac83dd9194fe4023431",
     ".wai/specs/interfaces/ilock_store.yaml": "efa90855985be7245fb6edf134e6b6f90559225c054cc52dc1092236ba37f9cd",
     ".wai/specs/interfaces/imcp_authoring_adapter.yaml": "781f7859545ca80f0d804c811cea7b3f6ec17241f74ec05df8d644fcb139a925",
     ".wai/specs/interfaces/imcp_build_adapter.yaml": "5dbcc705be0cfdbb590010f3246057a9d2485e0d93d60593a6159d1faf889209",
@@ -803,7 +801,7 @@
     ".wai/specs/subsystems/sdd_cli.yaml": "361dfff04f03b1cf3d0d96f6a7013ad2b0b247c10ee084cc20f4b8d453c070b9",
     ".wai/specs/subsystems/sdd_core.yaml": "c9f9c3a8345a27ca6724d1723d6ab6c1539772b140ea71d99c3df66c3267b213",
     ".wai/specs/subsystems/sdd_git.yaml": "68e64f2496006bb917d4213efa09263e05d8bf0a7b35d58178ef3c728c2f8075",
-    ".wai/specs/subsystems/sdd_host.yaml": "f7973dbcaccd65d58d926d17ebbffb17ede1562ec397f37b6eaeb8a955e80c9e",
+    ".wai/specs/subsystems/sdd_host.yaml": "655be160a02b4e0aff030b238dfe991040534a58485fb6e3fdf13f6863b24d6b",
     ".wai/specs/subsystems/sdd_mcp.yaml": "12f22095fbb683a1be5b5a57a76a1b4248a028ad4010ab52babe37dc3dc47dd5",
     ".wai/specs/subsystems/sdd_producers.yaml": "a4a3aef588e70013ed62cda8aca36d69c15fa2295f6cab3250eb90ae719a2fc6",
     ".wai/specs/subsystems/sdd_sdk.yaml": "51a2e0321e9155bfbdebe0db512aa66f1b8822791fe62b93ff6a6180759d63f8",

@@ -95,7 +95,7 @@ methods:
         targetComponent: extension_portal
         targetMethod: checkDeclarativePack
     detail: calls-only
-  - name: assertContainedProjectPath
+  - name: resolveContainedProjectPath
     narrative:
       - stepNumber: 1
         description: >-
@@ -206,4 +206,4 @@ methods:
         targetMethod: packEntryLabel
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-09-25T21:33:45.524Z'
+updatedAt: '2026-09-26T14:15:51.765Z'

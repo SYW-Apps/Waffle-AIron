@@ -304,6 +304,46 @@ describe('authoring: updateSpecGated', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
+  it('refuses moving a component to a subsystem the tree does not have, and writes nothing', () => {
+    const { tempDir, writeSpec } = createTempProject();
+    setProjectRoot(tempDir);
+    writeSpec('component', 'orch', 'schemaVersion: 1.0.0\nid: orch\nname: Orch\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator');
+    invalidateSpecCache();
+
+    expect(() => updateSpecGated('component', 'orch', { subsystem: 'ghost' }))
+      .toThrow(/Parent subsystem "ghost" does not exist\. Nothing was written\./);
+
+    invalidateSpecCache();
+    expect(loadComponentSpec('orch')?.subsystem).toBe('sub-a');
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('refuses moving a type to a subsystem the tree does not have', () => {
+    const { tempDir, writeSpec } = createTempProject();
+    setProjectRoot(tempDir);
+    writeSpec('type', 'money', 'kind: value-object\nid: money\nname: Money\nsubsystem: sub-a\nfields: []\nmethods: []');
+    invalidateSpecCache();
+
+    expect(() => updateSpecGated('type', 'money', { subsystem: 'ghost' }))
+      .toThrow(/Owning subsystem "ghost" does not exist/);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not judge an owner the delta leaves alone, so a spec under a missing subsystem stays repairable', () => {
+    const { tempDir, writeSpec } = createTempProject();
+    setProjectRoot(tempDir);
+    // Already on disk under a subsystem the tree does not have.
+    writeSpec('component', 'stray', 'schemaVersion: 1.0.0\nid: stray\nname: Stray\ndescription: d\nsubsystem: ghost\ncomponentType: Orchestrator');
+    invalidateSpecCache();
+
+    expect(() => updateSpecGated('component', 'stray', { description: 'still editable' })).not.toThrow();
+    // ...and the repair itself - moving it to a subsystem that exists - goes through.
+    expect(() => updateSpecGated('component', 'stray', { subsystem: 'sub-a' })).not.toThrow();
+    invalidateSpecCache();
+    expect(loadComponentSpec('stray')?.subsystem).toBe('sub-a');
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
   it('leaves non-component kinds ungated', () => {
     const { tempDir } = createTempProject();
     setProjectRoot(tempDir);

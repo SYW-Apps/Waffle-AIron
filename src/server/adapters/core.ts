@@ -46,6 +46,6 @@ export {
   packEntryRef,
   packEntryLabel,
   // A mount's projectPath resolved within its root — the hosted
-  // mount-resolution seam.
-  assertContainedProjectPath,
+  // mount-resolution seam. The adapter names it for what it answers.
+  assertContainedProjectPath as resolveContainedProjectPath,
 } from '../../core/index.js';
