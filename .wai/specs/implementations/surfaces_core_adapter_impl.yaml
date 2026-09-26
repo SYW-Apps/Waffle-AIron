@@ -76,6 +76,13 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
+  - name: resolveExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward the externals resolution to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveExternals
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-09-26T16:09:57.145Z'
+updatedAt: '2026-09-26T17:48:19.539Z'

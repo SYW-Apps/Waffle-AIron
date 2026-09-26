@@ -1,0 +1,19 @@
+kind: value-object
+id: external_source
+name: ExternalSource
+description: >-
+  Where an external's producer is found when the family does not hold it: an explicit filesystem
+  path, relative to the declaring project's root. A hosted source is stage 7 and is not part of this
+  shape.
+subsystem: sdd_core
+fields:
+  - name: path
+    type: string
+    description: >-
+      The producer project's root directory, relative to the declaring project's root (an absolute
+      path is kept as written).
+    optional: false
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-26T17:39:12.278Z'
+updatedAt: '2026-09-26T17:39:12.283Z'

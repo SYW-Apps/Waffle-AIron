@@ -1170,6 +1170,96 @@ methods:
         type: local
     symbol: check
     exportedVia: authSourceWiringRule
+  - name: projectBoundaries
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project graph and the export usages from the rule context (ctx.projectFamily,
+          ctx.exportUsages)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        label: references
+        description: For each cross-project reference
+        type: loop
+        loopKind: forEach
+        over: the graph's cross-project references
+        endStep: 7
+      - stepNumber: 5
+        description: Does the consumer declare the producer?
+        type: branch
+        condition: >-
+          ProjectFamily.declares(consumer, producer) — the producer is a direct member, or one of
+          the consumer's externals resolves to it
+        onTrueStep: 7
+        onFalseStep: 6
+      - stepNumber: 6
+        description: >-
+          Report EXTERNAL_UNDECLARED (notice) on the referring spec, in its draft context, naming
+          the position, the target, the producer's id and namespace, and the `externals` entry that
+          would declare it (a member needs none; a parent or sibling does)
+        type: local
+      - stepNumber: 7
+        label: declared
+        description: The reference's declaration is judged
+        type: local
+      - stepNumber: 8
+        description: For each unexported reference of every usage
+        type: loop
+        loopKind: forEach
+        over: the unexported references of the context's export usages
+        endStep: 9
+      - stepNumber: 9
+        label: exported
+        description: >-
+          Report EXTERNAL_NOT_EXPORTED (notice) on the referring spec, in its draft context, naming
+          the target and the producer, and that another project may reach it only through an L0
+          export whose audience covers the referrer — export it from the producer's L0 (audience
+          project reaches the family) and reach it there
+        type: local
+      - stepNumber: 10
+        description: For each subsystem's trustedLinks entries
+        type: loop
+        loopKind: forEach
+        over: every loaded subsystem's trustedLinks entries
+        endStep: 14
+      - stepNumber: 11
+        description: >-
+          Find the project the link lands in: ProjectFamily.producerOf(the link as written, from the
+          declaring subsystem's project) — the loader leaves trustedLinks raw, so it is qualified
+          here the way the loader qualifies a reference
+        type: local
+      - stepNumber: 12
+        description: Does the link stay inside its project?
+        type: branch
+        condition: the producer is unknown, or is the project that owns the declaring subsystem
+        onTrueStep: 14
+        onFalseStep: 13
+      - stepNumber: 13
+        description: >-
+          Report TRUSTED_LINK_CROSSES_PROJECT (notice) on the declaring subsystem, in its draft
+          context, naming the linked subsystem and its project: a trusted link waives the
+          client-Adapter shim inside one project and cannot pierce a project boundary; reach the
+          other project through its exports
+        type: local
+      - stepNumber: 14
+        label: linked
+        description: The link is judged
+        type: local
+      - stepNumber: 15
+        description: Every boundary is judged
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-26T16:12:25.527Z'
+updatedAt: '2026-09-26T17:50:55.463Z'

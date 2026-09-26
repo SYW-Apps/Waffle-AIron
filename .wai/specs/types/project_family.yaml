@@ -1,0 +1,62 @@
+kind: value-object
+id: project_family
+name: ProjectFamily
+description: >-
+  The project graph of one scan: a node per project root, an owner for every spec id, the relative
+  references authors wrote, and the family's identity problems. A projection of the scan, never
+  stale with it; the rules read it from the rule context and ask it who owns what.
+subsystem: sdd_core
+fields:
+  - name: nodes
+    type: ProjectNode[]
+    description: Every project root the scan read, bound root first, then members in walk order.
+    optional: false
+  - name: owners
+    type: Map<string, string>
+    description: Spec id → the namespace of the project that declares it.
+    optional: false
+  - name: authoredReferences
+    type: AuthoredReference[]
+    description: Every relative-form reference across the family.
+    optional: false
+  - name: problems
+    type: ProjectFamilyProblem[]
+    description: Id collisions and id-less projects across the family.
+    optional: false
+  - name: references
+    type: CrossProjectReference[]
+    description: >-
+      Every reference in the family that leaves the project making it, in the positions
+      CrossProjectReference lists.
+    optional: false
+methods:
+  - name: node
+    signature: 'node(namespace: string): ProjectNode | null'
+    returns: ProjectNode | null
+    description: The node with that namespace, or null.
+  - name: ownerOf
+    signature: 'ownerOf(specId: string): ProjectNode | null'
+    returns: ProjectNode | null
+    description: 'The project that declares the spec: its owner entry. Null for an id the scan did not read.'
+  - name: producerOf
+    signature: 'producerOf(reference: string, from?: string): ProjectNode | null'
+    returns: ProjectNode | null
+    description: >-
+      The project a reference lands in. With `from` (a namespace), the reference is first qualified
+      from that project the way the loader qualifies a reference (a leading `::` is absolute, each
+      `super::` climbs one mount, a first segment naming a bound-root subsystem is absolute,
+      anything else is prefixed with `from`) — for fields the loader leaves raw, such as
+      trustedLinks. Then: the owner of the spec it names when the scan read one; otherwise the node
+      whose namespace is the longest prefix of it (a namespace equals the reference or prefixes it
+      followed by `::`), which names the project a reference points into even when the item is
+      missing. Null for a reference still in a relative form after qualification (it climbs above
+      the bound root, so the scan cannot say where it lands).
+  - name: declares
+    signature: 'declares(consumer: string, producer: string): boolean'
+    returns: boolean
+    description: >-
+      Whether the consumer may reach the producer as a declared dependency: the producer is one of
+      the consumer's direct members (the mount is the alias), or one of the consumer's externals
+      resolves to it.
+createdAt: '2026-09-26T17:40:06.197Z'
+updatedAt: '2026-09-26T17:43:20.189Z'

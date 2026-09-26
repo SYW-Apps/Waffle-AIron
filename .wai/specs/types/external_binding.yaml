@@ -1,0 +1,27 @@
+kind: value-object
+id: external_binding
+name: ExternalBinding
+description: >-
+  One declared external of the bound project, bound to its producer, with what the project's
+  references reach in it. The answer the surface plane pins, lists and checks status from.
+subsystem: sdd_core
+fields:
+  - name: external
+    type: ResolvedExternal
+    description: The declaration bound to its producer (or left unresolved, with the problem).
+    optional: false
+  - name: usage
+    type: ExportUsage
+    description: >-
+      The consumer's references into a family producer, mapped onto its public names; absent for a
+      path or unresolved producer — no stage-2 reference form reaches a project outside the family.
+    optional: true
+  - name: reachable
+    type: boolean
+    description: >-
+      Whether the climb reached the whole family: false when a hop above the bound root was out of
+      reach, so a family producer above it could not be looked for.
+    optional: false
+methods: []
+createdAt: '2026-09-26T17:43:46.075Z'
+updatedAt: '2026-09-26T17:43:46.077Z'

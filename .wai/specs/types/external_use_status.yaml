@@ -1,0 +1,38 @@
+kind: value-object
+id: external_use_status
+name: ExternalUseStatus
+description: >-
+  The verdict on one used member of one pinned external, compared at signature level with the live
+  producer (decision 19). Only a report: verdicts from the comparison arrive with composed
+  validation in stage 4.
+subsystem: sdd_surfaces
+fields:
+  - name: publicName
+    type: string
+    description: The producer's public name.
+    optional: false
+  - name: member
+    type: string
+    description: The member (method, capability:<name>, type); absent for a name used only as a dependency.
+    optional: true
+  - name: state
+    type: string
+    description: >-
+      unchanged (the live digest equals the locked one) | changed (it differs) | removed (the live
+      table no longer has the name or the member) | unlocked (used now, but not in the lock —
+      re-pin) | unavailable (cannot be compared).
+    optional: false
+  - name: code
+    type: string
+    description: EXTERNAL_CHECK_UNAVAILABLE on an unavailable entry — never a pass.
+    optional: true
+  - name: detail
+    type: string
+    description: >-
+      Why it could not be compared: producer unreachable, the reference is not exported, or the
+      producer is outside the family and nothing references it in stage 2.
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-26T17:47:11.330Z'
+updatedAt: '2026-09-26T17:47:11.331Z'

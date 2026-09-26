@@ -1,0 +1,56 @@
+kind: value-object
+id: scanned_project_root
+name: ScannedProjectRoot
+description: >-
+  What one scan read at one project root, beyond the specs it merged into the index: where the root
+  sits in the mount chain, its own L0 (a member's L0 is not merged into the index, whose L0 is the
+  bound root's), its configuration, the ids of the specs it declared, and the relative references
+  its authors wrote. The raw material of the project graph.
+subsystem: sdd_core
+fields:
+  - name: namespace
+    type: string
+    description: ''''' for the bound root, else the qualified id of the mount subsystem.'
+    optional: false
+    key: primary
+  - name: parent
+    type: string
+    description: The namespace of the root that mounts this one.
+    optional: true
+  - name: mountAlias
+    type: string
+    description: The local id of the mounting subsystem.
+    optional: true
+  - name: directory
+    type: string
+    description: The root directory, absolute.
+    optional: false
+  - name: system
+    type: SystemSpec | null
+    description: >-
+      The root's own L0, qualified into its namespace (its export entries' `from`, `component`,
+      `interface` and `typeDef` read as references from that namespace); null when the root has
+      none.
+    optional: false
+  - name: config
+    type: ProjectConfig | null
+    description: >-
+      The root's configuration, read through the configuration bound at that root — the same
+      per-root binding that already supplies the root's specs folder; null when unreadable.
+    optional: false
+  - name: specIds
+    type: string[]
+    description: >-
+      The qualified ids of every spec this root's files declared. A mount subsystem belongs to the
+      root it mounts, whose realization it merges with.
+    optional: false
+  - name: authoredReferences
+    type: AuthoredReference[]
+    description: >-
+      Every reference this root's files wrote in a relative form (`super::…`, leading `::`), before
+      qualification.
+    optional: false
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-09-26T17:39:58.407Z'
+updatedAt: '2026-09-26T17:39:58.408Z'

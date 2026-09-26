@@ -200,29 +200,70 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: resolveProjectExports
       - stepNumber: 29
+        label: project-family
+        description: >-
+          Read the project graph of this scan through the core adapter: one node per project root
+          with its bound externals, the owner of every spec, the cross-project references, the
+          relative-form references authors wrote, and the family's identity problems. On a run that
+          judges a chained child through its parent the graph is the parent's, so a child's
+          references are judged by the family that holds both ends
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 30
+        description: For each member project of the family
+        type: loop
+        loopKind: forEach
+        over: the graph's nodes other than the bound root
+        endStep: 31
+      - stepNumber: 31
+        label: member-exports
+        description: >-
+          Read the member's resolved L0 export table through the core adapter — its problems (a
+          widening re-export among them) are the export-tables rule's facts, and its public names
+          are what the family's references may land on
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 32
+        description: For each pair of projects the graph's cross-project references connect
+        type: loop
+        loopKind: forEach
+        over: the distinct (consumer, producer) pairs of the graph's cross-project references
+        endStep: 33
+      - stepNumber: 33
+        label: pair-usage
+        description: >-
+          Map the consumer's references into the producer onto the producer's public names through
+          the core adapter — the unexported ones are what EXTERNAL_NOT_EXPORTED reports
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: exportUsage
+      - stepNumber: 34
         description: >-
           Build the rule context from the gathered inputs: the loaded specs and their lookup maps,
           the surface snapshots, the code model, the round-trip findings, the known issue codes, the
-          pack data, the project identity, the export tables and the lint-allow bookkeeping. Its
-          addIssue applies the designDepth gate, then severity resolution (the project's
-          sddRuleSeverity, else the governing pack profile's, else the draft-context downgrade,
-          which is min(rule default, warning) and so never raises a notice, else the rule default),
-          and lets a matching lint allow silence a warning or a notice and the conformance debt
-          register carry one; an error is never silenced or carried
+          pack data, the project identity, the export tables (every subsystem's, the bound root's
+          and each member's project table), the project graph and the export usages, and the
+          lint-allow bookkeeping. Its addIssue applies the designDepth gate, then severity
+          resolution (the project's sddRuleSeverity, else the governing pack profile's, else the
+          draft-context downgrade, which is min(rule default, warning) and so never raises a notice,
+          else the rule default), and lets a matching lint allow silence a warning or a notice and
+          the conformance debt register carry one; an error is never silenced or carried
         type: local
-      - stepNumber: 30
+      - stepNumber: 35
         description: For each rule in the run sequence
         type: loop
         loopKind: forEach
         over: the rule run sequence read in step 17 (built-ins, then pack rules, lint-allows last)
-        endStep: 31
-      - stepNumber: 31
+        endStep: 36
+      - stepNumber: 36
         label: run-rule
         description: >-
           Run the rule's check against the rule context; the rule reports its findings through
           ctx.addIssue
         type: local
-      - stepNumber: 32
+      - stepNumber: 37
         description: >-
           When this root still holds a reference-resolution failure no surface snapshot covers,
           detect the parent through the core adapter's reach-gated resolveChainingParent, so a
@@ -231,7 +272,7 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: resolveChainingParent
-      - stepNumber: 33
+      - stepNumber: 38
         description: >-
           Resolve a chained subproject's verdict through its parent. When this root still holds a
           reference-resolution failure no surface snapshot covers — an unresolved cross-tree
@@ -244,7 +285,7 @@ methods:
         type: call
         targetComponent: spec_validator
         targetMethod: resolveThroughParent
-      - stepNumber: 34
+      - stepNumber: 39
         description: >-
           Merge what the parent judged with this run's own findings: a child finding gives way only
           where the parent reported the same code on the same spec at least as severely, or where it
@@ -256,7 +297,7 @@ methods:
           evidence judges a pinned edge depends on whether some resolution failure triggered the
           walk. The result records the root and scope it was resolved through.
         type: local
-      - stepNumber: 35
+      - stepNumber: 40
         description: Return the aggregated validation result
         type: return
         outcome: ValidationResult
@@ -578,4 +619,4 @@ lint:
         validation run has.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-26T16:11:16.889Z'
+updatedAt: '2026-09-26T17:45:07.637Z'

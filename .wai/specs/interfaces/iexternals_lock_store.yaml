@@ -1,0 +1,52 @@
+id: iexternals_lock_store
+name: Externals Lock Store Interface
+description: >-
+  Read-through state contract for the pinned-externals aggregate at the bound root: the lock and the
+  snapshots it names.
+component: externals_lock_store
+methods:
+  - name: read
+    description: >-
+      The lock at the bound root, or null when none was written. A malformed lock is an error, never
+      an empty lock.
+    signature: 'read(): ExternalsLock | null'
+    returns: ExternalsLock | null
+    params: []
+    effect: read
+  - name: write
+    description: Replace the lock at the bound root.
+    signature: 'write(lock: ExternalsLock): void'
+    returns: void
+    params:
+      - name: lock
+        type: ExternalsLock
+    effect: write
+  - name: readSnapshot
+    description: The pinned snapshot for an alias, or null when none is stored.
+    signature: 'readSnapshot(alias: string): SurfaceSnapshot | null'
+    returns: SurfaceSnapshot | null
+    params:
+      - name: alias
+        type: string
+    effect: read
+  - name: writeSnapshot
+    description: Replace the pinned snapshot for an alias.
+    signature: 'writeSnapshot(alias: string, snapshot: SurfaceSnapshot): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+      - name: snapshot
+        type: SurfaceSnapshot
+    effect: write
+  - name: removeSnapshot
+    description: Remove the pinned snapshot for an alias; whether one existed.
+    signature: 'removeSnapshot(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+    effect: write
+status: design
+createdAt: '2026-09-26T17:47:50.203Z'
+updatedAt: '2026-09-26T17:51:01.457Z'

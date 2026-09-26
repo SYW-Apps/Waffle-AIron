@@ -1,0 +1,47 @@
+kind: value-object
+id: external_pin
+name: ExternalPin
+description: What pinning did for one alias.
+subsystem: sdd_surfaces
+fields:
+  - name: alias
+    type: string
+    description: The alias.
+    optional: false
+    key: primary
+  - name: outcome
+    type: string
+    description: >-
+      pinned (snapshot or lock entry changed) | unchanged | unresolved (no producer: see detail) |
+      unreachable (the producer's root could not be read, or is out of the request's reach).
+    optional: false
+  - name: project
+    type: string
+    description: The producer id pinned.
+    optional: true
+  - name: snapshot
+    type: string
+    description: The snapshot path written or kept.
+    optional: true
+  - name: digest
+    type: string
+    description: The snapshot's content digest.
+    optional: true
+  - name: usedNames
+    type: number
+    description: How many public names the lock records as used.
+    optional: false
+  - name: unexported
+    type: CrossProjectReference[]
+    description: >-
+      The consumer's references into the producer that land on no public name it may see — not
+      pinnable, and reported so the author can export them.
+    optional: false
+  - name: detail
+    type: string
+    description: Why an alias was unresolved or unreachable.
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-26T17:47:06.730Z'
+updatedAt: '2026-09-26T17:47:06.732Z'

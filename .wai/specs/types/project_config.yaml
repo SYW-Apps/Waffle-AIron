@@ -67,6 +67,15 @@ fields:
       migration: a lock records the id it approved, and a later mismatch is PROJECT_ID_CHANGED.
     optional: true
     key: primary
+  - name: externals
+    type: Map<string, ExternalDeclaration>
+    description: >-
+      The other projects this project consumes, keyed by alias (the name its references use from
+      stage 3). Each value is an ExternalDeclaration; the alias defaults the producer id, and a
+      producer is found through the family (parent, members, siblings) or an explicit source.path. A
+      member (a project this one mounts) needs no declaration: the mount is its alias. Read by the
+      project graph at scan time; stage 2 writes it by hand only.
+    optional: true
 methods:
   - name: declaredPackNames
     signature: 'declaredPackNames(): string[]'
@@ -89,13 +98,15 @@ methods:
       The target types this configuration enables: every target not explicitly disabled. Empty for a
       configuration with no enabled targets.
   - name: effectiveId
-    signature: 'effectiveId(): string | null'
+    signature: 'effectiveId(mountAlias?: string): string | null'
     returns: string | null
     description: >-
-      The declared id when there is one, as written; otherwise `name` slugified. Slugifying
-      lower-cases the name, collapses each run of characters outside [a-z0-9-_.] to one '-', and
-      trims the result until it starts and ends alphanumeric. Returns null when no declared id
-      exists and no slug can be made; it never invents a fallback.
+      The declared id when there is one, as written; otherwise, for a chained child read through its
+      family, the mount alias it is given (a chained child answers to its mount's subsystem id,
+      decision 2a); otherwise `name` slugified. Slugifying lower-cases the name, collapses each run
+      of characters outside [a-z0-9-_.] to one '-', and trims the result until it starts and ends
+      alphanumeric. Returns null when no declared id exists, no mount alias is given and no slug can
+      be made; it never invents a fallback.
     symbol: effectiveProjectId
   - name: identity
     signature: 'identity(lockedProjectId?: string): ProjectIdentity'
@@ -107,6 +118,14 @@ methods:
       lockedProjectId is given and the effective id differs from it (an effective id of none
       included).
     symbol: projectIdentity
+  - name: declaredExternals
+    signature: 'declaredExternals(): DeclaredExternal[]'
+    returns: DeclaredExternal[]
+    description: >-
+      The configuration's `externals`, one DeclaredExternal per alias in declaration order: the
+      producer id is the entry's `project`, else the alias; the source path is copied as written; an
+      alias outside [a-z0-9-_]+ or a producer id outside the project-id grammar is recorded as the
+      entry's problem rather than dropped. Empty when nothing is declared.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-26T15:58:36.840Z'
+updatedAt: '2026-09-26T17:39:27.020Z'

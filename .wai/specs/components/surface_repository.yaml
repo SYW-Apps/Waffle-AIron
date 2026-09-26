@@ -1,9 +1,10 @@
 id: surface_repository
 name: Surface Repository
 description: >-
-  Facade over the stored surface snapshots of this project (.wai/surfaces/): imported
-  exchanged/authored surfaces and received parent-generated snapshots. Consumers use the facade
-  only.
+  Facade over the contracts this project has taken in from other projects: the stored surface
+  snapshots (.wai/surfaces/ — imported exchanged/authored surfaces and received parent-generated
+  snapshots) and the pinned externals (the lock and its snapshots under .wai/externals/). Consumers
+  use the facade only.
 subsystem: sdd_surfaces
 componentType: Repository
 owns:
@@ -11,7 +12,8 @@ owns:
   - surface_registry
   - surface_index
   - surface_fs_adapter
+  - externals_lock_store
 dependsOn: []
 status: complete
 createdAt: '2026-07-10T23:12:15.724Z'
-updatedAt: '2026-07-11T09:04:02.260Z'
+updatedAt: '2026-09-26T17:47:58.718Z'

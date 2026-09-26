@@ -1,0 +1,28 @@
+kind: value-object
+id: export_use
+name: ExportUse
+description: >-
+  One public name of a producer's project table that a consumer's references reach, and the members
+  they reach on it — the key half of a lock's `used` map (the snapshot supplies the digests).
+subsystem: sdd_core
+fields:
+  - name: publicName
+    type: string
+    description: The producer's public name.
+    optional: false
+    key: primary
+  - name: kind
+    type: string
+    description: component | type.
+    optional: false
+  - name: members
+    type: string[]
+    description: >-
+      The members reached, sorted: contract method names, `capability:<name>` for a capability
+      dispatched through the entry, `type` for a type export. Empty when the consumer only depends
+      on the entry (a dependsOn with no call through it).
+    optional: false
+methods: []
+sourcePath: src/models/exports.ts
+createdAt: '2026-09-26T17:40:30.206Z'
+updatedAt: '2026-09-26T17:40:30.208Z'

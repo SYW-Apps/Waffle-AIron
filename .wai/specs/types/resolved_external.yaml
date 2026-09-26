@@ -1,0 +1,55 @@
+kind: value-object
+id: resolved_external
+name: ResolvedExternal
+description: >-
+  One declared external of a project, bound to its producer: found in the family by id (or by the
+  directory its source.path names), or — for a source.path outside the family — only by that
+  directory. The audience a producer shows it follows from where it was found: the family sees
+  `project`, any other source sees `instance`.
+subsystem: sdd_core
+fields:
+  - name: alias
+    type: string
+    description: The alias the consumer declared.
+    optional: false
+    key: primary
+  - name: project
+    type: string
+    description: The producer id the declaration names (its `project`, else the alias).
+    optional: false
+  - name: sourceKind
+    type: string
+    description: >-
+      family | path | unresolved: found in the family, found only through source.path outside the
+      family, or not found.
+    optional: false
+  - name: relation
+    type: string
+    description: >-
+      For a family producer, how it stands to the consumer: parent | sibling | member | family (any
+      other project of the family).
+    optional: true
+  - name: producer
+    type: string
+    description: The producer's namespace in the family graph, for a family producer.
+    optional: true
+  - name: directory
+    type: string
+    description: 'The producer''s root directory, absolute: the family node''s, or the resolved source.path.'
+    optional: true
+  - name: audience
+    type: string
+    description: >-
+      The audience ceiling the consumer sees: project for a family producer, instance for any other
+      source.
+    optional: false
+  - name: problem
+    type: string
+    description: >-
+      Why the external is unresolved or unusable: the declaration's own problem, no family project
+      with that id and no source.path, a source.path that holds no project, a source.path whose
+      project declares another id, or two family projects answering to the id.
+    optional: true
+methods: []
+createdAt: '2026-09-26T17:39:40.205Z'
+updatedAt: '2026-09-26T17:43:21.855Z'

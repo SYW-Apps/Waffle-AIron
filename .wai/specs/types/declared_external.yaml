@@ -1,0 +1,33 @@
+kind: value-object
+id: declared_external
+name: DeclaredExternal
+description: >-
+  One external as the configuration declares it, normalized: the alias, the producer id it defaults
+  or names, the explicit source path when one is given, and what is wrong with the declaration on
+  its own (before any producer is looked for). The answer of project_config.declaredExternals().
+subsystem: sdd_core
+fields:
+  - name: alias
+    type: string
+    description: The alias key as written in project.yaml.
+    optional: false
+    key: primary
+  - name: project
+    type: string
+    description: 'The producer id: the declaration''s `project`, else the alias.'
+    optional: false
+  - name: sourcePath
+    type: string
+    description: The declaration's `source.path`, as written.
+    optional: true
+  - name: problem
+    type: string
+    description: >-
+      Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+ (a dotted
+      producer id declared without an explicit alias lands here), or a producer id outside the
+      project-id grammar.
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-26T17:39:19.261Z'
+updatedAt: '2026-09-26T17:39:19.263Z'

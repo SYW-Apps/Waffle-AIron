@@ -1,0 +1,30 @@
+kind: value-object
+id: project_family_problem
+name: ProjectFamilyProblem
+description: >-
+  A fact about the family's identities that no single project can see alone: two projects of one
+  family resolving to one id, or a project resolving to none. Reported, never judged — the
+  project-identity rule turns it into PROJECT_ID_AMBIGUOUS.
+subsystem: sdd_core
+fields:
+  - name: kind
+    type: string
+    description: id-collision | no-id.
+    optional: false
+  - name: id
+    type: string
+    description: The id two or more projects resolve to, for an id-collision.
+    optional: true
+  - name: projects
+    type: string[]
+    description: The namespaces of the projects concerned ('' is the bound root).
+    optional: false
+  - name: detail
+    type: string
+    description: >-
+      What is wrong, in words a finding can quote, including where each id came from (declared,
+      mount alias, or name).
+    optional: false
+methods: []
+createdAt: '2026-09-26T17:39:43.662Z'
+updatedAt: '2026-09-26T17:43:22.485Z'

@@ -149,11 +149,37 @@ methods:
     description: >-
       Forward to spec_tree_portal.resolveProjectExports: the project's resolved L0 export table with
       the problems met resolving it, which the export-tables rule judges.
-    signature: 'resolveProjectExports(): ResolvedExportTable'
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
     returns: ResolvedExportTable
+    params:
+      - name: project
+        type: string
+        description: The namespace of a member project; omitted for the bound root
+        optional: true
+    guarantees:
+      - idempotent
+  - name: projectFamily
+    description: 'Forward to the core portal: the project graph of the current scan, for the family rules.'
+    signature: 'projectFamily(): ProjectFamily'
+    returns: ProjectFamily
     params: []
+    guarantees:
+      - idempotent
+  - name: exportUsage
+    description: >-
+      Forward to the core portal: one project's references into another, mapped onto the producer's
+      public names or not.
+    signature: 'exportUsage(consumer: string, producer: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's namespace in the family graph
+      - name: producer
+        type: string
+        description: The producer's namespace in the family graph
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T16:10:50.218Z'
+updatedAt: '2026-09-26T17:44:34.374Z'

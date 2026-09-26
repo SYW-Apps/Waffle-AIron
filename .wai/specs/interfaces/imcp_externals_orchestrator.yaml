@@ -1,0 +1,39 @@
+id: imcp_externals_orchestrator
+name: MCP Externals Orchestrator Interface
+description: >-
+  Contract for the MCP tool workflows over the bound project's outward world: external-surface
+  discovery, the externals pin and the externals status report.
+component: mcp_externals_orchestrator
+methods:
+  - name: listInterfaces
+    description: >-
+      The sdd_list_external_interfaces tool workflow: read the project's consumable external
+      surfaces (parent family, siblings, foreign imports) with origin, provenance, and freshness
+      verdicts, and shape the tool response.
+    signature: 'listInterfaces(): ExternalSurfaceEntry[]'
+    returns: ExternalSurfaceEntry[]
+  - name: pin
+    description: >-
+      The sdd_pin_externals tool workflow: pin the bound project's declared externals (the named
+      aliases, else all) through the surfaces adapter and shape the tool response — one outcome per
+      alias, with its unexported references. A tree-scoped write: under a narrowed credential it
+      pins the bound child, and a producer outside the request's reach is reported unreachable,
+      never read.
+    signature: 'pin(aliases?: string[]): ExternalPin[]'
+    returns: ExternalPin[]
+    params:
+      - name: aliases
+        type: string[]
+        description: The aliases to pin; all when omitted
+        optional: true
+  - name: status
+    description: >-
+      The sdd_get_externals_status tool workflow: read each declared external's pin against its live
+      producer through the surfaces adapter and shape the tool response; what cannot be compared is
+      EXTERNAL_CHECK_UNAVAILABLE. A tree-scoped read.
+    signature: 'status(): ExternalStatus[]'
+    returns: ExternalStatus[]
+    params: []
+status: complete
+createdAt: '2026-09-26T17:50:42.455Z'
+updatedAt: '2026-09-26T17:51:27.509Z'

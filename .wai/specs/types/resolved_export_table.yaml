@@ -7,7 +7,9 @@ description: >-
 fields:
   - name: owner
     type: string
-    description: A subsystem id, or the system name for the project table.
+    description: >-
+      A subsystem id; for a project table, the system name of the bound root, or the mount namespace
+      of a member project (the mount subsystem is the spec its findings anchor to).
     optional: false
     key: primary
   - name: level
@@ -28,4 +30,4 @@ fields:
 methods: []
 sourcePath: src/models/exports.ts
 createdAt: '2026-09-26T16:08:00.499Z'
-updatedAt: '2026-09-26T16:08:00.501Z'
+updatedAt: '2026-09-26T17:40:41.284Z'

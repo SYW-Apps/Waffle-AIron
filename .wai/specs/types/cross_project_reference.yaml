@@ -1,0 +1,49 @@
+kind: value-object
+id: cross_project_reference
+name: CrossProjectReference
+description: >-
+  One reference that leaves the project that makes it. In stage 2 references are still the
+  loader-qualified ids of the old namespaced forms, so a reference is cross-project when the project
+  that owns the referring spec differs from producerOf(target). The positions counted: a component's
+  dependsOn; a narrative call, register or dispatch step's targetComponent (with its targetMethod,
+  or its capability); an intent method's declared `calls`; a Portal dispatch-table binding; a
+  listener's mounts; a subsystem lifecycle entry; an `auth.from: component:` source; an L1
+  publicInterfaces re-export (`from`, `component`, `typeDef`); and a type named by a field, param or
+  return. Not counted: `owns` (a pattern never owns across a subsystem, let alone a project),
+  trustedLinks (judged by TRUSTED_LINK_CROSSES_PROJECT), L0 re-exports (judged by the export
+  tables), and a reference whose producer is unknown (it climbs above the scan, and the verdict
+  comes through the parent).
+subsystem: sdd_core
+fields:
+  - name: specId
+    type: string
+    description: The qualified id of the referring spec.
+    optional: false
+  - name: position
+    type: string
+    description: >-
+      dependsOn | call | register | dispatch | calls | dispatch-table | mounts | lifecycle | auth |
+      reexport | type.
+    optional: false
+  - name: target
+    type: string
+    description: 'The qualified id the reference names: a component, a subsystem (a re-export source) or a type.'
+    optional: false
+  - name: member
+    type: string
+    description: >-
+      The contract method it reaches (call, register, calls, dispatch-table, lifecycle), or
+      `capability:<name>` for a dispatch step; absent for a reference to the component or type as a
+      whole.
+    optional: true
+  - name: consumer
+    type: string
+    description: The namespace of the project that owns the referring spec.
+    optional: false
+  - name: producer
+    type: string
+    description: The namespace of the project the reference lands in.
+    optional: false
+methods: []
+createdAt: '2026-09-26T17:40:27.050Z'
+updatedAt: '2026-09-26T17:43:23.967Z'

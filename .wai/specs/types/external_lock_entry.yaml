@@ -1,0 +1,32 @@
+kind: value-object
+id: external_lock_entry
+name: ExternalLockEntry
+description: >-
+  What `wairon externals pin` recorded for one alias in .wai/externals.lock.yaml: which producer it
+  pinned, where the snapshot is, the snapshot's content digest, and the digest of every member the
+  consumer's references use, so a later status says stale only when something used changed.
+subsystem: sdd_surfaces
+fields:
+  - name: project
+    type: string
+    description: The producer's project id at pin time.
+    optional: false
+  - name: snapshot
+    type: string
+    description: 'The snapshot path, project-relative: .wai/externals/<alias>.yaml.'
+    optional: false
+  - name: digest
+    type: string
+    description: sha256:… over the snapshot's content with provenance stripped (SurfaceSnapshot.contentDigest).
+    optional: false
+  - name: used
+    type: Map<string, Map<string, string>>
+    description: >-
+      Public name → member → sha256:… (SurfaceSnapshot.memberDigest). A member is a method name,
+      `capability:<name>` or `type`; a public name the consumer only depends on maps to an empty
+      member map. Empty for a producer outside the family: no stage-2 reference reaches it.
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-26T17:46:57.120Z'
+updatedAt: '2026-09-26T17:46:57.123Z'

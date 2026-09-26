@@ -1,0 +1,20 @@
+id: project_family_index
+name: Project Family Index
+description: >-
+  Read face of the spec repository for the project graph. It projects the roots the Spec Index's
+  scan read into one node per project (namespace, effective id, name, parent, mount alias,
+  directory, members, and its declared externals bound to their producers), an owner for every spec
+  id, every reference that leaves the project making it, the relative-form references authors wrote,
+  and the family's identity problems (two projects resolving to one id, a project resolving to
+  none). The projection is memoized on the scan and dropped with it, so it is never stale. It
+  depends on the Spec Index of the same Repository — the sanctioned exceptional case of an Index
+  projecting another Index, never in a cycle — because the scan already walked every mount; a second
+  walk would duplicate state the Spec Index holds.
+subsystem: sdd_core
+componentType: Index
+owns: []
+dependsOn:
+  - spec_index
+status: design
+createdAt: '2026-09-26T17:40:58.525Z'
+updatedAt: '2026-09-26T17:40:58.541Z'

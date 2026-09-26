@@ -408,14 +408,17 @@ methods:
         onFalseStep: 14
       - stepNumber: 14
         description: >-
-          Classify the called tool: a read when its name starts with sdd_get_ or sdd_validate_, or
-          when it is one of the explicitly listed read tools — sdd_list_external_interfaces and the
-          topology reads listAgents, getAgent, listDomains, validateTopology and getProjectConfig —
-          requiring project:read; ANY other tool — the explicit write prefixes
-          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_/sdd_rename_),
+          Classify the called tool: a read when its name starts with sdd_get_ or sdd_validate_
+          (sdd_get_externals_status among them), or when it is one of the explicitly listed read
+          tools — sdd_list_external_interfaces and the topology reads listAgents, getAgent,
+          listDomains, validateTopology and getProjectConfig — requiring project:read; ANY other
+          tool — the explicit write prefixes
+          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_/sdd_rename_/sdd_pin_),
           AND any unrecognized or newly added name — is treated as a write requiring project:write
           (fail closed: an unknown tool never falls through to read-level gating, and a rename tool
-          added later is a write by its prefix rather than by a hand-kept list)
+          added later is a write by its prefix rather than by a hand-kept list). Every explicit read
+          and every explicit write prefix declares scope tree, so sdd_pin_externals and
+          sdd_get_externals_status act on the bound (possibly narrowed) tree
         type: local
       - stepNumber: 15
         description: >-
@@ -474,4 +477,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-18T19:33:41.262Z'
+updatedAt: '2026-09-26T17:50:07.671Z'

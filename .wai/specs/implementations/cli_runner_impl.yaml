@@ -662,8 +662,9 @@ methods:
         outcome: listed
       - stepNumber: 8
         description: >-
-          List the project's external surfaces (parent family, siblings, foreign imports) with
-          origin and freshness
+          Print a deprecation line (`wairon surface externals` is deprecated; use `wairon externals
+          list` and `wairon externals status`), then list the project's external surfaces (parent
+          family, siblings, foreign imports) with origin and freshness
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: listExternalInterfaces
@@ -674,7 +675,10 @@ methods:
         type: return
         outcome: externals listed
       - stepNumber: 10
-        description: Pin the chaining parent's family and sibling surfaces into this chained child
+        description: >-
+          Print a deprecation line (`wairon surface pin` is deprecated; declare the parent or
+          sibling under `externals` in .wai/project.yaml and use `wairon externals pin`), then pin
+          the chaining parent's family and sibling surfaces into this chained child
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: pinFamilySurfaces
@@ -2569,6 +2573,64 @@ methods:
         type: return
         outcome: reported
     detail: full
+  - name: runExternals
+    narrative:
+      - stepNumber: 1
+        description: Route on the externals action
+        type: switch
+        'on': action
+        cases:
+          - value: pin
+            step: 2
+          - value: status
+            step: 4
+          - value: list
+            step: 6
+        defaultStep: 8
+      - stepNumber: 2
+        label: pin
+        description: Pin the named aliases, else every declared external
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: pinExternals
+      - stepNumber: 3
+        description: >-
+          Print one line per alias — pinned, unchanged, unresolved or unreachable, with the
+          used-name count and each unexported reference (export it from the producer's L0 to pin it)
+          — or the JSON answer
+        type: return
+        outcome: pinned
+      - stepNumber: 4
+        label: status
+        description: Read each external's status against its live producer
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: getExternalsStatus
+      - stepNumber: 5
+        description: >-
+          Print the status table — per alias: source, pinned, reachable, stale, drifted, then each
+          used member's state, with EXTERNAL_CHECK_UNAVAILABLE and its reason on what could not be
+          compared — or the JSON answer; staleness never fails the command
+        type: return
+        outcome: status reported
+      - stepNumber: 6
+        label: list
+        description: List the declared externals
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listExternals
+      - stepNumber: 7
+        description: >-
+          Print the table — alias, producer id, source kind and relation, audience, pinned digest or
+          the problem — or the JSON answer
+        type: return
+        outcome: listed
+      - stepNumber: 8
+        label: unknown
+        description: Unknown externals action
+        type: throw
+        error: UnknownExternalsActionError
+    detail: full
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -2584,4 +2646,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-26T15:27:25.450Z'
+updatedAt: '2026-09-26T17:50:57.460Z'

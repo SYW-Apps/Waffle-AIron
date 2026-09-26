@@ -13,6 +13,20 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: listExternalInterfaces
+  - name: pinExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward the pin to the surface-exchange subsystem's published portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: pinExternals
+  - name: getExternalsStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward the status read to the surface-exchange subsystem's published portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: getExternalsStatus
 status: complete
 createdAt: '2026-07-24T18:14:33.463Z'
-updatedAt: '2026-09-25T20:49:28.738Z'
+updatedAt: '2026-09-26T17:49:45.167Z'

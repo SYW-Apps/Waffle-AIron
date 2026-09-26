@@ -1,0 +1,56 @@
+kind: value-object
+id: project_node
+name: ProjectNode
+description: >-
+  One project root of the family the scan read: the bound root, or a chained member at any depth.
+  Keyed by its mount namespace, because two projects may (wrongly) resolve to one id and the graph
+  must still tell them apart.
+subsystem: sdd_core
+fields:
+  - name: namespace
+    type: string
+    description: >-
+      The project's mount namespace: '' for the bound root, else the qualified id of the subsystem
+      that mounts it (e.g. billing, billing::ledger). Every spec the project declares is qualified
+      under it.
+    optional: false
+    key: primary
+  - name: id
+    type: string
+    description: >-
+      The effective project id: project_config.effectiveId(mountAlias) — declared, else the mount
+      alias for a chained member, else the name slug. Absent when none can be made.
+    optional: true
+  - name: idSource
+    type: string
+    description: 'declared | mount | name | none: where the id came from.'
+    optional: false
+  - name: name
+    type: string
+    description: The display name from project.yaml, absent when the root has no readable configuration.
+    optional: true
+  - name: parent
+    type: string
+    description: The namespace of the project that mounts this one; absent for the bound root.
+    optional: true
+  - name: mountAlias
+    type: string
+    description: >-
+      The local id of the mounting subsystem — the alias the parent uses for this member; absent for
+      the bound root.
+    optional: true
+  - name: directory
+    type: string
+    description: The project's root directory, absolute.
+    optional: false
+  - name: members
+    type: string[]
+    description: The namespaces of the projects this one mounts directly.
+    optional: false
+  - name: externals
+    type: ResolvedExternal[]
+    description: The project's declared externals, each bound to its producer (empty when none are declared).
+    optional: false
+methods: []
+createdAt: '2026-09-26T17:39:52.264Z'
+updatedAt: '2026-09-26T17:43:21.026Z'

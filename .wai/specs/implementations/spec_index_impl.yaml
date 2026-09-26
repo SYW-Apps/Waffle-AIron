@@ -245,6 +245,47 @@ methods:
         description: Answer with the parsed spec, or null when no document is stored
         type: return
         outcome: loaded
+  - name: listProjectRoots
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Serve the workspace scan (cached while the tree's file signature holds): the scan walks
+          every spec directory of the bound root and each chained member, recording per root its
+          namespace, parent, mount alias and directory as it recurses
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: listTree
+      - stepNumber: 2
+        description: >-
+          At each root, read its own L0 document through the file store — a member's L0 is recorded
+          on its root, never merged into the index, whose L0 stays the bound root's
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: >-
+          Qualify the member L0's export entries into the member's namespace the way the loader
+          qualifies an L1 re-export (`from` against the namespace the member declares its subsystems
+          in, `component`, `interface` and `typeDef` against that source's namespace)
+        type: local
+      - stepNumber: 4
+        description: >-
+          Record the root's configuration, read through the configuration bound at that root — the
+          per-root binding the scan already reads the root's specs folder through — and add the
+          root's .wai/project.yaml to the scan's freshness signature
+        type: local
+      - stepNumber: 5
+        description: >-
+          Record the ids of every spec the root's files declared (a mount subsystem merged with its
+          realization belongs to the root it mounts), and every reference the root's files wrote as
+          `super::…` or leading `::`, with its position and what it qualified to, before
+          qualification erases the form
+        type: local
+      - stepNumber: 6
+        description: Answer the recorded roots, bound root first
+        type: return
+        outcome: ScannedProjectRoot[]
+    detail: full
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-25T21:53:06.009Z'
+updatedAt: '2026-09-26T17:40:52.666Z'

@@ -1,0 +1,24 @@
+kind: value-object
+id: external_declaration
+name: ExternalDeclaration
+description: >-
+  One `externals` entry of project.yaml as written: the value under an alias key. `billing: {}`
+  declares the producer whose id is the alias; `crm: { project: crm }` names the producer id
+  explicitly; `ledger: { project: acme.ledger, source: { path: ../ledger } }` also says where to
+  find it. A producer id with a dot does not fit the alias grammar, so it needs an explicit alias.
+subsystem: sdd_core
+fields:
+  - name: project
+    type: string
+    description: The producer's project id; defaults to the alias.
+    optional: true
+  - name: source
+    type: ExternalSource
+    description: >-
+      An explicit place to find the producer; without one it is found through the family (parent,
+      members, siblings).
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-26T17:39:15.516Z'
+updatedAt: '2026-09-26T17:39:15.518Z'

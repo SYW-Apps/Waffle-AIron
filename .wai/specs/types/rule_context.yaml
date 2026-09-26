@@ -153,10 +153,26 @@ fields:
   - name: exportTables
     type: ResolvedExportTable[]
     description: >-
-      The resolved export tables — one per loaded subsystem, then the project's L0 table — gathered
-      by the validator through the core adapter, so the export-tables rule judges the resolver's
-      problems without resolving anything itself. Absent on a candidate run, which judges one
-      component and no tables.
+      The resolved export tables — one per loaded subsystem, then the bound root's L0 table, then
+      each member project's L0 table — gathered by the validator through the core adapter, so the
+      export-tables rule judges the resolver's problems without resolving anything itself. Absent on
+      a candidate run.
+    optional: true
+  - name: projectFamily
+    type: ProjectFamily
+    description: >-
+      The project graph of the run's scan, gathered by the validator through the core adapter: nodes
+      with their bound externals, owners, cross-project references, authored relative references and
+      identity problems. The family rules (project-boundaries, reference-forms,
+      external-declarations, and the family half of project-identity) judge it without I/O. Absent
+      on a candidate run.
+    optional: true
+  - name: exportUsages
+    type: ExportUsage[]
+    description: >-
+      For every (consumer, producer) pair the graph's cross-project references connect, those
+      references mapped onto the producer's public names; the unexported ones are
+      EXTERNAL_NOT_EXPORTED's facts. Absent on a candidate run.
     optional: true
 methods:
   - name: isComponentDraft
@@ -314,4 +330,4 @@ methods:
       rule that accuses
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-26T16:14:46.472Z'
+updatedAt: '2026-09-26T17:45:17.363Z'

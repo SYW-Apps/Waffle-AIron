@@ -1,0 +1,39 @@
+id: mcp_externals_orchestrator_impl
+name: MCP Externals Orchestrator Implementation
+description: >-
+  The external-surface tool workflows in src/mcp/server.ts: each reads or pins through the surfaces
+  adapter and shapes the tool response.
+contract: imcp_externals_orchestrator
+sourcePath: src/mcp/server.ts
+methods:
+  - name: listInterfaces
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the external-surface discovery entries through the surfaces adapter and shape the
+          tool response
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listExternalInterfaces
+    symbol: listExternalInterfaces
+  - name: pin
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Pin the declared externals through the surfaces adapter and shape the tool response: the
+          outcomes as structured content, with a one-line summary per alias
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: pinExternals
+  - name: status
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the externals status through the surfaces adapter and shape the tool response: the
+          statuses as structured content, with a one-line summary per alias
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: getExternalsStatus
+status: complete
+createdAt: '2026-09-26T17:50:42.456Z'
+updatedAt: '2026-09-26T17:51:27.644Z'

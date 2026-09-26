@@ -606,15 +606,19 @@ methods:
         endStep: 5
       - stepNumber: 4
         description: >-
-          Read the root's stored surface snapshots under .wai/surfaces: a missing directory holds
-          none, and a malformed file is skipped rather than aborting the read. Read locally: the
-          snapshot files are modelled in sdd_surfaces, which sdd_core must not depend on
+          Read the root's consumed contracts: its stored surface snapshots under .wai/surfaces, its
+          pinned external snapshots under .wai/externals and its .wai/externals.lock.yaml. A missing
+          directory or lock holds none, and a malformed file is skipped rather than aborting the
+          read. Read locally: the snapshot and lock files are modelled in sdd_surfaces, which
+          sdd_core must not depend on
         type: local
       - stepNumber: 5
         description: >-
-          Reduce each snapshot to its canonical content key: provenance (stateId, generatedAt,
-          origin) stripped and the rest canonicalized, so re-pinning an unchanged contract never
-          moves the key
+          Reduce each to its canonical content key: a snapshot with its provenance (stateId,
+          generatedAt, origin) stripped and the rest canonicalized, so re-pinning an unchanged
+          contract never moves the key; the lock canonicalized whole, since its digests and `used`
+          map are what a verdict consults. Each key names its kind (surface, external, lock) so
+          equal content in two kinds never collides
         type: local
       - stepNumber: 6
         description: Return every root's content keys
@@ -1588,4 +1592,4 @@ methods:
         targetMethod: resolveVariantGuidance
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T15:27:20.161Z'
+updatedAt: '2026-09-26T17:44:23.076Z'

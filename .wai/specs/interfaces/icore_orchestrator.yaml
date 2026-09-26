@@ -293,9 +293,10 @@ methods:
       - idempotent
   - name: consumedContractInputs
     description: >-
-      The consumed contract inputs a verdict can consult, as canonical content keys: this root's
-      stored surface snapshots and every chained mount's. The gate identity covers them, so swapping
-      a pinned contract invalidates a lock.
+      The consumed contract inputs a verdict can consult, as canonical content keys: this root's and
+      every chained mount's stored surface snapshots (.wai/surfaces), pinned external snapshots
+      (.wai/externals) and externals lock (.wai/externals.lock.yaml). The gate identity covers them,
+      so swapping a pinned contract or re-pinning a changed `used` map invalidates a lock.
     signature: 'consumedContractInputs(): string[]'
     returns: string[]
     params: []
@@ -678,4 +679,4 @@ methods:
         type: VariantDef[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T15:27:01.233Z'
+updatedAt: '2026-09-26T17:44:24.549Z'

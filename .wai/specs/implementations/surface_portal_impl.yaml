@@ -60,6 +60,27 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: pinFamilySurfaces
+  - name: pinExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward pinExternals to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: pinExternals
+  - name: getExternalsStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward getExternalsStatus to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: getExternalsStatus
+  - name: listExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward listExternals to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listExternals
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-09-12T12:38:11.029Z'
+updatedAt: '2026-09-26T17:49:07.511Z'
