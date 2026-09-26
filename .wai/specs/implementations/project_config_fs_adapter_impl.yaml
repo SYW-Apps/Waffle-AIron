@@ -1,6 +1,12 @@
 id: project_config_fs_adapter_impl
 name: Project Config FS Adapter Implementation
-description: File I/O for `.wai/project.yaml` at the bound project root; raw documents only.
+description: >-
+  File I/O for `.wai/project.yaml` at the bound project root: raw documents in, and every document
+  write an edit of the file's YAML node tree that keeps its comments. Uses the `yaml` package (v2),
+  the comment-preserving document model, which nothing else in the tree uses. It is named here and
+  not bound under `technologies`: the binding's leakage check matches the token `yaml`, which is
+  also the file format every spec names, so a binding would report the format as a leaked vendor
+  across the tree.
 contract: iproject_config_fs_adapter
 sourcePath: src/config/project-config.ts
 methods:
@@ -13,9 +19,26 @@ methods:
   - name: writeDocument
     narrative: []
     intent: >-
-      Serializes the raw document to YAML and writes it to the bound project's `project.yaml`,
-      replacing the file and creating the `.wai` directory when missing. It is a plain file
-      replacement, not an atomic rename, so an interrupted write can leave a truncated file.
+      With no project.yaml yet, serializes the document and writes it fresh, creating the `.wai`
+      directory when missing. Otherwise reads the file's text and parses it into a
+      comment-preserving YAML document with the `yaml` package (v2) — the node tree, not a plain
+      object; the js-yaml parser the reads use drops comments — then reconciles the tree to the
+      given document recursively. A mapping key present on both sides recurses into its value and
+      keeps its node, comments and position. A scalar whose value changed is replaced in place, in
+      its own quoting, keeping its node's comments. A key the document no longer holds is deleted. A
+      key it newly holds is inserted at its place in the schema's field order relative to the keys
+      already present — directly after the nearest preceding schema field the mapping holds, else
+      directly before the nearest following one — so a new `id` lands next to `name`, not at the
+      end; a key with no schema neighbour present (an unknown key, or a record entry such as a new
+      `externals` alias) is appended after the existing keys. A sequence is reconciled by position:
+      equal items keep their nodes, changed items are reconciled in place, surplus items are
+      deleted, new items appended. Each difference is spliced into the source text at its node's
+      range; untouched nodes are never re-serialized, so every line the change does not touch stays
+      byte-identical (re-serializing the whole document would re-fold every folded scalar). The
+      result is parsed again and compared with the given document: a difference is refused with an
+      error naming the project root and nothing is written. Otherwise the text replaces the file,
+      keeping the file's line endings. A plain replacement, not an atomic rename, like every write
+      of this adapter.
   - name: documentExists
     narrative: []
     intent: >-
@@ -35,4 +58,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:21:50.998Z'
-updatedAt: '2026-09-26T10:59:40.465Z'
+updatedAt: '2026-09-26T22:01:20.110Z'

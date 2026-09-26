@@ -136,7 +136,7 @@ describe('project config store', () => {
     expect(readDoc(root).extensions.packs).toEqual([{ name: 'beta' }]);
   });
 
-  it('keeps the document key order and appends new keys', () => {
+  it('keeps the document key order and inserts new keys at their place in the schema order (F82)', () => {
     const root = tempRoot();
     writeDoc(root, [
       'name: demo',
@@ -150,9 +150,12 @@ describe('project config store', () => {
 
     projectConfigRepositoryAt(root).setProjectType('frontend-reactive');
 
+    // The keys already there keep their order; each new one lands after the
+    // nearest preceding schema field the file holds (projectType after name,
+    // execution and paths after rules), not at the end.
     expect(Object.keys(readDoc(root))).toEqual([
-      'name', 'futureTopLevel', 'schemaVersion', 'targets', 'rules', 'createdAt', 'updatedAt',
-      'projectType', 'execution', 'paths',
+      'name', 'projectType', 'futureTopLevel', 'schemaVersion', 'targets', 'rules', 'execution', 'paths',
+      'createdAt', 'updatedAt',
     ]);
   });
 

@@ -51,4 +51,14 @@ export {
   backfillChainedSubprojectConfigs,
   diagnoseProjectPacks,
   pinInstalledPacksAsSelections,
+  // The chaining migration's reads and its two configuration writes.
+  resolveChainingParent,
+  projectFamily,
+  exportUsage,
+  resolveProjectExports,
+  resolveSubsystemExports,
+  loadSpec,
+  approvalRecord,
+  setId as setProjectId,
+  declareExternal,
 } from '../../core/index.js';

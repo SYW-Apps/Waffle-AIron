@@ -1,0 +1,45 @@
+kind: value-object
+id: chaining_migration_finding
+name: ChainingMigrationFinding
+description: >-
+  Something the chaining migration will not do for a person: an ambiguity it reports rather than
+  guesses, a reference it cannot migrate by adding an export, or a condition that makes apply
+  refuse. The report prints each with the project it concerns.
+subsystem: sdd_cli
+fields:
+  - name: kind
+    type: string
+    description: >-
+      id-ambiguous (no usable id, a planned id outside the grammar, or one that collides with
+      another project's) | id-locked (a member keeps the id its lock approved, which differs from
+      its mount's subsystem id — changing it is the stage-6 rename) | declaration-orphaned (an
+      existing external finds its producer by an id the producer is about to leave) |
+      target-unpublished (the referenced item is not in its subsystem's L1 table, so no L0 re-export
+      can follow it) | name-taken (the item's default public name already binds another target in
+      the producer) | narrowed (the item is exported, but under a narrowing that does not declare
+      the member reached) | subsystem-reference (an L1 re-export that names another project's
+      subsystem wholesale) | alias-invalid | alias-taken | project-absent (a project the plan must
+      write has no configuration) | family-partial (the climb stopped at a hop out of reach).
+    optional: false
+  - name: project
+    type: string
+    description: The namespace of the project it concerns ('' is the family's top root).
+    optional: false
+  - name: detail
+    type: string
+    description: What is wrong and what a person does about it, in words the report prints.
+    optional: false
+  - name: reference
+    type: CrossProjectReference
+    description: The reference concerned, for a finding about one.
+    optional: true
+  - name: blocking
+    type: boolean
+    description: >-
+      Whether apply refuses because of it (project-absent, family-partial); every other finding only
+      leaves its own piece undone.
+    optional: false
+methods: []
+sourcePath: src/commands/chaining-migration.ts
+createdAt: '2026-09-26T21:11:50.175Z'
+updatedAt: '2026-09-26T21:57:03.192Z'

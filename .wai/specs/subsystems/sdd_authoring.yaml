@@ -9,10 +9,14 @@ description: >-
   subsystem and not a component inside sdd_core: the seam calls sdd_core to persist and
   sdd_validator to judge, and a component that sits above two peers cannot live inside one of them
   without inverting an edge and declaring a coupling that does not exist. It holds no state: specs
-  are loaded and saved through sdd_core, candidates are judged through sdd_validator. Mechanical
-  writes — status promotion at lock, layout normalization, migrations, doctor repairs — stay on
-  sdd_core directly, ungated by construction, which is what lets a spec authored before a rule
-  existed still load and still be repaired.
+  are loaded and saved through sdd_core, candidates are judged through sdd_validator. The line
+  between gated and ungated is what a write says, not who makes it. A write that restates what the
+  tree already holds — status promotion at lock, layout normalization, renames and relocations, a
+  doctor repair that retypes or drops a field without adding design — stays on sdd_core directly,
+  ungated by construction, which is what lets a spec authored before a rule existed still load and
+  still be repaired. A write that authors NEW spec content goes through this seam whoever makes it,
+  a migration included: the chaining migration's L0 export entries are design a person would
+  otherwise have written, and they are judged like it.
 parentSystem: Waffle-AIron
 publicInterfaces:
   - type: Custom
@@ -25,4 +29,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-09-18T21:40:20.265Z'
-updatedAt: '2026-09-18T21:50:55.457Z'
+updatedAt: '2026-09-26T21:28:03.779Z'

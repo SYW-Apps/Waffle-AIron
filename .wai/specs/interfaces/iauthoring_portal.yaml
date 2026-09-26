@@ -1,12 +1,14 @@
 id: iauthoring_portal
 name: Authoring Portal Interface
 description: >-
-  The published spec writes, shared by every access path: every write an author makes — a whole spec
-  restated, a delta, a method move, a delete — enters here, and only mechanical writes (status
-  promotion at lock, layout normalization, migrations, doctor repairs, renames, subproject
-  relocation) stay on sdd_core. A write that violates an intrinsic rule throws with the rule codes
-  and nothing reaches disk, so the remedy is to fix the arguments and call again rather than to
-  repair a saved spec. A write that changes nothing writes nothing and says so.
+  The published spec writes, shared by every access path: every write that authors spec content — a
+  whole spec restated, a delta, a method move, a delete, and a migration's new content such as the
+  chaining migration's L0 export entries — enters here. Only writes that restate what the tree
+  already holds (status promotion at lock, layout normalization, renames, subproject relocation,
+  doctor repairs that add no design) stay on sdd_core. A write that violates an intrinsic rule
+  throws with the rule codes and nothing reaches disk, so the remedy is to fix the arguments and
+  call again rather than to repair a saved spec. A write that changes nothing writes nothing and
+  says so.
 component: authoring_portal
 methods:
   - name: updateSpecGated
@@ -88,4 +90,4 @@ methods:
         description: The spec id
 status: complete
 createdAt: '2026-09-18T21:41:27.211Z'
-updatedAt: '2026-09-24T22:21:46.235Z'
+updatedAt: '2026-09-26T21:28:09.020Z'

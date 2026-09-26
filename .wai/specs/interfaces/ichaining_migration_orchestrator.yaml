@@ -1,0 +1,44 @@
+id: ichaining_migration_orchestrator
+name: Chaining Migration Orchestrator Interface
+description: >-
+  Plan first, applied on confirmation. plan() writes nothing, ever; apply(plan) writes only what the
+  plan names, in a fixed order, and is idempotent — applying the same plan again, or planning again
+  after it, changes nothing. Neither locks: the writes stale the approval of every project they
+  touch, and the report names them for their humans to re-lock.
+component: chaining_migration_orchestrator
+methods:
+  - name: plan
+    description: >-
+      Plan the chaining migration of the bound project's family, from the highest root in reach: (a)
+      each defaulted id to declare — a member its mount's subsystem id, the top root its effective
+      id, any project the id its own lock approved; (b) each stage-1 family pin converted to an
+      externals entry for the parent, each sibling pin marked superseded; (c) for every
+      cross-project reference that reaches another project at anything but a public name, the
+      producer's missing L0 re-export entry, the consumer's external, and a pin. Computed only from
+      the project graph, export usage, the export tables and the specs the references name. An
+      ambiguity is reported, never guessed. Writes nothing.
+    signature: 'plan(): ChainingMigrationPlan'
+    returns: ChainingMigrationPlan
+    params: []
+    guarantees:
+      - idempotent
+  - name: apply
+    description: >-
+      Apply a plan. Refuses before the first write when the plan is blocked (the family was partial,
+      or a project it writes is absent) or when a planned L0 edit fails the gate's dry run. Then
+      writes in order — ids, L0 re-export entries through the gated authoring seam, externals
+      declarations, and last the pins — each under its project's binding. Every write is idempotent:
+      a declared id or external equal to the planned one, and an L0 entry already present, change
+      nothing; a declared id or alias that DIFFERS is refused, never overwritten. Answers what was
+      written and which projects must be re-locked; it locks nothing.
+    signature: 'apply(plan: ChainingMigrationPlan): ChainingMigrationReport'
+    returns: ChainingMigrationReport
+    params:
+      - name: plan
+        type: ChainingMigrationPlan
+        description: The plan the person confirmed, as plan() answered it
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-26T21:12:29.184Z'
+updatedAt: '2026-09-26T21:57:08.690Z'

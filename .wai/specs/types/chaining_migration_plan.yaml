@@ -1,0 +1,48 @@
+kind: value-object
+id: chaining_migration_plan
+name: ChainingMigrationPlan
+description: >-
+  The chaining migration of one family, planned and not yet applied: computed only from what the
+  project graph and export usage already report, with one entry per project that has something to
+  write and every finding it will not decide for a person. `doctor --report chaining` prints it;
+  `doctor --fix` prints it, asks, and applies it.
+subsystem: sdd_cli
+fields:
+  - name: familyRoot
+    type: string
+    description: >-
+      The directory of the highest root the climb reached: the family's top, whose graph the plan
+      was computed from.
+    optional: false
+  - name: whole
+    type: boolean
+    description: >-
+      Whether the climb reached the family's true top; false when a hop above was out of reach, so a
+      producer above it could need writes the plan cannot see.
+    optional: false
+  - name: projects
+    type: ProjectMigration[]
+    description: >-
+      The projects the plan writes, top root first, then members in the graph's walk order; a
+      project with nothing to write is left out.
+    optional: false
+  - name: findings
+    type: ChainingMigrationFinding[]
+    description: Every ambiguity reported and every reference the plan cannot migrate, in the order found.
+    optional: false
+methods:
+  - name: isEmpty
+    signature: 'isEmpty(): boolean'
+    returns: boolean
+    description: >-
+      True when no project has anything to write: no id, no export entry, no external and no pin.
+      Findings do not count — a plan can be empty and still report.
+  - name: blocked
+    signature: 'blocked(): boolean'
+    returns: boolean
+    description: >-
+      True when a finding refuses apply: the family is partial, or a project the plan writes is
+      absent.
+sourcePath: src/commands/chaining-migration.ts
+createdAt: '2026-09-26T21:12:04.535Z'
+updatedAt: '2026-09-26T21:56:59.835Z'

@@ -1,0 +1,33 @@
+kind: value-object
+id: planned_external
+name: PlannedExternal
+description: >-
+  One `externals` declaration the chaining migration adds to a consumer project: the producer it
+  reaches, under an alias equal to the producer's id, so the declaration is `{}`.
+subsystem: sdd_cli
+fields:
+  - name: alias
+    type: string
+    description: >-
+      The alias key: the producer's planned id, which fits [a-z0-9-_]+ (a dotted id is reported
+      instead — its alias is a person's choice).
+    optional: false
+    key: primary
+  - name: project
+    type: string
+    description: The producer's project id — equal to the alias.
+    optional: false
+  - name: producer
+    type: string
+    description: The producer's namespace in the family graph.
+    optional: false
+  - name: reason
+    type: string
+    description: >-
+      reference | legacy-pin: the consumer's references cross into the producer, or the consumer
+      held a stage-1 family pin of its parent that this declaration replaces.
+    optional: false
+methods: []
+sourcePath: src/commands/chaining-migration.ts
+createdAt: '2026-09-26T21:11:44.325Z'
+updatedAt: '2026-09-26T21:57:05.666Z'

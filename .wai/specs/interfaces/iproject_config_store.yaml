@@ -18,8 +18,10 @@ methods:
   - name: write
     description: >-
       Write the configuration. Known fields come from the given value; every key of the current
-      document the schema does not know is carried over verbatim, so a hand-added or newer key
-      survives any write.
+      document the schema does not know is carried over verbatim; and the write is an edit of the
+      file, not a rewrite — every comment, the order of the keys and the quoting of what did not
+      change survive, so a registry save keeps the debt register's carried-group comments byte for
+      byte. A configuration that fails the schema is refused before anything is written.
     signature: 'write(config: ProjectConfig): void'
     returns: void
     params:
@@ -78,4 +80,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-09-13T10:50:08.266Z'
-updatedAt: '2026-09-26T10:59:24.613Z'
+updatedAt: '2026-09-26T21:10:18.279Z'

@@ -13,6 +13,13 @@ methods:
         type: call
         targetComponent: authoring_portal
         targetMethod: writeSpec
+  - name: updateSpecGated
+    narrative:
+      - stepNumber: 1
+        description: Call updateSpecGated on the authoring portal
+        type: call
+        targetComponent: authoring_portal
+        targetMethod: updateSpecGated
 status: complete
 createdAt: '2026-09-25T17:35:11.409Z'
-updatedAt: '2026-09-25T20:49:37.591Z'
+updatedAt: '2026-09-26T21:11:30.977Z'

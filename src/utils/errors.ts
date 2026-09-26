@@ -51,3 +51,27 @@ export class BundleNotFoundError extends WaironError {
     this.name = 'BundleNotFoundError';
   }
 }
+
+/**
+ * Thrown by `wairon doctor` for flags that do not combine: `--report` prints a
+ * plan and writes nothing, so it never goes with `--fix`, and `chaining` is the
+ * one section it knows.
+ */
+export class DoctorOptionsError extends WaironError {
+  constructor(detail: string) {
+    super(`wairon doctor: ${detail}`);
+    this.name = 'DoctorOptionsError';
+  }
+}
+
+/**
+ * Thrown when the chaining migration refuses to apply a plan, before its first
+ * write: the family was only partly in reach, or a project the plan writes has
+ * no configuration. `reasons` names each blocking finding.
+ */
+export class ChainingMigrationRefusedError extends WaironError {
+  constructor(readonly reasons: string[]) {
+    super(`The chaining migration was not applied; nothing was written:\n${reasons.map((r) => `  - ${r}`).join('\n')}`);
+    this.name = 'ChainingMigrationRefusedError';
+  }
+}

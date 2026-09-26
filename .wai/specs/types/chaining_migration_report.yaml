@@ -1,0 +1,34 @@
+kind: value-object
+id: chaining_migration_report
+name: ChainingMigrationReport
+description: >-
+  The answer of applying a chaining migration, shaped after `wairon host doctor`'s MigrationReport {
+  findings, applied }: the plan it applied, whether it wrote, every file written in write order, and
+  the projects whose approval the writes staled — each needs its human to re-lock.
+subsystem: sdd_cli
+fields:
+  - name: plan
+    type: ChainingMigrationPlan
+    description: The plan applied, findings included.
+    optional: false
+  - name: applied
+    type: boolean
+    description: True when apply wrote; false when the plan was empty and nothing was written.
+    optional: false
+  - name: written
+    type: string[]
+    description: >-
+      Every file apply changed, in write order (project.yaml ids, L0 system specs, project.yaml
+      externals, pinned snapshots and externals locks); a write that changed nothing is not listed.
+    optional: false
+  - name: relock
+    type: string[]
+    description: >-
+      The directories of the projects whose lock the writes left stale: a producer whose L0 changed
+      (its spec digests moved), a consumer whose externals and pins changed (gate inputs). Nothing
+      is locked on anyone's behalf.
+    optional: false
+methods: []
+sourcePath: src/commands/chaining-migration.ts
+createdAt: '2026-09-26T21:12:09.954Z'
+updatedAt: '2026-09-26T21:57:03.979Z'

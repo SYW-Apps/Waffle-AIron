@@ -25,7 +25,11 @@ narrative step is now refused where it used to be stripped (item 13). Thirteen
 `sdd_*` tools now declare an `outputSchema`, which changes what a conforming MCP
 client expects back from them (item 14). The library surface narrows too:
 `@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
-(item 4). Nothing here is purely additive, so `[minor]` would understate it.
+(item 4). Stage 2 adds three more: a hosted landscape entry with no audience now
+defaults to `instance` rather than `public`, a legacy L0 entry sourced from a chained
+member binds only what that member exports from its own L0, and `doctor --fix` asks
+before it applies the chaining migration (`--yes` in a script). Nothing here is purely
+additive, so `[minor]` would understate it.
 
 ### A third severity: `notice`
 
@@ -229,6 +233,79 @@ parent or sibling under `externals` and use `wairon externals` / `sdd_pin_extern
 - **Every lock reads stale once**: the gate identity's consumed-contract keys now name
   their kind (`surface:`, `external:`, `lock:`), and the rule sequence gained three
   rules. Re-lock.
+
+### The chaining migration, and a project.yaml save that keeps its comments
+
+Stage 2c of the chained-subsystems work: the migration that takes an existing
+chained family onto the stage-2 model, plan first.
+
+**`wairon doctor --report chaining`** prints, per project of the family, what the
+migration would write, and writes nothing. It climbs from the bound project to the
+highest root in reach and plans from what the project graph and the export usage
+already report:
+
+- **ids:** each project that declares no `id` gets one — a member its mount's
+  subsystem id, the top root its name slug, and any project whose lock recorded an
+  id keeps that one (a member whose approved id differs from its mount id is
+  reported `id-locked`; moving it is the stage-6 rename, so re-locking never
+  deadlocks on `PROJECT_ID_CHANGED`);
+- **L0 entries:** for every reference that reaches another project at anything but
+  a public name, the producer gains `{ from: <subsystem>, component | typeDef,
+  audience: project }` (no `as`: the public name is the item's own id) — only for an
+  item its subsystem already publishes at L1;
+- **externals:** the consumer declares the producer under its id (`alias: {}`);
+- **pins:** each new or affected alias is pinned once everything else is written;
+- **stage-1 pins:** a member's family pin converts to an external for the parent;
+  its sibling pins are listed as superseded and **stay on disk** until stage 3,
+  because stage-1 resolution still reads them.
+
+What it will not decide it reports instead (`id-ambiguous`, `target-unpublished`,
+`name-taken`, `narrowed`, `subsystem-reference`, `alias-invalid`, `alias-taken`,
+`declaration-orphaned`, …), with totals at the end.
+
+**`wairon doctor --fix`** runs the migration after its existing repairs (after the
+chained-config backfill and the spec repairs, before the MCP registration): it prints
+the plan and applies it only once confirmed. `--yes` answers for a non-interactive
+run; with neither a terminal nor `--yes`, nothing of it is written. The L0 entries go
+through the gated authoring seam, dry-run first, so a refused entry stops the run
+before anything is written. A family only partly in reach, or a project the plan must
+write that has no `project.yaml`, refuses the whole apply before its first write. The
+migration is idempotent and **locks nothing**: it names every project whose lock the
+writes staled. `--report` never combines with `--fix`.
+
+A plain `wairon doctor` adds a `Chaining: N pending` line when something is planned or
+reported.
+
+**project.yaml keeps its comments (F82).** Every configuration save — packs,
+profiles, the execution tier, and now the migration's `setId` / `declareExternal` —
+used to re-serialize the file and drop every comment in it (this repository keeps its
+debt register in those comments). A save is now an edit of the file: keys that did not
+change keep their text byte for byte, a changed value is replaced in place in its own
+quoting, a removed key is deleted, and a new key lands at its place in the schema's
+field order (a new `id` after `schemaVersion`, before `name`). The edited text is read
+back and must equal what was meant, or the write is refused and nothing is written.
+Line endings are kept.
+
+**Fixed on the way.** From the family root, a member project's L0 re-export without
+`as` was named by its qualified id (`billing::invoice-portal`, reported
+`EXPORT_INVALID`); it is now named by the item's local id. A type reference written
+through its subsystem (`operations::route-id`) now lands on that type's `typeDef`
+export, so `EXTERNAL_NOT_EXPORTED` stops firing once the type is exported.
+
+**Upgrading.**
+
+- **New runtime dependency: `yaml` (v2).** Only the project-configuration file
+  adapter uses it, for the comment-preserving save; everything else still reads and
+  writes YAML with `js-yaml`. `npm install` picks it up.
+- **To migrate a chained family,** run `wairon doctor --report chaining` to see the
+  plan, then `wairon doctor --fix` (or `--fix --yes` in CI and scripts) to apply it,
+  then `wairon lock` in each project the output names. Run it from any project of the
+  family; it plans the whole family from its top.
+- **A project that declares no `id` gets one** from `doctor --fix`, even outside a
+  family (its name slug, or the id its lock recorded).
+- **A configuration save no longer appends new keys at the end** of `project.yaml`;
+  it places them in schema order. A script that compares the file's text after a save
+  will see that difference.
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 

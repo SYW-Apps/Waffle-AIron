@@ -1,0 +1,50 @@
+kind: value-object
+id: planned_export
+name: PlannedExport
+description: >-
+  One L0 re-export entry the chaining migration adds to a producer project, so references another
+  project makes into it land on a public name. One entry per source subsystem and item, shared by
+  every consumer that needs it; written as `{ from, component | typeDef, audience: project }` with
+  no `as`, so its public name is the item's default.
+subsystem: sdd_cli
+fields:
+  - name: from
+    type: string
+    description: >-
+      The source subsystem's local id in the producer: the subsystem that owns the item and already
+      publishes it at L1.
+    optional: false
+  - name: component
+    type: string
+    description: The re-exported component's local id, for a component reference.
+    optional: true
+  - name: typeDef
+    type: string
+    description: The re-exported type's local id, for a type reference.
+    optional: true
+  - name: publicName
+    type: string
+    description: >-
+      The public name the entry binds: the item's default (its id), checked free in the producer's
+      table when planned.
+    optional: false
+  - name: audience
+    type: string
+    description: >-
+      Always project: the family sees `project`, and a migration never widens a surface beyond the
+      family that already used it.
+    optional: false
+  - name: consumers
+    type: string[]
+    description: The namespaces of the projects whose references the entry serves, sorted.
+    optional: false
+  - name: members
+    type: string[]
+    description: >-
+      The members the consumers reach through the entry (contract methods, `capability:<name>`, or
+      `type`), sorted — what the report prints and the pin's `used` map will hold.
+    optional: false
+methods: []
+sourcePath: src/commands/chaining-migration.ts
+createdAt: '2026-09-26T21:11:40.727Z'
+updatedAt: '2026-09-26T21:57:04.789Z'

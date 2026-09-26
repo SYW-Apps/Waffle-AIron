@@ -477,6 +477,112 @@ methods:
     signature: 'pinInstalledPacksAsSelections(): string[]'
     returns: string[]
     params: []
+  - name: resolveChainingParent
+    description: >-
+      Forward to spec_tree_portal.resolveChainingParent: the bound root's chaining parent (parent
+      root and mounting subsystem id), or null for a top root and when the bound request may not
+      read above its root.
+    signature: 'resolveChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+    params: []
+  - name: projectFamily
+    description: 'Forward to spec_tree_portal.projectFamily: the project graph of the bound root''s scan.'
+    signature: 'projectFamily(): ProjectFamily'
+    returns: ProjectFamily
+    params: []
+    guarantees:
+      - idempotent
+  - name: exportUsage
+    description: >-
+      Forward to spec_tree_portal.exportUsage: one project's references into another mapped onto the
+      producer's public names (used) or not (unexported).
+    signature: 'exportUsage(consumer: string, producer: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's namespace in the family graph
+      - name: producer
+        type: string
+        description: The producer's namespace in the family graph
+    guarantees:
+      - idempotent
+  - name: resolveProjectExports
+    description: >-
+      Forward to spec_tree_portal.resolveProjectExports: a project's resolved L0 export table, the
+      bound root's or a member's.
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: project
+        type: string
+        description: The namespace of a member project; omitted for the bound root
+        optional: true
+    guarantees:
+      - idempotent
+  - name: resolveSubsystemExports
+    description: 'Forward to spec_tree_portal.resolveSubsystemExports: one subsystem''s resolved L1 export table.'
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem
+    guarantees:
+      - idempotent
+  - name: loadSpec
+    description: 'Forward to spec_tree_portal.loadSpec: one spec of the named kind by id, or null.'
+    signature: >-
+      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
+      | ImplementationSpec | TypeSpec | null
+    returns: >-
+      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
+      null
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed)
+  - name: approvalRecord
+    description: >-
+      Forward to approval_portal.approvalRecord: the lock record a project root carries (with the
+      project id it approved), or null.
+    signature: 'approvalRecord(root?: string): LockRecord | null'
+    returns: LockRecord | null
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+  - name: setProjectId
+    description: >-
+      Forward to project_config_portal.setId: declare the bound project's id. Returns whether it
+      wrote.
+    signature: 'setProjectId(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The project id to declare
+    guarantees:
+      - idempotent
+  - name: declareExternal
+    description: >-
+      Forward to project_config_portal.declareExternal: declare one external of the bound project.
+      Returns whether it wrote.
+    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias key
+      - name: declaration
+        type: ExternalDeclaration
+        description: The value under the alias
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T15:27:06.274Z'
+updatedAt: '2026-09-26T21:11:21.196Z'

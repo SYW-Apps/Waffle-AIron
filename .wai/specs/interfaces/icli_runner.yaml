@@ -269,11 +269,19 @@ methods:
   - name: runDoctor
     description: >-
       `wairon doctor`: a health check of the project (initialization and configuration, spec
-      conformance, generated guides and skills, the lock, MCP registration). With --fix it applies
-      the repairs it can: regenerating stale guides, context and skills, registering the MCP server,
-      and retiring Specialists into Orchestrators.
-    signature: 'runDoctor(options: { fix?: boolean }): Promise<void>'
+      conformance, the chaining migration still pending, generated guides and skills, the lock, MCP
+      registration). With --fix it applies the repairs it can — regenerating stale guides, context
+      and skills, registering the MCP server, retiring Specialists into Orchestrators — and then the
+      chaining migration, which it prints and applies only after confirmation (--yes answers it for
+      a non-interactive run; without either nothing of it is written). With --report chaining it
+      prints the chaining plan per project and changes nothing; that never combines with --fix.
+    signature: 'runDoctor(options?: DoctorOptions): Promise<void>'
     returns: Promise<void>
+    params:
+      - name: options
+        type: DoctorOptions
+        description: '--fix, --report <section> and --yes; none given is a plain health check'
+        optional: true
   - name: runLockCheck
     description: >-
       `wairon lock-check`: the merge gate. Ask the lock adapter whether the design in this working
@@ -489,4 +497,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-26T17:50:58.357Z'
+updatedAt: '2026-09-26T21:14:54.590Z'
