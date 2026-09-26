@@ -3,6 +3,7 @@
 # in the wrapper's doctrine, so plain `wairon validate` (and the MCP server's
 # sdd_validate_tree) enforce it — no wrapper binary required.
 schemaVersion: 1.0.0
+id: flowops-demo
 name: flowops-demo
 projectType: backend
 description: Example project whose specs are enforced by injected FlowOps doctrine.
