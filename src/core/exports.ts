@@ -576,7 +576,10 @@ export function resolveProjectTable(
     if (e.component !== undefined || e.typeDef !== undefined || e.interface !== undefined) {
       const bound = bindNamed(world, owner, source.subsystem, sourceTable,
         { component: e.component, interface: e.interface, typeDef: e.typeDef },
-        () => e.as ?? e.id ?? e.interface ?? e.component ?? e.typeDef!,
+        // The default public name is the item's own LOCAL id: a member's L0 is
+        // read with its ids qualified into its mount, and its entry names the
+        // item as the member wrote it.
+        () => e.as ?? e.id ?? localName(e.interface ?? e.component ?? e.typeDef!),
         false, problems);
       if (!bound) return;
       checkPublicName(bound.publicName, owner, problems);
@@ -754,7 +757,11 @@ function landingEntries(
     });
   }
   if (ref.position === 'type' || ref.position === 'reexport') {
-    const typed = visible.filter((e) => e.kind === 'type' && (e.typeDef === ref.target || matchTypeRef(ref.target, e.typeDef ?? '')));
+    // A type reference names the type through its subsystem (`operations::route-id`),
+    // which is longer than the exported type's own id, so it is also matched
+    // against the type as its declaring subsystem qualifies it.
+    const typed = visible.filter((e) => e.kind === 'type' && (e.typeDef === ref.target
+      || matchTypeRef(ref.target, e.typeDef ?? '') || ref.target === `${e.source}::${localName(e.typeDef ?? '')}`));
     if (typed.length > 0 || ref.position === 'type') return typed;
   }
   return [];
