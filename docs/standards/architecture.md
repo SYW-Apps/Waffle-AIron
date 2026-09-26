@@ -140,6 +140,12 @@ standard.
 - **Index** is a read-only **projection over a Store**: it shares the Store's
   per-entry references. It may depend on its Store, an Adapter for cold reads, and
   pure logic. It **never** depends on a Registry — read and write paths are decoupled.
+  As an **exceptional case**, when one Index's projection is itself worth
+  re-presenting another way, a derived Index may depend on another Index — only
+  one **owned by the same Repository**, and never in a cycle of Index edges
+  (`ARCHITECTURE_VIOLATION_INDEX_DEP` otherwise). It is not a way to chain lookups:
+  reach for it only when a second parse of the Store would duplicate state the
+  first Index already holds (wairon's export tables over its scanned specs).
 - **Query** computes reads over its own Repository's Store: it depends **only on
   its Store, a backend Adapter or pure logic**, and it lives only inside a
   Repository (`UNOWNED_QUERY`).
@@ -470,7 +476,7 @@ can sit in either class, which is why the class is a field and not a variant.
 | Variant | Base | Class | Shape | Discipline (guidance-enforced) |
 |---|---|---|---|---|
 | `arbiter` | Orchestrator | `pure` | subject + supplied world → deterministic verdict + reasons | NO I/O, no state deps — the caller gathers the world (companion shape: read logic or a workflow gathers, the arbiter rules); no clock/randomness; `idempotent` where it holds |
-| `projector` | Orchestrator | `pure` when handed its source, `read` when it loads it | source model → self-contained derived view (snapshot, graph, artifact, digest) | ≤1 read facade or parameters-only; recomputed per call, owns nothing, writes nothing. NOT an Index: an Index is a maintained read model over an owned Store |
+| `projector` | Orchestrator | `pure` when handed its source, `read` when it loads it | source model → self-contained derived view (snapshot, graph, artifact, digest) | ≤1 read facade or parameters-only; recomputed per call, owns nothing, writes nothing. NOT an Index: an Index is a maintained read model over an owned Store (or, exceptionally, over another Index of the same Repository) |
 | `composer` | Orchestrator | `pure` when handed its values, `read` when it loads them | templates + values → authored text/file map | returns content, never writes or executes it; degrades gracefully on missing optional inputs |
 | `codec` | Orchestrator | `pure` | format ↔ format, bidirectional | pure whole-value translation; inbound half validates + safety-checks; both directions in one component so the round-trip stays testable |
 | `gateway` | Portal | — | a Portal that authenticates, authorizes, validates or rate-limits before dispatching | calls that logic before it dispatches; declares its inbound auth in `auth`; writes still route through Orchestrators |
@@ -607,6 +613,10 @@ indexed field — propagate from the Store to its Indexes (an internal change-
 propagation mechanism, *not* the domain Observer block). The **Registry** writes
 only the Store; it never updates Indexes. (Where a language can't share references
 safely, the binding appendix gives the equivalent.)
+
+A derived Index — the exceptional Index over another Index of the same
+Repository (§3) — projects that Index's references rather than the Store's,
+and is dropped and rebuilt with it, so the same holds for it.
 
 A coherent Index defined this way is **never stale**. A deliberately **evicting /
 TTL cache** is a different thing — it is for *external or expensive-to-compute*

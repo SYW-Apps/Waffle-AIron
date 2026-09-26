@@ -36,8 +36,8 @@ neither `valid` nor `validate --ci` ever fails on one.
 
 - **Opt in per code.** `rules.sddRuleSeverity` accepts `notice`, so a team can
   soften a warning to a notice, or raise a code later shipped as a notice to a
-  warning or an error. No built-in rule defaults to notice yet; the stage-2 export
-  checks will be the first.
+  warning or an error. The project-identity and export-table checks below are
+  the first built-in codes that default to it.
 - **Allows and the debt register cover notices**, and a draft context never turns
   anything into a notice (the downgrade is at most `warning`).
 - **The lock record counts notices** beside errors and warnings.
@@ -47,6 +47,88 @@ neither `valid` nor `validate --ci` ever fails on one.
   switches on severity should handle the third value.
 - **Fixed on the way:** the legacy hosted validate view read a field
   `sdd_validate_tree` never sends, so it reported every tree as clean.
+
+### A project has an id, and every level exports like a module
+
+Stage 2a of the chained-subsystems work: the declarations the cross-project model
+rests on. It changes files and adds findings, not verdicts — every new code except
+three is a notice.
+
+**The project id.** `project.yaml` gains `id`, a slug of `[a-z0-9-_.]` that starts
+and ends with a letter or digit. It is the project's identity; `name` stays the
+display name.
+
+- **Who writes it.** `wairon init`, provisioning and hosted project creation (the
+  hosted project id) declare it, and a chained child — created, externalized,
+  backfilled or completed by `generate` — is identified by its mount's subsystem id.
+  No ordinary save writes one for you: a default can be wrong, so only deliberate
+  writers set it.
+- **A project without one** answers to its name slugified and gets
+  `PROJECT_ID_DEFAULTED` (**notice** — the first built-in code that defaults to one).
+  A name that yields no slug, or a declared id that breaks the grammar, is
+  `PROJECT_ID_AMBIGUOUS` (warning).
+- **The lock records it** as `projectId`, locally and hosted. An id that later
+  differs from the one the lock approved is `PROJECT_ID_CHANGED` (error): restore it,
+  or rename deliberately and re-lock. A lock taken before this release records no id
+  and judges nothing.
+
+**Export tables.** A subsystem's `publicInterfaces` and the L0 `publicInterfaces` are
+now export tables, the way a module's exports are: a level re-exports what a level
+below already declares instead of redeclaring it.
+
+- **Entry forms, the same at L1 and L0.** An own item as today; a named re-export
+  `{ from: payments, component: payment_portal, as: payments }` (optionally narrowed
+  with `interface`); a type exported by name `{ from: payments, typeDef: money }`; and
+  a wildcard `{ from: shipping }` that re-exports everything that subsystem exports.
+  `type` and `details` are optional on a re-export, which inherits its target's. The
+  public name is `as`, else the narrowed interface, else the component or type id.
+- **Existing L0 entries keep their names.** A legacy `{ subsystem, component, id }`
+  reads as `{ from: subsystem, component, as: id }`, one without a source takes it
+  from its component's owner, and one naming only an interface takes that interface's
+  component — so no published name, snapshot entry or OpenAPI tag moves.
+- **One resolver, `export_index`.** Each table is resolved once per scan: every
+  re-export followed to its canonical target, an explicit or own entry shadowing a
+  name a wildcard brings in, a wildcard cycle resolving to the union. The surface
+  projector, the validator, the canvas and the hosted landscape all read it.
+- **Findings** (new rule `export-tables`): `EXPORT_ID_DUPLICATE` (error — one public
+  name bound to two targets; the name is left out), `EXPORT_CYCLE` (error for a named
+  chain that never reaches its item, warning for a wildcard cycle), `EXPORT_INVALID`
+  (notice — a missing source or item, an item the source does not export, a type the
+  level does not own, a public name outside `[a-z0-9-_]+`) and `EXPORT_UNCONSUMABLE`
+  (notice — a re-exported component that is neither a Portal nor an Observer). No rule
+  checked L0 entries before. An invalid entry is still bound where it can be, so no
+  existing surface loses an entry until stage 4 makes these errors.
+- **A re-export is a name, not a licence.** A `dependsOn` across subsystems still has
+  to target the component its owning subsystem publishes, and the `PUBLIC_INTERFACE_*`
+  rules judge own entries only.
+- **Snapshots** record each entry's `componentType` and narrowed `interface`, carry
+  the producer's `projectId` beside `projectName` (as does `sdd_list_external_interfaces`),
+  list exported types apart in `exportedTypes`, and gather the type closure by
+  qualified id, so two subsystems' same-named types no longer collide.
+- **MCP.** `sdd_set_public_interfaces` and `sdd_add_subsystem` accept `from`,
+  `typeDef` and `as`, with `type`/`details` optional on a re-export.
+- **Doctrine: an Index may project another Index** of the same Repository, never in a
+  cycle — the exceptional case the export tables are (`ARCHITECTURE_VIOLATION_INDEX_DEP`
+  still fires across Repositories and on an Index cycle). The architecture standard
+  and the sdd-architect skill say so.
+
+**Upgrading.**
+
+- **Hosted landscape: an entry that declares no audience is now `instance`**, the
+  projector's default, where the landscape used to treat it as `public` (external).
+  Such an entry stops being visible at partner or external distance; declare
+  `audience: partner` or `external` where that reach was meant.
+- **The landscape lists what resolves.** Its snapshot is built from the resolved
+  export table, so an L0 entry that names no source, or a component that does not
+  exist, is no longer listed (validate reports it as `EXPORT_INVALID`). Its method,
+  endpoint and type names now come from the exported contract rather than from lists
+  authored inline on the L0 entry, which are no longer read.
+- **A pinned family surface reads stale once.** A snapshot projected now carries
+  `componentType`, `interface` and `projectId`, so a pin taken before this release no
+  longer equals the parent's projection. Re-pin (`wairon surface pin`).
+- **A cross-tree reference to a renamed export** matches its public name only: once a
+  snapshot records a stereotype, an entry whose id is neither its component nor its
+  interface no longer answers to its backing component's name.
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 
