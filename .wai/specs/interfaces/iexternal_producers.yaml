@@ -17,6 +17,6 @@ methods:
     signature: 'resolveDeclared(): ExternalBinding[]'
     returns: ExternalBinding[]
     params: []
-status: design
+status: complete
 createdAt: '2026-09-26T17:43:52.033Z'
-updatedAt: '2026-09-26T17:43:52.041Z'
+updatedAt: '2026-09-26T18:43:57.739Z'

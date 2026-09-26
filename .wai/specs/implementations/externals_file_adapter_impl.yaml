@@ -36,6 +36,6 @@ methods:
     intent: >-
       Removes .wai/externals/<alias>.yaml, reports whether a file existed, and removes an emptied
       externals directory.
-status: design
+status: complete
 createdAt: '2026-09-26T18:11:39.138Z'
-updatedAt: '2026-09-26T18:11:56.906Z'
+updatedAt: '2026-09-26T18:44:02.189Z'

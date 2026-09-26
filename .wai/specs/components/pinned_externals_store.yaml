@@ -11,6 +11,6 @@ owns: []
 dependsOn:
   - externals_file_adapter
 durability: read-through
-status: design
+status: complete
 createdAt: '2026-09-26T17:47:45.022Z'
-updatedAt: '2026-09-26T18:12:33.007Z'
+updatedAt: '2026-09-26T18:43:56.287Z'

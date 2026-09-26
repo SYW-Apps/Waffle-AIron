@@ -47,6 +47,6 @@ methods:
       - name: alias
         type: string
     effect: write
-status: design
+status: complete
 createdAt: '2026-09-26T17:47:50.203Z'
-updatedAt: '2026-09-26T18:12:33.802Z'
+updatedAt: '2026-09-26T18:43:59.941Z'

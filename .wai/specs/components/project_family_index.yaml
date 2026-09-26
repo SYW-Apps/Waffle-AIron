@@ -15,6 +15,6 @@ componentType: Index
 owns: []
 dependsOn:
   - spec_index
-status: design
+status: complete
 createdAt: '2026-09-26T17:40:58.525Z'
-updatedAt: '2026-09-26T18:13:25.144Z'
+updatedAt: '2026-09-26T18:43:53.681Z'

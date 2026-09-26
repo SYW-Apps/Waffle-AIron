@@ -51,5 +51,6 @@ fields:
       project declares another id, or two family projects answering to the id.
     optional: true
 methods: []
+sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:40.205Z'
-updatedAt: '2026-09-26T17:43:21.855Z'
+updatedAt: '2026-09-26T18:32:26.614Z'

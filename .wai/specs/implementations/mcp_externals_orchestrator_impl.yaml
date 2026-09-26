@@ -25,6 +25,7 @@ methods:
         type: call
         targetComponent: mcp_surfaces_adapter
         targetMethod: pinExternals
+    symbol: pinExternals
   - name: status
     narrative:
       - stepNumber: 1
@@ -34,6 +35,7 @@ methods:
         type: call
         targetComponent: mcp_surfaces_adapter
         targetMethod: getExternalsStatus
+    symbol: getExternalsStatus
 status: complete
 createdAt: '2026-09-26T17:50:42.456Z'
-updatedAt: '2026-09-26T17:51:27.644Z'
+updatedAt: '2026-09-26T18:37:47.492Z'

@@ -52,5 +52,6 @@ fields:
     description: The project's declared externals, each bound to its producer (empty when none are declared).
     optional: false
 methods: []
+sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:52.264Z'
-updatedAt: '2026-09-26T18:12:39.002Z'
+updatedAt: '2026-09-26T18:32:25.836Z'

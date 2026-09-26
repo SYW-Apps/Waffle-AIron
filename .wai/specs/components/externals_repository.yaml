@@ -11,6 +11,6 @@ owns:
   - pinned_externals_store
   - externals_file_adapter
 dependsOn: []
-status: design
+status: complete
 createdAt: '2026-09-26T18:11:59.426Z'
-updatedAt: '2026-09-26T18:11:59.443Z'
+updatedAt: '2026-09-26T18:43:55.488Z'

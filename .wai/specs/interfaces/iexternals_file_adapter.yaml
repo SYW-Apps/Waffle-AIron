@@ -45,6 +45,6 @@ methods:
     params:
       - name: alias
         type: string
-status: design
+status: complete
 createdAt: '2026-09-26T18:11:39.137Z'
-updatedAt: '2026-09-26T18:11:55.779Z'
+updatedAt: '2026-09-26T18:43:58.487Z'

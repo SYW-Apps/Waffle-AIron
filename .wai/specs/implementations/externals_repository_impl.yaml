@@ -11,6 +11,7 @@ methods:
         type: call
         targetComponent: pinned_externals_store
         targetMethod: readLock
+    exportedVia: externalsRepository
   - name: saveLock
     narrative:
       - stepNumber: 1
@@ -18,6 +19,7 @@ methods:
         type: call
         targetComponent: pinned_externals_store
         targetMethod: writeLock
+    exportedVia: externalsRepository
   - name: readSnapshot
     narrative:
       - stepNumber: 1
@@ -25,6 +27,7 @@ methods:
         type: call
         targetComponent: pinned_externals_store
         targetMethod: readSnapshot
+    exportedVia: externalsRepository
   - name: saveSnapshot
     narrative:
       - stepNumber: 1
@@ -32,6 +35,7 @@ methods:
         type: call
         targetComponent: pinned_externals_store
         targetMethod: writeSnapshot
+    exportedVia: externalsRepository
   - name: removeSnapshot
     narrative:
       - stepNumber: 1
@@ -39,6 +43,7 @@ methods:
         type: call
         targetComponent: pinned_externals_store
         targetMethod: removeSnapshot
-status: design
+    exportedVia: externalsRepository
+status: complete
 createdAt: '2026-09-26T18:12:05.305Z'
-updatedAt: '2026-09-26T18:12:23.766Z'
+updatedAt: '2026-09-26T18:44:03.078Z'
