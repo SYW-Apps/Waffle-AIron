@@ -118,11 +118,16 @@ to the case nobody wrote down.
    A write's answer is what the *server* believes. `sdd_update_spec` returns a
    structured change report naming what actually moved — read it, because
    "nothing changed" and "everything changed" are different answers that used to
-   be the same sentence — and it sets `staleServer: true` (with a ⚠ STALE SERVER
-   banner) when the build on disk moved after the server started. That flag
-   exists because a stale process once silently replaced an entire `params` list
-   while reporting success. Restart the session when you see it, and open the
-   file either way: the report is evidence, the file is truth.
+   be the same sentence. When the build on disk moved after the server started,
+   every answer carries `staleServer: true` and a ⚠ STALE SERVER banner
+   (`sdd_get_status` leads with it). If the rebuild changed a spec or tool
+   schema, the server REFUSES every spec write and writes nothing
+   (`writesRefused: true`), because a stale process once silently replaced an
+   entire `params` list while reporting success; if only the build changed,
+   writes still go through under the warning. Either way only the human can
+   clear it, by reconnecting the server (`/mcp reconnect wairon`) — ask for
+   that, finish what needs no write, and list the spec writes still owed. Open
+   the file after every write: the report is evidence, the file is truth.
 3. **The lock is the human's signature, not a step in your task.**
    Never run `wairon lock`. Your work ends at "the tree validates" — say so and
    hand it over (`sdd-architect` carries the handoff wording). Locking on the

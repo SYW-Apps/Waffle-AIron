@@ -89,7 +89,7 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 222 files / 3784 tests |
+| `npx vitest run` | 234 files / 4061 tests |
 | `npx vitest run --config vitest.e2e.config.ts` | 7 files / 33 tests |
 | `npm run build` | clean |
 | `node dist/cli/index.js validate` | 0 errors, 0 warnings |
@@ -117,13 +117,23 @@ codes, and the suite is currently the only place that says so.
 
 ## A stale MCP server
 
-Every `sdd_*` write answers with `staleServer: true`, and a `⚠ STALE SERVER`
-banner on the text, when the build on disk changed after the server started —
-which is exactly what `npm run build` does mid-session. Restart the MCP session
-before editing specs further: a stale process can silently drop fields a newer
-schema introduced, and has. For a server old enough not to carry the flag, the
-tell is the shape of the answer: a current `sdd_update_spec` returns a structured
-change report naming what moved, an old one a single sentence.
+When the build on disk changed after the server started — which is exactly what
+`npm run build` does mid-session — every `sdd_*` answer carries
+`staleServer: true` and a `⚠ STALE SERVER` banner, and `sdd_get_status` leads
+with it. What happens to a write depends on what the rebuild changed:
+
+- **The spec or tool schemas changed** (the server compares its own schema
+  fingerprint with the one the build on disk computes): every spec write, dry
+  runs included, is REFUSED and writes nothing, and the answers carry
+  `writesRefused: true`. A stale process with old schemas silently drops the
+  fields a newer schema introduced, and has — three times.
+- **Only the build changed:** writes still go through, under the warning.
+
+Either way the cure is the human reconnecting the server
+(`/mcp reconnect wairon`). So author specs *before* a rebuild that changes a
+schema. For a server old enough not to carry the flag, the tell is the shape of
+the answer: a current `sdd_update_spec` returns a structured change report
+naming what moved, an old one a single sentence.
 
 ---
 

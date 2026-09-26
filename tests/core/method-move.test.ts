@@ -645,3 +645,63 @@ describe('moveMethods into a component with no contract yet', () => {
     expect(declared(root, 'iintake')).toEqual(['post', 'audit', 'close']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A moved entry keeps the file it is realized in.
+//
+// An implementation entry with no sourcePath of its own is realized in its
+// implementation's default file. Moved into an implementation that names a
+// DIFFERENT file, it used to take that file on silently — the spec now
+// claimed the method lived where no code of it was. It keeps its old file as
+// its own sourcePath instead, and the report says so.
+// ---------------------------------------------------------------------------
+
+describe('moveMethods keeps where a moved entry is realized', () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  /** books() with default files on both implementations. */
+  function booksWithFiles(intakeFile: string, archiveFile: string): string {
+    const dir = books();
+    const specs = path.join(dir, '.wai', 'specs', 'implementations');
+    for (const [file, sourcePath] of [['intake_impl.yaml', intakeFile], ['archive_impl.yaml', archiveFile]]) {
+      const at = path.join(specs, file);
+      writeYamlFile(at, { ...(readYamlFile(at) as object), sourcePath });
+    }
+    invalidateSpecCache();
+    return dir;
+  }
+
+  it('an entry realized by default in a different file keeps that file as its own, and the report says so', () => {
+    root = booksWithFiles('src/books/intake.ts', 'src/books/archive.ts');
+
+    const report = moveMethods('intake', 'archive', ['post', 'audit'], permissive);
+
+    expect(report.moved).toBe(true);
+    // audit named no file: it was realized in intake_impl's, and still is.
+    expect(method(root, 'archive_impl', 'audit').sourcePath).toBe('src/books/intake.ts');
+    // post named its own file already: nothing to keep.
+    expect(method(root, 'archive_impl', 'post').sourcePath).toBe('src/books/intake.ts');
+    expect(report.notices).toContain(
+      '"audit" keeps src/books/intake.ts as its own sourcePath: it was realized there by default, and '
+      + '"archive_impl" names src/books/archive.ts — moving a method is not moving its code.',
+    );
+    expect(report.notices.filter((n) => n.includes('keeps'))).toHaveLength(1);
+  });
+
+  it('an entry whose default file is the target\'s own changes nothing', () => {
+    root = booksWithFiles('src/books/shared.ts', 'src/books/shared.ts');
+
+    const report = moveMethods('intake', 'archive', ['audit'], permissive);
+
+    expect(report.moved).toBe(true);
+    expect(method(root, 'archive_impl', 'audit').sourcePath).toBeUndefined();
+    expect(report.notices.some((n) => n.includes('keeps'))).toBe(false);
+  });
+});

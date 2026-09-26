@@ -4322,6 +4322,9 @@ export class SpecWorkspace {
 
     const arriving: MethodSignature[] = [];
     const travelling: MethodImplementation[] = [];
+    // The file each travelling entry's implementation named as its default —
+    // what an entry without a sourcePath of its own is realized in today.
+    const realizedIn = new Map<string, string>();
 
     for (const contract of contracts.filter((i) => i.component === source.id)) {
       const leaving = contract.methods.filter((m) => methods.includes(m.name));
@@ -4341,6 +4344,7 @@ export class SpecWorkspace {
         const moving = impl.methods.filter((m) => methods.includes(m.name));
         if (moving.length === 0) continue;
         travelling.push(...cloneSpec(moving));
+        for (const entry of moving) if (impl.sourcePath) realizedIn.set(entry.name, impl.sourcePath);
         const kept = cloneSpec(impl);
         kept.methods = kept.methods.filter((m) => !methods.includes(m.name));
         this.stageMoveEdit(plan, 'implementation', impl.id, impl, kept);
@@ -4364,6 +4368,16 @@ export class SpecWorkspace {
 
     const targetImpl = implementations.find((i) => i.contract === receiving.id);
     if (travelling.length > 0 && targetImpl) {
+      // An entry that relied on its old implementation's default file would
+      // otherwise be realized, silently, in whatever file the target's
+      // implementation names. It keeps its file as its own instead.
+      for (const entry of travelling) {
+        const file = realizedIn.get(entry.name);
+        if (entry.sourcePath || !file || file === targetImpl.sourcePath) continue;
+        entry.sourcePath = file;
+        plan.notices.push(`"${entry.name}" keeps ${file} as its own sourcePath: it was realized there by default, and `
+          + `"${targetImpl.id}" names ${targetImpl.sourcePath ? targetImpl.sourcePath : 'no file'} — moving a method is not moving its code.`);
+      }
       this.stageMoveEdit(plan, 'implementation', targetImpl.id, targetImpl, {
         ...cloneSpec(targetImpl),
         methods: [...cloneSpec(targetImpl.methods), ...travelling],
