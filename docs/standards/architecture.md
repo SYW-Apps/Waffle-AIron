@@ -146,6 +146,10 @@ standard.
   (`ARCHITECTURE_VIOLATION_INDEX_DEP` otherwise). It is not a way to chain lookups:
   reach for it only when a second parse of the Store would duplicate state the
   first Index already holds (wairon's export tables over its scanned specs).
+  An Index that **scans** a tree of project roots may read the configuration of
+  the root it is walking, through that root's own binding — the same per-root
+  binding it already resolves that root's files through — and nothing else of
+  it (wairon's spec scan reads each root's `project.yaml` for the project graph).
 - **Query** computes reads over its own Repository's Store: it depends **only on
   its Store, a backend Adapter or pure logic**, and it lives only inside a
   Repository (`UNOWNED_QUERY`).

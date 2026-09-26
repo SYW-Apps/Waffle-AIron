@@ -293,7 +293,9 @@ function verdict(at: string): ValidationResult {
 /** Findings on whether a reference resolves, and on the edge it resolves to, as `CODE @specId` with `strip` removed. */
 function referenceFindings(res: ValidationResult, strip = ''): string[] {
   return res.issues
-    .filter((i) => /REFERENCE|UNRESOLVED|ENTRYPOINT|DISPATCH|CAPABILITY|CROSS_SUBSYSTEM/.test(i.code))
+    // A deprecated FORM is a notice about how a reference is written, not
+    // whether it resolves: the fixture's root-anchored `::` id is one on purpose.
+    .filter((i) => /REFERENCE|UNRESOLVED|ENTRYPOINT|DISPATCH|CAPABILITY|CROSS_SUBSYSTEM/.test(i.code) && i.code !== 'DEPRECATED_REFERENCE_FORM')
     .map((i) => `${i.code} @${strip && i.specId?.startsWith(strip) ? i.specId.slice(strip.length) : i.specId}`)
     .sort();
 }

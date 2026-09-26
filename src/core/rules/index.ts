@@ -241,6 +241,10 @@ export interface BuildContextOptions {
   projectIdentity?: ProjectIdentity;
   /** The resolved export tables (see RuleContext.exportTables); absent when none were gathered. */
   exportTables?: import('../../models/exports.js').ResolvedExportTable[];
+  /** The project graph of the run's scan (see RuleContext.projectFamily); absent on a candidate run. */
+  projectFamily?: import('../../models/project-family.js').ProjectFamily;
+  /** The export usage of every connected project pair (see RuleContext.exportUsages); absent on a candidate run. */
+  exportUsages?: import('../../models/exports.js').ExportUsage[];
   /** Snapshots each chained mount holds, keyed by mount namespace (see RuleContext.mountSurfaceSnapshots). */
   mountSurfaceSnapshots?: import('./types.js').MountSurfaceSnapshots[];
   /** Source-code model for structural conformance; empty when not built. */
@@ -799,6 +803,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     surfaceSnapshots,
     ...(opts.projectIdentity ? { projectIdentity: opts.projectIdentity } : {}),
     ...(opts.exportTables ? { exportTables: opts.exportTables } : {}),
+    ...(opts.projectFamily ? { projectFamily: opts.projectFamily } : {}),
+    ...(opts.exportUsages ? { exportUsages: opts.exportUsages } : {}),
     mountSurfaceSnapshots,
     codeModel: opts.codeModel ?? emptyCodeModel(),
     roundTripIssues: opts.roundTripIssues,

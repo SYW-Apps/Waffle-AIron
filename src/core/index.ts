@@ -62,6 +62,11 @@ export {
   // resolveProjectExports): passthrough reads of the spec repository.
   resolveSubsystemExports,
   resolveProjectExports,
+  // The project graph and the export usage (spec_tree_portal projectFamily /
+  // exportUsage): passthrough reads of the spec repository, whose graph is
+  // spec_loader.graph.
+  graph as projectFamily,
+  exportUsage,
   // Kind-generic access (spec_tree_portal loadSpec; spec_store_portal
   // saveSpec / deleteSpec / updateSpec / moveMethods), for a caller that holds
   // the kind as data — the authoring seam above all.
@@ -96,6 +101,10 @@ export {
   findLegacySpecFiles,
 } from './specs.js';
 export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile } from './specs.js';
+
+// spec_tree_portal resolveExternals: the bound project's declared externals,
+// each bound to its producer — a dispatch to the external-producers workflow.
+export { resolveDeclared as resolveExternals } from './external-producers.js';
 
 // Project provisioning and the chained-subproject wiring
 // (spec_maintenance_portal provisionProject … internalizeSubsystem;

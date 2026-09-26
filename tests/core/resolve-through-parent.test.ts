@@ -122,6 +122,15 @@ function errors(res: ValidationResult, stripPrefix = ''): string[] {
     .sort();
 }
 
+/**
+ * The stage-2 project-boundary notices: the kid reaches its parent's portal
+ * without declaring the parent as an external, and the parent exports nothing
+ * from its L0. They are notices that never fail a gate, and they are judged in
+ * tests/core/externals.test.ts — here the edge is "clean" at the verdict's level.
+ */
+const STAGE2_NOTICE = (i: { code: string; severity: string }): boolean =>
+  i.severity === 'notice' && (i.code === 'EXTERNAL_UNDECLARED' || i.code === 'EXTERNAL_NOT_EXPORTED');
+
 const PARENT_JUDGEMENT = [
   'CROSS_SUBSYSTEM_NON_ADAPTER @kid::k-orch',
   'CROSS_SUBSYSTEM_PRIVATE_ACCESS @kid::k-store-adapter',
@@ -149,7 +158,7 @@ describe('a chained child judged from its own root vs its parent', () => {
 
     expect(errors(fromParent)).toEqual(PARENT_JUDGEMENT);
     expect(fromParent.valid).toBe(false);
-    expect(fromParent.issues.filter((i) => i.specId === 'kid::k-adapter' && i.code !== 'UNUSED_COMPONENT')).toEqual([]);
+    expect(fromParent.issues.filter((i) => i.specId === 'kid::k-adapter' && i.code !== 'UNUSED_COMPONENT' && !STAGE2_NOTICE(i))).toEqual([]);
   });
 
   it('a child validated standalone reports every error its parent does', () => {
@@ -171,7 +180,7 @@ describe('a chained child judged from its own root vs its parent', () => {
 
     const fromChild = verdict(fam.kidDir);
 
-    expect(fromChild.issues.filter((i) => i.specId === 'k-adapter' && i.code !== 'UNUSED_COMPONENT')).toEqual([]);
+    expect(fromChild.issues.filter((i) => i.specId === 'k-adapter' && i.code !== 'UNUSED_COMPONENT' && !STAGE2_NOTICE(i))).toEqual([]);
   });
 });
 
@@ -288,7 +297,7 @@ describe('step 1b — a surface held inside a mount decides that mount\'s refere
 
   /** Any finding on crm-adapter beyond it being unused — it should have none. */
   function adapterNoise(res: ValidationResult, id: string): string[] {
-    return res.issues.filter((i) => i.specId === id && i.code !== 'UNUSED_COMPONENT').map((i) => i.code);
+    return res.issues.filter((i) => i.specId === id && i.code !== 'UNUSED_COMPONENT' && !STAGE2_NOTICE(i)).map((i) => i.code);
   }
 
   const SURFACE_VERDICT = [

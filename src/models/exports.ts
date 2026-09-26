@@ -9,6 +9,8 @@
 // `export … from` to its declaration. These are the shapes it answers with.
 // ---------------------------------------------------------------------------
 
+import type { CrossProjectReference } from './project-family.js';
+
 /**
  * One resolved entry of an export table: a public name bound to its canonical
  * target after every re-export has been followed.
@@ -47,7 +49,7 @@ export interface ResolvedExport {
 }
 
 /** The problem kinds the export resolver reports; the export-tables rule judges them. */
-export type ExportProblemKind = 'duplicate' | 'named-cycle' | 'wildcard-cycle' | 'invalid' | 'unconsumable';
+export type ExportProblemKind = 'duplicate' | 'named-cycle' | 'wildcard-cycle' | 'invalid' | 'unconsumable' | 'widens';
 
 /** A fact the export resolver met while resolving one table — reported, never judged. */
 export interface ExportProblem {
@@ -56,7 +58,7 @@ export interface ExportProblem {
   owner: string;
   /** The public name concerned, when there is one. */
   publicName?: string;
-  /** For a duplicate, the competing targets; for a cycle, the levels on the loop. */
+  /** For a duplicate, the competing targets; for a cycle, the levels on the loop; for a widening, the declared audience then the source export's. */
   targets?: string[];
   /** What is wrong, in words a finding can quote. */
   detail: string;
@@ -64,7 +66,7 @@ export interface ExportProblem {
 
 /** An export table after resolution, flattened, with the problems met on the way. */
 export interface ResolvedExportTable {
-  /** A subsystem id, or the system name for the project table. */
+  /** A subsystem id; for a project table, the bound root's system name or a member project's mount namespace. */
   owner: string;
   /** subsystem | project */
   level: 'subsystem' | 'project';
@@ -78,4 +80,32 @@ export const PUBLIC_NAME_RE = /^[a-z0-9_-]+$/;
 /** The canonical target a resolved export binds — two entries with the same key are one item. */
 export function exportTargetKey(e: Pick<ResolvedExport, 'kind' | 'component' | 'interface' | 'typeDef'>): string {
   return e.kind === 'type' ? `type:${e.typeDef}` : `component:${e.component}${e.interface ? `#${e.interface}` : ''}`;
+}
+
+/**
+ * export_use — one public name of a producer's project table that a
+ * consumer's references reach, and the members they reach on it: the key half
+ * of a lock's `used` map.
+ */
+export interface ExportUse {
+  publicName: string;
+  /** component | type */
+  kind: 'component' | 'type';
+  /** Contract method names, `capability:<name>`, or `type`; sorted, empty for a bare dependency. */
+  members: string[];
+}
+
+/**
+ * export_usage — what one project's references reach in another, mapped onto
+ * the producer's resolved project table.
+ */
+export interface ExportUsage {
+  /** The consumer's namespace. */
+  consumer: string;
+  /** The producer's namespace. */
+  producer: string;
+  /** The public names reached, sorted by name. */
+  used: ExportUse[];
+  /** The references that land on no public name the consumer may see. */
+  unexported: CrossProjectReference[];
 }
