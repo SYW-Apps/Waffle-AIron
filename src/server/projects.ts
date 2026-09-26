@@ -3,7 +3,7 @@ import * as path from 'path';
 import { aiPathsAt } from '../config/paths.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { listFilesRecursive } from '../utils/fs.js';
-import { assertContainedProjectPath } from './adapters/core.js';
+import { resolveContainedProjectPath } from './adapters/core.js';
 import type { HostedProjectRecord, Principal } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -213,7 +213,7 @@ export function resolveSubprojectMounts(
     }
     // Containment guard: the child dir must resolve strictly within the current
     // root, so a crafted mount can never escape the project's isolated tree.
-    root = assertContainedProjectPath(root, sub.projectPath);
+    root = resolveContainedProjectPath(root, sub.projectPath);
     at = `${at}${SUBPROJECT_SEPARATOR}${mount}`;
   }
   return root;
