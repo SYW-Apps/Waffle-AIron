@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as YAML from 'yaml';
 import { z } from 'zod';
 import { getProjectRoot } from '../utils/fs.js';
 import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
@@ -8,9 +9,12 @@ import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
 import {
   ProjectConfigSchema,
+  PROJECT_ID_RE,
+  EXTERNAL_ALIAS_RE,
   type ProjectConfig,
   type PackSelection,
   type ProjectProfileSelection,
+  type ExternalDeclaration,
 } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
@@ -52,6 +56,8 @@ export interface ProjectConfigRepository {
   markSelectionsBundled(bundled: PackSelection[]): void;
   pinGlobalPacksAsSelections(selections: PackSelection[]): void;
   rekeyCarried(rename: IdentityRename, dryRun?: boolean): CarriedRekey[];
+  setId(id: string): boolean;
+  declareExternal(alias: string, declaration: ExternalDeclaration): boolean;
 }
 
 /** iproject_config_index — the read half of the facade. */
@@ -96,7 +102,15 @@ export function projectConfigFsAdapterAt(rootDir: string): ProjectConfigFsAdapte
     },
     writeDocument(document) {
       // A plain replacement, not an atomic rename — as the loader always wrote it.
-      writeYamlFile(file(), document);
+      const text = readFileOrNull(file());
+      // No file yet: nothing to keep, so the document is serialized fresh.
+      if (text === null) {
+        writeYamlFile(file(), document);
+        return;
+      }
+      // Otherwise an EDIT of the file already there (F82): its comments, key
+      // order and quoting survive, and only what changed moves.
+      writeFile(file(), editDocumentText(text, document, root));
     },
     documentExists() {
       // existsSync answers false for an unreadable directory too.
@@ -360,6 +374,284 @@ function rewriteScalarsInText(text: string, edits: ScalarEdit[], root: string): 
   return next;
 }
 
+// ── the comment-preserving document write (F82) ─────────────────────────────
+//
+// Every registry save used to re-serialize a plain object, which dropped every
+// comment in the file — the debt register's carried-group notes among them.
+// The write is now an edit: the file is parsed with the `yaml` package (v2)
+// into its node tree, whose nodes carry their comments and the exact source
+// range they were read from; the tree is reconciled against the document to
+// write; and each difference becomes one splice of the source at the range of
+// the node that differs. A node that did not change is never re-serialized —
+// that is the whole point — so its comments, quoting, folding and blank lines
+// survive byte for byte. (yaml's own Document serializer keeps comments, but
+// re-folds every folded scalar, which would rewrite most of this repository's
+// project.yaml on any save.) The edited text is parsed again, by the parser
+// every read uses, and must equal the document; otherwise nothing is written.
+
+/** One splice of the source text: replace [start, end) with `text`. */
+interface TextSplice {
+  start: number;
+  end: number;
+  text: string;
+  /**
+   * Orders several insertions at one offset, lower first: a key inserted into
+   * a deeper mapping precedes one inserted into the mapping around it, so the
+   * nested key stays inside its own block.
+   */
+  rank: number;
+}
+
+/** A value the edit compares and writes: what js-yaml reads, and what the store hands down. */
+type PlainValue = unknown;
+
+/** The options new YAML text is written with — the loader's own style (2-space indent, sequences indented). */
+const FRESH_TEXT_OPTIONS: YAML.DocumentOptions & YAML.SchemaOptions & YAML.ToStringOptions = {
+  indent: 2, indentSeq: true, lineWidth: 100, customTags: ['timestamp'],
+};
+
+/** Parse options that read scalars the way js-yaml's default schema does (timestamps included). */
+const PARSE_OPTIONS: YAML.ParseOptions & YAML.DocumentOptions & YAML.SchemaOptions = { customTags: ['timestamp'] };
+
+/** Deep equality of two plain values, key order ignored, dates by instant. */
+function sameValue(a: PlainValue, b: PlainValue): boolean {
+  if (a instanceof Date || b instanceof Date) {
+    return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((item, i) => sameValue(item, b[i]));
+  }
+  if (isPlainObject(a) || isPlainObject(b)) {
+    if (!isPlainObject(a) || !isPlainObject(b)) return false;
+    const keysA = Object.keys(a).filter((k) => a[k] !== undefined);
+    const keysB = Object.keys(b).filter((k) => b[k] !== undefined);
+    return keysA.length === keysB.length && keysA.every((k) => hasOwn(b, k) && sameValue(a[k], b[k]));
+  }
+  return a === b;
+}
+
+/** The start of the line holding `pos`. */
+function lineStartOf(text: string, pos: number): number {
+  return text.lastIndexOf('\n', pos - 1) + 1;
+}
+
+/** The start of the line after the one `pos` sits on; `pos` itself when it already starts a line. */
+function lineEndFrom(text: string, pos: number): number {
+  if (pos === 0 || text[pos - 1] === '\n') return pos;
+  const newline = text.indexOf('\n', pos);
+  return newline < 0 ? text.length : newline + 1;
+}
+
+/** `text` with every non-empty line indented by `col` spaces, ending in a newline. */
+function indentBlock(text: string, col: number): string {
+  const pad = ' '.repeat(col);
+  const body = text.endsWith('\n') ? text : `${text}\n`;
+  return body.split('\n').map((line, i, all) => (line === '' || i === all.length - 1 ? line : pad + line)).join('\n');
+}
+
+/** Fresh YAML for `value`, as block text at column `col`. */
+function freshBlock(value: PlainValue, col: number): string {
+  return indentBlock(YAML.stringify(value, FRESH_TEXT_OPTIONS), col);
+}
+
+/**
+ * The field order the ProjectConfig schema declares for the mapping at `at`
+ * (keys and sequence indexes from the document root), or null where the
+ * schema names no fields there — a record (`externals`) or an unknown key.
+ * Placement only: nothing here validates.
+ */
+function schemaFieldOrder(at: (string | number)[]): string[] | null {
+  const objectsOf = (schema: z.ZodTypeAny): z.ZodObject<z.ZodRawShape>[] => {
+    const shape = shapeOf(schema);
+    if (shape instanceof z.ZodObject) return [shape];
+    if (shape instanceof z.ZodUnion) return (shape._def.options as z.ZodTypeAny[]).flatMap(objectsOf);
+    return [];
+  };
+  let current: z.ZodTypeAny | null = ProjectConfigSchema;
+  for (const segment of at) {
+    if (current === null) return null;
+    const shape = shapeOf(current);
+    if (typeof segment === 'number') {
+      current = shape instanceof z.ZodArray ? shape.element as z.ZodTypeAny : null;
+    } else if (shape instanceof z.ZodRecord) {
+      current = shape._def.valueType as z.ZodTypeAny;
+    } else {
+      current = objectsOf(current).map((o) => o.shape[segment] as z.ZodTypeAny | undefined).find((s) => s !== undefined) ?? null;
+    }
+  }
+  if (current === null) return null;
+  const fields = objectsOf(current).flatMap((o) => Object.keys(o.shape));
+  return fields.length > 0 ? [...new Set(fields)] : null;
+}
+
+/** One scalar written on one line in the given style, or null when it cannot be. */
+function inlineScalar(value: PlainValue, style: YAML.Scalar['type']): string | null {
+  if (value !== null && typeof value === 'object') return null;
+  const quoting = style === 'QUOTE_SINGLE' || style === 'QUOTE_DOUBLE' ? style : 'PLAIN';
+  const text = YAML.stringify(value, { ...FRESH_TEXT_OPTIONS, lineWidth: 0, defaultStringType: quoting }).replace(/\n$/, '');
+  return text.includes('\n') ? null : text;
+}
+
+/** Collects the splices that turn the parsed file into the document. */
+class DocumentReconciler {
+  readonly splices: TextSplice[] = [];
+
+  constructor(private readonly text: string, private readonly doc: YAML.Document.Parsed) {}
+
+  /** Reconcile one node to its target; `replace` rewrites the node wholesale where an edit cannot be precise. */
+  node(node: unknown, target: PlainValue, at: (string | number)[], replace: (value: PlainValue) => void): void {
+    if (YAML.isNode(node) && sameValue(node.toJS(this.doc, { maxAliasCount: -1 }), target)) return;
+    if (YAML.isMap(node) && !node.flow && node.items.length > 0 && isPlainObject(target) && Object.keys(target).length > 0) {
+      this.mapping(node, target, at, replace);
+    } else if (YAML.isSeq(node) && !node.flow && node.items.length > 0 && Array.isArray(target) && target.length > 0) {
+      this.sequence(node, target, at);
+    } else if (YAML.isScalar(node) && !this.scalarInPlace(node, target)) {
+      replace(target);
+    } else if (!YAML.isScalar(node)) {
+      replace(target);
+    }
+  }
+
+  /** A changed one-line scalar, replaced in its own quoting; false when it is not one. */
+  private scalarInPlace(node: YAML.Scalar, target: PlainValue): boolean {
+    const [start, end] = node.range ?? [0, 0];
+    const flowStyle = node.type === 'PLAIN' || node.type === 'QUOTE_SINGLE' || node.type === 'QUOTE_DOUBLE';
+    if (!flowStyle || start === end) return false;
+    const written = inlineScalar(target, node.type);
+    if (written === null) return false;
+    this.splices.push({ start, end, text: written, rank: 0 });
+    return true;
+  }
+
+  /** Where a pair's text starts (its key's line) and ends (the line after its value). */
+  private pairSpan(pair: YAML.Pair): { start: number; end: number; col: number } {
+    const key = pair.key as YAML.Node;
+    const start = lineStartOf(this.text, key.range![0]);
+    const value = pair.value as YAML.Node | null;
+    const valueEnd = value && value.range ? value.range[1] : key.range![1];
+    return { start, end: lineEndFrom(this.text, valueEnd), col: key.range![0] - start };
+  }
+
+  /** Where a sequence item's text starts (its dash's line) and ends, and the dash's column. */
+  private itemSpan(item: YAML.Node): { start: number; end: number; col: number } {
+    let dash = item.range![0] - 1;
+    while (dash >= 0 && /\s/.test(this.text[dash])) dash -= 1;
+    const start = lineStartOf(this.text, dash);
+    return { start, end: lineEndFrom(this.text, item.range![1]), col: dash - start };
+  }
+
+  /** The first line of the comment block directly above the line starting at `lineStart`. */
+  private commentBlockStart(lineStart: number): number {
+    let start = lineStart;
+    while (start > 0) {
+      const above = lineStartOf(this.text, start - 1);
+      if (!this.text.slice(above, start).trim().startsWith('#')) break;
+      start = above;
+    }
+    return start;
+  }
+
+  private mapping(map: YAML.YAMLMap, target: Record<string, unknown>, at: (string | number)[], replace: (value: PlainValue) => void): void {
+    const keyOf = (pair: YAML.Pair): string => String(YAML.isScalar(pair.key) ? pair.key.value : pair.key);
+    const kept = map.items.filter((pair) => target[keyOf(pair)] !== undefined);
+    if (kept.length === 0) {
+      replace(target);
+      return;
+    }
+    for (const pair of map.items) {
+      const key = keyOf(pair);
+      const span = this.pairSpan(pair);
+      if (target[key] === undefined) {
+        this.splices.push({ start: span.start, end: span.end, text: '', rank: 0 });
+        continue;
+      }
+      this.node(pair.value, target[key], [...at, key], (value) => {
+        this.splices.push({ start: span.start, end: span.end, text: freshBlock({ [key]: value }, span.col), rank: 0 });
+      });
+    }
+    this.insertNewKeys(map, kept, target, at, keyOf);
+  }
+
+  /**
+   * Insert the keys the document adds at their place in the schema's field
+   * order: after the nearest preceding schema field the mapping keeps, else
+   * before the nearest following one (above its comments), else after the
+   * mapping's last key.
+   */
+  private insertNewKeys(
+    map: YAML.YAMLMap, kept: YAML.Pair[], target: Record<string, unknown>, at: (string | number)[], keyOf: (pair: YAML.Pair) => string,
+  ): void {
+    const present = new Map(kept.map((pair) => [keyOf(pair), pair] as const));
+    const order = schemaFieldOrder(at) ?? [];
+    const col = this.pairSpan(kept[0]).col;
+    const added = Object.keys(target).filter((key) => target[key] !== undefined && !map.items.some((pair) => keyOf(pair) === key));
+    added.forEach((key, n) => {
+      const index = order.indexOf(key);
+      const before = index < 0 ? undefined : order.slice(0, index).reverse().find((k) => present.has(k));
+      const after = index < 0 ? undefined : order.slice(index + 1).find((k) => present.has(k));
+      const offset = before !== undefined ? this.pairSpan(present.get(before)!).end
+        : after !== undefined ? this.commentBlockStart(this.pairSpan(present.get(after)!).start)
+          : this.pairSpan(kept[kept.length - 1]).end;
+      const rank = -at.length * 100_000 + (index < 0 ? order.length + n : index);
+      this.splices.push({ start: offset, end: offset, text: freshBlock({ [key]: target[key] }, col), rank });
+    });
+  }
+
+  private sequence(seq: YAML.YAMLSeq, target: unknown[], at: (string | number)[]): void {
+    seq.items.forEach((item, i) => {
+      const span = this.itemSpan(item as YAML.Node);
+      if (i >= target.length) {
+        this.splices.push({ start: span.start, end: span.end, text: '', rank: 0 });
+        return;
+      }
+      this.node(item, target[i], [...at, i], (value) => {
+        this.splices.push({ start: span.start, end: span.end, text: freshBlock([value], span.col), rank: 0 });
+      });
+    });
+    if (target.length > seq.items.length) {
+      const last = this.itemSpan(seq.items[seq.items.length - 1] as YAML.Node);
+      this.splices.push({ start: last.end, end: last.end, text: freshBlock(target.slice(seq.items.length), last.col), rank: -(at.length + 1) * 100_000 });
+    }
+  }
+}
+
+/** Apply the splices, last first, so every offset still addresses the original text. */
+function applySplices(text: string, splices: TextSplice[]): string {
+  const ordered = [...splices].sort((a, b) => b.start - a.start || b.end - a.end || b.rank - a.rank);
+  let out = text;
+  for (const splice of ordered) out = out.slice(0, splice.start) + splice.text + out.slice(splice.end);
+  return out;
+}
+
+/**
+ * The file's text edited to hold `document`: parsed into the node tree,
+ * reconciled, spliced, and proved — the result must read back as exactly the
+ * document, or the write is refused and nothing is written. The file's line
+ * endings are kept.
+ */
+function editDocumentText(text: string, document: PlainValue, root: string): string {
+  const refuse = (why: string): never => {
+    throw new WaironError(`Cannot write .wai/project.yaml at ${root} as an edit of the file: ${why}. Nothing was written.`);
+  };
+  const crlf = text.includes('\r\n');
+  const source = crlf ? text.replace(/\r\n/g, '\n') : text;
+  const doc = YAML.parseDocument(source, PARSE_OPTIONS);
+  if (doc.errors.length > 0) refuse(`the file does not parse (${doc.errors[0].message})`);
+  const reconciler = new DocumentReconciler(source, doc);
+  reconciler.node(doc.contents, document, [], (value) => {
+    reconciler.splices.push({ start: 0, end: source.length, text: YAML.stringify(value, FRESH_TEXT_OPTIONS), rank: 0 });
+  });
+  const edited = applySplices(source, reconciler.splices);
+  let reread: unknown;
+  try {
+    reread = parseYaml(edited);
+  } catch (e) {
+    refuse(`the edited text does not parse (${e instanceof Error ? e.message : String(e)})`);
+  }
+  if (!sameValue(reread, document)) refuse('the edited text does not read back as the document to write');
+  return crlf ? edited.replace(/\n/g, '\r\n') : edited;
+}
+
 /** Parse the document against the schema, defaults applied, with the loader's error on failure. */
 function parseConfig(document: ProjectConfigDocument | null, root: string): ProjectConfig {
   try {
@@ -587,6 +879,40 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       store.rewriteScalars(edits, dryRun);
       return rekeys;
     },
+    setId(id) {
+      if (!PROJECT_ID_RE.test(id)) {
+        throw new WaironError(`Refusing to declare the project id "${id}" at ${root}: it breaks the project-id grammar ([a-z0-9-_.], starting and ending alphanumeric).`);
+      }
+      const config = current();
+      if (config.id === id) return false;
+      if (config.id !== undefined) {
+        throw new WaironError(
+          `Refusing to declare the project id "${id}" at ${root}: the project already declares "${config.id}". `
+          + 'An id is immutable; moving it is the rename migration, never a set.',
+        );
+      }
+      save({ ...config, id });
+      return true;
+    },
+    declareExternal(alias, declaration) {
+      if (!EXTERNAL_ALIAS_RE.test(alias)) {
+        throw new WaironError(`Refusing to declare the external "${alias}" at ${root}: an alias must fit [a-z0-9-_]+.`);
+      }
+      if (declaration.project !== undefined && !PROJECT_ID_RE.test(declaration.project)) {
+        throw new WaironError(`Refusing to declare the external "${alias}" at ${root}: the producer id "${declaration.project}" breaks the project-id grammar.`);
+      }
+      const config = current();
+      const existing = config.externals?.[alias];
+      if (existing !== undefined) {
+        if (sameValue(existing, declaration)) return false;
+        throw new WaironError(
+          `Refusing to declare the external "${alias}" at ${root} as ${JSON.stringify(declaration)}: `
+          + `it is already declared as ${JSON.stringify(existing)}, and a declaration a person wrote is never overwritten.`,
+        );
+      }
+      save({ ...config, externals: { ...config.externals, [alias]: declaration } });
+      return true;
+    },
   };
 }
 
@@ -663,6 +989,8 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     markSelectionsBundled(bundled) { registry.markSelectionsBundled(bundled); },
     pinGlobalPacksAsSelections(selections) { registry.pinGlobalPacksAsSelections(selections); },
     rekeyCarried(rename, dryRun) { return registry.rekeyCarried(rename, dryRun); },
+    setId(id) { return registry.setId(id); },
+    declareExternal(alias, declaration) { return registry.declareExternal(alias, declaration); },
   };
 }
 
@@ -693,4 +1021,6 @@ export const projectConfigRepository: ProjectConfigRepository = {
   markSelectionsBundled(bundled) { bound().markSelectionsBundled(bundled); },
   pinGlobalPacksAsSelections(selections) { bound().pinGlobalPacksAsSelections(selections); },
   rekeyCarried(rename, dryRun) { return bound().rekeyCarried(rename, dryRun); },
+  setId(id) { return bound().setId(id); },
+  declareExternal(alias, declaration) { return bound().declareExternal(alias, declaration); },
 };

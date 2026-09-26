@@ -377,6 +377,11 @@ export {
   setProjectType,
   recordProfileSelection,
   setExecutionTier,
+  // project_config_portal setId / declareExternal: the deliberate identity and
+  // dependency declarations `doctor --fix`'s chaining migration writes. The
+  // portal's setId IS the orchestrator's setProjectId, by identity.
+  setProjectId as setId,
+  declareExternal,
 } from './specs.js';
 
 // The project_config type's own behaviour, for callers deriving from a loaded configuration.

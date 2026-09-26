@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { writeYamlFile } from '../../src/utils/yaml.js';
+import { writeFile } from '../../src/utils/fs.js';
 import { installPackFromDirectory } from '../../src/core/index.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { addPack, usePack, unusePack, bundlePack } from '../../src/commands/packs.js';
@@ -13,13 +14,18 @@ import { listRules } from '../../src/commands/rules.js';
 // ---------------------------------------------------------------------------
 // The CLI's reads and writes of .wai/project.yaml, through the core portal
 // (stage 2a-0). Every write reaches the file through the project config
-// Repository, whose fs adapter is the one caller of writeYamlFile for it — so
-// wrapping writeYamlFile counts the configuration writes a command makes.
+// Repository, whose fs adapter is the one writer of it — writeYamlFile for a
+// fresh file, writeFile for an edit of the file already there (F82) — so
+// wrapping both counts the configuration writes a command makes.
 // ---------------------------------------------------------------------------
 
 vi.mock('../../src/utils/yaml.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/utils/yaml.js')>();
   return { ...actual, writeYamlFile: vi.fn(actual.writeYamlFile) };
+});
+vi.mock('../../src/utils/fs.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/utils/fs.js')>();
+  return { ...actual, writeFile: vi.fn(actual.writeFile) };
 });
 
 type Entry = string | { name: string; version?: string; source?: string; bundle?: boolean };
@@ -63,7 +69,8 @@ function project(fields: Record<string, unknown> = {}): string {
 
 /** Writes of any project.yaml since the last clear. */
 function configWrites(): number {
-  return vi.mocked(writeYamlFile).mock.calls.filter(([file]) => path.basename(file) === 'project.yaml').length;
+  const calls = [...vi.mocked(writeYamlFile).mock.calls, ...vi.mocked(writeFile).mock.calls];
+  return calls.filter(([file]) => path.basename(file) === 'project.yaml').length;
 }
 
 /** Point the machine-wide pack store at a fresh directory. */
@@ -99,7 +106,7 @@ describe('pack add', () => {
     const source = path.join(mkTmp('wairon-cfg-cli-pack-'), 'demo.yaml');
     fs.writeFileSync(source, 'name: demo\nversion: 1.0.0\nprofiles:\n  demo-profile:\n    family: neutral\n');
 
-    vi.mocked(writeYamlFile).mockClear();
+    vi.mocked(writeYamlFile).mockClear(); vi.mocked(writeFile).mockClear();
     await addPack(source);
     await addPack(source);
 
@@ -145,7 +152,7 @@ describe('pack unuse', () => {
     const dir = project({ extensions: { useGlobalPacks: false, packs: ['.wai/packs/beta.yaml', { name: 'alpha' }] } });
     const before = fs.readFileSync(configFile(dir), 'utf8');
 
-    vi.mocked(writeYamlFile).mockClear();
+    vi.mocked(writeYamlFile).mockClear(); vi.mocked(writeFile).mockClear();
     await unusePack('beta');
 
     expect(process.exitCode).toBe(1);
@@ -166,7 +173,7 @@ describe('pack bundle', () => {
       },
     });
 
-    vi.mocked(writeYamlFile).mockClear();
+    vi.mocked(writeYamlFile).mockClear(); vi.mocked(writeFile).mockClear();
     await bundlePack(undefined, { all: true });
 
     expect(process.exitCode ?? 0).toBe(0);
@@ -184,7 +191,7 @@ describe('execution set-tier', () => {
   it('writes nothing when the requested tier is already set', async () => {
     const dir = project({ execution: { tier: 'default', overrides: {} } });
 
-    vi.mocked(writeYamlFile).mockClear();
+    vi.mocked(writeYamlFile).mockClear(); vi.mocked(writeFile).mockClear();
     await setExecutionTier('default');
     expect(configWrites()).toBe(0);
 

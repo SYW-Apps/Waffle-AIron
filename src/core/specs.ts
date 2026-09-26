@@ -3,7 +3,7 @@ import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, WaiPaths } from '../config/paths.js';
 import { projectConfigRepository } from '../config/project-config.js';
-import type { ProjectConfig, PackSelection, ProjectProfileSelection } from '../models/project.js';
+import type { ProjectConfig, PackSelection, ProjectProfileSelection, ExternalDeclaration } from '../models/project.js';
 import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
@@ -5545,6 +5545,25 @@ export function deregisterPackRef(ref: string): boolean {
 /** Record bundled packs on their selections in place, in one write. */
 export function markSelectionsBundled(bundled: PackSelection[]): void {
   projectConfigRepository.markSelectionsBundled(bundled);
+}
+
+/**
+ * Declare the bound project's id through the project config Repository:
+ * refused for a malformed id or when a different id is already declared, a
+ * no-op when the same one is. Returns whether it wrote.
+ */
+export function setProjectId(id: string): boolean {
+  return projectConfigRepository.setId(id);
+}
+
+/**
+ * Declare one external of the bound project under an alias through the project
+ * config Repository: refused for a malformed alias or producer id, or when the
+ * alias holds a different declaration, a no-op when it holds the same one.
+ * Returns whether it wrote.
+ */
+export function declareExternal(alias: string, declaration: ExternalDeclaration): boolean {
+  return projectConfigRepository.declareExternal(alias, declaration);
 }
 
 /**
