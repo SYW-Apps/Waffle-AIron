@@ -1,14 +1,14 @@
 {
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs",
-    "digest": "ccb6ab21db2f3ee39e7d11328bd3b04ebdd1efc18da09255cd73ee8c2fac2337"
+    "digest": "7fac1ca751caf9739ad994db8fc2a879b96f67d07132309ecda3e206d36bc4be"
   },
-  "lockedAt": "2026-09-25T23:12:28.493Z",
+  "lockedAt": "2026-09-26T00:08:15.081Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "5.1.1-dev.73",
+  "validatorVersion": "5.1.1-dev.74",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -267,7 +267,7 @@
     ".wai/specs/components/version_stamp.yaml": "e0cdd133297520bf273c4de55c60a5dc682011a292cec3020a4593ce1c2a3842",
     ".wai/specs/components/visibility_rules.yaml": "7e23953d1674f18cda916e7e43a3b207c60acadae1e9220fe9f8671fb585434c",
     ".wai/specs/components/web_admin_orchestrator.yaml": "111a85be4aebd5ee0550695f459c5c8423f055d1cd75d7babc0baa0f7f93791f",
-    ".wai/specs/components/web_graph_orchestrator.yaml": "faed8936de82362105823252cbf67377576f554d974ad8e5d5f1ec6990f26852",
+    ".wai/specs/components/web_graph_orchestrator.yaml": "a3c5fe8e2b033b9d578059a25c04135442079d0541a53f1ed64b7f270a1d24fb",
     ".wai/specs/components/web_instance_admin_orchestrator.yaml": "a23e339bda1d01760ad36a1260e6edaad618705ce96acfa9b413807cb97d87ce",
     ".wai/specs/components/web_portal.yaml": "dda53422b2416c9ef2291310736dd04e6bbd9d0bef7281fd922bba8908b19e3e",
     ".wai/specs/components/web_project_orchestrator.yaml": "7622c153d9984be63daee191e199c1568081da66683de504a9e1a938987d1e30",
@@ -526,9 +526,9 @@
     ".wai/specs/implementations/version_stamp_impl.yaml": "52d23c6ce9e247a738032af49437d4407097588280dcb4a0c6c1101ce888922d",
     ".wai/specs/implementations/visibility_rules_impl.yaml": "33f226a96c90a147b3174f7feec4f1d4fb77c890cef2c7db3eb35d0b9a269936",
     ".wai/specs/implementations/web_admin_orchestrator_impl.yaml": "1e227341715f0760a3f1e179e7f254e0c6d662a033cf73cf68c75c69127ab357",
-    ".wai/specs/implementations/web_graph_orchestrator_impl.yaml": "f4bb9be015eddfa3a55edd58e3464a29abe2cc7aff7a4dfd66c201841e1ec94d",
+    ".wai/specs/implementations/web_graph_orchestrator_impl.yaml": "a33b766a0c6955b3a35a10c0cc8ff0965ad91a26d81902dcb27e19813cc6c6bc",
     ".wai/specs/implementations/web_instance_admin_orchestrator_impl.yaml": "75d8b6460f516e3ce1b474d260eb13a6083212ab161256ed3b58068712ae1bf6",
-    ".wai/specs/implementations/web_portal_impl.yaml": "fbc6f41add21f32fd817e69a7de567ea33db3b0696f9c0898626cdaaefcfd3b6",
+    ".wai/specs/implementations/web_portal_impl.yaml": "c1e47539ddd458aa1d7c08c61f91e67c45fb8f5a37bec4ff09e027f06165b8bd",
     ".wai/specs/implementations/web_project_orchestrator_impl.yaml": "fbe80fe22625aaee23b5ec6d36641b5f739bc51e3dbb86cc1a3c3bb69777adae",
     ".wai/specs/implementations/web_session_index_impl.yaml": "98c6ae379443a4fd31b9413039be3f8dbd881c244ba129cb26b0bc9c9f1abdc9",
     ".wai/specs/implementations/web_session_orchestrator_impl.yaml": "1a782157813d63354d54128ba5bb4df2797e34256c3e61679907b5499b3edb32",
@@ -786,9 +786,9 @@
     ".wai/specs/interfaces/iversion_stamp.yaml": "5412a5ca3ee6d729dfa19a96ceca917195971d66f430810284a04bb5568dfb24",
     ".wai/specs/interfaces/ivisibility_rules.yaml": "459c434d718b918dd539ef9578b52e9f31f620c33a7c529d1acd48910dd18f17",
     ".wai/specs/interfaces/iweb_admin_orchestrator.yaml": "3968ffdd1a9c9897b3dd969b45c9cfc3e52c787988463172346c0d21bbda384a",
-    ".wai/specs/interfaces/iweb_graph_orchestrator.yaml": "265402c06f47d030b1d3d4af7acac6754181d0ebaca85da31676910e40556a35",
+    ".wai/specs/interfaces/iweb_graph_orchestrator.yaml": "294b208d9d325e0f1da57bca991f70a9ac6c368ff65b04854c60241868ba0f39",
     ".wai/specs/interfaces/iweb_instance_admin_orchestrator.yaml": "b4ecef9d5054c2ab592d96c948b752b4b5e7f8905a2ba6765bb20061a1dae76f",
-    ".wai/specs/interfaces/iweb_portal.yaml": "ac03c2235e78b459fc44b10e4de357242c3d1f15d6aaba639d08cc98749ac418",
+    ".wai/specs/interfaces/iweb_portal.yaml": "5721bbff1779fa782854a3017f534fae5eb9f1fb48006eda559da46ea42b7f9a",
     ".wai/specs/interfaces/iweb_project_orchestrator.yaml": "1c9f33142ca5f7091f1138cf07e9b620fce31d45b0c9d4c6ef6359b93b38493b",
     ".wai/specs/interfaces/iweb_session_index.yaml": "c4f5cdf6fac6fdfa680c6b82d74070bba571c8069ea0bbdc372e1bf4031e48d3",
     ".wai/specs/interfaces/iweb_session_orchestrator.yaml": "9df306202f41cfcf57be033ff708d18425ca22afb3aa54603b6d0b3e64734cc9",

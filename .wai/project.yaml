@@ -2411,25 +2411,5 @@ rules:
             at: 'get'
             covers:
               - 'projectId'
-      # 1 finding(s), 2 unit(s).
-      - kind: drift
-        why: >-
-          Two routes the web router serves that no contract declares, and the gap runs three layers
-          deep, which is why they are carried rather than declared with the five that sat beside them.
-          GET /web/canvas-model and GET /web/openapi are answered inline in handleWebRequest by
-          getWebProjectCanvasModel and getWebProjectOpenApi, which no web_graph_orchestrator contract
-          declares either; and below them the canvas model comes from the host core adapter’s
-          buildCanvasDataModel, which that adapter’s contract does not declare, while the OpenAPI page
-          comes from a surfaces-adapter export. Declaring only the portal method would name a
-          forwarding target that does not exist in the design. Owed: one slice that models all three
-          layers together — the adapter method, the orchestrator methods, then the portal methods and
-          their endpoints — in the pattern the other routes of this portal already follow.
-        findings:
-          - code: UNDECLARED_ROUTE
-            spec: web_portal_impl
-            at: 'handleWebRequest'
-            covers:
-              - 'GET /web/canvas-model'
-              - 'GET /web/openapi'
 createdAt: '2026-06-10T20:23:10.714Z'
 updatedAt: '2026-06-10T20:23:10.714Z'
