@@ -43,8 +43,11 @@ client expects back from them (item 14). The library surface narrows too:
   follow the move, so unchanged debt no longer reads as both paid and new. The
   register's comments and formatting are kept, the rewrite is verified by
   re-parsing before anything is written, and each report lists what it rekeyed.
-- **`sdd_add_type` refuses an owning subsystem that does not exist**, as every
-  other create tool refuses an unknown parent.
+- **An owning subsystem that does not exist is refused** — by `sdd_add_type`, as
+  every other create tool refuses an unknown parent, and by `sdd_update_spec`
+  when a delta moves a component or type under one. An owner the delta leaves
+  alone is not judged, so a spec already pointing at a missing subsystem can
+  still be repaired.
 
 ### Authoring tells the truth about stale servers, narratives and moves
 
