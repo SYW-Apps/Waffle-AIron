@@ -7,9 +7,10 @@ import {
   loadInterfaceSpecs,
   loadImplementationSpecs,
   loadTypeSpecs,
+  resolveProjectExports,
 } from './specs.js';
 import type { ValidationIssue } from './validation.js';
-import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs } from '../models/index.js';
+import { extractTypeIdentifiers, isOwnComponentEntry, matchTypeRef, methodTypeRefs } from '../models/index.js';
 import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 
 // ---------------------------------------------------------------------------
@@ -156,16 +157,22 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
   const componentIds = new Set(components.map(c => c.id));
   const publicComponents = new Set<string>();
   for (const sub of subsystems) {
-    for (const pi of sub.publicInterfaces) {
+    // Own component entries only: a re-export names another subsystem's component.
+    for (const pi of sub.publicInterfaces.filter(isOwnComponentEntry)) {
       if (pi.component) publicComponents.add(pi.component);
     }
   }
-  // The combined project OpenAPI tags each operation with its L0 gateway entry id.
-  // Map the backing component → that tag so a portal's "View OpenAPI" can deep-link
-  // straight to its section of the combined spec.
+  // The project OpenAPI tags each operation with the public name its portal is
+  // exported under. Map the canonical target → that name, read from the
+  // resolved export table (the resolver's name, not the raw L0 entry's), so a
+  // portal's "View OpenAPI" can deep-link straight to its section.
   const apiTagOf = new Map<string, string>();
-  for (const pi of system?.publicInterfaces ?? []) {
-    if (pi.component && pi.id) apiTagOf.set(pi.component, pi.id);
+  if (system) {
+    for (const entry of resolveProjectExports().entries) {
+      if (entry.kind === 'component' && entry.component && !apiTagOf.has(entry.component)) {
+        apiTagOf.set(entry.component, entry.publicName);
+      }
+    }
   }
 
   // Ownership nests only under a live pattern, as the validator records it: a
@@ -356,7 +363,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
   // have no owner, so imply no directional coupling. Rendered only under the toggle.
   const portalOf = new Map<string, string>();
   for (const sub of subsystems) {
-    for (const pi of sub.publicInterfaces) {
+    for (const pi of sub.publicInterfaces.filter(isOwnComponentEntry)) {
       if (pi.component && !portalOf.has(sub.id)) portalOf.set(sub.id, pi.component);
     }
   }

@@ -1077,3 +1077,80 @@ describe('external interface discovery (listExternalInterfaces) + computeStateId
     }
   });
 });
+
+describe('surface projection over the resolved export table', () => {
+  let rootDir: string;
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+  });
+
+  /** buildParent, plus a declared project id, a subsystem-owned type and re-export entries at L0. */
+  function buildExporting(): void {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surface-exports-'));
+    buildParent(rootDir);
+    fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), [
+      "schemaVersion: '1.0.0'", 'name: Root System', 'id: root-sys',
+      `createdAt: '${now}'`, `updatedAt: '${now}'`,
+    ].join('\n'));
+    saveTypeSpec({
+      kind: 'value-object', id: 'ledger-entry', name: 'LedgerEntry', subsystem: 'core-sub',
+      fields: [{ name: 'amount', type: 'number', optional: false }],
+      methods: [], createdAt: now, updatedAt: now,
+    });
+    saveSubsystemSpec(subsystem('core-sub', {
+      publicInterfaces: [
+        { type: 'REST', details: 'api', component: 'gateway-portal' },
+        { type: 'Custom', details: 'family', component: 'family-portal' },
+        { typeDef: 'ledger-entry' },
+      ],
+    }));
+    const system = loadSystemSpec()!;
+    saveSystemSpec({
+      ...system,
+      publicInterfaces: [
+        ...(system.publicInterfaces ?? []),
+        { from: 'core-sub', component: 'gateway-portal', interface: 'igateway-portal', as: 'records', audience: 'external' },
+        { from: 'core-sub', typeDef: 'ledger-entry', audience: 'external' },
+      ],
+    });
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+  }
+
+  it('keeps every legacy public name and records the stereotype, the narrowing and the project id', () => {
+    buildExporting();
+    const snap = projectOwnSurface('project');
+    expect(snap.projectName).toBe('root-system');
+    expect(snap.projectId).toBe('root-sys');
+    expect(snap.interfaces.map((e) => e.id).sort()).toEqual(['family-ops', 'gateway', 'records']);
+    const gateway = snap.interfaces.find((e) => e.id === 'gateway')!;
+    expect(gateway.componentType).toBe('Portal');
+    expect(gateway.interface).toBeUndefined();
+    const records = snap.interfaces.find((e) => e.id === 'records')!;
+    expect(records).toMatchObject({ component: 'gateway-portal', interface: 'igateway-portal', type: 'REST', details: 'api' });
+    expect(records.methods.map((m) => m.name)).toEqual(['fetchRecord']);
+  });
+
+  it('lists an exported type apart from the contract entries, with its definition in the closure', () => {
+    buildExporting();
+    const snap = projectOwnSurface('external');
+    expect(snap.exportedTypes).toEqual([{ id: 'ledger-entry', type: 'ledger-entry', audience: 'external' }]);
+    expect(snap.types.map((t) => t.id)).toContain('ledger-entry');
+    expect(snap.interfaces.some((e) => e.id === 'ledger-entry')).toBe(false);
+  });
+
+  it('drops an entry the resolver cannot bind, and reports it through validate as a notice', () => {
+    buildExporting();
+    const system = loadSystemSpec()!;
+    saveSystemSpec({ ...system, publicInterfaces: [...(system.publicInterfaces ?? []), { id: 'ghost-api', type: 'REST', details: 'nothing behind it' }] });
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    expect(projectOwnSurface('project').interfaces.some((e) => e.id === 'ghost-api')).toBe(false);
+    const result = validateSddTree();
+    const invalid = result.issues.filter((i) => i.code === 'EXPORT_INVALID');
+    expect(invalid.map((i) => i.severity)).toEqual(['notice']);
+    expect(invalid[0].message).toContain('ghost-api');
+  });
+});
