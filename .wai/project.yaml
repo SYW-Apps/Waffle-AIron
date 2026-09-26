@@ -245,7 +245,7 @@ rules:
             spec: cli_runner_impl
             at: 'runDoctor'
             covers:
-              - '12:cli_mcp_adapter.installMcpServer'
+              - '22:cli_mcp_adapter.installMcpServer'
           - code: CALL_STEP_UNREALIZED
             spec: cli_validator_adapter_impl
             at: 'runValidation'
