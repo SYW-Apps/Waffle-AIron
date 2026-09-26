@@ -5,12 +5,12 @@ description: >-
   across flat and per-subsystem layouts, reads documents through the file store, and parses them
   against the level schemas — collecting loader issues instead of throwing on a bad file. Its
   per-root scan also records each project root it walks (namespace, parent, mount alias, directory,
-  its own L0, its configuration, the ids its files declare and the relative-form references they
-  wrote), the raw material of the project graph. The scan is a cache the index keeps fresh itself:
-  every spec write drops it, a cached scan is re-verified against the tree's file signature — which
-  covers each root's .wai/project.yaml too — at most once per short TTL, and a root switch (a caller
-  binding this project root after another) re-verifies it on the first read regardless of the TTL,
-  so no caller has to invalidate it to read a tree as it is now.
+  its own L0, its configuration read through that root's binding, the ids its files declare and the
+  leading-`::` references they wrote), the raw material of the project graph. The scan is a cache
+  the index keeps fresh itself: every spec write drops it, a cached scan is re-verified against the
+  tree's file signature — which covers each root's .wai/project.yaml too — at most once per short
+  TTL, and a root switch (a caller binding this project root after another) re-verifies it on the
+  first read regardless of the TTL, so no caller has to invalidate it to read a tree as it is now.
 subsystem: sdd_core
 componentType: Index
 owns: []
@@ -18,4 +18,4 @@ dependsOn:
   - spec_file_store
 status: complete
 createdAt: '2026-07-18T22:57:53.159Z'
-updatedAt: '2026-09-26T17:51:37.020Z'
+updatedAt: '2026-09-26T18:13:15.472Z'

@@ -1,0 +1,13 @@
+id: externals_file_adapter
+name: Externals File Adapter
+description: >-
+  File I/O for the project's pinned externals at the bound root: .wai/externals.lock.yaml and the
+  snapshots it names under .wai/externals/<alias>.yaml. Owned by the externals Repository; the only
+  block that touches those files.
+subsystem: sdd_surfaces
+componentType: Adapter
+owns: []
+dependsOn: []
+status: design
+createdAt: '2026-09-26T18:11:27.615Z'
+updatedAt: '2026-09-26T18:11:27.631Z'

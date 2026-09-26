@@ -297,7 +297,10 @@ methods:
           Find the visible entries the reference lands on: for a component target, the entries whose
           canonical component is the target and — when the reference reaches a contract method and
           the entry narrows to an interface — whose interface declares that method; for a type
-          target, the entries exporting that type; for a re-export source (a subsystem), none
+          target, the entries exporting that type by name, and when there are none but the type is
+          in the closure of a visible entry's signatures, it is consumable though not pinnable in
+          stage 2 and is skipped (neither used nor unexported); for a re-export source (a
+          subsystem), none
         type: local
       - stepNumber: 9
         description: Does it land on any?
@@ -330,4 +333,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-26T16:09:07.864Z'
-updatedAt: '2026-09-26T17:43:30.881Z'
+updatedAt: '2026-09-26T18:13:55.056Z'

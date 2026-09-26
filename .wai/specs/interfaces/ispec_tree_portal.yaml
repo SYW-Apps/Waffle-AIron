@@ -246,7 +246,7 @@ methods:
   - name: projectFamily
     description: >-
       The project graph of the current scan — one node per project root, an owner for every spec id,
-      the cross-project references, the relative-form references authors wrote and the family's
+      the cross-project references, the leading-`::` references authors wrote and the family's
       identity problems. A passthrough read of the spec repository.
     signature: 'projectFamily(): ProjectFamily'
     returns: ProjectFamily
@@ -278,4 +278,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T17:44:12.489Z'
+updatedAt: '2026-09-26T18:13:28.688Z'

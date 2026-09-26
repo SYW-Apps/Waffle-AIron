@@ -54,9 +54,10 @@ methods:
       - stepNumber: 8
         description: >-
           Make one node per root: its namespace, parent, mount alias and directory as the scan
-          recorded them; its id from project_config.effectiveId(mountAlias) with where it came from
-          (declared, mount, name, none); its name; and its members, the roots whose parent it is. A
-          root with no readable configuration has no name, and its id is its mount alias or none
+          recorded them; its id from project_config.effectiveId() — declared, else the name slug,
+          the one default every reader uses — with where it came from (declared, name, none); its
+          name; and its members, the roots whose parent it is. A root with no readable configuration
+          has no name and no id
         type: local
       - stepNumber: 9
         description: 'Record the owner of every spec id: the root whose files declared it'
@@ -64,8 +65,10 @@ methods:
       - stepNumber: 10
         description: >-
           Record the family's identity problems: every id two or more nodes resolve to is an
-          id-collision naming each node and where its id came from, and every node with no id is a
-          no-id
+          id-collision naming each node and where its id came from; a member with no id is a no-id;
+          and a member that declares no id is defaulted, carrying its mount's subsystem id as the id
+          to declare (the bound root's own identity is judged from its configuration and lock, so it
+          is not repeated here)
         type: local
       - stepNumber: 11
         description: For each node
@@ -95,7 +98,7 @@ methods:
           the member it reaches
         type: local
       - stepNumber: 14
-        description: Gather every root's authored relative references into the graph
+        description: Gather every root's leading-`::` references into the graph
         type: local
       - stepNumber: 15
         description: Memoize the graph on this scan
@@ -108,4 +111,4 @@ methods:
     detail: full
 status: design
 createdAt: '2026-09-26T17:41:29.805Z'
-updatedAt: '2026-09-26T17:51:12.013Z'
+updatedAt: '2026-09-26T18:13:26.183Z'

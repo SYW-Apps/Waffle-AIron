@@ -3,9 +3,10 @@ id: authored_reference
 name: AuthoredReference
 description: >-
   A reference as its author wrote it, recorded by the scan before qualification erases the form: the
-  loader turns `super::x` and `::x` into absolute ids, so nothing downstream could tell them apart
-  from a plain id. Only the relative forms are recorded — the ones DEPRECATED_REFERENCE_FORM
-  concerns.
+  loader turns `::x` into an absolute id, so nothing downstream could tell it from one written
+  absolute. Only the leading-`::` form is recorded — the one DEPRECATED_REFERENCE_FORM concerns in
+  stage 2. `super::` is not recorded: wairon's own writer emits it and it has no alternative before
+  stage 3.
 subsystem: sdd_core
 fields:
   - name: specId
@@ -21,12 +22,12 @@ fields:
     optional: false
   - name: authored
     type: string
-    description: 'The reference exactly as written: a `super::`-prefixed or a leading-`::` form.'
+    description: 'The reference exactly as written: a leading-`::` form.'
     optional: false
   - name: resolved
     type: string
-    description: What the loader qualified it to.
+    description: The absolute id the loader qualified it to — the form to write instead.
     optional: false
 methods: []
 createdAt: '2026-09-26T17:39:34.152Z'
-updatedAt: '2026-09-26T17:43:23.355Z'
+updatedAt: '2026-09-26T18:13:04.861Z'

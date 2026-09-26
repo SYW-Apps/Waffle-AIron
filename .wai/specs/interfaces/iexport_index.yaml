@@ -52,7 +52,10 @@ methods:
       consumer (project for a family consumer) counts that name as used, with the member it reaches;
       every other reference is unexported. When several public names bind the same target, each is
       counted. The key half of a lock's `used` map, and the fact EXTERNAL_NOT_EXPORTED judges. A
-      pair with no references answers an empty usage.
+      type counts as used only as a typeDef export: a type the consumer names directly that the
+      producer exports only inside a signature closure is neither used nor unexported in stage 2
+      (its shape is pinned only through the method digests that carry it). A pair with no references
+      answers an empty usage.
     signature: 'usage(consumer: string, producer: string): ExportUsage'
     returns: ExportUsage
     params:
@@ -66,4 +69,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-26T16:08:30.136Z'
-updatedAt: '2026-09-26T17:43:30.749Z'
+updatedAt: '2026-09-26T18:13:46.627Z'

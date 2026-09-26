@@ -162,8 +162,8 @@ fields:
     type: ProjectFamily
     description: >-
       The project graph of the run's scan, gathered by the validator through the core adapter: nodes
-      with their bound externals, owners, cross-project references, authored relative references and
-      identity problems. The family rules (project-boundaries, reference-forms,
+      with their bound externals, owners, cross-project references, the leading-`::` references
+      authors wrote and identity problems. The family rules (project-boundaries, reference-forms,
       external-declarations, and the family half of project-identity) judge it without I/O. Absent
       on a candidate run.
     optional: true
@@ -330,4 +330,4 @@ methods:
       rule that accuses
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-26T17:45:17.363Z'
+updatedAt: '2026-09-26T18:13:30.387Z'

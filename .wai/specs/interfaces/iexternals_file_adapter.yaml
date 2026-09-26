@@ -1,0 +1,50 @@
+id: iexternals_file_adapter
+name: Externals File Adapter Interface
+description: >-
+  File I/O for the pinned-externals aggregate at the bound root: .wai/externals.lock.yaml and
+  .wai/externals/<alias>.yaml.
+component: externals_file_adapter
+methods:
+  - name: readLock
+    description: >-
+      Parse .wai/externals.lock.yaml at the bound root; null when absent. A malformed lock is
+      refused with a clear error, never read as empty — an empty lock would silently unpin
+      everything.
+    signature: 'readLock(): ExternalsLock | null'
+    returns: ExternalsLock | null
+    params: []
+  - name: writeLock
+    description: Write .wai/externals.lock.yaml, aliases sorted, overwriting it atomically.
+    signature: 'writeLock(lock: ExternalsLock): void'
+    returns: void
+    params:
+      - name: lock
+        type: ExternalsLock
+  - name: readSnapshot
+    description: Parse .wai/externals/<alias>.yaml; null when absent or malformed.
+    signature: 'readSnapshot(alias: string): SurfaceSnapshot | null'
+    returns: SurfaceSnapshot | null
+    params:
+      - name: alias
+        type: string
+  - name: writeSnapshot
+    description: >-
+      Write .wai/externals/<alias>.yaml, creating the directory when missing and overwriting
+      atomically.
+    signature: 'writeSnapshot(alias: string, snapshot: SurfaceSnapshot): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+      - name: snapshot
+        type: SurfaceSnapshot
+  - name: deleteSnapshot
+    description: Remove .wai/externals/<alias>.yaml and report whether a file existed.
+    signature: 'deleteSnapshot(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+status: design
+createdAt: '2026-09-26T18:11:39.137Z'
+updatedAt: '2026-09-26T18:11:55.779Z'

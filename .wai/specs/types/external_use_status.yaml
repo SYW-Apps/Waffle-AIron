@@ -9,8 +9,10 @@ subsystem: sdd_surfaces
 fields:
   - name: publicName
     type: string
-    description: The producer's public name.
-    optional: false
+    description: >-
+      The producer's public name; absent on the one unavailable entry reported for an external with
+      nothing to compare.
+    optional: true
   - name: member
     type: string
     description: The member (method, capability:<name>, type); absent for a name used only as a dependency.
@@ -29,10 +31,11 @@ fields:
   - name: detail
     type: string
     description: >-
-      Why it could not be compared: producer unreachable, the reference is not exported, or the
-      producer is outside the family and nothing references it in stage 2.
+      Why it could not be compared: the producer is unresolved or unreachable, the reference is not
+      exported, or the producer is outside the family — no stage-2 reference form reaches outside
+      the family, so nothing there is used until stage 3's `alias::name`.
     optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:47:11.330Z'
-updatedAt: '2026-09-26T17:47:11.331Z'
+updatedAt: '2026-09-26T18:13:41.510Z'

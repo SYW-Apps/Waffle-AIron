@@ -230,8 +230,9 @@ methods:
   - name: projectIdentity
     description: >-
       Rule project-identity. A project is keyed on its id, so the id must be declared, well-formed,
-      stable and its own: a project that declares none answers to one derived from its display name
-      until it writes one (PROJECT_ID_DEFAULTED), a project whose name yields no id or whose
+      stable and its own: a project that declares none answers to its display name slugified until
+      it writes one (PROJECT_ID_DEFAULTED — for a member of the family, the finding names its
+      mount's subsystem id as the id to declare), a project whose name yields no id or whose
       declared id breaks the grammar has nothing reliable to key on, nor do two projects of one
       family that resolve to one id (PROJECT_ID_AMBIGUOUS — the family half reads the project
       graph's identity problems), and an id that differs from the one the lock approved has moved
@@ -299,12 +300,13 @@ methods:
         summary: An L0 entry declares a wider audience than the member or external export it re-exports
   - name: referenceForms
     description: >-
-      Rule reference-forms. The relative reference forms — `super::` climbing mounts and a leading
-      `::` escaping to the root — name another project by its place in one checkout's mount chain
-      rather than by an alias it declared, and stage 3 replaces them with `alias::name`. Every one
-      an author wrote is reported (DEPRECATED_REFERENCE_FORM), naming the spec, where in it, the
-      form as written and what it resolved to. It reads the project graph's authored references,
-      which the scan records before qualification erases the form.
+      Rule reference-forms. A reference written with a leading `::` escapes to the root of whatever
+      checkout loads it, naming a spec by its place in one mount chain; it always has a fix, the
+      absolute id it resolves to. Every one an author wrote is reported (DEPRECATED_REFERENCE_FORM),
+      naming the spec, where in it, the form as written and the absolute id to write instead.
+      `super::` is not reported in stage 2: wairon's own writer emits it for every cross-namespace
+      reference and no alternative exists until stage 3 brings `alias::name`. It reads the project
+      graph's authored references, which the scan records before qualification erases the form.
     signature: 'referenceForms(ctx: RuleContext): void'
     returns: void
     params:
@@ -314,9 +316,7 @@ methods:
     findings:
       - code: DEPRECATED_REFERENCE_FORM
         severity: notice
-        summary: >-
-          A reference written in a relative form (super:: or a leading ::) that stage 3 replaces
-          with alias::name
+        summary: 'A reference written with a leading :: where the absolute id it resolves to belongs'
   - name: externalDeclarations
     description: >-
       Rule external-declarations. Every external a project declares in project.yaml must be usable:
@@ -340,4 +340,4 @@ methods:
           and its source.path do not provide
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-26T17:45:38.459Z'
+updatedAt: '2026-09-26T18:12:58.286Z'

@@ -18,12 +18,12 @@ fields:
   - name: id
     type: string
     description: >-
-      The effective project id: project_config.effectiveId(mountAlias) — declared, else the mount
-      alias for a chained member, else the name slug. Absent when none can be made.
+      The effective project id: project_config.effectiveId() — declared, else the name slug, exactly
+      as every other reader resolves it. Absent when none can be made.
     optional: true
   - name: idSource
     type: string
-    description: 'declared | mount | name | none: where the id came from.'
+    description: 'declared | name | none: where the id came from.'
     optional: false
   - name: name
     type: string
@@ -53,4 +53,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-09-26T17:39:52.264Z'
-updatedAt: '2026-09-26T17:43:21.026Z'
+updatedAt: '2026-09-26T18:12:39.002Z'

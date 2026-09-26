@@ -764,16 +764,18 @@ methods:
         description: For each family identity problem
         type: loop
         loopKind: forEach
-        over: the graph's id-collision and no-id problems
+        over: the graph's id-collision, no-id and defaulted problems
         endStep: 12
       - stepNumber: 12
         label: family-reported
         description: >-
-          Report PROJECT_ID_AMBIGUOUS (warning) with the problem's detail: the id two or more
-          projects of the family resolve to, naming each project and where its id came from
-          (declared, mount alias, name) — every declaration and reference keyed on that id could
-          mean either — or a member project that resolves to no id at all; the bound root's own
-          no-id case is left to the steps above, so it is reported once
+          Report by the problem's kind: a defaulted member is PROJECT_ID_DEFAULTED (notice), naming
+          the member, the name slug it answers to now, and its mount's subsystem id as the id to
+          declare in its .wai/project.yaml (2c's doctor --fix writes it); an id-collision is
+          PROJECT_ID_AMBIGUOUS (warning) naming the id and each project resolving to it with where
+          its id came from (declared or name) — every declaration and reference keyed on that id
+          could mean either; a member with no id at all is PROJECT_ID_AMBIGUOUS (warning). The bound
+          root's own defaulted and no-id cases are left to the steps above, so each is reported once
         type: local
       - stepNumber: 13
         label: judged
@@ -912,7 +914,7 @@ methods:
         outcome: no graph
       - stepNumber: 4
         label: each-reference
-        description: For each reference an author wrote in a relative form
+        description: For each reference an author wrote with a leading `::`
         type: loop
         loopKind: forEach
         over: the graph's authored references
@@ -921,9 +923,8 @@ methods:
         label: reported
         description: >-
           Report DEPRECATED_REFERENCE_FORM (notice) on the referring spec, in its draft context,
-          naming the position, the form as written and what it resolved to, and that stage 3
-          replaces it with `alias::name` once the producer is declared as an external (or is a
-          member)
+          naming the position, the form as written and the absolute id it resolved to, which is the
+          form to write instead
         type: local
       - stepNumber: 6
         description: Every authored reference is reported
@@ -976,4 +977,4 @@ methods:
     symbol: check
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-26T17:50:56.603Z'
+updatedAt: '2026-09-26T18:12:59.747Z'

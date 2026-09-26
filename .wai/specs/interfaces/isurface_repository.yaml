@@ -40,41 +40,6 @@ methods:
       lifecycle flow).
     signature: 'hydrate(): void'
     returns: void
-  - name: readExternalsLock
-    description: The externals lock at the bound root, or null when none was written.
-    signature: 'readExternalsLock(): ExternalsLock | null'
-    returns: ExternalsLock | null
-    params: []
-  - name: saveExternalsLock
-    description: Replace the externals lock at the bound root.
-    signature: 'saveExternalsLock(lock: ExternalsLock): void'
-    returns: void
-    params:
-      - name: lock
-        type: ExternalsLock
-  - name: readExternalSnapshot
-    description: The pinned snapshot for an alias, or null.
-    signature: 'readExternalSnapshot(alias: string): SurfaceSnapshot | null'
-    returns: SurfaceSnapshot | null
-    params:
-      - name: alias
-        type: string
-  - name: saveExternalSnapshot
-    description: Replace the pinned snapshot for an alias.
-    signature: 'saveExternalSnapshot(alias: string, snapshot: SurfaceSnapshot): void'
-    returns: void
-    params:
-      - name: alias
-        type: string
-      - name: snapshot
-        type: SurfaceSnapshot
-  - name: removeExternalSnapshot
-    description: Remove the pinned snapshot for an alias; whether one existed.
-    signature: 'removeExternalSnapshot(alias: string): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
 status: complete
 createdAt: '2026-07-10T23:13:27.580Z'
-updatedAt: '2026-09-26T17:48:02.725Z'
+updatedAt: '2026-09-26T18:12:05.361Z'

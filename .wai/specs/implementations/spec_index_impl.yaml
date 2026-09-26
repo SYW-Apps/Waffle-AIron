@@ -271,14 +271,15 @@ methods:
       - stepNumber: 4
         description: >-
           Record the root's configuration, read through the configuration bound at that root — the
-          per-root binding the scan already reads the root's specs folder through — and add the
-          root's .wai/project.yaml to the scan's freshness signature
+          per-root binding the scan already reads the root's specs folder through (a scan may read
+          the configuration of the root it is walking) — and add the root's .wai/project.yaml to the
+          scan's freshness signature, so an edit to its externals re-scans
         type: local
       - stepNumber: 5
         description: >-
           Record the ids of every spec the root's files declared (a mount subsystem merged with its
-          realization belongs to the root it mounts), and every reference the root's files wrote as
-          `super::…` or leading `::`, with its position and what it qualified to, before
+          realization belongs to the root it mounts), and every reference the root's files wrote
+          with a leading `::`, with its position and the absolute id it qualified to, before
           qualification erases the form
         type: local
       - stepNumber: 6
@@ -288,4 +289,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-26T17:40:52.666Z'
+updatedAt: '2026-09-26T18:13:11.045Z'

@@ -4,8 +4,8 @@ name: ScannedProjectRoot
 description: >-
   What one scan read at one project root, beyond the specs it merged into the index: where the root
   sits in the mount chain, its own L0 (a member's L0 is not merged into the index, whose L0 is the
-  bound root's), its configuration, the ids of the specs it declared, and the relative references
-  its authors wrote. The raw material of the project graph.
+  bound root's), its configuration, the ids of the specs it declared, and the leading-`::`
+  references its authors wrote. The raw material of the project graph.
 subsystem: sdd_core
 fields:
   - name: namespace
@@ -35,8 +35,10 @@ fields:
   - name: config
     type: ProjectConfig | null
     description: >-
-      The root's configuration, read through the configuration bound at that root — the same
-      per-root binding that already supplies the root's specs folder; null when unreadable.
+      The root's configuration, read through the configuration bound at that root — the per-root
+      binding the scan already reads the root's specs folder through (a scan may read the
+      configuration of the root it is walking, through that root's binding); its .wai/project.yaml
+      is part of the scan's freshness signature. Null when unreadable.
     optional: false
   - name: specIds
     type: string[]
@@ -46,11 +48,9 @@ fields:
     optional: false
   - name: authoredReferences
     type: AuthoredReference[]
-    description: >-
-      Every reference this root's files wrote in a relative form (`super::…`, leading `::`), before
-      qualification.
+    description: Every reference this root's files wrote with a leading `::`, before qualification.
     optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-26T17:39:58.407Z'
-updatedAt: '2026-09-26T17:39:58.408Z'
+updatedAt: '2026-09-26T18:13:07.650Z'

@@ -98,15 +98,16 @@ methods:
       The target types this configuration enables: every target not explicitly disabled. Empty for a
       configuration with no enabled targets.
   - name: effectiveId
-    signature: 'effectiveId(mountAlias?: string): string | null'
+    signature: 'effectiveId(): string | null'
     returns: string | null
     description: >-
-      The declared id when there is one, as written; otherwise, for a chained child read through its
-      family, the mount alias it is given (a chained child answers to its mount's subsystem id,
-      decision 2a); otherwise `name` slugified. Slugifying lower-cases the name, collapses each run
-      of characters outside [a-z0-9-_.] to one '-', and trims the result until it starts and ends
-      alphanumeric. Returns null when no declared id exists, no mount alias is given and no slug can
-      be made; it never invents a fallback.
+      The declared id when there is one, as written; otherwise `name` slugified — in every reader,
+      the project graph included, so a project answers to one id wherever it is read (a chained
+      child that declares none is not given its mount's subsystem id here: PROJECT_ID_DEFAULTED
+      names that id as the one to declare, and 2c's doctor --fix writes it). Slugifying lower-cases
+      the name, collapses each run of characters outside [a-z0-9-_.] to one '-', and trims the
+      result until it starts and ends alphanumeric. Returns null when no declared id exists and no
+      slug can be made; it never invents a fallback.
     symbol: effectiveProjectId
   - name: identity
     signature: 'identity(lockedProjectId?: string): ProjectIdentity'
@@ -128,4 +129,4 @@ methods:
       entry's problem rather than dropped. Empty when nothing is declared.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-26T17:39:27.020Z'
+updatedAt: '2026-09-26T18:12:37.400Z'

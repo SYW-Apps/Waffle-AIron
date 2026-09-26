@@ -17,7 +17,7 @@ fields:
     optional: false
   - name: authoredReferences
     type: AuthoredReference[]
-    description: Every relative-form reference across the family.
+    description: Every leading-`::` reference across the family.
     optional: false
   - name: problems
     type: ProjectFamilyProblem[]
@@ -59,4 +59,4 @@ methods:
       the consumer's direct members (the mount is the alias), or one of the consumer's externals
       resolves to it.
 createdAt: '2026-09-26T17:40:06.197Z'
-updatedAt: '2026-09-26T17:43:20.189Z'
+updatedAt: '2026-09-26T18:13:08.687Z'
