@@ -24,6 +24,21 @@ export type SourceFileStatus = 'analyzed' | 'missing' | 'escaped' | 'unreadable'
  *
  * Type-only imports are never recorded: a type binding cannot be a call origin.
  */
+/**
+ * One name a file republishes from another module (source_file_facts
+ * reexportBindings): `export { local as exported } from 'from'`, or a star
+ * re-export, which republishes every name its module exports under that same
+ * name and is written with `*` on both sides.
+ */
+export interface ReexportBindingFact {
+  /** The name this file publishes it under; `*` for a star re-export. */
+  exported: string;
+  /** The name the module it comes from publishes it under; `*` for a star re-export. */
+  local: string;
+  /** The module specifier, exactly as written. */
+  from: string;
+}
+
 export interface ImportBindingFact {
   /** The module specifier the binding came from, exactly as written. */
   from: string;
@@ -211,6 +226,15 @@ export interface SourceFileFacts {
   imports: string[];
   /** Module specifiers of export-from declarations (surface republication). */
   reexports: string[];
+  /**
+   * What each export-from declaration republishes, name by name: a named one
+   * with both sides of its rename (`export { a as b } from 'm'` publishes `b`
+   * as m's `a`), a star with `*` on both sides. Runtime re-exports only — a
+   * type-only one republishes no function. EXACT grade only: it is what lets a
+   * reader follow a republished name to the module that wrote it, and a
+   * weaker grade leaves it unset rather than guess.
+   */
+  reexportBindings?: ReexportBindingFact[];
   /**
    * Cyclomatic complexity per named function-like (function/method/accessor
    * declarations, and function/arrow initializers of named slots). EXACT grade

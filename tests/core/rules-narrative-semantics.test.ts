@@ -647,6 +647,102 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
   });
 });
 
+// F80: an adapter whose contract speaks the consumer's language republishes
+// its provider under the ADAPTER's name — `export { a as b } from 'm'`. The
+// hop is an identity forward exactly like the unaliased `export { a } from
+// 'm'`, and both halves of the relation must read it that way.
+describe('F80 — an aliased re-export forwards like an unaliased one', () => {
+  /** A provider store, a thin adapter re-exporting it under its own contract name, and an orchestrator calling the adapter. */
+  const aliasedAdapter = (proj: ReturnType<typeof createTempProject>, adapterSource: string, orchSource: string) => {
+    proj.component('store-a', 'Store');
+    proj.contract('store-a', ['listSnapshots']);
+    proj.impl('store-a', 'sourcePath: src/store.ts\nmethods:\n  - name: listSnapshots\n    detail: intent\n    intent: Answers every snapshot held, in the order they were stored; an empty store answers none.');
+    proj.source('src/store.ts', 'export function listSnapshots(): string[] { return []; }\n');
+    proj.component('store-adapter', 'Adapter', 'dependsOn: [store-a]');
+    proj.contract('store-adapter', ['loadSurfaceSnapshots']);
+    proj.impl('store-adapter', [
+      'sourcePath: src/adapters/store.ts',
+      'methods:',
+      '  - name: loadSurfaceSnapshots',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Call listSnapshots on the store, type: call, targetComponent: store-a, targetMethod: listSnapshots }',
+    ].join('\n'));
+    proj.source('src/adapters/store.ts', adapterSource);
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [store-adapter]');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', [
+      'sourcePath: src/orch.ts',
+      'methods:',
+      '  - name: runFlow',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Read the snapshots through the adapter, type: call, targetComponent: store-adapter, targetMethod: loadSurfaceSnapshots }',
+      '      - { stepNumber: 2, description: Done, type: return, outcome: done }',
+    ].join('\n'));
+    proj.source('src/orch.ts', orchSource);
+  };
+  const CONSUMER = "import { loadSurfaceSnapshots } from './adapters/store.js';\nexport function runFlow(): void { loadSurfaceSnapshots(); }\n";
+
+  it('the adapter\'s own call step is realized by `export { a as b } from` — the identity forward, aliased', () => {
+    const proj = createTempProject();
+    aliasedAdapter(proj, "export { listSnapshots as loadSurfaceSnapshots } from '../store.js';\n", CONSUMER);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(byCode(res, 'CALL_STEP_UNREALIZED')).toEqual([]);
+      expect(byCode(res, 'CALL_ORIGIN_UNRESOLVED')).toEqual([]);
+      expect(byCode(res, 'METHOD_BODY_NOT_FOUND')).toEqual([]);
+      expect(byCode(res, 'UNREALIZED_METHOD')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('follows the alias through a chain of re-exports, aliased at every hop', () => {
+    const proj = createTempProject();
+    aliasedAdapter(proj, "export { snapshots as loadSurfaceSnapshots } from './barrel.js';\n", CONSUMER);
+    proj.source('src/adapters/barrel.ts', "export { listSnapshots as snapshots } from '../store.js';\n");
+    proj.activate();
+    try {
+      // The middle hop is a file no spec names: it is in the code model because
+      // the run declares its source root, as a project that wants its unclaimed
+      // code seen does. A file outside the model is not read.
+      const res = validateSddTree({ rules: { conformance: { sourceRoots: ['src'] } } as never });
+      expect(byCode(res, 'CALL_STEP_UNREALIZED')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a consumer claiming the PROVIDER\'s method is realized by calling the adapter\'s alias — the call lands where m.a lives', () => {
+    const proj = createTempProject();
+    aliasedAdapter(proj, "export { listSnapshots as loadSurfaceSnapshots } from '../store.js';\n", CONSUMER);
+    proj.component('orch-b', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('orch-b', ['audit']);
+    proj.impl('orch-b', [
+      'sourcePath: src/audit.ts',
+      'methods:',
+      '  - name: audit',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Read the snapshots, type: call, targetComponent: store-a, targetMethod: listSnapshots }',
+      '      - { stepNumber: 2, description: Done, type: return, outcome: done }',
+    ].join('\n'));
+    proj.source('src/audit.ts', "import { loadSurfaceSnapshots } from './adapters/store.js';\nexport function audit(): void { loadSurfaceSnapshots(); }\n");
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('the alias is load-bearing: re-exporting a DIFFERENT provider function under the contract name still flags the step', () => {
+    const proj = createTempProject();
+    aliasedAdapter(proj, "export { countSnapshots as loadSurfaceSnapshots } from '../other.js';\n", CONSUMER);
+    proj.source('src/other.ts', 'export function countSnapshots(): number { return 0; }\n');
+    proj.activate();
+    try {
+      const found = byCode(validateSddTree(), 'CALL_STEP_UNREALIZED');
+      expect(found).toHaveLength(1);
+      expect(found[0].specId).toBe('impl-store-adapter');
+      expect(found[0].message).toContain('store-a.listSnapshots');
+    } finally { proj.cleanup(); }
+  });
+});
+
 describe('buildCodeModel — per-function callee facts (exact grade)', () => {
   const mkTemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-callees-'));
   const impl = (sourcePath: string) => ({

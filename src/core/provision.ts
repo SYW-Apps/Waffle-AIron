@@ -36,6 +36,7 @@ import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } fro
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
 import type { ProjectConfig } from '../models/project.js';
+import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
 import {
   SpecIdSchema,
   type ComponentSpec,
@@ -638,6 +639,46 @@ function rewriteRefFields(
 }
 
 /**
+ * Rekey every lint allow under `specsDir` for an identity move and return the
+ * specs it rewrote. An allow is keyed like a carried finding — the spec it
+ * sits on, its site (`at`), the units it covers — so it follows the move by
+ * the same arithmetic (identity_rename.rekeyAnchor): its site follows a
+ * renamed method or an edge's renamed component, and every covered unit
+ * follows too. Where the allow LIVES is the file walk's business: a spec the
+ * rename moves carries its allows with it.
+ */
+function rekeyLintAllows(specsDir: string, rename: IdentityRename): RewrittenSpec[] {
+  const rewritten: RewrittenSpec[] = [];
+  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    const allows = raw?.lint?.allow;
+    const kind = raw && typeof raw === 'object' ? specKind(raw) : null;
+    if (!kind || !Array.isArray(allows)) continue;
+    const specId = kind === 'system' ? 'system' : String(raw.id);
+    let changed = false;
+    for (const allow of allows) {
+      if (!allow || typeof allow !== 'object') continue;
+      const next = rekeyAnchor(rename, {
+        spec: specId,
+        ...(typeof allow.at === 'string' ? { at: allow.at } : {}),
+        ...(Array.isArray(allow.covers) ? { covers: allow.covers } : {}),
+      });
+      if (next.at !== undefined && next.at !== allow.at) { allow.at = next.at; changed = true; }
+      if (next.covers && JSON.stringify(next.covers) !== JSON.stringify(allow.covers)) { allow.covers = next.covers; changed = true; }
+    }
+    if (!changed) continue;
+    writeYamlFile(file, raw);
+    rewritten.push({ kind, id: specId });
+  }
+  return rewritten;
+}
+
+/**
  * Re-express every implementation file path (sourcePath, each method's
  * sourcePath, simPath) under `specsDir` so it is read against `toRoot` instead
  * of `fromRoot`. The file a path names never changes — only the root it is
@@ -705,8 +746,14 @@ export interface SpecRename {
 export interface ComponentRename {
   /** The component, and each interface and implementation named after it (i<id>, <id>_impl), with its old and new id. */
   renamed: SpecRename[];
-  /** Ids of the other specs whose references to a renamed id were rewritten. */
+  /** Ids of the other specs whose references to a renamed id were rewritten — lint allows naming it included. */
   rewritten: string[];
+  /**
+   * Every edit to the debt register (.wai/project.yaml rules.conformance.carried):
+   * an entry anchored on a renamed spec, or naming the component in its site or
+   * covered units. Empty when the register names none of them.
+   */
+  carried: CarriedRekey[];
 }
 
 /**
@@ -765,29 +812,46 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
     ...(movingInterface ? [{ kind: 'interface' as const, from: movingInterface.id, to: interfaceId }] : []),
     ...(movingImplementation ? [{ kind: 'implementation' as const, from: movingImplementation.id, to: implementationId }] : []),
   ];
+  // Step 14: the move as the register and the lint allows are keyed by it:
+  // every renamed spec, and the component wherever a unit or an edge names it.
+  const rename: IdentityRename = {
+    specs: renamed.map(({ from, to }) => ({ from, to })),
+    components: [{ from: componentId, to: newId }],
+  };
+  // Step 15: refuse before the first write when the register cannot be
+  // rewritten precisely: a rename that half-lands with its debt left behind reads as
+  // debt paid and debt new.
+  projectConfigRepository.rekeyCarried(rename, true);
 
-  // Step 14: every reference to a renamed id across the bound tree, the moved
+  // Step 16: every reference to a renamed id across the bound tree, the moved
   // specs' own files included, before anything is saved: placement then finds a
   // renamed member's owner through its rewritten owns. The moved specs report as
   // renamed, not as rewritten.
-  const rewritten = rewriteRefFields(aiPathsAt(getProjectRoot()).specsDir(), (ref, position) => {
+  const rewrittenRefs = rewriteRefFields(aiPathsAt(getProjectRoot()).specsDir(), (ref, position) => {
     if (position === 'component' || position === 'entity-class' || position === 'auth-source') {
       return ref === componentId ? newId : ref;
     }
     if (position === 'interface' && ref === movingInterface?.id) return interfaceId;
     return ref;
-  })
+  });
+  // Step 17: the lint allows naming it — a site on an edge, a covered unit —
+  // follow as the register does.
+  const allowsRekeyed = rekeyLintAllows(aiPathsAt(getProjectRoot()).specsDir(), rename);
+  const rewritten = [...new Set([...rewrittenRefs, ...allowsRekeyed]
     .filter((spec) => !renamed.some((moved) => moved.kind === spec.kind && moved.from === spec.id))
-    .map((spec) => spec.id);
+    .map((spec) => spec.id))];
 
-  // Step 15: the rewrite changed files outside the save paths.
+  // Step 18: the rewrite changed files outside the save paths.
   invalidateSpecCache();
 
-  // Step 16: each moved spec under its new id, and the file it left behind.
+  // Step 19: each moved spec under its new id, and the file it left behind.
   moveRenamedSpecs(componentId, newId, component, movingInterface, movingImplementation);
 
-  // Step 17: what moved, and what was rewritten.
-  return { renamed, rewritten };
+  // Step 20: the debt register, keyed by exactly the ids just moved.
+  const carried = projectConfigRepository.rekeyCarried(rename);
+
+  // Step 21: what moved, what was rewritten, and what the register followed.
+  return { renamed, rewritten, carried };
 }
 
 /**
@@ -908,6 +972,13 @@ export interface MethodRename {
   mentions: string[];
   /** The code symbol an implementation now declares, when the rename pinned the old name so the existing function still binds. */
   pinnedSymbol?: string;
+  /**
+   * Every edit to the debt register (.wai/project.yaml rules.conformance.carried):
+   * an entry anchored at the method on a spec it moved in, or naming
+   * `<component>.<method>` in a covered unit. Empty when the register names it
+   * nowhere.
+   */
+  carried: CarriedRekey[];
 }
 
 /**
@@ -940,23 +1011,43 @@ export function renameMethod(componentId: string, methodName: string, newName: s
     throw new WaironError(`invalid-name: "${newName}" is not a camel-case identifier.`);
   }
 
-  // Steps 8–9: the component's own contracts, and the ones declaring the method.
+  // Step 8: the component's own contracts, and the ones declaring the method.
   const contracts = loadInterfaceSpecs().filter((i) => i.component === componentId);
   const moving = contracts.filter((i) => i.methods.some((m) => m.name === methodName));
-  // Steps 10–11: the component must declare the method…
+  // Steps 9–10: the component must declare the method…
   if (moving.length === 0) {
     throw new WaironError(`method-missing: no contract of "${componentId}" declares the method "${methodName}".`);
   }
-  // Steps 12–13: …and the new name must be free on every contract that moves.
+  // Steps 11–12: …and the new name must be free on every contract that moves.
   const taken = moving.filter((i) => i.methods.some((m) => m.name === newName)).map((i) => `"${i.id}"`);
   if (taken.length > 0) {
     throw new WaironError(`name-taken: ${taken.join(', ')} already declares a method under the name "${newName}".`);
   }
 
-  // Step 14: every implementation, for the realizations of those contracts.
+  // Step 13: every implementation, for the realizations of those contracts.
   const implementations = loadImplementationSpecs();
   const movingContracts = new Set(moving.map((i) => i.id));
   const renamed: string[] = [];
+
+  // Step 14: the move as the register and the lint allows are keyed by it: the
+  // method on the contracts that declare it and the implementations that
+  // realize it, and `<component>.<method>` wherever a unit names it. Refused
+  // before the first write when the register cannot be rewritten precisely.
+  const rename: IdentityRename = {
+    methods: [{
+      component: componentId,
+      method: methodName,
+      toComponent: componentId,
+      toMethod: newName,
+      specs: [
+        ...moving.map((i) => i.id),
+        ...implementations
+          .filter((impl) => movingContracts.has(impl.contract) && impl.methods.some((m) => m.name === methodName))
+          .map((impl) => impl.id),
+      ],
+    }],
+  };
+  projectConfigRepository.rekeyCarried(rename, true);
 
   // Steps 15–16: the method moves on each of those contracts — its name, and
   // the name inside its signature. Params, returns, description, guarantees,
@@ -999,14 +1090,20 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   // it is named: a narrative call, register or dispatch step, a dispatch-table
   // binding, and a lifecycle entrypoint. The rewriter persists what it changes.
   const specsDir = aiPathsAt(getProjectRoot()).specsDir();
-  const rewritten = rewriteRefFields(specsDir, (ref, position, owner) =>
-    (position === 'method' && owner === componentId && ref === methodName ? newName : ref))
-    .map((spec) => spec.id);
+  const retargeted = rewriteRefFields(specsDir, (ref, position, owner) =>
+    (position === 'method' && owner === componentId && ref === methodName ? newName : ref));
+  // Still step 22: the lint allows naming it — a site on a spec it moved in, a
+  // covered unit — follow as the register does.
+  const allowsRekeyed = rekeyLintAllows(specsDir, rename);
+  const rewritten = [...new Set([...retargeted, ...allowsRekeyed].map((spec) => spec.id))];
 
   // Step 23: what names the method and is left alone.
   const mentions = collectMentions(specsDir, methodName, moving);
 
-  // Step 24: the report.
+  // Step 24: the debt register, keyed by exactly the identity just moved.
+  const carried = projectConfigRepository.rekeyCarried(rename);
+
+  // Step 25: the report.
   return {
     component: componentId,
     from: methodName,
@@ -1015,6 +1112,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
     rewritten,
     mentions,
     ...(pinnedSymbol ? { pinnedSymbol } : {}),
+    carried,
   };
 }
 

@@ -112,6 +112,8 @@ describe('sdd_rename_component', () => {
         { kind: 'interface', from: 'iledger', to: 'ijournal' },
       ],
       rewritten: ['books_orch'],
+      // The debt register names nothing this rename moved (F78).
+      carried: [],
     });
     invalidateSpecCache();
     expect(loadComponentSpec('journal')).not.toBeNull();

@@ -74,6 +74,8 @@ function counted(root: string): { repo: ProjectConfigRepository; writes: () => n
     readDocument: () => real.readDocument(),
     writeDocument: (document) => { n++; real.writeDocument(document); },
     documentExists: () => real.documentExists(),
+    readText: () => real.readText(),
+    writeText: (text) => { n++; real.writeText(text); },
   };
   return { repo: projectConfigRepositoryOver(adapter, root), writes: () => n };
 }
@@ -503,5 +505,176 @@ describe('project_config type behaviour', () => {
       profileSelection: { profileIds: ['game-ecs', 'backend', 'game-ecs'], requiredPackNames: [], selectedAt: NOW },
     })).toEqual(['game-ecs', 'backend']);
     expect(declaredProfileIds({})).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F78 — the debt register follows a renamed identity, and nothing else moves
+//
+// The register is keyed by exactly the ids a rename exists to rewrite. It is
+// also written by people: every carried group has a count comment and prose.
+// So the rekey edits the scalars in the TEXT, and the proof is a diff.
+// ---------------------------------------------------------------------------
+
+describe('project config registry — rekeyCarried (F78)', () => {
+  /** The lines of two texts that differ, pairwise; the texts must have the same line count. */
+  const changedLines = (before: string, after: string): [string, string][] => {
+    const a = before.split('\n');
+    const b = after.split('\n');
+    expect(b).toHaveLength(a.length);
+    return a.map((line, i) => [line, b[i]] as [string, string]).filter(([x, y]) => x !== y);
+  };
+
+  const REGISTER = [
+    MARKER,
+    'schemaVersion: 1.0.0',
+    'name: demo',
+    'targets: []',
+    'rules:',
+    '  conformance:',
+    '    # The debt register, frozen.',
+    '    carried:',
+    '      # 2 finding(s), 3 unit(s).',
+    '      - kind: drift',
+    '        why: >-',
+    '          A narrative names a call target: core_portal.loadX is where it',
+    '          lands, and prose never moves.',
+    '        findings:',
+    '          - code: CALL_STEP_UNREALIZED',
+    '            spec: core_portal_impl  # the portal',
+    "            at: 'loadX'",
+    '            covers:',
+    "              - '3:core_portal.loadX'",
+    "              - '4:other.loadX'",
+    '          - code: UNDECLARED_COLOCATED_CALL',
+    '            spec: runner_impl',
+    '            at: "run"',
+    '            covers:',
+    '              - core_portal.loadX',
+    `createdAt: '${NOW}'`,
+    `updatedAt: '${NOW}'`,
+  ];
+
+  it('rewrites spec, at and covers for a component rename, keeping every comment, quote and untouched line', () => {
+    const root = tempRoot();
+    writeDoc(root, REGISTER);
+    const before = fs.readFileSync(configFile(root), 'utf8');
+    const rekeys = projectConfigRepositoryAt(root).rekeyCarried({
+      specs: [{ from: 'core_portal', to: 'spec_tree_portal' }, { from: 'core_portal_impl', to: 'spec_tree_portal_impl' }],
+      components: [{ from: 'core_portal', to: 'spec_tree_portal' }],
+    });
+    expect(rekeys).toEqual([
+      { code: 'CALL_STEP_UNREALIZED', spec: 'core_portal_impl', at: 'loadX', field: 'spec', from: 'core_portal_impl', to: 'spec_tree_portal_impl' },
+      { code: 'CALL_STEP_UNREALIZED', spec: 'core_portal_impl', at: 'loadX', field: 'covers', from: '3:core_portal.loadX', to: '3:spec_tree_portal.loadX' },
+      { code: 'UNDECLARED_COLOCATED_CALL', spec: 'runner_impl', at: 'run', field: 'covers', from: 'core_portal.loadX', to: 'spec_tree_portal.loadX' },
+    ]);
+    const after = fs.readFileSync(configFile(root), 'utf8');
+    // Only the three renamed ids moved — the prose naming core_portal did not.
+    expect(changedLines(before, after)).toEqual([
+      ['            spec: core_portal_impl  # the portal', '            spec: spec_tree_portal_impl  # the portal'],
+      ["              - '3:core_portal.loadX'", "              - '3:spec_tree_portal.loadX'"],
+      ['              - core_portal.loadX', '              - spec_tree_portal.loadX'],
+    ]);
+  });
+
+  it('rewrites the site on the specs a renamed method moved on, and a unit naming it anywhere', () => {
+    const root = tempRoot();
+    writeDoc(root, REGISTER);
+    const before = fs.readFileSync(configFile(root), 'utf8');
+    projectConfigRepositoryAt(root).rekeyCarried({
+      methods: [{ component: 'core_portal', method: 'loadX', toComponent: 'core_portal', toMethod: 'loadY', specs: ['core_portal_impl', 'icore_portal'] }],
+    });
+    expect(changedLines(before, fs.readFileSync(configFile(root), 'utf8'))).toEqual([
+      ["            at: 'loadX'", "            at: 'loadY'"],
+      ["              - '3:core_portal.loadX'", "              - '3:core_portal.loadY'"],
+      ['              - core_portal.loadX', '              - core_portal.loadY'],
+    ]);
+  });
+
+  it('re-homes only the moved methods\' entries on a method move', () => {
+    const root = tempRoot();
+    writeDoc(root, REGISTER);
+    const rekeys = projectConfigRepositoryAt(root).rekeyCarried({
+      specs: [{ from: 'core_portal_impl', to: 'loader_impl', sites: ['loadX'] }, { from: 'runner_impl', to: 'loader_impl', sites: ['elsewhere'] }],
+      methods: [{ component: 'core_portal', method: 'loadX', toComponent: 'loader', toMethod: 'loadX' }],
+    });
+    expect(rekeys.map((r) => `${r.field}:${r.from}->${r.to}`)).toEqual([
+      'spec:core_portal_impl->loader_impl',
+      'covers:3:core_portal.loadX->3:loader.loadX',
+      'covers:core_portal.loadX->loader.loadX',
+    ]);
+  });
+
+  it('keeps CRLF line endings exactly', () => {
+    const root = tempRoot();
+    fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
+    fs.writeFileSync(configFile(root), REGISTER.join('\r\n') + '\r\n');
+    projectConfigRepositoryAt(root).rekeyCarried({ components: [{ from: 'core_portal', to: 'spec_tree_portal' }] });
+    const bytes = fs.readFileSync(configFile(root));
+    const crlf = bytes.toString('latin1').split('\r\n').length - 1;
+    const lf = bytes.toString('latin1').split('\n').length - 1;
+    expect(crlf).toBe(REGISTER.length);
+    expect(lf).toBe(crlf);
+    expect(bytes.toString('utf8')).toContain("- '3:spec_tree_portal.loadX'\r\n");
+  });
+
+  it('writes nothing on a dry run, yet answers the edits it would make', () => {
+    const root = tempRoot();
+    writeDoc(root, REGISTER);
+    const { repo, writes } = counted(root);
+    const rekeys = repo.rekeyCarried({ components: [{ from: 'core_portal', to: 'spec_tree_portal' }] }, true);
+    expect(rekeys).toHaveLength(2);
+    expect(writes()).toBe(0);
+    expect(fs.readFileSync(configFile(root), 'utf8')).toContain("'3:core_portal.loadX'");
+  });
+
+  it('writes nothing, and answers nothing, when no entry names the moved identity', () => {
+    const root = tempRoot();
+    writeDoc(root, REGISTER);
+    const { repo, writes } = counted(root);
+    expect(repo.rekeyCarried({ components: [{ from: 'nobody', to: 'somebody' }] })).toEqual([]);
+    expect(writes()).toBe(0);
+  });
+
+  it('refuses a layout it cannot edit precisely, naming the path, and writes nothing', () => {
+    const root = tempRoot();
+    writeDoc(root, [
+      ...minimal().filter((l) => l !== 'rules: {}'),
+      'rules:',
+      '  conformance:',
+      '    carried:',
+      '      - kind: drift',
+      '        why: w',
+      "        findings: [{ code: CALL_STEP_UNREALIZED, spec: core_portal_impl, at: loadX, covers: ['1:core_portal.loadX'] }]",
+    ]);
+    const before = fs.readFileSync(configFile(root), 'utf8');
+    expect(() => projectConfigRepositoryAt(root).rekeyCarried({ components: [{ from: 'core_portal', to: 'x' }] }))
+      .toThrow(/Cannot rewrite \.wai\/project\.yaml .*rules\.conformance\.carried\.0\.findings\.0\.covers\.0: .*Nothing was written\./);
+    expect(fs.readFileSync(configFile(root), 'utf8')).toBe(before);
+  });
+
+  it('rewrites this repository\'s own register and changes nothing but the renamed ids', () => {
+    // The real register: dozens of groups, count comments, folded prose.
+    const root = tempRoot();
+    fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
+    const real = fs.readFileSync(path.resolve(process.cwd(), '.wai', 'project.yaml'));
+    fs.writeFileSync(configFile(root), real);
+    const text = real.toString('utf8');
+    const target = /spec: (\w+_impl)\n\s+at: '(\w+)'\n\s+covers:\n\s+- '(\w+)\.\w+'/.exec(text.replace(/\r\n/g, '\n'));
+    expect(target).not.toBeNull();
+    const [, spec, , component] = target!;
+    const rekeys = projectConfigRepositoryAt(root).rekeyCarried({
+      specs: [{ from: spec, to: `${spec}_renamed` }],
+      components: [{ from: component, to: `${component}_renamed` }],
+    });
+    expect(rekeys.length).toBeGreaterThan(0);
+    const after = fs.readFileSync(configFile(root));
+    // Same bytes everywhere but the rekeyed lines, CRLF kept where it was.
+    const pairs = changedLines(text, after.toString('utf8'));
+    for (const [was, now] of pairs) {
+      expect(now.replace(`${spec}_renamed`, spec).replace(`${component}_renamed`, component)).toBe(was);
+    }
+    expect(pairs.length).toBe(rekeys.length);
+    expect(after.toString('latin1').split('\r\n').length).toBe(real.toString('latin1').split('\r\n').length);
   });
 });

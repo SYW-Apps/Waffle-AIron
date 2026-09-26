@@ -416,3 +416,131 @@ describe('updateSpecGated — the write names the tests it just invalidated', ()
     expect(report.testsToRevisit.map(e => e.method)).toEqual(['run']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F75 — a binding binds ONE module
+//
+// Removing eleven thin adapter methods named like core's functions once listed
+// ~250 test files: every test that imported CORE's function of the same name.
+// None of them tested the adapter. A method whose realizing file is known is
+// searched by module: an import counts only when it resolves to that file or
+// to a module re-exporting the name from there.
+// ---------------------------------------------------------------------------
+
+describe('findTestsReferencing — resolved by the module a test imports FROM (F75)', () => {
+  /**
+   * The shape that flooded: core realizes saveSpec/loadSpec, an adapter module
+   * republishes them by identity under the same names, and most of the suite
+   * imports core's functions directly.
+   */
+  const floodShape = (root: string): void => {
+    write(root, 'src/core/specs.ts', 'export function saveSpec() {}\nexport function loadSpec() {}\n');
+    write(root, 'src/core/adapters/authoring-core.ts', "export { saveSpec, loadSpec } from '../specs.js';\n");
+    for (let i = 0; i < 12; i += 1) {
+      write(root, `tests/core/specs${i}.test.ts`, "import { saveSpec, loadSpec } from '../../src/core/specs.js';\nit('saves', () => saveSpec());");
+    }
+    write(root, 'tests/core/adapter.test.ts', "import { saveSpec } from '../../src/core/adapters/authoring-core.js';\nit('forwards', () => saveSpec());");
+  };
+
+  it('counts no test that imports the PROVIDER\'s same-named function when the removed method is the adapter\'s', () => {
+    const root = tempProject();
+    floodShape(root);
+    const found = findTestsReferencing(
+      [{ name: 'saveSpec', sourcePath: 'src/core/adapters/authoring-core.ts' }, { name: 'loadSpec', sourcePath: 'src/core/adapters/authoring-core.ts' }],
+      root,
+      ['tests'],
+    );
+    // saveSpec: only the adapter's own test. loadSpec: every file naming it binds
+    // it to core, so nothing names the adapter's method at all — no entry, and
+    // not a withheld "indiscriminate" mention list either.
+    expect(found).toEqual([
+      { method: 'saveSpec', symbol: 'saveSpec', imported: ['tests/core/adapter.test.ts'], mentioned: [], indiscriminate: false },
+    ]);
+  });
+
+  it('counts a test importing through a module that RE-EXPORTS the method from its file, aliased or not, through a chain', () => {
+    const root = tempProject();
+    floodShape(root);
+    write(root, 'src/core/index.ts', "export { saveSpec as storeSpec } from './adapters/authoring-core.js';\n");
+    write(root, 'src/barrel.ts', "export * from './core/index.js';\n");
+    write(root, 'tests/barrel.test.ts', "import { storeSpec } from '../src/barrel.js';\nit('stores', () => storeSpec());");
+    const found = findTestsReferencing([{ name: 'saveSpec', sourcePath: 'src/core/specs.ts' }], root, ['tests']);
+    // Every one of them reaches core's saveSpec: directly, through the adapter's
+    // identity re-export, and through an aliased re-export behind a star barrel.
+    expect(found[0].imported).toEqual([
+      'tests/barrel.test.ts',
+      'tests/core/adapter.test.ts',
+      ...Array.from({ length: 12 }, (_, i) => `tests/core/specs${i}.test.ts`).sort(),
+    ].sort());
+  });
+
+  it('keeps a prose or string mention as a mention, and drops a file that binds the name to another module', () => {
+    const root = tempProject();
+    write(root, 'src/billing.ts', 'export function runBilling() {}\n');
+    write(root, 'src/legacy.ts', 'export function runBilling() {}\n');
+    write(root, 'tests/portal.test.ts', "// drives runBilling through the portal\nit('bills', () => portal.handle('runBilling'));");
+    write(root, 'tests/legacy.test.ts', "import { runBilling } from '../src/legacy.js';\nit('bills', () => runBilling());");
+    write(root, 'tests/billing.test.ts', "import * as billing from '../src/billing.js';\nit('bills', () => billing.runBilling());");
+    for (let i = 0; i < 20; i += 1) write(root, `tests/filler${i}.test.ts`, "it('x', () => 1);");
+    const found = findTestsReferencing([{ name: 'runBilling', sourcePath: 'src/billing.ts' }], root, ['tests']);
+    expect(found).toEqual([{
+      method: 'runBilling',
+      symbol: 'runBilling',
+      // A namespace import of the method's own module that names the symbol.
+      imported: ['tests/billing.test.ts'],
+      mentioned: ['tests/portal.test.ts'],
+      indiscriminate: false,
+    }]);
+  });
+
+  it('reads a destructured dynamic import like a static one', () => {
+    const root = tempProject();
+    write(root, 'src/billing.ts', 'export function runBilling() {}\n');
+    write(root, 'tests/lazy.test.ts', "it('bills', async () => { const { runBilling: run } = await import('../src/billing.js'); run(); });");
+    const found = findTestsReferencing([{ name: 'runBilling', sourcePath: 'src/billing.ts' }], root, ['tests']);
+    expect(found[0].imported).toEqual(['tests/lazy.test.ts']);
+  });
+
+  it('merges a method realized in several files into one entry, imported from any of them', () => {
+    const root = tempProject();
+    write(root, 'src/a.ts', 'export function run() {}\n');
+    write(root, 'src/b.ts', 'export function run() {}\n');
+    write(root, 'tests/a.test.ts', "import { run } from '../src/a.js';\nit('a', () => run());");
+    write(root, 'tests/b.test.ts', "import { run } from '../src/b.js';\nit('b', () => run());");
+    const found = findTestsReferencing([{ name: 'run', sourcePath: 'src/a.ts' }, { name: 'run', sourcePath: 'src/b.ts' }], root, ['tests']);
+    expect(found).toHaveLength(1);
+    expect(found[0].imported).toEqual(['tests/a.test.ts', 'tests/b.test.ts']);
+  });
+
+  it('searches by name alone, as before, when no spec places the method in a file', () => {
+    const root = tempProject();
+    floodShape(root);
+    const found = findTestsReferencing([{ name: 'loadSpec' }], root, ['tests']);
+    expect(found[0].imported).toHaveLength(12);
+  });
+
+  it('the gated write resolves a CONTRACT method to its realization\'s file, so a same-named import elsewhere is not its test', () => {
+    const proj = seedGatedProject(['tests']);
+    saveImplementationSpec({
+      id: 'flow_impl', name: 'FlowImpl', description: 'The flow implementation', contract: 'iflow',
+      sourcePath: 'src/adapters/flow.ts',
+      methods: [{ name: 'run', narrative: [{ stepNumber: 1, description: 'Do the work', type: 'local' }] } as never],
+      status: 'complete', createdAt: now, updatedAt: now,
+    });
+    invalidateSpecCache();
+    write(proj, 'src/flow.ts', 'export function run(payload: string) {}\n');
+    write(proj, 'src/adapters/flow.ts', "export { run } from '../flow.js';\n");
+    write(proj, 'tests/adapter.test.ts', "import { run } from '../src/adapters/flow.js';\nit('forwards', () => run(''));");
+    write(proj, 'tests/other.test.ts', "import { run } from '../src/other.js';\nit('other', () => run(''));");
+
+    const report = updateSpecGated('interface', 'iflow', {
+      methods: [{ name: 'run', description: 'runs the flow, now differently' }],
+    });
+    // tests/flow.test.ts imports the PROVIDER (src/flow.js), which is not the
+    // adapter's file and re-exports nothing from it; tests/other.test.ts binds
+    // the name to a module of its own. Only the adapter's own test remains.
+    expect(report.testsToRevisit).toEqual([
+      { method: 'run', symbol: 'run', imported: ['tests/adapter.test.ts'], mentioned: [], indiscriminate: false },
+    ]);
+  });
+});

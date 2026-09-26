@@ -124,7 +124,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('restatementParent — the spec a restatement cannot be written without', () => {
-  it('names the container of each level, and none for the L0 or a type', () => {
+  it('names the container of each level, and none for the L0 or a type that names no owner', () => {
     const r = (kind: SpecRestatement['kind'], spec: Record<string, unknown>): SpecRestatement =>
       ({ kind, spec: spec as never, fields: [] });
     expect(restatementParent(r('system', { name: 'S' }))).toBeNull();
@@ -132,8 +132,13 @@ describe('restatementParent — the spec a restatement cannot be written without
     expect(restatementParent(r('component', { id: 'c', subsystem: 'shop' }))).toEqual({ kind: 'subsystem', id: 'shop' });
     expect(restatementParent(r('interface', { id: 'i', component: 'c' }))).toEqual({ kind: 'component', id: 'c' });
     expect(restatementParent(r('implementation', { id: 'x', contract: 'i' }))).toEqual({ kind: 'interface', id: 'i' });
-    // A type's subsystem is an ownership label, not a container.
-    expect(restatementParent(r('type', { id: 't', subsystem: 'shop' }))).toBeNull();
+    // A type's subsystem is an ownership label, not a container — but a label
+    // naming a subsystem the tree does not have owns the type to nothing (F81),
+    // so the owner it names is the spec it cannot be written without.
+    expect(restatementParent(r('type', { id: 't', subsystem: 'shop' }))).toEqual({ kind: 'subsystem', id: 'shop' });
+    // A system-level value object names no subsystem and stays parentless.
+    expect(restatementParent(r('type', { id: 't' }))).toBeNull();
+    expect(restatementParent(r('type', { id: 't', subsystem: '' }))).toBeNull();
   });
 });
 
@@ -441,6 +446,22 @@ describe('writeSpec — a type', () => {
     kind: 'type',
     spec: { kind: 'value-object', id: 'money', name: 'Money', fields: [], methods: [], ...over } as unknown as TypeSpec,
     fields: TYPE_FIELDS,
+  });
+
+  it('refuses an owning subsystem the tree does not have, before anything reaches disk (F81)', () => {
+    project();
+    expect(() => writeSpec(type({ kind: 'entity', subsystem: 'warehouse' })))
+      .toThrow('Owning subsystem "warehouse" does not exist');
+    invalidateSpecCache();
+    expect(loadTypeSpec('money')).toBeNull();
+  });
+
+  it('writes a type owned by a subsystem the tree has', () => {
+    project();
+    const receipt = writeSpec(type({ kind: 'entity', subsystem: 'shop' }));
+    expect(receipt.replacedExisting).toBe(false);
+    invalidateSpecCache();
+    expect(loadTypeSpec('money')?.subsystem).toBe('shop');
   });
 
   it('needs no parent, carries no status, and names a removed member', () => {

@@ -17,6 +17,7 @@ import {
 } from '../../models/index.js';
 import type {
   CodeIndex,
+  ForwardedName,
   DependencyEdge,
   DependencyEdges,
   ImportGraph,
@@ -239,6 +240,31 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
   const declarationsAt = (path: string): ReadonlySet<string> =>
     namesAt(declarations, pathKey(path), f => new Set([...f.declaredNames, ...f.exportedNames]));
 
+  const forwardsOf = (start: string, name: string): ForwardedName[] => {
+    const out: ForwardedName[] = [];
+    const seen = new Set<string>();
+    const queue: ForwardedName[] = [{ file: pathKey(start), name }];
+    while (queue.length) {
+      const at = queue.shift()!;
+      const key = `${at.file}#${at.name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(at);
+      for (const binding of facts.get(at.file)?.reexportBindings ?? []) {
+        const star = binding.exported === '*';
+        if (!star && binding.exported !== at.name) continue;
+        // A star re-export never republishes a module's default export.
+        if (star && at.name === 'default') continue;
+        const to = resolveImport(at.file, binding.from, paths);
+        if (!to) continue;
+        // A star forwards only the names its module actually publishes.
+        if (star && !facts.get(to)?.exportedNames.includes(at.name)) continue;
+        queue.push({ file: to, name: star ? at.name : binding.local });
+      }
+    }
+    return out;
+  };
+
   return {
     paths,
     exactPaths,
@@ -249,6 +275,7 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
     findingAnchorsAt: (path) => namesAt(findingAnchors, pathKey(path), f => new Set(f.anchoredNames)),
     originOf,
     possibleOriginsOf,
+    forwardsOf,
   };
 }
 

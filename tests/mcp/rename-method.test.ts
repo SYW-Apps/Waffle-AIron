@@ -122,6 +122,8 @@ describe('sdd_rename_method', () => {
       rewritten: ['books'],
       mentions: [],
       pinnedSymbol: 'post',
+      // The debt register names nothing this rename moved (F78).
+      carried: [],
     });
     invalidateSpecCache();
     expect(loadInterfaceSpec('iledger')?.methods.map((m) => m.name)).toEqual(['append', 'close']);

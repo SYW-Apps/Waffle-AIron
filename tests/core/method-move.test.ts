@@ -705,3 +705,138 @@ describe('moveMethods keeps where a moved entry is realized', () => {
     expect(report.notices.some((n) => n.includes('keeps'))).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F78 — a moved method's debt and allows move with it
+// ---------------------------------------------------------------------------
+
+describe('moveMethods — the debt register and the lint allows follow the moved methods (F78)', () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  /** A register keyed on a moved method (post), on one that stays (close), and naming intake.post in a unit. */
+  const register = (dir: string): string => {
+    const text = [
+      'schemaVersion: 1.0.0',
+      `name: ${path.basename(dir)}`,
+      'targets: []',
+      'rules:',
+      '  conformance:',
+      '    carried:',
+      '      # 3 finding(s), 2 unit(s).',
+      '      - kind: drift',
+      '        why: w',
+      '        findings:',
+      '          - code: UNDECLARED_PARAM',
+      '            spec: intake_impl',
+      "            at: 'post'",
+      '            covers:',
+      "              - 'cfg'",
+      '          - code: UNDECLARED_PARAM',
+      '            spec: intake_impl',
+      "            at: 'close'",
+      '          - code: CALL_STEP_UNREALIZED',
+      '            spec: books_orch_impl',
+      "            at: 'run'",
+      '            covers:',
+      "              - '1:intake.post'",
+      'extensions:',
+      '  packs: []',
+      '  useGlobalPacks: false',
+      `createdAt: '${now}'`,
+      `updatedAt: '${now}'`,
+    ].join('\n') + '\n';
+    fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), text);
+    return text;
+  };
+
+  const expectedRekeys = [
+    { code: 'UNDECLARED_PARAM', spec: 'intake_impl', at: 'post', field: 'spec', from: 'intake_impl', to: 'archive_impl' },
+    { code: 'CALL_STEP_UNREALIZED', spec: 'books_orch_impl', at: 'run', field: 'covers', from: '1:intake.post', to: '1:archive.post' },
+  ];
+
+  it('re-homes the moved method\'s register entries to the receiving spec, leaves the one that stays, and lists each edit', () => {
+    root = books();
+    const before = register(root);
+
+    const report = moveMethods('intake', 'archive', ['post', 'audit'], permissive);
+
+    expect(report.moved).toBe(true);
+    expect(report.carried).toEqual(expectedRekeys);
+    const after = fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8').split('\n');
+    expect(before.split('\n').map((line, i) => [line, after[i]]).filter(([x, y]) => x !== y)).toEqual([
+      ['            spec: intake_impl', '            spec: archive_impl'],
+      ["              - '1:intake.post'", "              - '1:archive.post'"],
+    ]);
+    expect(report.summary).toContain('rekeyed 2 debt-register keys');
+  });
+
+  it('names the register edits on a dry run and writes nothing', () => {
+    root = books();
+    register(root);
+    const before = snapshot(path.join(root, '.wai'));
+
+    const report = moveMethods('intake', 'archive', ['post', 'audit'], permissive, true);
+
+    expect(report.carried).toEqual(expectedRekeys);
+    expect(report.summary).toContain('would rekey 2 debt-register keys');
+    expect(snapshot(path.join(root, '.wai'))).toEqual(before);
+  });
+
+  it('moves a lint allow at a moved method to the receiving spec, and rekeys one covering it elsewhere', () => {
+    root = books();
+    const specs = path.join(root, '.wai', 'specs');
+    const intakeImpl = readYamlFile(path.join(specs, 'implementations', 'intake_impl.yaml')) as any;
+    writeYamlFile(path.join(specs, 'implementations', 'intake_impl.yaml'), {
+      ...intakeImpl,
+      lint: { allow: [
+        { code: 'UNDECLARED_PARAM', at: 'post', covers: ['cfg'], reason: 'wiring' },
+        { code: 'UNDECLARED_PARAM', at: 'close', covers: ['cfg'], reason: 'wiring' },
+      ] },
+    });
+    const orch = readYamlFile(path.join(specs, 'implementations', 'books_orch_impl.yaml')) as any;
+    writeYamlFile(path.join(specs, 'implementations', 'books_orch_impl.yaml'), {
+      ...orch, lint: { allow: [{ code: 'CALL_STEP_UNREALIZED', at: 'run', covers: ['1:intake.post', '4:mailer.post'], reason: 'r' }] },
+    });
+    invalidateSpecCache();
+
+    const report = moveMethods('intake', 'archive', ['post', 'audit'], permissive);
+
+    expect(stored(root, 'implementation', 'intake_impl').lint.allow).toEqual([
+      { code: 'UNDECLARED_PARAM', at: 'close', covers: ['cfg'], reason: 'wiring' },
+    ]);
+    expect(stored(root, 'implementation', 'archive_impl').lint.allow).toEqual([
+      { code: 'UNDECLARED_PARAM', at: 'post', covers: ['cfg'], reason: 'wiring' },
+    ]);
+    expect(stored(root, 'implementation', 'books_orch_impl').lint.allow).toEqual([
+      { code: 'CALL_STEP_UNREALIZED', at: 'run', covers: ['1:archive.post', '4:mailer.post'], reason: 'r' },
+    ]);
+    expect(report.edits.map((e) => e.id)).toEqual(expect.arrayContaining(['intake_impl', 'archive_impl', 'books_orch_impl']));
+  });
+
+  it('refuses before the first write when the register cannot be rewritten precisely', () => {
+    root = books();
+    fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), [
+      'schemaVersion: 1.0.0',
+      `name: ${path.basename(root)}`,
+      'targets: []',
+      'rules:',
+      '  conformance:',
+      "    carried: [{ kind: drift, why: w, findings: [{ code: UNDECLARED_PARAM, spec: intake_impl, at: post }] }]",
+      'extensions: { packs: [], useGlobalPacks: false }',
+      `createdAt: '${now}'`,
+      `updatedAt: '${now}'`,
+    ].join('\n') + '\n');
+    const before = snapshot(path.join(root, '.wai'));
+
+    expect(() => moveMethods('intake', 'archive', ['post', 'audit'], permissive)).toThrow(/Cannot rewrite \.wai\/project\.yaml/);
+
+    expect(snapshot(path.join(root, '.wai'))).toEqual(before);
+  });
+});

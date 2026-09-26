@@ -179,6 +179,26 @@ export interface CodeIndex {
    * nothing, exactly as the proven tier does.
    */
   possibleOriginsOf(site: CallSiteFact, from: string): ReadonlySet<string>;
+  /**
+   * What a name a file publishes IS, followed through every re-export: the
+   * pair itself, then for each export-from that republishes the name — named
+   * or star, aliased or not (`export { a as b } from 'm'` makes the file's `b`
+   * m's `a`) — the module it comes from under the name that module publishes
+   * it by, transitively. An aliased re-export forwards exactly as an
+   * unaliased one does; the spelling differs, the identity does not.
+   * Specifiers outside the closed path set, files below exact grade (which
+   * record no re-export names) and cycles end the walk. PROVEN: every pair is
+   * written down in the code.
+   */
+  forwardsOf(path: string, name: string): ForwardedName[];
+}
+
+/** One (file, name) a republished name resolves to (forwarded_name). */
+export interface ForwardedName {
+  /** Canonical path of the module. */
+  file: string;
+  /** The name that module publishes it under. */
+  name: string;
 }
 
 /**

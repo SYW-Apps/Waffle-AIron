@@ -2,8 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 import { getProjectRoot } from '../utils/fs.js';
-import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
+import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
+import { readFileOrNull, writeFile } from '../utils/fs.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
+import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
 import {
   ProjectConfigSchema,
   type ProjectConfig,
@@ -49,6 +51,7 @@ export interface ProjectConfigRepository {
   deregisterPackRef(ref: string): boolean;
   markSelectionsBundled(bundled: PackSelection[]): void;
   pinGlobalPacksAsSelections(selections: PackSelection[]): void;
+  rekeyCarried(rename: IdentityRename, dryRun?: boolean): CarriedRekey[];
 }
 
 /** iproject_config_index — the read half of the facade. */
@@ -67,6 +70,8 @@ export interface ProjectConfigFsAdapter {
   readDocument(): ProjectConfigDocument | null;
   writeDocument(document: ProjectConfigDocument): void;
   documentExists(): boolean;
+  readText(): string | null;
+  writeText(text: string): void;
 }
 
 /**
@@ -97,6 +102,13 @@ export function projectConfigFsAdapterAt(rootDir: string): ProjectConfigFsAdapte
       // existsSync answers false for an unreadable directory too.
       return fs.existsSync(file());
     },
+    readText() {
+      // The bytes as they are — comments, quoting and line endings included.
+      return readFileOrNull(file());
+    },
+    writeText(text) {
+      writeFile(file(), text);
+    },
   };
 }
 
@@ -109,6 +121,18 @@ interface ProjectConfigStore {
   exists(): boolean;
   declares(field: string): boolean;
   readField(field: string): ProjectConfigDocument | undefined;
+  rewriteScalars(edits: ScalarEdit[], dryRun?: boolean): void;
+}
+
+/**
+ * One scalar of the document to replace in place (scalar_edit): where it sits,
+ * as a path of keys and sequence indexes from the document root, what it must
+ * hold now, and what it holds after.
+ */
+export interface ScalarEdit {
+  path: (string | number)[];
+  from: string;
+  to: string;
 }
 
 function storeOver(adapter: ProjectConfigFsAdapter, root: string): ProjectConfigStore {
@@ -138,7 +162,202 @@ function storeOver(adapter: ProjectConfigFsAdapter, root: string): ProjectConfig
       // rejects still yields the field.
       return valueAt(currentDocument(), field);
     },
+    rewriteScalars(edits, dryRun = false) {
+      if (edits.length === 0) return;
+      const text = adapter.readText();
+      if (text === null) throw new ProjectNotInitializedError();
+      const next = rewriteScalarsInText(text, edits, root);
+      if (!dryRun) adapter.writeText(next);
+    },
   };
+}
+
+// ── the comment-preserving scalar edit ──────────────────────────────────────
+//
+// `.wai/project.yaml` is written by people as well as by wairon: it carries
+// comments that say why each carried group exists and how many findings it
+// holds. A write through the parsed document drops every one of them. So a
+// write that only changes some scalars changes those scalars in the TEXT, in
+// their own quoting, and nothing else — and proves it: the edited text is
+// parsed again and must equal the document with exactly those values changed.
+// A layout this edit cannot address precisely (a flow collection, a
+// multi-line scalar) is refused before anything is written, naming the path.
+
+/** One line's structure, as far as locating a scalar needs it. */
+interface LineToken {
+  kind: 'key' | 'item' | 'scalar';
+  /** The column the key, the item's dash, or the scalar starts at. */
+  col: number;
+  line: number;
+  /** The key's name, for a key. */
+  name?: string;
+  /** Where the inline value starts in the line (a key's value, a scalar item's text), when the line has one. */
+  valueStart?: number;
+}
+
+const KEY_RE = /^('(?:[^']|'')*'|"(?:[^"\\]|\\.)*"|[^\s'"#{}[\],&*!|>%@`][^:#]*?)\s*:(?=\s|$)/;
+
+/** The key and item structure of the text, block scalars' bodies skipped. */
+function tokenize(lines: string[]): LineToken[] {
+  const tokens: LineToken[] = [];
+  let blockAbove: number | null = null;
+  lines.forEach((raw, line) => {
+    const content = raw.replace(/\r?\n$/, '');
+    const indent = content.length - content.trimStart().length;
+    const trimmed = content.trim();
+    if (blockAbove !== null) {
+      if (trimmed === '' || indent > blockAbove) return;
+      blockAbove = null;
+    }
+    if (trimmed === '' || trimmed.startsWith('#')) return;
+    let col = indent;
+    let rest = content.slice(indent);
+    while (rest === '-' || rest.startsWith('- ')) {
+      tokens.push({ kind: 'item', col, line });
+      const after = rest.slice(1);
+      const pad = after.length - after.trimStart().length;
+      col += 1 + pad;
+      rest = after.trimStart();
+    }
+    if (rest === '') return;
+    const key = KEY_RE.exec(rest);
+    if (key) {
+      const name = key[1].startsWith("'") ? key[1].slice(1, -1).replace(/''/g, "'")
+        : key[1].startsWith('"') ? JSON.parse(key[1]) as string : key[1].trim();
+      const afterKey = rest.slice(key[0].length);
+      const value = afterKey.trimStart();
+      const token: LineToken = { kind: 'key', col, line, name };
+      if (value !== '' && !value.startsWith('#')) token.valueStart = col + key[0].length + (afterKey.length - value.length);
+      tokens.push(token);
+      if (/^[|>][-+0-9]*\s*(#.*)?$/.test(value)) blockAbove = col;
+      return;
+    }
+    tokens.push({ kind: 'scalar', col, line, valueStart: col });
+    if (/^[|>][-+0-9]*\s*(#.*)?$/.test(rest)) blockAbove = col - 2;
+  });
+  return tokens;
+}
+
+/** The tokens nested under the token at `index`: everything after it until the structure returns to its column. */
+function childrenOf(tokens: LineToken[], index: number): LineToken[] {
+  const parent = tokens[index];
+  const out: LineToken[] = [];
+  for (let i = index + 1; i < tokens.length; i += 1) {
+    const t = tokens[i];
+    const nested = t.col > parent.col
+      // A block sequence may sit at its key's own column: `key:\n- a`.
+      || (parent.kind === 'key' && t.kind === 'item' && t.col === parent.col);
+    if (!nested) break;
+    out.push(t);
+  }
+  return out;
+}
+
+/** The token holding the scalar at `path`, or why it cannot be addressed precisely. */
+function locateScalar(tokens: LineToken[], path: (string | number)[]): LineToken | string {
+  let region = tokens;
+  for (let k = 0; k < path.length; k += 1) {
+    const segment = path[k];
+    if (region.length === 0) return `nothing is nested at ${path.slice(0, k).join('.')}`;
+    const base = Math.min(...region.map((t) => t.col));
+    const last = k === path.length - 1;
+    let at: number;
+    if (typeof segment === 'string') {
+      at = region.findIndex((t) => t.kind === 'key' && t.col === base && t.name === segment);
+      if (at < 0) return `no block key "${segment}" at ${path.slice(0, k).join('.') || 'the document root'}`;
+      if (last) return region[at].valueStart !== undefined ? region[at] : `"${segment}" holds no inline scalar`;
+    } else {
+      const items = region.map((t, i) => ({ t, i })).filter(({ t }) => t.kind === 'item' && t.col === base);
+      if (segment >= items.length) return `no block sequence item ${segment} at ${path.slice(0, k).join('.')}`;
+      at = items[segment].i;
+      if (last) {
+        const value = region[at + 1];
+        return value && value.kind === 'scalar' && value.line === region[at].line ? value : `item ${segment} holds no inline scalar`;
+      }
+    }
+    const regionStart = tokens.indexOf(region[at]);
+    region = childrenOf(tokens, regionStart);
+  }
+  return 'an empty path addresses no scalar';
+}
+
+/** The scalar written at the start of `text`: its value, how it was quoted, and where it ends. */
+function readScalar(text: string): { value: string; style: 'plain' | 'single' | 'double'; end: number } | null {
+  if (text.startsWith("'")) {
+    let i = 1;
+    let value = '';
+    while (i < text.length) {
+      if (text[i] === "'") {
+        if (text[i + 1] === "'") { value += "'"; i += 2; continue; }
+        return { value, style: 'single', end: i + 1 };
+      }
+      value += text[i];
+      i += 1;
+    }
+    return null;
+  }
+  if (text.startsWith('"')) {
+    const closing = /^"(?:[^"\\]|\\.)*"/.exec(text);
+    if (!closing) return null;
+    try {
+      return { value: JSON.parse(closing[0]) as string, style: 'double', end: closing[0].length };
+    } catch {
+      return null;
+    }
+  }
+  const comment = text.search(/\s#/);
+  const body = (comment < 0 ? text : text.slice(0, comment)).trimEnd();
+  return { value: body, style: 'plain', end: body.length };
+}
+
+/** A value written in the style the old one was, falling back to single quotes where plain would read differently. */
+function writeScalar(value: string, style: 'plain' | 'single' | 'double'): string {
+  if (style === 'double') return JSON.stringify(value);
+  if (style === 'plain' && /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(value)) return value;
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+/** The document with the value at `path` set, for the proof. */
+function setAt(document: unknown, path: (string | number)[], value: string): void {
+  let node = document as Record<string | number, unknown>;
+  for (const segment of path.slice(0, -1)) node = node[segment] as Record<string | number, unknown>;
+  node[path[path.length - 1]] = value;
+}
+
+/**
+ * Replace the named scalars in the document's text and nothing else: each is
+ * located by walking its path through the block structure, checked to hold
+ * `from`, and rewritten in its own quoting (plain stays plain where plain reads
+ * the same). The result is parsed again and must equal the original document
+ * with exactly those values changed — anything else is refused, and nothing is
+ * returned for the caller to write.
+ */
+function rewriteScalarsInText(text: string, edits: ScalarEdit[], root: string): string {
+  const refuse = (why: string): never => {
+    throw new WaironError(`Cannot rewrite .wai/project.yaml at ${root} without disturbing its formatting: ${why}. Nothing was written.`);
+  };
+  const lines = text.split(/(?<=\n)/);
+  const tokens = tokenize(lines);
+  const expected = parseYaml(text);
+  for (const edit of edits) {
+    const where = edit.path.join('.');
+    const token = locateScalar(tokens, edit.path);
+    if (typeof token === 'string') refuse(`${where}: ${token}`);
+    const { line, valueStart } = token as LineToken;
+    const content = lines[line].replace(/\r?\n$/, '');
+    const ending = lines[line].slice(content.length);
+    const scalar = readScalar(content.slice(valueStart!));
+    if (!scalar) refuse(`${where}: the scalar there is not written on one line`);
+    if (scalar!.value !== edit.from) refuse(`${where} holds "${scalar!.value}", not "${edit.from}"`);
+    lines[line] = content.slice(0, valueStart!) + writeScalar(edit.to, scalar!.style)
+      + content.slice(valueStart! + scalar!.end) + ending;
+    setAt(expected, edit.path, edit.to);
+  }
+  const next = lines.join('');
+  if (JSON.stringify(parseYaml(next)) !== JSON.stringify(expected)) {
+    refuse('the edited text does not read back as exactly the intended change');
+  }
+  return next;
 }
 
 /** Parse the document against the schema, defaults applied, with the loader's error on failure. */
@@ -333,6 +552,38 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
         extensions: { ...config.extensions, packs: [...packsOf(config), ...selections], useGlobalPacks: false },
       });
     },
+    rekeyCarried(rename, dryRun = false) {
+      // The register as it is WRITTEN — before schema defaults — so every
+      // index below is the index of the text the store edits.
+      const groups = store.readField('rules.conformance.carried');
+      if (!Array.isArray(groups)) return [];
+      const edits: ScalarEdit[] = [];
+      const rekeys: CarriedRekey[] = [];
+      groups.forEach((group, g) => {
+        const findings = (group as { findings?: unknown } | null)?.findings;
+        if (!Array.isArray(findings)) return;
+        findings.forEach((finding, f) => {
+          const entry = finding as { code?: unknown; spec?: unknown; at?: unknown; covers?: unknown } | null;
+          if (!entry || typeof entry.spec !== 'string') return;
+          const at = typeof entry.at === 'string' ? entry.at : undefined;
+          const covers = Array.isArray(entry.covers) ? entry.covers.filter((u): u is string => typeof u === 'string') : undefined;
+          const next = rekeyAnchor(rename, { spec: entry.spec, at, covers });
+          const base = ['rules', 'conformance', 'carried', g, 'findings', f];
+          const named = { code: String(entry.code), spec: entry.spec, at: at ?? '' };
+          const change = (path: (string | number)[], field: CarriedRekey['field'], from: string, to: string): void => {
+            if (from === to) return;
+            edits.push({ path: [...base, ...path], from, to });
+            rekeys.push({ ...named, field, from, to });
+          };
+          change(['spec'], 'spec', entry.spec, next.spec);
+          if (at !== undefined) change(['at'], 'at', at, next.at!);
+          (covers ?? []).forEach((unit, u) => change(['covers', u], 'covers', unit, next.covers![u]));
+        });
+      });
+      // A dry run still proves the text can be edited precisely.
+      store.rewriteScalars(edits, dryRun);
+      return rekeys;
+    },
   };
 }
 
@@ -408,6 +659,7 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     deregisterPackRef(ref) { return registry.deregisterPackRef(ref); },
     markSelectionsBundled(bundled) { registry.markSelectionsBundled(bundled); },
     pinGlobalPacksAsSelections(selections) { registry.pinGlobalPacksAsSelections(selections); },
+    rekeyCarried(rename, dryRun) { return registry.rekeyCarried(rename, dryRun); },
   };
 }
 
@@ -437,4 +689,5 @@ export const projectConfigRepository: ProjectConfigRepository = {
   deregisterPackRef(ref) { return bound().deregisterPackRef(ref); },
   markSelectionsBundled(bundled) { bound().markSelectionsBundled(bundled); },
   pinGlobalPacksAsSelections(selections) { bound().pinGlobalPacksAsSelections(selections); },
+  rekeyCarried(rename, dryRun) { return bound().rekeyCarried(rename, dryRun); },
 };

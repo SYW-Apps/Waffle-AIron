@@ -26,6 +26,7 @@ import type { MethodMoveReport, SpecChangeReport, SpecWriteHooks, WritableSpecKi
 import {
   createChainedSubsystem,
   deleteSpec as coreDeleteSpec,
+  loadImplementationSpecs,
   loadProjectConfig,
   loadSpec,
   moveMethods as coreMoveMethods,
@@ -241,6 +242,7 @@ const MISSING_PARENT: Partial<Record<WritableSpecKind, (parentId: string) => str
   component: (id) => `Parent subsystem "${id}" does not exist.`,
   interface: (id) => `Component "${id}" does not exist.`,
   implementation: (id) => `Interface contract "${id}" does not exist.`,
+  type: (id) => `Owning subsystem "${id}" does not exist — name a subsystem the tree has, or omit subsystem for a system-level value object.`,
 };
 
 /** How a re-authoring notice names the spec, and what a removed member drags with it. */
@@ -256,9 +258,13 @@ const REWRITE_LABEL: Record<WritableSpecKind, string> = {
 /**
  * spec_restatement.parent — the spec this one cannot be written without: the
  * L0 for a subsystem, the subsystem a component names, the component an
- * interface names, the contract an implementation names. None for the L0
- * itself and for a type, whose subsystem is an ownership label and not a
- * container.
+ * interface names, the contract an implementation names, and the subsystem a
+ * type names as its owner. None for the L0 itself and for a type that names no
+ * subsystem — a system-level value object belongs to no subsystem, so there is
+ * nothing to refuse it for. A type's subsystem is an ownership label rather
+ * than a container, but a label naming a subsystem the tree does not have owns
+ * the type to nothing, which is the same mistake a component under an unknown
+ * subsystem is.
  */
 export function restatementParent(restatement: SpecRestatement): SpecParent | null {
   const spec = restatement.spec as Record<string, any>;
@@ -267,6 +273,7 @@ export function restatementParent(restatement: SpecRestatement): SpecParent | nu
     case 'component':      return { kind: 'subsystem', id: spec.subsystem };
     case 'interface':      return { kind: 'component', id: spec.component };
     case 'implementation': return { kind: 'interface', id: spec.contract };
+    case 'type':           return typeof spec.subsystem === 'string' && spec.subsystem !== '' ? { kind: 'subsystem', id: spec.subsystem } : null;
     default:               return null;
   }
 }
@@ -619,9 +626,9 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   const gateNotices = restatement.kind === 'component' ? judgeComponent(application.spec as ComponentSpec, bound) : [];
   // Steps 13-16: to disk — scaffolding a chained subsystem's child project.
   const persisted = persistCandidate(restatement.kind, application.spec);
-  // Steps 17-18: the tests this write invalidated.
-  const testsToRevisit = testsInvalidatedBy(application.changedMethods, [existing, application.spec], bound);
-  // Step 19: the receipt.
+  // Steps 17-19: the tests this write invalidated, each placed in its file.
+  const testsToRevisit = testsInvalidatedBy(restatement.kind, id, application.changedMethods, [existing, application.spec], bound);
+  // Step 20: the receipt.
   return {
     kind: restatement.kind,
     id,
@@ -658,20 +665,69 @@ function persistCandidate(kind: WritableSpecKind, spec: Spec): { notices: string
 
 /**
  * The tests that encode the named methods, when the project declares test roots.
- * Each method is searched by the first `symbol` the given specs declare for it —
- * the stored one before the restated one — and by its name when none does.
+ * Each method is searched by the code name and in the file that realize it
+ * (searchedMethods), so a test importing a same-named function from another
+ * module is not one of its tests (F75).
  */
 function testsInvalidatedBy(
+  kind: WritableSpecKind,
+  id: string,
   methods: string[],
   specs: (Spec | null)[],
   options: { rules?: RulesConfig },
+  written: Record<string, any>[] = [],
 ): TestsToRevisit[] {
   const testRoots = options.rules?.conformance?.testRoots ?? [];
   if (methods.length === 0 || testRoots.length === 0) return [];
-  const symbolOf = (name: string): string | undefined => specs
-    .map((s) => ((s as { methods?: { name: string; symbol?: string }[] } | null)?.methods ?? []).find((m) => m.name === name)?.symbol)
-    .find((symbol) => symbol !== undefined);
-  return findTestsReferencing(methods.map((name) => ({ name, symbol: symbolOf(name) })), getProjectRoot(), testRoots);
+  return findTestsReferencing(searchedMethods(kind, id, methods, specs, written), getProjectRoot(), testRoots);
+}
+
+/** A spec's methods as the search reads them — every kind that has any names them the same way. */
+type SearchedMethod = Pick<MethodImplementation, 'name' | 'symbol' | 'sourcePath'>;
+
+/**
+ * Each method as the test search needs it: the code name it is realized under
+ * and the file realizing it. For an implementation or a type, the method's own
+ * entry in the given specs — the stored one before the restated one — its
+ * `symbol`, and its own sourcePath, else the spec's. For a contract, every
+ * implementation realizing it that carries the method, each with the symbol
+ * and file it realizes the method under, since a contract method's tests
+ * import the realization. A code name the write itself states (a delta's
+ * `symbol`) wins. A method no spec places in a file is searched by name alone,
+ * exactly as every method was before the search learned modules.
+ */
+function searchedMethods(
+  kind: WritableSpecKind,
+  id: string,
+  names: string[],
+  specs: (Spec | null)[],
+  written: Record<string, any>[],
+): SearchedMethod[] {
+  const stated = (name: string): string | undefined => written.find((m) => m?.name === name)?.symbol;
+  if (kind === 'interface') {
+    const realizations = loadImplementationSpecs().filter((impl) => impl.contract === id);
+    return names.flatMap((name) => {
+      const found: SearchedMethod[] = realizations.flatMap((impl) => impl.methods
+        .filter((m) => m.name === name)
+        .map((m) => ({ name, symbol: stated(name) ?? m.symbol, sourcePath: m.sourcePath ?? impl.sourcePath })));
+      return found.length > 0 ? found : [{ name, symbol: stated(name) }];
+    });
+  }
+  return names.map((name) => {
+    const holders = specs
+      .map((spec) => {
+        const holder = spec as { sourcePath?: string; methods?: { name: string; symbol?: string; sourcePath?: string }[] } | null;
+        const method = holder?.methods?.find((m) => m.name === name);
+        return method ? { method, file: method.sourcePath ?? holder?.sourcePath } : null;
+      })
+      .filter((h): h is NonNullable<typeof h> => h !== null);
+    const symbol = stated(name) ?? holders.map((h) => h.method.symbol).find((s) => s !== undefined);
+    // A method no given spec holds yet (a delta adding it) is realized in the
+    // spec's own default file, when the spec names one.
+    const sourcePath = holders.map((h) => h.file).find((f) => f !== undefined)
+      ?? specs.map((spec) => (spec as { sourcePath?: string } | null)?.sourcePath).find((f) => f !== undefined);
+    return { name, symbol, sourcePath };
+  });
 }
 
 /**
@@ -688,10 +744,10 @@ export function deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion {
   const stored = loadSpec(kind, id);
   // Step 3: the delete itself.
   const deleted = coreDeleteSpec(kind, id);
-  // Steps 4-5: the tests the removed methods invalidated.
+  // Steps 4-6: the tests the removed methods invalidated, each placed in its file.
   const methods = deleted ? ((stored as { methods?: { name: string }[] } | null)?.methods ?? []).map((m) => m.name) : [];
-  const testsToRevisit = testsInvalidatedBy(methods, [stored], bound);
-  // Step 6.
+  const testsToRevisit = testsInvalidatedBy(kind, id, methods, [stored], bound);
+  // Step 7.
   return { kind, id, deleted, testsToRevisit };
 }
 
@@ -726,19 +782,24 @@ export function updateSpecGated(
   const bound = candidateOptions();
   // Step 2: the judgement as a write hook over those same settings.
   const gate = componentCandidateGate(bound);
-  // Step 3: apply the delta with the hook injected, so the judgement runs on
+  // Step 3: the spec as it stands, when a test search may follow — a method the
+  // delta deletes is placed in its file, and named by its code name, only by
+  // the version that still held it.
+  const testRoots = bound.rules?.conformance?.testRoots ?? [];
+  const stored = testRoots.length > 0 ? loadSpec(kind, id) : null;
+  // Step 4: apply the delta with the hook injected, so the judgement runs on
   // the merged spec at the last point before anything reaches disk.
   const report = updateSpec(kind, id, delta, gate, dryRun);
 
-  // Step 4: did this write invalidate any test?
-  const testRoots = bound.rules?.conformance?.testRoots ?? [];
-  const changed = changedMethods(report, delta);
+  // Step 5: did this write invalidate any test?
+  const changed = changedMethods(report);
   if (changed.length > 0 && testRoots.length > 0) {
-    // Step 5.
-    report.testsToRevisit = findTestsReferencing(changed, getProjectRoot(), testRoots);
+    // Steps 6-7: search them by the code name and the file realizing each.
+    const written: Record<string, any>[] = Array.isArray(delta?.methods) ? delta.methods : [];
+    report.testsToRevisit = testsInvalidatedBy(kind, id, changed, [stored], bound, written);
   }
 
-  // Step 6.
+  // Step 8.
   return report;
 }
 
@@ -747,25 +808,16 @@ export function updateSpecGated(
  *
  * The change report addresses them by PATH (`methods.<name>`, and everything
  * under it), which is the one place both a rewritten method and a deleted one
- * appear. The delta is where a code-level `symbol` for one of them is written,
- * so it supplies that; a symbol the delta does not restate is not knowable
- * from the report alone, and the search falls back to the contract name —
- * exactly what it does for a method that declares no symbol at all.
+ * appear. Their code name and file come from the spec as it stood and from
+ * what the delta states (searchedMethods).
  */
-function changedMethods(
-  report: SpecChangeReport,
-  delta: Record<string, any>,
-): Pick<MethodImplementation, 'name' | 'symbol'>[] {
+function changedMethods(report: SpecChangeReport): string[] {
   const named = new Set<string>();
   for (const change of report.changes) {
     const [field, name] = change.path.split('.');
     if (field === 'methods' && name) named.add(name);
   }
-  const written: Record<string, any>[] = Array.isArray(delta?.methods) ? delta.methods : [];
-  return [...named].map(name => ({
-    name,
-    symbol: written.find(m => m?.name === name)?.symbol,
-  }));
+  return [...named];
 }
 
 /**
