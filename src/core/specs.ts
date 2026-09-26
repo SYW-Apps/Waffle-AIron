@@ -836,8 +836,13 @@ type StoredSpec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | I
  */
 export interface SpecChange {
   path: string;
-  /** `set` a value, `added` a key/element, `removed` one, `cleared` a list. */
-  change: 'set' | 'added' | 'removed' | 'cleared';
+  /**
+   * `set` a value, `added` a key/element, `removed` one, `cleared` a list. A
+   * narrative is compared by step identity, so it adds two more: `renumbered`,
+   * a run of unchanged steps an insert or delete shifted (before and after name
+   * the ranges), and `relocated`, a jump field that followed its target.
+   */
+  change: 'set' | 'added' | 'removed' | 'cleared' | 'renumbered' | 'relocated';
   /** The previous value, summarized; absent when there was none. */
   before?: string;
   /** The new value, summarized; absent when there is none. */
@@ -975,6 +980,14 @@ export interface MethodMoveReport {
    * bindings that keep it. Nothing here was rewritten.
    */
   mentions: string[];
+  /**
+   * The specs the move created to receive the methods, each named with its kind
+   * and id — `i<to>` for a target that declared no contract, `<to>_impl` for a
+   * receiving contract no implementation realized — and, for an implementation,
+   * the sourcePath it inherited. Empty when the target already had both, and on
+   * a refusal; a dry run names what it would create.
+   */
+  created: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1250,6 +1263,12 @@ export function specChanges(before: unknown, after: unknown, prefix = ''): SpecC
     if (after.length === 0 && before.length > 0) {
       return [{ path: prefix, change: 'cleared', before: summarizeValue(before) }];
     }
+    // A narrative is compared by step identity, never by position: an insert
+    // renumbers every later step, which is not a rewrite of every later step.
+    if ((prefix.split('.').pop() ?? prefix) === 'narrative'
+      && [...before, ...after].every(i => i !== null && typeof i === 'object' && !Array.isArray(i))) {
+      return narrativeChanges(before as Rec[], after as Rec[], prefix);
+    }
     const identified = [...before, ...after].every(i => reportIdentityOf(prefix.split('.').pop() ?? prefix, i) !== null);
     if (!identified) {
       return JSON.stringify(before) === JSON.stringify(after)
@@ -1286,6 +1305,203 @@ export function specChanges(before: unknown, after: unknown, prefix = ''): SpecC
 
   if (JSON.stringify(before) === JSON.stringify(after)) return [];
   return [{ path: prefix, change: 'set', before: summarizeValue(before), after: summarizeValue(after) }];
+}
+
+// ---------------------------------------------------------------------------
+// Narrative changes by step IDENTITY.
+//
+// A narrative is numbered by position, so one inserted step renumbers every
+// step after it and shifts every jump that points past it. Compared by number,
+// inserting one step into a 97-step narrative read as 124 changes — each later
+// step "set" to its predecessor's description, type and target — which buried
+// the one line that mattered and made a real accidental rewrite impossible to
+// spot beside it. Steps are matched by what they ARE instead: first by their
+// content with every number left out, then (between those anchors) by the same
+// description, label or call target, and a same-sized leftover run position by
+// position — an edit in place. What is left over was added or removed.
+// ---------------------------------------------------------------------------
+
+type Rec = Record<string, unknown>;
+
+/** The numeric jump fields a step can set directly. */
+const STEP_JUMP_FIELDS = ['onTrueStep', 'onFalseStep', 'defaultStep', 'endStep', 'finallyStep', 'toStep'] as const;
+/** The lists whose entries each carry a jump `step`, with the field that names an entry. */
+const STEP_JUMP_LISTS = [['cases', 'value'], ['catches', 'error'], ['branches', 'name']] as const;
+
+/** Every jump a step sets, keyed by the dotted field it sits in. */
+function jumpsOf(step: Rec): Map<string, number> {
+  const jumps = new Map<string, number>();
+  for (const field of STEP_JUMP_FIELDS) {
+    if (typeof step[field] === 'number') jumps.set(field, step[field] as number);
+  }
+  for (const [list, name] of STEP_JUMP_LISTS) {
+    const entries = step[list];
+    if (!Array.isArray(entries)) continue;
+    entries.forEach((entry: Rec, i) => {
+      if (entry && typeof entry.step === 'number') jumps.set(`${list}.${String(entry[name] ?? i)}.step`, entry.step);
+    });
+  }
+  return jumps;
+}
+
+/** A step with its own number and every jump number left out: what it says, not where it sits. */
+function withoutNumbers(step: Rec): Rec {
+  const out: Rec = { ...step };
+  delete out.stepNumber;
+  for (const field of STEP_JUMP_FIELDS) delete out[field];
+  for (const [list] of STEP_JUMP_LISTS) {
+    if (Array.isArray(out[list])) {
+      out[list] = (out[list] as Rec[]).map((entry) => {
+        if (!entry || typeof entry !== 'object') return entry;
+        const { step: _step, ...rest } = entry;
+        return rest;
+      });
+    }
+  }
+  return out;
+}
+
+/** A value serialized with sorted keys, so two equal steps compare equal whatever order they were written in. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v) => (v && typeof v === 'object' && !Array.isArray(v)
+    ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, (v as Rec)[k]]))
+    : v));
+}
+
+/** Monotonic index pairs of a longest common subsequence under `same`. */
+function commonRun<A, B>(a: A[], b: B[], same: (x: A, y: B) => boolean): [number, number][] {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const table = new Uint32Array(rows * cols);
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      table[i * cols + j] = same(a[i], b[j])
+        ? table[(i + 1) * cols + j + 1] + 1
+        : Math.max(table[(i + 1) * cols + j], table[i * cols + j + 1]);
+    }
+  }
+  const pairs: [number, number][] = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (same(a[i], b[j])) { pairs.push([i, j]); i++; j++; }
+    else if (table[(i + 1) * cols + j] >= table[i * cols + j + 1]) i++;
+    else j++;
+  }
+  return pairs;
+}
+
+/** Two steps that are recognisably the same step, one of them edited: same description, label or call target. */
+function recognisablySame(a: Rec, b: Rec): boolean {
+  if (typeof a.description === 'string' && a.description === b.description) return true;
+  if (typeof a.label === 'string' && a.label === b.label) return true;
+  return typeof a.targetComponent === 'string' && a.type === b.type
+    && a.targetComponent === b.targetComponent && a.targetMethod === b.targetMethod;
+}
+
+/**
+ * Pair the steps of two narratives by identity: exact content first, then
+ * recognisably-same steps between those anchors, then equal-sized leftover
+ * runs position by position. Answers ascending (old index, new index) pairs.
+ */
+function pairSteps(before: Rec[], after: Rec[]): [number, number][] {
+  const keysBefore = before.map((s) => canonicalJson(withoutNumbers(s)));
+  const keysAfter = after.map((s) => canonicalJson(withoutNumbers(s)));
+  const anchors = commonRun(keysBefore, keysAfter, (x, y) => x === y);
+  const pairs: [number, number][] = [];
+  // Each gap between two anchors (and before the first / after the last).
+  const bounds: [number, number][] = [[-1, -1], ...anchors, [before.length, after.length]];
+  for (let g = 0; g < bounds.length - 1; g++) {
+    const [oi, ni] = bounds[g];
+    const [oj, nj] = bounds[g + 1];
+    const gapBefore = before.slice(oi + 1, oj).map((step, k) => ({ step, at: oi + 1 + k }));
+    const gapAfter = after.slice(ni + 1, nj).map((step, k) => ({ step, at: ni + 1 + k }));
+    const similar = commonRun(gapBefore, gapAfter, (x, y) => recognisablySame(x.step, y.step))
+      .map(([x, y]) => [gapBefore[x].at, gapAfter[y].at] as [number, number]);
+    // Between the similar pairs, a run left over on both sides at the same
+    // length is an edit in place; any other leftover is an insert or delete.
+    const inner: [number, number][] = [[oi, ni], ...similar, [oj, nj]];
+    for (let k = 0; k < inner.length - 1; k++) {
+      const [a0, b0] = inner[k];
+      const [a1, b1] = inner[k + 1];
+      if (a1 - a0 === b1 - b0) for (let d = 1; d < a1 - a0; d++) pairs.push([a0 + d, b0 + d]);
+      if (k < inner.length - 2) pairs.push(inner[k + 1]);
+    }
+    if (g < bounds.length - 2) pairs.push(bounds[g + 1]);
+  }
+  return pairs.sort((x, y) => x[0] - y[0]);
+}
+
+/** A step's number, or its 1-based position when it carries none. */
+function numberOf(step: Rec, index: number): number {
+  return typeof step.stepNumber === 'number' ? step.stepNumber : index + 1;
+}
+
+/** Contiguous runs of numbers shifted by the same amount, as `steps a-b`. */
+function renumberedRuns(moves: [number, number][]): { from: string; to: string }[] {
+  const runs: { from: string; to: string }[] = [];
+  const range = (a: number, b: number): string => (a === b ? `step ${a}` : `steps ${a}-${b}`);
+  let start = 0;
+  for (let k = 1; k <= moves.length; k++) {
+    const continues = k < moves.length
+      && moves[k][0] === moves[k - 1][0] + 1
+      && moves[k][1] - moves[k][0] === moves[start][1] - moves[start][0];
+    if (continues) continue;
+    const [firstOld, firstNew] = moves[start];
+    const [lastOld, lastNew] = moves[k - 1];
+    runs.push({ from: range(firstOld, lastOld), to: range(firstNew, lastNew) });
+    start = k;
+  }
+  return runs;
+}
+
+/**
+ * Every change between two versions of one narrative, by step identity: steps
+ * added and removed, each run of unchanged steps an insert or delete shifted
+ * (`renumbered`), each jump that merely followed its target (`relocated`), and
+ * the field changes of a step that was really edited.
+ */
+function narrativeChanges(before: Rec[], after: Rec[], prefix: string): SpecChange[] {
+  const pairs = pairSteps(before, after);
+  const oldToNew = new Map<number, number>();
+  for (const [o, n] of pairs) oldToNew.set(numberOf(before[o], o), numberOf(after[n], n));
+  const pairedOld = new Set(pairs.map(([o]) => o));
+  const pairedNew = new Set(pairs.map(([, n]) => n));
+
+  const removed: SpecChange[] = before.flatMap((step, o) => (pairedOld.has(o) ? [] : [{
+    path: `${prefix}.step ${numberOf(step, o)}`, change: 'removed' as const, before: summarizeValue(step),
+  }]));
+  const added: SpecChange[] = after.flatMap((step, n) => (pairedNew.has(n) ? [] : [{
+    path: `${prefix}.step ${numberOf(step, n)}`, change: 'added' as const, after: summarizeValue(step),
+  }]));
+
+  const edited: SpecChange[] = [];
+  const relocated: SpecChange[] = [];
+  const moves: [number, number][] = [];
+  for (const [o, n] of pairs) {
+    const oldNumber = numberOf(before[o], o);
+    const newNumber = numberOf(after[n], n);
+    const at = oldNumber === newNumber ? `${prefix}.step ${newNumber}` : `${prefix}.step ${newNumber} (was ${oldNumber})`;
+    edited.push(...specChanges(withoutNumbers(before[o]), withoutNumbers(after[n]), at));
+    const oldJumps = jumpsOf(before[o]);
+    const newJumps = jumpsOf(after[n]);
+    for (const field of new Set([...oldJumps.keys(), ...newJumps.keys()])) {
+      const was = oldJumps.get(field);
+      const now = newJumps.get(field);
+      if (was === now) continue;
+      if (was === undefined) edited.push({ path: `${at}.${field}`, change: 'added', after: String(now) });
+      else if (now === undefined) edited.push({ path: `${at}.${field}`, change: 'removed', before: String(was) });
+      else if (oldToNew.get(was) === now) relocated.push({ path: `${at}.${field}`, change: 'relocated', before: String(was), after: String(now) });
+      else edited.push({ path: `${at}.${field}`, change: 'set', before: String(was), after: String(now) });
+    }
+    // A moved step that was also edited already reads as `step N (was M)`;
+    // only the untouched ones make up the renumbered runs.
+    if (oldNumber !== newNumber && !edited.some((c) => c.path.startsWith(`${at}.`))) moves.push([oldNumber, newNumber]);
+  }
+  const renumbered: SpecChange[] = renumberedRuns(moves).map(({ from, to }) => ({
+    path: prefix, change: 'renumbered', before: from, after: to,
+  }));
+  return [...removed, ...added, ...edited, ...renumbered, ...relocated];
 }
 
 /**
@@ -3976,7 +4192,7 @@ export class SpecWorkspace {
           moved: false, from, to, methods, edits: [], repointed: 0,
           refusals: verdict.refusals, alternatives, notices: plan.notices,
           summary: refusedMoveSummary(from, to, methods, verdict.refusals, alternatives),
-          dryRun, mentions,
+          dryRun, mentions, created: [],
         };
       }
     }
@@ -3989,8 +4205,8 @@ export class SpecWorkspace {
         moved: false, from, to, methods, edits, repointed,
         refusals: [], alternatives: [], notices: plan.notices,
         summary: `Dry run: moving ${namedMethods(methods)} from "${from}" to "${to}" would touch `
-          + `${edits.length} spec${edits.length === 1 ? '' : 's'} and re-point ${repointed} reference${repointed === 1 ? '' : 's'}. Nothing was written.`,
-        dryRun: true, mentions,
+          + `${edits.length} spec${edits.length === 1 ? '' : 's'}${createdClause(plan.created, 'would create')} and re-point ${repointed} reference${repointed === 1 ? '' : 's'}. Nothing was written.`,
+        dryRun: true, mentions, created: plan.created,
       };
     }
 
@@ -4003,9 +4219,9 @@ export class SpecWorkspace {
       moved: true, from, to, methods, edits, repointed,
       refusals: [], alternatives: [], notices: plan.notices,
       summary: `Moved ${namedMethods(methods)} from "${from}" to "${to}": ${edits.length} spec`
-        + `${edits.length === 1 ? '' : 's'} written, ${repointed} reference${repointed === 1 ? '' : 's'} re-pointed`
+        + `${edits.length === 1 ? '' : 's'} written${createdClause(plan.created, 'created')}, ${repointed} reference${repointed === 1 ? '' : 's'} re-pointed`
         + `${mentions.length ? `, ${mentions.length} still naming the old home in prose or on the wire` : ''}.`,
-      dryRun: false, mentions,
+      dryRun: false, mentions, created: plan.created,
     };
   }
 
@@ -4049,19 +4265,33 @@ export class SpecWorkspace {
     const receiving = this.moveTargetContract(to, ofTarget);
     if (typeof receiving === 'string') return receiving;
 
-    // A method whose implementation entry has nowhere to arrive would lose its
-    // narrative on the way. Saying so beats dropping it.
-    const travelling = this.loadImplementationSpecs().some((impl) =>
+    // A target with no contract receives one, and moved implementation entries
+    // with no implementation to arrive in receive one — under ids nothing else
+    // may already hold, or the move would overwrite a spec it never read.
+    const contractId = receiving?.id ?? `i${to}`;
+    const holder = contracts.find((i) => i.id === contractId);
+    if (!receiving && holder) {
+      return `"${to}" declares no contract, and the one the move would create for it, "${contractId}", is already `
+        + `the id of "${holder.component}"'s contract — rename that contract, or give "${to}" its own first.`;
+    }
+    const implementations = this.loadImplementationSpecs();
+    const travelling = implementations.some((impl) =>
       ofSource.some((i) => i.id === impl.contract) && impl.methods.some((m) => methods.includes(m.name)));
-    if (travelling && !this.loadImplementationSpecs().some((i) => i.contract === receiving.id)) {
-      return `no implementation realizes "${receiving.id}", so the moved methods' narratives would have nowhere to arrive.`;
+    const implId = `${to}_impl`;
+    const implHolder = implementations.find((i) => i.id === implId);
+    if (travelling && !implementations.some((i) => i.contract === contractId) && implHolder) {
+      return `no implementation realizes "${contractId}", and the one the move would create for it, "${implId}", is `
+        + `already the id of the implementation of "${implHolder.contract}" — rename it, or realize "${contractId}" first.`;
     }
     return null;
   }
 
-  /** The contract of `to` that receives the methods, or why that cannot be decided. */
-  private moveTargetContract(to: string, ofTarget: InterfaceSpec[]): InterfaceSpec | string {
-    if (ofTarget.length === 0) return `"${to}" declares no contract, so the methods would have nowhere to arrive.`;
+  /**
+   * The contract of `to` that receives the methods; null when it declares none
+   * yet, so the move creates `i<to>`; or why the choice cannot be decided.
+   */
+  private moveTargetContract(to: string, ofTarget: InterfaceSpec[]): InterfaceSpec | string | null {
+    if (ofTarget.length === 0) return null;
     if (ofTarget.length === 1) return ofTarget[0];
     const named = ofTarget.find((i) => i.id === `i${to}` || i.id.endsWith(`::i${to}`));
     return named ?? `"${to}" declares ${ofTarget.length} contracts and none is named "i${to}", `
@@ -4081,11 +4311,14 @@ export class SpecWorkspace {
     contracts: InterfaceSpec[],
   ): MethodMovePlan {
     const target = this.loadComponentSpec(to) as ComponentSpec;
-    const receiving = this.moveTargetContract(to, contracts.filter((i) => i.component === to)) as InterfaceSpec;
+    const stated = this.moveTargetContract(to, contracts.filter((i) => i.component === to)) as InterfaceSpec | null;
     const implementations = this.loadImplementationSpecs();
     const plan: MethodMovePlan = {
-      edits: new Map(), source, target, reach: [], newDependencies: [], wireBound: [], notices: [],
+      edits: new Map(), source, target, reach: [], newDependencies: [], wireBound: [], notices: [], created: [],
     };
+    // A target with no contract yet receives i<to>, at the status of the
+    // contract the methods leave: they arrive as designed as they were.
+    const receiving: InterfaceSpec = stated ?? createdContract(target, source.id, methods, contracts);
 
     const arriving: MethodSignature[] = [];
     const travelling: MethodImplementation[] = [];
@@ -4114,12 +4347,13 @@ export class SpecWorkspace {
       }
     }
 
-    this.stageMoveEdit(plan, 'interface', receiving.id, receiving, {
+    this.stageMoveEdit(plan, 'interface', receiving.id, stated, {
       ...cloneSpec(receiving),
       methods: [...cloneSpec(receiving.methods), ...arriving],
     });
+    if (!stated) plan.created.push(`interface "${receiving.id}"`);
     if (arriving.some((m) => m.endpoint)) plan.wireBound.push(receiving.id);
-    if (receiving.status !== undefined && receiving.status !== statusOfContracts(contracts, source.id)) {
+    if (stated && receiving.status !== undefined && receiving.status !== statusOfContracts(contracts, source.id)) {
       plan.notices.push(`"${receiving.id}" is ${receiving.status} where the methods came from a ${statusOfContracts(contracts, source.id)} contract — the status of a moved method is the status of its new home.`);
     }
     for (const entry of travelling) {
@@ -4134,6 +4368,13 @@ export class SpecWorkspace {
         ...cloneSpec(targetImpl),
         methods: [...cloneSpec(targetImpl.methods), ...travelling],
       });
+    } else if (travelling.length > 0) {
+      // No implementation realizes the receiving contract: <to>_impl is
+      // created for the entries, so no narrative is lost on the way.
+      const created = createdImplementation(target, receiving.id, source.id, travelling, implementations, contracts);
+      this.stageMoveEdit(plan, 'implementation', created.spec.id, null, created.spec);
+      plan.created.push(created.named);
+      plan.notices.push(...created.notices);
     }
 
     // What the moved methods reach once they live on the target. A call back
@@ -4188,6 +4429,12 @@ export class SpecWorkspace {
         continue;
       }
       this.stageMoveEdit(plan, kind, id, spec, subject);
+    }
+
+    // A spec the move creates is not in the tree yet, so the walk above never
+    // saw it — but its travelling narratives may call back into a moving method.
+    for (const edit of plan.edits.values()) {
+      if (edit.before === null) rewriteSpecRefs(edit.after, remap);
     }
 
     plan.notices.push(...this.callersOwingADependency(to, plan));
@@ -4296,7 +4543,9 @@ export class SpecWorkspace {
     } catch (e) {
       for (const edit of [...written].reverse()) {
         try {
-          this.saveMovedSpec(edit.kind, edit.before);
+          // A spec the move created is taken away again; any other is put back.
+          if (edit.before === null) this.delete(edit.kind, edit.id);
+          else this.saveMovedSpec(edit.kind, edit.before);
         } catch {
           // A restore that cannot be written is the one thing this cannot fix;
           // the throw below names how far the write got.
@@ -4333,7 +4582,11 @@ const PROSE_FIELDS = new Set([
   'description', 'intent', 'summary', 'condition', 'over', 'outcome', 'error', 'note', 'caller',
 ]);
 
-/** One spec the move rewrites, with the version it started from — the snapshot a failed write restores. */
+/**
+ * One spec the move rewrites, with the version it started from — the snapshot a
+ * failed write restores. `before` is null for a spec the move creates, which a
+ * failed write deletes.
+ */
 interface MoveEdit {
   kind: WritableSpecKind;
   id: string;
@@ -4356,6 +4609,8 @@ interface MethodMovePlan {
   /** Contract ids whose moved methods keep a wire address. */
   wireBound: string[];
   notices: string[];
+  /** The specs the move creates, named for the report. */
+  created: string[];
 }
 
 /** A spec copied so the plan can rewrite it without touching what the cache holds. */
@@ -4452,7 +4707,7 @@ function weighMoveHome(
 /** One change report per staged edit that actually changes something. */
 function moveChangeReports(edits: MoveEdit[], dryRun: boolean): SpecChangeReport[] {
   return edits
-    .map((edit) => ({ edit, changes: specChanges(edit.before, edit.after) }))
+    .map((edit) => ({ edit, changes: specChanges(edit.before ?? {}, edit.after) }))
     .filter(({ changes }) => changes.length > 0)
     .map(({ edit, changes }) => ({
       kind: edit.kind,
@@ -4463,9 +4718,86 @@ function moveChangeReports(edits: MoveEdit[], dryRun: boolean): SpecChangeReport
       ineffective: [],
       notices: [] as string[],
       testsToRevisit: [] as TestsToRevisit[],
-      summary: `${dryRun ? 'Would move' : 'Moved'} into ${edit.kind} "${edit.id}": `
-        + `${changes.length} change${changes.length === 1 ? '' : 's'}.`,
+      summary: edit.before === null
+        ? `${dryRun ? 'Would create' : 'Created'} ${edit.kind} "${edit.id}" to receive the moved methods.`
+        : `${dryRun ? 'Would move' : 'Moved'} into ${edit.kind} "${edit.id}": `
+          + `${changes.length} change${changes.length === 1 ? '' : 's'}.`,
     }));
+}
+
+/** The created specs as a clause of the move's summary, or nothing when it created none. */
+function createdClause(created: string[], verb: string): string {
+  return created.length ? `, ${verb} ${created.join(' and ')}` : '';
+}
+
+/**
+ * The contract a target with none receives: `i<to>`, at the status of the
+ * contract the methods leave.
+ */
+function createdContract(target: ComponentSpec, from: string, methods: string[], contracts: InterfaceSpec[]): InterfaceSpec {
+  const now = new Date().toISOString();
+  const status = statusOfContracts(contracts, from);
+  return {
+    id: `i${target.id}`,
+    name: `${target.name} Interface`,
+    description: `The contract of ${target.name}, created by moving ${namedMethods(methods)} here from "${from}".`,
+    component: target.id,
+    methods: [],
+    ...(status ? { status } : {}),
+    createdAt: now,
+    updatedAt: now,
+  } as InterfaceSpec;
+}
+
+/**
+ * The implementation a receiving contract with none receives: `<to>_impl`, at
+ * the status of the implementation the entries leave, inheriting its
+ * sourcePath. Entries leaving implementations with DIFFERENT sourcePaths leave
+ * the new one's unset instead, and each entry that relied on its old
+ * implementation's default keeps that file as its own — never silently realized
+ * somewhere else.
+ */
+function createdImplementation(
+  target: ComponentSpec,
+  contractId: string,
+  from: string,
+  travelling: MethodImplementation[],
+  implementations: ImplementationSpec[],
+  contracts: InterfaceSpec[],
+): { spec: ImplementationSpec; named: string; notices: string[] } {
+  const ofSource = new Set(contracts.filter((i) => i.component === from).map((i) => i.id));
+  const leaving = implementations.filter((impl) => ofSource.has(impl.contract)
+    && impl.methods.some((m) => travelling.some((t) => t.name === m.name)));
+  const paths = [...new Set(leaving.map((impl) => impl.sourcePath))];
+  const inherited = paths.length === 1 ? paths[0] : undefined;
+  const notices: string[] = [];
+  if (paths.length > 1) {
+    for (const entry of travelling) {
+      if (entry.sourcePath) continue;
+      const home = leaving.find((impl) => impl.methods.some((m) => m.name === entry.name));
+      if (home?.sourcePath) entry.sourcePath = home.sourcePath;
+    }
+    notices.push(`"${target.id}_impl" is created without a sourcePath: the moved entries come from implementations `
+      + 'with different ones, so each keeps the file it was realized in as its own sourcePath.');
+  }
+  const now = new Date().toISOString();
+  const status = leaving[0]?.status;
+  const spec = {
+    id: `${target.id}_impl`,
+    name: `${target.name} Implementation`,
+    description: `The implementation of ${target.name}, created by moving methods here from "${from}".`,
+    contract: contractId,
+    ...(inherited ? { sourcePath: inherited } : {}),
+    methods: travelling,
+    ...(status ? { status } : {}),
+    createdAt: now,
+    updatedAt: now,
+  } as ImplementationSpec;
+  const origin = leaving.length === 1 ? ` from "${leaving[0].id}"` : '';
+  const named = inherited
+    ? `implementation "${spec.id}" (sourcePath ${inherited}, inherited${origin})`
+    : `implementation "${spec.id}" (no sourcePath)`;
+  return { spec, named, notices };
 }
 
 /** The one line a refusal reads by: which rule fired, and the cheapest home that would not. */

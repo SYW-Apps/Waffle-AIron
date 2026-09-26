@@ -526,3 +526,122 @@ describe('moveMethods', () => {
     expect(() => hooks.gate?.('component', { ...over, id: 'intake' })).not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// F77 — a target without a contract receives one.
+//
+// Splitting a portal meant moving methods into brand-new components, and every
+// dry run refused: '"approval_portal" declares no contract, so the methods
+// would have nowhere to arrive.' Each target first needed an empty interface
+// and an empty implementation authored by hand, with a sourcePath the move
+// could have inherited. The move now creates i<target> and <target>_impl and
+// names what it created; what it refuses, it still refuses for a reason.
+// ---------------------------------------------------------------------------
+
+describe('moveMethods into a component with no contract yet', () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  /** books() plus `shelf`, a bare Orchestrator, and a spec-level sourcePath on intake_impl to inherit. */
+  function booksWithShelf(extra: (write: (rel: string, content: object) => void) => void = () => undefined): string {
+    const dir = books();
+    const specs = path.join(dir, '.wai', 'specs');
+    const write = (rel: string, content: object): void => writeYamlFile(path.join(specs, ...rel.split('/')), content);
+    write('components/shelf.yaml', comp('shelf', 'books', 'Orchestrator', { dependsOn: ['vault', 'mailer'] }));
+    const intakeImpl = path.join(specs, 'implementations', 'intake_impl.yaml');
+    writeYamlFile(intakeImpl, { ...(readYamlFile(intakeImpl) as object), sourcePath: 'src/books/intake-impl.ts', status: 'complete' });
+    const iintake = path.join(specs, 'interfaces', 'iintake.yaml');
+    writeYamlFile(iintake, { ...(readYamlFile(iintake) as object), status: 'complete' });
+    extra(write);
+    invalidateSpecCache();
+    return dir;
+  }
+
+  it('creates i<target> and <target>_impl, inheriting the sourcePath, and names both', () => {
+    root = booksWithShelf();
+
+    const report = moveMethods('intake', 'shelf', ['post', 'audit'], permissive);
+
+    expect(report.moved).toBe(true);
+    expect(report.created).toEqual([
+      'interface "ishelf"',
+      'implementation "shelf_impl" (sourcePath src/books/intake-impl.ts, inherited from "intake_impl")',
+    ]);
+    expect(report.summary).toContain('created interface "ishelf" and implementation "shelf_impl"');
+    expect(declared(root, 'ishelf')).toEqual(['post', 'audit']);
+    expect(stored(root, 'interface', 'ishelf')).toMatchObject({ component: 'shelf', status: 'complete' });
+    const created = stored(root, 'implementation', 'shelf_impl');
+    expect(created).toMatchObject({ contract: 'ishelf', sourcePath: 'src/books/intake-impl.ts', status: 'complete' });
+    // The entries arrived whole: narrative, symbol and their own sourcePath.
+    expect(method(root, 'shelf_impl', 'post')).toMatchObject({ symbol: 'appendEntry', sourcePath: 'src/books/intake.ts' });
+    expect(method(root, 'shelf_impl', 'audit').calls).toEqual(['vault.put']);
+    // References followed the methods to the new home.
+    expect(method(root, 'intake_impl', 'close').narrative[0]).toMatchObject({ targetComponent: 'shelf' });
+    expect(declared(root, 'iintake')).toEqual(['close']);
+    // Each created spec has its own change report, marked as created.
+    expect(report.edits.find((e) => e.id === 'ishelf')?.summary).toBe('Created interface "ishelf" to receive the moved methods.');
+  });
+
+  it('creates only the implementation when the contract exists but nothing realizes it', () => {
+    root = booksWithShelf((write) => write('interfaces/ishelf.yaml', intf('ishelf', 'shelf', ['stack'])));
+
+    const report = moveMethods('intake', 'shelf', ['post'], permissive);
+
+    expect(report.moved).toBe(true);
+    expect(report.created).toEqual(['implementation "shelf_impl" (sourcePath src/books/intake-impl.ts, inherited from "intake_impl")']);
+    expect(declared(root, 'ishelf')).toEqual(['stack', 'post']);
+    expect(stored(root, 'implementation', 'shelf_impl').methods.map((m: any) => m.name)).toEqual(['post']);
+  });
+
+  it('a dry run names what it would create and writes nothing', () => {
+    root = booksWithShelf();
+    const before = snapshot(path.join(root, '.wai'));
+
+    const report = moveMethods('intake', 'shelf', ['post'], permissive, true);
+
+    expect(report.moved).toBe(false);
+    expect(report.created).toEqual([
+      'interface "ishelf"',
+      'implementation "shelf_impl" (sourcePath src/books/intake-impl.ts, inherited from "intake_impl")',
+    ]);
+    expect(report.summary).toContain('would create interface "ishelf"');
+    expect(snapshot(path.join(root, '.wai'))).toEqual(before);
+  });
+
+  it('refuses to create a contract under an id another component\'s contract holds', () => {
+    root = booksWithShelf((write) => write('interfaces/ishelf.yaml', intf('ishelf', 'desk', ['greet2'])));
+    const before = snapshot(path.join(root, '.wai'));
+
+    expect(() => moveMethods('intake', 'shelf', ['post'], permissive))
+      .toThrow(/^unmovable request: "shelf" declares no contract, and the one the move would create for it, "ishelf", is already the id of "desk"'s contract/);
+    expect(snapshot(path.join(root, '.wai'))).toEqual(before);
+  });
+
+  it('refuses to create an implementation under an id another implementation holds', () => {
+    root = booksWithShelf((write) => write('implementations/shelf_impl.yaml', impl('shelf_impl', 'idesk', [])));
+
+    expect(() => moveMethods('intake', 'shelf', ['post'], permissive))
+      .toThrow(/^unmovable request: no implementation realizes "ishelf", and the one the move would create for it, "shelf_impl", is already the id of the implementation of "idesk"/);
+  });
+
+  it('a failed write deletes the specs it created as it restores the ones it edited', () => {
+    root = booksWithShelf();
+    const blocked = path.join(root, '.wai', 'specs', 'implementations', 'books_orch_impl.yaml');
+    fs.chmodSync(blocked, 0o444);
+    try {
+      expect(() => moveMethods('intake', 'shelf', ['post', 'audit'], permissive)).toThrow(/move-write-failed/);
+    } finally {
+      fs.chmodSync(blocked, 0o666);
+    }
+    invalidateSpecCache();
+    expect(stored(root, 'interface', 'ishelf')).toBeUndefined();
+    expect(stored(root, 'implementation', 'shelf_impl')).toBeUndefined();
+    expect(declared(root, 'iintake')).toEqual(['post', 'audit', 'close']);
+  });
+});
