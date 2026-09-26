@@ -150,10 +150,9 @@ describe('project config store', () => {
 
     projectConfigRepositoryAt(root).setProjectType('frontend-reactive');
 
-    // `id` is new to this document too: the save backfilled the defaulted id.
     expect(Object.keys(readDoc(root))).toEqual([
       'name', 'futureTopLevel', 'schemaVersion', 'targets', 'rules', 'createdAt', 'updatedAt',
-      'projectType', 'execution', 'paths', 'id',
+      'projectType', 'execution', 'paths',
     ]);
   });
 
@@ -681,18 +680,19 @@ describe('project config registry — rekeyCarried (F78)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Stage 2a: every save through the registry backfills a defaulted project id,
-// so the id a project was answering to stops moving with its display name.
+// Stage 2a: an ordinary save never writes a defaulted project id. A default can
+// be wrong (a chained child answers to its mount, which a save cannot know), so
+// only a deliberate writer - init, provisioning, doctor - sets one.
 // ---------------------------------------------------------------------------
 
-describe('project config registry — id backfill', () => {
-  it('writes the defaulted id on the next save', () => {
+describe('project config registry — no defaulted id on save', () => {
+  it('a save leaves an undeclared id undeclared', () => {
     const root = tempRoot();
     writeDoc(root, minimal().map((l) => (l === 'name: demo' ? 'name: Billing Platform' : l)));
 
     projectConfigRepositoryAt(root).setProjectType('frontend-reactive');
 
-    expect(readDoc(root).id).toBe('billing-platform');
+    expect(readDoc(root)).not.toHaveProperty('id');
     expect(readDoc(root).name).toBe('Billing Platform');
   });
 
@@ -705,16 +705,7 @@ describe('project config registry — id backfill', () => {
     expect(readDoc(root).id).toBe('Billing_Platform');
   });
 
-  it('writes no id for a name that yields none, rather than inventing one', () => {
-    const root = tempRoot();
-    writeDoc(root, minimal().map((l) => (l === 'name: demo' ? "name: '請求'" : l)));
-
-    projectConfigRepositoryAt(root).setProjectType('frontend-reactive');
-
-    expect(readDoc(root)).not.toHaveProperty('id');
-  });
-
-  it('create writes the effective id of a configuration given without one', () => {
+  it('create writes the configuration it is given, inventing no id', () => {
     const root = tempRoot();
     const config = {
       schemaVersion: '1.0.0', name: 'Ledger Service', targets: [], rules: {}, createdAt: NOW, updatedAt: NOW,
@@ -722,7 +713,7 @@ describe('project config registry — id backfill', () => {
 
     projectConfigRepositoryAt(root).create(config);
 
-    expect(readDoc(root).id).toBe('ledger-service');
+    expect(readDoc(root)).not.toHaveProperty('id');
   });
 
   it('the comment-preserving rekey is not a save, and writes no id', () => {

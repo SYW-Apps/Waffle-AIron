@@ -446,8 +446,8 @@ export const ProjectConfigSchema = z.object({
   /**
    * The project's stable identity: a slug of [a-z0-9-_.] that starts and ends
    * alphanumeric (PROJECT_ID_RE). Optional in the file: a project that declares
-   * none answers to its name slugified (effectiveProjectId), and the next save
-   * through the config registry writes that default in. Deliberately a plain
+   * none answers to its name slugified (effectiveProjectId) until a deliberate
+   * writer sets one — an ordinary save never writes the default. Deliberately a plain
    * string here rather than the grammar: a malformed id must be REPORTED
    * (PROJECT_ID_AMBIGUOUS), not make the whole configuration unreadable.
    */

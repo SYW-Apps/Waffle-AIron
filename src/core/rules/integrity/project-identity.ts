@@ -38,7 +38,7 @@ export const projectIdentityRule: SddRule = {
       ctx.addIssue(
         'notice',
         'PROJECT_ID_DEFAULTED',
-        `Project "${identity.name}" declares no id in .wai/project.yaml, so it answers to "${identity.id}", derived from its display name — renaming the project would move it. The configuration's next save writes it in; declare it now with \`id: ${identity.id}\` (stage 3 requires an explicit id).`,
+        `Project "${identity.name}" declares no id in .wai/project.yaml, so it answers to "${identity.id}", derived from its display name — renaming the project would move it. No save writes it for you; declare it with \`id: ${identity.id}\` (stage 3 requires an explicit id).`,
       );
     }
     // Steps 6-7: no usable id.

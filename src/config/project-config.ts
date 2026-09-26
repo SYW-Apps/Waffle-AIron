@@ -8,7 +8,6 @@ import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
 import {
   ProjectConfigSchema,
-  effectiveProjectId,
   type ProjectConfig,
   type PackSelection,
   type ProjectProfileSelection,
@@ -486,18 +485,6 @@ function withPacks(config: ProjectConfig, packs: PackEntry[]): ProjectConfig {
   return { ...config, extensions: { ...config.extensions, packs, useGlobalPacks: effectiveUseGlobalPacks(config) } };
 }
 
-/**
- * The configuration with a defaulted identity written in: a configuration that
- * declares no `id` gets its effective one, so the id the project was answering
- * to stops moving with its display name. A name that yields no id writes none —
- * the project-identity rule reports it instead.
- */
-function withBackfilledId(config: ProjectConfig): ProjectConfig {
-  if (config.id !== undefined) return config;
-  const id = effectiveProjectId(config);
-  return id === null ? config : { ...config, id };
-}
-
 function registryOver(store: ProjectConfigStore, root: string): ProjectConfigRegistry {
   /** The configuration to change; a project with none is refused. */
   const current = (): ProjectConfig => {
@@ -505,8 +492,9 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     if (!config) throw new ProjectNotInitializedError();
     return config;
   };
-  /** Every save goes through here, so every save backfills a defaulted id. */
-  const save = (config: ProjectConfig): void => store.write(withBackfilledId(config));
+  // A save never writes a defaulted id: an id is set only by a deliberate writer
+  // (init, provisioning, doctor), which knows what the project should answer to.
+  const save = (config: ProjectConfig): void => store.write(config);
 
   return {
     create(config) {
