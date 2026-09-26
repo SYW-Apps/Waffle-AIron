@@ -1,0 +1,48 @@
+kind: value-object
+id: identity_rename
+name: IdentityRename
+description: >-
+  An identity move, described for the names findings are keyed by. The debt register
+  (rules.conformance.carried) and a spec's lint allows key a finding by the spec it is anchored to,
+  the site inside it and the units it covers — exactly the ids a component rename, a method rename
+  or a method move exist to rewrite. Left alone, unchanged debt reads as both PAID (the old key no
+  longer fires) and NEW (the same finding under the new key). So each operation that moves an
+  identity describes the move once, as this value, and the register and the allows are rekeyed by
+  the same pure arithmetic.
+subsystem: sdd_core
+fields:
+  - name: specs
+    type: SpecIdentityMove[]
+    description: >-
+      Spec ids that change: a component rename's component, i<id> and <id>_impl; a method move's
+      source contract and implementations, each limited to the moved methods' sites
+    optional: true
+  - name: components
+    type: ComponentIdentityMove[]
+    description: Component ids that change, wherever a covered unit or an edge site names one
+    optional: true
+  - name: methods
+    type: MethodIdentityMove[]
+    description: 'Contract methods whose identity changes: renamed, or moved to another component'
+    optional: true
+methods:
+  - name: rekeyUnit
+    signature: 'rekeyUnit(unit: string): string'
+    returns: string
+    description: >-
+      One covered unit as this move leaves it. A `[step:]component.method` unit (a call claim, a
+      colocated crossing, a declared call) follows a moved method first, else a renamed component;
+      each side of an edge (`a -> b`) follows a renamed component. Anything else — a parameter name,
+      a field, a file path — is no identity a move changes and is answered unchanged.
+  - name: rekeyAnchor
+    signature: 'rekeyAnchor(anchor: RekeyedAnchor): RekeyedAnchor'
+    returns: RekeyedAnchor
+    description: >-
+      Where a finding is keyed once this move is written: its spec follows a moved spec (only at a
+      listed site, when the move lists sites), its site follows a renamed method on the specs that
+      declared it or, for an edge, a renamed component, and every covered unit follows as rekeyUnit
+      says. Every lookup reads the anchor as it stood, so the three answers never depend on one
+      another.
+sourcePath: src/models/identity-rename.ts
+createdAt: '2026-09-26T10:58:55.833Z'
+updatedAt: '2026-09-26T10:58:55.835Z'

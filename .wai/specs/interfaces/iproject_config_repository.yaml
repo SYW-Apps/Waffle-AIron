@@ -135,6 +135,23 @@ methods:
     params:
       - name: selections
         type: PackSelection[]
+  - name: rekeyCarried
+    description: >-
+      Rekey the debt register for an identity move — a component rename, a method rename, a method
+      move — so unchanged debt never reads as both paid and new. Every comment and all other
+      formatting of the document survive; only the renamed ids change. Answers each edit; a dry run
+      proves it and writes nothing; a register that cannot be edited precisely is refused and
+      nothing is written.
+    signature: 'rekeyCarried(rename: IdentityRename, dryRun?: boolean): CarriedRekey[]'
+    returns: CarriedRekey[]
+    params:
+      - name: rename
+        type: IdentityRename
+        description: The identity move the register follows
+      - name: dryRun
+        type: boolean
+        description: Answer the edits and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-09-14T05:15:59.805Z'
+updatedAt: '2026-09-26T10:59:30.935Z'

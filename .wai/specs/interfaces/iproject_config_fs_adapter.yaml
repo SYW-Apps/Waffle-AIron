@@ -22,6 +22,21 @@ methods:
     signature: 'documentExists(): boolean'
     returns: boolean
     params: []
+  - name: readText
+    description: >-
+      Read the configuration file's text exactly as it is — comments, quoting and line endings
+      included — or null when the file does not exist.
+    signature: 'readText(): string | null'
+    returns: string | null
+    params: []
+  - name: writeText
+    description: Write the configuration file's text verbatim, replacing the file.
+    signature: 'writeText(text: string): void'
+    returns: void
+    params:
+      - name: text
+        type: string
+        description: The whole document text, written byte for byte
 status: complete
 createdAt: '2026-09-13T10:50:01.980Z'
-updatedAt: '2026-09-14T05:15:59.502Z'
+updatedAt: '2026-09-26T10:59:20.511Z'

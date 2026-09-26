@@ -27,7 +27,7 @@ fields:
     type: string[]
     description: >-
       Ids of the specs whose references were retargeted: narrative call, register and dispatch
-      steps, dispatch-table bindings, and lifecycle entrypoints
+      steps, dispatch-table bindings, lifecycle entrypoints, and lint allows keyed on the method
     optional: false
   - name: mentions
     type: string[]
@@ -42,7 +42,14 @@ fields:
       The code symbol an implementation now declares, when the rename pinned the old name so the
       existing function still binds
     optional: true
+  - name: carried
+    type: CarriedRekey[]
+    description: >-
+      Every edit the rename made to the debt register (.wai/project.yaml rules.conformance.carried):
+      an entry anchored at the method on a spec it moved in, or naming <component>.<method> in a
+      covered unit. Empty when the register names it nowhere
+    optional: false
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-09-17T19:21:55.866Z'
-updatedAt: '2026-09-19T11:07:10.843Z'
+updatedAt: '2026-09-26T10:59:14.063Z'

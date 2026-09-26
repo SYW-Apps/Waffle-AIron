@@ -162,6 +162,15 @@ fields:
       as a route needs the conditions as expressions, not as text. A function with no recognisable
       route records none rather than an empty guess.
     optional: true
+  - name: reexportBindings
+    type: ReexportBindingFact[]
+    description: >-
+      What each export-from declaration republishes, name by name: a named one with both sides of
+      its rename (`export { a as b } from 'm'` publishes `b` as m's `a`), a star with `*` on both
+      sides. Runtime re-exports only — a type-only one republishes no function. Exact grade only: it
+      is what lets a reader follow a republished name to the module that wrote it, and a weaker
+      grade leaves it unset rather than guess
+    optional: true
 methods:
   - name: resolveImport
     signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
@@ -217,4 +226,4 @@ methods:
       what keeps an unannotated receiver from becoming a guess, exactly as it is for a field
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-09-24T20:30:24.237Z'
+updatedAt: '2026-09-26T10:59:00.469Z'

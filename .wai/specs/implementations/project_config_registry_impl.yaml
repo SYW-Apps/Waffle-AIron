@@ -98,7 +98,52 @@ methods:
     calls:
       - project_config_store.read
       - project_config_store.write
+  - name: rekeyCarried
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the raw `rules.conformance.carried` — the register as it is WRITTEN, before schema
+          defaults, so every index below is the index of the text the store edits
+        type: call
+        targetComponent: project_config_store
+        targetMethod: readField
+      - stepNumber: 2
+        description: Decide whether there is a register to rekey
+        type: branch
+        condition: the register is not a list
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Answer empty: a project that carries no debt has nothing a move could leave behind'
+        type: return
+        outcome: no edits
+      - stepNumber: 4
+        description: Rekey every carried finding
+        type: loop
+        loopKind: forEach
+        over: each finding, of each carried group, that names a spec
+        endStep: 5
+      - stepNumber: 5
+        description: >-
+          Rekey its spec, site and covered units with identity_rename.rekeyAnchor; for every key
+          that changed, record a scalar edit at its path
+          (rules.conformance.carried.<group>.findings.<finding>.spec | at | covers.<unit>) holding
+          the old value and the new, and a carried rekey naming the finding by its code, spec and
+          site as they stood
+        type: local
+      - stepNumber: 6
+        description: >-
+          Hand every edit to the store's comment-preserving rewrite — as a dry run when asked, so a
+          caller can prove the edit before its first write. A register the store cannot edit
+          precisely raises its refusal here, and nothing is written; no edits writes nothing
+        type: call
+        targetComponent: project_config_store
+        targetMethod: rewriteScalars
+      - stepNumber: 7
+        description: Answer the carried rekeys, in register order
+        type: return
+        outcome: rekeyed
+    detail: full
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-09-19T21:26:57.661Z'
+updatedAt: '2026-09-26T11:04:27.256Z'

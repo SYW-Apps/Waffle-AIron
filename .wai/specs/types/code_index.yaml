@@ -81,6 +81,18 @@ methods:
       cannot place, exactly as the proven tier is. A widened answer may only ACCEPT a call as
       realized; naming a file a call landed in stays the proven tier's word alone, since a
       possibility can never accuse
+  - name: forwardsOf
+    signature: 'forwardsOf(path: string, name: string): ForwardedName[]'
+    returns: ForwardedName[]
+    description: >-
+      What a name a file publishes IS, followed through every re-export: the pair itself, then for
+      each export-from that republishes the name — named or star, aliased or not (`export { a as b }
+      from 'm'` makes the file's `b` m's `a`) — the module it comes from under the name that module
+      publishes it by, transitively; a star forwards only a name its module actually exports, and
+      never a default. An aliased re-export forwards exactly as an unaliased one does: the spelling
+      differs, the identity does not. Specifiers outside the closed path set, files below exact
+      grade (which record no re-export names) and cycles end the walk. PROVEN: every pair is written
+      down in the code
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:08.829Z'
-updatedAt: '2026-09-20T10:41:25.822Z'
+updatedAt: '2026-09-26T10:59:02.952Z'

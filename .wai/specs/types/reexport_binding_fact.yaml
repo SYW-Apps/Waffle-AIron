@@ -1,0 +1,26 @@
+kind: value-object
+id: reexport_binding_fact
+name: ReexportBindingFact
+description: >-
+  One name a file republishes from another module: `export { local as exported } from 'from'`, or a
+  star re-export, which republishes every name its module exports under that same name and is
+  written with `*` on both sides. What lets a reader follow a republished name — aliased or not — to
+  the module that wrote it.
+subsystem: sdd_validator
+fields:
+  - name: exported
+    type: string
+    description: The name this file publishes it under; * for a star re-export
+    optional: false
+  - name: local
+    type: string
+    description: The name the module it comes from publishes it under; * for a star re-export
+    optional: false
+  - name: from
+    type: string
+    description: The module specifier, exactly as written
+    optional: false
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-09-26T10:58:46.831Z'
+updatedAt: '2026-09-26T10:58:46.833Z'

@@ -138,6 +138,14 @@ methods:
       - name: projectName
         type: string
         description: The child project's display name
+  - name: loadImplementationSpecs
+    description: >-
+      Every implementation spec of the bound tree — how the test search finds the files that realize
+      a contract's methods, since a contract method's tests import its realization. Forwarded to the
+      core portal.
+    signature: 'loadImplementationSpecs(): ImplementationSpec[]'
+    returns: ImplementationSpec[]
+    params: []
 status: complete
 createdAt: '2026-09-18T21:41:49.125Z'
-updatedAt: '2026-09-24T22:26:07.111Z'
+updatedAt: '2026-09-26T11:01:57.247Z'
