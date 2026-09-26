@@ -799,7 +799,8 @@ function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGr
 }
 
 /**
- * Overlay validator issues onto a project graph's nodes as per-node issueCounts,
+ * Overlay validator issues onto a project graph's nodes as per-node issueCounts
+ * (errors and warnings) and, apart from them, noticeCounts (notices),
  * grouping each issue by the component/spec id it references, and stamp tier
  * 'project', scope = the project id, level = the requested level, generatedAt = now.
  */
@@ -810,13 +811,24 @@ function overlayProjectIssues(
   level: number,
 ): WebGraphModel {
   const counts = new Map<string, number>();
+  const noticeCounts = new Map<string, number>();
   for (const issue of issues) {
     const id = issue.specId;
-    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+    if (!id) continue;
+    // A notice is never a failing issue: counted apart, so a node holding only
+    // notices is not drawn with the error pill.
+    const into = issue.severity === 'notice' ? noticeCounts : counts;
+    into.set(id, (into.get(id) ?? 0) + 1);
   }
   const nodes = graph.nodes.map((n) => {
     const count = counts.get(n.id);
-    return count !== undefined ? { ...n, issueCount: count } : n;
+    const notices = noticeCounts.get(n.id);
+    if (count === undefined && notices === undefined) return n;
+    return {
+      ...n,
+      ...(count !== undefined ? { issueCount: count } : {}),
+      ...(notices !== undefined ? { noticeCount: notices } : {}),
+    };
   });
   return {
     ...graph,
@@ -1597,7 +1609,8 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         nodes.forEach(function (n) {
           var li = document.createElement('li');
           li.innerHTML = '<span class="kind">' + esc(n.kind) + '</span><span>' + esc(n.label || n.id) + '</span>'
-            + (n.issueCount ? ' <span class="pill bad" title="validation issues">' + n.issueCount + '</span>' : '');
+            + (n.issueCount ? ' <span class="pill bad" title="validation errors and warnings">' + n.issueCount + '</span>' : '')
+            + (n.noticeCount ? ' <span class="pill" title="validation notices">' + n.noticeCount + '</span>' : '');
           li.addEventListener('click', function () {
             Array.prototype.forEach.call(list.children, function (x) { x.classList.remove('sel'); });
             li.classList.add('sel');
@@ -1640,14 +1653,18 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   $('btnValidate').addEventListener('click', function () {
     var insp = $('insp'); insp.innerHTML = '<div class="hint">Validating…</div>';
     mcp('sdd_validate_tree', {}).then(function (res) {
-      var issues = (res && res.issues) || [];
+      // sdd_validate_tree answers with three lists — errors, warnings, notices;
+      // this view used to read an "issues" list the tool never sends, so it
+      // reported every tree clean.
+      var issues = (res && res.issues) || [].concat((res && res.errors) || [], (res && res.warnings) || [], (res && res.notices) || []);
       var errs = issues.filter(function (i) { return i.severity === 'error'; }).length;
-      var warns = issues.length - errs;
-      var html = '<h2>Validation</h2><p class="meta">' + (issues.length ? (errs + ' error(s), ' + warns + ' warning(s)') : 'clean — no findings') + '</p>';
+      var notes = issues.filter(function (i) { return i.severity === 'notice'; }).length;
+      var warns = issues.length - errs - notes;
+      var html = '<h2>Validation</h2><p class="meta">' + (issues.length ? (errs + ' error(s), ' + warns + ' warning(s), ' + notes + ' notice(s)') : 'clean — no findings') + '</p>';
       if (issues.length) {
         html += '<table class="grid"><thead><tr><th>Severity</th><th>Code</th><th>Spec</th><th>Message</th></tr></thead><tbody>';
         issues.slice(0, 200).forEach(function (i) {
-          var cls = i.severity === 'error' ? 'bad' : 'warn';
+          var cls = i.severity === 'error' ? 'bad' : i.severity === 'notice' ? '' : 'warn';
           html += '<tr><td><span class="pill ' + cls + '">' + esc(i.severity) + '</span></td><td>' + esc(i.code) + '</td><td>' + esc(i.specId || '') + '</td><td>' + esc(i.message) + '</td></tr>';
         });
         html += '</tbody></table>';

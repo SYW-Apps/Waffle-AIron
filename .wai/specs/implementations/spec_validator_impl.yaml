@@ -170,8 +170,9 @@ methods:
           the surface snapshots, the code model, the round-trip findings, the known issue codes, the
           pack data and the lint-allow bookkeeping. Its addIssue applies the designDepth gate, then
           severity resolution (the project's sddRuleSeverity, else the governing pack profile's,
-          else the draft-context downgrade, else the rule default), and lets a matching lint allow
-          silence a warning
+          else the draft-context downgrade, which is min(rule default, warning) and so never raises
+          a notice, else the rule default), and lets a matching lint allow silence a warning or a
+          notice and the conformance debt register carry one; an error is never silenced or carried
         type: local
       - stepNumber: 25
         description: For each rule in the run sequence
@@ -402,8 +403,8 @@ methods:
         type: local
       - stepNumber: 10
         description: >-
-          Return the verdict split by severity: errors refuse the write, warnings ride along as
-          notices
+          Return the verdict split by severity: errors refuse the write, warnings and notices ride
+          along as the write's notices, each list kept apart
         type: return
         outcome: CandidateVerdict
   - name: computeGateStateId
@@ -541,4 +542,4 @@ lint:
         validation run has.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-25T21:38:19.237Z'
+updatedAt: '2026-09-26T14:49:16.682Z'

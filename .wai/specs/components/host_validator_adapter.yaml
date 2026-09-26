@@ -3,8 +3,8 @@ name: Host Validator Client Adapter
 description: >-
   Local client adapter crossing the subsystem boundary to sdd_validator via its published portal:
   runs the validate-as-complete conformance pass the admin orchestrator requires before writing a
-  lock record, returning errors and warnings, and forwards the gate identity a lock records and a
-  lock check compares.
+  lock record, returning errors, warnings and notices, and forwards the gate identity a lock records
+  and a lock check compares.
 subsystem: sdd_host
 componentType: Adapter
 owns: []
@@ -13,4 +13,4 @@ dependsOn:
   - host_core_adapter
 status: complete
 createdAt: '2026-07-04T12:33:56.357Z'
-updatedAt: '2026-09-15T18:01:00.085Z'
+updatedAt: '2026-09-26T14:49:34.653Z'

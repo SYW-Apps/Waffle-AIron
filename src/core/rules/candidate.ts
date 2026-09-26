@@ -120,5 +120,6 @@ export function validateComponentCandidate(
   return {
     errors: own.filter(i => i.severity === 'error'),
     warnings: own.filter(i => i.severity === 'warning'),
+    notices: own.filter(i => i.severity === 'notice'),
   };
 }

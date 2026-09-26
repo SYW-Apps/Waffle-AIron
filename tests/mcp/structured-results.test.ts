@@ -288,9 +288,12 @@ describe('the tools answer with data, and still with the same sentence', () => {
     expect(typeof report.valid).toBe('boolean');
     expect(Array.isArray(report.errors)).toBe(true);
     expect(Array.isArray(report.warnings)).toBe(true);
-    for (const finding of [...report.errors, ...report.warnings]) {
+    expect(Array.isArray(report.notices)).toBe(true);
+    for (const [list, severity] of [[report.errors, 'error'], [report.warnings, 'warning'], [report.notices, 'notice']] as const) {
+      for (const finding of list) expect(finding.severity).toBe(severity);
+    }
+    for (const finding of [...report.errors, ...report.warnings, ...report.notices]) {
       expect(typeof finding.code).toBe('string');
-      expect(finding.severity === 'error' || finding.severity === 'warning').toBe(true);
       expect(typeof finding.message).toBe('string');
     }
     // A tree with a Store nobody owns and contracts nobody realizes has findings

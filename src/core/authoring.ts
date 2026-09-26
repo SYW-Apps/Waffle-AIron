@@ -165,9 +165,16 @@ function candidateOptions(): { rules?: RulesConfig; projectType?: string } {
   return config ? { rules: config.rules, projectType: config.projectType } : {};
 }
 
-/** Intrinsic warnings, as the notice strings the authoring surfaces already return. */
+/**
+ * Intrinsic warnings and notices, as the notice strings the authoring surfaces
+ * already return. A notice-severity finding says so, so it is never read as a
+ * warning.
+ */
 function noticesFrom(verdict: CandidateVerdict): string[] {
-  return verdict.warnings.map(w => `${w.code}: ${w.message}`);
+  return [
+    ...verdict.warnings.map(w => `${w.code}: ${w.message}`),
+    ...verdict.notices.map(n => `${n.code} (notice): ${n.message}`),
+  ];
 }
 
 /**

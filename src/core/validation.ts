@@ -37,7 +37,7 @@ export { validateComponentCandidate } from './rules/candidate.js';
 import type { LoadedExtensions } from './extensions.js';
 import type { PackSelection } from '../models/project.js';
 import { computeGateIdentity, type GateConfig } from './rules/gate-identity.js';
-import { BUILTIN_PROFILES, PROJECT_KINDS } from './rules/types.js';
+import { BUILTIN_PROFILES, PROJECT_KINDS, type IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
 
 /**
@@ -112,7 +112,11 @@ const RESOLUTION_FAILURE_CODES = new Set([
   'CROSS_TREE_REF_UNRESOLVED',
 ]);
 
-const SEVERITY_RANK = { off: 0, warning: 1, error: 2 } as const;
+/**
+ * Severities in order. A notice sits between off and warning: it is reported,
+ * so it outranks a silenced code, but it never fails anything a warning can.
+ */
+const SEVERITY_RANK = { off: 0, notice: 1, warning: 2, error: 3 } as const;
 
 /** A finding's identity when merging two roots' verdicts: its code on its spec. */
 function issueKey(issue: ValidationIssue): string {
@@ -143,7 +147,7 @@ function stricterSeverities(parent: RulesConfig | undefined, child: RulesConfig 
   const codes = new Set([...Object.keys(fromParent), ...Object.keys(fromChild)]);
   if (codes.size === 0) return parent ?? child;
   const defaults = new Map(knownIssueCodes().map((rc) => [rc.code, rc.defaultSeverity]));
-  const merged: Record<string, 'error' | 'warning' | 'off'> = {};
+  const merged: Record<string, IssueSeverity | 'off'> = {};
   for (const code of codes) {
     const p = fromParent[code] ?? defaults.get(code);
     const c = fromChild[code] ?? defaults.get(code);
@@ -165,7 +169,12 @@ function stricterSeverities(parent: RulesConfig | undefined, child: RulesConfig 
 // ---------------------------------------------------------------------------
 
 export interface ValidationIssue {
-  severity: 'error' | 'warning';
+  /**
+   * After project and profile overrides. A `notice` is reported like any other
+   * finding but never makes a result invalid (`valid` counts errors only) and
+   * never fails `--ci`.
+   */
+  severity: IssueSeverity;
   code: string;
   message: string;
   /** Optional: agent id related to the issue */

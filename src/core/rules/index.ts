@@ -30,6 +30,7 @@ import {
   RuleContext,
   SddRule,
   Severity,
+  type IssueSeverity,
   type CodeIndex,
   type DependencyEdges,
   type ImportGraph,
@@ -110,8 +111,14 @@ const DEPTH_GATED_CODES: Record<string, DesignDepth> = {
   UNUSED_METHOD: 'narratives',
 };
 
+/** min(severity, warning) on the rank off < notice < warning < error. */
+function atMostWarning(severity: IssueSeverity): IssueSeverity {
+  return severity === 'error' ? 'warning' : severity;
+}
+
 // Completeness rules downgrade to warnings while the surrounding specs are
 // still draft/design — the tree is allowed to be unfinished, not inconsistent.
+// The downgrade is min(default, warning), so a notice is never raised by it.
 const COMPLETENESS_RULES = new Set([
   'MISSING_IMPLEMENTATION_METHOD',
   'MISSING_NARRATIVE',
@@ -511,8 +518,9 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     defaultSeverity: Severity,
     isDraftContext?: boolean,
     subsystemId?: string,
-  ): Severity | 'off' => {
-    // Explicit project config wins over everything.
+  ): IssueSeverity | 'off' => {
+    // Explicit project config wins over everything — including setting a code
+    // to `notice`, or raising one from notice to warning or error.
     if (rules?.sddRuleSeverity?.[ruleCode]) {
       return rules.sddRuleSeverity[ruleCode];
     }
@@ -525,15 +533,18 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     if (profileSeverity) {
       return profileSeverity;
     }
+    // The draft downgrade is min(default, warning): it softens an error, and it
+    // never RAISES anything — a notice stays a notice in draft context, and
+    // nothing becomes one by being draft.
     if (isDraftContext && COMPLETENESS_RULES.has(ruleCode)) {
-      return 'warning';
+      return atMostWarning(defaultSeverity);
     }
     return defaultSeverity;
   };
 
   // Per-spec lint suppressions — wairon's #[allow(...)]. Collected from every
   // spec kind that carries a `lint` block; addIssue consults them AFTER
-  // severity resolution: a matching allow silences a WARNING, while an error
+  // severity resolution: a matching allow silences a WARNING or a NOTICE, while an error
   // still surfaces (architecture violations are never locally suppressible —
   // the allow is only marked used so it isn't flagged as stale).
   //
@@ -648,7 +659,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         allowClaimed = true;
         const grew = (parts?.covers ?? []).filter(unit => !(allow.covers ?? []).includes(unit));
         if (grew.length === 0) {
-          if (severity === 'warning') return;
+          if (severity !== 'error') return;
         } else {
           text = `${text} A lint.allow covers this site, but not ${grew.length} part(s) of it — ${grew.map(u => `"${u}"`).join('; ')} ${grew.length === 1 ? 'is' : 'are'} new. Decide on them: add them to the allow's \`covers\` with a reason that is actually true, or fix them.`;
         }
@@ -659,12 +670,15 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     // EVERY unit the finding reports: a crossing or a step the entry does not
     // name is growth, and growth is exactly what a register must not absorb —
     // so the finding still fires, and its message says which units are new.
-    // Errors are never carried, for the reason an allow never silences one.
+    // Errors are never carried, for the reason an allow never silences one; a
+    // notice is carried like a warning, because a register entry for a code
+    // the project set to notice still names a finding that fired — reporting
+    // it stale would be a false warning about a true entry.
     // An allow that claimed this site is the end of it: the two mechanisms
     // make different claims, and one finding is never both "wrong by design"
     // and "right but unpaid" — the entry is then reported stale, which is the
     // truth, because it carries nothing.
-    if (specId && parts && severity === 'warning' && !allowClaimed) {
+    if (specId && parts && severity !== 'error' && !allowClaimed) {
       const entry = carriedLookup.get(carriedKey(specId, code, parts.at));
       if (entry) {
         entry.fired = true;

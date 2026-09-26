@@ -152,7 +152,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
  * confirmation (nothing was changed).
  *
  * `gate` is the as-complete validation result the caller already gated on;
- * its warning count is captured on the record (the hosted lock records the
+ * its warning and notice counts are captured on the record (the hosted lock records the
  * same shape).
  */
 export async function runLock(options: LockOptions = {}, gate?: ValidationResult): Promise<LockRecord | null> {
@@ -242,6 +242,7 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
       valid: true,
       errors: 0,
       warnings: gate ? gate.issues.filter((i) => i.severity === 'warning').length : 0,
+      notices: gate ? gate.issues.filter((i) => i.severity === 'notice').length : 0,
     },
     status: 'ready',
     specs: captureApprovedSpecs(root, scope),

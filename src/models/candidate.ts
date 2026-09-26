@@ -9,12 +9,17 @@ import type { ValidationIssue } from '../core/validation.js';
 // verdict must be able to render one without reaching into the validator.
 // ---------------------------------------------------------------------------
 
-/** A candidate's verdict, split by severity — errors refuse the write, warnings ride along as notices. */
+/**
+ * A candidate's verdict, split by severity — errors refuse the write; warnings
+ * and notices ride along as the write's notices, each list kept apart.
+ */
 export interface CandidateVerdict {
   /** Intrinsic violations. The write must be refused; each names its rule code. */
   errors: ValidationIssue[];
   /** Intrinsic advisories (e.g. MISSING_DURABILITY). Surface, but never block. */
   warnings: ValidationIssue[];
+  /** Intrinsic findings the project set to notice severity. Surface beside the warnings, never block. */
+  notices: ValidationIssue[];
 }
 
 /**

@@ -21,7 +21,10 @@ fields:
     optional: false
   - name: sddRuleSeverity
     type: object
-    description: Per-code severity overrides for the SDD conformance rules
+    description: >-
+      Per-code severity overrides for the SDD conformance rules: error, warning, notice or off. A
+      code set to notice is still reported but never fails the gate; one set to off is not reported
+      at all.
     optional: true
   - name: naming
     type: NamingRuleConfig
@@ -44,4 +47,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-19T11:07:16.763Z'
+updatedAt: '2026-09-26T14:48:50.814Z'

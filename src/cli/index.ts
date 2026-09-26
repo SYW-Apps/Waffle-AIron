@@ -235,13 +235,18 @@ async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursi
       valid?: boolean;
       errors?: { code: string; message: string; specId?: string }[];
       warnings?: { code: string; message: string; specId?: string }[];
+      notices?: { code: string; message: string; specId?: string }[];
     };
     const errors = report.errors ?? [];
     const warnings = report.warnings ?? [];
-    logger.info(`Validated "${target.projectId}" on ${target.url} — ${errors.length} error(s), ${warnings.length} warning(s).`);
+    // An instance older than the notice severity sends no `notices` list.
+    const notices = report.notices ?? [];
+    logger.info(`Validated "${target.projectId}" on ${target.url} — ${errors.length} error(s), ${warnings.length} warning(s), ${notices.length} notice(s).`);
     for (const e of errors) logger.error(`  [${e.code}] ${e.specId ? `${e.specId}: ` : ''}${e.message}`);
     for (const w of warnings) logger.warn(`  [${w.code}] ${w.specId ? `${w.specId}: ` : ''}${w.message}`);
-    // Exit non-zero exactly as a local run would, so CI gates identically.
+    for (const n of notices) logger.notice(`  [${n.code}] ${n.specId ? `${n.specId}: ` : ''}${n.message}`);
+    // Exit non-zero exactly as a local run would, so CI gates identically:
+    // notices never fail it, --ci included.
     if (errors.length || (opts.ci && warnings.length)) process.exit(1);
     return;
   }
@@ -321,7 +326,7 @@ program
 program
   .command('validate')
   .description('Validate the project configuration and the SDD Spec Tree')
-  .option('--ci', 'treat warnings as errors for CI pipelines')
+  .option('--ci', 'treat warnings as errors for CI pipelines (notices are printed and counted, never fatal)')
   .option('--subsystem <id>', 'only validate the specified subsystem (granular)')
   .option('--no-recursive', 'do not recursively validate subprojects')
   .action(async (opts) => {

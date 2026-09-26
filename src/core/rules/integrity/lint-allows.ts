@@ -18,14 +18,14 @@ import { SddRule } from '../types.js';
  * sites are in the message for the same reason: the author is being asked to
  * write one, and guessing its spelling from prose is how allows rot.
  *
- * By design, allows silence WARNING-severity findings only. Error findings
+ * By design, allows silence WARNING- and NOTICE-severity findings only. Error findings
  * are architecture violations and always surface; a human can still re-tune
  * a code globally via rules.sddRuleSeverity in project.yaml.
  */
 export const lintAllowsRule: SddRule = {
   name: 'lint-allows',
   description:
-    'Per-spec lint suppressions (lint.allow) must name real issue codes and actually suppress a finding — unknown codes and stale allows are flagged. An allow covers exactly the occurrence it names: a finding that reports a site is silenced only by an allow whose `at` is that site, a finding that reports none only by an allow that names none, and an aggregating finding only by an allow whose `covers` lists every unit it reports — a unit nobody listed is named back as new instead of inheriting a decision taken about its neighbours. So a coarse allow left on a rule that names sites, and an allow whose site the run no longer reports, are both UNUSED_LINT_ALLOW, and the finding names the sites that did fire. Allows silence warnings only; errors always surface.',
+    'Per-spec lint suppressions (lint.allow) must name real issue codes and actually suppress a finding — unknown codes and stale allows are flagged. An allow covers exactly the occurrence it names: a finding that reports a site is silenced only by an allow whose `at` is that site, a finding that reports none only by an allow that names none, and an aggregating finding only by an allow whose `covers` lists every unit it reports — a unit nobody listed is named back as new instead of inheriting a decision taken about its neighbours. So a coarse allow left on a rule that names sites, and an allow whose site the run no longer reports, are both UNUSED_LINT_ALLOW, and the finding names the sites that did fire. Allows silence warnings and notices; errors always surface.',
   codes: [
     { code: 'UNKNOWN_LINT_ALLOW_CODE', defaultSeverity: 'warning', summary: 'lint.allow names an issue code no registered rule emits' },
     { code: 'UNUSED_LINT_ALLOW', defaultSeverity: 'warning', summary: 'lint.allow entry matched no finding this run — the code never fired, or it fired at sites this allow does not name' },

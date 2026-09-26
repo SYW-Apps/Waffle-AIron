@@ -50,7 +50,9 @@ fields:
     optional: true
   - name: issueCount
     type: number
-    description: Number of validator issues overlaid onto this node (project tier), 0 or absent when clean.
+    description: >-
+      Number of validator errors and warnings overlaid onto this node (project tier), 0 or absent
+      when it has none. Notices are counted apart, in noticeCount.
     optional: true
   - name: actionable
     type: boolean
@@ -60,7 +62,13 @@ fields:
       + yes@one-project case) — its non-visible children are omitted. An instance-admin sees every
       node actionable. Carried through from LandscapeNode.actionable on the landscape tier.
     optional: true
+  - name: noticeCount
+    type: number
+    description: >-
+      Number of validator notices overlaid onto this node (project tier), absent when it has none —
+      kept apart from issueCount so a node holding only notices is never drawn as failing.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-11T11:31:08.145Z'
-updatedAt: '2026-09-19T11:07:21.475Z'
+updatedAt: '2026-09-26T14:48:55.416Z'

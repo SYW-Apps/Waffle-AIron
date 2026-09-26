@@ -99,8 +99,10 @@ methods:
       address: mcp tools/call sdd_write_narrative
   - name: sdd_validate_tree
     description: >-
-      Tool: validate the SDD tree and answer with every finding. Optionally narrowed to one
-      subsystem, and optionally descending into chained subprojects.
+      Tool: validate the SDD tree and answer with every finding, split into errors, warnings and
+      notices (three separate lists, in the structured content and the text block alike). Notices
+      never make the tree invalid. Optionally narrowed to one subsystem, and optionally descending
+      into chained subprojects.
     signature: 'sdd_validate_tree(subsystem?: string, recursive?: boolean): ValidationResult'
     returns: ValidationResult
     params:
@@ -476,4 +478,4 @@ methods:
       address: mcp tools/call getProjectConfig
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T00:25:16.154Z'
+updatedAt: '2026-09-26T14:49:33.185Z'

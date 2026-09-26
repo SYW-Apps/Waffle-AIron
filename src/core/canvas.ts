@@ -629,6 +629,8 @@ body:not(.panel-closed) #panelToggle { background:var(--accent); color:#fff; bor
 #panel .flowbtn:hover { background:var(--hover-bg); }
 #panel .issue { border-left:3px solid var(--danger); padding:6px 9px; margin:6px 0; background:var(--card); font-size:12px; border-radius:0 7px 7px 0; }
 #panel .issue.warning { border-left-color:var(--warn); }
+#panel .issue.notice { border-left-color:var(--accent); }
+#panel .issue .sev { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; margin-left:6px; }
 #panel .issue code { font-size:10.5px; color:var(--dim); }
 
 /* Presentation mode = the canvas page, focused: the header chrome and legend
@@ -839,7 +841,15 @@ var MODEL = __MODEL_JSON__;
   });
   document.getElementById('issueCount').textContent =
     MODEL.issues.filter(function (i) { return i.severity === 'error'; }).length + 'e/' +
-    MODEL.issues.filter(function (i) { return i.severity === 'warning'; }).length + 'w';
+    MODEL.issues.filter(function (i) { return i.severity === 'warning'; }).length + 'w/' +
+    MODEL.issues.filter(function (i) { return i.severity === 'notice'; }).length + 'n';
+  // A node is marked failing only for an error or a warning; one that holds
+  // only notices gets its own quieter mark, never the failing one.
+  function issueMark(id) {
+    var list = state.showIssues && issuesBySpec[id];
+    if (!list) return '';
+    return list.some(function (i) { return i.severity !== 'notice'; }) ? ' hasIssue' : ' hasNotice';
+  }
 
   var PATTERN_TYPES = { Repository:1, FeatureComponent:1, RouterComponent:1 };
   // A retired Specialist or Gateway renders as a plain box marked retired, so a
@@ -1179,6 +1189,9 @@ var MODEL = __MODEL_JSON__;
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
+      // Notices only: the node keeps its own border colour and width (no layout
+      // nudge), drawn dotted so it reads as noted rather than failing.
+      { selector: '.hasNotice', style: { 'border-style': 'dotted' } },
       // Overlay only (no border) — a border changes node geometry, which nudges
       // the compound parent and makes hover flicker; overlay never affects layout.
       { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.34, 'overlay-padding': 6 } },
@@ -1968,7 +1981,7 @@ var MODEL = __MODEL_JSON__;
       var kindCls = t.kind === 'entity' ? 'typeEntity' : 'typeValue';
       var dim = !typeMatches(t);
       var extra = (dim ? ' dimmed' : '')
-        + (state.showIssues && issuesBySpec[t.id] ? ' hasIssue' : '')
+        + issueMark(t.id)
         + (state.selectedKind === 'type' && state.selected === t.id ? ' sel' : '');
       if (sh.plain) {
         eles.push({
@@ -2258,7 +2271,7 @@ var MODEL = __MODEL_JSON__;
       }
       classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '')
         + (dim ? ' dimmed' : '')
-        + (state.showIssues && issuesBySpec[e.id] ? ' hasIssue' : '')
+        + issueMark(e.id)
         + (state.selectedKind === e.kind && state.selected === e.id ? ' sel' : '');
       if (inner) {
         var boxNode = { data: { id: aid, label: e.kind === 'subsystem' ? nameOf(e) : nameOf(e), w: p.w, h: p.h, tw: p.w - 16 }, classes: classes };
@@ -4203,7 +4216,7 @@ var MODEL = __MODEL_JSON__;
   }
   function issueHtml(list) {
     return list.map(function (i) {
-      return '<div class="issue ' + esc(i.severity) + '"><code>' + esc(i.code) + '</code><br>' + esc(i.message) + '</div>';
+      return '<div class="issue ' + esc(i.severity) + '"><code>' + esc(i.code) + '</code><span class="sev">' + esc(i.severity) + '</span><br>' + esc(i.message) + '</div>';
     }).join('');
   }
 

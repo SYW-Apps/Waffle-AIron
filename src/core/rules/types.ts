@@ -36,7 +36,17 @@ import type { ValidationIssue } from '../validation.js';
 // family's folder plus a registry entry — no surgery on a monolith.
 // ---------------------------------------------------------------------------
 
+/** A rule's DEFAULT severity: what a code is reported at before any override. */
 export type Severity = 'error' | 'warning';
+
+/**
+ * The severity a finding is REPORTED at, after the project's and the governing
+ * profile's overrides. A `notice` is listed on every surface that lists
+ * findings, beside errors and warnings, but never makes a result invalid and
+ * never fails `--ci`. A project reaches it through `rules.sddRuleSeverity`, and
+ * raises a notice code to warning or error the same way.
+ */
+export type IssueSeverity = Severity | 'notice';
 
 export interface RuleCode {
   code: string;
@@ -529,7 +539,7 @@ export interface RuleContext {
 
   /**
    * Bookkeeping for per-spec lint suppressions (lint.allow). Suppression
-   * itself happens inside addIssue (warnings only — errors always surface);
+   * itself happens inside addIssue (warnings and notices only — errors always surface);
    * the lint-allows rule audits these entries at the end of the run.
    *
    * `at`/`covers` are the finding's own identity (FindingParts), so an allow
@@ -571,8 +581,9 @@ export interface RuleContext {
 
   /**
    * Report an issue. Applies scope filtering, user severity overrides
-   * (rules.sddRuleSeverity), and draft-context downgrades for completeness
-   * rules. 'off' suppresses the issue entirely.
+   * (rules.sddRuleSeverity, which may also set a code to `notice`), and
+   * draft-context downgrades for completeness rules — min(default, warning),
+   * so a draft never raises a notice. 'off' suppresses the issue entirely.
    *
    * `surfaceResolved` marks a finding whose reference DID resolve against a
    * vendored surface snapshot — a genuine contract/boundary verdict rather
@@ -582,7 +593,7 @@ export interface RuleContext {
    * `parts` is the finding's IDENTITY — its site inside the spec and the units
    * it aggregates — which is what the conformance debt register matches on. A
    * rule emitting a CARRYABLE code must supply it; a matching entry that lists
-   * every unit carries the warning, and a unit the entry does not list is
+   * every unit carries the warning (or notice), and a unit the entry does not list is
    * named back as new rather than absorbed.
    */
   addIssue(

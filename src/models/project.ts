@@ -337,9 +337,11 @@ export const RulesConfigSchema = z.object({
 
   /**
    * Severity overrides for SDD validation rules.
-   * Key: rule code (e.g. CIRCULAR_DEPENDENCY), Value: error | warning | off
+   * Key: rule code (e.g. CIRCULAR_DEPENDENCY), Value: error | warning | notice | off.
+   * A notice is still reported, but never makes the tree invalid and never
+   * fails `--ci`; off is not reported at all.
    */
-  sddRuleSeverity: z.record(z.enum(['error', 'warning', 'off'])).default({}),
+  sddRuleSeverity: z.record(z.enum(['error', 'warning', 'notice', 'off'])).default({}),
 
   /** Dynamic naming conventions and stereotype suffix rules */
   naming: NamingRuleConfigSchema.optional(),

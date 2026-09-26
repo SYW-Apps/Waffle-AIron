@@ -906,6 +906,8 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .finding-msg-clickable { cursor: pointer; }
 .finding-msg-clickable:hover { text-decoration: underline dotted; }
 .finding-chip-row { margin-top: 4px; }
+/* The rail's severity label for a notice: dim, so it never reads as a problem. */
+.finding-notice-label { color: var(--ink-dim); }
 /* The affected-spec chip — same visual language as .badge, just an
    interactive <button> instead of a <span> so it can navigate on click. */
 .finding-chip { cursor: pointer; font: inherit; border: 1px solid var(--border-strong); }
@@ -923,6 +925,8 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
   border-radius: var(--radius-sm);
 }
 .field-flag-error { border-left-color: var(--bad); }
+/* A notice is informational: a neutral strip, never the warning amber. */
+.field-flag-notice { border-left-color: var(--border-strong); }
 /* ComponentUnitEditor — the Component/Interface/Implementation tab header. */
 .unit-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .unit-head .btn { margin-left: auto; }

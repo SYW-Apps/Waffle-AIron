@@ -27,6 +27,27 @@ client expects back from them (item 14). The library surface narrows too:
 `@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
 (item 4). Nothing here is purely additive, so `[minor]` would understate it.
 
+### A third severity: `notice`
+
+A finding can now be a **notice** — reported everywhere, never a failure. It sits
+between `off` and `warning`: the CLI, `wairon doctor`, the MCP tools, the hosted
+web views, the specs editor and the canvas all list notices distinctly, and
+neither `valid` nor `validate --ci` ever fails on one.
+
+- **Opt in per code.** `rules.sddRuleSeverity` accepts `notice`, so a team can
+  soften a warning to a notice, or raise a code later shipped as a notice to a
+  warning or an error. No built-in rule defaults to notice yet; the stage-2 export
+  checks will be the first.
+- **Allows and the debt register cover notices**, and a draft context never turns
+  anything into a notice (the downgrade is at most `warning`).
+- **The lock record counts notices** beside errors and warnings.
+- **MCP clients:** `sdd_validate_tree` (and `validateTopology`) return a separate
+  `notices` list in their structured content, a finding's `severity` may be
+  `notice`, and the candidate gate's verdict carries its notices. A client that
+  switches on severity should handle the third value.
+- **Fixed on the way:** the legacy hosted validate view read a field
+  `sdd_validate_tree` never sends, so it reported every tree as clean.
+
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 
 - **Tests to revisit are matched by the module a test imports from.** A test

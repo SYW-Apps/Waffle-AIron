@@ -5,11 +5,13 @@ description: Aggregate outcome of a validation run over the spec tree or registr
 fields:
   - name: valid
     type: boolean
-    description: True when no error-severity issues were found
+    description: >-
+      True when no error-severity issues were found; warnings and notices never make a result
+      invalid
     optional: false
   - name: issues
     type: ValidationIssue[]
-    description: All findings (errors and warnings) collected during the run
+    description: All findings (errors, warnings and notices) collected during the run
     optional: false
   - name: resolvedThrough
     type: ResolvedThrough
@@ -20,4 +22,4 @@ fields:
 methods: []
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-19T11:07:20.449Z'
+updatedAt: '2026-09-26T14:48:49.392Z'
