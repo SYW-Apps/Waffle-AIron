@@ -49,12 +49,20 @@ function isLineSubsequence(inner: string, outer: string): boolean {
   return true;
 }
 
+/**
+ * This repository's real project.yaml, as CRLF. The checkout's line endings depend
+ * on the platform (a Linux CI checkout is LF), so the file is normalized to the
+ * ending the working tree uses here; `keeps a CRLF file CRLF and an LF file LF`
+ * covers LF files.
+ */
+const realConfig = (): string => fs.readFileSync(REPO_CONFIG, 'utf8').replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+
 /** The carried-group comments of the debt register: `# N finding(s), M unit(s).` */
 const groupComments = (text: string): string[] => text.split('\n').filter((l) => /^\s*# \d+ finding\(s\), \d+ unit\(s\)\.\r?$/.test(l));
 
 describe('F82 — a registry save keeps this repository\'s project.yaml comments byte for byte', () => {
   it('declareExternal on a copy of the real file: only insertions, every carried-group comment intact, CRLF kept', () => {
-    const original = fs.readFileSync(REPO_CONFIG, 'utf8');
+    const original = realConfig();
     expect(groupComments(original).length).toBeGreaterThan(0);
     const root = tempRoot(original);
 
@@ -72,7 +80,7 @@ describe('F82 — a registry save keeps this repository\'s project.yaml comments
   });
 
   it('setId on the real file without its id: the id lands between schemaVersion and name, nothing else moves', () => {
-    const original = fs.readFileSync(REPO_CONFIG, 'utf8');
+    const original = realConfig();
     const withoutId = original.replace(/^id: .*\r\n/m, '');
     expect(withoutId).not.toBe(original);
     const root = tempRoot(withoutId);
