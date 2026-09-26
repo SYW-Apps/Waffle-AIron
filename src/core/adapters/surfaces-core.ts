@@ -14,4 +14,8 @@ export {
   resolveChainingParent,
   resolveSubprojectForNamespace,
   computeStateId,
+  // The resolved export table the projector flattens, and the configuration
+  // whose effective id a snapshot records beside its name.
+  resolveProjectExports,
+  loadProjectConfig,
 } from '../index.js';

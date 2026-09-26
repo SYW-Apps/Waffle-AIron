@@ -51,6 +51,10 @@ import {
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
 import { buildGraphModel } from './diagram.js';
+// The export index is an owned face of this Repository: the facade forwards
+// its two reads 1:1 (spec_loader resolveSubsystemExports / resolveProjectExports).
+import { resolveProjectExportTable, resolveSubsystemExportTable } from './exports.js';
+import type { ResolvedExportTable } from '../models/exports.js';
 import type { WebGraphModel } from '../server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -584,13 +588,18 @@ function stripNamespaceFromSubsystem(spec: SubsystemSpec, prefix: string): Subsy
   // subsystem members bind the subsystem's OWN components, never cross-tree.
   const memberPrefix = spec.projectPath ? spec.id : prefix;
   const relMember = (id: string): string => (id.includes('::') ? relativizeId(id, memberPrefix) : id);
+  const relPeer = (id: string): string => (id.includes('::') ? relativizeId(id, prefix) : id);
   return {
     ...spec,
     id: relativizeId(spec.id, prefix),
     publicInterfaces: spec.publicInterfaces.map(pi => ({
       ...pi,
-      component: pi.component ? relMember(pi.component) : undefined,
-      interface: pi.interface ? relMember(pi.interface) : undefined,
+      // A re-export names a peer's item, written relative to the namespace the
+      // subsystem is declared in (the loader's inverse), not its members'.
+      component: pi.component ? (pi.from ? relPeer(pi.component) : relMember(pi.component)) : undefined,
+      interface: pi.interface ? (pi.from ? relPeer(pi.interface) : relMember(pi.interface)) : undefined,
+      ...(pi.typeDef ? { typeDef: pi.from ? relPeer(pi.typeDef) : relMember(pi.typeDef) } : {}),
+      ...(pi.from ? { from: relPeer(pi.from) } : {}),
       // consumers name SUBSYSTEMS — peers of this one, so they are relative to
       // the namespace the subsystem itself is declared in, never its members'.
       ...(pi.consumers ? { consumers: pi.consumers.map(c => (c.includes('::') ? relativizeId(c, prefix) : c)) } : {}),
@@ -1238,6 +1247,16 @@ function identityKeyOf(field: string, item: unknown): string | null {
  */
 function publicInterfaceKey(o: Record<string, unknown>): string | null {
   const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  // A re-export or a type export is addressed by its source, item and name:
+  // two re-exports of one component from different sources are two entries.
+  const from = str(o.from);
+  const typeDef = str(o.typeDef);
+  if (from || typeDef) {
+    const item = typeDef ? `type ${typeDef}` : str(o.component) ?? '*';
+    const narrowed = str(o.interface) ? `.${String(o.interface)}` : '';
+    const renamed = str(o.as) ? ` as ${String(o.as)}` : '';
+    return `${from ? `${from}:` : ''}${item}${narrowed}${renamed}`;
+  }
   const component = str(o.component);
   if (component) return str(o.interface) ? `${component}.${String(o.interface)}` : component;
   if (typeof o.type === 'string' && typeof o.details === 'string') return `${o.type} ${o.details}`;
@@ -1540,7 +1559,8 @@ function identityFieldsOf(field: string): string[] {
   switch (field) {
     case 'dispatch':           return ['capability'];
     // Bound: component + interface; not yet bound: type + details.
-    case 'publicInterfaces':   return ['component', 'interface', 'type', 'details'];
+    // Re-exports and type exports: from + item + interface + as.
+    case 'publicInterfaces':   return ['component', 'interface', 'type', 'details', 'from', 'typeDef', 'as'];
     case 'lifecycle':          return ['phase', 'component', 'method'];
     case 'emits':
     case 'subscribesTo':       return ['topic', 'event'];
@@ -1863,14 +1883,21 @@ export class SpecWorkspace {
       return {
         ...sub,
         id: qualifiedSubId,
-        publicInterfaces: sub.publicInterfaces.map(p => ({
-          ...p,
-          component: p.component ? qualifyId(p.component, componentPrefix, this.rootSubsystems) : undefined,
-          interface: p.interface ? qualifyId(p.interface, componentPrefix, this.rootSubsystems) : undefined,
-          // Each consumer is a subsystem reference: qualified into the namespace
-          // this subsystem is declared in, like a component's `subsystem` field.
-          ...(p.consumers ? { consumers: p.consumers.map(c => qualifySubsystemRef(c, namespacePrefix, this.rootSubsystems)) } : {}),
-        })),
+        publicInterfaces: sub.publicInterfaces.map(p => {
+          // A re-export names a PEER's item, so it is qualified into the
+          // namespace this subsystem is declared in, never its own members'.
+          const itemPrefix = p.from ? namespacePrefix : componentPrefix;
+          return {
+            ...p,
+            component: p.component ? qualifyId(p.component, itemPrefix, this.rootSubsystems) : undefined,
+            interface: p.interface ? qualifyId(p.interface, itemPrefix, this.rootSubsystems) : undefined,
+            ...(p.typeDef ? { typeDef: qualifyId(p.typeDef, itemPrefix, this.rootSubsystems) } : {}),
+            ...(p.from ? { from: qualifySubsystemRef(p.from, namespacePrefix, this.rootSubsystems) } : {}),
+            // Each consumer is a subsystem reference: qualified into the namespace
+            // this subsystem is declared in, like a component's `subsystem` field.
+            ...(p.consumers ? { consumers: p.consumers.map(c => qualifySubsystemRef(c, namespacePrefix, this.rootSubsystems)) } : {}),
+          };
+        }),
         lifecycle: sub.lifecycle?.map(le => ({
           ...le,
           component: qualifyId(le.component, componentPrefix, this.rootSubsystems),
@@ -3934,8 +3961,12 @@ export class SpecWorkspace {
           if (Array.isArray(out.publicInterfaces)) {
             out.publicInterfaces = out.publicInterfaces.map((pi: any) => ({
               ...pi,
-              ...(typeof pi?.component === 'string' ? { component: qm(pi.component) } : {}),
-              ...(typeof pi?.interface === 'string' ? { interface: qm(pi.interface) } : {}),
+              // A re-export names a peer's item: qualified into the declaring
+              // namespace (q), not this subsystem's members' (qm).
+              ...(typeof pi?.component === 'string' ? { component: (typeof pi?.from === 'string' ? q : qm)(pi.component) } : {}),
+              ...(typeof pi?.interface === 'string' ? { interface: (typeof pi?.from === 'string' ? q : qm)(pi.interface) } : {}),
+              ...(typeof pi?.typeDef === 'string' ? { typeDef: (typeof pi?.from === 'string' ? q : qm)(pi.typeDef) } : {}),
+              ...(typeof pi?.from === 'string' ? { from: qualifySubsystemRef(pi.from, prefix, this.rootSubsystems) } : {}),
               ...(Array.isArray(pi?.consumers)
                 ? { consumers: pi.consumers.map((c: unknown) => (typeof c === 'string' ? qualifySubsystemRef(c, prefix, this.rootSubsystems) : c)) }
                 : {}),
@@ -5107,6 +5138,16 @@ export function loadTypeSpecs(): TypeSpec[] {
 
 export function loadTypeSpec(id: string): TypeSpec | null {
   return current().loadTypeSpec(id);
+}
+
+/** ispec_loader.resolveSubsystemExports — one subsystem's resolved export table, forwarded 1:1 to the export index. */
+export function resolveSubsystemExports(subsystemId: string): ResolvedExportTable {
+  return resolveSubsystemExportTable(subsystemId);
+}
+
+/** ispec_loader.resolveProjectExports — the project's resolved L0 export table, forwarded 1:1 to the export index. */
+export function resolveProjectExports(): ResolvedExportTable {
+  return resolveProjectExportTable();
 }
 
 export function saveTypeSpec(spec: TypeSpec): string[] {

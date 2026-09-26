@@ -345,18 +345,27 @@ methods:
         targetMethod: currentChildPins
       - stepNumber: 9
         description: >-
-          Assemble a LockRecord: stateId, lockedAt, the AUTHENTICATED approver the caller resolved
-          from the credential, validatorVersion, validationResult, status ready, plus the captured
-          specs and child pins.
-        type: local
+          Read the bound tree's project configuration: the record carries its effective id
+          (project_config.effectiveId(), a defaulted one included) as projectId, which validate
+          later compares with project.yaml (PROJECT_ID_CHANGED); no configuration, or no effective
+          id, records none
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
       - stepNumber: 10
+        description: >-
+          Assemble a LockRecord: stateId, lockedAt, the AUTHENTICATED approver the caller resolved
+          from the credential, validatorVersion, validationResult, status ready, the project's
+          effective id as projectId, plus the captured specs and child pins.
+        type: local
+      - stepNumber: 11
         description: >-
           Persist the record BEFORE publishing, so the commit that ships the specs also contains the
           approval that certifies them.
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
           the PR from — the lock is the semantic checkpoint that triggers the auto-publish. A no-op
@@ -365,27 +374,27 @@ methods:
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-      - stepNumber: 12
+      - stepNumber: 13
         description: Only a real publish has a commit to record.
         type: branch
         condition: nothing was published (native project, or a subproject-scoped lock)
-        onTrueStep: 13
-        onFalseStep: 14
-      - stepNumber: 13
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
         description: Return the persisted record unchanged.
         type: return
         outcome: lock record
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Extend the record with commitSha and compareUrl — known only AFTER the commit, so these
           two fields are re-written into a record the commit already carries.
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: Persist the two published fields.
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 16
+      - stepNumber: 17
         description: Return the published record.
         type: return
         outcome: lock record with the compare URL to open the PR
@@ -1140,4 +1149,4 @@ methods:
         outcome: project record
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-25T22:55:53.888Z'
+updatedAt: '2026-09-26T15:27:45.038Z'

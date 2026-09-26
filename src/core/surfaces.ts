@@ -10,9 +10,12 @@ import {
   SurfaceTypeDef,
   SurfaceOrigin,
   SURFACE_AUDIENCES,
-  SystemPublicInterface,
   NamedOpenApiSpec,
   TypeSpec,
+  ComponentSpec,
+  InterfaceSpec,
+  ResolvedExport,
+  effectiveProjectId,
   extractTypeIdentifiers,
   matchTypeRef,
   methodTypeRefs,
@@ -29,6 +32,8 @@ import {
   resolveChainingParent,
   resolveSubprojectForNamespace,
   computeStateId,
+  resolveProjectExports,
+  loadProjectConfig,
 } from './adapters/surfaces-core.js';
 import type { ChainingParentRef } from './specs.js';
 import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
@@ -64,30 +69,42 @@ export function stateIdString(): string {
 // Projection (surface_projector)
 // ---------------------------------------------------------------------------
 
+/** A type's qualified id: its subsystem-qualified id when it has an owner, else its id. */
+function qualifiedTypeId(spec: TypeSpec): string {
+  return spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`) ? `${spec.subsystem}::${spec.id}` : spec.id;
+}
+
 /**
  * Transitive type closure: every type reachable from the exported method
- * signatures (params + returns), following field type references. The
- * snapshot must be self-contained — types are the one sanctioned
- * cross-boundary "internal", so a consumer's type resolution has to work
- * without the producing tree.
+ * signatures (params + returns) and from the exported types, following field
+ * type references. The snapshot must be self-contained — types are the one
+ * sanctioned cross-boundary "internal", so a consumer's type resolution has
+ * to work without the producing tree.
+ *
+ * Types are gathered by QUALIFIED id: two subsystems that each own a type of
+ * one name both arrive, where keying on the bare id kept whichever matched
+ * first and silently dropped the other. The first keeps its id; a later one
+ * with the same id is written under its qualified id, so no two definitions
+ * in one snapshot share an id.
  */
-function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[]): SurfaceTypeDef[] {
+function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[], exported: TypeSpec[] = []): SurfaceTypeDef[] {
   const included = new Map<string, TypeSpec>();
   const queue: string[] = [];
 
+  const include = (spec: TypeSpec): void => {
+    const key = qualifiedTypeId(spec);
+    if (included.has(key)) return;
+    included.set(key, spec);
+    queue.push(key);
+  };
   const enqueueRef = (ref: string): void => {
     if (BUILTIN_TYPES.has(ref.toLowerCase())) return;
     for (const spec of types) {
-      const qualifiedId = spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`)
-        ? `${spec.subsystem}::${spec.id}`
-        : spec.id;
-      if (matchTypeRef(ref, qualifiedId) && !included.has(spec.id)) {
-        included.set(spec.id, spec);
-        queue.push(spec.id);
-      }
+      if (matchTypeRef(ref, qualifiedTypeId(spec))) include(spec);
     }
   };
 
+  for (const spec of exported) include(spec);
   for (const entry of entries) {
     for (const m of entry.methods) {
       for (const ref of methodTypeRefs(m)) enqueueRef(ref);
@@ -100,79 +117,119 @@ function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[]):
     }
   }
 
-  return [...included.values()].map(t => ({
-    id: t.id,
-    name: t.name,
-    kind: t.kind,
-    fields: t.fields.map(f => ({
-      name: f.name,
-      type: f.type,
-      ...(f.description ? { description: f.description } : {}),
-      ...(f.optional ? { optional: true } : {}),
-    })),
-  }));
+  const usedIds = new Set<string>();
+  return [...included.entries()].map(([qualified, t]) => {
+    const id = usedIds.has(t.id) ? qualified : t.id;
+    usedIds.add(id);
+    return {
+      id,
+      name: t.name,
+      kind: t.kind,
+      fields: t.fields.map(f => ({
+        name: f.name,
+        type: f.type,
+        ...(f.description ? { description: f.description } : {}),
+        ...(f.optional ? { optional: true } : {}),
+      })),
+    };
+  });
+}
+
+/** The effective id of the bound project, when it has a configuration to take one from. */
+function boundProjectId(): string | undefined {
+  try {
+    const config = loadProjectConfig();
+    return config ? effectiveProjectId(config) ?? undefined : undefined;
+  } catch {
+    // A configuration that fails its schema is reported by the paths that
+    // load it; the snapshot simply records no id.
+    return undefined;
+  }
+}
+
+/** One component export as a contract entry: the canonical target's contract, under its public name. */
+function contractEntry(entry: ResolvedExport, comp: ComponentSpec, interfaces: InterfaceSpec[]): SurfaceContractEntry {
+  const methods = interfaces
+    .filter(i => i.component === comp.id && (!entry.interface || i.id === entry.interface))
+    .flatMap(i => i.methods);
+  return {
+    id: entry.publicName,
+    name: entry.name ?? comp.name,
+    audience: entry.audience ?? 'instance',
+    type: entry.type ?? 'Custom',
+    component: comp.id,
+    methods,
+    ...(comp.dispatch && comp.dispatch.length ? { dispatch: comp.dispatch } : {}),
+    // Project the backing Portal's auth + basePath so the codec can emit
+    // OpenAPI security + per-portal servers self-contained from the snapshot.
+    ...(comp.auth && comp.auth.scheme !== 'none' ? { auth: comp.auth } : {}),
+    ...(comp.basePath ? { basePath: comp.basePath } : {}),
+    details: entry.details ?? '',
+    ...(entry.version ? { version: entry.version } : {}),
+    ...(entry.stability ? { stability: entry.stability } : {}),
+    componentType: comp.componentType,
+    ...(entry.interface ? { interface: entry.interface } : {}),
+  };
 }
 
 /**
- * Project the own tree's L0 gateway surface into a contract-grade snapshot.
- * `maxAudience` is the consumer's distance class: an entry is included when
- * its declared reach covers that distance (rank(entry) >= rank(maxAudience)).
- * The family ceiling 'project' therefore includes everything.
+ * Project the own tree's resolved L0 export table into a contract-grade
+ * snapshot. `maxAudience` is the consumer's distance class: an entry is
+ * included when its declared reach covers that distance (rank(entry) >=
+ * rank(maxAudience)). The family ceiling 'project' therefore includes
+ * everything. Every re-export was followed to its canonical target by the
+ * export index, so each entry carries its target's contract under its public
+ * name, and a consumer never walks the producer's chain.
  */
 export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
+  // Step 1: the L0 (its name keys the snapshot).
   const system = loadSystemSpec();
   if (!system) {
     throw new Error('Cannot project a surface: the L0 system spec is missing.');
   }
-  const subsystems = loadSubsystemSpecs();
+  // Steps 2-5: the resolved table and the specs its targets name.
+  const table = resolveProjectExports();
   const components = loadComponentSpecs();
   const interfaces = loadInterfaceSpecs();
   const types = loadTypeSpecs();
 
+  // Step 6: the entries at or below the audience ceiling.
   const floor = audienceRank(maxAudience);
-  const rawEntries: SystemPublicInterface[] = system.publicInterfaces ?? [];
+  const visible = table.entries.filter(e => audienceRank(e.audience ?? 'instance') >= floor);
 
+  // Steps 7-8: each component entry's canonical contract, with its auth and basePath.
   const entries: SurfaceContractEntry[] = [];
-  for (const raw of rawEntries) {
-    const audience = raw.audience ?? 'instance';
-    if (audienceRank(audience) < floor) continue;
-    if (!raw.component) continue; // unbound gateway entries cannot be exported
-
-    const comp = components.find(c => c.id === raw.component);
-    if (!comp) continue;
-    const compInterfaces = interfaces.filter(i =>
-      i.component === comp.id && (!raw.interface || i.id === raw.interface));
-    const methods = compInterfaces.flatMap(i => i.methods);
-
-    const subsystemType = subsystems
-      .find(s => s.id === comp.subsystem)?.publicInterfaces
-      .find(pi => pi.component === comp.id)?.type;
-
-    entries.push({
-      id: raw.id ?? raw.interface ?? comp.id,
-      name: raw.name ?? comp.name,
-      audience,
-      type: raw.type ?? subsystemType ?? 'Custom',
-      component: comp.id,
-      methods,
-      ...(comp.dispatch && comp.dispatch.length ? { dispatch: comp.dispatch } : {}),
-      // Project the backing Portal's auth + basePath so the codec can emit
-      // OpenAPI security + per-portal servers self-contained from the snapshot.
-      ...(comp.auth && comp.auth.scheme !== 'none' ? { auth: comp.auth } : {}),
-      ...(comp.basePath ? { basePath: comp.basePath } : {}),
-      details: raw.details ?? '',
-      ...(raw.version ? { version: raw.version } : {}),
-      ...(raw.stability ? { stability: raw.stability } : {}),
-    });
+  for (const entry of visible) {
+    if (entry.kind !== 'component') continue;
+    const comp = components.find(c => c.id === entry.component);
+    if (comp) entries.push(contractEntry(entry, comp, interfaces));
   }
 
+  // Step 9: exported types listed apart, and the closure over both.
+  const exportedTypes = visible.filter(e => e.kind === 'type');
+  const exportedSpecs = exportedTypes
+    .map(e => types.find(t => t.id === e.typeDef && (t.subsystem ?? e.source) === e.source))
+    .filter((t): t is TypeSpec => !!t);
+  const closure = computeTypeClosure(entries, types, exportedSpecs);
+  const closureIdOf = (e: ResolvedExport): string => {
+    const spec = types.find(t => t.id === e.typeDef && (t.subsystem ?? e.source) === e.source);
+    if (!spec) return String(e.typeDef);
+    return closure.some(d => d.id === qualifiedTypeId(spec)) ? qualifiedTypeId(spec) : spec.id;
+  };
+
+  // Steps 10-12: the project's id, the StateId, and the stamp.
+  const projectId = boundProjectId();
   return SurfaceSnapshotSchema.parse({
     projectName: system.name,
+    ...(projectId ? { projectId } : {}),
     origin: 'generated',
     stateId: stateIdString(),
     generatedAt: new Date().toISOString(),
     interfaces: entries,
-    types: computeTypeClosure(entries, types),
+    types: closure,
+    ...(exportedTypes.length
+      ? { exportedTypes: exportedTypes.map(e => ({ id: e.publicName, type: closureIdOf(e), audience: e.audience ?? 'instance' })) }
+      : {}),
   });
 }
 
@@ -621,6 +678,8 @@ export interface ExternalSurfaceEntry {
   freshness: 'fresh' | 'stale' | 'unverifiable';
   /** Ids of the interfaces the snapshot exposes — the discovery summary. */
   interfaceIds: string[];
+  /** The producing project's id, when the snapshot records one — beside projectName, the display name and storage key. */
+  projectId?: string;
 }
 
 /**
@@ -676,6 +735,7 @@ export function listExternalInterfaces(): ExternalSurfaceEntry[] {
       ...(snapshot.version ? { version: snapshot.version } : {}),
       freshness,
       interfaceIds: snapshot.interfaces.map(e => e.id),
+      ...(snapshot.projectId ? { projectId: snapshot.projectId } : {}),
     };
   });
 }

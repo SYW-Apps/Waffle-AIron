@@ -77,7 +77,10 @@ methods:
     sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: Compose a default ProjectConfig and a bootstrap L0 SystemSpec named `name`
+        description: >-
+          Compose a default ProjectConfig declaring the id `name` slugified
+          (project_config.effectiveId of the composed configuration) and a bootstrap L0 SystemSpec
+          named `name`
         type: local
       - stepNumber: 2
         description: >-
@@ -176,7 +179,8 @@ methods:
         onFalseStep: 11
       - stepNumber: 10
         description: >-
-          Write the child's default configuration, named after the child, through the project config
+          Write the child's default configuration, named after the child and declaring the mount's
+          subsystem id (its local segment) as the child's project id, through the project config
           Repository
         type: call
         targetComponent: project_config_repository
@@ -251,7 +255,8 @@ methods:
       - stepNumber: 4
         description: >-
           With the project root scoped to the child directory at projectPath, write the child's
-          default configuration through the project config Repository
+          default configuration — declaring the externalized subsystem's id as the child's project
+          id — through the project config Repository
         type: call
         targetComponent: project_config_repository
         targetMethod: create
@@ -504,7 +509,9 @@ methods:
         condition: the project has no configuration
         onFalseStep: 7
       - stepNumber: 6
-        description: Create the default configuration under the chosen name
+        description: >-
+          Create the default configuration under the chosen name, declaring the given id, else the
+          chosen name slugified
         type: call
         targetComponent: project_config_repository
         targetMethod: create
@@ -1537,8 +1544,8 @@ methods:
       - stepNumber: 1
         description: >-
           Walk the chained subprojects recursively from the root; for each that holds a spec tree
-          but no project configuration, write a default configuration named for its mount, leaving
-          its specs untouched
+          but no project configuration, write a default configuration named for its mount and
+          declaring the mount's subsystem id as its project id, leaving its specs untouched
         type: local
       - stepNumber: 2
         description: Return the directories repaired
@@ -1581,4 +1588,4 @@ methods:
         targetMethod: resolveVariantGuidance
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T11:03:25.789Z'
+updatedAt: '2026-09-26T15:27:20.161Z'

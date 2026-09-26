@@ -1,0 +1,86 @@
+kind: value-object
+id: resolved_export
+name: ResolvedExport
+description: >-
+  One resolved entry of an export table: a public name bound to its canonical target after every
+  re-export has been followed, the way a module resolver binds `export … from` to the declaration it
+  names. Metadata an entry leaves unset (transport kind, details, name) is inherited from the entry
+  the chain ends at.
+fields:
+  - name: publicName
+    type: string
+    description: >-
+      The name consumers use: `as`, else the legacy L0 `id`, else the narrowed interface, else the
+      component or type id — or, through a wildcard, the source's public name unchanged.
+    optional: false
+    key: primary
+  - name: kind
+    type: string
+    description: component | type
+    optional: false
+  - name: source
+    type: string
+    description: The subsystem that declares the exported item — the canonical owner the chain ends at.
+    optional: false
+  - name: component
+    type: string
+    description: The exported component's qualified id, for kind component.
+    optional: true
+  - name: interface
+    type: string
+    description: >-
+      The L3 interface the export narrows to, when it narrows; two narrowings of one component are
+      distinct targets.
+    optional: true
+  - name: typeDef
+    type: string
+    description: The exported type's qualified id, for kind type.
+    optional: true
+  - name: componentType
+    type: string
+    description: >-
+      The exported component's stereotype, so a consumer applies the boundary rule without reloading
+      the tree.
+    optional: true
+  - name: type
+    type: string
+    description: >-
+      Transport kind: REST | GraphQL | MessageBus | RPC | Custom, from the entry or inherited from
+      its target's entry.
+    optional: true
+  - name: details
+    type: string
+    description: Consumer-facing description, from the entry or inherited from its target's entry.
+    optional: true
+  - name: name
+    type: string
+    description: Human-readable surface name, on project tables where the L0 entry declares one.
+    optional: true
+  - name: audience
+    type: string
+    description: >-
+      The reach ceiling, on project tables only: project | department | instance | partner |
+      external (default instance).
+    optional: true
+  - name: authPolicy
+    type: string
+    description: The L0 entry's authentication policy summary, on project tables.
+    optional: true
+  - name: version
+    type: string
+    description: The L0 entry's public contract version, on project tables.
+    optional: true
+  - name: stability
+    type: string
+    description: The L0 entry's contract stability, on project tables.
+    optional: true
+  - name: via
+    type: string[]
+    description: >-
+      The levels the name passed through from the table's owner to the declaring subsystem, in
+      order; empty for an own item.
+    optional: false
+methods: []
+sourcePath: src/models/exports.ts
+createdAt: '2026-09-26T16:07:53.828Z'
+updatedAt: '2026-09-26T16:07:53.830Z'

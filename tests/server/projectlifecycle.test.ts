@@ -19,6 +19,7 @@ import { computeGateStateId } from '../../src/server/adapters/validator.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
+import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { seedChainedMount, seedSubsystem } from './helpers.js';
 import { createUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { listProjectPacks } from '../../src/server/packs.js';
@@ -461,6 +462,10 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     // check later compares against.
     expect(lock!.stateId.algorithm).toBe('sha256+content+doctrine+inputs');
     expect(lock!.stateId).toEqual(runWithProjectRoot(root, () => computeGateStateId()));
+    // Hosted creation declared the hosted project id as the project's id, and
+    // the lock records the id it approved.
+    expect(projectConfigRepositoryAt(root).load()?.id).toBe('hosted-baseline');
+    expect(lock!.projectId).toBe('hosted-baseline');
   });
 
   it('a qualified lock REFUSES a child boundary violation only its parent can see — judged through the parent', () => {

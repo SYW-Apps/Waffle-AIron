@@ -50,6 +50,26 @@ methods:
     signature: 'computeStateId(): StateId'
     returns: StateId
     params: []
+  - name: resolveProjectExports
+    description: >-
+      Forward to spec_tree_portal.resolveProjectExports: the project's resolved L0 export table —
+      every public name bound to its canonical target, with its audience — which the projector
+      flattens into a snapshot.
+    signature: 'resolveProjectExports(): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params: []
+    guarantees:
+      - idempotent
+  - name: loadProjectConfig
+    description: >-
+      Forward to project_config_portal.loadProjectConfig: the bound project's configuration, or null
+      when it has none — read for the project's effective id, which a snapshot records beside its
+      name.
+    signature: 'loadProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-09-25T21:09:24.181Z'
+updatedAt: '2026-09-26T16:09:55.198Z'

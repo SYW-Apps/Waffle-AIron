@@ -35,7 +35,7 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../config/pr
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
-import type { ProjectConfig } from '../models/project.js';
+import { effectiveProjectId, type ProjectConfig } from '../models/project.js';
 import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
 import {
   SpecIdSchema,
@@ -60,9 +60,16 @@ import {
 // remain as per-spec primitives — the bulk sweep is what was the bug.
 // ---------------------------------------------------------------------------
 
-function defaultProjectConfig(name: string, now: string): ProjectConfig {
+/**
+ * A fresh project's default configuration. It declares its id: the one given (a
+ * chained child's mount subsystem id), else the name slugified — none when the
+ * name yields no id, which the project-identity rule then reports.
+ */
+function defaultProjectConfig(name: string, now: string, id?: string): ProjectConfig {
+  const declared = id ?? effectiveProjectId({ name });
   return {
     schemaVersion: '1.0.0',
+    ...(declared !== null ? { id: declared } : {}),
     name,
     projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
@@ -128,7 +135,7 @@ export function provisionProject(name: string): void {
  * spec's name so a backfilled project.yaml stays consistent with its tree.
  * Returns which files it created.
  */
-export function ensureProjectInitialized(fallbackName: string): { wroteConfig: boolean; wroteSystem: boolean } {
+export function ensureProjectInitialized(fallbackName: string, id?: string): { wroteConfig: boolean; wroteSystem: boolean } {
   const now = new Date().toISOString();
   const paths = aiPathsAt(getProjectRoot());
   const hasSystem = fs.existsSync(paths.specsSystem());
@@ -141,7 +148,7 @@ export function ensureProjectInitialized(fallbackName: string): { wroteConfig: b
   let wroteSystem = false;
   // Complete only what is missing: an existing configuration is never overwritten.
   if (!projectConfigRepository.exists()) {
-    projectConfigRepository.create(defaultProjectConfig(name, now));
+    projectConfigRepository.create(defaultProjectConfig(name, now, id));
     wroteConfig = true;
   }
   if (!hasSystem) {
@@ -264,7 +271,8 @@ export function backfillChainedSubprojectConfigs(projectRoot: string): string[] 
   walkChainedSubprojects(projectRoot, (childDir, subsystemId) => {
     if (childHasSpecsButNoConfig(childDir)) {
       runWithProjectRoot(childDir, () => {
-        ensureProjectInitialized(subsystemId);
+        // A chained child is identified by its mount's subsystem id.
+        ensureProjectInitialized(subsystemId, localSegment(subsystemId));
       });
       backfilled.push(childDir);
     }
@@ -304,7 +312,8 @@ export function createChainedSubsystem(subsystem: SubsystemSpec, projectName: st
     //    project.yaml) is completed without clobbering its existing spec tree.
   runWithProjectRoot(childDir, () => {
     ensureDir(aiPathsAt(childDir).specsDir());
-    ensureProjectInitialized(projectName);
+    // The child is named after the subsystem, and identified by its id.
+    ensureProjectInitialized(projectName, localSegment(subsystem.id));
   });
 
   invalidateSpecCache();
@@ -350,6 +359,11 @@ export function moveSubsystemProject(subsystemId: string, newProjectPath: string
 }
 
 /** Normalize a filesystem path to forward-slash form for portable storage. */
+/** The local segment of a subsystem id — the name its own mount knows it by. */
+function localSegment(subsystemId: string): string {
+  return subsystemId.split('::').pop()!;
+}
+
 function toPosixPath(p: string): string {
   return p.replace(/\\/g, '/');
 }
@@ -411,7 +425,7 @@ export function externalizeSubsystem(subsystemId: string, projectPath: string): 
   const childSystemName = foo.name || subsystemId;
   runWithProjectRoot(childDir, () => {
     const now = new Date().toISOString();
-    projectConfigRepository.create(defaultProjectConfig(childSystemName, now));
+    projectConfigRepository.create(defaultProjectConfig(childSystemName, now, subsystemId));
     ensureDir(path.join(childDir, '.wai', 'specs'));
     saveSystemSpec(bootstrapSystemSpec(childSystemName, now));
   });

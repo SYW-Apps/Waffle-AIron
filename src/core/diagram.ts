@@ -11,6 +11,7 @@ import {
   InterfaceSpec,
   ImplementationSpec,
   PATTERN_TYPES,
+  isOwnComponentEntry,
 } from '../models/index.js';
 import { buildCanvasModel, renderCanvasHtml, type CanvasModel } from './canvas.js';
 import { generateDrawioXml, generateExcalidrawScene } from './diagram-export.js';
@@ -224,7 +225,8 @@ export function loadSpecGraph(): SpecGraph {
   const implementations = loadImplementationSpecs();
   const publicComponents = new Set<string>();
   for (const sub of subsystems) {
-    for (const pi of sub.publicInterfaces) {
+    // Own component entries only: a re-export names another subsystem's component.
+    for (const pi of sub.publicInterfaces.filter(isOwnComponentEntry)) {
       if (pi.component) publicComponents.add(pi.component);
     }
   }

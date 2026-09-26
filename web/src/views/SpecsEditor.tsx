@@ -746,7 +746,12 @@ function typeFieldsDelta(orig: any, draft: any): any[] {
   return out;
 }
 
-/** publicInterfaces value deltas (merged by component+interface). */
+/**
+ * publicInterfaces value deltas. The server merges an entry by its identity:
+ * component+interface for an own item, source+item+alias for a re-export — so
+ * every identity field the entry carries goes back with the change, or a
+ * re-export's edit would land as a new own entry.
+ */
 function piDelta(orig: any, draft: any, kind: SpecKind): any[] {
   const out: any[] = [];
   const list = draft.publicInterfaces ?? [];
@@ -763,8 +768,11 @@ function piDelta(orig: any, draft: any, kind: SpecKind): any[] {
     }
     if (Object.keys(ch).length) {
       out.push({
+        ...(opi.from !== undefined ? { from: opi.from } : {}),
         ...(opi.component !== undefined ? { component: opi.component } : {}),
+        ...(opi.typeDef !== undefined ? { typeDef: opi.typeDef } : {}),
         ...(opi.interface !== undefined ? { interface: opi.interface } : {}),
+        ...(opi.as !== undefined ? { as: opi.as } : {}),
         ...ch,
       });
     }

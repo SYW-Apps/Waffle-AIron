@@ -1,7 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { runWithProjectRoot } from '../utils/fs.js';
-import { readYamlFile } from '../utils/yaml.js';
-import { AI_PATHS } from '../config/paths.js';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
@@ -58,7 +56,8 @@ import type {
   VisibleSurfaceEntry,
   SurfaceArtifact,
 } from './types.js';
-import type { SurfaceSnapshot } from '../models/index.js';
+import type { SurfaceSnapshot, InterfaceSpec, MethodSignature, ResolvedExportTable } from '../models/index.js';
+import { BUILTIN_TYPES, methodTypeRefs } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Landscape Orchestrator + Surface Exchange Orchestrator + Landscape Graph
@@ -247,128 +246,53 @@ function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
 
 // ── redaction helpers for the public-surface snapshot ────────────────────────
 //
-// SystemSpec.publicInterfaces IS schema-modeled since Phase 7 Stage 1, but the
-// schema deliberately carries only the gateway CORE fields — the catalog
-// extras some trees author inline (methods/endpoints/publicTypes name lists)
-// are not modeled and would be stripped by loadSystemSpec(). The snapshot
-// builder therefore still reads the raw .wai/specs/.index.yaml, tolerating
-// absence and legacy shapes, and projects each entry into a redacted
-// PublicInterfaceSummary carrying ONLY safe scalar/name content — never
-// component ids, narratives, implementations, root paths, secrets, or
-// non-public types.
+// The snapshot is built from the project's RESOLVED export table — the same
+// table the surface projector flattens — so the landscape lists exactly the
+// public names the export resolver binds, every re-export followed to its
+// canonical target, instead of re-reading raw L0 YAML leniently. Each exported
+// component becomes a redacted PublicInterfaceSummary carrying ONLY safe
+// scalar/name content — its method NAMES, HTTP endpoint paths and the type
+// names its signatures reference — never component ids, signatures,
+// narratives, implementations, root paths or secrets. An entry that declares
+// no audience gets the resolver's default, `instance`, as the projector does.
 
-/** One raw, un-schema'd L0 public-interface entry as authored in the system spec.
- *  Every field is optional and read leniently. */
-interface RawSystemPublicInterface {
-  id?: unknown;
-  systemInterfaceId?: unknown;
-  name?: unknown;
-  type?: unknown;
-  audience?: unknown;
-  version?: unknown;
-  stability?: unknown;
-  methods?: unknown;
-  endpoints?: unknown;
-  publicTypes?: unknown;
-  details?: unknown;
-  subsystem?: unknown;
-  interface?: unknown;
-  component?: unknown;
+/** The HTTP path of a method's endpoint binding — the only endpoint shape that is a public name. */
+function endpointPath(m: MethodSignature): string | undefined {
+  return m.endpoint?.transport === 'HTTP' ? m.endpoint.path : undefined;
 }
 
-/** The subsystem public-interface shape backing an L0 surface (type + details). */
-interface SubsystemPublicInterface {
-  type: string;
-  details: string;
-  component?: string;
-  interface?: string;
-}
-
-/** First non-empty string among the candidates, or undefined. */
-function firstString(...vals: unknown[]): string | undefined {
-  for (const v of vals) {
-    if (typeof v === 'string' && v.trim().length > 0) return v;
-  }
-  return undefined;
-}
-
-/** Reduce an array to a list of plain NAMES (strings pass through; objects yield
- *  their name/id), dropping anything else. This is the redaction gate for
- *  methods / public types — a full signature or narrative can never leak. */
-function toNameList(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  const out: string[] = [];
-  for (const item of v) {
-    if (typeof item === 'string') {
-      if (item.trim().length > 0) out.push(item);
-    } else if (item && typeof item === 'object') {
-      const rec = item as Record<string, unknown>;
-      const name = firstString(rec.name, rec.id);
-      if (name) out.push(name);
+/** The non-builtin type names a contract's signatures reference, local names only. */
+function referencedTypeNames(methods: MethodSignature[]): string[] {
+  const names = new Set<string>();
+  for (const m of methods) {
+    for (const ref of methodTypeRefs(m)) {
+      if (!BUILTIN_TYPES.has(ref.toLowerCase())) names.add(ref.split(/::|\./).pop()!);
     }
   }
-  return out;
+  return [...names];
 }
 
-/** Read the target project's raw L0 publicInterfaces (must run bound to the
- *  project root). A missing/absent field yields an empty list — private by
- *  default. */
-function readRawSystemPublicInterfaces(): RawSystemPublicInterface[] {
-  const raw = readYamlFile(AI_PATHS.specsSystem()) as { publicInterfaces?: unknown } | null;
-  const list = raw?.publicInterfaces;
-  return Array.isArray(list) ? (list as RawSystemPublicInterface[]) : [];
-}
-
-/** Resolve an L0 entry against a referenced subsystem public interface (by
- *  interface id, else component id) to source its type/details. */
-function resolveSubsystemInterface(
-  entry: RawSystemPublicInterface,
-  subsystems: { id: string; publicInterfaces: SubsystemPublicInterface[] }[],
-): SubsystemPublicInterface | undefined {
-  const subId = firstString(entry.subsystem);
-  const interfaceId = firstString(entry.interface);
-  const componentId = firstString(entry.component);
-  const pools = subId
-    ? subsystems.filter((s) => s.id === subId).map((s) => s.publicInterfaces)
-    : subsystems.map((s) => s.publicInterfaces);
-  for (const pool of pools) {
-    const match = pool.find(
-      (pi) =>
-        (interfaceId !== undefined && pi.interface === interfaceId) ||
-        (componentId !== undefined && pi.component === componentId),
-    );
-    if (match) return match;
-  }
-  return undefined;
-}
-
-/** Project the raw L0 public interfaces into redacted PublicInterfaceSummary
- *  entries — public method/endpoint metadata and public DTO names only. */
-function buildRedactedSummaries(
-  rawList: RawSystemPublicInterface[],
-  subsystems: { id: string; publicInterfaces: SubsystemPublicInterface[] }[],
-): PublicInterfaceSummary[] {
+/** Project the resolved export table into redacted PublicInterfaceSummary entries. */
+function buildRedactedSummaries(table: ResolvedExportTable, interfaces: InterfaceSpec[]): PublicInterfaceSummary[] {
   const out: PublicInterfaceSummary[] = [];
-  for (const entry of rawList) {
-    if (!entry || typeof entry !== 'object') continue;
-    const id = firstString(entry.id, entry.systemInterfaceId, entry.interface, entry.component);
-    if (!id) continue; // an entry with no stable id can never be targeted by a relation
-    const matched = resolveSubsystemInterface(entry, subsystems);
+  for (const entry of table.entries) {
+    if (entry.kind !== 'component') continue; // a type export is no contract entry
+    const methods = interfaces
+      .filter((i) => i.component === entry.component && (!entry.interface || i.id === entry.interface))
+      .flatMap((i) => i.methods);
     const summary: PublicInterfaceSummary = {
-      id,
-      name: firstString(entry.name) ?? id,
-      type: firstString(entry.type, matched?.type) ?? 'Custom',
-      audience: firstString(entry.audience) ?? 'public',
-      methods: toNameList(entry.methods),
-      details: firstString(entry.details, matched?.details) ?? '',
+      id: entry.publicName,
+      name: entry.name ?? entry.publicName,
+      type: entry.type ?? 'Custom',
+      audience: entry.audience ?? 'instance',
+      methods: methods.map((m) => m.name),
+      details: entry.details ?? '',
     };
-    const version = firstString(entry.version);
-    if (version) summary.version = version;
-    const stability = firstString(entry.stability);
-    if (stability) summary.stability = stability;
-    const endpoints = toNameList(entry.endpoints);
+    if (entry.version) summary.version = entry.version;
+    if (entry.stability) summary.stability = entry.stability;
+    const endpoints = methods.map(endpointPath).filter((e): e is string => !!e);
     if (endpoints.length > 0) summary.endpoints = endpoints;
-    const publicTypes = toNameList(entry.publicTypes);
+    const publicTypes = referencedTypeNames(methods);
     if (publicTypes.length > 0) summary.publicTypes = publicTypes;
     out.push(summary);
   }
@@ -630,9 +554,8 @@ export function refreshPublicSurface(
   const snapshot = runWithProjectRoot(root, (): ProjectPublicSurfaceSnapshot => {
     const stateId = hostCore.computeStateId();
     const system = hostCore.loadSystemSpec();
-    const subsystems = hostCore.loadSubsystemSpecs();
-    const rawInterfaces = readRawSystemPublicInterfaces();
-    const interfaces = buildRedactedSummaries(rawInterfaces, subsystems);
+    const exports = hostCore.resolveProjectExports();
+    const interfaces = buildRedactedSummaries(exports, hostCore.loadInterfaceSpecs());
     return {
       projectId,
       stateId: stateIdToString(stateId),

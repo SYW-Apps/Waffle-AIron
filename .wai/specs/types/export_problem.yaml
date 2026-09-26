@@ -1,0 +1,39 @@
+kind: value-object
+id: export_problem
+name: ExportProblem
+description: >-
+  A fact the export resolver met while resolving one table. It is reported, never judged: the
+  export-tables rule decides each problem's finding and severity.
+fields:
+  - name: kind
+    type: string
+    description: >-
+      duplicate | named-cycle | wildcard-cycle | invalid | unconsumable. The export-tables rule maps
+      them to EXPORT_ID_DUPLICATE (error), EXPORT_CYCLE (error for a named chain that never reaches
+      a component or type, warning for a wildcard cycle), EXPORT_INVALID (notice) and
+      EXPORT_UNCONSUMABLE (notice).
+    optional: false
+  - name: owner
+    type: string
+    description: >-
+      The table's owner — a subsystem id, or the system name for the L0 table — which is the spec a
+      finding anchors to.
+    optional: false
+  - name: publicName
+    type: string
+    description: The public name concerned, when there is one.
+    optional: true
+  - name: targets
+    type: string[]
+    description: >-
+      For a duplicate, the canonical targets competing for the name; for a cycle, the levels on the
+      loop, in order.
+    optional: true
+  - name: detail
+    type: string
+    description: What is wrong, in words a finding can quote.
+    optional: false
+methods: []
+sourcePath: src/models/exports.ts
+createdAt: '2026-09-26T16:07:57.678Z'
+updatedAt: '2026-09-26T16:07:57.679Z'

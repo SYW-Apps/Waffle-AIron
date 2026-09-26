@@ -1,5 +1,5 @@
 import { SddRule } from '../types.js';
-import { isDraftSubsystem } from '../../../models/index.js';
+import { isDraftSubsystem, isOwnComponentEntry } from '../../../models/index.js';
 
 const pubTypeMatches = (piType: string, ct: string, portalType?: string): boolean => {
   switch (piType) {
@@ -54,14 +54,19 @@ export const publicSurfaceDeclaredTypeRule: SddRule = {
   check(ctx) {
     for (const sub of ctx.subsystems) {
       const isDraftCtx = isDraftSubsystem(sub);
-      for (const pi of sub.publicInterfaces) {
+      // Own component entries only: a re-export or a type export is the
+      // export-tables rule's to judge.
+      for (const pi of sub.publicInterfaces.filter(isOwnComponentEntry)) {
         // public-surface-binding's preconditions, restated: an unbound or
         // unresolvable entry is its finding, and has no stereotype to judge.
         const backing = pi.component ? ctx.componentMap.get(pi.component) : undefined;
         if (!backing) continue;
 
-        if (!pubTypeMatches(pi.type, backing.componentType, backing.portalType)) {
-          ctx.addIssue('error', 'PUBLIC_INTERFACE_TYPE_MISMATCH', `Subsystem "${sub.id}" declares a ${pi.type} public interface backed by "${pi.component}" (${backing.componentType}${backing.portalType ? `/${backing.portalType}` : ''}), which cannot realize ${pi.type}. Expected ${expectedFor(pi.type)}.`, sub.id, isDraftCtx);
+        // An own component entry states both (the schema refuses it otherwise).
+        const piType = pi.type ?? 'Custom';
+        const piDetails = pi.details ?? '';
+        if (!pubTypeMatches(piType, backing.componentType, backing.portalType)) {
+          ctx.addIssue('error', 'PUBLIC_INTERFACE_TYPE_MISMATCH', `Subsystem "${sub.id}" declares a ${pi.type} public interface backed by "${pi.component}" (${backing.componentType}${backing.portalType ? `/${backing.portalType}` : ''}), which cannot realize ${pi.type}. Expected ${expectedFor(piType)}.`, sub.id, isDraftCtx);
         }
         // Heuristic — closes the "escape to Custom" hole. `Custom` is the only public
         // interface type that carries no backing obligation, so an unrealized event
@@ -70,7 +75,7 @@ export const publicSurfaceDeclaredTypeRule: SddRule = {
         // can't catch that, but the contradiction is legible in the prose — event/async
         // vocabulary in `details` while the backing component cannot actually realize
         // eventing. Warn so the mislabel surfaces; override via rules.sddRuleSeverity.
-        if (pi.type === 'Custom' && EVENT_VOCAB.test(pi.details)) {
+        if (piType === 'Custom' && EVENT_VOCAB.test(piDetails)) {
           const eventCapable = backing.componentType === 'Observer'
             || (backing.componentType === 'Portal' && backing.portalType === 'MessageBus');
           if (!eventCapable) {

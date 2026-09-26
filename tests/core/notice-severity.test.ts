@@ -55,6 +55,9 @@ function makeProject(f: Fixture = {}): string {
   fs.mkdirSync(wai);
   fs.writeFileSync(path.join(wai, 'project.yaml'), JSON.stringify({
     schemaVersion: '1.0.0',
+    // Declared, as every project init writes today — so the one notice these
+    // tests count is the one they set up, not PROJECT_ID_DEFAULTED.
+    id: 'notice-fixture',
     name: 'notice-fixture',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: f.rules ?? {},

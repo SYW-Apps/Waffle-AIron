@@ -61,7 +61,13 @@ fields:
       Ids of the interfaces the snapshot exposes — the discovery summary; contracts are read from
       the snapshot itself.
     optional: false
+  - name: projectId
+    type: string
+    description: >-
+      The producing project's id, when the snapshot records one — beside projectName, which stays
+      the display name and storage key.
+    optional: true
 methods: []
 sourcePath: src/core/surfaces.ts
 createdAt: '2026-07-24T17:53:32.174Z'
-updatedAt: '2026-09-19T11:07:07.684Z'
+updatedAt: '2026-09-26T16:08:14.256Z'

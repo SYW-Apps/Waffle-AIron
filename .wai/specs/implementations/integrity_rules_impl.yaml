@@ -454,10 +454,12 @@ methods:
         type: local
       - stepNumber: 3
         label: psbPiStart
-        description: For each public interface entry declared on the subsystem.
+        description: >-
+          For each OWN component entry declared on the subsystem — an entry with neither `from` nor
+          `typeDef`; a re-export or a type export is the export-tables rule's to judge.
         type: loop
         loopKind: forEach
-        over: sub.publicInterfaces
+        over: the subsystem's own component entries (sub.publicInterfaces without from or typeDef)
         endStep: 12
       - stepNumber: 4
         description: 'Branch: is pi.component unset?'
@@ -529,10 +531,12 @@ methods:
         type: local
       - stepNumber: 3
         label: psdPiStart
-        description: For each public interface entry declared on the subsystem.
+        description: >-
+          For each OWN component entry declared on the subsystem — an entry with neither `from` nor
+          `typeDef`; a re-export inherits its target's type and a type export has none.
         type: loop
         loopKind: forEach
-        over: sub.publicInterfaces
+        over: the subsystem's own component entries (sub.publicInterfaces without from or typeDef)
         endStep: 11
       - stepNumber: 4
         description: backing = ctx.componentMap.get(pi.component) when the entry names a component.
@@ -608,10 +612,12 @@ methods:
         type: local
       - stepNumber: 3
         label: pscPiStart
-        description: For each public interface entry declared on the subsystem.
+        description: >-
+          For each OWN component entry declared on the subsystem — an entry with neither `from` nor
+          `typeDef`; a re-export's narrowing is the export-tables rule's to judge.
         type: loop
         loopKind: forEach
-        over: sub.publicInterfaces
+        over: the subsystem's own component entries (sub.publicInterfaces without from or typeDef)
         endStep: 11
       - stepNumber: 4
         description: 'Branch: does the entry bind an L3 interface at all?'
@@ -694,6 +700,167 @@ methods:
         outcome: judged
     symbol: check
     exportedVia: publicSurfaceConsumersRule
+  - name: projectIdentity
+    sourcePath: src/core/rules/integrity/project-identity.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project identity the validator resolved into the rule context
+          (ctx.projectIdentity)
+        type: local
+      - stepNumber: 2
+        description: Is there an identity to judge?
+        type: branch
+        condition: >-
+          the context carries no project identity (no readable configuration, or the parent's
+          verdict on a chained child)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no identity
+      - stepNumber: 4
+        label: defaulted
+        description: Does the identity carry a defaulted problem?
+        type: branch
+        condition: the identity's problems include one of kind defaulted
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report PROJECT_ID_DEFAULTED (notice), naming the display name and the id derived from it,
+          that no save writes it into project.yaml for the project, that stage 3 requires an
+          explicit id, and how to declare one
+        type: local
+      - stepNumber: 6
+        label: ambiguous
+        description: Does the identity carry an ambiguous problem?
+        type: branch
+        condition: the identity's problems include one of kind ambiguous
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report PROJECT_ID_AMBIGUOUS (warning) with the problem's detail: the display name that
+          yields no slug, or the declared id and the grammar it breaks
+        type: local
+      - stepNumber: 8
+        label: changed
+        description: Does the identity carry a changed problem?
+        type: branch
+        condition: the identity's problems include one of kind changed
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Report PROJECT_ID_CHANGED (error), naming the id the lock approved and the id project.yaml
+          resolves to now, and the two ways out: restore the approved id, or rename deliberately and
+          re-lock
+        type: local
+      - stepNumber: 10
+        label: judged
+        description: The identity is judged
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: projectIdentityRule
+  - name: exportTables
+    sourcePath: src/core/rules/integrity/export-tables.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the export tables the validator resolved into the rule context (ctx.exportTables)
+        type: local
+      - stepNumber: 2
+        description: Are there tables to judge?
+        type: branch
+        condition: the context carries no export tables (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no tables
+      - stepNumber: 4
+        label: each-problem
+        description: For each problem of each table
+        type: loop
+        loopKind: forEach
+        over: the problems every table records
+        endStep: 15
+      - stepNumber: 5
+        description: >-
+          Report by the problem's kind, anchored to the table's owner (a subsystem, or the L0 system
+          spec), in the owner's draft context
+        type: switch
+        'on': the problem's kind
+        cases:
+          - value: duplicate
+            step: 6
+          - value: named-cycle
+            step: 8
+          - value: wildcard-cycle
+            step: 10
+          - value: invalid
+            step: 12
+          - value: unconsumable
+            step: 14
+        defaultStep: 15
+      - stepNumber: 6
+        label: duplicate
+        description: >-
+          Report EXPORT_ID_DUPLICATE (error), naming the public name and the targets competing for
+          it, and that the name is left out of the table until one wildcard is narrowed or an
+          explicit entry picks the target
+        type: local
+      - stepNumber: 7
+        description: Next problem
+        type: jump
+        toStep: 15
+      - stepNumber: 8
+        label: named-cycle
+        description: >-
+          Report EXPORT_CYCLE (error), naming the public name and the levels on the loop: the chain
+          never reaches a component or type
+        type: local
+      - stepNumber: 9
+        description: Next problem
+        type: jump
+        toStep: 15
+      - stepNumber: 10
+        label: wildcard-cycle
+        description: >-
+          Report EXPORT_CYCLE (warning), naming the levels that re-export each other through
+          wildcards: the tables resolved to their union, but the levels form one circular module
+          surface
+        type: local
+      - stepNumber: 11
+        description: Next problem
+        type: jump
+        toStep: 15
+      - stepNumber: 12
+        label: invalid
+        description: >-
+          Report EXPORT_INVALID (notice) with the problem's detail: the missing source or item, the
+          item the source does not export, the own item the level does not own, or the public name
+          that breaks [a-z0-9-_]+
+        type: local
+      - stepNumber: 13
+        description: Next problem
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        label: unconsumable
+        description: >-
+          Report EXPORT_UNCONSUMABLE (notice), naming the public name and the target's stereotype:
+          only a Portal (a gateway is a Portal variant) or an Observer can serve a caller across the
+          boundary
+        type: local
+      - stepNumber: 15
+        label: reported
+        description: The problem is reported
+        type: local
+      - stepNumber: 16
+        description: Every problem is judged
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: exportTablesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-25T17:39:04.665Z'
+updatedAt: '2026-09-26T16:12:14.723Z'

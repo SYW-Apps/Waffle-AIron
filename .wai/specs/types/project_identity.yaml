@@ -1,0 +1,41 @@
+kind: value-object
+id: project_identity
+name: ProjectIdentity
+description: >-
+  A project's resolved identity and what is wrong with it: the answer of project_config.identity(),
+  and the input to the project-id findings (PROJECT_ID_DEFAULTED, PROJECT_ID_AMBIGUOUS,
+  PROJECT_ID_CHANGED).
+subsystem: sdd_core
+fields:
+  - name: id
+    type: string
+    description: >-
+      The effective id: the declared one as written, or `name` slugified; absent when there is no
+      declared id and the name yields no slug.
+    optional: true
+  - name: source
+    type: string
+    description: 'declared | defaulted | none: where the effective id came from.'
+    optional: false
+  - name: name
+    type: string
+    description: The project's display name, as configured.
+    optional: false
+  - name: lockedId
+    type: string
+    description: >-
+      The id the current lock approved, when one was given (a lock written before project ids
+      existed records none).
+    optional: true
+  - name: problems
+    type: object[]
+    description: >-
+      Each { kind: defaulted | ambiguous | changed, detail } — defaulted: no id is declared and the
+      effective one comes from the name; ambiguous: no id is declared and the name yields no slug,
+      or the declared id breaks the grammar; changed: the effective id differs from lockedId. Empty
+      when the identity is declared, well-formed and matches the lock.
+    optional: false
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-26T15:26:01.419Z'
+updatedAt: '2026-09-26T15:26:01.424Z'

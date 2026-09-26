@@ -567,3 +567,37 @@ describe('a leniently configured parent never softens what the child judged alon
     expect(fromChild.valid).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Stage 2a: a project's identity is judged in its own run only. The parent's
+// run that resolves a child's references judges the child's specs — the
+// parent's own id (here: none declared) must not surface as a finding of the
+// child.
+// ---------------------------------------------------------------------------
+
+describe('project identity across a chained family', () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  it("the parent reports its own defaulted id; the child, judged through it, reports none of the parent's", () => {
+    const fam = family();
+    root = fam.root;
+
+    const fromParent = verdict(fam.root);
+    const parentIdentity = fromParent.issues.filter((i) => i.code.startsWith('PROJECT_ID_'));
+    expect(parentIdentity.map((i) => `${i.severity} ${i.code}`)).toEqual(['notice PROJECT_ID_DEFAULTED']);
+    expect(parentIdentity[0].message).toContain('"parent"');
+
+    // The child was created with its mount's subsystem id, and its verdict is
+    // resolved through the parent — which carries no identity into it.
+    const fromChild = verdict(fam.kidDir);
+    expect(fromChild.resolvedThrough).toBeDefined();
+    expect(fromChild.issues.filter((i) => i.code.startsWith('PROJECT_ID_'))).toEqual([]);
+  });
+});

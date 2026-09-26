@@ -8,7 +8,7 @@ import * as crypto from 'node:crypto';
 import { handleMcpRequest, subprojectConfinementError } from '../../src/server/request.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
 import { createProject } from '../../src/server/admin.js';
-import { mintUserToken, allow, seedUnit } from './helpers.js';
+import { mintUserToken, allow, seedUnit, seedExportedSurface, type SeededExport } from './helpers.js';
 import { refreshPublicSurface, upsertRelation } from '../../src/server/landscape.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type {
@@ -87,12 +87,11 @@ describe('handleMcpRequest landscape discovery dispatch (end-to-end)', () => {
         subsystem: 'billing',
         interface: 'ibilling_portal',
         component: 'billing_portal',
+        // The contract carries full signatures — only names may survive redaction.
         methods: [
-          { name: 'createInvoice', signature: 'createInvoice(x): y', narrative: 'secret private steps' },
-          'listInvoices',
+          { name: 'createInvoice', http: { method: 'POST', path: '/invoices' }, params: [{ name: 'line', type: 'LineItem' }], returns: 'Invoice' },
+          { name: 'listInvoices', returns: 'Invoice[]' },
         ],
-        endpoints: ['/invoices'],
-        publicTypes: ['Invoice', { name: 'LineItem' }],
         details: 'Beta public surface',
       },
     ]);
@@ -140,12 +139,10 @@ describe('handleMcpRequest landscape discovery dispatch (end-to-end)', () => {
 
   /** Seed L0 publicInterfaces into a provisioned project's raw system spec. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function seedSurface(root: string, ifaces: any[]): void {
-    const p = path.join(root, '.wai', 'specs', '.index.yaml');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw = readYamlFile(p) as any;
-    raw.publicInterfaces = ifaces;
-    writeYamlFile(p, raw);
+  function seedSurface(root: string, ifaces: SeededExport[]): void {
+    // The landscape reads the RESOLVED export table: each entry is backed by a
+    // published Portal the resolver can bind.
+    seedExportedSurface(root, ifaces);
   }
 
   /** A minimal ACTIVE cross-project relation targeting an interface in the target's snapshot. */

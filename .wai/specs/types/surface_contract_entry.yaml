@@ -9,7 +9,9 @@ description: >-
 fields:
   - name: id
     type: string
-    description: Stable public interface id (matches the producing system's L0 entry).
+    description: >-
+      The entry's public name in the producing project's export table (`as`, else the legacy L0 id,
+      else the narrowed interface, else the component).
     optional: false
     key: primary
   - name: name
@@ -67,6 +69,20 @@ fields:
       The backing Portal's basePath, projected onto the entry so the codec can emit this portal's
       OpenAPI `servers`.
     optional: true
+  - name: componentType
+    type: string
+    description: >-
+      Stereotype of the backing component (a consumable entry is a Portal — a gateway is a Portal
+      variant — or an Observer for an event surface), carried so a consumer applies the same
+      boundary rule the producer's tree would. Absent on snapshots written before exports carried
+      it.
+    optional: true
+  - name: interface
+    type: string
+    description: >-
+      The L3 interface the export narrows to, when it narrows; two narrowings of one component are
+      distinct contracts.
+    optional: true
 methods:
   - name: sameContract
     signature: 'sameContract(other: SurfaceContractEntry): boolean'
@@ -77,4 +93,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:38.492Z'
-updatedAt: '2026-09-19T11:07:19.014Z'
+updatedAt: '2026-09-26T16:08:06.104Z'

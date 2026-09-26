@@ -1,0 +1,19 @@
+id: export_index
+name: Export Index
+description: >-
+  Read face of the spec repository for export tables. It projects the scanned specs the Spec Index
+  holds into resolved export tables, the way a module resolver flattens `export … from`: each
+  re-export is followed to its canonical target, wildcards are expanded with explicit and own
+  entries shadowing, a wildcard cycle resolves to its union, and every problem is returned as a fact
+  for the validator to judge. The projection is memoized per scan and dropped with it, so it is
+  never stale. It depends on the Spec Index of the same Repository — the sanctioned exceptional case
+  of an Index projecting another Index, never in a cycle — because a second parse of the tree would
+  duplicate state the Spec Index already holds.
+subsystem: sdd_core
+componentType: Index
+owns: []
+dependsOn:
+  - spec_index
+status: complete
+createdAt: '2026-09-26T16:08:20.637Z'
+updatedAt: '2026-09-26T16:09:22.055Z'

@@ -79,12 +79,21 @@ function systemBody(system: SystemSpec | null, mermaid: string, diagramUrl: stri
   return parts.join('\n');
 }
 
+/** One export-table row: an own item by its transport and component, a re-export by its source. */
+function publicInterfaceLine(p: SubsystemSpec['publicInterfaces'][number]): string {
+  const item = p.typeDef ? `type \`${p.typeDef}\`` : p.component ? `\`${p.component}\`` : 'everything';
+  const name = p.as ? ` as \`${p.as}\`` : '';
+  if (p.from) return `- re-exports ${item}${name} from \`${p.from}\`${p.details ? ` — ${p.details}` : ''}`;
+  if (p.typeDef) return `- ${item}${name}`;
+  return `- **${p.type}** via \`${p.component ?? '?'}\`${name} — ${p.details}`;
+}
+
 function subsystemBody(sub: SubsystemSpec): string {
   const parts = [`# ${sub.name || sub.id}`, ''];
   if (sub.description) parts.push(sub.description, '');
   if (sub.publicInterfaces?.length) {
     parts.push('## Public surface');
-    for (const p of sub.publicInterfaces) parts.push(`- **${p.type}** via \`${p.component ?? '?'}\` — ${p.details}`);
+    for (const p of sub.publicInterfaces) parts.push(publicInterfaceLine(p));
     parts.push('');
   }
   return parts.join('\n');

@@ -2,7 +2,9 @@ id: project_config_registry_impl
 name: Project Config Registry Implementation
 description: >-
   The write path for `.wai/project.yaml`: one intent-level change per method, read and written back
-  through the store.
+  through the store. A save writes exactly the configuration it is given: a defaulted identity is
+  never written in, because a default can be wrong (a chained child answers to its mount) and only a
+  deliberate writer — init, provisioning, doctor — knows what the project should answer to.
 contract: iproject_config_registry
 sourcePath: src/config/project-config.ts
 methods:
@@ -10,8 +12,8 @@ methods:
     narrative: []
     intent: >-
       Refuses with an error naming the project root when a configuration already exists; otherwise
-      validates the given configuration against the schema and writes it through the store. It never
-      overwrites an existing configuration.
+      validates the configuration against the schema and writes it through the store as given,
+      inventing no `id`. It never overwrites an existing configuration.
     calls:
       - project_config_store.exists
       - project_config_store.write
@@ -146,4 +148,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-09-26T11:04:27.256Z'
+updatedAt: '2026-09-26T15:58:19.267Z'

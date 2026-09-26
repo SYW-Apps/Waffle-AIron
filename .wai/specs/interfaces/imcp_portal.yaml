@@ -317,10 +317,13 @@ methods:
       address: mcp tools/call sdd_set_endpoints
   - name: sdd_set_public_interfaces
     description: >-
-      Tool: set — replace — an existing subsystem's publicInterfaces, binding each to the component,
-      and optionally the contract, that realizes it. The tool for backfilling bindings once a
-      subsystem's components exist, because a cross-subsystem dependency may only target a published
-      public component.
+      Tool: set — replace — an existing subsystem's export table: own items binding a component (and
+      optionally the contract) that realizes them, or a type the subsystem owns, and re-exports
+      naming another subsystem in `from` with one component, interface narrowing or type, optionally
+      renamed with `as` — `from` alone re-exports everything that subsystem exports. `type` and
+      `details` are required on an own component item and optional on a re-export, which inherits
+      its target's. The tool for backfilling bindings once a subsystem's components exist, because a
+      cross-subsystem dependency may only target a published public component.
     signature: >-
       sdd_set_public_interfaces(subsystemId: string, publicInterfaces: PublicInterface[]):
       SpecChangeReport
@@ -478,4 +481,4 @@ methods:
       address: mcp tools/call getProjectConfig
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T14:49:33.185Z'
+updatedAt: '2026-09-26T16:13:54.831Z'

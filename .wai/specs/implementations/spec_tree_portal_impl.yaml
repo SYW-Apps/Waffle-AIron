@@ -201,6 +201,20 @@ methods:
         type: call
         targetComponent: architecture_diagrams
         targetMethod: buildCanvasDataModel
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: resolveSubsystemExports
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: resolveProjectExports
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:06:46.864Z'
+updatedAt: '2026-09-26T16:09:40.849Z'

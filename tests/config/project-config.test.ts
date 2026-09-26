@@ -678,3 +678,51 @@ describe('project config registry — rekeyCarried (F78)', () => {
     expect(after.toString('latin1').split('\r\n').length).toBe(real.toString('latin1').split('\r\n').length);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Stage 2a: an ordinary save never writes a defaulted project id. A default can
+// be wrong (a chained child answers to its mount, which a save cannot know), so
+// only a deliberate writer - init, provisioning, doctor - sets one.
+// ---------------------------------------------------------------------------
+
+describe('project config registry — no defaulted id on save', () => {
+  it('a save leaves an undeclared id undeclared', () => {
+    const root = tempRoot();
+    writeDoc(root, minimal().map((l) => (l === 'name: demo' ? 'name: Billing Platform' : l)));
+
+    projectConfigRepositoryAt(root).setProjectType('frontend-reactive');
+
+    expect(readDoc(root)).not.toHaveProperty('id');
+    expect(readDoc(root).name).toBe('Billing Platform');
+  });
+
+  it('never touches a declared id, even one that breaks the grammar', () => {
+    const root = tempRoot();
+    writeDoc(root, minimal('id: Billing_Platform'));
+
+    projectConfigRepositoryAt(root).setProjectType('frontend-reactive');
+
+    expect(readDoc(root).id).toBe('Billing_Platform');
+  });
+
+  it('create writes the configuration it is given, inventing no id', () => {
+    const root = tempRoot();
+    const config = {
+      schemaVersion: '1.0.0', name: 'Ledger Service', targets: [], rules: {}, createdAt: NOW, updatedAt: NOW,
+    } as unknown as ProjectConfig;
+
+    projectConfigRepositoryAt(root).create(config);
+
+    expect(readDoc(root)).not.toHaveProperty('id');
+  });
+
+  it('the comment-preserving rekey is not a save, and writes no id', () => {
+    const root = tempRoot();
+    writeDoc(root, minimal());
+
+    projectConfigRepositoryAt(root).rekeyCarried({});
+
+    expect(fs.readFileSync(configFile(root), 'utf8')).toContain(MARKER);
+    expect(readDoc(root)).not.toHaveProperty('id');
+  });
+});

@@ -72,15 +72,21 @@ export type SurfaceAudience = z.infer<typeof SurfaceAudienceSchema>;
  * un-schema'd); the surface projector applies defaults where sensible.
  */
 export const SystemPublicInterfaceSchema = z.object({
-  /** Stable public interface id within the system. */
+  /** Legacy public name, read as `as` when `as` is absent. */
   id: z.string().optional(),
   name: z.string().optional(),
-  /** Subsystem publishing the backing L1 public interface. */
+  /** Legacy source subsystem, read as `from` when `from` is absent. */
   subsystem: z.string().optional(),
-  /** Portal (or compatible published component) backing this entry. */
+  /** The component re-exported one to one; without it and without `typeDef`, a wildcard. */
   component: z.string().optional(),
-  /** Optional L3 interface id backing the surface. */
+  /** The L3 interface the export narrows to. */
   interface: z.string().optional(),
+  /** The source subsystem the entry re-exports from. */
+  from: z.string().optional(),
+  /** A type exported as is, giving it a public name. */
+  typeDef: z.string().optional(),
+  /** The public name: defaults to `id`, then `interface`, then `component` or `typeDef`. */
+  as: z.string().optional(),
   /** Surface kind: REST, GraphQL, MessageBus, RPC, or Custom. */
   type: z.string().optional(),
   details: z.string().optional(),
@@ -130,22 +136,46 @@ export type SystemSpec = z.infer<typeof SystemSpecSchema>;
 export const PublicInterfaceTypeSchema = z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']);
 export type PublicInterfaceType = z.infer<typeof PublicInterfaceTypeSchema>;
 
+/**
+ * One entry of a subsystem's export table. An OWN item binds a transport kind
+ * and details to a component (or a type) the subsystem owns; a RE-EXPORT names
+ * another subsystem of the project in `from` and one component, interface
+ * narrowing or type from that subsystem's table, optionally renamed with `as` —
+ * `from` alone re-exports everything it exports. A re-export inherits its
+ * target's type and details, so only an own component item must state them.
+ */
 export const PublicInterfaceSchema = z.object({
-  type: PublicInterfaceTypeSchema,
-  details: z.string(),
-  /** The L2 component that realizes this public interface (the subsystem's published surface). */
+  /** Transport kind of an own item; a re-export inherits its target's. */
+  type: PublicInterfaceTypeSchema.optional(),
+  /** Consumer-facing description of an own item; a re-export inherits its target's. */
+  details: z.string().optional(),
+  /** For an own item, the L2 component that realizes it; for a re-export, the component re-exported from `from`. */
   component: SpecIdSchema.optional(),
-  /** Optional L3 interface on that component backing this entry. */
+  /** Optional L3 interface the entry narrows to. */
   interface: SpecIdSchema.optional(),
+  /** Re-export source: another subsystem of the same project. */
+  from: SpecIdSchema.optional(),
+  /** A type exported as is: owned by this subsystem, or re-exported from `from`. */
+  typeDef: SpecIdSchema.optional(),
+  /** The public name; defaults to the narrowed interface, then the component or type id. */
+  as: z.string().optional(),
   /**
    * The subsystems this surface is published to. Absent, anyone may depend on
    * it; present, only these subsystems may — when every entry publishing the
    * component names consumers, the union of those lists is the whole set.
    */
   consumers: z.array(SpecIdSchema).optional(),
+}).refine(pi => pi.from !== undefined || pi.typeDef !== undefined || (pi.type !== undefined && pi.details !== undefined), {
+  message: 'An own component entry states its `type` and `details`; only a re-export (`from`) or a type export (`typeDef`) may leave them out.',
+  path: ['type'],
 });
 
 export type PublicInterface = z.infer<typeof PublicInterfaceSchema>;
+
+/** Whether an L1 entry is an OWN component item — neither a re-export nor a type export. */
+export function isOwnComponentEntry(pi: PublicInterface): boolean {
+  return pi.from === undefined && pi.typeDef === undefined;
+}
 
 /**
  * An explicitly sanctioned tight coupling with a peer subsystem — e.g. a
@@ -712,8 +742,8 @@ export type MethodParam = z.infer<typeof MethodParamSchema>;
 export const FindingDeclarationSchema = z.object({
   /** UPPER_SNAKE and unique within the method; a pack's codes carry the pack prefix (<PACK>_<CODE>). */
   code: z.string().regex(/^[A-Z][A-Z0-9_]*$/, 'Finding code must be UPPER_SNAKE, e.g. UNREALIZED_FINDING'),
-  /** The default before project severity overrides and draft-context downgrades. */
-  severity: z.enum(['error', 'warning']),
+  /** The default before project severity overrides and draft-context downgrades; a notice is reported but never fails the gate. */
+  severity: z.enum(['error', 'warning', 'notice']),
   /** One line saying what the finding means. */
   summary: z.string().min(1, 'Finding summary must say what the finding means'),
 });
@@ -1416,6 +1446,17 @@ export const SurfaceTypeDefSchema = z.object({
 });
 export type SurfaceTypeDef = z.infer<typeof SurfaceTypeDefSchema>;
 
+/** A type the producer exports by name (a typeDef export); its definition is in the type closure. */
+export const SurfaceTypeExportSchema = z.object({
+  /** The type's public name in the producer's export table. */
+  id: z.string(),
+  /** The id of the type's definition in the snapshot's type closure. */
+  type: z.string(),
+  /** Exposure level from the L0 entry. */
+  audience: z.string().default('instance'),
+});
+export type SurfaceTypeExport = z.infer<typeof SurfaceTypeExportSchema>;
+
 /** One exported interface at CONTRACT grade — full methods + dispatch table. */
 export const SurfaceContractEntrySchema = z.object({
   id: z.string(),
@@ -1438,6 +1479,10 @@ export const SurfaceContractEntrySchema = z.object({
   auth: PortalAuthSchema.optional(),
   /** The backing Portal's basePath — becomes the per-portal OpenAPI `servers` url. */
   basePath: z.string().optional(),
+  /** Stereotype of the backing component; absent on snapshots written before exports carried it. */
+  componentType: z.string().optional(),
+  /** The L3 interface the export narrows to, when it narrows. */
+  interface: z.string().optional(),
 });
 export type SurfaceContractEntry = z.infer<typeof SurfaceContractEntrySchema>;
 
@@ -1451,8 +1496,12 @@ export const SurfaceSnapshotSchema = z.object({
   version: z.string().optional(),
   generatedAt: z.string(),
   interfaces: z.array(SurfaceContractEntrySchema).default([]),
-  /** Transitive type closure of every exported signature — self-contained. */
+  /** Transitive type closure of every exported signature and exported type — self-contained. */
   types: z.array(SurfaceTypeDefSchema).default([]),
+  /** The producing project's effective id, beside the display-oriented projectName. */
+  projectId: z.string().optional(),
+  /** The types the producer exports by name, listed apart from the contract entries. */
+  exportedTypes: z.array(SurfaceTypeExportSchema).optional(),
 });
 export type SurfaceSnapshot = z.infer<typeof SurfaceSnapshotSchema>;
 

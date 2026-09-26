@@ -12,7 +12,9 @@ fields:
     optional: false
   - name: defaultSeverity
     type: string
-    description: error | warning (before user severity overrides).
+    description: >-
+      error | warning | notice (before user severity overrides). A code that defaults to notice is
+      reported but never fails the gate, until a project raises it through rules.sddRuleSeverity.
     optional: false
   - name: summary
     type: string
@@ -31,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:14.460Z'
-updatedAt: '2026-09-19T19:03:34.173Z'
+updatedAt: '2026-09-26T15:26:11.954Z'

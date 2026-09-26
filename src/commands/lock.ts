@@ -16,8 +16,10 @@ import {
   loadSubsystemSpecs,
   loadSystemSpec,
   readLockState,
+  loadProjectConfig,
   type LockRecord,
 } from '../core/index.js';
+import { effectiveProjectId } from '../models/project.js';
 // The approver's own projection, taken from the models rather than from the
 // core barrel: rendering a name is the value object's behaviour, not a Portal
 // method, and it travels with the type.
@@ -233,6 +235,10 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
   // settled specs from in-flux ones. It is recorded HERE rather than beside it
   // because the lock record is committed — which is what lets a teammate, a
   // fresh clone and CI all see the same approval the approver saw.
+  // The project's effective id, recorded so a later id change is caught
+  // (PROJECT_ID_CHANGED) rather than silently re-keying everything that keys on it.
+  const config = loadProjectConfig();
+  const projectId = config ? effectiveProjectId(config) : null;
   const record: LockRecord = {
     stateId: computeGateStateId(),
     lockedAt: new Date().toISOString(),
@@ -245,6 +251,7 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
       notices: gate ? gate.issues.filter((i) => i.severity === 'notice').length : 0,
     },
     status: 'ready',
+    ...(projectId !== null ? { projectId } : {}),
     specs: captureApprovedSpecs(root, scope),
     children: currentChildPins(loadSubsystemSpecs(), root),
   };

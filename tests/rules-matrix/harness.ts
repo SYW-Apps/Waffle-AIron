@@ -41,7 +41,7 @@ export const FIXTURE_PACK_NAME = 'ledger-platform';
 // Fixture contract
 // ---------------------------------------------------------------------------
 
-export type FixtureSeverity = 'error' | 'warning';
+export type FixtureSeverity = 'error' | 'warning' | 'notice';
 
 /**
  * One spec of a fixture tree. `id` is required; every other field is the raw
@@ -189,8 +189,8 @@ export function validateRuleFixture(fx: unknown, where: string): RuleFixture {
       `architecture situation the tree models (min 4 words). Got: ${JSON.stringify(f.scenario)}`,
     );
   }
-  if (f.severity !== undefined && f.severity !== 'error' && f.severity !== 'warning') {
-    throw new Error(`${where} [${f.code}]: "severity" must be 'error' or 'warning' when given.`);
+  if (f.severity !== undefined && f.severity !== 'error' && f.severity !== 'warning' && f.severity !== 'notice') {
+    throw new Error(`${where} [${f.code}]: "severity" must be 'error', 'warning' or 'notice' when given.`);
   }
   if (f.anchoredTo !== undefined && f.anchoredTo !== null && (typeof f.anchoredTo !== 'string' || f.anchoredTo.length === 0)) {
     throw new Error(`${where} [${f.code}]: "anchoredTo" must be a non-empty spec id (or null to assert the finding carries NO anchor) when given.`);

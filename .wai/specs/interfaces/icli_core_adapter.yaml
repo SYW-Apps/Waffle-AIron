@@ -109,13 +109,20 @@ methods:
   - name: ensureProjectInitialized
     description: >-
       Complete the bound project's bootstrap without overwriting anything: the default configuration
-      and the L0 system spec, each only when absent. Forwarded to the core portal.
-    signature: 'ensureProjectInitialized(fallbackName: string): ProjectBootstrap'
+      and the L0 system spec, each only when absent. A configuration it writes declares the given
+      id, else the chosen name slugified. Forwarded to the core portal.
+    signature: 'ensureProjectInitialized(fallbackName: string, id?: string): ProjectBootstrap'
     returns: ProjectBootstrap
     params:
       - name: fallbackName
         type: string
         description: The project name to use when no system spec names one yet
+      - name: id
+        type: string
+        description: >-
+          The project id a configuration written here declares — a chained child's mount subsystem
+          id; omitted, the chosen name slugified
+        optional: true
     guarantees:
       - idempotent
   - name: listDirectChainedSubprojects
@@ -472,4 +479,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:10:17.390Z'
+updatedAt: '2026-09-26T15:27:06.274Z'

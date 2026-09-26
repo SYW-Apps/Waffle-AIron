@@ -160,6 +160,19 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     expect(onDisk.status).toBe('ready');
   });
 
+  it('records the project id it approved — the defaulted one when project.yaml declares none', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
+    buildLockableProject(rootDir);
+
+    const record = await runLock({ yes: true }, { valid: true, issues: [] });
+
+    // 'lockable-system' declares no id, so it answers to its name slugified —
+    // exactly what a later validate compares project.yaml against.
+    expect(record!.projectId).toBe('lockable-system');
+    const onDisk = JSON.parse(fs.readFileSync(path.join(rootDir, '.wai', 'lock.json'), 'utf8'));
+    expect(onDisk.projectId).toBe('lockable-system');
+  });
+
   it('--subsystem approves only its own scope, never the whole tree', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
     buildLockableProject(rootDir);

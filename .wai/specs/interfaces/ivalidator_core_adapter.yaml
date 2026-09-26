@@ -123,6 +123,37 @@ methods:
     signature: 'loadProjectVariants(): VariantDef[]'
     returns: VariantDef[]
     params: []
+  - name: readLockRecord
+    description: >-
+      Forward to approval_portal.readLockRecord: the bound root's lock record, or null when it is
+      unlocked or the record cannot be read. The validator reads the project id the lock recorded,
+      to judge the project's identity against it.
+    signature: 'readLockRecord(): LockRecord | null'
+    returns: LockRecord | null
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveSubsystemExports
+    description: >-
+      Forward to spec_tree_portal.resolveSubsystemExports: one subsystem's resolved export table
+      with the problems met resolving it, which the export-tables rule judges.
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem
+    guarantees:
+      - idempotent
+  - name: resolveProjectExports
+    description: >-
+      Forward to spec_tree_portal.resolveProjectExports: the project's resolved L0 export table with
+      the problems met resolving it, which the export-tables rule judges.
+    signature: 'resolveProjectExports(): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:09:18.037Z'
+updatedAt: '2026-09-26T16:10:50.218Z'

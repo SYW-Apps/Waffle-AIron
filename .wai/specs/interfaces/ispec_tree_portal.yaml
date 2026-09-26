@@ -216,6 +216,28 @@ methods:
     signature: 'buildCanvasDataModel(): CanvasModel'
     returns: CanvasModel
     params: []
+  - name: resolveSubsystemExports
+    description: >-
+      One subsystem's resolved export table, with the problems met resolving it as facts — a
+      passthrough read of the spec repository.
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem
+    guarantees:
+      - idempotent
+  - name: resolveProjectExports
+    description: >-
+      The project's resolved L0 export table — what other projects may consume — with the problems
+      met resolving it as facts; the one table the surface projector, the validator, the canvas and
+      the hosted landscape read exports from. A passthrough read of the spec repository.
+    signature: 'resolveProjectExports(): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:08:48.496Z'
+updatedAt: '2026-09-26T16:09:34.596Z'

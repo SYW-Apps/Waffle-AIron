@@ -2,14 +2,15 @@ kind: value-object
 id: project_config
 name: ProjectConfig
 description: >-
-  Project configuration, including output targets, rule configuration, extension pack registration,
-  and the hosted/profile selection applied when the project was initialized or reconciled.
+  Project configuration: the project's identity, output targets, rule configuration, extension pack
+  registration, and the hosted/profile selection applied when the project was initialized or
+  reconciled. Identity resolution is intrinsic, pure behaviour of the configuration itself
+  (effectiveId, identity): it needs no collaborator.
 fields:
   - name: name
     type: string
-    description: Project name
+    description: 'Display name. Not an identity: `id` is.'
     optional: false
-    key: primary
   - name: targets
     type: object[]
     description: 'Output targets: type (claude | gemini | custom), outputDir, enabled'
@@ -54,6 +55,18 @@ fields:
     type: string
     description: When the config was last written. Store-managed.
     optional: false
+  - name: id
+    type: string
+    description: >-
+      The project's stable identity: a slug of [a-z0-9-_.] that starts and ends alphanumeric. When
+      absent, the effective id is `name` slugified (see effectiveId) and no save writes it in,
+      because the default can be wrong: an existing chained child answers to its mount's subsystem
+      id, which a plain save cannot know. Only deliberate writers set it: init and provisioning
+      write it from the name, hosted creation writes the hosted project id, and a chained child is
+      created (or repaired by doctor) with its mount's subsystem id. Changing it is a rename
+      migration: a lock records the id it approved, and a later mismatch is PROJECT_ID_CHANGED.
+    optional: true
+    key: primary
 methods:
   - name: declaredPackNames
     signature: 'declaredPackNames(): string[]'
@@ -75,6 +88,25 @@ methods:
     description: >-
       The target types this configuration enables: every target not explicitly disabled. Empty for a
       configuration with no enabled targets.
+  - name: effectiveId
+    signature: 'effectiveId(): string | null'
+    returns: string | null
+    description: >-
+      The declared id when there is one, as written; otherwise `name` slugified. Slugifying
+      lower-cases the name, collapses each run of characters outside [a-z0-9-_.] to one '-', and
+      trims the result until it starts and ends alphanumeric. Returns null when no declared id
+      exists and no slug can be made; it never invents a fallback.
+    symbol: effectiveProjectId
+  - name: identity
+    signature: 'identity(lockedProjectId?: string): ProjectIdentity'
+    returns: ProjectIdentity
+    description: >-
+      Resolve the effective id against the id a lock approved, naming every problem with it:
+      defaulted when no id is declared and the name yields one; ambiguous when no id is declared and
+      the name yields no slug, or when a declared id breaks the grammar; changed when a
+      lockedProjectId is given and the effective id differs from it (an effective id of none
+      included).
+    symbol: projectIdentity
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-25T21:05:24.706Z'
+updatedAt: '2026-09-26T15:58:36.840Z'

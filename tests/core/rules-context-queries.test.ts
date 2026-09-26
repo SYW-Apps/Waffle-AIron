@@ -151,6 +151,23 @@ describe('rule_context.resolveSurfaceRef', () => {
     expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal'))).toBe(root);
   });
 
+  it('matches a renamed export only by its public name, and an unrenamed or older entry by its component too', () => {
+    // An entry projected from an export table records its componentType. Named
+    // "invoicing" over invoice-portal, it answers to that name alone.
+    const renamed = snapshot('Billing', [{ ...entry('invoice-portal', ['list']), id: 'invoicing', componentType: 'Portal' }]);
+    const ctx = context({ surfaceSnapshots: [renamed] });
+    expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::invoicing'))).toBe(renamed);
+    expect(ctx.resolveSurfaceRef('super::invoice-portal')).toEqual({ kind: 'unresolved' });
+
+    // Its id is just its interface: it carries no public name of its own.
+    const narrowed = snapshot('Billing', [{ ...entry('invoice-portal', ['list']), interface: 'iinvoice-portal', componentType: 'Portal' }]);
+    expect(resolvedSnapshot(context({ surfaceSnapshots: [narrowed] }).resolveSurfaceRef('super::invoice-portal'))).toBe(narrowed);
+
+    // Written before exports carried a stereotype (a sibling surface): the fallback stands until stage 3.
+    const older = snapshot('Billing', [{ ...entry('invoice-portal', ['list']), id: 'invoicing' }]);
+    expect(resolvedSnapshot(context({ surfaceSnapshots: [older] }).resolveSurfaceRef('super::invoice-portal'))).toBe(older);
+  });
+
   it('is unresolved when no snapshot covers the reference', () => {
     const ctx = context({ surfaceSnapshots: [snapshot('Parent::billing', [entry('portal', ['list'])])] });
     expect(ctx.resolveSurfaceRef('super::nothing')).toEqual({ kind: 'unresolved' });

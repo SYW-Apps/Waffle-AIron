@@ -1,0 +1,39 @@
+id: iexport_index
+name: Export Index Interface
+description: >-
+  Read contract for export tables: projections of the scanned spec tree, memoized with the scan and
+  dropped with it. Nothing here writes, and nothing here judges — problems come back as facts.
+component: export_index
+methods:
+  - name: resolveSubsystemExports
+    description: >-
+      Project one subsystem's export table — what it makes visible to the other subsystems of its
+      project. Own items bind a component or type the subsystem owns; every re-export is followed to
+      its canonical target and wildcards are expanded; a wildcard cycle resolves to its union.
+      Explicit and own entries shadow a name a wildcard brings in, the same target under one name
+      twice is no conflict, and a name two wildcards bring from different targets is left out. Every
+      problem — duplicate, cycle, invalid, unconsumable — is returned as a fact. A subsystem the
+      tree does not have answers an empty table.
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem whose table to project
+    guarantees:
+      - idempotent
+  - name: resolveProjectExports
+    description: >-
+      Project the project's L0 export table — what other projects may consume — through the
+      subsystems' tables. A legacy entry reads as a re-export (`subsystem` as `from`, `id` as `as`;
+      no source infers it from the component's owner); the public name is `as ?? id ?? interface ??
+      component`; each entry's audience applies to every name it brings in. Problems are returned as
+      facts, exactly as for a subsystem table. A tree with no L0 answers an empty table.
+    signature: 'resolveProjectExports(): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params: []
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-26T16:08:30.136Z'
+updatedAt: '2026-09-26T16:08:30.145Z'

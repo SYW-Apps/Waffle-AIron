@@ -3,6 +3,7 @@ import { SddRule, RuleCode } from './types.js';
 import { hierarchyRule } from './integrity/hierarchy-integrity.js';
 import { reservedIdSegmentsRule } from './integrity/reserved-id-segments.js';
 import { namespaceShadowingRule } from './integrity/namespace-shadowing.js';
+import { projectIdentityRule } from './integrity/project-identity.js';
 import { roundtripRule } from './integrity/roundtrip-serialization.js';
 import { typeDeclarationsRule } from './integrity/type-declarations.js';
 import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
@@ -11,6 +12,7 @@ import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js'
 import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
 import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
 import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
+import { exportTablesRule } from './integrity/export-tables.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { contractSymmetryRule } from './narrative/contract-symmetry.js';
 import { narrativeTargetReferencesRule } from './narrative/narrative-target-references.js';
@@ -118,6 +120,9 @@ export const SDD_RULES: SddRule[] = [
   // that would anchor a bare reference to the root instead.
   reservedIdSegmentsRule,
   namespaceShadowingRule,
+  // The project's own id, beside the spec ids: declared, well-formed, and the
+  // one its lock approved.
+  projectIdentityRule,
   roundtripRule,
   // The type vocabulary in three questions: what a type declares about
   // itself, then the identifiers its fields name, then the ones its
@@ -209,6 +214,8 @@ export const SDD_RULES: SddRule[] = [
   publicSurfaceConsumersRule,
   publicSurfaceDeclaredTypeRule,
   publicSurfaceBoundContractRule,
+  // The export tables the resolver settled: what the published names bind.
+  exportTablesRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
   // reader sees the broken edge finding next to the unused-detection fallout

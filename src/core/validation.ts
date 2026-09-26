@@ -23,7 +23,10 @@ import {
   resolveChainingParent,
   findChainingParent,
   settledSpecPaths,
+  readLockRecord,
   loadProjectVariants,
+  resolveSubsystemExports,
+  resolveProjectExports,
 } from './adapters/validator-core.js';
 import { listSnapshots, listMountSnapshots } from './adapters/validator-surfaces.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
@@ -35,7 +38,7 @@ import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes 
 // callers reach it through the portal.
 export { validateComponentCandidate } from './rules/candidate.js';
 import type { LoadedExtensions } from './extensions.js';
-import type { PackSelection } from '../models/project.js';
+import { projectIdentity, type PackSelection, type ProjectIdentity } from '../models/project.js';
 import { computeGateIdentity, type GateConfig } from './rules/gate-identity.js';
 import { BUILTIN_PROFILES, PROJECT_KINDS, type IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
@@ -52,6 +55,26 @@ function projectPackSelections(): PackSelection[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * The bound project's identity, resolved against the id its lock recorded, for
+ * the project-identity rule. Undefined when the project has no readable
+ * configuration — a configuration that fails its schema is reported by the
+ * paths that load it, and an identity guessed from half of it would be a second,
+ * less truthful report. An unreadable lock records no id: a lock that cannot be
+ * read approved nothing this run can compare against.
+ */
+function boundProjectIdentity(): ProjectIdentity | undefined {
+  let config;
+  try {
+    config = loadProjectConfig();
+  } catch {
+    return undefined;
+  }
+  if (!config) return undefined;
+  const lockedProjectId = readLockRecord()?.projectId;
+  return projectIdentity(config, lockedProjectId);
 }
 import {
   buildCodeModel,
@@ -547,8 +570,17 @@ export function validateSddTree(
       scopeSubsystem,
       extensions,
       variants: loadProjectVariants(),
+      // Every subsystem's resolved export table, then the project's: the
+      // export-tables rule judges the problems the resolver met.
+      exportTables: [
+        ...subsystems.map((s) => resolveSubsystemExports(s.id)),
+        resolveProjectExports(),
+      ],
       // By-name selections only: a legacy path ref pins nothing to check.
       packSelections: projectPackSelections(),
+      // The run that IS the parent's verdict on a chained child judges the
+      // child's specs, not the parent's identity, so it carries none.
+      projectIdentity: crossTree === 'off' ? undefined : boundProjectIdentity(),
       surfaceSnapshots,
       mountSurfaceSnapshots,
       codeModel,

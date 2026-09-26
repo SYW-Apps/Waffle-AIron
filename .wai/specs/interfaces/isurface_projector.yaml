@@ -5,9 +5,12 @@ component: surface_projector
 methods:
   - name: projectOwnSurface
     description: >-
-      Project the own tree's L0 gateway entries at or below the audience ceiling into a
-      self-contained contract-grade snapshot (full L3 contracts, dispatch tables, transitive type
-      closure, StateId provenance).
+      Project the own tree's resolved L0 export table at or below the audience ceiling into a
+      self-contained contract-grade snapshot: each public name with the full L3 contract of its
+      canonical target (narrowed to the entry's interface when it narrows), its stereotype, dispatch
+      table, auth and base path; the exported types listed apart; the transitive type closure; the
+      project's effective id beside its name; and StateId provenance. Every re-export is resolved
+      once by the export index, so a consumer never walks the producer's chain.
     signature: 'projectOwnSurface(maxAudience: string): SurfaceSnapshot'
     returns: SurfaceSnapshot
     params:
@@ -44,4 +47,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-10T23:13:52.676Z'
-updatedAt: '2026-09-15T17:45:23.375Z'
+updatedAt: '2026-09-26T16:10:41.418Z'

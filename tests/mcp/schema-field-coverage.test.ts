@@ -16,6 +16,7 @@ import {
   MethodSignatureSchema,
   MethodImplementationSchema,
   NarrativeStepSchema,
+  PublicInterfaceSchema,
 } from '../../src/models/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -250,6 +251,23 @@ describe('MCP write-tool schema field coverage', () => {
       + 'Add them to narrativeStepInput in src/mcp/server.ts — the MCP SDK strips unknown input keys silently.',
     ).toEqual([]);
   });
+
+  // A subsystem's publicInterfaces entry is its export table's row: an own item
+  // or a re-export (from / typeDef / as). The item schema is hand-copied into
+  // both tools that write it, and a field missing there is stripped by the SDK
+  // before the handler sees it — a re-export would silently become an own item.
+  for (const tool of ['sdd_add_subsystem', 'sdd_set_public_interfaces']) {
+    it(`every publicInterfaces ENTRY field is reachable through ${tool}`, () => {
+      const itemProps = (toolProps[tool]?.publicInterfaces?.items?.properties ?? {}) as Record<string, any>;
+      expect(Object.keys(itemProps).length, `${tool} publishes no publicInterfaces item schema`).toBeGreaterThan(0);
+      const unclassified = Object.keys(PublicInterfaceSchema.innerType().shape).filter((f) => !(f in itemProps));
+      expect(
+        unclassified,
+        `publicInterfaces entry fields ${tool} cannot set: ${unclassified.join(', ')}. `
+        + 'Add them to publicInterfaceItemInput in src/mcp/server.ts — the MCP SDK strips unknown input keys silently.',
+      ).toEqual([]);
+    });
+  }
 
   // -------------------------------------------------------------------------
   // 2. LOSABLE — the same fields survive a minimal re-authoring, and the tool

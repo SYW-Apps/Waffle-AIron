@@ -33,8 +33,8 @@
     dependencyClass: read. The same source must always yield the same view.
     Own nothing, write nothing: the caller persists or serves the result.
     Distinct from an Index: an Index is a MAINTAINED read model over a Store
-    it shares references with; a projector is RECOMPUTED per call and owns no
-    state. If the derivation starts coordinating multiple facades or deciding
+    it shares references with (or, exceptionally, over another Index of the
+    same Repository); a projector is RECOMPUTED per call and owns no state. If the derivation starts coordinating multiple facades or deciding
     what to do with its output, it is drifting toward a workflow — split it.
 - id: composer
   base: Orchestrator

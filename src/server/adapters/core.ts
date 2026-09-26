@@ -25,6 +25,10 @@ export {
   // L0/L1 reads the landscape plane projects a redacted public surface from.
   loadSystemSpec,
   loadSubsystemSpecs,
+  // The resolved export table and the contracts it names, for the landscape's
+  // redacted public-surface snapshot.
+  resolveProjectExports,
+  loadInterfaceSpecs,
   // Level-of-detail project-tier graph for the web UI.
   buildProjectGraph,
   // Whole-spec-tree transfer (.waitree).

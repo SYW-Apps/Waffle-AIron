@@ -122,7 +122,7 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
     logger.blank();
     logger.info(`↳ Chained subproject "${child.subsystemId}" — generating its layer in ${path.relative(getProjectRoot(), child.dir) || '.'}/`);
     await runWithProjectRoot(child.dir, async () => {
-      ensureProjectInitialized(child.subsystemId); // non-destructive
+      ensureProjectInitialized(child.subsystemId, child.subsystemId); // non-destructive; a child is identified by its mount's subsystem id
       await runGenerate(options); // recurse: this child's layer + its own subprojects
     });
   }

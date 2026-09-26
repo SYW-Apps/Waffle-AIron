@@ -66,7 +66,10 @@ fields:
     optional: false
   - name: publicSet
     type: Map<string, Set<string>>
-    description: Per subsystem, the ids of its published components
+    description: >-
+      Per subsystem, the ids of its published components — its OWN component entries only: a
+      re-export is a name, not a licence, so a component another subsystem re-exports is still
+      depended on through its owning subsystem's publication
     optional: false
   - name: interfacesByComponent
     type: Map<string, InterfaceSpec[]>
@@ -138,6 +141,23 @@ fields:
       Every issue code a registered rule declares CARRYABLE, gathered by the validator — what the
       debt register's entries are checked against.
     optional: false
+  - name: projectIdentity
+    type: ProjectIdentity
+    description: >-
+      The validated root's identity, resolved by the validator from its project configuration
+      against the id its lock recorded (project_config.identity), so the project-identity rule does
+      no I/O. Absent when the root has no readable configuration, and on the run that judges a
+      chained child through its parent: that run is about the child's specs, not the parent's
+      identity.
+    optional: true
+  - name: exportTables
+    type: ResolvedExportTable[]
+    description: >-
+      The resolved export tables — one per loaded subsystem, then the project's L0 table — gathered
+      by the validator through the core adapter, so the export-tables rule judges the resolver's
+      problems without resolving anything itself. Absent on a candidate run, which judges one
+      component and no tables.
+    optional: true
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -210,7 +230,9 @@ methods:
     returns: SurfaceRefResolution
     description: >-
       Resolve a cross-tree reference against the stored surface snapshots. The last segment is the
-      local name and the one before it, if any, the provider. The snapshots of the mounts enclosing
+      local name and the one before it, if any, the provider; it matches an entry's public name, or
+      — only while the entry carries no public name of its own (its id is just its component or its
+      interface) — the entry's backing component. The snapshots of the mounts enclosing
       fromSubsystem are consulted first, nearest mount first, then the bound root's own; the first
       pool with matches decides, and matches that disagree on the contract make the reference
       ambiguous.
@@ -292,4 +314,4 @@ methods:
       rule that accuses
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-19T19:04:25.085Z'
+updatedAt: '2026-09-26T16:14:46.472Z'

@@ -4,6 +4,7 @@ import { WAIRON_VERSION } from '../config/defaults.js';
 
 import type { LockRecord } from '../core/lockfile.js';
 import type { ApproverIdentity } from '../models/lock.js';
+import { effectiveProjectId } from '../models/project.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
 import { placeProject, listOrganizationUnits } from './organization.js';
@@ -328,6 +329,9 @@ export function executeApprovedLock(
     // Settledness is derived from these digests instead, exactly as locally.
     const specs = hostCore.captureApprovedSpecs();
     const children = hostCore.currentChildPins(hostCore.loadSubsystemSpecs());
+    // The bound tree's effective id, so a later id change is caught (PROJECT_ID_CHANGED).
+    const config = hostCore.loadProjectConfig();
+    const projectId = config ? effectiveProjectId(config) : null;
 
     // Write the record BEFORE publishing, so the commit that ships the specs
     // also contains the approval that certifies them. Publishing first (as this
@@ -346,6 +350,7 @@ export function executeApprovedLock(
         notices: result.issues.filter((i) => i.severity === 'notice').length,
       },
       status: 'ready',
+      ...(projectId !== null ? { projectId } : {}),
       specs,
       children,
     };

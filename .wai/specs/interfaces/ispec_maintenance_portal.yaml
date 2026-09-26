@@ -7,8 +7,8 @@ component: spec_maintenance_portal
 methods:
   - name: provisionProject
     description: >-
-      Bootstrap a fresh isolated project at the bound root: default project.yaml plus an L0 system
-      spec named `name`.
+      Bootstrap a fresh isolated project at the bound root: default project.yaml (declaring the id,
+      `name` slugified) plus an L0 system spec named `name`.
     signature: 'provisionProject(name: string): void'
     returns: void
   - name: moveSubsystemProject
@@ -45,13 +45,20 @@ methods:
   - name: ensureProjectInitialized
     description: >-
       Write path for completing a project's bootstrap non-destructively (wairon init, the generate
-      cascade): the default configuration and the L0 system spec, each only when absent.
-    signature: 'ensureProjectInitialized(fallbackName: string): ProjectBootstrap'
+      cascade): the default configuration and the L0 system spec, each only when absent. A
+      configuration it writes declares the given id, else the chosen name slugified.
+    signature: 'ensureProjectInitialized(fallbackName: string, id?: string): ProjectBootstrap'
     returns: ProjectBootstrap
     params:
       - name: fallbackName
         type: string
         description: The project name to use when no system spec names one yet
+      - name: id
+        type: string
+        description: >-
+          The project id a configuration written here declares — a chained child's mount subsystem
+          id; omitted, the chosen name slugified
+        optional: true
     guarantees:
       - idempotent
   - name: renameComponent
@@ -135,4 +142,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-09-25T21:06:55.248Z'
+updatedAt: '2026-09-26T15:27:04.032Z'
