@@ -260,6 +260,56 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
     });
   });
 
+  // ── Canvas model + API explorer ────────────────────────────────────────────
+
+  describe('GET /web/canvas-model and GET /web/openapi', () => {
+    it('GET /web/canvas-model decodes projectId: the model for a real project, 403 for an unknown one', async () => {
+      const cookie = adminCookie();
+      createPlacedProject(cfg, MASTER, 'demo');
+
+      const model = await get('/web/canvas-model?projectId=demo', cookie);
+      expect(model.status).toBe(200);
+      expect(model.headers['content-type']).toMatch(/application\/json/);
+      expect(typeof json(model)).toBe('object');
+
+      // No existence leak: an unknown project is refused exactly like a forbidden one.
+      const ghost = await get('/web/canvas-model?projectId=ghost', cookie);
+      expect(ghost.status).toBe(403);
+      expect(json(ghost)).toEqual({ error: 'forbidden' });
+    });
+
+    it('GET /web/canvas-model without a session is 401', async () => {
+      const r = await get('/web/canvas-model?projectId=demo');
+      expect(r.status).toBe(401);
+      expect(json(r)).toEqual({ error: 'unauthorized' });
+    });
+
+    it('GET /web/openapi decodes projectId and spec: an HTML page for a real project, 403 for an unknown one', async () => {
+      const cookie = adminCookie();
+      createPlacedProject(cfg, MASTER, 'demo');
+
+      const page = await get('/web/openapi?projectId=demo', cookie);
+      expect(page.status).toBe(200);
+      expect(page.headers['content-type']).toBe('text/html; charset=utf-8');
+
+      // A spec the project does not publish lands on the index page, never on a
+      // different API and never on an empty explorer.
+      const unknownSpec = await get('/web/openapi?projectId=demo&spec=nope', cookie);
+      expect(unknownSpec.status).toBe(200);
+      expect(unknownSpec.headers['content-type']).toBe('text/html; charset=utf-8');
+
+      const ghost = await get('/web/openapi?projectId=ghost', cookie);
+      expect(ghost.status).toBe(403);
+      expect(json(ghost)).toEqual({ error: 'forbidden' });
+    });
+
+    it('GET /web/openapi without a session is 401', async () => {
+      const r = await get('/web/openapi?projectId=demo');
+      expect(r.status).toBe(401);
+      expect(json(r)).toEqual({ error: 'unauthorized' });
+    });
+  });
+
   // ── Secrets + org-unit removal ─────────────────────────────────────────────
 
   describe('/web/admin/secrets and /web/admin/org/units/remove', () => {

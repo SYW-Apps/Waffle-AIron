@@ -506,6 +506,24 @@ export function getProjectCanvas(cfg: HostConfig, sessionId: string, projectId: 
 }
 
 /**
+ * Return one authorized project's canvas model (data, not HTML) by delegating to
+ * the web graph orchestrator, which authenticates the session and scopes the
+ * result to the principal's authorized projects.
+ */
+export function getProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): unknown {
+  return getWebProjectCanvasModel(cfg, sessionId, projectId); // step 1 (delegate)
+}
+
+/**
+ * Return one authorized project's API explorer page by delegating to the web
+ * graph orchestrator, which authenticates the session, scopes the project and
+ * chooses between the explorer and the index of the project's APIs.
+ */
+export function getProjectOpenApi(cfg: HostConfig, sessionId: string, projectId: string, portalId?: string): string {
+  return getWebProjectOpenApi(cfg, sessionId, projectId, portalId); // step 1 (delegate)
+}
+
+/**
  * Revoke every browser session belonging to the caller's principal (sign out on
  * all devices/tabs): resolve the presented session to a Principal (an expired or
  * absent session yields an unauthenticated principal → idempotent no-op), remove
@@ -3395,7 +3413,7 @@ export async function handleWebRequest(
     // canvas renderer directly rather than iframing the HTML. Cross-project → 403.
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas-model') {
       const projectId = url.searchParams.get('projectId') ?? '';
-      return sendJson(res, 200, getWebProjectCanvasModel(cfg, sessionId, projectId));
+      return sendJson(res, 200, getProjectCanvasModel(cfg, sessionId, projectId));
     }
 
     // GET /web/openapi?projectId= → the project's full public surface as an
@@ -3403,7 +3421,7 @@ export async function handleWebRequest(
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'openapi') {
       const projectId = url.searchParams.get('projectId') ?? '';
       const spec = url.searchParams.get('spec') ?? undefined;
-      const html = getWebProjectOpenApi(cfg, sessionId, projectId, spec);
+      const html = getProjectOpenApi(cfg, sessionId, projectId, spec);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(html);
       return;
