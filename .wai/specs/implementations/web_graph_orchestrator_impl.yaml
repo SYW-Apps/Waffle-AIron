@@ -107,16 +107,24 @@ methods:
         targetMethod: authenticateSession
       - stepNumber: 2
         description: >-
+          Confirm the project is in the caller's resolved read set through the web project
+          orchestrator's scoped list — a unit-scoped grant must not render another tenant's canvas —
+          refusing anything else as Forbidden
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: list
+      - stepNumber: 3
+        description: >-
           Resolve and bind the requested project's isolated root within the principal's authorized
           set through the project repository (rejects cross-project access, so an out-of-scope or
           unknown project is Forbidden)
         type: call
         targetComponent: project_repository
         targetMethod: resolveRoot
-      - stepNumber: 3
+      - stepNumber: 4
         description: Bind the resolved target project root for the canvas render that follows
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Render the interactive architecture canvas ('canvas' format — the full Cytoscape canvas
           with edge routing, type-ERD/database views, search, and the details sidebar) over the
@@ -124,11 +132,100 @@ methods:
         type: call
         targetComponent: host_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return the self-contained canvas HTML
         type: return
         outcome: project canvas html
     detail: full
+  - name: getProjectCanvasModel
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the browser session to a Principal through the single auth authority's session
+          bridge (rejects an expired or absent session as unauthenticated)
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: >-
+          Confirm the project is in the caller's resolved read set through the web project
+          orchestrator's scoped list, refusing anything else as Forbidden
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: list
+      - stepNumber: 3
+        description: >-
+          Resolve the project's isolated root within the principal's authorized set through the
+          project repository; an unresolvable one is Forbidden too, with no existence leak
+        type: call
+        targetComponent: project_repository
+        targetMethod: resolveRoot
+      - stepNumber: 4
+        description: Bind that root for the build that follows
+        type: local
+      - stepNumber: 5
+        description: Build the canvas model over the bound spec tree through the host core adapter
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: buildCanvasDataModel
+      - stepNumber: 6
+        description: Return the model
+        type: return
+        outcome: project canvas model
+    symbol: getWebProjectCanvasModel
+  - name: getProjectOpenApi
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the browser session to a Principal through the single auth authority's session
+          bridge (rejects an expired or absent session as unauthenticated)
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: >-
+          Confirm the project is in the caller's resolved read set through the web project
+          orchestrator's scoped list, refusing anything else as Forbidden
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: list
+      - stepNumber: 3
+        description: >-
+          Resolve the project's isolated root within the principal's authorized set through the
+          project repository; an unresolvable one is Forbidden
+        type: call
+        targetComponent: project_repository
+        targetMethod: resolveRoot
+      - stepNumber: 4
+        description: >-
+          Export the bound project's gateway surface at the project audience ceiling as OpenAPI
+          through the host surfaces adapter: one named document per public portal, or a single
+          rendered document
+        type: call
+        targetComponent: host_surfaces_adapter
+        targetMethod: exportSurface
+      - stepNumber: 5
+        label: choose
+        description: Choose the page
+        type: branch
+        condition: >-
+          the project publishes no document, or a portal was named that the project does not
+          publish, or several portals and none named
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        label: index
+        description: >-
+          Return the index page listing the project's APIs — never an empty explorer, never a
+          different API in place of the one asked for
+        type: return
+        outcome: api index html
+      - stepNumber: 7
+        label: explorer
+        description: Return the explorer page for the named portal's document, or for the only one
+        type: return
+        outcome: api explorer html
+    symbol: getWebProjectOpenApi
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-09-23T21:20:16.234Z'
+updatedAt: '2026-09-26T00:00:21.750Z'

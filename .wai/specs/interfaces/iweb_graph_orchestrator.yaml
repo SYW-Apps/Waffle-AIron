@@ -49,8 +49,44 @@ methods:
         type: string
       - name: projectId
         type: string
+  - name: getProjectCanvasModel
+    description: >-
+      The full canvas model — data, not HTML — for ONE authorized project: the JSON sibling of
+      getProjectCanvas, which the web app's in-React canvas mounts directly instead of framing the
+      static page. Same scoped authorization: the session resolves to a Principal, the project must
+      be in the caller's resolved read set (cross-project access is Forbidden, an unknown project
+      indistinguishably so), and the model is built over the project's bound spec tree.
+    signature: 'getProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
+    returns: CanvasModel
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+  - name: getProjectOpenApi
+    description: >-
+      An interactive API explorer page for ONE authorized project's public surface, as HTML. Same
+      scoped authorization as the canvas. The owner sees the FULL surface (the project audience
+      ceiling, every gateway entry), unlike a public share link. Each public portal is its own API
+      with its own document: one portal renders its explorer directly, several render an index of
+      them, a named portal renders that portal's explorer, and a portal name the project does not
+      publish lands on the index rather than on a different API — never an empty explorer and never
+      a substitute.
+    signature: 'getProjectOpenApi(sessionId: string, projectId: string, portalId?: string): string'
+    returns: string
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+      - name: portalId
+        type: string
+        description: >-
+          The public portal whose API to show; absent shows the only one, or the index when there
+          are several
+        optional: true
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-09-17T20:37:44.130Z'
+updatedAt: '2026-09-26T00:00:12.066Z'

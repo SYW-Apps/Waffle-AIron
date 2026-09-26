@@ -961,7 +961,29 @@ methods:
         targetComponent: project_lifecycle_orchestrator
         targetMethod: decideRequest
     detail: calls-only
+  - name: serveProjectCanvasModel
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the arguments the router decoded from the request to
+          web_graph_orchestrator.getProjectCanvasModel, and hand back its result for the router to
+          encode
+        type: call
+        targetComponent: web_graph_orchestrator
+        targetMethod: getProjectCanvasModel
+    symbol: getProjectCanvasModel
+  - name: serveProjectOpenApi
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the arguments the router decoded from the request to
+          web_graph_orchestrator.getProjectOpenApi, and hand back its result for the router to
+          encode
+        type: call
+        targetComponent: web_graph_orchestrator
+        targetMethod: getProjectOpenApi
+    symbol: getProjectOpenApi
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-09-24T20:54:36.407Z'
+updatedAt: '2026-09-26T00:00:32.879Z'

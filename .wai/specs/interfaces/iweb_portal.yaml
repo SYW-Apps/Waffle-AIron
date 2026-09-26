@@ -1415,6 +1415,43 @@ methods:
       transport: HTTP
       method: POST
       path: /web/admin/approvals/decide
+  - name: serveProjectCanvasModel
+    description: >-
+      Serve one authorized project's canvas model as JSON — the data the web app's in-React canvas
+      mounts directly. Forwards to the web graph orchestrator's getProjectCanvasModel;
+      session-cookie authenticated, so cross-project access is Forbidden.
+    signature: 'serveProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
+    returns: CanvasModel
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/canvas-model
+  - name: serveProjectOpenApi
+    description: >-
+      Serve one authorized project's API explorer as HTML — its only public API directly, the index
+      of them when it publishes several, or the one the `spec` query names. Forwards to the web
+      graph orchestrator's getProjectOpenApi; session-cookie authenticated, so cross-project access
+      is Forbidden.
+    signature: 'serveProjectOpenApi(sessionId: string, projectId: string, portalId?: string): string'
+    returns: string
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+      - name: portalId
+        type: string
+        description: The public portal whose API to show, from the `spec` query
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/openapi
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-09-24T20:54:31.863Z'
+updatedAt: '2026-09-26T00:00:30.409Z'
