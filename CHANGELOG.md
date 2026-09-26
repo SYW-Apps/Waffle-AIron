@@ -25,7 +25,11 @@ narrative step is now refused where it used to be stripped (item 13). Thirteen
 `sdd_*` tools now declare an `outputSchema`, which changes what a conforming MCP
 client expects back from them (item 14). The library surface narrows too:
 `@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
-(item 4). Nothing here is purely additive, so `[minor]` would understate it.
+(item 4). Stage 2 adds three more: a hosted landscape entry with no audience now
+defaults to `instance` rather than `public`, a legacy L0 entry sourced from a chained
+member binds only what that member exports from its own L0, and `doctor --fix` asks
+before it applies the chaining migration (`--yes` in a script). Nothing here is purely
+additive, so `[minor]` would understate it.
 
 ### A third severity: `notice`
 

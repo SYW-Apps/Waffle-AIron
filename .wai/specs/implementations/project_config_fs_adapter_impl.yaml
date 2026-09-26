@@ -24,18 +24,21 @@ methods:
       comment-preserving YAML document with the `yaml` package (v2) — the node tree, not a plain
       object; the js-yaml parser the reads use drops comments — then reconciles the tree to the
       given document recursively. A mapping key present on both sides recurses into its value and
-      keeps its node, comments and position. A scalar whose value changed is replaced in place,
-      keeping its node's comments. A key the document no longer holds is deleted. A key it newly
-      holds is inserted at its place in the schema's field order relative to the keys already
-      present — directly after the nearest preceding schema field the mapping holds, else directly
-      before the nearest following one — so a new `id` lands next to `name`, not at the end; a key
-      with no schema neighbour present (an unknown key, or a record entry such as a new `externals`
-      alias) is appended after the existing keys. A sequence is reconciled by position: equal items
-      keep their nodes, changed items are reconciled in place, surplus items are deleted, new items
-      appended. The tree is serialized, the result parsed again and compared with the given
-      document: a difference is refused with an error naming the project root and nothing is
-      written. Otherwise the text replaces the file, keeping the file's line endings. A plain
-      replacement, not an atomic rename, like every write of this adapter.
+      keeps its node, comments and position. A scalar whose value changed is replaced in place, in
+      its own quoting, keeping its node's comments. A key the document no longer holds is deleted. A
+      key it newly holds is inserted at its place in the schema's field order relative to the keys
+      already present — directly after the nearest preceding schema field the mapping holds, else
+      directly before the nearest following one — so a new `id` lands next to `name`, not at the
+      end; a key with no schema neighbour present (an unknown key, or a record entry such as a new
+      `externals` alias) is appended after the existing keys. A sequence is reconciled by position:
+      equal items keep their nodes, changed items are reconciled in place, surplus items are
+      deleted, new items appended. Each difference is spliced into the source text at its node's
+      range; untouched nodes are never re-serialized, so every line the change does not touch stays
+      byte-identical (re-serializing the whole document would re-fold every folded scalar). The
+      result is parsed again and compared with the given document: a difference is refused with an
+      error naming the project root and nothing is written. Otherwise the text replaces the file,
+      keeping the file's line endings. A plain replacement, not an atomic rename, like every write
+      of this adapter.
   - name: documentExists
     narrative: []
     intent: >-
@@ -55,4 +58,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:21:50.998Z'
-updatedAt: '2026-09-26T21:28:45.683Z'
+updatedAt: '2026-09-26T22:01:20.110Z'
