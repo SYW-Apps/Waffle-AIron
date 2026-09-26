@@ -103,3 +103,31 @@ describe('public_interface.consumers round-trips through the MCP doors', () => {
     expect(stored()).toEqual([restricted]);
   });
 });
+
+describe('re-export entries round-trip through sdd_set_public_interfaces', () => {
+  const own = { type: 'REST', details: 'invoice API', component: 'invoice_portal' };
+  const reexport = { from: 'claims', component: 'claim_portal', as: 'claims-api' };
+  const wildcard = { from: 'claims' };
+
+  it('stores a named re-export and a wildcard without type or details, and a replacement drops them again', async () => {
+    const call = await bound();
+    await call('sdd_add_subsystem', { id: 'billing', name: 'Billing', description: 'invoicing' });
+
+    const set = await call('sdd_set_public_interfaces', { subsystem: 'billing', publicInterfaces: [own, reexport, wildcard] });
+    expect(set.isError ?? false, textOf(set)).toBe(false);
+    expect(stored()).toEqual([own, reexport, wildcard]);
+
+    const replaced = await call('sdd_set_public_interfaces', { subsystem: 'billing', publicInterfaces: [own] });
+    expect(replaced.isError ?? false, textOf(replaced)).toBe(false);
+    expect(stored()).toEqual([own]);
+  });
+
+  it('refuses an own component entry that states no type or details', async () => {
+    const call = await bound();
+    await call('sdd_add_subsystem', { id: 'billing', name: 'Billing', description: 'invoicing' });
+    const result = await call('sdd_set_public_interfaces', { subsystem: 'billing', publicInterfaces: [{ component: 'invoice_portal' }] });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/type/);
+    expect(stored()).toEqual([]);
+  });
+});
