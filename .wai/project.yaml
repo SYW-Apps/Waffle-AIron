@@ -1037,7 +1037,7 @@ rules:
             at: 'src/utils/secrets.ts'
             covers:
               - 'resolveGitToken'
-      # 45 finding(s), 85 unit(s).
+      # 44 finding(s), 77 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of type-shape, after the 32 envelope fields the spec types now
@@ -1046,10 +1046,11 @@ rules:
           Two, the code carries data no spec describes, so the ERD draws a record smaller than the one
           that exists. Three, and split almost two to one, the two sides disagree about whether a field
           may be absent: 19 are a spec calling a defaulted field optional - true of what an AUTHOR may
-          omit, false of the value the type finally holds, which is what a type spec describes - and 9
-          run the other way, where the spec promises a field is always there and the code lets it be
-          missing. Those 9 are the ones to read first: a promise the data does not keep is the shape
-          that misleads, and the other two shapes only omit.
+          omit, false of the value the type finally holds, which is what a type spec describes - and 1
+          runs the other way, where the spec promises a field is always there and the code lets it be
+          missing (8 more of that kind were paid when stage 2a made system_public_interface honest).
+          That 1 is the one to read first: a promise the data does not keep is the shape that
+          misleads, and the other two shapes only omit.
           Undecided rather than drift because for each one the spec may be wrong or the code may be,
           and which it is cannot be read off the divergence - only off what the data is FOR. Nothing
           here is a limit of the reader: every finding is exact grade, and the shape it compares was
@@ -1281,18 +1282,6 @@ rules:
             covers:
               - 'renderedSet'
               - 'writtenPaths'
-          - code: TYPE_FIELD_OPTIONALITY
-            spec: system_public_interface
-            at: 'SystemPublicInterface'
-            covers:
-              - 'id'
-              - 'name'
-              - 'subsystem'
-              - 'component'
-              - 'type'
-              - 'details'
-              - 'audience'
-              - 'authPolicy'
           - code: TYPE_FIELD_OPTIONALITY
             spec: system_spec
             at: 'SystemSpec'
