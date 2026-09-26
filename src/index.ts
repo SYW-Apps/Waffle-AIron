@@ -63,3 +63,9 @@ export {
   discoverPacks,
 } from './core/extensions.js';
 export type { LoadedExtensions, DeclarativePack } from './core/extensions.js';
+
+// The running MCP server asks the build ON DISK for its schema fingerprint by
+// requiring this entry in a child process (src/mcp/build.ts): a server whose
+// schemas differ from the rebuilt ones refuses spec writes rather than drop
+// the fields only the new build knows. The export is that question's answer.
+export { schemaFingerprint } from './mcp/server.js';

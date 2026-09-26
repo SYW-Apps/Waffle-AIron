@@ -19,6 +19,15 @@ import { readYamlFile } from '../utils/yaml.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue, TestsToRevisit } from '../core/validation.js';
+import * as crypto from 'crypto';
+import {
+  SystemSpecSchema,
+  SubsystemSpecSchema,
+  ComponentSpecSchema,
+  InterfaceSpecSchema,
+  ImplementationSpecSchema,
+  TypeSpecSchema,
+} from '../models/specs.js';
 import { EndpointSchema, type Endpoint, type PublicInterface, type SubsystemSpec, type SystemSpec, type TypeSpec, type InterfaceSpec, type ImplementationSpec } from '../models/specs.js';
 import type { ComponentSpec } from '../models/specs.js';
 import type { SpecDeletion, SpecRestatement, SpecWriteReceipt } from '../core/authoring.js';
@@ -59,6 +68,7 @@ import {
   resolveVariantGuidance,
 } from './adapters/core.js';
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from './adapters/authoring.js';
+import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
 import { listExternalInterfaces } from './adapters/surfaces.js';
 import { validateSddTree, validateRegistry } from './adapters/validator.js';
@@ -200,8 +210,15 @@ function json(value: unknown): CallToolResult {
   return text(JSON.stringify(value, null, 2));
 }
 
+/**
+ * THE one rendering of a tool refusal: a single `Error: ` prefix, whatever the
+ * handler caught. `String(e)` of an Error already reads "Error: …", and a
+ * refusal wrapped by a layer below may carry its own, so every leading
+ * "Error:" is folded into the one this adds — here, once, rather than tool by
+ * tool, which is how the doubled prefix survived a fix on the create tools.
+ */
 function errText(message: string): CallToolResult {
-  return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
+  return { content: [{ type: 'text', text: `Error: ${message.replace(/^(?:\s*Error:\s*)+/, '')}` }], isError: true };
 }
 
 /**
@@ -271,8 +288,13 @@ function jsonStructured(value: object): CallToolResult {
 const staleServerOutput = {
   staleServer: z.boolean().optional().describe(
     'True when the wairon build on disk changed after this server started — the structured twin of '
-    + 'the text answer\'s STALE SERVER banner. Writes through a stale process can silently drop fields '
-    + 'a newer schema introduced: restart the MCP session before editing further.',
+    + 'the text answer\'s STALE SERVER banner. When the rebuild left the spec and tool schemas alone, '
+    + 'writes still go through; reconnect to run the new code.',
+  ),
+  writesRefused: z.boolean().optional().describe(
+    'True when the rebuild changed a spec or tool schema (or its schemas could not be compared): every '
+    + 'spec write through this server is refused and writes nothing, because it would silently drop the '
+    + 'fields only the new build knows. The human has to reconnect the server (/mcp reconnect wairon).',
   ),
 };
 
@@ -393,7 +415,11 @@ const specDeletionOutput = {
 /** ONE change a write made, field for field as core reports it. */
 const specChangeOutput = {
   path: z.string().describe('The dotted path the change addresses, with names and indexes.'),
-  change: z.enum(['set', 'added', 'removed', 'cleared']).describe('What happened at that path.'),
+  change: z.enum(['set', 'added', 'removed', 'cleared', 'renumbered', 'relocated']).describe(
+    'What happened at that path. A narrative is compared by step identity: `renumbered` is a run of unchanged '
+    + 'steps shifted by an insert or delete (before/after name the ranges), `relocated` a jump field that '
+    + 'followed its target to the target\'s new number.',
+  ),
   before: z.string().optional().describe('The previous value, summarized; absent when there was none.'),
   after: z.string().optional().describe('The new value, summarized; absent when there is none.'),
 } satisfies Record<keyof SpecChange, z.ZodTypeAny>;
@@ -493,72 +519,208 @@ const getSpecOutput = {
 //
 // A long-running MCP server keeps the Zod schemas it was started with; after a
 // rebuild, writes through the OLD process silently STRIP any field a newer
-// schema added (this destroyed data twice before this guard existed). The
-// server stamps its own entry file at startup and, once the file on disk
-// changes, appends a loud warning to every tool result until restarted.
+// schema added (this destroyed data three times). The server stamps the build
+// it stands for and, once that file changes on disk, compares SCHEMA
+// FINGERPRINTS: the running process's own against the one the build on disk
+// computes for itself. A rebuild that left every schema a write passes through
+// alone only earns a warning — refusing it would block an agent that rebuilds
+// and then authors specs, and only the human can reconnect. A rebuild that
+// changed one refuses every spec write, because that is the rebuild that loses
+// data.
 // ---------------------------------------------------------------------------
 
-export interface BuildStamp {
-  path: string;
-  mtimeMs: number;
-  size: number;
+/** Whether this server still runs the build on disk, and whether a spec write through it may proceed. */
+export interface BuildFreshness {
+  state: 'fresh' | 'build-changed' | 'schema-changed' | 'unreadable';
+  writesRefused: boolean;
+  reason: string;
 }
 
-/** Stamp a build entry file; null when it cannot be stat'd (e.g. pkg snapshot fs). */
-export function captureBuildStamp(entryPath: string): BuildStamp | null {
-  try {
-    const s = fs.statSync(entryPath);
-    return { path: entryPath, mtimeMs: s.mtimeMs, size: s.size };
-  } catch {
-    return null;
-  }
-}
-
-/** True once the stamped entry file changed on disk (rebuild/update since start). */
-export function isBuildStale(stamp: BuildStamp | null): boolean {
-  if (!stamp) return false;
-  try {
-    const s = fs.statSync(stamp.path);
-    return s.mtimeMs !== stamp.mtimeMs || s.size !== stamp.size;
-  } catch {
-    return false;
-  }
-}
-
-const SERVER_BUILD_STAMP = captureBuildStamp(__filename);
-
-const STALE_SERVER_WARNING =
-  '\n\n⚠ STALE SERVER: the wairon build on disk changed after this MCP server started. '
-  + 'Restart the MCP session (e.g. /mcp reconnect) before further spec edits — writes through '
-  + 'a stale server can silently drop fields introduced by newer schemas.';
+/** Bumped when what the fingerprint reads changes, so that change reads as a schema change too. */
+const FINGERPRINT_VERSION = 1;
 
 /**
- * A result carrying the stale-build warning in BOTH channels — the banner on
- * the text block, and `staleServer: true` on the structured content when the
- * tool has any. Half a warning protects half the readers: an agent that reads
- * only structuredContent would never see the banner, and this is the warning
- * that has twice stopped a stale process from silently stripping fields.
- *
- * Unconditional, so the marking can be tested on its own; the guard below
- * decides WHEN to apply it.
+ * A zod schema read STRUCTURALLY: what it accepts and what it keeps, never its
+ * prose. Object keys and their strictness, element types, unions, enums,
+ * literals, defaults and checks all count; a description does not, so a
+ * reworded field is no reason to refuse a write while a retyped one is.
+ * Refinement bodies are code, not structure — only their presence is read.
  */
-export function markStale(result: CallToolResult): CallToolResult {
+function schemaShape(schema: unknown, seen: Map<unknown, number> = new Map()): unknown {
+  const def = (schema as { _def?: Record<string, any> } | null)?._def;
+  if (!def) return null;
+  const known = seen.get(schema);
+  if (known !== undefined) return { ref: known };
+  seen.set(schema, seen.size);
+  const inner = (s: unknown): unknown => schemaShape(s, seen);
+  const kind = String(def.typeName);
+  switch (kind) {
+    case 'ZodObject': {
+      const shape = typeof def.shape === 'function' ? def.shape() : def.shape;
+      return {
+        kind,
+        keys: Object.keys(shape).sort().map((key) => [key, inner(shape[key])]),
+        unknownKeys: def.unknownKeys,
+        catchall: inner(def.catchall),
+      };
+    }
+    case 'ZodArray': return { kind, of: inner(def.type), min: def.minLength?.value, max: def.maxLength?.value };
+    case 'ZodOptional':
+    case 'ZodNullable':
+    case 'ZodReadonly':
+    case 'ZodBranded':
+    case 'ZodCatch': return { kind, of: inner(def.innerType ?? def.type) };
+    case 'ZodDefault': return { kind, of: inner(def.innerType), default: JSON.stringify(def.defaultValue?.()) };
+    case 'ZodEffects': return { kind, effect: def.effect?.type, of: inner(def.schema) };
+    case 'ZodLazy': return { kind, of: inner(def.getter()) };
+    case 'ZodUnion':
+    case 'ZodDiscriminatedUnion': {
+      const options = def.options instanceof Map ? [...def.options.values()] : def.options;
+      return { kind, discriminator: def.discriminator, of: (options as unknown[]).map(inner) };
+    }
+    case 'ZodIntersection': return { kind, left: inner(def.left), right: inner(def.right) };
+    case 'ZodTuple': return { kind, of: (def.items as unknown[]).map(inner), rest: inner(def.rest) };
+    case 'ZodRecord':
+    case 'ZodMap': return { kind, key: inner(def.keyType), value: inner(def.valueType) };
+    case 'ZodSet': return { kind, of: inner(def.valueType) };
+    case 'ZodEnum': return { kind, values: def.values };
+    case 'ZodNativeEnum': return { kind, values: def.values };
+    case 'ZodLiteral': return { kind, value: def.value };
+    case 'ZodPipeline': return { kind, in: inner(def.in), out: inner(def.out) };
+    default:
+      // A primitive: its kind, and the checks that narrow what it accepts.
+      return { kind, checks: (def.checks as { kind: string; value?: unknown }[] | undefined)?.map((c) => [c.kind, c.value ?? null]) ?? [] };
+  }
+}
+
+let runningFingerprint: string | undefined;
+
+/**
+ * mcp_server.schemaFingerprint — a stable hash over everything a spec write
+ * passes through: the six canonical spec schemas and the input schema of every
+ * spec-write tool. The build on disk is asked for its own through this export,
+ * in a child process (mcp_build_adapter.readBuildFingerprint).
+ */
+export function schemaFingerprint(): string {
+  // Step 1: the schemas a process runs cannot change underneath it.
+  if (runningFingerprint !== undefined) return runningFingerprint;
+  // Step 2: the canonical spec schemas, read structurally.
+  const specs = {
+    system: schemaShape(SystemSpecSchema),
+    subsystem: schemaShape(SubsystemSpecSchema),
+    component: schemaShape(ComponentSpecSchema),
+    interface: schemaShape(InterfaceSpecSchema),
+    implementation: schemaShape(ImplementationSpecSchema),
+    type: schemaShape(TypeSpecSchema),
+  };
+  // Step 3: a throwaway server, for the input schema every write tool registers.
+  const registered = (createMcpServer() as unknown as { _registeredTools: Record<string, { inputSchema?: unknown }> })._registeredTools;
+  const tools = [...SPEC_WRITE_TOOLS].sort().map((name) => [name, schemaShape(registered[name]?.inputSchema)]);
+  // Step 4: the hash, versioned.
+  runningFingerprint = crypto.createHash('sha256')
+    .update(JSON.stringify({ version: FINGERPRINT_VERSION, specs, tools }))
+    .digest('hex');
+  return runningFingerprint;
+}
+
+const RECONNECT = 'The human has to reconnect this MCP server (in Claude Code: /mcp reconnect wairon) — an agent cannot.';
+
+/**
+ * mcp_server.assessBuildFreshness — whether this server still runs the build on
+ * disk, and whether a spec write through it may proceed.
+ */
+export function assessBuildFreshness(stamp: BuildStamp | null): BuildFreshness {
+  // Steps 1-3: an unchanged entry file is the build that is running.
+  if (!isBuildStale(stamp)) return { state: 'fresh', writesRefused: false, reason: '' };
+  // Step 4: what this process runs.
+  const running = schemaFingerprint();
+  // Steps 5-6: what the build on disk says of itself.
+  let onDisk: string;
+  try {
+    onDisk = readBuildFingerprint(stamp as BuildStamp);
+  } catch (e) {
+    // Step 10: a schema change cannot be ruled out.
+    return {
+      state: 'unreadable',
+      writesRefused: true,
+      reason: 'the wairon build on disk changed after this MCP server started, and its schemas could not be compared '
+        + `(${e instanceof Error ? e.message : String(e)}), so a schema change cannot be ruled out. Every spec write through `
+        + `this server is REFUSED and writes nothing. ${RECONNECT}`,
+    };
+  }
+  // Steps 7-8: the rebuild left every schema a write passes through alone.
+  if (onDisk === running) {
+    return {
+      state: 'build-changed',
+      writesRefused: false,
+      reason: 'the wairon build on disk changed after this MCP server started. Its spec and tool schemas did not change, so '
+        + 'spec writes still go through; reconnect the server (/mcp reconnect wairon) to run the new code.',
+    };
+  }
+  // Step 9: the rebuild that loses data.
+  return {
+    state: 'schema-changed',
+    writesRefused: true,
+    reason: 'the wairon build on disk changed after this MCP server started, and its spec or tool schemas changed with it. '
+      + 'A write through this server would silently drop the fields only the new build knows, so every spec write is '
+      + `REFUSED and writes nothing. ${RECONNECT}`,
+  };
+}
+
+/**
+ * A result carrying the staleness in BOTH channels — the banner on the text
+ * block, and `staleServer: true` (with `writesRefused` when writes are refused)
+ * on the structured content when the tool has any. Half a warning protects
+ * half the readers: an agent that reads only structuredContent would never see
+ * the banner.
+ *
+ * The banner trails the answer, except where it must LEAD: sdd_get_status is
+ * the first call of a session, and a warning at the bottom of a long dashboard
+ * is a warning read last.
+ *
+ * Unconditional, so the marking can be tested on its own; the guard decides
+ * WHEN to apply it.
+ */
+export function markStale(
+  result: CallToolResult,
+  freshness: BuildFreshness = assessedAsChanged,
+  placement: 'lead' | 'trail' = 'trail',
+): CallToolResult {
   const marked: CallToolResult = result.structuredContent
-    ? { ...result, structuredContent: { ...result.structuredContent, staleServer: true } }
+    ? {
+      ...result,
+      structuredContent: {
+        ...result.structuredContent,
+        staleServer: true,
+        ...(freshness.writesRefused ? { writesRefused: true } : {}),
+      },
+    }
     : result;
+  const banner = `⚠ STALE SERVER: ${freshness.reason}`;
   const first = marked.content?.[0];
   if (first && first.type === 'text') {
-    return {
-      ...marked,
-      content: [{ ...first, text: `${first.text}${STALE_SERVER_WARNING}` }, ...marked.content.slice(1)],
-    };
+    const textWithBanner = placement === 'lead' ? `${banner}\n\n${first.text}` : `${first.text}\n\n${banner}`;
+    return { ...marked, content: [{ ...first, text: textWithBanner }, ...marked.content.slice(1)] };
   }
   return marked;
 }
 
-function withStaleWarning(result: CallToolResult): CallToolResult {
-  return isBuildStale(SERVER_BUILD_STAMP) ? markStale(result) : result;
-}
+/** The staleness markStale reports when it is handed none: a rebuild whose schemas were not compared. */
+const assessedAsChanged: BuildFreshness = {
+  state: 'build-changed',
+  writesRefused: false,
+  reason: 'the wairon build on disk changed after this MCP server started. Reconnect the server (/mcp reconnect wairon) '
+    + 'before further spec edits — a write through a stale server can silently drop fields a newer schema introduced.',
+};
+
+/** Each server's build stamp: the build it stands for, settled when it is created. */
+const serverBuildStamps = new WeakMap<McpServer, BuildStamp | null>();
+
+/**
+ * This process's own entry file, stamped when the module is loaded — the build
+ * the process started from, whenever its first server is built.
+ */
+const SERVER_BUILD_STAMP = captureBuildStamp(__filename);
 
 // The definitive spec-WRITE tool set: every tool that persists a change to the
 // spec tree. The agent topology (and therefore the wairon-agent:// brief
@@ -582,6 +744,7 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_add_type',
   'sdd_delete_spec',
   'sdd_update_spec',
+  'sdd_move_methods',
 ]);
 
 // Per-server list-changed emitter, registered ONLY for the long-lived stdio
@@ -613,7 +776,18 @@ function reg<Args extends Record<string, unknown>>(
   cb: (args: Args) => CallToolResult,
 ): void {
   const guarded = (args: Args): CallToolResult => {
-    const result = withStaleWarning(cb(args));
+    // The build-freshness guard. A spec write through a server whose schemas
+    // differ from the build on disk is refused before it runs — the handler
+    // never sees the arguments, so nothing can be written. Every other answer
+    // from a stale server carries the staleness; sdd_get_status leads with it.
+    const freshness = assessBuildFreshness(serverBuildStamps.get(server) ?? null);
+    if (freshness.writesRefused && SPEC_WRITE_TOOLS.has(name)) {
+      return errText(`${name} refused — ${freshness.reason}`);
+    }
+    const answered = cb(args);
+    const result = freshness.state === 'fresh'
+      ? answered
+      : markStale(answered, freshness, name === 'sdd_get_status' ? 'lead' : 'trail');
     // A SUCCESSFUL spec write just changed the derived agent topology — tell
     // the connected session its resources/prompts lists are stale.
     if (result.isError !== true && SPEC_WRITE_TOOLS.has(name)) listChangedEmitters.get(server)?.();
@@ -842,6 +1016,12 @@ export interface McpServerOptions {
    * unsupported by design. Never set for the local stdio server.
    */
   hostedTools?: boolean;
+  /**
+   * The build this server stands for, judged by the build-freshness guard on
+   * every call. Omitted, it is this process's own entry file as stamped when
+   * the module loaded; null opts out (nothing to compare against).
+   */
+  buildStamp?: BuildStamp | null;
 }
 
 export function createMcpServer(options: McpServerOptions = {}): McpServer {
@@ -855,6 +1035,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   }, {
     instructions: buildServerInstructions(),
   });
+
+  // mcp_server.create step 3: the build this server stands for.
+  serverBuildStamps.set(server, options.buildStamp === undefined ? SERVER_BUILD_STAMP : options.buildStamp);
 
   // Truthful listChanged: ONLY the long-lived stdio session declares it, so
   // ONLY that session emits. Fired by reg() after a successful SPEC_WRITE_TOOLS
@@ -1275,7 +1458,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ from: string; to: string; methods: string[]; dryRun?: boolean }>(server,
     'sdd_move_methods',
     {
-      description: 'Move contract methods from one component to another, carrying each method\'s narrative, calls and bindings, and re-pointing every reference that named the old home: narrative call/register/dispatch steps, dispatch-table bindings, lifecycle entrypoints and `calls` entries. The target gains the dependencies the moved narratives call. ONE all-or-nothing gated write: if a rule refuses the move nothing is written and the report names the rule plus where these methods could live instead, cheapest legal home first, with the requested target among them so its shortfall reads beside the others. Prose is never rewritten and a wire endpoint keeps its address — moving a method between components must not silently re-address an RPC; both are reported as mentions. Refuses before the first write (unmovable request): a component or method that does not exist, a method name already declared on the target, a source and target that are the same component, and a component inside a chained subproject (move it from that project\'s own root). A dry run runs the whole move, gate included, and reports what it would have done.',
+      description: 'Move contract methods from one component to another, carrying each method\'s narrative, calls and bindings, and re-pointing every reference that named the old home: narrative call/register/dispatch steps, dispatch-table bindings, lifecycle entrypoints and `calls` entries. The target gains the dependencies the moved narratives call. ONE all-or-nothing gated write: if a rule refuses the move nothing is written and the report names the rule plus where these methods could live instead, cheapest legal home first, with the requested target among them so its shortfall reads beside the others. Prose is never rewritten and a wire endpoint keeps its address — moving a method between components must not silently re-address an RPC; both are reported as mentions. A target that declares no contract yet receives one, i<target>, and when implementation entries travel and no implementation realizes the receiving contract, <target>_impl is created for them, inheriting the source implementation\'s sourcePath; the report\'s `created` names every spec the move created. Refuses before the first write (unmovable request): a component or method that does not exist, a method name already declared on the target, a source and target that are the same component, a target with several contracts none named i<target>, a contract or implementation to create whose id another spec already holds, and a component inside a chained subproject (move it from that project\'s own root). A dry run runs the whole move, gate included, and reports what it would have done.',
       inputSchema: {
         from: z.string().describe('The component the methods belong to (namespaced if needed)'),
         to: z.string().describe('The component that should receive them (namespaced if needed)'),

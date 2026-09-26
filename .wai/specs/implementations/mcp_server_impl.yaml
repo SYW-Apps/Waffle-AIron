@@ -20,26 +20,43 @@ methods:
         description: Instantiate McpServer with name 'wairon', the version, and the composed instructions
         type: local
       - stepNumber: 3
+        description: >-
+          Settle the build this server stands for: the stamp the caller named, or else the stamp
+          this module took of its own entry file when the process loaded it — the build the process
+          started from, however long before its first server is built
+        type: local
+      - stepNumber: 4
+        description: >-
+          Wrap every tool registered below in the build-freshness guard, which judges that stamp on
+          each call. A spec-write tool on a server whose freshness refuses writes answers with the
+          refusal and never runs, so nothing is written; every other answer from a stale server
+          carries the staleness in both channels — the banner on the text and staleServer (with
+          writesRefused when writes are refused) on the structured content — appended to the answer,
+          except sdd_get_status, which LEADS with it so the first call of a session surfaces it.
+        type: register
+        targetComponent: mcp_server
+        targetMethod: assessBuildFreshness
+      - stepNumber: 5
         description: Register tool 'listAgents' which resolves dynamic agent topology using agent_resolver
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveAgentTopology
-      - stepNumber: 4
+      - stepNumber: 6
         description: Register tool 'getAgent' which retrieves a single resolved agent's details
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveAgentTopology
-      - stepNumber: 5
+      - stepNumber: 7
         description: Register validation tools executing validateSddTree
         type: call
         targetComponent: mcp_validator_adapter
         targetMethod: validateSddTree
-      - stepNumber: 6
+      - stepNumber: 8
         description: Register loader tools to fetch system, subsystem, and component specs from spec_loader
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadSystemSpec
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           Register the PROMPTS capability over the same skill set the resources publish. Resources
           are pull-only — a client must already know to fetch wairon-skill://… — so prompts are what
@@ -47,7 +64,7 @@ methods:
           context. Mirrored from the same descriptor list, so one skill set is served two ways and
           the surfaces cannot drift.
         type: local
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
           Register MCP resource endpoints (resources/list and resources/read) on the SDK server so
           the MCP server now publishes the four built-in SDD skills (sdd-architect, sdd-auditor,
@@ -57,7 +74,7 @@ methods:
           mcp_portal.createMcpServer), both transports publish the resources automatically; inbound
           resource reads dispatch through the MCP portal to the resource workflow.
         type: local
-      - stepNumber: 9
+      - stepNumber: 11
         description: >-
           Resolve the bound root's chaining context through the core adapter; when the root is a
           chained subproject, announce the parent project, the mounting subsystem id, and the
@@ -67,7 +84,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveChainingParent
-      - stepNumber: 10
+      - stepNumber: 12
         description: >-
           When the caller asked for them, register the sixteen hosted data-plane tools — the four
           execute-primary project-lifecycle tools, the four landscape discovery tools, the six
@@ -78,10 +95,96 @@ methods:
           before a call reaches this server, which is why the handler fires only outside a hosted
           request and is a refusal when it does
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: Return configured McpServer instance
         type: local
     symbol: createMcpServer
+  - name: schemaFingerprint
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the fingerprint already computed by this process, when there is one: the schemas it
+          runs cannot change underneath it
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read the six canonical spec schemas structurally — object keys and their strictness,
+          element types, unions, enums, literals, defaults and checks, with descriptions left out —
+          so a changed field changes the reading and reworded prose does not
+        type: local
+      - stepNumber: 3
+        description: >-
+          Build a throwaway server to read the input schema every spec-write tool registers, and
+          read each the same way
+        type: call
+        targetComponent: mcp_server
+        targetMethod: create
+      - stepNumber: 4
+        description: >-
+          Answer the sha256 of the readings, versioned so a change to how the fingerprint is read
+          also reads as a change
+        type: return
+        outcome: fingerprint
+  - name: assessBuildFreshness
+    narrative:
+      - stepNumber: 1
+        description: Ask whether the stamped entry file has changed on disk since the server started
+        type: call
+        targetComponent: mcp_build_adapter
+        targetMethod: isBuildStale
+      - stepNumber: 2
+        description: Decide whether there is anything to judge
+        type: branch
+        condition: the entry file is unchanged
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Answer fresh: the build on disk is the one running'
+        type: return
+        outcome: fresh
+      - stepNumber: 4
+        label: compare
+        description: Read the fingerprint of the schemas this process runs
+        type: call
+        targetComponent: mcp_server
+        targetMethod: schemaFingerprint
+      - stepNumber: 5
+        description: 'Guard the read of the build on disk: a half-written or older build cannot answer'
+        type: try
+        endStep: 6
+        catches:
+          - error: the build on disk could not be read
+            step: 10
+      - stepNumber: 6
+        label: read-disk
+        description: Ask the build on disk for its own fingerprint
+        type: call
+        targetComponent: mcp_build_adapter
+        targetMethod: readBuildFingerprint
+      - stepNumber: 7
+        description: Decide whether the rebuild changed a schema a write passes through
+        type: branch
+        condition: the two fingerprints are equal
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Answer build-changed: writes proceed under the warning, and a reconnect runs the new code
+          when convenient
+        type: return
+        outcome: build-changed
+      - stepNumber: 9
+        label: schema-changed
+        description: >-
+          Answer schema-changed: every spec write is refused, because this server would drop the
+          fields only the new build knows, until the human reconnects it (/mcp reconnect wairon)
+        type: return
+        outcome: schema-changed
+      - stepNumber: 10
+        label: unreadable
+        description: >-
+          Answer unreadable, naming why: a schema change cannot be ruled out, so writes are refused
+          exactly as for a changed schema
+        type: return
+        outcome: unreadable
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-19T23:12:59.119Z'
+updatedAt: '2026-09-26T00:36:16.461Z'

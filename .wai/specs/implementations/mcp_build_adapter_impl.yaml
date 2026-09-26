@@ -1,0 +1,35 @@
+id: mcp_build_adapter_impl
+name: MCP Build Adapter Implementation
+description: >-
+  File-system stats of the build entry, and a synchronous child node process that requires the build
+  on disk and prints the fingerprint it exports.
+contract: imcp_build_adapter
+sourcePath: src/mcp/build.ts
+methods:
+  - name: captureBuildStamp
+    narrative: []
+    detail: intent
+    intent: >-
+      Stat the entry file and answer its path, modification time and size; any failure to stat
+      answers null.
+  - name: isBuildStale
+    narrative: []
+    detail: intent
+    intent: >-
+      Stat the stamped file again and answer whether its modification time or size differs from the
+      stamp; a null stamp or a file that can no longer be stat'd answers false.
+  - name: readBuildFingerprint
+    narrative: []
+    detail: intent
+    intent: >-
+      Key the answer by the entry file's current size and modification time and answer a cached
+      fingerprint for that key. Otherwise locate the module to ask: walking up from the stamped file
+      to the package.json of @wairon/cli, the package's library entry when the stamped file sits
+      inside that package's dist, else the stamped module itself. Run node on it in a child process
+      (carrying this process's loader flags only for a TypeScript module), read the fingerprint its
+      schemaFingerprint export prints, cache it under the key and answer it. A child that fails,
+      times out or prints nothing throws, naming the module and the cause; a failure is never
+      cached, so the next call after a finished build tries again.
+status: complete
+createdAt: '2026-09-26T00:24:26.203Z'
+updatedAt: '2026-09-26T00:24:26.213Z'

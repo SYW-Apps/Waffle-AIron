@@ -1138,9 +1138,11 @@ methods:
         description: >-
           Collect every difference between the stored spec and the merged one as an addressed
           change, both read through the level's canonical schema so a key the writer would drop
-          cannot count as a change, and name every path the delta carried that the write does not
-          act on — one the schema drops at a depth the permissive delta cannot refuse, and one whose
-          value the stored spec already held
+          cannot count as a change — a narrative by step identity across the renumbering, so an
+          insert reads as the step added, the shift as renumbered runs and the jumps that followed
+          their targets as relocations, never as every later step rewritten — and name every path
+          the delta carried that the write does not act on — one the schema drops at a depth the
+          permissive delta cannot refuse, and one whose value the stored spec already held
         type: local
       - stepNumber: 11
         description: Decide whether there is anything to write
@@ -1265,7 +1267,9 @@ methods:
       - stepNumber: 2
         description: >-
           Check what the caller named: the source and target both exist and differ, every named
-          method is declared on the source contract, no name is already declared on the target, and
+          method is declared on the source contract, no name is already declared on the target, the
+          target's receiving contract is decidable (none yet, one, or one named i<target>), no other
+          spec already holds the id of a contract or implementation the move would create, and
           neither component sits inside a chained subproject
         type: local
       - stepNumber: 3
@@ -1290,9 +1294,12 @@ methods:
       - stepNumber: 6
         description: >-
           Build the plan in memory: the contract entries that leave the source interface and arrive
-          on the target's, the implementation entries that travel with them carrying narrative,
-          sourcePath, symbol, detail, intent, calls and findings, and the dependencies the moved
-          narratives call that the target does not have yet
+          on the target's — on i<target>, created at the source contract's status, when the target
+          declares no contract yet — the implementation entries that travel with them carrying
+          narrative, sourcePath, symbol, detail, intent, calls and findings — into <target>_impl,
+          created inheriting the source implementation's sourcePath, when no implementation realizes
+          the receiving contract — the specs it creates named for the report, and the dependencies
+          the moved narratives call that the target does not have yet
         type: local
       - stepNumber: 7
         description: >-
@@ -1345,16 +1352,17 @@ methods:
         outcome: previewed
       - stepNumber: 15
         description: >-
-          Write every edit in the plan — both contracts, both implementations, and each referencing
-          implementation — restoring the ones already written if any write fails, because a
-          half-moved method leaves callers naming a home it no longer has
+          Write every edit in the plan — the specs it creates, both contracts, both implementations,
+          and each referencing implementation — restoring the ones already written if any write
+          fails, and deleting any it created, because a half-moved method leaves callers naming a
+          home it no longer has
         type: call
         targetComponent: spec_loader
         targetMethod: saveImplementationSpec
       - stepNumber: 16
         description: >-
-          Answer with what moved, how many references followed it, and the prose still naming the
-          old home
+          Answer with what moved, what the move created, how many references followed it, and the
+          prose still naming the old home
         type: return
         outcome: moved
   - name: specPathsInScope
@@ -1500,4 +1508,4 @@ methods:
         targetMethod: resolveVariantGuidance
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:08:33.952Z'
+updatedAt: '2026-09-26T00:25:43.851Z'
