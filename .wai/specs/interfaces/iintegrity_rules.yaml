@@ -229,12 +229,14 @@ methods:
         summary: A published surface names as its consumer a subsystem the tree does not have
   - name: projectIdentity
     description: >-
-      Rule project-identity. A project is keyed on its id, so the id must be declared, well-formed
-      and stable: a project that declares none answers to one derived from its display name until it
-      writes one (PROJECT_ID_DEFAULTED), a project whose name yields no id or whose declared id
-      breaks the grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), and an id that
-      differs from the one the lock approved has moved under everything that keyed on it
-      (PROJECT_ID_CHANGED).
+      Rule project-identity. A project is keyed on its id, so the id must be declared, well-formed,
+      stable and its own: a project that declares none answers to its display name slugified until
+      it writes one (PROJECT_ID_DEFAULTED — for a member of the family, the finding names its
+      mount's subsystem id as the id to declare), a project whose name yields no id or whose
+      declared id breaks the grammar has nothing reliable to key on, nor do two projects of one
+      family that resolve to one id (PROJECT_ID_AMBIGUOUS — the family half reads the project
+      graph's identity problems), and an id that differs from the one the lock approved has moved
+      under everything that keyed on it (PROJECT_ID_CHANGED).
     signature: 'projectIdentity(ctx: RuleContext): void'
     returns: void
     params:
@@ -244,7 +246,9 @@ methods:
     findings:
       - code: PROJECT_ID_AMBIGUOUS
         severity: warning
-        summary: 'Project has no usable id: its name yields no slug, or its declared id breaks the grammar'
+        summary: >-
+          Project has no usable id: its name yields no slug, its declared id breaks the grammar, or
+          another project of its family resolves to the same id
       - code: PROJECT_ID_CHANGED
         severity: error
         summary: Project id differs from the id the lock approved
@@ -259,10 +263,13 @@ methods:
       back to itself (EXPORT_CYCLE — an error for a named chain that never reaches a component or
       type, a warning for a wildcard cycle, which resolves to its union), every entry names a source
       and an item that exist, that the source exports and, for an own type, that the level owns,
-      under a public name of [a-z0-9-_]+ (EXPORT_INVALID), and every re-exported component can serve
-      a boundary caller — a Portal, a gateway being a Portal variant, or an Observer for events
-      (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports). The rule judges the facts the export
-      resolver gathered and resolves nothing itself.
+      under a public name of [a-z0-9-_]+ (EXPORT_INVALID), every re-exported component can serve a
+      boundary caller — a Portal, a gateway being a Portal variant, or an Observer for events
+      (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports), and an L0 entry that re-exports a member's
+      or an external's export never declares a wider audience than that export has
+      (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. The rule judges the
+      facts the export resolver gathered — for the bound root's table and every member's — and
+      resolves nothing itself.
     signature: 'exportTables(ctx: RuleContext): void'
     returns: void
     params:
@@ -288,6 +295,49 @@ methods:
       - code: EXPORT_UNCONSUMABLE
         severity: notice
         summary: 'An exported component no boundary caller may reach: neither a Portal nor an Observer'
+      - code: EXPORT_WIDENS_AUDIENCE
+        severity: error
+        summary: An L0 entry declares a wider audience than the member or external export it re-exports
+  - name: referenceForms
+    description: >-
+      Rule reference-forms. A reference written with a leading `::` escapes to the root of whatever
+      checkout loads it, naming a spec by its place in one mount chain; it always has a fix, the
+      absolute id it resolves to. Every one an author wrote is reported (DEPRECATED_REFERENCE_FORM),
+      naming the spec, where in it, the form as written and the absolute id to write instead.
+      `super::` is not reported in stage 2: wairon's own writer emits it for every cross-namespace
+      reference and no alternative exists until stage 3 brings `alias::name`. It reads the project
+      graph's authored references, which the scan records before qualification erases the form.
+    signature: 'referenceForms(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DEPRECATED_REFERENCE_FORM
+        severity: notice
+        summary: 'A reference written with a leading :: where the absolute id it resolves to belongs'
+  - name: externalDeclarations
+    description: >-
+      Rule external-declarations. Every external a project declares in project.yaml must be usable:
+      its alias fits [a-z0-9-_]+ (a dotted producer id needs an explicit alias), its producer id
+      fits the project-id grammar, and its producer is found — exactly one project of the family
+      answers to the id, or source.path names a directory (whose project, when it is in the family,
+      answers to the declared id). A declaration that fails is reported (EXTERNAL_UNRESOLVED) with
+      its reason, so a misspelled declaration never passes as declared. The findings name no spec:
+      externals live in configuration. It reads the project graph's bound externals.
+    signature: 'externalDeclarations(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: EXTERNAL_UNRESOLVED
+        severity: notice
+        summary: >-
+          A declared external whose alias or producer id is malformed, or whose producer the family
+          and its source.path do not provide
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-26T16:29:09.302Z'
+updatedAt: '2026-09-26T18:12:58.286Z'

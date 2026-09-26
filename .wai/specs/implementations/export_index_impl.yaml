@@ -4,8 +4,10 @@ description: >-
   src/core/exports.ts. Resolves every subsystem's export table in one pass per scan — dependency
   order, with groups of subsystems that re-export each other resolved together — and memoizes the
   tables on the scan they projected, so a re-export chain costs one walk however many consumers read
-  it. The project table is resolved on top of them and memoized on the scan and the L0 entries it
-  read.
+  it. Project tables (the bound root's and each member's) are resolved on top of them, following
+  member and family-external sources through those projects' own tables, and memoized on the scan
+  and the L0 entries they read. Reference usage is mapped from the project graph's cross-project
+  references onto the producer's table.
 contract: iexport_index
 sourcePath: src/core/exports.ts
 methods:
@@ -98,84 +100,238 @@ methods:
   - name: resolveProjectExports
     narrative:
       - stepNumber: 1
-        description: Read the L0 system spec from the Spec Index
+        description: Is a member project's namespace given?
+        type: branch
+        condition: a project namespace other than the bound root's is given
+        onFalseStep: 5
+      - stepNumber: 2
+        description: Read the project roots the scan read from the Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: listProjectRoots
+      - stepNumber: 3
+        description: >-
+          Take the member root's own L0, as the scan recorded it on that root (none when the
+          namespace names no root)
+        type: local
+      - stepNumber: 4
+        description: Continue with that L0
+        type: jump
+        toStep: 6
+      - stepNumber: 5
+        label: bound-root
+        description: Read the bound root's L0 system spec from the Spec Index
         type: call
         targetComponent: spec_index
         targetMethod: loadSystemSpec
-      - stepNumber: 2
+      - stepNumber: 6
+        label: have-l0
         description: Is there an L0 to read exports from?
         type: branch
-        condition: the tree has no L0 system spec
-        onFalseStep: 4
-      - stepNumber: 3
-        description: 'No L0: answer an empty project table'
+        condition: the project has no L0 system spec
+        onFalseStep: 8
+      - stepNumber: 7
+        description: 'No L0: answer an empty project table owned by the project'
         type: return
         outcome: empty table
-      - stepNumber: 4
+      - stepNumber: 8
         label: entries
-        description: Read the scanned subsystems from the Spec Index — with the L0 entries, the memo key
+        description: >-
+          Read the scanned subsystems from the Spec Index — with the project and its L0 entries, the
+          memo key
         type: call
         targetComponent: spec_index
         targetMethod: loadSubsystemSpecs
-      - stepNumber: 5
-        description: Is the project table memoized for this scan and these L0 entries?
+      - stepNumber: 9
+        description: Is the project table memoized for this scan, this project and these L0 entries?
         type: branch
-        condition: the memo holds a project table for this scan and these entries
-        onTrueStep: 13
-        onFalseStep: 6
-      - stepNumber: 6
+        condition: the memo holds the project's table for this scan and these entries
+        onTrueStep: 25
+        onFalseStep: 10
+      - stepNumber: 10
         description: >-
           Read the scanned components (a legacy entry's source is its component's owner) from the
           Spec Index
         type: call
         targetComponent: spec_index
         targetMethod: loadComponentSpecs
-      - stepNumber: 7
+      - stepNumber: 11
         description: >-
           Read the scanned types (a typeDef entry without a source is its type's owner) from the
           Spec Index
         type: call
         targetComponent: spec_index
         targetMethod: loadTypeSpecs
-      - stepNumber: 8
+      - stepNumber: 12
+        description: >-
+          Read the project graph from the Project Family Index: the project's members (by mount
+          alias) and its externals, each bound to its producer
+        type: call
+        targetComponent: project_family_index
+        targetMethod: graph
+      - stepNumber: 13
         description: For each L0 entry
         type: loop
         loopKind: forEach
-        over: the L0 publicInterfaces entries
-        endStep: 11
-      - stepNumber: 9
+        over: the project's L0 publicInterfaces entries
+        endStep: 23
+      - stepNumber: 14
         description: >-
           Read the entry the way it was meant: `from ?? subsystem ?? owner of the component or type`
-          as its source, `as ?? id` as its name; a public name outside [a-z0-9-_]+, or no source at
-          all, is an invalid problem
+          as its source, `as ?? id` as its name (a public name outside [a-z0-9-_]+ is an invalid
+          problem), and classify the source: one of the project's own subsystems; else another
+          project — a member by its mount alias, or a declared external by its alias whose producer
+          is in the family; else unresolvable
         type: local
-      - stepNumber: 10
+      - stepNumber: 15
+        description: Follow the source by its kind
+        type: switch
+        'on': the source's kind
+        cases:
+          - value: subsystem
+            step: 16
+          - value: project
+            step: 18
+        defaultStep: 20
+      - stepNumber: 16
+        label: own-source
         description: Resolve the source subsystem's table
         type: call
         targetComponent: export_index
         targetMethod: resolveSubsystemExports
-      - stepNumber: 11
-        label: bound
+      - stepNumber: 17
+        description: Bind against it
+        type: jump
+        toStep: 22
+      - stepNumber: 18
+        label: project-source
+        description: >-
+          Resolve the producing project's own table (the member's, or the family external
+          producer's); a project already being resolved on this path is a named-cycle problem naming
+          the projects on the loop, and binds nothing
+        type: call
+        targetComponent: export_index
+        targetMethod: resolveProjectExports
+      - stepNumber: 19
+        description: Bind against it
+        type: jump
+        toStep: 22
+      - stepNumber: 20
+        label: unresolvable
+        description: >-
+          Record an invalid problem: no source at all, an alias that is neither a subsystem, a
+          member nor a declared external, or an external found only through source.path — whose
+          table the scan cannot follow, so stage 2 re-exports only from projects in the family
+        type: local
+      - stepNumber: 21
+        description: Next entry
+        type: jump
+        toStep: 23
+      - stepNumber: 22
+        label: bind
         description: >-
           Bind the entry against the source table — a named entry by its target (leniently, as for a
-          subsystem table), a wildcard under every name the source exports — carrying the entry's
-          audience (default instance), name, transport kind, details, auth policy, version and
-          stability onto every name it brings in, and recording a target that is neither a Portal
-          nor an Observer as an unconsumable problem
+          subsystem table), a wildcard under every name the source exports; from another project,
+          only its public names can be bound, and an entry whose declared audience (default
+          instance) ranks wider than the source export's audience is a widens problem naming both
+          audiences (a re-export may narrow reach, never widen it) — carrying the entry's audience,
+          name, transport kind, details, auth policy, version and stability onto every name it
+          brings in, and recording a target that is neither a Portal nor an Observer as an
+          unconsumable problem
         type: local
-      - stepNumber: 12
+      - stepNumber: 23
+        label: bound
+        description: The entry is bound
+        type: local
+      - stepNumber: 24
         description: >-
           Settle the project table as a subsystem table is settled (explicit shadows wildcard, a
           same-target repeat is one entry, a wildcard-versus-wildcard name is a duplicate and left
-          out) and memoize it on this scan and these entries
+          out) and memoize it on this scan, this project and these entries
         type: local
-      - stepNumber: 13
+      - stepNumber: 25
         label: answer
         description: Answer with the project table
         type: return
         outcome: ResolvedExportTable
     detail: full
     symbol: resolveProjectExportTable
+  - name: usage
+    narrative:
+      - stepNumber: 1
+        description: 'Read the project graph from the Project Family Index: its cross-project references'
+        type: call
+        targetComponent: project_family_index
+        targetMethod: graph
+      - stepNumber: 2
+        description: Keep the references from the consumer into the producer
+        type: local
+      - stepNumber: 3
+        description: Are there any?
+        type: branch
+        condition: the consumer makes no reference into the producer
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Answer an empty usage
+        type: return
+        outcome: empty usage
+      - stepNumber: 5
+        label: producer-table
+        description: Resolve the producer's project table
+        type: call
+        targetComponent: export_index
+        targetMethod: resolveProjectExports
+      - stepNumber: 6
+        description: >-
+          Keep the table's entries whose audience covers the consumer: project for a consumer in the
+          family (every audience), which is the only way a stage-2 reference reaches another project
+        type: local
+      - stepNumber: 7
+        description: For each reference
+        type: loop
+        loopKind: forEach
+        over: the consumer's references into the producer
+        endStep: 13
+      - stepNumber: 8
+        description: >-
+          Find the visible entries the reference lands on: for a component target, the entries whose
+          canonical component is the target and — when the reference reaches a contract method and
+          the entry narrows to an interface — whose interface declares that method; for a type
+          target, the entries exporting that type by name, and when there are none but the type is
+          in the closure of a visible entry's signatures, it is consumable though not pinnable in
+          stage 2 and is skipped (neither used nor unexported); for a re-export source (a
+          subsystem), none
+        type: local
+      - stepNumber: 9
+        description: Does it land on any?
+        type: branch
+        condition: the reference lands on at least one visible entry
+        onFalseStep: 12
+      - stepNumber: 10
+        description: >-
+          Count each entry's public name as used, adding the member the reference reaches (a method,
+          `capability:<name>`, or `type` for a type export; nothing for a bare dependency)
+        type: local
+      - stepNumber: 11
+        description: Next reference
+        type: jump
+        toStep: 13
+      - stepNumber: 12
+        label: unexported
+        description: Record the reference as unexported
+        type: local
+      - stepNumber: 13
+        label: mapped
+        description: The reference is mapped
+        type: local
+      - stepNumber: 14
+        description: >-
+          Answer the usage: the used public names sorted by name, each with its members sorted, and
+          the unexported references
+        type: return
+        outcome: ExportUsage
+    detail: full
+    symbol: exportUsageOf
 status: complete
 createdAt: '2026-09-26T16:09:07.864Z'
-updatedAt: '2026-09-26T16:09:18.635Z'
+updatedAt: '2026-09-26T18:37:43.571Z'

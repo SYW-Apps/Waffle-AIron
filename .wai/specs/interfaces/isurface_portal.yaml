@@ -78,6 +78,30 @@ methods:
     signature: 'pinFamilySurfaces(): string[] | null'
     returns: string[] | null
     params: []
+  - name: pinExternals
+    description: >-
+      Pin the bound project's declared externals (the named aliases, else all): snapshots under
+      .wai/externals/ and the lock at .wai/externals.lock.yaml. The caller must gate on reach
+      itself.
+    signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
+    returns: ExternalPin[]
+    params:
+      - name: aliases
+        type: string[]
+        description: The aliases to pin; all declared externals when omitted
+        optional: true
+  - name: getExternalsStatus
+    description: >-
+      Report each declared external's pin against its live producer at signature level; what cannot
+      be compared is EXTERNAL_CHECK_UNAVAILABLE. Writes nothing.
+    signature: 'getExternalsStatus(): ExternalStatus[]'
+    returns: ExternalStatus[]
+    params: []
+  - name: listExternals
+    description: List the bound project's declared externals, how each resolves and what is pinned for it.
+    signature: 'listExternals(): ExternalListing[]'
+    returns: ExternalListing[]
+    params: []
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-09-12T12:38:09.905Z'
+updatedAt: '2026-09-26T17:49:05.202Z'

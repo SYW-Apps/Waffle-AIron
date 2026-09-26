@@ -1,0 +1,45 @@
+id: pinned_externals_store_impl
+name: Pinned Externals Store Implementation
+description: >-
+  src/core/externals.ts. A read-through Store: each method is one file operation through the
+  externals file adapter.
+contract: ipinned_externals_store
+sourcePath: src/core/externals.ts
+methods:
+  - name: readLock
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads the lock through the file adapter on every call and returns it, or null when no lock
+      file exists; a malformed lock propagates the adapter's error.
+    calls:
+      - externals_file_adapter.readLock
+  - name: writeLock
+    narrative: []
+    detail: intent
+    intent: Writes the lock through the file adapter; a write failure propagates.
+    calls:
+      - externals_file_adapter.writeLock
+  - name: readSnapshot
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads the alias's snapshot through the file adapter on every call, or null when none is
+      stored.
+    calls:
+      - externals_file_adapter.readSnapshot
+  - name: writeSnapshot
+    narrative: []
+    detail: intent
+    intent: Writes the alias's snapshot through the file adapter; a write failure propagates.
+    calls:
+      - externals_file_adapter.writeSnapshot
+  - name: removeSnapshot
+    narrative: []
+    detail: intent
+    intent: Removes the alias's snapshot through the file adapter and reports whether one existed.
+    calls:
+      - externals_file_adapter.deleteSnapshot
+status: complete
+createdAt: '2026-09-26T17:47:54.596Z'
+updatedAt: '2026-09-26T18:44:03.490Z'

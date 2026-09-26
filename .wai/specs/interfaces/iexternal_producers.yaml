@@ -1,0 +1,22 @@
+id: iexternal_producers
+name: External Producers Interface
+description: >-
+  Contract for finding the producers of the bound project's declared externals through its family
+  (parent, members, siblings) or an explicit source.path. Read-only in effect; the caller's binding
+  is restored before it answers.
+component: external_producers
+methods:
+  - name: resolveDeclared
+    description: >-
+      Every external the bound project declares, in declaration order, bound to its producer: a
+      family producer found by id (or by the directory its source.path names) in the graph of the
+      highest root the climb could reach, a path producer by its resolved directory, or unresolved
+      with the reason. Each family producer carries the consumer's references into it, mapped onto
+      its public names (used) or not (unexported). A project that declares nothing answers an empty
+      list.
+    signature: 'resolveDeclared(): ExternalBinding[]'
+    returns: ExternalBinding[]
+    params: []
+status: complete
+createdAt: '2026-09-26T17:43:52.033Z'
+updatedAt: '2026-09-26T18:43:57.739Z'

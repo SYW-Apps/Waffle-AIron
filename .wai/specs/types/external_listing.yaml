@@ -1,0 +1,45 @@
+kind: value-object
+id: external_listing
+name: ExternalListing
+description: >-
+  One row of `wairon externals list`: a declared external, how it resolves, and what is pinned for
+  it — no live comparison.
+subsystem: sdd_surfaces
+fields:
+  - name: alias
+    type: string
+    description: The alias.
+    optional: false
+    key: primary
+  - name: project
+    type: string
+    description: The producer id declared.
+    optional: false
+  - name: sourceKind
+    type: string
+    description: family | path | unresolved.
+    optional: false
+  - name: relation
+    type: string
+    description: parent | sibling | member | family, for a family producer.
+    optional: true
+  - name: directory
+    type: string
+    description: The producer's root directory.
+    optional: true
+  - name: audience
+    type: string
+    description: The audience ceiling the consumer sees.
+    optional: false
+  - name: lock
+    type: ExternalLockEntry
+    description: The lock's entry for the alias, when pinned.
+    optional: true
+  - name: problem
+    type: string
+    description: Why the external is unresolved.
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-26T17:47:20.318Z'
+updatedAt: '2026-09-26T17:47:20.320Z'

@@ -8,4 +8,8 @@ export {
   listSnapshots,
   listExternalInterfaces,
   pinFamilySurfaces,
-} from '../../core/surfaces.js';
+  // `wairon externals`: pin, status and list of the declared externals.
+  pinExternals,
+  getExternalsStatus,
+  listExternals,
+} from '../../core/surface-portal.js';

@@ -239,8 +239,237 @@ methods:
         description: Return the paths that changed
         type: return
         outcome: the changed snapshot paths
+  - name: pinExternals
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the bound project's declared externals through the core: each bound to its
+          producer, with the consumer's references into each family producer mapped onto its public
+          names
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 2
+        description: Keep the aliases asked for, or every declared external when none are named
+        type: local
+      - stepNumber: 3
+        description: Is an alias named that the project does not declare?
+        type: branch
+        condition: a named alias is not among the declared externals
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Refuse before anything is written, naming the alias and the declared ones
+        type: throw
+        error: UnknownExternalAliasError
+      - stepNumber: 5
+        label: read-lock
+        description: Read the current externals lock (none yet reads as empty)
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 6
+        description: For each external to pin
+        type: loop
+        loopKind: forEach
+        over: the kept bindings
+        endStep: 17
+      - stepNumber: 7
+        description: Is its producer resolved?
+        type: branch
+        condition: the binding's sourceKind is unresolved
+        onTrueStep: 16
+        onFalseStep: 8
+      - stepNumber: 8
+        description: >-
+          Bind the producer's root read-only, restoring the consumer's binding afterwards. The
+          caller must gate on reach itself: a producer root outside the request's reach, missing, or
+          holding no project is recorded as unreachable with the reason, and its previous pin stays
+        type: local
+      - stepNumber: 9
+        description: >-
+          Project the producer's resolved project export table at the external's audience ceiling
+          (project for a family producer, instance for a source.path one), each entry with its
+          stereotype, narrowed interface and full contract, plus the exported types and the type
+          closure
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 10
+        description: >-
+          Restore the consumer's binding and stamp the snapshot with the audience it was filtered
+          to; take its content digest (SurfaceSnapshot.contentDigest)
+        type: local
+      - stepNumber: 11
+        description: Read the snapshot pinned for the alias now
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readSnapshot
+      - stepNumber: 12
+        description: Is the pinned snapshot's content the same?
+        type: branch
+        condition: a snapshot is pinned and its content digest equals the new one
+        onTrueStep: 14
+        onFalseStep: 13
+      - stepNumber: 13
+        description: Write the new snapshot to .wai/externals/<alias>.yaml
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveSnapshot
+      - stepNumber: 14
+        label: used
+        description: >-
+          Compute the lock entry: the producer id, the snapshot path, the content digest, and `used`
+          — each public name of the binding's usage mapped to each of its members'
+          SurfaceSnapshot.memberDigest (an empty map for a name only depended on; a member the
+          snapshot does not carry cannot be pinned and is reported); record the outcome as pinned
+          when the snapshot or the entry changed, else unchanged, with the usage's unexported
+          references
+        type: local
+      - stepNumber: 15
+        description: Next external
+        type: jump
+        toStep: 17
+      - stepNumber: 16
+        label: unresolved-pin
+        description: Record the outcome as unresolved with the external's problem; its previous pin stays
+        type: local
+      - stepNumber: 17
+        label: next
+        description: The external is handled
+        type: local
+      - stepNumber: 18
+        description: >-
+          With no aliases named, prune: every lock entry whose alias is no longer declared is
+          dropped
+        type: local
+      - stepNumber: 19
+        description: For each pruned alias
+        type: loop
+        loopKind: forEach
+        over: the pruned aliases
+        endStep: 20
+      - stepNumber: 20
+        label: pruned
+        description: Remove its snapshot
+        type: call
+        targetComponent: externals_repository
+        targetMethod: removeSnapshot
+      - stepNumber: 21
+        description: Did the lock change?
+        type: branch
+        condition: any lock entry was added, changed or pruned
+        onFalseStep: 23
+      - stepNumber: 22
+        description: Write the lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveLock
+      - stepNumber: 23
+        label: answer
+        description: Answer one outcome per external handled, in declaration order
+        type: return
+        outcome: ExternalPin[]
+    detail: full
+  - name: getExternalsStatus
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the bound project's declared externals through the core, with the consumer's
+          references as they are now
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 2
+        description: Read the externals lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 3
+        description: For each declared external
+        type: loop
+        loopKind: forEach
+        over: the bindings
+        endStep: 11
+      - stepNumber: 4
+        description: Read its pinned snapshot, if any
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readSnapshot
+      - stepNumber: 5
+        description: Can the live producer be read?
+        type: branch
+        condition: the producer is resolved, its root is in the request's reach and holds a project
+        onFalseStep: 10
+      - stepNumber: 6
+        description: >-
+          Bind the producer's root read-only (the caller must gate on reach itself), restoring the
+          consumer's binding afterwards
+        type: local
+      - stepNumber: 7
+        description: Project the producer's live export table at the external's audience ceiling
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 8
+        description: >-
+          Restore the consumer's binding. Compare every used member — the lock's and the one the
+          references use now — at signature level: a live SurfaceSnapshot.memberDigest equal to the
+          locked one is unchanged, a different one changed, none removed, and a member used now but
+          absent from the lock is unlocked; an unexported reference is unavailable
+          (EXTERNAL_CHECK_UNAVAILABLE). A producer found only through source.path has no used
+          members to compare: report it unavailable with EXTERNAL_CHECK_UNAVAILABLE and the reason —
+          no stage-2 reference form reaches a project outside the family, so nothing it exports can
+          be used or compared until stage 3's `alias::name` — never as a pass. Stale when any member
+          is changed or removed; drifted when the live content digest differs from the pinned one
+        type: local
+      - stepNumber: 9
+        description: Next external
+        type: jump
+        toStep: 11
+      - stepNumber: 10
+        label: unavailable
+        description: >-
+          Report every locked used member — or, when none is locked, the external itself — as
+          unavailable with EXTERNAL_CHECK_UNAVAILABLE and the reason: unresolved (the external's
+          problem), unreachable (why its root could not be read), or, for a producer outside the
+          family, that no stage-2 reference form reaches outside the family. Never a pass
+        type: local
+      - stepNumber: 11
+        label: reported
+        description: The external's status is recorded
+        type: local
+      - stepNumber: 12
+        description: Answer one status per declared external, in declaration order
+        type: return
+        outcome: ExternalStatus[]
+    detail: full
+  - name: listExternals
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the bound project's declared externals through the core
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 2
+        description: Read the externals lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 3
+        description: >-
+          One row per declared external: alias, producer id, source kind, relation, directory,
+          audience, problem, and the lock's entry when pinned
+        type: local
+      - stepNumber: 4
+        description: Answer the rows in declaration order
+        type: return
+        outcome: ExternalListing[]
+    detail: full
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-09-17T20:30:09.275Z'
+updatedAt: '2026-09-26T18:13:39.373Z'

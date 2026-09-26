@@ -1,0 +1,22 @@
+id: external_producers
+name: External Producers
+description: >-
+  Finds the producers of the bound project's declared externals. A family producer (parent, sibling,
+  member) is visible only from the family's top root, so the workflow climbs the mount chain hop by
+  hop through the reach-gated chaining detection — the caller must gate on reach itself, and a hop
+  that is out of reach ends the climb, leaving the family the reachable part — binds the highest
+  reachable root read-only, reads the project graph there, finds the bound project's node by its
+  directory, and answers its externals, each bound to its producer, with the consumer's references
+  into each family producer mapped onto that producer's public names. It restores the caller's
+  binding before it answers. It holds no state: the graph belongs to the spec repository. A
+  workflow, not a read Orchestrator, because its climb goes through the core workflow's reach-gated
+  detection.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - core_orchestrator
+  - spec_loader
+status: complete
+createdAt: '2026-09-26T17:43:42.775Z'
+updatedAt: '2026-09-26T18:43:54.189Z'

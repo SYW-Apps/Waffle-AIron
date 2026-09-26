@@ -105,8 +105,8 @@ methods:
       - stepNumber: 1
         description: Dispatch to the external-surface discovery workflow
         type: call
-        targetComponent: mcp_orchestrator
-        targetMethod: listExternalInterfaces
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: listInterfaces
   - name: sdd_get_agent_brief
     narrative:
       - stepNumber: 1
@@ -214,6 +214,20 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: getProjectConfig
+  - name: sdd_pin_externals
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the externals pin workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: pin
+  - name: sdd_get_externals_status
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the externals status workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: status
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-20T14:32:01.313Z'
+updatedAt: '2026-09-26T17:50:43.128Z'

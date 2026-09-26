@@ -130,6 +130,106 @@ below already declares instead of redeclaring it.
   snapshot records a stereotype, an entry whose id is neither its component nor its
   interface no longer answers to its backing component's name.
 
+### Projects declare what they consume, and pin it
+
+Stage 2b of the chained-subsystems work: every project is a crate of its own,
+reached from another project only through its L0 exports and only as a dependency
+it declared. Like 2a it changes files and adds findings, not verdicts â€” every new
+code but one is a notice.
+
+**The project graph.** The spec scan now records every project root it walks â€”
+namespace, parent, mount alias, directory, its own L0 and its `project.yaml`, read
+through that root's binding â€” and a new `project_family_index` projects them into
+one node per project, an owner for every spec id, and every reference that leaves
+the project making it. The scan's freshness signature covers each root's
+`project.yaml`, so an edit to a root's externals is seen without a restart. The
+architecture standard says a scan may read the configuration of the root it is
+walking, through that root's binding.
+
+**Externals.** `project.yaml` gains `externals`, keyed by alias:
+
+```yaml
+externals:
+  billing: {}                                            # alias = producer id
+  crm: { project: crm }
+  ledger: { project: acme.ledger, source: { path: ../ledger } }
+```
+
+A producer is found in the family (parent, members, siblings) by its id, or through
+`source.path`. A member needs no declaration â€” the mount is its alias. A project
+without a declared id answers to its name slug in every reader, the graph included.
+
+- **`wairon externals pin [aliasâ€¦]`** projects each producer's resolved L0 export
+  table at the consumer's audience ceiling (`project` for the family, `instance`
+  through `source.path`) into `.wai/externals/<alias>.yaml`, and records in
+  `.wai/externals.lock.yaml` the producer id, the snapshot's content digest and a
+  `used` map â€” every public name the consumer's references land on, each used method
+  with its signature digest. An unchanged snapshot is not rewritten; with no aliases
+  named, pins for aliases no longer declared are removed. An alias the project does
+  not declare is refused before anything is written.
+- **`wairon externals status`** compares each used member with the live producer at
+  signature level â€” unchanged, changed, removed, or unlocked (used now, not in the
+  lock) â€” and reports `EXTERNAL_CHECK_UNAVAILABLE` for anything it cannot compare,
+  never a pass. A pin is **stale only when something used changed**; `drifted`
+  reports that the producer moved at all. It only reports: it fails nothing.
+- **`wairon externals list`** shows each declared external, how it resolves and what
+  is pinned. All three take `--json`.
+- **MCP:** `sdd_pin_externals` (a tree-scoped write) and `sdd_get_externals_status` (a
+  tree-scoped read), both answering with structured content. Hosted, `sdd_pin_` is a
+  write prefix.
+- **Gate inputs:** the lock identity covers `.wai/externals/` and the lock, so
+  re-pinning a changed contract or `used` map moves it.
+- **Stage-2 limits:** no stage-2 reference form reaches a project outside the family,
+  so a `source.path` external has an empty `used` map and its status is
+  `EXTERNAL_CHECK_UNAVAILABLE`. A type is pinned only through a used method's
+  signature closure or as a `typeDef` export until stage 3.
+
+**Findings.**
+
+- `EXTERNAL_UNDECLARED` (notice, new rule `project-boundaries`): a reference reaches
+  another project that the referring project neither mounts nor declares.
+- `EXTERNAL_NOT_EXPORTED` (notice): a reference reaches another project at anything
+  but a public name of its L0 whose audience covers the referrer.
+- `TRUSTED_LINK_CROSSES_PROJECT` (notice): a `trustedLinks` entry names a subsystem of
+  another project.
+- `EXTERNAL_UNRESOLVED` (notice, new rule `external-declarations`): a declared external
+  whose alias or producer id is malformed, or whose producer the family and its
+  `source.path` do not provide.
+- `DEPRECATED_REFERENCE_FORM` (notice, new rule `reference-forms`): a reference written
+  with a leading `::`; the finding names the absolute id to write instead. `super::`
+  is not reported until stage 3 brings `alias::name`.
+- `EXPORT_WIDENS_AUDIENCE` (**error**): an L0 entry re-exports a member's or an
+  external's export at a wider audience than that export has. It is bound at the
+  narrower audience. Only a re-export from another project can trip it.
+- **Project identity across the family:** two projects of one family that resolve to
+  one id, or a member with no id, are `PROJECT_ID_AMBIGUOUS` (warning); a member that
+  declares no id is `PROJECT_ID_DEFAULTED`, naming its mount's subsystem id as the id
+  to declare.
+- **Export tables see the family.** An L0 entry may re-export from a member (by its
+  mount alias) or a family external (by its alias), through that project's own L0
+  table; every member's table is resolved and judged by `export-tables`.
+
+**Deprecated.** `wairon surface pin`, `wairon surface externals` and the MCP tool
+`sdd_list_external_interfaces` keep working for one release and say so: declare the
+parent or sibling under `externals` and use `wairon externals` / `sdd_pin_externals` /
+`sdd_get_externals_status`.
+
+**Upgrading.**
+
+- **Expect notices on a chained family.** A member referencing a sibling or its parent
+  gets `EXTERNAL_UNDECLARED` until it declares it, and `EXTERNAL_NOT_EXPORTED` until the
+  producer exports what is used from its L0 at audience `project`; none fails CI.
+- **An L0 entry sourced from a mount now follows the member's L0.** An entry whose
+  `from`/`subsystem` (or inferred owner) is a chained mount re-exports from that member
+  project's own export table, so it binds only a public name the member exports; one
+  the member does not export is `EXPORT_INVALID` and leaves the table. Export it from
+  the member's L0 first.
+- **A test or script filtering findings by `/REFERENCE/`** now also sees
+  `DEPRECATED_REFERENCE_FORM` wherever a spec writes a leading `::`.
+- **Every lock reads stale once**: the gate identity's consumed-contract keys now name
+  their kind (`surface:`, `external:`, `lock:`), and the rule sequence gained three
+  rules. Re-lock.
+
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 
 - **Tests to revisit are matched by the module a test imports from.** A test

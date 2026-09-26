@@ -59,6 +59,19 @@ describe('data-plane tool classification', () => {
     })).toBeUndefined();
   });
 
+  it('gates the externals tools on the bound tree: sdd_pin_externals a write, sdd_get_externals_status a read', () => {
+    expect(requiredDataPlaneCapability('sdd_pin_externals')).toBe('project:write');
+    expect(toolScope('sdd_pin_externals')).toBe('tree');
+    expect(isExplicitlyClassifiedTool('sdd_pin_externals')).toBe(true);
+    expect(requiredDataPlaneCapability('sdd_get_externals_status')).toBe('project:read');
+    expect(toolScope('sdd_get_externals_status')).toBe('tree');
+    for (const name of ['sdd_pin_externals', 'sdd_get_externals_status']) {
+      expect(subprojectConfinementError('proj', 'kid', {
+        jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name, arguments: {} },
+      })).toBeUndefined();
+    }
+  });
+
   it('gates a never-listed rename tool as a tree-scoped write by its sdd_rename_ prefix alone, not a hand-kept name list', () => {
     expect(requiredDataPlaneCapability('sdd_rename_anything')).toBe('project:write');
     expect(toolScope('sdd_rename_anything')).toBe('tree');

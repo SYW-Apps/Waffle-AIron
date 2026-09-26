@@ -22,7 +22,8 @@ import type { VariantDef } from '../variants.js';
 import type { CarriedDebtKind, PackSelection, ProjectIdentity } from '../../models/project.js';
 import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
-import type { ResolvedExportTable } from '../../models/exports.js';
+import type { ExportUsage, ResolvedExportTable } from '../../models/exports.js';
+import type { ProjectFamily } from '../../models/project-family.js';
 
 // ---------------------------------------------------------------------------
 // Rule registry contracts
@@ -413,12 +414,27 @@ export interface RuleContext {
    */
   projectIdentity?: ProjectIdentity;
   /**
-   * The resolved export tables — one per loaded subsystem, then the project's
-   * L0 table — gathered by the validator through the core adapter, so the
+   * The resolved export tables — one per loaded subsystem, then the bound
+   * root's L0 table, then each member project's L0 table — gathered by the validator through the core adapter, so the
    * export-tables rule judges the resolver's problems without resolving
    * anything itself. Absent on a candidate run.
    */
   exportTables?: ResolvedExportTable[];
+  /**
+   * The project graph of the run's scan, gathered by the validator through the
+   * core adapter: nodes with their bound externals, owners, cross-project
+   * references, the leading-`::` references authors wrote and identity
+   * problems. The family rules (project-boundaries, reference-forms,
+   * external-declarations, and the family half of project-identity) judge it
+   * without I/O. Absent on a candidate run.
+   */
+  projectFamily?: ProjectFamily;
+  /**
+   * For every (consumer, producer) pair the graph's cross-project references
+   * connect, those references mapped onto the producer's public names; the
+   * unexported ones are EXTERNAL_NOT_EXPORTED's facts. Absent on a candidate run.
+   */
+  exportUsages?: ExportUsage[];
   /**
    * The snapshots each chained mount holds in its own `.wai/surfaces/`, keyed
    * by mount namespace. Consulted ONLY for references made from inside that

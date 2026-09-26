@@ -1,0 +1,115 @@
+id: project_family_index_impl
+name: Project Family Index Implementation
+description: >-
+  src/core/project-family.ts. Projects the scan's roots and specs into the project graph once per
+  scan and memoizes it on that scan. Lookups (node, ownerOf, producerOf, declares) are pure methods
+  of the ProjectFamily value every consumer already holds, so the Index publishes the graph alone.
+contract: iproject_family_index
+sourcePath: src/core/project-family.ts
+methods:
+  - name: graph
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project roots the current scan read from the Spec Index — the scan the graph is
+          memoized on
+        type: call
+        targetComponent: spec_index
+        targetMethod: listProjectRoots
+      - stepNumber: 2
+        description: Is the graph memoized for this scan?
+        type: branch
+        condition: the memo holds a graph for this scan's roots
+        onTrueStep: 16
+        onFalseStep: 3
+      - stepNumber: 3
+        description: >-
+          Read the scanned subsystems (lifecycle entries, L1 re-exports, trustedLinks' declaring
+          subsystems) from the Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 4
+        description: Read the scanned components (dependsOn, dispatch tables, mounts) from the Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadComponentSpecs
+      - stepNumber: 5
+        description: Read the scanned interfaces (param and return types) from the Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 6
+        description: >-
+          Read the scanned implementations (narrative targets, declared calls, auth sources) from
+          the Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 7
+        description: Read the scanned types (field types) from the Spec Index
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadTypeSpecs
+      - stepNumber: 8
+        description: >-
+          Make one node per root: its namespace, parent, mount alias and directory as the scan
+          recorded them; its id from project_config.effectiveId() — declared, else the name slug,
+          the one default every reader uses — with where it came from (declared, name, none); its
+          name; and its members, the roots whose parent it is. A root with no readable configuration
+          has no name and no id
+        type: local
+      - stepNumber: 9
+        description: 'Record the owner of every spec id: the root whose files declared it'
+        type: local
+      - stepNumber: 10
+        description: >-
+          Record the family's identity problems: every id two or more nodes resolve to is an
+          id-collision naming each node and where its id came from; a member with no id is a no-id;
+          and a member that declares no id is defaulted, carrying its mount's subsystem id as the id
+          to declare (the bound root's own identity is judged from its configuration and lock, so it
+          is not repeated here)
+        type: local
+      - stepNumber: 11
+        description: For each node
+        type: loop
+        loopKind: forEach
+        over: the nodes
+        endStep: 12
+      - stepNumber: 12
+        label: bind-externals
+        description: >-
+          Bind each of the node's project_config.declaredExternals() to its producer. A declaration
+          with a problem is unresolved with that problem. With a source.path: the path resolved
+          against the node's directory; the family node at that directory makes it a family producer
+          (a declared producer id that differs from that node's id is the problem), any other
+          directory makes it a path producer at audience instance — whether a project lives there is
+          established when it is pinned, since the index does no I/O of its own. Without one: the
+          family nodes whose id equals the producer id — none leaves it unresolved, two leave it
+          unresolved as ambiguous, one makes it a family producer at audience project, related to
+          the consumer as its parent, a sibling (same parent), a member, or otherwise family
+        type: local
+      - stepNumber: 13
+        description: >-
+          Collect the cross-project references: every reference in a counted position (dependsOn,
+          call/register/dispatch targets, declared calls, dispatch-table bindings, mounts, lifecycle
+          entries, component auth sources, L1 re-exports, field/param/return types) whose producer
+          (ProjectFamily.producerOf) is known and differs from the owner of the referring spec, with
+          the member it reaches
+        type: local
+      - stepNumber: 14
+        description: Gather every root's leading-`::` references into the graph
+        type: local
+      - stepNumber: 15
+        description: Memoize the graph on this scan
+        type: local
+      - stepNumber: 16
+        label: answer
+        description: Answer with the graph
+        type: return
+        outcome: ProjectFamily
+    detail: full
+    symbol: projectFamilyGraph
+status: complete
+createdAt: '2026-09-26T17:41:29.805Z'
+updatedAt: '2026-09-26T18:44:00.717Z'

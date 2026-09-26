@@ -716,9 +716,9 @@ methods:
           verdict on a chained child)
         onFalseStep: 4
       - stepNumber: 3
-        description: 'Nothing to judge: report nothing'
-        type: return
-        outcome: no identity
+        description: 'No identity of the root''s own to judge: go on to the family''s'
+        type: jump
+        toStep: 10
       - stepNumber: 4
         label: defaulted
         description: Does the identity carry a defaulted problem?
@@ -755,6 +755,29 @@ methods:
           re-lock
         type: local
       - stepNumber: 10
+        label: family
+        description: >-
+          Read the family's identity problems from the project graph in the rule context
+          (ctx.projectFamily); a candidate run carries none
+        type: local
+      - stepNumber: 11
+        description: For each family identity problem
+        type: loop
+        loopKind: forEach
+        over: the graph's id-collision, no-id and defaulted problems
+        endStep: 12
+      - stepNumber: 12
+        label: family-reported
+        description: >-
+          Report by the problem's kind: a defaulted member is PROJECT_ID_DEFAULTED (notice), naming
+          the member, the name slug it answers to now, and its mount's subsystem id as the id to
+          declare in its .wai/project.yaml (2c's doctor --fix writes it); an id-collision is
+          PROJECT_ID_AMBIGUOUS (warning) naming the id and each project resolving to it with where
+          its id came from (declared or name) — every declaration and reference keyed on that id
+          could mean either; a member with no id at all is PROJECT_ID_AMBIGUOUS (warning). The bound
+          root's own defaulted and no-id cases are left to the steps above, so each is reported once
+        type: local
+      - stepNumber: 13
         label: judged
         description: The identity is judged
         type: return
@@ -782,7 +805,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the problems every table records
-        endStep: 15
+        endStep: 17
       - stepNumber: 5
         description: >-
           Report by the problem's kind, anchored to the table's owner (a subsystem, or the L0 system
@@ -800,7 +823,9 @@ methods:
             step: 12
           - value: unconsumable
             step: 14
-        defaultStep: 15
+          - value: widens
+            step: 16
+        defaultStep: 17
       - stepNumber: 6
         label: duplicate
         description: >-
@@ -811,7 +836,7 @@ methods:
       - stepNumber: 7
         description: Next problem
         type: jump
-        toStep: 15
+        toStep: 17
       - stepNumber: 8
         label: named-cycle
         description: >-
@@ -821,7 +846,7 @@ methods:
       - stepNumber: 9
         description: Next problem
         type: jump
-        toStep: 15
+        toStep: 17
       - stepNumber: 10
         label: wildcard-cycle
         description: >-
@@ -832,7 +857,7 @@ methods:
       - stepNumber: 11
         description: Next problem
         type: jump
-        toStep: 15
+        toStep: 17
       - stepNumber: 12
         label: invalid
         description: >-
@@ -843,7 +868,7 @@ methods:
       - stepNumber: 13
         description: Next problem
         type: jump
-        toStep: 15
+        toStep: 17
       - stepNumber: 14
         label: unconsumable
         description: >-
@@ -852,15 +877,108 @@ methods:
           boundary
         type: local
       - stepNumber: 15
+        description: Next problem
+        type: jump
+        toStep: 17
+      - stepNumber: 16
+        label: widens
+        description: >-
+          Report EXPORT_WIDENS_AUDIENCE (error), naming the public name, the audience the L0 entry
+          declares and the narrower audience of the member's or external's export it re-exports: a
+          re-export can narrow reach, never widen it, as `pub use` of a `pub(crate)` item does not
+          compile
+        type: local
+      - stepNumber: 17
         label: reported
         description: The problem is reported
         type: local
-      - stepNumber: 16
+      - stepNumber: 18
         description: Every problem is judged
         type: return
         outcome: judged
     symbol: check
     exportedVia: exportTablesRule
+  - name: referenceForms
+    sourcePath: src/core/rules/integrity/reference-forms.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph from the rule context (ctx.projectFamily)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        label: each-reference
+        description: For each reference an author wrote with a leading `::`
+        type: loop
+        loopKind: forEach
+        over: the graph's authored references
+        endStep: 5
+      - stepNumber: 5
+        label: reported
+        description: >-
+          Report DEPRECATED_REFERENCE_FORM (notice) on the referring spec, in its draft context,
+          naming the position, the form as written and the absolute id it resolved to, which is the
+          form to write instead
+        type: local
+      - stepNumber: 6
+        description: Every authored reference is reported
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: referenceFormsRule
+  - name: externalDeclarations
+    sourcePath: src/core/rules/integrity/external-declarations.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph from the rule context (ctx.projectFamily)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        label: each-external
+        description: For each external every project of the family declares
+        type: loop
+        loopKind: forEach
+        over: every node's bound externals
+        endStep: 7
+      - stepNumber: 5
+        description: Is it unresolved?
+        type: branch
+        condition: the external's sourceKind is unresolved
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report EXTERNAL_UNRESOLVED (notice), naming the declaring project, the alias, the producer
+          id and the external's problem (a malformed alias or id, no family project and no
+          source.path, two family projects answering to the id, or a family project at source.path
+          answering to another id), and how to fix it in .wai/project.yaml
+        type: local
+      - stepNumber: 7
+        label: checked
+        description: The external is checked
+        type: local
+      - stepNumber: 8
+        description: Every declaration is judged
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: externalDeclarationsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-26T16:12:14.723Z'
+updatedAt: '2026-09-26T18:32:11.246Z'

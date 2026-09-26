@@ -27,6 +27,8 @@ import {
   loadProjectVariants,
   resolveSubsystemExports,
   resolveProjectExports,
+  projectFamily,
+  exportUsage,
 } from './adapters/validator-core.js';
 import { listSnapshots, listMountSnapshots } from './adapters/validator-surfaces.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
@@ -558,6 +560,18 @@ export function validateSddTree(
       knownIssueCodes().filter((rc) => rc.carryable).map((rc) => rc.code),
     );
 
+    // The project graph of this scan (on a run that judges a chained child
+    // through its parent, the parent's), every member project's L0 table, and
+    // for each (consumer, producer) pair the references connect, those
+    // references mapped onto the producer's public names.
+    const family = projectFamily();
+    const memberTables = family.nodes
+      .filter((n) => n.namespace !== '')
+      .map((n) => resolveProjectExports(n.namespace));
+    const pairs = new Map<string, [string, string]>();
+    for (const r of family.references) pairs.set(`${r.consumer}|${r.producer}`, [r.consumer, r.producer]);
+    const exportUsages = [...pairs.values()].map(([consumer, producer]) => exportUsage(consumer, producer));
+
     const ctx = buildRuleContext({
       system,
       subsystems,
@@ -575,7 +589,10 @@ export function validateSddTree(
       exportTables: [
         ...subsystems.map((s) => resolveSubsystemExports(s.id)),
         resolveProjectExports(),
+        ...memberTables,
       ],
+      projectFamily: family,
+      exportUsages,
       // By-name selections only: a legacy path ref pins nothing to check.
       packSelections: projectPackSelections(),
       // The run that IS the parent's verdict on a chained child judges the

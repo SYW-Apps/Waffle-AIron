@@ -479,6 +479,33 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call getProjectConfig
+  - name: sdd_pin_externals
+    description: >-
+      Tool (scope: tree, a write): pin the bound project's declared externals — the named aliases,
+      else all — into .wai/externals/<alias>.yaml and .wai/externals.lock.yaml, recording each used
+      member's signature digest. Answers one outcome per alias (pinned, unchanged, unresolved,
+      unreachable) with its unexported references.
+    signature: 'sdd_pin_externals(aliases?: string[]): ExternalPin[]'
+    returns: ExternalPin[]
+    params:
+      - name: aliases
+        type: string[]
+        description: The aliases to pin; all declared externals when omitted
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_pin_externals
+  - name: sdd_get_externals_status
+    description: >-
+      Tool (scope: tree, a read): each declared external's pin compared with its live producer at
+      signature level — unchanged, changed, removed, unlocked — and EXTERNAL_CHECK_UNAVAILABLE for
+      anything that cannot be compared, never a pass. Writes nothing.
+    signature: 'sdd_get_externals_status(): ExternalStatus[]'
+    returns: ExternalStatus[]
+    params: []
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_get_externals_status
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T16:13:54.831Z'
+updatedAt: '2026-09-26T17:50:04.304Z'

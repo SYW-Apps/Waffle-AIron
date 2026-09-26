@@ -48,6 +48,25 @@ methods:
     signature: 'pinFamilySurfaces(): string[] | null'
     returns: string[] | null
     params: []
+  - name: pinExternals
+    description: Forward to surface_portal.pinExternals.
+    signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
+    returns: ExternalPin[]
+    params:
+      - name: aliases
+        type: string[]
+        description: The aliases to pin; all when omitted
+        optional: true
+  - name: getExternalsStatus
+    description: Forward to surface_portal.getExternalsStatus.
+    signature: 'getExternalsStatus(): ExternalStatus[]'
+    returns: ExternalStatus[]
+    params: []
+  - name: listExternals
+    description: Forward to surface_portal.listExternals.
+    signature: 'listExternals(): ExternalListing[]'
+    returns: ExternalListing[]
+    params: []
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-09-12T12:38:12.217Z'
+updatedAt: '2026-09-26T17:49:14.056Z'

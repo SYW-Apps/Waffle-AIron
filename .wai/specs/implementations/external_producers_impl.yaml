@@ -1,0 +1,78 @@
+id: external_producers_impl
+name: External Producers Implementation
+description: >-
+  src/core/external-producers.ts. Climbs to the highest reachable root of the family, reads the
+  graph there, and binds the bound project's declarations; restores the caller's binding on every
+  path.
+contract: iexternal_producers
+sourcePath: src/core/external-producers.ts
+methods:
+  - name: resolveDeclared
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Remember the bound root — the consumer, whose node is found by its directory — and the
+          caller's binding, which every path restores
+        type: local
+      - stepNumber: 2
+        description: Climb the mount chain one hop at a time
+        type: loop
+        condition: the last hop found a parent in reach
+        loopKind: doWhile
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Detect the bound root's chaining parent through the core workflow's detection, which is
+          null for a top root and null when the bound request may not read above its root — the
+          caller must gate on reach itself, and this is where it does
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveChainingParent
+      - stepNumber: 4
+        label: climbed
+        description: >-
+          When a parent was found, bind its root read-only and continue from there; when none was
+          found for a root that is itself chained (the next hop is out of reach), record that the
+          family could not be read whole
+        type: local
+      - stepNumber: 5
+        description: Read the project graph of the highest root reached
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 6
+        description: 'Find the consumer''s node: the one whose directory is the remembered root'
+        type: local
+      - stepNumber: 7
+        description: For each of the node's externals
+        type: loop
+        loopKind: forEach
+        over: the consumer node's externals
+        endStep: 10
+      - stepNumber: 8
+        description: Is the producer in the family?
+        type: branch
+        condition: the external's sourceKind is family
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Map the consumer's references into the producer onto the producer's public names
+        type: call
+        targetComponent: spec_loader
+        targetMethod: exportUsage
+      - stepNumber: 10
+        label: bound
+        description: >-
+          Record the binding: the external, its usage when one was mapped, and whether the family
+          was read whole
+        type: local
+      - stepNumber: 11
+        description: Restore the caller's binding
+        type: local
+      - stepNumber: 12
+        description: Answer the bindings in declaration order
+        type: return
+        outcome: ExternalBinding[]
+    detail: full
+status: complete
+createdAt: '2026-09-26T17:44:00.485Z'
+updatedAt: '2026-09-26T18:44:01.630Z'

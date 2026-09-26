@@ -1,0 +1,34 @@
+kind: value-object
+id: authored_reference
+name: AuthoredReference
+description: >-
+  A reference as its author wrote it, recorded by the scan before qualification erases the form: the
+  loader turns `::x` into an absolute id, so nothing downstream could tell it from one written
+  absolute. Only the leading-`::` form is recorded — the one DEPRECATED_REFERENCE_FORM concerns in
+  stage 2. `super::` is not recorded: wairon's own writer emits it and it has no alternative before
+  stage 3.
+subsystem: sdd_core
+fields:
+  - name: specId
+    type: string
+    description: The qualified id of the spec that holds the reference.
+    optional: false
+  - name: position
+    type: string
+    description: >-
+      Where in that spec: dependsOn, owns, dispatch, mounts, lifecycle, publicInterfaces,
+      trustedLinks, contract (an interface's component), narrative (a step's targetComponent, with
+      the method and step number), or type (a field, param or return type).
+    optional: false
+  - name: authored
+    type: string
+    description: 'The reference exactly as written: a leading-`::` form.'
+    optional: false
+  - name: resolved
+    type: string
+    description: The absolute id the loader qualified it to — the form to write instead.
+    optional: false
+methods: []
+sourcePath: src/models/project-family.ts
+createdAt: '2026-09-26T17:39:34.152Z'
+updatedAt: '2026-09-26T18:32:22.657Z'

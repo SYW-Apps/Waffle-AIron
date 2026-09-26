@@ -359,6 +359,40 @@ methods:
       - code: FACADE_FORWARDING
         severity: warning
         summary: Pattern facade narrative is not a single call to an owned member
+  - name: projectBoundaries
+    description: >-
+      Rule project-boundaries. Every project is a crate of its own (decision 9): another project
+      reaches it only through its L0 exports, and only as a dependency it declared. A reference that
+      reaches another project the referring project neither mounts as a member nor declares as an
+      external is EXTERNAL_UNDECLARED; a reference that reaches another project at anything but a
+      public name whose audience covers the referrer — an L1-published or internal component, a
+      method outside the entry's narrowing, a type neither exported by name nor in an exported
+      signature's closure — is EXTERNAL_NOT_EXPORTED; and a trustedLinks entry that names a
+      subsystem of another project is TRUSTED_LINK_CROSSES_PROJECT, since a sanctioned fast lane
+      stays inside one project. A reference is one of the positions CrossProjectReference lists,
+      judged from the project graph (owner of the referring spec versus producer of the target) and
+      the export usages; a reference whose producer the scan cannot place is left to the
+      resolve-through-parent verdict.
+    signature: 'projectBoundaries(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: EXTERNAL_UNDECLARED
+        severity: notice
+        summary: >-
+          A reference reaches another project that the referring project neither mounts nor declares
+          as an external
+      - code: EXTERNAL_NOT_EXPORTED
+        severity: notice
+        summary: >-
+          A reference reaches another project at anything but a public name whose audience covers
+          the referrer
+      - code: TRUSTED_LINK_CROSSES_PROJECT
+        severity: notice
+        summary: A trustedLinks entry names a subsystem of another project
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-09-26T16:12:33.602Z'
+updatedAt: '2026-09-26T17:46:20.988Z'

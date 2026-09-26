@@ -114,6 +114,20 @@ methods:
         type: string
         description: The spec id (namespaced if needed)
     effect: read
+  - name: listProjectRoots
+    description: >-
+      The project roots the current scan read, bound root first, then each chained member in walk
+      order: where each sits in the mount chain, its own L0 (qualified into its namespace), its
+      configuration (read through that root's binding), the ids of the specs its files declared, and
+      the references its files wrote with a leading `::`. Served from the same cached scan as every
+      other read, so it is never stale with it; the scan's freshness signature also covers each
+      root's .wai/project.yaml, so an edit to a root's externals re-scans.
+    signature: 'listProjectRoots(): ScannedProjectRoot[]'
+    returns: ScannedProjectRoot[]
+    params: []
+    guarantees:
+      - idempotent
+    effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-09-24T22:26:02.901Z'
+updatedAt: '2026-09-26T18:13:12.837Z'

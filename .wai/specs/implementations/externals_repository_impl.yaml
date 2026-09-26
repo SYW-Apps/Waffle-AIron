@@ -1,0 +1,49 @@
+id: externals_repository_impl
+name: Externals Repository Implementation
+description: 'src/core/externals.ts: facade forwarding, each method one call to the Pinned Externals Store.'
+contract: iexternals_repository
+sourcePath: src/core/externals.ts
+methods:
+  - name: readLock
+    narrative:
+      - stepNumber: 1
+        description: Read through the pinned externals store
+        type: call
+        targetComponent: pinned_externals_store
+        targetMethod: readLock
+    exportedVia: externalsRepository
+  - name: saveLock
+    narrative:
+      - stepNumber: 1
+        description: Write through the pinned externals store
+        type: call
+        targetComponent: pinned_externals_store
+        targetMethod: writeLock
+    exportedVia: externalsRepository
+  - name: readSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Read through the pinned externals store
+        type: call
+        targetComponent: pinned_externals_store
+        targetMethod: readSnapshot
+    exportedVia: externalsRepository
+  - name: saveSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Write through the pinned externals store
+        type: call
+        targetComponent: pinned_externals_store
+        targetMethod: writeSnapshot
+    exportedVia: externalsRepository
+  - name: removeSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Remove through the pinned externals store
+        type: call
+        targetComponent: pinned_externals_store
+        targetMethod: removeSnapshot
+    exportedVia: externalsRepository
+status: complete
+createdAt: '2026-09-26T18:12:05.305Z'
+updatedAt: '2026-09-26T18:44:03.078Z'

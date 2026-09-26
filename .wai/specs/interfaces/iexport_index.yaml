@@ -24,16 +24,49 @@ methods:
       - idempotent
   - name: resolveProjectExports
     description: >-
-      Project the project's L0 export table — what other projects may consume — through the
-      subsystems' tables. A legacy entry reads as a re-export (`subsystem` as `from`, `id` as `as`;
-      no source infers it from the component's owner); the public name is `as ?? id ?? interface ??
-      component`; each entry's audience applies to every name it brings in. Problems are returned as
-      facts, exactly as for a subsystem table. A tree with no L0 answers an empty table.
-    signature: 'resolveProjectExports(): ResolvedExportTable'
+      Project a project's L0 export table — what other projects may consume — for the bound root, or
+      for the member project at the given namespace (its L0 as the scan recorded it on its root). A
+      legacy entry reads as a re-export (`subsystem` as `from`, `id` as `as`; no source infers it
+      from the component's owner); the public name is `as ?? id ?? interface ?? component`; each
+      entry's audience applies to every name it brings in. An entry's source is one of the project's
+      subsystems, one of its members by mount alias, or one of its declared externals by alias
+      (decision 9); a member or a family external is followed through that project's own table, and
+      an entry declaring a wider audience than the export it re-exports is a widens problem. An
+      external found only through source.path cannot be followed from the scan and is an invalid
+      problem. Problems are returned as facts, exactly as for a subsystem table. A project with no
+      L0 answers an empty table.
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
     returns: ResolvedExportTable
-    params: []
+    params:
+      - name: project
+        type: string
+        description: The namespace of a member project; omitted for the bound root
+        optional: true
+    guarantees:
+      - idempotent
+  - name: usage
+    description: >-
+      Map one consumer's references into one producer onto the producer's resolved project table:
+      each reference that lands on a public name (the entry's canonical component, or its type; for
+      a member, the entry's narrowing, when it has one, must declare it) whose audience covers the
+      consumer (project for a family consumer) counts that name as used, with the member it reaches;
+      every other reference is unexported. When several public names bind the same target, each is
+      counted. The key half of a lock's `used` map, and the fact EXTERNAL_NOT_EXPORTED judges. A
+      type counts as used only as a typeDef export: a type the consumer names directly that the
+      producer exports only inside a signature closure is neither used nor unexported in stage 2
+      (its shape is pinned only through the method digests that carry it). A pair with no references
+      answers an empty usage.
+    signature: 'usage(consumer: string, producer: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's namespace in the family graph
+      - name: producer
+        type: string
+        description: The producer's namespace in the family graph
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-26T16:08:30.136Z'
-updatedAt: '2026-09-26T16:08:30.145Z'
+updatedAt: '2026-09-26T18:13:46.627Z'

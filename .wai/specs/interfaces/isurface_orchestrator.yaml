@@ -91,8 +91,48 @@ methods:
     signature: 'pinFamilySurfaces(): string[] | null'
     returns: string[] | null
     params: []
+  - name: pinExternals
+    description: >-
+      The `wairon externals pin` / sdd_pin_externals workflow. For each declared external (the named
+      aliases, else all): project the producer's resolved project export table at the consumer's
+      audience ceiling (project for a family producer, instance for a source.path one) into
+      .wai/externals/<alias>.yaml, and record in .wai/externals.lock.yaml the producer id, the
+      snapshot path, the snapshot's content digest and the `used` map — every public name the
+      consumer's references land on, each used member with its signature digest. An unchanged
+      snapshot is not rewritten; with no aliases named, lock entries and snapshots for aliases no
+      longer declared are removed. An alias the project does not declare is refused before anything
+      is written; an unresolved or unreachable producer is reported and leaves its previous pin in
+      place. The caller must gate on reach itself: a producer the request may not read is reported
+      unreachable, never read.
+    signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
+    returns: ExternalPin[]
+    params:
+      - name: aliases
+        type: string[]
+        description: The aliases to pin; all declared externals when omitted
+        optional: true
+  - name: getExternalsStatus
+    description: >-
+      The `wairon externals status` / sdd_get_externals_status report. For each declared external:
+      how it resolves, whether it is pinned, and — when the producer is reachable — each used member
+      (as locked, and as the consumer's references use it now) compared at signature level with the
+      live producer (decision 19): unchanged, changed, removed, or unlocked (used now but not in the
+      lock). Anything it cannot compare — an unreachable producer, an unexported reference, a
+      producer outside the family — is unavailable with EXTERNAL_CHECK_UNAVAILABLE, never a pass. It
+      only reports: it writes nothing and fails nothing.
+    signature: 'getExternalsStatus(): ExternalStatus[]'
+    returns: ExternalStatus[]
+    params: []
+  - name: listExternals
+    description: >-
+      The `wairon externals list` read: each declared external with how it resolves (family and its
+      relation, path, or unresolved with the reason), the audience the consumer sees, and the lock's
+      entry when pinned. No live comparison.
+    signature: 'listExternals(): ExternalListing[]'
+    returns: ExternalListing[]
+    params: []
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-09-17T20:37:42.152Z'
+updatedAt: '2026-09-26T17:48:28.906Z'

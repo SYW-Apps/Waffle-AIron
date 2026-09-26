@@ -8,10 +8,11 @@ fields:
   - name: kind
     type: string
     description: >-
-      duplicate | named-cycle | wildcard-cycle | invalid | unconsumable. The export-tables rule maps
-      them to EXPORT_ID_DUPLICATE (error), EXPORT_CYCLE (error for a named chain that never reaches
-      a component or type, warning for a wildcard cycle), EXPORT_INVALID (notice) and
-      EXPORT_UNCONSUMABLE (notice).
+      duplicate | named-cycle | wildcard-cycle | invalid | unconsumable | widens. The export-tables
+      rule maps them to EXPORT_ID_DUPLICATE (error), EXPORT_CYCLE (error for a named chain that
+      never reaches a component or type, warning for a wildcard cycle), EXPORT_INVALID (notice),
+      EXPORT_UNCONSUMABLE (notice) and EXPORT_WIDENS_AUDIENCE (error: an L0 entry declaring a wider
+      audience than the member or external export it re-exports).
     optional: false
   - name: owner
     type: string
@@ -27,7 +28,7 @@ fields:
     type: string[]
     description: >-
       For a duplicate, the canonical targets competing for the name; for a cycle, the levels on the
-      loop, in order.
+      loop, in order; for a widening, the declared audience then the source export's audience.
     optional: true
   - name: detail
     type: string
@@ -36,4 +37,4 @@ fields:
 methods: []
 sourcePath: src/models/exports.ts
 createdAt: '2026-09-26T16:07:57.678Z'
-updatedAt: '2026-09-26T16:07:57.679Z'
+updatedAt: '2026-09-26T17:40:40.124Z'

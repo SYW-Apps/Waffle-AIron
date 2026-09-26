@@ -271,6 +271,8 @@ const WRITE_TOOL_PREFIXES = [
   'sdd_internalize_',
   'sdd_move_',
   'sdd_rename_',
+  // sdd_pin_externals writes the externals lock and snapshots of the bound tree.
+  'sdd_pin_',
 ];
 
 /** Read tools only inspect the tree; their names carry one of these prefixes

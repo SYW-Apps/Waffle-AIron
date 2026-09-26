@@ -18,4 +18,7 @@ export {
   // whose effective id a snapshot records beside its name.
   resolveProjectExports,
   loadProjectConfig,
+  // The bound project's declared externals, each bound to its producer: the
+  // surfaces plane never walks the family itself.
+  resolveExternals,
 } from '../index.js';

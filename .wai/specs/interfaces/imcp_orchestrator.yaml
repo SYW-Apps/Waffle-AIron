@@ -82,13 +82,6 @@ methods:
       - name: resourceId
         type: string
         description: The MCP resource id — a skill id or a wairon-agent:// agent id.
-  - name: listExternalInterfaces
-    description: >-
-      The sdd_list_external_interfaces tool workflow: read the project's consumable external
-      surfaces (parent family, siblings, foreign imports) with origin, provenance, and freshness
-      verdicts, and shape the tool response.
-    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
-    returns: ExternalSurfaceEntry[]
   - name: getAgentBrief
     description: >-
       The sdd_get_agent_brief tool workflow: compose the live delegation brief for one resolved
@@ -296,4 +289,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-26T16:13:56.819Z'
+updatedAt: '2026-09-26T17:50:42.500Z'

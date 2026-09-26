@@ -436,6 +436,30 @@ export const ProjectProfileSelectionSchema = z.object({
 });
 export type ProjectProfileSelection = z.infer<typeof ProjectProfileSelectionSchema>;
 
+/**
+ * external_source — where an external's producer is found when the family does
+ * not hold it: the producer project's root directory, relative to the declaring
+ * project's root (an absolute path is kept as written). A hosted source is
+ * stage 7 and is not part of this shape.
+ */
+export const ExternalSourceSchema = z.object({
+  path: z.string(),
+});
+export type ExternalSource = z.infer<typeof ExternalSourceSchema>;
+
+/**
+ * external_declaration — one `externals` entry of project.yaml as written: the
+ * value under an alias key. `billing: {}` declares the producer whose id is
+ * the alias; `crm: { project: crm }` names it; `ledger: { project: acme.ledger,
+ * source: { path: ../ledger } }` also says where to find it.
+ */
+export const ExternalDeclarationSchema = z.object({
+  /** The producer's project id; defaults to the alias. Plain string: a malformed id is REPORTED, never unreadable. */
+  project: z.string().optional(),
+  source: ExternalSourceSchema.optional(),
+});
+export type ExternalDeclaration = z.infer<typeof ExternalDeclarationSchema>;
+
 export const ProjectConfigSchema = z.object({
   /**
    * Schema version — used to detect incompatible config formats in future
@@ -455,6 +479,16 @@ export const ProjectConfigSchema = z.object({
 
   /** Human-readable display name. Not an identity — `id` is. */
   name: z.string(),
+
+  /**
+   * The other projects this project consumes, keyed by alias (the name its
+   * references use from stage 3). A producer is found through the family
+   * (parent, members, siblings) or an explicit source.path; a member needs no
+   * declaration — the mount is its alias. Read by the project graph at scan
+   * time; stage 2 writes it by hand only. The alias is a plain record key: a
+   * malformed alias is REPORTED (EXTERNAL_UNRESOLVED), never unreadable.
+   */
+  externals: z.record(ExternalDeclarationSchema).optional(),
 
   /**
    * The type/profile of the project, which configures targeted guidelines, rules,
@@ -683,4 +717,49 @@ export function projectIdentity(config: Pick<ProjectConfig, 'id' | 'name'>, lock
     ...(lockedProjectId !== undefined ? { lockedId: lockedProjectId } : {}),
     problems,
   };
+}
+
+// ── project_config externals ────────────────────────────────────────────────
+
+/** An external's alias: a reference segment, so no dot (a dotted producer id needs an explicit alias). */
+export const EXTERNAL_ALIAS_RE = /^[a-z0-9_-]+$/;
+
+/**
+ * declared_external — one external as the configuration declares it,
+ * normalized: the alias, the producer id it defaults or names, the explicit
+ * source path when one is given, and what is wrong with the declaration on its
+ * own (before any producer is looked for).
+ */
+export interface DeclaredExternal {
+  alias: string;
+  /** The producer id: the declaration's `project`, else the alias. */
+  project: string;
+  /** The declaration's `source.path`, as written. */
+  sourcePath?: string;
+  /** Why the declaration cannot be used as written. */
+  problem?: string;
+}
+
+/**
+ * project_config.declaredExternals — the configuration's `externals`, one
+ * DeclaredExternal per alias in declaration order. A malformed alias or
+ * producer id is recorded as the entry's problem, never dropped.
+ */
+export function declaredExternals(config: Pick<ProjectConfig, 'externals'>): DeclaredExternal[] {
+  return Object.entries(config.externals ?? {}).map(([alias, declaration]) => {
+    const project = declaration?.project ?? alias;
+    const problem = !EXTERNAL_ALIAS_RE.test(alias)
+      ? (PROJECT_ID_RE.test(alias)
+        ? `the alias "${alias}" is not a reference name ([a-z0-9-_]+) — a dotted producer id needs an explicit alias, e.g. \`${alias.replace(/\./g, '-')}: { project: ${alias} }\``
+        : `the alias "${alias}" breaks [a-z0-9-_]+`)
+      : !PROJECT_ID_RE.test(project)
+        ? `the producer id "${project}" breaks the project-id grammar`
+        : undefined;
+    return {
+      alias,
+      project,
+      ...(declaration?.source?.path !== undefined ? { sourcePath: declaration.source.path } : {}),
+      ...(problem ? { problem } : {}),
+    };
+  });
 }

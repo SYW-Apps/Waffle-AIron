@@ -32,4 +32,7 @@ export {
   // The resolved export tables the export-tables rule judges.
   resolveSubsystemExports,
   resolveProjectExports,
+  // The project graph and the export usages the family rules judge.
+  projectFamily,
+  exportUsage,
 } from '../index.js';

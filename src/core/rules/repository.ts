@@ -13,6 +13,9 @@ import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers
 import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
 import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
 import { exportTablesRule } from './integrity/export-tables.js';
+import { externalDeclarationsRule } from './integrity/external-declarations.js';
+import { referenceFormsRule } from './integrity/reference-forms.js';
+import { projectBoundariesRule } from './doctrine/project-boundaries.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { contractSymmetryRule } from './narrative/contract-symmetry.js';
 import { narrativeTargetReferencesRule } from './narrative/narrative-target-references.js';
@@ -216,6 +219,13 @@ export const SDD_RULES: SddRule[] = [
   publicSurfaceBoundContractRule,
   // The export tables the resolver settled: what the published names bind.
   exportTablesRule,
+  // The project graph in three questions: does every declared external
+  // resolve, is every reference written in a form that survives a re-root, and
+  // does every reference into another project go through a declared
+  // dependency and a public name.
+  externalDeclarationsRule,
+  referenceFormsRule,
+  projectBoundariesRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
   // reader sees the broken edge finding next to the unused-detection fallout

@@ -10,3 +10,4 @@ export * from './step-config.js';
 export * from './code-model.js';
 export * from './surface-references.js';
 export * from './exports.js';
+export * from './project-family.js';

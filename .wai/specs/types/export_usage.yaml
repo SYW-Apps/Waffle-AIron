@@ -1,0 +1,31 @@
+kind: value-object
+id: export_usage
+name: ExportUsage
+description: >-
+  What one project's references reach in another project, mapped onto the producer's resolved
+  project table: the public names they land on, and the references that land on nothing public the
+  consumer may see.
+subsystem: sdd_core
+fields:
+  - name: consumer
+    type: string
+    description: The consumer's namespace.
+    optional: false
+  - name: producer
+    type: string
+    description: The producer's namespace.
+    optional: false
+  - name: used
+    type: ExportUse[]
+    description: The public names reached, sorted by name.
+    optional: false
+  - name: unexported
+    type: CrossProjectReference[]
+    description: >-
+      The references that reach the producer at anything but a public name whose audience covers the
+      consumer.
+    optional: false
+methods: []
+sourcePath: src/models/exports.ts
+createdAt: '2026-09-26T17:40:33.156Z'
+updatedAt: '2026-09-26T17:40:33.158Z'

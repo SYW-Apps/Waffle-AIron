@@ -1,0 +1,17 @@
+id: mcp_externals_orchestrator
+name: MCP Externals Orchestrator
+description: >-
+  The MCP tool workflows over the bound project's outward world — what it can consume from other
+  projects: discovering the external surfaces it holds (sdd_list_external_interfaces), pinning its
+  declared externals (sdd_pin_externals) and reporting their status against the live producers
+  (sdd_get_externals_status). Each reaches the surface-exchange subsystem through the surfaces
+  adapter and shapes the tool response. Split from the MCP orchestrator because these tools share no
+  collaborator with the spec-authoring and validation workflows.
+subsystem: sdd_mcp
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - mcp_surfaces_adapter
+status: complete
+createdAt: '2026-09-26T17:50:34.764Z'
+updatedAt: '2026-09-26T17:51:34.121Z'

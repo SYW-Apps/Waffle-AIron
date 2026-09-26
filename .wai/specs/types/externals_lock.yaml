@@ -1,0 +1,17 @@
+kind: value-object
+id: externals_lock
+name: ExternalsLock
+description: >-
+  The content of .wai/externals.lock.yaml: one entry per pinned alias. Together with the snapshots
+  it names under .wai/externals/, it is one aggregate — the project's pinned externals — and the
+  gate identity covers both.
+subsystem: sdd_surfaces
+fields:
+  - name: externals
+    type: Map<string, ExternalLockEntry>
+    description: Alias → what was pinned for it.
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-26T17:46:59.348Z'
+updatedAt: '2026-09-26T17:46:59.351Z'

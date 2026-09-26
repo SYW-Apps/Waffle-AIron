@@ -96,9 +96,11 @@ methods:
       Surface exchange commands: export (own surface, optionally as OpenAPI), import
       (exchanged/authored foreign surface), list (stored snapshots), externals (the consumable
       outward world with freshness), and pin (pull the chaining parent's family and sibling surfaces
-      into THIS chained child, on the child owner's schedule). For an OpenAPI export of a
-      multi-portal project, `--portal <id>` selects one API; without it `--out` writes one file per
-      portal and stdout lists the available portals instead of printing nothing.
+      into THIS chained child, on the child owner's schedule). `externals` and `pin` are deprecated
+      in favour of `wairon externals list|status|pin` and keep working for one release, printing a
+      deprecation line first. For an OpenAPI export of a multi-portal project, `--portal <id>`
+      selects one API; without it `--out` writes one file per portal and stdout lists the available
+      portals instead of printing nothing.
     signature: >-
       runSurface(action: string, options: { audience?: string; format?: string; out?: string;
       source?: string; origin?: string; portal?: string }): Promise<void>
@@ -474,6 +476,17 @@ methods:
       place (`wairon host doctor`).
     signature: 'runHostDoctor(options: { fix?: boolean; dataDir?: string }): Promise<void>'
     returns: Promise<void>
+  - name: runExternals
+    description: >-
+      `wairon externals <action> [alias…]`: pin (pin the named declared externals, else all, into
+      .wai/externals/ and .wai/externals.lock.yaml, printing each alias's outcome and its unexported
+      references), status (each external's pin compared with its live producer at signature level —
+      unchanged, changed, removed, unlocked, or unavailable with EXTERNAL_CHECK_UNAVAILABLE; it
+      reports and never fails the command on staleness), and list (the declared externals, how each
+      resolves, and what is pinned). `--json` prints the structured answer instead of the table.
+    signature: 'runExternals(action: string, aliases: string[], options: { json?: boolean }): Promise<void>'
+    returns: Promise<void>
+    params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-25T22:58:18.808Z'
+updatedAt: '2026-09-26T17:50:58.357Z'

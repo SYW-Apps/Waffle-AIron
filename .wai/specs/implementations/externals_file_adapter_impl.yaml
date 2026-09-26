@@ -1,0 +1,41 @@
+id: externals_file_adapter_impl
+name: Externals File Adapter Implementation
+description: 'src/core/externals.ts: YAML reads and atomic writes of the externals lock and pinned snapshots.'
+contract: iexternals_file_adapter
+sourcePath: src/core/externals.ts
+methods:
+  - name: readLock
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads .wai/externals.lock.yaml at the bound root and schema-parses it into an ExternalsLock,
+      returning null when the file is absent. A file that fails to parse or fails the schema throws
+      an error naming the file, because reading it as empty would silently drop every pin.
+  - name: writeLock
+    narrative: []
+    detail: intent
+    intent: >-
+      Serializes the lock to YAML with its aliases sorted and writes .wai/externals.lock.yaml
+      atomically, creating .wai/ when missing; a write failure propagates.
+  - name: readSnapshot
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads and schema-parses .wai/externals/<alias>.yaml into a SurfaceSnapshot, returning null
+      when the file is absent or malformed (status then reports the alias as unpinned rather than
+      failing).
+  - name: writeSnapshot
+    narrative: []
+    detail: intent
+    intent: >-
+      Serializes the snapshot to YAML and writes .wai/externals/<alias>.yaml atomically, creating
+      the directory when missing; a write failure propagates.
+  - name: deleteSnapshot
+    narrative: []
+    detail: intent
+    intent: >-
+      Removes .wai/externals/<alias>.yaml, reports whether a file existed, and removes an emptied
+      externals directory.
+status: complete
+createdAt: '2026-09-26T18:11:39.138Z'
+updatedAt: '2026-09-26T18:44:02.189Z'
