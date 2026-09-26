@@ -712,8 +712,8 @@ export type MethodParam = z.infer<typeof MethodParamSchema>;
 export const FindingDeclarationSchema = z.object({
   /** UPPER_SNAKE and unique within the method; a pack's codes carry the pack prefix (<PACK>_<CODE>). */
   code: z.string().regex(/^[A-Z][A-Z0-9_]*$/, 'Finding code must be UPPER_SNAKE, e.g. UNREALIZED_FINDING'),
-  /** The default before project severity overrides and draft-context downgrades. */
-  severity: z.enum(['error', 'warning']),
+  /** The default before project severity overrides and draft-context downgrades; a notice is reported but never fails the gate. */
+  severity: z.enum(['error', 'warning', 'notice']),
   /** One line saying what the finding means. */
   summary: z.string().min(1, 'Finding summary must say what the finding means'),
 });

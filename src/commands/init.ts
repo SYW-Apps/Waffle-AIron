@@ -34,7 +34,7 @@ import { exportSddSkills } from './adapters/skills.js';
 // cli_authoring_adapter: authoring the subsystem goes through the gated seam.
 import { writeSpec } from './adapters/authoring.js';
 import { defaultTargetConfig } from '../config/defaults.js';
-import { ProjectConfig, TargetConfig, activeTargetTypes } from '../models/project.js';
+import { ProjectConfig, TargetConfig, activeTargetTypes, effectiveProjectId } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
 // init command
@@ -508,8 +508,12 @@ function buildProjectConfig(
   now: string,
   projectType: 'backend' | 'frontend-reactive' | 'frontend-controller' | 'lowlevel-os' | 'game-ecs' | 'realtime-embedded' | 'plc-cyclic' | 'fullstack',
 ): ProjectConfig {
+  // The project's id is its name slugified; a name that yields none writes no
+  // id, and validate reports that (PROJECT_ID_AMBIGUOUS) instead of inventing one.
+  const id = effectiveProjectId({ name });
   return {
     schemaVersion: '1.0.0',
+    ...(id !== null ? { id } : {}),
     name,
     projectType,
     targets,

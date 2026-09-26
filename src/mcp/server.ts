@@ -1601,7 +1601,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           }).strict().optional().describe('Typed acknowledgment of a real caller OUTSIDE the modeled narrative graph. Unused-detection seeds the method as an entrypoint so reachability propagates through its narrative (unlike lint.allow); a method the internal walk already reaches is flagged stale (INVOKED_BY_REDUNDANT). Prefer a `register` narrative step when the wiring is internal.'),
           findings: z.array(z.object({
             code: z.string().describe('UPPER_SNAKE finding code, unique within the method; a pack\'s codes carry the pack prefix (<PACK>_<CODE>)'),
-            severity: z.enum(['error', 'warning']).describe('Default severity, before project severity overrides and draft-context downgrades'),
+            severity: z.enum(['error', 'warning', 'notice']).describe('Default severity, before project severity overrides and draft-context downgrades. A notice is reported but never fails the gate'),
             summary: z.string().describe('One line saying what the finding means'),
           }).strict()).optional().describe('The finding codes this method can report, each with its default severity and summary. Each declared code must be anchored in the method\'s source file, as a string literal or a property-access name (UNREALIZED_FINDING). A code is declared once per method; sdd_update_spec upserts and deletes findings by code.'),
           ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data for this method (namespaced keys) — preserved verbatim'),

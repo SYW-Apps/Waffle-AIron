@@ -100,8 +100,12 @@ describe('cli_runner.runInit: completes only what is missing (real CLI)', () => 
 
     const config = yaml.load(fs.readFileSync(path.join(rootDir, '.wai', 'project.yaml'), 'utf8')) as {
       execution: { tier: string };
+      id?: string;
     };
     expect(config.execution.tier).toBe('off');
+    // The project's id is declared from the start: the folder name slugified
+    // (the temp folder's random suffix is mixed-case, the id is not).
+    expect(config.id).toBe(path.basename(rootDir).toLowerCase());
     expect(stdout).not.toContain('Kept the existing .wai/project.yaml');
     expect(stdout).toMatch(LISTED_AS_CREATED);
     expect(stdout).not.toContain(LISTED_AS_KEPT);

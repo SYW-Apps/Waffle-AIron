@@ -52,6 +52,13 @@ export interface LockRecord {
    * diff; it moves this pin, which is the parent's review signal.
    */
   children?: Record<string, string>;
+  /**
+   * The project's effective id when this lock was taken (a defaulted one
+   * included). Validate reports PROJECT_ID_CHANGED when project.yaml later
+   * resolves to a different id. Absent on a record written before project ids
+   * existed, and when the project had no effective id to record.
+   */
+  projectId?: string;
   /** For git-backed projects: the pushed commit the PR is at. */
   commitSha?: string;
   /** For git-backed projects: the compare/PR URL a human opens to merge. */

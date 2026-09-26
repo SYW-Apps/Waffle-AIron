@@ -213,3 +213,69 @@ describe('loader wrappers over the project config Repository', () => {
     expect(aiPathsAt(root).specsSystem()).toBe(path.join(path.resolve(root, 'design/specs'), '.index.yaml'));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Stage 2a: every provisioning writer declares the project's id. A fresh
+// project gets its name slugified; a chained child is identified by its
+// mount's subsystem id, never by its display name.
+// ---------------------------------------------------------------------------
+
+describe('provisioning writes the project id', () => {
+  it('provisionProject declares the name slugified (a hosted id stays itself)', () => {
+    const root = tempRoot();
+    setProjectRoot(root);
+
+    provisionProject('acme-billing');
+
+    expect(projectConfigRepositoryAt(root).load()?.id).toBe('acme-billing');
+  });
+
+  it('ensureProjectInitialized declares the given id, else the chosen name slugified', () => {
+    const given = tempRoot();
+    setProjectRoot(given);
+    ensureProjectInitialized('Billing Service', 'billing');
+    expect(projectConfigRepositoryAt(given).load()?.id).toBe('billing');
+
+    const derived = tempRoot();
+    setProjectRoot(derived);
+    saveL0('Ledger Tree');
+    ensureProjectInitialized('fallback');
+    expect(projectConfigRepositoryAt(derived).load()?.id).toBe('ledger-tree');
+  });
+
+  it('createChainedSubsystem identifies the child by the subsystem id, not its display name', () => {
+    const root = tempRoot();
+    setProjectRoot(root);
+    saveL0('root-system');
+
+    createChainedSubsystem(subsystem('billing', 'Billing Service', 'packages/billing'), 'Billing Service');
+
+    const child = projectConfigRepositoryAt(path.join(root, 'packages', 'billing')).load();
+    expect(child?.name).toBe('Billing Service');
+    expect(child?.id).toBe('billing');
+  });
+
+  it('externalizeSubsystem identifies the child by the subsystem id', () => {
+    const root = tempRoot();
+    setProjectRoot(root);
+    saveL0('root-system');
+    saveSubsystemSpec(subsystem('core', 'Core Service'));
+
+    externalizeSubsystem('core', 'packages/core');
+
+    expect(projectConfigRepositoryAt(path.join(root, 'packages', 'core')).load()?.id).toBe('core');
+  });
+
+  it("backfill identifies a child by its mount's subsystem id", () => {
+    const root = tempRoot();
+    setProjectRoot(root);
+    saveL0('root-system');
+    saveSubsystemSpec(subsystem('ledger', 'Ledger', 'packages/general-ledger'));
+    const child = path.join(root, 'packages', 'general-ledger');
+    fs.mkdirSync(path.join(child, '.wai', 'specs'), { recursive: true });
+
+    backfillChainedSubprojectConfigs(root);
+
+    expect(projectConfigRepositoryAt(child).load()?.id).toBe('ledger');
+  });
+});

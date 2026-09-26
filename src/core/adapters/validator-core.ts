@@ -24,6 +24,7 @@ export {
   resolveChainingParent,
   findChainingParent,
   settledSpecPaths,
+  readLockRecord,
   getLoaderIssues,
   clearLoaderIssues,
   scanAllSpecs,

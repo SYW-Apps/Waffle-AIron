@@ -8,6 +8,7 @@ import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
 import {
   ProjectConfigSchema,
+  effectiveProjectId,
   type ProjectConfig,
   type PackSelection,
   type ProjectProfileSelection,
@@ -485,6 +486,18 @@ function withPacks(config: ProjectConfig, packs: PackEntry[]): ProjectConfig {
   return { ...config, extensions: { ...config.extensions, packs, useGlobalPacks: effectiveUseGlobalPacks(config) } };
 }
 
+/**
+ * The configuration with a defaulted identity written in: a configuration that
+ * declares no `id` gets its effective one, so the id the project was answering
+ * to stops moving with its display name. A name that yields no id writes none —
+ * the project-identity rule reports it instead.
+ */
+function withBackfilledId(config: ProjectConfig): ProjectConfig {
+  if (config.id !== undefined) return config;
+  const id = effectiveProjectId(config);
+  return id === null ? config : { ...config, id };
+}
+
 function registryOver(store: ProjectConfigStore, root: string): ProjectConfigRegistry {
   /** The configuration to change; a project with none is refused. */
   const current = (): ProjectConfig => {
@@ -492,19 +505,21 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     if (!config) throw new ProjectNotInitializedError();
     return config;
   };
+  /** Every save goes through here, so every save backfills a defaulted id. */
+  const save = (config: ProjectConfig): void => store.write(withBackfilledId(config));
 
   return {
     create(config) {
       if (store.exists()) {
         throw new WaironError(`A project configuration already exists at ${root}; creating one never overwrites it.`);
       }
-      store.write(config);
+      save(config);
     },
     upsertPackSelection(selection) {
       const config = current();
       const existing = packsOf(config);
       const without = existing.filter((entry) => typeof entry === 'string' || entry.name !== selection.name);
-      store.write(withPacks(config, [...without, selection]));
+      save(withPacks(config, [...without, selection]));
       return without.length !== existing.length;
     },
     removePackSelection(packName) {
@@ -512,25 +527,25 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       const existing = packsOf(config);
       const remaining = existing.filter((entry) => typeof entry === 'string' || entry.name !== packName);
       if (remaining.length === existing.length) return false;
-      store.write(withPacks(config, remaining));
+      save(withPacks(config, remaining));
       return true;
     },
     setProjectType(projectType) {
-      store.write({ ...current(), projectType });
+      save({ ...current(), projectType });
     },
     recordProfileSelection(selection) {
-      store.write({ ...current(), profileSelection: selection });
+      save({ ...current(), profileSelection: selection });
     },
     setExecutionTier(tier) {
       const config = current();
       // The contract takes a string; the store refuses a tier the schema does not know.
-      store.write({ ...config, execution: { ...config.execution, tier: tier as ProjectConfig['execution']['tier'] } });
+      save({ ...config, execution: { ...config.execution, tier: tier as ProjectConfig['execution']['tier'] } });
     },
     registerPackRef(ref) {
       const config = current();
       const packs = packsOf(config);
       if (packs.includes(ref)) return false;
-      store.write(withPacks(config, [...packs, ref]));
+      save(withPacks(config, [...packs, ref]));
       return true;
     },
     deregisterPackRef(ref) {
@@ -538,16 +553,16 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       const packs = packsOf(config);
       const remaining = packs.filter((entry) => entry !== ref);
       if (remaining.length === packs.length) return false;
-      store.write(withPacks(config, remaining));
+      save(withPacks(config, remaining));
       return true;
     },
     markSelectionsBundled(bundled) {
       const config = current();
-      store.write(withPacks(config, bundleInPlace(packsOf(config), bundled)));
+      save(withPacks(config, bundleInPlace(packsOf(config), bundled)));
     },
     pinGlobalPacksAsSelections(selections) {
       const config = current();
-      store.write({
+      save({
         ...config,
         extensions: { ...config.extensions, packs: [...packsOf(config), ...selections], useGlobalPacks: false },
       });

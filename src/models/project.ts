@@ -443,7 +443,17 @@ export const ProjectConfigSchema = z.object({
    */
   schemaVersion: z.string().default('1.0.0'),
 
-  /** Human-readable project name */
+  /**
+   * The project's stable identity: a slug of [a-z0-9-_.] that starts and ends
+   * alphanumeric (PROJECT_ID_RE). Optional in the file: a project that declares
+   * none answers to its name slugified (effectiveProjectId), and the next save
+   * through the config registry writes that default in. Deliberately a plain
+   * string here rather than the grammar: a malformed id must be REPORTED
+   * (PROJECT_ID_AMBIGUOUS), not make the whole configuration unreadable.
+   */
+  id: z.string().optional(),
+
+  /** Human-readable display name. Not an identity — `id` is. */
   name: z.string(),
 
   /**
@@ -586,4 +596,91 @@ export function declaredPackNames(config: Pick<ProjectConfig, 'extensions' | 'pr
 /** The profile ids a configuration's profile selection records, deduplicated; never `projectType`. */
 export function declaredProfileIds(config: Pick<ProjectConfig, 'profileSelection'>): string[] {
   return [...new Set(config.profileSelection?.profileIds ?? [])];
+}
+
+// ── project_config identity ─────────────────────────────────────────────────
+
+/**
+ * The project-id grammar: lower-case letters, digits, `-`, `_` and `.`,
+ * starting and ending with a letter or a digit. Dots are allowed (a dotted id
+ * needs an explicit alias once references name projects); nothing else is.
+ */
+export const PROJECT_ID_RE = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
+
+/**
+ * A display name slugified into the project-id grammar: lower-cased, every run
+ * of characters outside [a-z0-9-_.] collapsed to one '-', then trimmed until it
+ * starts and ends with a letter or a digit. Null when nothing is left — there is
+ * deliberately no fallback, so a name that yields no id is reported, never
+ * papered over with an invented one.
+ */
+function slugifyProjectName(name: string): string | null {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[^a-z0-9]+/, '')
+    .replace(/[^a-z0-9]+$/, '');
+  return slug === '' ? null : slug;
+}
+
+/**
+ * project_config.effectiveId — the declared id as written, else `name`
+ * slugified; null when neither yields one.
+ */
+export function effectiveProjectId(config: Pick<ProjectConfig, 'id' | 'name'>): string | null {
+  if (config.id !== undefined) return config.id;
+  return slugifyProjectName(config.name);
+}
+
+/** One thing wrong with a project's identity, as project_config.identity names it. */
+export interface ProjectIdentityProblem {
+  kind: 'defaulted' | 'ambiguous' | 'changed';
+  detail: string;
+}
+
+/** project_identity — a project's resolved identity and what is wrong with it. */
+export interface ProjectIdentity {
+  /** The effective id; absent when there is no declared id and the name yields no slug. */
+  id?: string;
+  /** Where the effective id came from. */
+  source: 'declared' | 'defaulted' | 'none';
+  /** The display name, as configured. */
+  name: string;
+  /** The id the current lock approved, when one was given. */
+  lockedId?: string;
+  /** Every problem with the identity; empty when it is declared, well-formed and matches the lock. */
+  problems: ProjectIdentityProblem[];
+}
+
+/**
+ * project_config.identity — resolve the effective id against the id a lock
+ * approved and name every problem with it: defaulted (no id declared, one
+ * derived from the name), ambiguous (the name yields none, or the declared id
+ * breaks the grammar), changed (the effective id — none included — differs
+ * from lockedProjectId).
+ */
+export function projectIdentity(config: Pick<ProjectConfig, 'id' | 'name'>, lockedProjectId?: string): ProjectIdentity {
+  const id = effectiveProjectId(config);
+  const source: ProjectIdentity['source'] = config.id !== undefined ? 'declared' : id !== null ? 'defaulted' : 'none';
+  const problems: ProjectIdentityProblem[] = [];
+  if (source === 'defaulted') {
+    problems.push({ kind: 'defaulted', detail: `no id is declared; the name "${config.name}" yields "${id}"` });
+  } else if (source === 'none') {
+    problems.push({ kind: 'ambiguous', detail: `no id is declared, and the name "${config.name}" yields no id` });
+  } else if (!PROJECT_ID_RE.test(config.id!)) {
+    problems.push({ kind: 'ambiguous', detail: `the declared id "${config.id}" breaks the project-id grammar` });
+  }
+  if (lockedProjectId !== undefined && id !== lockedProjectId) {
+    problems.push({
+      kind: 'changed',
+      detail: id === null ? `the lock approved "${lockedProjectId}", and the project now has no id` : `the lock approved "${lockedProjectId}", and the project now resolves to "${id}"`,
+    });
+  }
+  return {
+    ...(id !== null ? { id } : {}),
+    source,
+    name: config.name,
+    ...(lockedProjectId !== undefined ? { lockedId: lockedProjectId } : {}),
+    problems,
+  };
 }

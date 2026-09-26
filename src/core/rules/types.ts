@@ -19,7 +19,7 @@ import {
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
-import type { CarriedDebtKind, PackSelection } from '../../models/project.js';
+import type { CarriedDebtKind, PackSelection, ProjectIdentity } from '../../models/project.js';
 import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
 
@@ -36,9 +36,6 @@ import type { ValidationIssue } from '../validation.js';
 // family's folder plus a registry entry — no surgery on a monolith.
 // ---------------------------------------------------------------------------
 
-/** A rule's DEFAULT severity: what a code is reported at before any override. */
-export type Severity = 'error' | 'warning';
-
 /**
  * The severity a finding is REPORTED at, after the project's and the governing
  * profile's overrides. A `notice` is listed on every surface that lists
@@ -46,7 +43,14 @@ export type Severity = 'error' | 'warning';
  * never fails `--ci`. A project reaches it through `rules.sddRuleSeverity`, and
  * raises a notice code to warning or error the same way.
  */
-export type IssueSeverity = Severity | 'notice';
+export type IssueSeverity = 'error' | 'warning' | 'notice';
+
+/**
+ * A rule's DEFAULT severity: what a code is reported at before any override.
+ * A code may default to `notice` — reported, never failing the gate — until a
+ * project raises it; the draft downgrade never raises one (min(default, warning)).
+ */
+export type Severity = IssueSeverity;
 
 export interface RuleCode {
   code: string;
@@ -400,6 +404,13 @@ export interface RuleContext {
   interfacesByComponent: Map<string, InterfaceSpec[]>;
   /** Stored surface snapshots (.wai/surfaces/) — declared contracts that unresolved cross-tree/remote references validate against. */
   surfaceSnapshots: SurfaceSnapshot[];
+  /**
+   * The validated root's identity, resolved by the validator from its project
+   * configuration against the id its lock recorded, so the project-identity
+   * rule does no I/O. Absent when the root has no readable configuration, and
+   * on the run that judges a chained child through its parent.
+   */
+  projectIdentity?: ProjectIdentity;
   /**
    * The snapshots each chained mount holds in its own `.wai/surfaces/`, keyed
    * by mount namespace. Consulted ONLY for references made from inside that

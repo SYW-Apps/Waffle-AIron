@@ -150,9 +150,10 @@ describe('project config store', () => {
 
     projectConfigRepositoryAt(root).setProjectType('frontend-reactive');
 
+    // `id` is new to this document too: the save backfilled the defaulted id.
     expect(Object.keys(readDoc(root))).toEqual([
       'name', 'futureTopLevel', 'schemaVersion', 'targets', 'rules', 'createdAt', 'updatedAt',
-      'projectType', 'execution', 'paths',
+      'projectType', 'execution', 'paths', 'id',
     ]);
   });
 
@@ -676,5 +677,61 @@ describe('project config registry — rekeyCarried (F78)', () => {
     }
     expect(pairs.length).toBe(rekeys.length);
     expect(after.toString('latin1').split('\r\n').length).toBe(real.toString('latin1').split('\r\n').length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stage 2a: every save through the registry backfills a defaulted project id,
+// so the id a project was answering to stops moving with its display name.
+// ---------------------------------------------------------------------------
+
+describe('project config registry — id backfill', () => {
+  it('writes the defaulted id on the next save', () => {
+    const root = tempRoot();
+    writeDoc(root, minimal().map((l) => (l === 'name: demo' ? 'name: Billing Platform' : l)));
+
+    projectConfigRepositoryAt(root).setProjectType('frontend-reactive');
+
+    expect(readDoc(root).id).toBe('billing-platform');
+    expect(readDoc(root).name).toBe('Billing Platform');
+  });
+
+  it('never touches a declared id, even one that breaks the grammar', () => {
+    const root = tempRoot();
+    writeDoc(root, minimal('id: Billing_Platform'));
+
+    projectConfigRepositoryAt(root).setProjectType('frontend-reactive');
+
+    expect(readDoc(root).id).toBe('Billing_Platform');
+  });
+
+  it('writes no id for a name that yields none, rather than inventing one', () => {
+    const root = tempRoot();
+    writeDoc(root, minimal().map((l) => (l === 'name: demo' ? "name: '請求'" : l)));
+
+    projectConfigRepositoryAt(root).setProjectType('frontend-reactive');
+
+    expect(readDoc(root)).not.toHaveProperty('id');
+  });
+
+  it('create writes the effective id of a configuration given without one', () => {
+    const root = tempRoot();
+    const config = {
+      schemaVersion: '1.0.0', name: 'Ledger Service', targets: [], rules: {}, createdAt: NOW, updatedAt: NOW,
+    } as unknown as ProjectConfig;
+
+    projectConfigRepositoryAt(root).create(config);
+
+    expect(readDoc(root).id).toBe('ledger-service');
+  });
+
+  it('the comment-preserving rekey is not a save, and writes no id', () => {
+    const root = tempRoot();
+    writeDoc(root, minimal());
+
+    projectConfigRepositoryAt(root).rekeyCarried({});
+
+    expect(fs.readFileSync(configFile(root), 'utf8')).toContain(MARKER);
+    expect(readDoc(root)).not.toHaveProperty('id');
   });
 });

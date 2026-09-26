@@ -80,8 +80,13 @@ describe('method_signature.findings', () => {
   });
 
   it('refuses an unknown severity', () => {
-    const result = FindingDeclarationSchema.safeParse({ code: 'SOME_CODE', severity: 'notice', summary: 's' });
+    const result = FindingDeclarationSchema.safeParse({ code: 'SOME_CODE', severity: 'info', summary: 's' });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts a notice default: a code may be reported without ever failing the gate', () => {
+    const result = FindingDeclarationSchema.safeParse({ code: 'SOME_CODE', severity: 'notice', summary: 's' });
+    expect(result.success).toBe(true);
   });
 
   it('refuses an empty summary', () => {
