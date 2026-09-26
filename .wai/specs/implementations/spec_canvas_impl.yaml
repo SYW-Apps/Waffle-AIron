@@ -22,8 +22,9 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
-          Mark each node the passed-in findings name, so the canvas shows a judgement it did not
-          make
+          Mark each node the passed-in findings name, keeping each finding's severity, so the canvas
+          shows a judgement it did not make — and can draw a node holding only notices apart from
+          one holding errors or warnings
         type: local
       - stepNumber: 4
         description: Answer with the model
@@ -56,4 +57,4 @@ methods:
     symbol: renderCanvasHtml
 status: complete
 createdAt: '2026-09-20T16:38:14.590Z'
-updatedAt: '2026-09-20T18:30:04.627Z'
+updatedAt: '2026-09-26T14:49:49.355Z'

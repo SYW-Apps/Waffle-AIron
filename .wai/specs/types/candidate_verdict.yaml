@@ -3,7 +3,7 @@ id: candidate_verdict
 name: CandidateVerdict
 description: >-
   The write gate's verdict on one component candidate, split by severity: errors refuse the write,
-  warnings ride along as notices.
+  warnings and notices ride along as the write's notices, each still named by its severity.
 fields:
   - name: errors
     type: ValidationIssue[]
@@ -12,6 +12,12 @@ fields:
   - name: warnings
     type: ValidationIssue[]
     description: Intrinsic advisories such as MISSING_DURABILITY; surfaced, never blocking
+    optional: false
+  - name: notices
+    type: ValidationIssue[]
+    description: >-
+      Intrinsic findings a project set to notice severity; surfaced beside the warnings, never
+      blocking
     optional: false
 methods:
   - name: formatCandidateRefusal
@@ -24,4 +30,4 @@ methods:
       written as one message because the authoring seam's channel is a thrown error's text.
 sourcePath: src/models/candidate.ts
 createdAt: '2026-09-14T06:03:51.301Z'
-updatedAt: '2026-09-25T21:05:28.932Z'
+updatedAt: '2026-09-26T14:48:53.575Z'
