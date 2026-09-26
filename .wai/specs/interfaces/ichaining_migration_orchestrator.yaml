@@ -39,6 +39,6 @@ methods:
         description: The plan the person confirmed, as plan() answered it
     guarantees:
       - idempotent
-status: design
+status: complete
 createdAt: '2026-09-26T21:12:29.184Z'
-updatedAt: '2026-09-26T21:12:29.201Z'
+updatedAt: '2026-09-26T21:57:08.690Z'

@@ -21,5 +21,6 @@ fields:
     description: Answer the chaining migration's confirmation for a non-interactive run.
     optional: true
 methods: []
+sourcePath: src/commands/doctor.ts
 createdAt: '2026-09-26T21:12:12.389Z'
-updatedAt: '2026-09-26T21:12:12.392Z'
+updatedAt: '2026-09-26T21:57:07.183Z'

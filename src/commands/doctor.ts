@@ -2,10 +2,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
+import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { AI_PATHS } from '../config/paths.js';
-import { ProjectNotInitializedError } from '../utils/errors.js';
+import { ChainingMigrationRefusedError, DoctorOptionsError, ProjectNotInitializedError } from '../utils/errors.js';
 import {
   loadProjectConfig,
   projectConfigExists,
@@ -43,6 +44,10 @@ import { computeGateStateId, validateSddTree } from './validate.js';
 // a command has no business reaching a Store to get it.
 import { describeApprover } from '../models/lock.js';
 import { claudeMcpConfigPath } from './mcp.js';
+// The chaining migration is sdd_cli's own workflow. Bound as a namespace so each
+// call site names the contract method it reaches (chainingMigration.plan / .apply).
+import * as chainingMigration from './chaining-migration.js';
+import type { ChainingMigrationPlan, ProjectMigration } from './chaining-migration.js';
 
 /** The bound project's enabled targets; none for a project without a configuration. */
 function enabledTargets(): string[] {
@@ -114,13 +119,24 @@ function mcpEntryHealth(settingsPath: string): { mark: Mark; note: string } {
   return { mark: 'ok', note: 'registered' };
 }
 
+/** doctor_options — the flags of `wairon doctor`. */
 export interface DoctorOptions {
-  /** Regenerate stale in-project guides/context/skills and register the MCP server. */
+  /** Apply the repairs before the report: the fixed steps, then the chaining migration once confirmed. */
   fix?: boolean;
+  /** Print one section's plan and nothing else, writing nothing. `chaining` is the one section. */
+  report?: string;
+  /** Answer the chaining migration's confirmation for a non-interactive run. */
+  yes?: boolean;
 }
 
 export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   const tally: Tally = { warn: 0, error: 0 };
+
+  // Steps 1-5: --report prints one section's plan and nothing else.
+  if (options.report !== undefined) {
+    reportOnly(options);
+    return;
+  }
 
   logger.blank();
   console.log(`${chalk.bold('wairon doctor')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
@@ -128,7 +144,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
 
   // --fix runs before the report so the output reflects the repaired state.
   if (options.fix) {
-    await applyFixes();
+    await applyFixes(options, tally);
   }
 
   // ── Project ───────────────────────────────────────────────────────────────
@@ -242,6 +258,21 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       }
     } catch (e) {
       line(tally, 'warn', `Could not plan the narrative-step repair: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // ── Chaining ───────────────────────────────────────────────────────────
+    // What the chaining migration still has to write, counted. Silent when
+    // nothing is planned or reported; after an applied --fix this plan is
+    // empty, which is the run's own idempotence check.
+    try {
+      const pending = chainingMigration.plan();
+      if (!chainingMigration.isEmpty(pending) || pending.findings.length > 0) {
+        console.log(chalk.bold('Chaining'));
+        line(tally, 'warn', `Chaining: ${pendingCount(pending)} pending (${chainingTotals(pending)}) — see \`wairon doctor --report chaining\`, apply with \`wairon doctor --fix\``);
+        logger.blank();
+      }
+    } catch (e) {
+      line(tally, 'warn', `Could not plan the chaining migration: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -415,7 +446,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
  * MCP server for any active backend that lacks it. The global Antigravity plugin
  * writes outside the project, so it is reported but not auto-fixed.
  */
-async function applyFixes(): Promise<void> {
+async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   if (!projectConfigExists()) return; // the report below will flag this
 
   let targets: string[];
@@ -509,6 +540,12 @@ async function applyFixes(): Promise<void> {
     console.log(`  ${icon('error')} Narrative-step repair failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
+  // The chaining migration — the last spec-touching fix: after the
+  // configuration backfill, so every chained child has a project.yaml to
+  // declare its id in, and after the filename migration and the spec repairs,
+  // so its gated L0 writes save specs under current names into a repaired tree.
+  await migrateChaining(options, tally);
+
   // Register / repair the MCP server. The install is now self-healing, so this
   // also rewrites a stale launch path. Claude uses the project config; Antigravity
   // (agy) only reads its GLOBAL mcp_config.json, so register there for it.
@@ -537,6 +574,126 @@ async function applyFixes(): Promise<void> {
   }
 
   logger.blank();
+}
+
+// ── the chaining migration ──────────────────────────────────────────────────
+
+/** Steps 2-5: `--report chaining` alone prints the plan per project and writes nothing. */
+function reportOnly(options: DoctorOptions): void {
+  if (options.fix) {
+    throw new DoctorOptionsError('--report prints a plan and writes nothing, so it never combines with --fix.');
+  }
+  if (options.report !== 'chaining') {
+    throw new DoctorOptionsError(`--report knows one section, \`chaining\`; "${options.report}" is not one.`);
+  }
+  const migration = chainingMigration.plan();
+  logger.blank();
+  console.log(`${chalk.bold('wairon doctor --report chaining')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
+  logger.blank();
+  printChainingPlan(migration);
+  console.log(chalk.gray('Nothing was written.'));
+  logger.blank();
+}
+
+/**
+ * Steps 17-21 of --fix: plan the chaining migration, print it, and apply it
+ * only once confirmed. --yes answers yes; a run with no terminal to ask and no
+ * --yes, or a no, writes none of it.
+ */
+async function migrateChaining(options: DoctorOptions, tally: Tally): Promise<void> {
+  let migration: ChainingMigrationPlan;
+  try {
+    migration = chainingMigration.plan();
+  } catch (e) {
+    console.log(`  ${icon('error')} Could not plan the chaining migration: ${e instanceof Error ? e.message : String(e)}`);
+    tally.error++;
+    return;
+  }
+  if (chainingMigration.isEmpty(migration)) return;
+  printChainingPlan(migration);
+  if (!(await confirmChaining(options))) return;
+  try {
+    const applied = chainingMigration.apply(migration);
+    printApplied(applied.written, applied.relock);
+  } catch (e) {
+    if (!(e instanceof ChainingMigrationRefusedError)) throw e;
+    console.log(`  ${icon('error')} ${e.message}`);
+    tally.error++;
+  }
+}
+
+/** Step 19: the person's answer — --yes, a terminal prompt, or no when there is no terminal to ask. */
+async function confirmChaining(options: DoctorOptions): Promise<boolean> {
+  if (options.yes) return true;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.log(`  ${icon('warn')} Chaining migration skipped: no terminal to confirm it — re-run with \`--fix --yes\` to apply it. Nothing of it was written.`);
+    return false;
+  }
+  const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([
+    { type: 'confirm', name: 'confirmed', message: 'Apply the chaining migration above?', default: false },
+  ]);
+  if (!confirmed) console.log(`  ${icon('warn')} Chaining migration skipped. Nothing of it was written.`);
+  return confirmed;
+}
+
+function printApplied(written: string[], relock: string[]): void {
+  console.log(`  ${icon('ok')} Applied the chaining migration: ${written.length} file(s) written.`);
+  for (const file of written) console.log(`      ${file}`);
+  if (relock.length === 0) return;
+  console.log(`  ${icon('warn')} The writes staled the approval of ${relock.length} project(s); nothing was locked here. Re-lock each with \`wairon lock\`:`);
+  for (const dir of relock) console.log(`      ${dir}`);
+}
+
+/** How many writes the plan holds: ids, entries, externals and pins. */
+function pendingCount(migration: ChainingMigrationPlan): number {
+  return migration.projects.reduce((n, p) => n + (p.idToWrite ? 1 : 0) + p.exports.length + p.externals.length + p.pins.length, 0);
+}
+
+/** The totals the report ends with — the P1 probe's counts. */
+function chainingTotals(migration: ChainingMigrationPlan): string {
+  const sum = (f: (p: ProjectMigration) => number): number => migration.projects.reduce((n, p) => n + f(p), 0);
+  const entries = sum((p) => p.exports.length);
+  return [
+    `${sum((p) => (p.idToWrite ? 1 : 0))} id(s)`,
+    `${entries} L0 entr${entries === 1 ? 'y' : 'ies'}`,
+    `${sum((p) => p.externals.length)} external(s)`,
+    `${sum((p) => p.pins.length)} pin(s)`,
+    `${sum((p) => p.supersededPins.length)} superseded pin(s)`,
+    `${migration.findings.length} finding(s)`,
+  ].join(', ');
+}
+
+/** The plan per project, then every finding and the totals. */
+function printChainingPlan(migration: ChainingMigrationPlan): void {
+  console.log(chalk.bold('Chaining migration'));
+  console.log(chalk.gray(`  family root: ${migration.familyRoot}${migration.whole ? '' : ' (partial: a hop above was out of reach)'}`));
+  if (chainingMigration.isEmpty(migration)) console.log('  Nothing to migrate.');
+  for (const p of migration.projects) printProjectMigration(p);
+  for (const f of migration.findings) {
+    const where = f.project === '' ? 'top root' : f.project;
+    console.log(`  ${icon(f.blocking ? 'error' : 'warn')} ${f.kind} [${where}]${f.blocking ? ' (blocks apply)' : ''}: ${f.detail}`);
+  }
+  console.log(`  Totals: ${chainingTotals(migration)}.`);
+  logger.blank();
+}
+
+function printProjectMigration(p: ProjectMigration): void {
+  console.log(`  ${chalk.bold(p.project === '' ? '(top root)' : p.project)} ${chalk.gray(p.directory)}`);
+  if (p.idToWrite) console.log(`    id: declare "${p.idToWrite}"`);
+  for (const e of p.exports) {
+    const item = e.component !== undefined ? `component: ${e.component}` : `typeDef: ${e.typeDef}`;
+    const members = e.members.length > 0 ? `, reaching ${e.members.join(', ')}` : '';
+    const consumers = e.consumers.map((c) => c || '(top root)').join(', ');
+    console.log(`    L0 entry: { from: ${e.from}, ${item}, audience: ${e.audience} } as "${e.publicName}" — for ${consumers}${members}`);
+  }
+  for (const x of p.externals) {
+    const why = x.reason === 'legacy-pin' ? 'replaces the stage-1 family pin of' : 'its references cross into';
+    console.log(`    external: ${x.alias}: {} — ${why} ${x.producer || '(top root)'}`);
+  }
+  if (p.pins.length > 0) console.log(`    pin: ${p.pins.join(', ')}`);
+  for (const key of p.supersededPins) {
+    console.log(`    superseded sibling pin: ${key} — left on disk until stage 3 (stage-1 resolution still reads it; nothing deletes it)`);
+  }
 }
 
 function printSummary(tally: Tally): void {

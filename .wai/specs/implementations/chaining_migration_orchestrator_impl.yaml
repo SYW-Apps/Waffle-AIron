@@ -337,6 +337,6 @@ methods:
         type: return
         outcome: ChainingMigrationReport
 detail: full
-status: design
+status: complete
 createdAt: '2026-09-26T21:13:14.060Z'
-updatedAt: '2026-09-26T21:14:55.461Z'
+updatedAt: '2026-09-26T21:57:09.295Z'

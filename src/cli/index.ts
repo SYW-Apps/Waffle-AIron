@@ -353,10 +353,12 @@ program
 
 program
   .command('doctor')
-  .description('Health check: flags stale generated guides/skills, an unregistered MCP server, and spec-tree issues')
-  .option('--fix', 'regenerate stale in-project guides/context/skills and register the MCP server')
+  .description('Health check: flags stale generated guides/skills, an unregistered MCP server, spec-tree issues and the chaining migration still pending')
+  .option('--fix', 'regenerate stale in-project guides/context/skills, register the MCP server, then apply the chaining migration once confirmed')
+  .option('--report <section>', "print one section's plan and nothing else, writing nothing (the one section: chaining); never combines with --fix")
+  .option('-y, --yes', "answer the chaining migration's confirmation (for a non-interactive --fix)")
   .action(async (opts) => {
-    await runDoctor({ fix: opts.fix });
+    await runDoctor({ fix: opts.fix, report: opts.report, yes: opts.yes });
   });
 
 // ---------------------------------------------------------------------------

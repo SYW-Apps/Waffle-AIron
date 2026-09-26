@@ -45,5 +45,6 @@ fields:
       `type`), sorted — what the report prints and the pin's `used` map will hold.
     optional: false
 methods: []
+sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:11:40.727Z'
-updatedAt: '2026-09-26T21:11:40.730Z'
+updatedAt: '2026-09-26T21:57:04.789Z'

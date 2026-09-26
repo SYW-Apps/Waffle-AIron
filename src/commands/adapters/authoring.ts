@@ -3,4 +3,4 @@
 // re-export of the authoring portal. Every spec a terminal command AUTHORS goes
 // through the gated seam, never through core's raw chained-subsystem write.
 // ---------------------------------------------------------------------------
-export { writeSpec } from '../../core/authoring.js';
+export { writeSpec, updateSpecGated } from '../../core/authoring.js';
