@@ -16,6 +16,30 @@ methods:
       - name: restatement
         type: SpecRestatement
         description: The spec as the command states it, with the fields the command can express
+  - name: updateSpecGated
+    description: >-
+      Forward a delta to the authoring portal: the seam merges it into the stored spec, judges the
+      merged spec and writes it, or — with dryRun — runs the whole write, gate included, and writes
+      nothing. Answers with the change report. Used by `doctor --fix` to add the chaining
+      migration's L0 re-export entries.
+    signature: >-
+      updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
+      SpecChangeReport
+    returns: SpecChangeReport
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The stored spec's id
+      - name: delta
+        type: SpecDelta
+        description: The partial change to merge
+      - name: dryRun
+        type: boolean
+        description: Answer with what the delta would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-25T17:35:09.087Z'
-updatedAt: '2026-09-25T17:35:09.097Z'
+updatedAt: '2026-09-26T21:11:29.782Z'

@@ -677,6 +677,35 @@ methods:
         type: ComponentSpec[]
       - name: variantsById
         type: VariantDef[]
+  - name: setProjectId
+    description: >-
+      Declare the bound project's id through the project config Repository: refused for a malformed
+      id or when a different id is already declared, a no-op when the same one is. Returns whether
+      it wrote.
+    signature: 'setProjectId(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The project id to declare
+    guarantees:
+      - idempotent
+  - name: declareExternal
+    description: >-
+      Declare one external of the bound project under an alias through the project config
+      Repository: refused for a malformed alias or producer id, or when the alias holds a different
+      declaration, a no-op when it holds the same one. Returns whether it wrote.
+    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias key
+      - name: declaration
+        type: ExternalDeclaration
+        description: The value under the alias
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T17:44:24.549Z'
+updatedAt: '2026-09-26T21:10:55.700Z'

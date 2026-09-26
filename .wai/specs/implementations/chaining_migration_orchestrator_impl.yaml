@@ -1,0 +1,342 @@
+id: chaining_migration_orchestrator_impl
+name: Chaining Migration Orchestrator Implementation
+description: >-
+  Plans a family's chaining migration from the graph and export usage, and applies a confirmed plan
+  ids-first, pins-last, binding each project's root for its writes and restoring the caller's
+  binding on every path.
+contract: ichaining_migration_orchestrator
+sourcePath: src/commands/chaining-migration.ts
+methods:
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Remember the bound root and the caller's binding; every path below restores the binding
+        type: local
+      - stepNumber: 2
+        label: climb
+        description: Climb the mount chain one hop at a time
+        type: loop
+        condition: the last hop found a parent in reach
+        loopKind: doWhile
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Detect the current root's chaining parent: null for a top root, and null when the request
+          may not read above its root — the caller must gate on reach itself, and this is where it
+          does
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 4
+        label: climbed
+        description: >-
+          When a parent was found, bind its root and continue from there; when none was found for a
+          root that is itself chained, the next hop is out of reach — record the family as partial
+          (a family-partial finding, blocking)
+        type: local
+      - stepNumber: 5
+        label: graph
+        description: >-
+          Read the project graph of the highest root reached: its nodes (id and where it came from,
+          parent, mount alias, directory, members, declared externals bound to their producers), its
+          owners, its cross-project references and its identity problems
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 6
+        label: ids
+        description: Decide an id for each project
+        type: loop
+        loopKind: forEach
+        over: the graph's nodes
+        endStep: 8
+      - stepNumber: 7
+        description: >-
+          Read the lock record the node's own root carries, for the project id it approved (none for
+          a root never locked, or locked before project ids existed)
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 8
+        label: decide-id
+        description: >-
+          Decide the node's id. A node with no readable configuration is reported absent
+          (project-absent, blocking only if the plan must write it) — doctor --fix's configuration
+          backfill runs earlier and writes one for a chained child. A declared id stays and nothing
+          is written. Otherwise, in order: the id the node's lock approved, when there is one — the
+          approved id is the stable one, and writing any other would raise PROJECT_ID_CHANGED, which
+          also blocks the re-lock (a member whose approved id differs from its mount's subsystem id
+          is reported id-locked, and keeps the approved id); else, for a member, its mount's
+          subsystem id — the id its PROJECT_ID_DEFAULTED names; else, for the top root, its
+          effective id (the name slug). A top root whose name yields no id is reported id-ambiguous
+          and given none
+        type: local
+      - stepNumber: 9
+        description: >-
+          Check the planned ids across the family: a planned id outside the project-id grammar, or
+          equal to another project's declared or planned id, is reported id-ambiguous for every
+          project involved and none of them is written — never guessed. An external some project
+          already declares that finds its producer by the id that producer is about to leave is
+          reported declaration-orphaned: after apply it would stop resolving, and only its author
+          can re-point it
+        type: local
+      - stepNumber: 10
+        label: pairs
+        description: Plan the exports, externals and pins each crossing needs
+        type: loop
+        loopKind: forEach
+        over: each (consumer, producer) pair among the graph's cross-project references
+        endStep: 19
+      - stepNumber: 11
+        description: >-
+          Map the consumer's references into the producer onto the producer's public names; what
+          lands on none is unexported
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: exportUsage
+      - stepNumber: 12
+        description: >-
+          Read the producer's current project table, so a planned public name can be checked against
+          every name it already binds
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 13
+        label: unexported
+        description: Plan an entry for each reference that lands on no public name
+        type: loop
+        loopKind: forEach
+        over: the usage's unexported references
+        endStep: 16
+      - stepNumber: 14
+        description: >-
+          Read the spec the reference targets — a component, a type, or (for an L1 re-export) a
+          whole subsystem — for the subsystem that owns it: the entry's source
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadSpec
+      - stepNumber: 15
+        description: >-
+          Read the source subsystem's L1 table: an L0 re-export can only follow what the subsystem
+          already publishes to its own project
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveSubsystemExports
+      - stepNumber: 16
+        label: plan-entry
+        description: >-
+          Plan the producer's entry — one per source subsystem and item, `from: <subsystem>` with
+          the component or the typeDef, audience project, no `as` — or merge the consumer and the
+          member it reaches into the entry already planned. Report instead, leaving the reference as
+          it is: a whole-subsystem target (subsystem-reference: no entry expresses it short of
+          exporting the subsystem wholesale; stage 3 rewrites it); an item its subsystem does not
+          publish (target-unpublished: publish it at L1 first, or the reference is wrong); an item
+          exported already but under a narrowing that does not declare the member reached
+          (narrowed); an item whose default public name already binds another target in the
+          producer's table (name-taken)
+        type: local
+      - stepNumber: 17
+        description: Does the consumer still have to declare the producer?
+        type: branch
+        condition: >-
+          the consumer does not declare the producer (ProjectFamily.declares: a direct member needs
+          no declaration — its mount is its alias — and an external that already resolves to the
+          producer is one)
+        onFalseStep: 19
+      - stepNumber: 18
+        description: >-
+          Plan the consumer's external: the alias is the producer's planned id and the declaration
+          `{}`, since the alias defaults the producer id. Report instead when there is no planned
+          id, when the id does not fit the alias grammar [a-z0-9-_]+ (alias-invalid: a dotted id
+          needs an alias a person chooses), or when the alias is already taken in the consumer by
+          another declaration or a mount (alias-taken)
+        type: local
+      - stepNumber: 19
+        label: pin
+        description: >-
+          Plan a pin of the consumer's alias for the producer whenever an entry or a declaration was
+          planned for the pair, so its snapshot carries the new entries and its lock's used map
+          covers the references
+        type: local
+      - stepNumber: 20
+        label: legacy
+        description: Convert each member's stage-1 pins
+        type: loop
+        loopKind: forEach
+        over: each node with a parent (a chained member)
+        endStep: 23
+      - stepNumber: 21
+        description: Bind the member's root
+        type: local
+      - stepNumber: 22
+        description: List the member's vendored surfaces with their family role (parent, sibling, foreign)
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listExternalInterfaces
+      - stepNumber: 23
+        label: convert
+        description: >-
+          A parent pin (the family surface) converts: plan an external for the parent under its
+          planned id, and a pin, unless the member already declares the parent or a crossing above
+          planned it. Each sibling pin is recorded as superseded — it held L1 items the parent never
+          exported, and the entries planned above serve those references now; it stays on disk,
+          because stage-1 resolution still reads it until stage 3. Foreign surfaces are left alone.
+          Bind back to the top root
+        type: local
+      - stepNumber: 24
+        description: >-
+          Restore the caller's binding; drop the projects with nothing to write, and order the rest
+          top root first, then members in the graph's walk order
+        type: local
+      - stepNumber: 25
+        description: Answer the plan with every finding
+        type: return
+        outcome: ChainingMigrationPlan
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        description: Is there anything to write?
+        type: branch
+        condition: the plan is empty (ChainingMigrationPlan.isEmpty)
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Answer applied false with nothing written and nothing to re-lock
+        type: return
+        outcome: nothing to migrate
+      - stepNumber: 3
+        label: blocked
+        description: Does a finding refuse apply?
+        type: branch
+        condition: >-
+          the plan is blocked (ChainingMigrationPlan.blocked): the family was partial, or a project
+          it writes was absent
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Refuse before the first write, naming each blocking finding
+        type: throw
+        error: ChainingMigrationRefusedError
+      - stepNumber: 5
+        label: preflight
+        description: Check every project the plan writes before writing any
+        type: loop
+        loopKind: forEach
+        over: the plan's projects
+        endStep: 10
+      - stepNumber: 6
+        description: Bind the project's root
+        type: local
+      - stepNumber: 7
+        description: Is the project still there, with a configuration?
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 8
+        description: A project that disappeared since the plan was made
+        type: branch
+        condition: the project has no configuration
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Restore the caller's binding and refuse before the first write, naming the project: a
+          project it must write is absent
+        type: throw
+        error: ChainingMigrationRefusedError
+      - stepNumber: 10
+        label: dry-run
+        description: >-
+          When the project gains L0 entries, run their one delta on its system spec through the
+          gated authoring seam as a dry run: the whole write, gate included, with nothing written —
+          a refusal raises here, before anything reached disk
+        type: call
+        targetComponent: cli_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 11
+        label: ids
+        description: 'Declare the ids first: every external resolves its producer by id'
+        type: loop
+        loopKind: forEach
+        over: the projects with an id to write
+        endStep: 13
+      - stepNumber: 12
+        description: Bind the project's root
+        type: local
+      - stepNumber: 13
+        label: set-id
+        description: >-
+          Declare the planned id in its project.yaml — an edit that keeps every comment; the same id
+          declared already writes nothing, a different one is refused and never overwritten
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: setProjectId
+      - stepNumber: 14
+        label: exports
+        description: Then the producers' exports, so every pin below projects them
+        type: loop
+        loopKind: forEach
+        over: the projects with export entries to add
+        endStep: 16
+      - stepNumber: 15
+        description: Bind the producer's root
+        type: local
+      - stepNumber: 16
+        label: add-entries
+        description: >-
+          Add the planned re-export entries to its L0 publicInterfaces in one gated delta on its
+          system spec. Entries upsert by from + item + interface + as, so an entry already present
+          changes nothing and a second apply writes nothing
+        type: call
+        targetComponent: cli_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 17
+        label: externals
+        description: Then the consumers' externals
+        type: loop
+        loopKind: forEach
+        over: each planned external of each project
+        endStep: 19
+      - stepNumber: 18
+        description: Bind the consumer's root
+        type: local
+      - stepNumber: 19
+        label: declare
+        description: >-
+          Declare the external in its project.yaml — the same declaration under the alias writes
+          nothing, a different one is refused and never overwritten
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: declareExternal
+      - stepNumber: 20
+        label: pins
+        description: Pin last, once every id, export and declaration is written
+        type: loop
+        loopKind: forEach
+        over: the projects with aliases to pin
+        endStep: 22
+      - stepNumber: 21
+        description: Bind the consumer's root
+        type: local
+      - stepNumber: 22
+        label: pin
+        description: >-
+          Pin the planned aliases: each snapshot projects the producer's new entries and each lock's
+          used map covers the migrated references; an unchanged snapshot is not rewritten. The
+          caller must gate on reach itself — a producer out of reach is reported unreachable and
+          keeps its previous pin
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: pinExternals
+      - stepNumber: 23
+        description: >-
+          Restore the caller's binding. Collect every file that changed, in write order, and every
+          project whose approval the writes staled: a producer whose L0 changed (its spec digests
+          moved) and a consumer whose externals or pins changed (gate inputs). Nothing is locked
+          here — re-locking is each project's human
+        type: local
+      - stepNumber: 24
+        description: 'Answer the report: the plan, applied true, the files written and the projects to re-lock'
+        type: return
+        outcome: ChainingMigrationReport
+detail: full
+status: design
+createdAt: '2026-09-26T21:13:14.060Z'
+updatedAt: '2026-09-26T21:14:55.461Z'

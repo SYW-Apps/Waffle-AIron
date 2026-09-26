@@ -145,7 +145,32 @@ methods:
         type: return
         outcome: rekeyed
     detail: full
+  - name: setId
+    narrative: []
+    intent: >-
+      Refuses an id outside the project-id grammar before reading anything. Reads the configuration
+      through the store, refusing when the project has none. When it already declares this id,
+      returns false and writes nothing; when it declares a different one, refuses with an error
+      naming both ids and the project root — an id moves only through the rename migration.
+      Otherwise sets `id` and writes the configuration back through the store, whose edit keeps
+      every comment, and returns true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: declareExternal
+    narrative: []
+    intent: >-
+      Refuses an alias outside [a-z0-9-_]+, or a declaration whose `project` breaks the project-id
+      grammar, before reading anything. Reads the configuration through the store, refusing when the
+      project has none. When `externals` already holds the alias with an equal declaration, returns
+      false and writes nothing; with a different one, refuses naming the alias, both declarations
+      and the project root. Otherwise adds the alias with the declaration after the existing entries
+      (creating `externals` when absent) and writes the configuration back through the store,
+      returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-09-26T15:58:19.267Z'
+updatedAt: '2026-09-26T21:10:37.127Z'

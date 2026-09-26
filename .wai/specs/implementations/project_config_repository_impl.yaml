@@ -109,6 +109,20 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: rekeyCarried
+  - name: setId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: setId
+  - name: declareExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: declareExternal
 status: complete
 createdAt: '2026-09-13T11:19:36.287Z'
-updatedAt: '2026-09-26T10:59:49.982Z'
+updatedAt: '2026-09-26T21:10:52.690Z'

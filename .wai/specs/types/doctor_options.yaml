@@ -1,0 +1,25 @@
+kind: value-object
+id: doctor_options
+name: DoctorOptions
+description: The flags of `wairon doctor`.
+subsystem: sdd_cli
+fields:
+  - name: fix
+    type: boolean
+    description: >-
+      Apply the repairs before the report: today's fixed steps, then the chaining migration once
+      confirmed.
+    optional: true
+  - name: report
+    type: string
+    description: >-
+      Print one section's plan and nothing else, writing nothing. `chaining` is the one section; it
+      never combines with --fix.
+    optional: true
+  - name: 'yes'
+    type: boolean
+    description: Answer the chaining migration's confirmation for a non-interactive run.
+    optional: true
+methods: []
+createdAt: '2026-09-26T21:12:12.389Z'
+updatedAt: '2026-09-26T21:12:12.392Z'

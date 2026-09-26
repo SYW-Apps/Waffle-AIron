@@ -11,7 +11,16 @@ methods:
     returns: Json | null
     params: []
   - name: writeDocument
-    description: Write the raw document, replacing the file.
+    description: >-
+      Write the document as an EDIT of the file already there, never a re-serialization of a plain
+      object: the file's YAML is parsed into its node tree (which carries its comments), the tree is
+      reconciled to the given document — a mapping key whose value is unchanged is left untouched
+      with every comment on it, a changed scalar is replaced in place, a key the document drops is
+      removed, a key it adds is appended after the keys already at its level, and a sequence is
+      reconciled item by item by position — and the tree is serialized back. So comments, key order,
+      quoting of untouched scalars and keys the schema does not know all survive. The edited text is
+      parsed again and must equal the given document; otherwise the write is refused naming the
+      project root, and nothing is written. With no file yet, the document is serialized fresh.
     signature: 'writeDocument(document: Json): void'
     returns: void
     params:
@@ -39,4 +48,4 @@ methods:
         description: The whole document text, written byte for byte
 status: complete
 createdAt: '2026-09-13T10:50:01.980Z'
-updatedAt: '2026-09-26T10:59:20.511Z'
+updatedAt: '2026-09-26T21:10:01.153Z'
