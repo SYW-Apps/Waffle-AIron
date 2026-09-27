@@ -1,6 +1,6 @@
 # Wairon SDD Project
 <!-- wairon-guide-start -->
-<!-- wairon-version: 5.1.1-dev.78 -->
+<!-- wairon-version: 5.1.1-dev.82 -->
 ## Wairon — Spec-Driven Development (you are operating inside it)
 
 This project uses **wairon**. System specs live under `.wai/specs/` (L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation → Narrative); agent topology and code are derived from it.
@@ -12,9 +12,9 @@ This project uses **wairon**. System specs live under `.wai/specs/` (L0 System �
 ### How you operate
 - **To design/modify specs**: Use **`sdd-architect`** skill (in `.claude/skills/` or `.gemini/skills/`).
 - **Manage specs via MCP tools only**: Use `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_add_component`, `sdd_define_interface`, `sdd_write_narrative`, `sdd_add_type`, `sdd_get_spec`, `sdd_delete_spec`, `sdd_validate_tree`, and `sdd_get_status` (namespaced if needed). Do not edit specs manually.
-- **Subprojects & Namespacing (Chaining)**: If a subsystem defines a `projectPath`, its entire `.wai/` spec tree is recursively loaded and namespaced with the subsystem ID as a prefix (using `::`, e.g. `billing::invoice::invoice_portal`). Use the qualified namespaced ID with the parent MCP tools; wairon will resolve the path and strip the prefix automatically.
-  - **Leading `::`**: Bypasses the local subsystem prefix to resolve absolute from the system root (e.g. `::shared::error-type`).
-  - **`super::`**: Goes up one parent subsystem level (e.g. `super::sibling_comp`, `super::super::parent_sibling`).
+- **Members & cross-project references**: A project may contain other wairon projects as **members**, declared in its `.wai/project.yaml` `members` (`billing: services/billing`, or the long form `{ path, description }`). Create one with `sdd_add_member`, relocate it with `sdd_move_member`, turn a subsystem into one with `sdd_externalize_subsystem` and take one back in with `sdd_internalize_member`. A member is never a subsystem of its parent: it has its own `.wai/` tree and is designed from its own root.
+  - **`alias::name`**: An id without `::` is local to the project that writes it. Anything another project provides is referenced as `alias::name` — the alias is one of your members or declared `externals`, the name a public name in that project's L0 export table. A reference to something it does not export is reported (`EXTERNAL_NOT_EXPORTED`).
+  - **Deprecated forms** (they still resolve for one release, are reported, and `wairon doctor --fix` rewrites them): a leading `::` (`::shared::error-type`), `super::` (`super::sibling_comp`), member paths (`billing::invoice::invoice_portal`), and an L1 subsystem carrying `projectPath` (`DEPRECATED_MOUNT_FORM`).
 - **Do not run the `wairon` CLI**: Use `sdd_validate_tree` and `sdd_get_status` instead of CLI commands.
 - **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run `wairon lock` to confirm and freeze them."* No session restart is needed after the lock — delegate implementation right away via the `sdd-delegate` skill.
 - **To implement code**: Delegate via the `sdd-delegate` skill: fetch the component's live brief with the `sdd_get_agent_brief` MCP tool (or the `wairon-agent://` resource) and spawn a subagent from it. Briefs are composed per call from the current spec tree, so they are always current — never wait for a restart. Implementations must match L3 interfaces and L5 narratives exactly. Generated agent files under `.claude/agents/` are an optional materialized view of the same topology — the live briefs are canonical.

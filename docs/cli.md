@@ -13,11 +13,14 @@ Bootstrap `.wai/` in the current project: project config, the SDD spec tree
 file, and the SDD skills installed into each selected target tool. `--yes` uses
 defaults without prompts; `--pack <source>` (repeatable) vendors + registers an
 extension pack right after init (see `wairon packs`). Re-running on an
-initialized project is a no-op that points you back to the SDD flow.
+initialized project is a no-op that points you back to the SDD flow. Run inside
+a subdirectory of an existing project, it offers to make that directory a
+**member** of the parent (see `wairon member add`).
 
 ### `wairon status`
 Print a hierarchical completeness dashboard of the SDD spec tree (which
 subsystems/components/interfaces/implementations are drafted vs complete).
+Each member project prints as `[Project] alias (id)` holding its own subsystems.
 
 ### `wairon validate [--ci]`
 Run the architecture-conformance gate over the spec tree: reference integrity,
@@ -245,6 +248,39 @@ narrative flowcharts with call drill-down, and an Export menu
 
 ---
 
+## Members
+
+A project may contain other wairon projects as **members**, declared in its
+`.wai/project.yaml`:
+
+```yaml
+members:
+  billing: services/billing                                  # shorthand: alias = key
+  ledger: { path: services/ledger, description: The books }  # long form
+```
+
+A member is never a subsystem of its parent: it has its own `.wai/` tree
+(its `project.yaml` declares its id — the alias, when wairon scaffolds it) and
+is designed from its own root. Every cross-project reference is
+`alias::name`: the alias is one of the referring project's members or declared
+`externals`, the name a public name in that project's L0 export table. An id
+without `::` is local.
+
+| Command | Description |
+|---------|-------------|
+| `wairon member add <alias> <path> [--description <text>]` | Scaffold a member project at `<path>` (its id = `<alias>`, its L0) — each part only when absent — and declare it in `members`. Nothing is written into this project's spec tree |
+| `wairon member move <alias> <path>` | Move a member's directory and point its `members` entry there (a legacy L1 mount is moved into `members` first) |
+| `wairon member internalize <alias>` | Take a single-subsystem member back into this project: its specs move in, references across the old boundary become local ids, its `members` entry and `.wai/` go |
+| `wairon subsystem externalize <id> --path <dir>` | Turn an internal subsystem into a member at `<dir>`: its specs move there, it is declared in `members` under the subsystem id, and references across the new boundary are re-saved as `alias::name`. You move the source code; `wairon doctor --fix` adds the exports either side now needs |
+
+**Deprecated forms.** For one release wairon still reads, and reports: a leading
+`::` (`::shared::money`), `super::` (`super::sibling`), a member path
+(`billing::invoice::invoice_portal`) and an L1 subsystem carrying
+`projectPath` (`DEPRECATED_MOUNT_FORM`). `wairon doctor --fix` rewrites them to
+`members` and `alias::name`.
+
+---
+
 ## Domains
 
 A domain is a unit of agent ownership. Subsystem-derived domains come from the
@@ -284,8 +320,8 @@ and author specs directly.
 
 **Tools:** `listAgents`, `getAgent`, `listDomains`, `validateTopology`,
 `getProjectConfig`, `sdd_initialize_system`, `sdd_add_subsystem`,
-`sdd_set_public_interfaces`, `sdd_set_subsystem_project_path`,
-`sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`,
+`sdd_set_public_interfaces`, `sdd_add_member`, `sdd_move_member`,
+`sdd_externalize_subsystem`, `sdd_internalize_member`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`,
 `sdd_write_narrative`, `sdd_add_type`, `sdd_get_spec`, `sdd_update_spec`,
 `sdd_delete_spec`, `sdd_validate_tree`, `sdd_get_status`.
 

@@ -28,8 +28,11 @@ client expects back from them (item 14). The library surface narrows too:
 (item 4). Stage 2 adds three more: a hosted landscape entry with no audience now
 defaults to `instance` rather than `public`, a legacy L0 entry sourced from a chained
 member binds only what that member exports from its own L0, and `doctor --fix` asks
-before it applies the chaining migration (`--yes` in a script). Nothing here is purely
-additive, so `[minor]` would understate it.
+before it applies the chaining migration (`--yes` in a script). Stage 3 renames and
+removes the mount writers' commands and tools with no aliases, re-keys every member's
+specs by its project id (one re-lock), and gives the deprecated reference and mount
+forms one release of grace. Nothing here is purely additive, so `[minor]` would
+understate it.
 
 ### A third severity: `notice`
 
@@ -306,6 +309,121 @@ export, so `EXTERNAL_NOT_EXPORTED` stops firing once the type is exported.
 - **A configuration save no longer appends new keys at the end** of `project.yaml`;
   it places them in schema order. A script that compares the file's text after a save
   will see that difference.
+
+### Members, and a loader without position
+
+Stage 3 of the chained-subsystems work. A family becomes a set of projects that name
+each other: a project declares the projects it contains as **members** in
+`project.yaml`, and every cross-project reference is `alias::name`.
+
+```yaml
+# .wai/project.yaml of the containing project
+members:
+  billing: services/billing                                   # shorthand: alias = key
+  ledger: { path: services/ledger, description: The books }   # long form
+```
+
+**A member is not a subsystem.** It has no L1 spec in its parent's tree, carries no
+content there, and is named only by its alias. Its own `.wai/` tree is designed from
+its own root.
+
+- **Resolution without position.** An id without `::` is local to the project that
+  writes it. `alias::name` goes through the referring project's alias table (its
+  members and declared `externals`) to a public name of that project's resolved L0
+  export table. A reference means the same thing from every root and at every depth,
+  and the loader no longer merges a member's tree into its parent's namespace.
+- **Keys.** A member's specs are keyed by its project id (`<id>::<local id>`) at any
+  depth; the bound root's own specs are bare. A subsystem whose key repeats its
+  member's id (`billing::billing`) keeps that honest id, and only its display
+  collapses: the canvas and the status tree label it `billing` under the member.
+- **The status tree** prints each member as `[Project] alias (id)` holding its own
+  subsystems, never as a `[Subsystem]` of its parent; a legacy mount is marked
+  `[mount form]`. `sdd_get_status` names every member the root declares, legacy
+  mounts included, and the `recursive` option of `sdd_get_status` and
+  `sdd_validate_tree` now reads "descend into members".
+- **New findings.** `DEPRECATED_MOUNT_FORM` (notice), `LOCAL_ID_SHADOWS_PROJECT`
+  (warning), `DUPLICATE_SPEC_ID` (error, types included, naming both files),
+  `PROJECT_ID_COLLISION` (error) and `PROJECT_DEPENDENCY_CYCLE` (warning; an error in
+  stage 5). `NAMESPACE_SHADOWING` retires with the root anchor it guarded.
+- **`strippedKeys` on the change report.** `sdd_update_spec` (and every gated delta)
+  names each key the stored file carries that its level's schema does not know — read
+  from the raw file, as `path: value` — which the write drops, on a dry run too.
+
+**The writers write members, never the L1 mount form.**
+
+| Before | Now |
+|---|---|
+| `wairon subsystem add <id> --project-path <dir>` | `wairon member add <alias> <path> [--description]` |
+| `wairon subsystem move <id> --project-path <dir>` | `wairon member move <alias> <path>` |
+| `wairon subsystem internalize <id>` | `wairon member internalize <alias>` |
+| `wairon subsystem externalize <id> --project-path <dir>` | `wairon subsystem externalize <id> --path <dir>` |
+| `sdd_add_subsystem` with `projectPath` | `sdd_add_member` (a `projectPath` is now refused, naming it) |
+| `sdd_move_subsystem_project` | `sdd_move_member` |
+| `sdd_internalize_subsystem` | `sdd_internalize_member` |
+| `sdd_externalize_subsystem { projectPath }` | `sdd_externalize_subsystem { path }` |
+| `sdd_set_subsystem_project_path` | removed — members are configuration; `sdd_move_member` relocates one |
+
+- **`createMember`** (`wairon member add`, `sdd_add_member`, and `wairon init` run in
+  a subdirectory of a project) scaffolds the member project — its `project.yaml`
+  declaring the alias as its id, and an L0 whose vision is the description — each
+  only when absent, and declares it in `members`. It writes no L1 spec.
+- **`moveMember`** relocates a member's directory and points its entry there. A member
+  still declared by a legacy L1 mount is moved into `members` first.
+- **`externalizeSubsystem`** turns an internal subsystem into a member declared under
+  its id. Every reference keeps its target: the parent's references into it become
+  `<id>::name`, its references back into the parent `<parent id>::name` (the parent is
+  declared as the member's external), and a `super::` it wrote becomes the id of the
+  project it lands in — never `super::`. One whose target lies above the bound root is
+  refused before anything moves. The exports either side now needs are left to
+  `wairon doctor --fix`.
+- **`internalizeMember`** takes a single-subsystem member back and re-saves every
+  reference across the old boundary as a local id. It refuses a member that holds
+  more than one subsystem, or declares members or externals of its own.
+- **The authoring seam refuses** a subsystem that names `projectPath`, before anything
+  reaches disk, and points at `sdd_add_member`.
+- `saveSubsystemSpec` is gone from the library; a subsystem is saved through the
+  generic `saveSpec('subsystem', …)` like every other level.
+
+**Hosted.** A token qualifier keeps its text (`projectId::alias`, one member alias per
+hop), and each hop is now read as a member alias, looked up in `members` or the legacy
+mount. Every existing token binds exactly the root it bound before, an internal
+subsystem is still no root, and nothing widens. The hosted lock pins each member the
+bound tree declares (it was handing over the subsystem specs, which no longer name
+members, and pinned nothing).
+
+**Retired.** The sibling surface — `.wai/surfaces` sibling pins,
+`projectSubsystemSurface`, `pinFamilySurfaces`, the family pin,
+`sdd_list_external_interfaces`, and `wairon surface pin` / `wairon surface externals`
+— is replaced by externals and their pins.
+
+**Upgrading.**
+
+- **Renamed and removed, with no aliases** (this release is major): the CLI commands
+  `wairon subsystem add` → `wairon member add`, `wairon subsystem move` →
+  `wairon member move`, `wairon subsystem internalize` → `wairon member internalize`,
+  `wairon subsystem externalize --project-path` → `--path`; the MCP tools
+  `sdd_move_subsystem_project` → `sdd_move_member`, `sdd_internalize_subsystem` →
+  `sdd_internalize_member`, the `projectPath` argument of `sdd_externalize_subsystem`
+  → `path`, and `sdd_set_subsystem_project_path` and `sdd_list_external_interfaces`
+  removed; `sdd_add_subsystem` refuses `projectPath` (use `sdd_add_member`); and
+  `wairon surface pin` / `wairon surface externals` removed. Library callers of
+  `saveSubsystemSpec`, `createChainedSubsystem`, `moveSubsystemProject` and
+  `internalizeSubsystem` move to `saveSpec('subsystem', …)`, `createMember`,
+  `moveMember` and `internalizeMember`. Scripts and agent prompts that name any of
+  these need the new names.
+- **Members are re-keyed by project id.** A member's specs used to be keyed by the
+  mount path that reached them (`waffler_core::transpiler::*`); they are now keyed by
+  the member's project id (`transpiler::*`). A lock taken before this release reads as
+  stale for the specs whose keys moved: re-lock once.
+- **Deprecated forms, one release of grace.** A leading `::`, `super::`, a member path
+  (`billing::invoice::invoice_portal`) and an L1 subsystem carrying `projectPath` still
+  resolve — a path-form first segment naming a family project's id walks on from that
+  project, so each reads the same from every root — and each is reported
+  (`DEPRECATED_REFERENCE_FORM`, `DEPRECATED_MOUNT_FORM`, notices). The next major
+  release stops reading them.
+- **`wairon doctor --fix` rewrites them** (landing with the rest of stage 3): the
+  mounts move into `members`, carrying their fields into the member, and every
+  reference is rewritten to `alias::name`, plan first.
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 
