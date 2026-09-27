@@ -259,8 +259,8 @@ already report:
 - **externals:** the consumer declares the producer under its id (`alias: {}`);
 - **pins:** each new or affected alias is pinned once everything else is written;
 - **stage-1 pins:** a member's family pin converts to an external for the parent;
-  its sibling pins are listed as superseded and **stay on disk** until stage 3,
-  because stage-1 resolution still reads them.
+  every family pin is listed as superseded, and stage 3's migration deletes them once
+  the externals that replace them are pinned (see *The migration* under stage 3).
 
 What it will not decide it reports instead (`id-ambiguous`, `target-unpublished`,
 `name-taken`, `narrowed`, `subsystem-reference`, `alias-invalid`, `alias-taken`,
@@ -368,7 +368,11 @@ its own root.
   declaring the alias as its id, and an L0 whose vision is the description — each
   only when absent, and declares it in `members`. It writes no L1 spec.
 - **`moveMember`** relocates a member's directory and points its entry there. A member
-  still declared by a legacy L1 mount is moved into `members` first.
+  still declared by a legacy L1 mount is moved into `members` first — and refused,
+  naming the fields, when that mount carries anything beyond its path and description
+  (a published entry, trusted links, lint allows, a lifecycle, profile, target language,
+  design depth or extension data): a move never drops a field, and `wairon doctor
+  --fix` carries them plan-first.
 - **`externalizeSubsystem`** turns an internal subsystem into a member declared under
   its id. Every reference keeps its target: the parent's references into it become
   `<id>::name`, its references back into the parent `<parent id>::name` (the parent is
@@ -378,7 +382,16 @@ its own root.
   `wairon doctor --fix`.
 - **`internalizeMember`** takes a single-subsystem member back and re-saves every
   reference across the old boundary as a local id. It refuses a member that holds
-  more than one subsystem, or declares members or externals of its own.
+  more than one subsystem, or declares members or externals of its own, and a member
+  another project of the family still references — listing each reference, since
+  rewriting other projects is the family migration's job.
+- **`EXTERNAL_UNRESOLVED` from a member's own root.** A member that declares its parent
+  or a sibling as an external no longer reads as unresolved when it is validated from
+  its own root: the validator climbs to the family's top (only where the request may
+  read above its root) and the notice fires only when neither the scan nor the climb
+  finds the producer.
+- **Agent topology.** A member's delegating owner is named `<alias> (member project)`
+  and describes the member it delegates into, not a "chained subproject".
 - **The authoring seam refuses** a subsystem that names `projectPath`, before anything
   reaches disk, and points at `sdd_add_member`.
 - `saveSubsystemSpec` is gone from the library; a subsystem is saved through the
@@ -421,9 +434,45 @@ members, and pinned nothing).
   project, so each reads the same from every root — and each is reported
   (`DEPRECATED_REFERENCE_FORM`, `DEPRECATED_MOUNT_FORM`, notices). The next major
   release stops reading them.
-- **`wairon doctor --fix` rewrites them** (landing with the rest of stage 3): the
-  mounts move into `members`, carrying their fields into the member, and every
-  reference is rewritten to `alias::name`, plan first.
+- **`wairon doctor --fix` rewrites them** — see *The migration* below.
+
+**The migration.** `wairon doctor --report chaining` prints what the family needs and
+writes nothing; `wairon doctor --fix` prints the same plan, asks, and applies it
+(`--fix --yes` in CI and scripts; with no terminal and no `--yes` it writes none of it).
+Run it from any project of the family: it climbs to the top and plans the whole family.
+On top of stage 2c's ids, exports, externals and pins, it now:
+
+- **moves every legacy L1 mount into its parent's `members`** — its `projectPath` as
+  the path, its description into the member's long form — and deletes the mount
+  document. A mount's published entry becomes an L0 export of the member at audience
+  `project` (published first at L1 in the member subsystem that owns the component,
+  with the entry's transport kind and details, where that subsystem does not publish it
+  yet). Empty arrays, lint allows about the mount and an entry's `consumers` retire with
+  the mount, each listed. A non-empty `trustedLinks`, a `lifecycle`, `profile`,
+  `targetLanguage`, `designDepth` or `ext` on a mount **blocks** the migration — the
+  member has to hold it itself — and nothing is written until a person moves or drops it;
+- **exports a project-level type as the project's own** (`{ typeDef, audience: project }`
+  with no `from`) where another project uses it, and **writes a minimal L0** — the
+  project's name and a one-line vision — for a project that exports and has none;
+- **rewrites every reference out of a deprecated form**, from the family's top root, to
+  the text the writer emits: a bare local id where it lands in its own project, else
+  `alias::name` — raw positions included (type strings, declared `calls`, `component:`
+  credential sources, trusted links, and the display signature beside a rewritten
+  parameter). Every rewrite is listed, grouped per project and spec with counts. A spec
+  that also holds a deprecated reference with no canonical text keeps all its rewrites
+  back, named in a `rewrite-unavailable` finding;
+- **deletes the stage-1 family pins** under `.wai/surfaces` (the parent's and every
+  sibling's), last, once the externals that replace them are pinned — one line per
+  project in the plan;
+- **lists every key its first L0 write will drop** — a key the stored L0 carries that
+  the schema does not know, e.g. `status: draft` — under a "will be removed" line, so
+  the one confirmation covers it.
+
+A second run plans nothing. The migration **locks nothing**: it names every project
+whose approval the writes staled; re-lock each once with `wairon lock`. Proven on a copy
+of a sixteen-project family: 15 mounts moved, 334 references rewritten, 169 family pins
+deleted, and `DEPRECATED_REFERENCE_FORM` / `DEPRECATED_MOUNT_FORM` / `EXTERNAL_UNDECLARED`
+at zero afterwards.
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 
