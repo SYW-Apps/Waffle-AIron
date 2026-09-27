@@ -22,24 +22,6 @@ methods:
         type: call
         targetComponent: spec_file_store
         targetMethod: write
-  - name: saveSubsystemSpec
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Key the spec's own id, write every reference back relative to the project that owns it
-          (the scan's inverse, from the owning project's alias table and the producers' recorded
-          public names; authored text carried back when its bound value is unchanged; never
-          `super::`, a leading `::` or a member path), keep the stored status when the spec arrives
-          at draft or without one so a re-author never quietly reopens a frozen subsystem, stamp
-          updatedAt (unless preserved for a mechanical re-save), and re-parse through the writer
-          schema — a refusal aborts the save. A spec keyed in a member is routed to that member's
-          files
-        type: local
-      - stepNumber: 2
-        description: Persist the serialized document to its subsystem spec path through the file store
-        type: call
-        targetComponent: spec_file_store
-        targetMethod: write
   - name: saveComponentSpec
     narrative:
       - stepNumber: 1
@@ -183,4 +165,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-09-27T10:36:43.345Z'
+updatedAt: '2026-09-27T11:02:35.796Z'

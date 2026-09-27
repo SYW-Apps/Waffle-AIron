@@ -63,13 +63,6 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: getStatus
-  - name: sdd_move_subsystem_project
-    narrative:
-      - stepNumber: 1
-        description: Dispatch to the moveSubsystemProject workflow
-        type: call
-        targetComponent: mcp_orchestrator
-        targetMethod: moveSubsystemProject
   - name: sdd_externalize_subsystem
     narrative:
       - stepNumber: 1
@@ -77,13 +70,6 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: externalizeSubsystem
-  - name: sdd_internalize_subsystem
-    narrative:
-      - stepNumber: 1
-        description: Dispatch to the internalizeSubsystem workflow
-        type: call
-        targetComponent: mcp_orchestrator
-        targetMethod: internalizeSubsystem
   - name: listResources
     narrative:
       - stepNumber: 1
@@ -142,13 +128,6 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: setPublicInterfaces
-  - name: sdd_set_subsystem_project_path
-    narrative:
-      - stepNumber: 1
-        description: Dispatch to the setSubsystemProjectPath workflow
-        type: call
-        targetComponent: mcp_orchestrator
-        targetMethod: setSubsystemProjectPath
   - name: sdd_get_spec
     narrative:
       - stepNumber: 1
@@ -221,6 +200,27 @@ methods:
         type: call
         targetComponent: mcp_externals_orchestrator
         targetMethod: status
+  - name: sdd_add_member
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the addMember workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: addMember
+  - name: sdd_move_member
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the moveMember workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: moveMember
+  - name: sdd_internalize_member
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the internalizeMember workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: internalizeMember
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T10:43:11.769Z'
+updatedAt: '2026-09-27T10:57:51.958Z'

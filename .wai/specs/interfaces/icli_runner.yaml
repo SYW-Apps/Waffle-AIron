@@ -64,32 +64,36 @@ methods:
       from flag, env, or an interactive prompt.
     signature: 'runProduce(target: string, options: { page?: string; token?: string }): Promise<void>'
     returns: Promise<void>
-  - name: runSubsystemAdd
+  - name: runMemberAdd
     description: >-
-      Add an L1 subsystem to the current project. With --project-path it creates an external
-      (chained) subproject: wires the parent subsystem spec and scaffolds an isolated child wairon
-      project at that path.
-    signature: >-
-      runSubsystemAdd(id: string, options: { projectPath?: string; name?: string; yes?: boolean }):
-      Promise<void>
+      `wairon member add <alias> <path> [--description]`: create a member of the current project —
+      scaffold an isolated wairon project at the path (its project.yaml declaring the alias as its
+      id, its L0) and declare it in this project's project.yaml `members`. Replaces `wairon
+      subsystem add --project-path`, which wrote the L1 mount form.
+    signature: 'runMemberAdd(alias: string, path: string, options: { description?: string }): Promise<void>'
     returns: Promise<void>
-  - name: runSubsystemMove
+  - name: runMemberMove
     description: >-
-      Relocate an external subsystem to a new directory: moves the subproject folder and updates its
-      projectPath link in one step (wairon subsystem move).
-    signature: 'runSubsystemMove(id: string, options: { projectPath?: string }): Promise<void>'
+      `wairon member move <alias> <path>`: relocate a member's directory and point its `members`
+      entry there in one step (a member still declared in the legacy L1 form is moved into `members`
+      first). Replaces `wairon subsystem move`.
+    signature: 'runMemberMove(alias: string, path: string): Promise<void>'
     returns: Promise<void>
   - name: runSubsystemExternalize
     description: >-
-      Migrate an internal subsystem out into a standalone subproject at --project-path (moves specs,
-      mounts via projectPath, rewrites references). Source code is moved by the user.
-    signature: 'runSubsystemExternalize(id: string, options: { projectPath?: string }): Promise<void>'
+      `wairon subsystem externalize <id> --path <dir>`: turn an internal subsystem into a member
+      project at the path — its specs move there, it is declared in project.yaml `members` under the
+      subsystem id, and every reference across the new boundary is re-saved as `alias::name`. It
+      keeps its name because it acts on a subsystem. Source code is moved by the user; the exports
+      either side now needs are left to `wairon doctor --fix`.
+    signature: 'runSubsystemExternalize(id: string, options: { path?: string }): Promise<void>'
     returns: Promise<void>
-  - name: runSubsystemInternalize
+  - name: runMemberInternalize
     description: >-
-      Migrate an external subsystem's specs back into the parent tree and delete its child .wai
-      project.
-    signature: 'runSubsystemInternalize(id: string): Promise<void>'
+      `wairon member internalize <alias>`: take a single-subsystem member back into the current
+      project, remove it from `members` and delete its .wai project. Replaces `wairon subsystem
+      internalize`.
+    signature: 'runMemberInternalize(alias: string): Promise<void>'
     returns: Promise<void>
   - name: runSurface
     description: >-
@@ -495,4 +499,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-27T10:43:23.622Z'
+updatedAt: '2026-09-27T10:59:02.922Z'

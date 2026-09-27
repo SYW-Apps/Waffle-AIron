@@ -197,6 +197,29 @@ methods:
         description: The member's path and optional description
     guarantees:
       - idempotent
+  - name: setMemberPath
+    description: Point an existing member at a new path (forwarded to the registry). Returns whether it wrote.
+    signature: 'setMemberPath(alias: string, path: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: path
+        type: string
+        description: The new path, relative to this root
+    guarantees:
+      - idempotent
+  - name: removeMember
+    description: Remove one member declaration (forwarded to the registry). Returns whether it wrote.
+    signature: 'removeMember(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-09-27T10:39:12.271Z'
+updatedAt: '2026-09-27T10:55:13.507Z'

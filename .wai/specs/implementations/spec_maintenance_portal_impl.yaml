@@ -14,13 +14,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: provisionProject
-  - name: moveSubsystemProject
+  - name: moveMember
     narrative:
       - stepNumber: 1
         description: Forward to the core orchestrator
         type: call
         targetComponent: core_orchestrator
-        targetMethod: moveSubsystemProject
+        targetMethod: moveMember
   - name: externalizeSubsystem
     narrative:
       - stepNumber: 1
@@ -28,13 +28,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: externalizeSubsystem
-  - name: internalizeSubsystem
+  - name: internalizeMember
     narrative:
       - stepNumber: 1
         description: Forward to the core orchestrator
         type: call
         targetComponent: core_orchestrator
-        targetMethod: internalizeSubsystem
+        targetMethod: internalizeMember
   - name: importSpecTree
     narrative:
       - stepNumber: 1
@@ -112,6 +112,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: normalizeReferences
+  - name: createMember
+    narrative:
+      - stepNumber: 1
+        description: Forward the member creation to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: createMember
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-09-27T10:39:43.465Z'
+updatedAt: '2026-09-27T10:57:05.434Z'

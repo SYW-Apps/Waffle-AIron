@@ -55,7 +55,16 @@ fields:
       collided with the spec because nothing listed them. The write that creates the collision is
       the one that reports it.
     optional: false
+  - name: strippedKeys
+    type: string[]
+    description: >-
+      Keys the stored document on disk carries that its level's schema does not know — read from the
+      raw file, not the parsed spec, since the parse already discards them — which this write will
+      drop, each as `path: value` (e.g. `status: draft` on an L0). A dry run lists them too, so a
+      caller can show them before anything is written. Absent when there are none. Named, never
+      silently lost.
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-09-20T13:25:45.629Z'
+updatedAt: '2026-09-27T11:01:27.402Z'

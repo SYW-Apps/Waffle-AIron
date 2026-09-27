@@ -35,13 +35,6 @@ methods:
         type: call
         targetComponent: spec_index
         targetMethod: loadSubsystemSpec
-  - name: saveSubsystemSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the registry write face
-        type: call
-        targetComponent: spec_registry
-        targetMethod: saveSubsystemSpec
   - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
@@ -229,4 +222,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-27T10:37:16.692Z'
+updatedAt: '2026-09-27T11:02:34.169Z'

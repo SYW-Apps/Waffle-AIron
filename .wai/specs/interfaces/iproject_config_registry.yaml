@@ -193,6 +193,35 @@ methods:
         description: The member's path relative to this root, and its description when one is carried
     guarantees:
       - idempotent
+  - name: setMemberPath
+    description: >-
+      Point an existing member at a new path, keeping its description: the write behind moving a
+      member's directory. Refuses an alias `members` does not declare, and an empty or absolute
+      path. The same path writes nothing. Returns whether it wrote.
+    signature: 'setMemberPath(alias: string, path: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: path
+        type: string
+        description: The member's new path, relative to this root
+    guarantees:
+      - idempotent
+  - name: removeMember
+    description: >-
+      Remove one member declaration from `members` — the write behind internalizing a member, whose
+      specs have moved into this project. Returns false when the alias is not declared, writing
+      nothing.
+    signature: 'removeMember(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-09-27T10:39:06.879Z'
+updatedAt: '2026-09-27T10:55:08.119Z'

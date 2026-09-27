@@ -193,11 +193,28 @@ methods:
         targetComponent: position_migration_orchestrator
         targetMethod: plan
       - stepNumber: 22
+        label: dropped
+        description: Find what the L0 writes would drop
+        type: loop
+        loopKind: forEach
+        over: each project that gains L0 entries and already has an L0
+        endStep: 23
+      - stepNumber: 23
+        label: dry-run-l0
+        description: >-
+          Under the project's binding, run its one L0 delta through the gated seam as a dry run —
+          nothing is written — and record the report's strippedKeys (keys the stored L0 file carries
+          that the schema does not know, e.g. `status: draft`) as the project's droppedKeys, to
+          print and confirm with the rest of the plan
+        type: call
+        targetComponent: cli_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 24
         description: >-
           Restore the caller's binding; drop the projects with nothing to write, and order the rest
           top root first, then members in the graph's walk order
         type: local
-      - stepNumber: 23
+      - stepNumber: 25
         description: Answer the plan with every finding
         type: return
         outcome: ChainingMigrationPlan
@@ -369,4 +386,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-09-26T21:13:14.060Z'
-updatedAt: '2026-09-27T10:46:46.811Z'
+updatedAt: '2026-09-27T11:01:56.614Z'

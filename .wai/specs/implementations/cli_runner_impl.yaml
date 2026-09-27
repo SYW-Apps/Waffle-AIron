@@ -344,7 +344,7 @@ methods:
         description: Return once produced
         type: return
         outcome: produced
-  - name: runSubsystemAdd
+  - name: runMemberAdd
     sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
@@ -356,40 +356,27 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
       - stepNumber: 2
-        description: Require an explicit projectPath for an external (chained) subsystem
+        description: Require the member's path
         type: branch
-        condition: options.projectPath is not provided
+        condition: no path was given
         onFalseStep: 4
       - stepNumber: 3
-        description: >-
-          Reject: plain in-tree subsystems are authored via the SDD tools; this command creates
-          external subsystems
+        description: 'Reject: a member needs a path (`wairon member add <alias> <path>`)'
         type: throw
-        error: '--project-path is required (use the sdd_add_subsystem tool for in-tree subsystems)'
+        error: 'a path is required: wairon member add <alias> <path>'
       - stepNumber: 4
         description: >-
-          Read the subsystem already stored under that id, if any, through the core adapter — a
-          re-run must not overwrite what the author set since
+          Scaffold the member project (configuration declaring the alias as its id, L0), each part
+          only when absent, and declare it in this project's `members` with --description when given
+          — idempotent, so a re-run changes nothing and a different member under the alias is
+          refused
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: loadSubsystemSpec
+        targetMethod: createMember
       - stepNumber: 5
         description: >-
-          State the restatement with only what this command owns — the id, the projectPath, and the
-          display name when --name is given — plus, for a subsystem not yet stored, the name (--name
-          or the id) and the placeholder description a new subsystem requires. A re-run therefore
-          carries the stored description, published surface and trusted links instead of overwriting
-          them
-        type: local
-      - stepNumber: 6
-        description: >-
-          Write it through the authoring client adapter, which requires the L0, derives parentSystem
-          from it, and scaffolds the child project
-        type: call
-        targetComponent: cli_authoring_adapter
-        targetMethod: writeSpec
-      - stepNumber: 7
-        description: Print confirmation (parent subsystem id + child project path) and next steps
+          Print confirmation (the alias and the member's path) and next steps: design the member
+          from its own root, export what others consume from its L0
         type: local
   - name: runInit
     sourcePath: src/commands/init.ts
@@ -413,9 +400,7 @@ methods:
         onTrueStep: 5
         onFalseStep: 13
       - stepNumber: 5
-        description: >-
-          Prompt the user to create this subdirectory as an external subsystem of the detected
-          parent project
+        description: Prompt the user to create this subdirectory as a member of the detected parent project
         type: local
       - stepNumber: 6
         description: Honor the user's choice
@@ -435,29 +420,29 @@ methods:
         targetMethod: loadSystemSpec
       - stepNumber: 9
         description: >-
-          Read the subsystem the parent project already stores under that id, if any, through the
-          core adapter
+          Read the parent project's configuration through the core adapter, for the members it
+          already declares
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: loadSubsystemSpec
+        targetMethod: loadProjectConfig
       - stepNumber: 10
         description: >-
-          State the restatement with only what this command owns — the id (from --name or the
-          directory name) and the projectPath (the relative path from the parent root to cwd) —
-          plus, for a subsystem the parent does not store yet, the name and the placeholder
-          description a new subsystem requires
+          Compose the member: the alias (from --name or the directory name, slugified to
+          [a-z0-9-_]+) and the path (the relative path from the parent root to cwd); an alias the
+          parent already declares for another path is refused by the write below
         type: local
       - stepNumber: 11
         description: >-
-          Write it into the parent project through the authoring client adapter, which wires the
-          parent subsystem and scaffolds this directory's child project
+          Create the member from the parent's root: scaffold this directory's project (configuration
+          declaring the alias as its id, L0) and declare it in the parent's project.yaml `members` —
+          no L1 spec is written into the parent
         type: call
-        targetComponent: cli_authoring_adapter
-        targetMethod: writeSpec
+        targetComponent: cli_core_adapter
+        targetMethod: createMember
       - stepNumber: 12
-        description: Report the external subsystem was created and stop
+        description: Report the member was created and stop
         type: return
-        outcome: external subsystem created
+        outcome: member created
       - stepNumber: 13
         description: Bootstrap the standard .wai directory structure
         type: local
@@ -536,7 +521,7 @@ methods:
         description: Report what was created and where, and name the next command to run
         type: return
         outcome: initialized
-  - name: runSubsystemMove
+  - name: runMemberMove
     sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
@@ -556,12 +541,12 @@ methods:
         type: throw
         error: '--project-path (the new location) is required'
       - stepNumber: 4
-        description: Move the subproject directory and update its projectPath link
+        description: Move the member's directory and point its `members` entry there
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: moveSubsystemProject
+        targetMethod: moveMember
       - stepNumber: 5
-        description: Print confirmation (old path to new path)
+        description: Print confirmation (alias, old path to new path)
         type: local
   - name: runSubsystemExternalize
     sourcePath: src/commands/subsystem.ts
@@ -583,7 +568,7 @@ methods:
         type: throw
         error: '--project-path (the subproject destination) is required'
       - stepNumber: 4
-        description: Externalize the subsystem into a standalone subproject
+        description: Turn the subsystem into a member project declared in `members`
         type: call
         targetComponent: cli_core_adapter
         targetMethod: externalizeSubsystem
@@ -592,7 +577,7 @@ methods:
           Print confirmation, the new subproject path, and a reminder to move the source code and
           re-validate
         type: local
-  - name: runSubsystemInternalize
+  - name: runMemberInternalize
     sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
@@ -603,10 +588,10 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
       - stepNumber: 2
-        description: Internalize the external subsystem back into the parent tree
+        description: Take the member back into the current project
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: internalizeSubsystem
+        targetMethod: internalizeMember
       - stepNumber: 3
         description: Print confirmation and a reminder to re-validate
         type: local
@@ -1406,12 +1391,13 @@ methods:
         description: >-
           Print the plan per project, each item once: the id to declare, the minimal L0 to create,
           the L0 entries to add with the consumers each serves (own `{ typeDef }` entries and
-          mount-carried entries marked), the externals to declare, the aliases to pin, the legacy
-          mounts moved into `members` with every field they carry or retire, and the superseded
-          family pins as ONE line per project with their count; then every reference rewrite (from →
-          to, grouped per project and spec), every finding once, and the totals (the P1 probe's
-          counts). The plan is computed without projecting any sibling surface, so no projector
-          message reaches it. Nothing is written
+          mount-carried entries marked), every key the first L0 write will drop from the stored file
+          (droppedKeys, e.g. `status: draft`) under a line saying they will be removed, the
+          externals to declare, the aliases to pin, the legacy mounts moved into `members` with
+          every field they carry or retire, and the superseded family pins as ONE line per project
+          with their count; then every reference rewrite (from → to, grouped per project and spec),
+          every finding once, and the totals (the P1 probe's counts). The plan is computed without
+          projecting any sibling surface, so no projector message reaches it. Nothing is written
         type: return
         outcome: chaining plan reported
       - stepNumber: 6
@@ -2700,4 +2686,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-27T10:47:16.631Z'
+updatedAt: '2026-09-27T11:02:03.375Z'

@@ -8,8 +8,8 @@ methods:
   - name: writeSpec
     description: >-
       Forward a command's whole-spec restatement to the authoring portal: the seam applies it to the
-      stored spec, judges it and writes it — scaffolding the child project of a chained subsystem —
-      and answers with the write receipt.
+      stored spec, judges it and writes it — refusing a subsystem that names a projectPath (members
+      are declared in project.yaml) — and answers with the write receipt.
     signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -42,4 +42,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-09-25T17:35:09.087Z'
-updatedAt: '2026-09-26T21:11:29.782Z'
+updatedAt: '2026-09-27T10:54:32.875Z'

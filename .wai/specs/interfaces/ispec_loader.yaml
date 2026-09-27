@@ -19,13 +19,6 @@ methods:
     description: Loads a single subsystem specification by id
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
     returns: SubsystemSpec | null
-  - name: saveSubsystemSpec
-    description: >-
-      Saves a subsystem specification. A spec arriving at draft, or without a status, keeps the
-      status already stored, so re-authoring one never quietly reopens a frozen subsystem; a
-      deliberate demotion is stated by the caller and honoured.
-    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
-    returns: void
   - name: loadComponentSpecs
     description: Loads all L2 component specifications from components/*.yaml
     signature: 'loadComponentSpecs(): ComponentSpec[]'
@@ -274,4 +267,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-27T10:37:23.361Z'
+updatedAt: '2026-09-27T11:02:33.373Z'

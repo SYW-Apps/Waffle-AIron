@@ -62,52 +62,86 @@ methods:
     description: Delegate diagram rendering to architecture_diagrams.
     signature: 'renderDiagram(format: string): string'
     returns: string
-  - name: createChainedSubsystem
+  - name: createMember
     description: >-
-      Create a chained subproject subsystem: persist the parent L1 subsystem spec (with projectPath)
-      at the bound root, then FULLY yet NON-DESTRUCTIVELY initialize the isolated child wairon
-      project at that path in the same action — create the specs dir, project.yaml, and L0 system
-      spec only when each is absent, so a fresh child becomes runnable standalone without the caller
-      hand-authoring project.yaml, and an already- or partially-scaffolded child (e.g. specs present
-      but project.yaml missing) is completed without overwriting its existing spec tree. Throws if
-      projectPath is empty, or if it does not resolve strictly within the owning project root
-      (absolute and ../-escaping paths are rejected so a chained subproject is always contained by
-      its parent).
-    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
+      Create a member of the bound project: FULLY yet NON-DESTRUCTIVELY initialize the isolated
+      member project at the path — its specs directory, project.yaml (declaring the alias as its
+      project id) and L0 system spec, each only when absent, so a fresh member is runnable
+      standalone and an already- or partially-scaffolded one is completed without overwriting
+      anything — then declare it in the bound project's project.yaml `members` under the alias.
+      Writes no L1 spec: a member carries no content in its parent. Throws for an alias outside
+      [a-z0-9-_]+ or an empty path, if the path does not resolve strictly within the owning project
+      root (absolute, ../-escaping and link-escaping paths are rejected), or if the alias already
+      declares a different member.
+    signature: 'createMember(alias: string, path: string, description?: string): void'
     returns: void
-  - name: moveSubsystemProject
+    params:
+      - name: alias
+        type: string
+        description: The member's alias, which is also its new project id
+      - name: path
+        type: string
+        description: The member's root, relative to the bound project root
+      - name: description
+        type: string
+        description: >-
+          What the member is to this project; recorded on the member entry and used as the vision of
+          a bootstrapped L0
+        optional: true
+  - name: moveMember
     description: >-
-      Relocate an external subsystem's subproject: move its directory on disk from the current
-      projectPath to newProjectPath and persist the updated link. Throws if the subsystem has no
-      projectPath (not an external subproject), or if newProjectPath does not resolve strictly
-      within the owning project root (absolute or ../-escaping targets are rejected).
-    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+      Relocate a member of the bound project: move its directory on disk from its current path to
+      the new one and point its `members` entry there. A member still declared in the legacy L1 form
+      is first moved into `members` (as moveMountToMembers does), so wairon never writes the L1
+      form. Throws if the alias declares no member, or if the new path does not resolve strictly
+      within the owning project root (absolute or ../-escaping targets are rejected) or already
+      exists.
+    signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The member's new root, relative to the bound project root
   - name: externalizeSubsystem
     description: >-
-      Externalize an internal subsystem into a standalone subproject: provision a child wairon
-      project at projectPath, move the subsystem's spec subtree (L1-L4 + types) there, re-express
-      each moved implementation's file paths (sourcePath, each method's sourcePath, simPath)
-      relative to the child root — the same files, so code left outside the child now reads as
-      escaping it — reduce the parent entry to a projectPath mount, rewrite cross-subsystem
-      references in the parent's remaining specs to the new namespaced ids, and rewrite the moved
-      subtree's own OUTGOING references — to the parent's other subsystems and to other chained
-      projects — into super:: form, since the moved specs now load from the child root. Throws if
-      the subsystem is missing or already external, or if projectPath does not resolve strictly
-      within the owning project root (absolute, ../-escaping and link-escaping paths are rejected).
-      Source code is not moved.
-    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
+      Externalize an internal subsystem into a new member project: provision the member project at
+      the path (its configuration declaring the subsystem id as its project id, and its L0), move
+      the subsystem's spec subtree (L1-L4 + types) there, re-express each moved implementation's
+      file paths (sourcePath, each method's sourcePath, simPath) relative to the member root — the
+      same files, so code left outside the member now reads as escaping it — and declare it in the
+      bound project's `members` under the subsystem id. Every reference keeps its target and is
+      re-saved from where it now lives, so the writer spells it again: the parent's references into
+      the moved subtree become `alias::name`, the moved subtree's references back into the parent
+      become `<parent id>::name` (the member gains an `externals` entry for the parent when it has
+      any), and the parent's L0 entries that re-exported the subsystem now re-export the member by
+      alias. The exports those references need on either side are new content, left to `wairon
+      doctor --fix` (its chaining migration adds them through the gated seam); until then
+      EXTERNAL_NOT_EXPORTED (notice) names each. The moved subsystem's own key becomes `<id>::<id>`.
+      Throws if the subsystem is missing, or if the path does not resolve strictly within the owning
+      project root (absolute, ../-escaping and link-escaping paths are rejected). Source code is not
+      moved.
+    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
     returns: void
-  - name: internalizeSubsystem
+  - name: internalizeMember
     description: >-
-      Internalize an external subsystem back into the parent tree: move the subproject's spec
-      subtree back under the parent subsystem, re-express each moved implementation's file paths
-      (sourcePath, each method's sourcePath, simPath) relative to the parent root, drop projectPath,
-      delete the child .wai project, rewrite the parent's references back to bare ids, and rewrite
-      the moved subtree's super:: references back to their parent-local form. Throws if the
-      subsystem is not external or its subproject is not a single flat subsystem.
-    signature: 'internalizeSubsystem(subsystemId: string): void'
+      Internalize a member back into the bound project: move the member's spec subtree under the
+      bound project's specs, re-express each moved implementation's file paths relative to the bound
+      root, remove the member from `members` (or delete its legacy L1 mount), delete the member's
+      .wai project, and re-save every reference from where it now lives — the parent's `alias::name`
+      references into it and its `<parent id>::name` references back become local ids, and the
+      parent's L0 re-exports from the member become re-exports of the moved subsystem. Throws if the
+      alias declares no member, if the member is not a single subsystem (a multi-subsystem
+      internalize is stage 6's), or if the member declares members or externals of its own other
+      than the parent, which would have no home.
+    signature: 'internalizeMember(alias: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
   - name: loadTypeSpecs
     description: Delegate loading type specs to spec loader
     signature: 'loadTypeSpecs(): TypeSpec[]'
@@ -280,9 +314,10 @@ methods:
       - idempotent
   - name: listDirectChainedSubprojects
     description: >-
-      The DIRECT chained subprojects of a project, one level deep: the subsystems in this project's
-      own spec tree whose projectPath resolves inside the project root, each as the child's
-      directory and mounting subsystem id. An absolute or escaping projectPath is skipped.
+      The DIRECT members of a project, one level deep: its project.yaml `members` entries (read
+      through that root's binding) and, for one release, its legacy L1 mounts, each resolved inside
+      the project root, as the member's directory, alias and form. An absolute or escaping path is
+      skipped.
     signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
     returns: ChainedSubprojectDir[]
     params:
@@ -628,8 +663,9 @@ methods:
     params: []
   - name: findChainingSubprojectsMissingConfig
     description: >-
-      The chained subproject directories, found recursively from a root, that hold a spec tree but
-      no project configuration — the state that leaves one unrunnable standalone. Pure read.
+      The member directories, found recursively from a root through each project's members (either
+      declaration form), that hold a spec tree but no project configuration — the state that leaves
+      one unrunnable standalone. Pure read.
     signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): string[]'
     returns: string[]
     params:
@@ -637,8 +673,9 @@ methods:
         type: string
   - name: backfillChainedSubprojectConfigs
     description: >-
-      Write a project configuration for every chained subproject found recursively from a root that
-      has a spec tree but none; existing specs are never touched. Returns the directories repaired.
+      Write a project configuration for every member found recursively from a root (either
+      declaration form) that has a spec tree but none, declaring its alias as its project id;
+      existing specs are never touched. Returns the directories repaired.
     signature: 'backfillChainedSubprojectConfigs(projectRoot: string): string[]'
     returns: string[]
     params:
@@ -742,4 +779,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T10:39:29.582Z'
+updatedAt: '2026-09-27T10:58:31.189Z'

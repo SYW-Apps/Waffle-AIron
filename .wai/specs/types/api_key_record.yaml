@@ -27,12 +27,14 @@ fields:
     type: string[]
     description: >-
       The token's project narrowing: the project ids this token may act on, or "*" for the owner's
-      full accessible set. An entry MAY be subproject-qualified — 'projectId::subsystemId' (nested
-      mounts compose, e.g. 'proj::a::b') — scoping the token INTO that chained subproject:
-      data-plane requests then bind the mounted child root instead of the project root. The token
-      carries no permissions of its own — within this narrowing it acts as the owner user's LIVE
-      permission (permission rules gate per project; a subproject qualifier narrows reach, it never
-      widens or refines grants).
+      full accessible set. An entry MAY be member-qualified — 'projectId::alias' (nested members
+      compose, e.g. 'proj::a::b', one member alias per hop) — scoping the token INTO that member
+      project: data-plane requests then bind the member's root instead of the project root. A
+      qualifier segment is a member alias, the same string the legacy mount id was, so a token
+      minted before stage 3 still names the same root and nothing is widened; stage 7 rewrites
+      qualifiers to member project ids. The token carries no permissions of its own — within this
+      narrowing it acts as the owner user's LIVE permission (permission rules gate per project; a
+      qualifier narrows reach, it never widens or refines grants).
     optional: false
   - name: createdAt
     type: string
@@ -61,4 +63,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-09-19T11:07:05.070Z'
+updatedAt: '2026-09-27T11:00:02.111Z'

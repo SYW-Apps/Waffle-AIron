@@ -125,19 +125,6 @@ methods:
       - name: id
         type: string
         description: The spec id
-  - name: createChainedSubsystem
-    description: >-
-      Write a subsystem that names a projectPath and scaffold its child project there, so a chained
-      subsystem never points at an empty directory. Forwarded to the core portal.
-    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
-    returns: void
-    params:
-      - name: subsystem
-        type: SubsystemSpec
-        description: The judged subsystem, carrying its projectPath
-      - name: projectName
-        type: string
-        description: The child project's display name
   - name: loadImplementationSpecs
     description: >-
       Every implementation spec of the bound tree — how the test search finds the files that realize
@@ -148,4 +135,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-09-18T21:41:49.125Z'
-updatedAt: '2026-09-26T11:01:57.247Z'
+updatedAt: '2026-09-27T10:54:33.324Z'

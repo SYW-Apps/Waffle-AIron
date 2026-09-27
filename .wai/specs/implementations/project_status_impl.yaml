@@ -11,7 +11,7 @@ methods:
   - name: report
     narrative:
       - stepNumber: 1
-        description: Load the tree, following chained subprojects as far as the options allow
+        description: Load the tree, following members as far as the options allow
         type: call
         targetComponent: spec_loader
         targetMethod: loadSystemSpec
@@ -47,13 +47,23 @@ methods:
         targetMethod: loadSubsystemSpecs
       - stepNumber: 7
         description: >-
+          Read the project graph: each member the tree reaches (its alias, project id, declaration
+          form and parent), so members print as projects rather than as subsystems
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 8
+        description: >-
           Count each component's progress through the layers — whether it has a contract, an
           implementation, and source files its implementation names — narrowing to one subsystem
           when the options asked for that, and marking each part through the role the caller
-          supplied: structure, layer, score, draft, present or missing. Roles rather than colours,
-          so this renderer never learns what a terminal is
+          supplied: structure, layer, score, draft, present or missing. Each member prints as a
+          `[Project]` node (alias and project id, `mount form` noted for a legacy declaration)
+          holding its own subsystems, never as a `[Subsystem]`; a subsystem whose key repeats its
+          member's alias (`billing::billing`) is labelled by its local name under its project. Roles
+          rather than colours, so this renderer never learns what a terminal is
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Answer the report as text, not failed. One renderer, so the terminal and the MCP status
           tool cannot drift into disagreeing about what this tree contains — which they did, for as
@@ -63,4 +73,4 @@ methods:
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-09-23T15:17:51.283Z'
+updatedAt: '2026-09-27T10:58:15.895Z'

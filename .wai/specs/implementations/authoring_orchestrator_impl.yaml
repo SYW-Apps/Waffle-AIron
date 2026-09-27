@@ -196,23 +196,21 @@ methods:
         error: intrinsic rule violation
       - stepNumber: 13
         label: persist
-        description: Decide how the candidate reaches disk
+        description: >-
+          Refuse the legacy mount form: a subsystem that names a projectPath is a member
+          declaration, not a subsystem
         type: branch
         condition: the candidate is a subsystem that names a projectPath
         onTrueStep: 14
-        onFalseStep: 16
+        onFalseStep: 15
       - stepNumber: 14
         description: >-
-          Write the chained subsystem and scaffold its child project, so the projectPath never
-          points at an empty directory
-        type: call
-        targetComponent: authoring_core_adapter
-        targetMethod: createChainedSubsystem
+          Refuse before anything reaches disk, naming the subsystem and the replacement: a member is
+          declared in project.yaml `members` (sdd_add_member / `wairon member add`), which scaffolds
+          its project; wairon never writes the L1 mount form
+        type: throw
+        error: mount form refused
       - stepNumber: 15
-        description: Continue to the test search
-        type: jump
-        toStep: 17
-      - stepNumber: 16
         label: save
         description: >-
           Persist the candidate through the core client adapter, collecting the store's placement
@@ -220,14 +218,14 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: saveSpec
-      - stepNumber: 17
+      - stepNumber: 16
         label: tests
         description: Decide whether this write invalidated any test
         type: branch
         condition: the application names a changed or removed method and the project declares test roots
-        onTrueStep: 18
-        onFalseStep: 20
-      - stepNumber: 18
+        onTrueStep: 17
+        onFalseStep: 19
+      - stepNumber: 17
         description: >-
           Place each changed method in the file realizing it (the private searchedMethods): for a
           contract, read every implementation realizing it and take each one's symbol and file for
@@ -238,7 +236,7 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 19
+      - stepNumber: 18
         description: >-
           Find the tests that encode those methods, so the restatement that drops or rewrites a
           method reports the collision exactly as a delta that does the same does, each method
@@ -246,7 +244,7 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 20
+      - stepNumber: 19
         label: receipt
         description: >-
           Return the write receipt: the kind, id and name written, whether a spec already held the
@@ -303,4 +301,4 @@ methods:
         outcome: reported
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-09-26T14:16:50.124Z'
+updatedAt: '2026-09-27T10:54:25.786Z'

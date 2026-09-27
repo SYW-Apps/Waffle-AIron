@@ -17,10 +17,6 @@ methods:
     description: Calls loadSubsystemSpec on core portal
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
     returns: SubsystemSpec | null
-  - name: loadSubsystemSpecs
-    description: Calls loadSubsystemSpecs on core portal
-    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
   - name: loadComponentSpec
     description: Calls loadComponentSpec on core portal
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
@@ -29,24 +25,35 @@ methods:
     description: Calls loadInterfaceSpec on core portal
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
     returns: InterfaceSpec | null
-  - name: moveSubsystemProject
+  - name: moveMember
     description: >-
-      Calls moveSubsystemProject on core portal to relocate an external subsystem's directory and
-      update its link.
-    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+      Calls moveMember on the core portal to relocate a member's directory and point its `members`
+      entry there.
+    signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The new root, relative to the bound project root
   - name: externalizeSubsystem
     description: >-
-      Calls externalizeSubsystem on core portal to migrate an internal subsystem into a standalone
-      subproject.
-    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
+      Calls externalizeSubsystem on the core portal to turn an internal subsystem into a member
+      project declared in `members`.
+    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
     returns: void
-  - name: internalizeSubsystem
+  - name: internalizeMember
     description: >-
-      Calls internalizeSubsystem on core portal to migrate an external subsystem back into the
-      parent tree.
-    signature: 'internalizeSubsystem(subsystemId: string): void'
+      Calls internalizeMember on the core portal to take a single-subsystem member back into the
+      bound project.
+    signature: 'internalizeMember(alias: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
   - name: resolveChainingParent
     description: >-
       Forward chaining-parent detection to the core portal: is the bound root a chained subproject,
@@ -191,6 +198,23 @@ methods:
         type: ComponentSpec[]
       - name: variantsById
         type: VariantDef[]
+  - name: createMember
+    description: >-
+      Calls createMember on the core portal: scaffold a member project and declare it in the bound
+      project's `members`.
+    signature: 'createMember(alias: string, path: string, description?: string): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias and new project id
+      - name: path
+        type: string
+        description: The member's root, relative to the bound project root
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:36:24.770Z'
+updatedAt: '2026-09-27T11:02:31.468Z'

@@ -11,13 +11,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadSystemSpec
-  - name: moveSubsystemProject
+  - name: moveMember
     narrative:
       - stepNumber: 1
         description: Forward subproject relocation to the core portal
         type: call
         targetComponent: spec_maintenance_portal
-        targetMethod: moveSubsystemProject
+        targetMethod: moveMember
   - name: externalizeSubsystem
     narrative:
       - stepNumber: 1
@@ -25,13 +25,13 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: externalizeSubsystem
-  - name: internalizeSubsystem
+  - name: internalizeMember
     narrative:
       - stepNumber: 1
         description: Forward subsystem internalization to the core portal
         type: call
         targetComponent: spec_maintenance_portal
-        targetMethod: internalizeSubsystem
+        targetMethod: internalizeMember
   - name: composeAgentBrief
     narrative:
       - stepNumber: 1
@@ -273,13 +273,6 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: approvalVerdict
-  - name: loadSubsystemSpec
-    narrative:
-      - stepNumber: 1
-        description: Call loadSubsystemSpec on the spec tree portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: loadSubsystemSpec
   - name: findLegacySpecFiles
     narrative:
       - stepNumber: 1
@@ -392,6 +385,13 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: normalizeReferences
+  - name: createMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: createMember
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T10:39:48.194Z'
+updatedAt: '2026-09-27T11:02:30.564Z'

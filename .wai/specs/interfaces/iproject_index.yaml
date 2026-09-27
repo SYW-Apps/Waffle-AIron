@@ -18,15 +18,18 @@ methods:
     returns: HostedProjectRecord[]
   - name: resolveBinding
     description: >-
-      Resolve the FULL binding of an authorized (possibly subproject-qualified) target: the root to
-      bind (the mounted chained-child root when qualified — each mount hop looked up on the current
-      root's subsystem specs and containment-resolved through the host core adapter; unknown or
-      non-chained mounts rejected, never silently the project root), the TOP project id (permission
-      + audit anchor), and the bound mount chain. Authorization matrix: an entry covers a target iff
-      equal or the target extends it with '::' — a qualified principal can never bind wider than its
-      qualifier (not the top project, not a sibling); a plain-project or '*' principal may narrow
-      via a qualified selector; a selector can never widen scope. resolveRoot is this binding's
-      rootPath projection.
+      Resolve the FULL binding of an authorized (possibly member-qualified) target: the root to bind
+      (the member root when qualified — each hop a member alias looked up on the current root's
+      member declarations, `members` entries or, for one release, legacy L1 mounts, and
+      containment-resolved through the host core adapter; an alias that declares no member is
+      rejected, never silently the project root), the TOP project id (permission + audit anchor),
+      and the bound member chain. A qualifier's segments are member aliases — the strings the legacy
+      mount ids were, so every existing qualifier binds the same root it bound before stage 3; stage
+      7 turns members into project records with ids of their own. Authorization matrix: an entry
+      covers a target iff equal or the target extends it with '::' — a qualified principal can never
+      bind wider than its qualifier (not the top project, not a sibling); a plain-project or '*'
+      principal may narrow via a qualified selector; a selector can never widen scope. resolveRoot
+      is this binding's rootPath projection.
     signature: 'resolveBinding(principal: Principal, selector: string): ProjectBinding | null'
     returns: ProjectBinding | null
   - name: existingRoot
@@ -41,4 +44,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-09-25T22:38:34.737Z'
+updatedAt: '2026-09-27T10:59:59.213Z'

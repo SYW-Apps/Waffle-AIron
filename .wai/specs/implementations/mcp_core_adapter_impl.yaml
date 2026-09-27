@@ -29,13 +29,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadSubsystemSpec
-  - name: loadSubsystemSpecs
-    narrative:
-      - stepNumber: 1
-        description: Call loadSubsystemSpecs on core portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: loadSubsystemSpecs
   - name: loadComponentSpec
     narrative:
       - stepNumber: 1
@@ -50,13 +43,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadInterfaceSpec
-  - name: moveSubsystemProject
+  - name: moveMember
     narrative:
       - stepNumber: 1
         description: Call moveSubsystemProject on core portal
         type: call
         targetComponent: spec_maintenance_portal
-        targetMethod: moveSubsystemProject
+        targetMethod: moveMember
   - name: externalizeSubsystem
     narrative:
       - stepNumber: 1
@@ -64,13 +57,13 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: externalizeSubsystem
-  - name: internalizeSubsystem
+  - name: internalizeMember
     narrative:
       - stepNumber: 1
         description: Call internalizeSubsystem on core portal
         type: call
         targetComponent: spec_maintenance_portal
-        targetMethod: internalizeSubsystem
+        targetMethod: internalizeMember
   - name: resolveChainingParent
     narrative:
       - stepNumber: 1
@@ -169,7 +162,14 @@ methods:
         type: call
         targetComponent: extension_portal
         targetMethod: resolveVariantGuidance
+  - name: createMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: createMember
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:09:40.205Z'
+updatedAt: '2026-09-27T11:02:32.376Z'

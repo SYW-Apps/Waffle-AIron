@@ -92,8 +92,9 @@ methods:
       - stepNumber: 1
         description: >-
           Parse the target — the explicit selector, or the principal's single narrowing entry: first
-          '::'-segment = TOP project id, remainder = the mount chain; a malformed target returns
-          null
+          '::'-segment = TOP project id, remainder = the member chain, one member alias per hop (the
+          same strings the mount chain held: every legacy mount's id becomes its member's alias, so
+          an existing qualifier names the same root); a malformed target returns null
         type: local
       - stepNumber: 2
         description: >-
@@ -105,15 +106,17 @@ methods:
         description: Resolve the TOP project record; a missing or inactive project returns null
         type: local
       - stepNumber: 4
-        description: Walk the mount chain hop by hop
+        description: Walk the member chain hop by hop
         type: loop
         loopKind: forEach
-        over: mount hops in the qualifier chain
+        over: member-alias hops in the qualifier chain
         endStep: 6
       - stepNumber: 5
         description: >-
-          Look up the named subsystem spec on the current root: an unknown subsystem or one without
-          a projectPath fails with an actionable error — never a silent fallback to the project root
+          Look up the alias among the current root's member declarations — its project.yaml
+          `members` and, for one release, its legacy L1 mounts: an alias that declares no member
+          fails with an actionable error — never a silent fallback to the project root, and never an
+          internal subsystem, which is not a root at all
         type: local
       - stepNumber: 6
         description: >-
@@ -124,7 +127,7 @@ methods:
         targetMethod: resolveContainedProjectPath
       - stepNumber: 7
         description: >-
-          Return the binding: bound root, TOP project id, and the joined mount chain (absent when
+          Return the binding: bound root, TOP project id, and the joined member chain (absent when
           unqualified)
         type: return
         outcome: ProjectBinding or null
@@ -141,4 +144,4 @@ methods:
     symbol: existingProjectRoot
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-09-25T22:45:10.653Z'
+updatedAt: '2026-09-27T10:59:55.660Z'

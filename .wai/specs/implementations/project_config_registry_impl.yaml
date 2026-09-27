@@ -185,7 +185,28 @@ methods:
     calls:
       - project_config_store.read
       - project_config_store.write
+  - name: setMemberPath
+    narrative: []
+    intent: >-
+      Refuses an empty or absolute path before reading anything. Reads the configuration through the
+      store, refusing when the project has none or `members` does not declare the alias. When the
+      member already has that path, returns false and writes nothing; otherwise sets the path in
+      whichever form the entry was written (the shorthand stays a shorthand, the long form keeps its
+      description) and writes the configuration back through the store, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: removeMember
+    narrative: []
+    intent: >-
+      Reads the configuration through the store, refusing when the project has none. When `members`
+      does not declare the alias, returns false and writes nothing; otherwise removes the entry (and
+      `members` itself when it was the last one) and writes the configuration back through the
+      store, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-09-27T10:39:10.079Z'
+updatedAt: '2026-09-27T10:55:11.088Z'

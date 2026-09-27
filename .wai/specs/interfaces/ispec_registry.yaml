@@ -9,13 +9,6 @@ methods:
     description: Validates and persists the L0 system specification.
     signature: 'saveSystemSpec(spec: SystemSpec): void'
     returns: void
-  - name: saveSubsystemSpec
-    description: >-
-      Validates and persists a subsystem specification. A spec arriving at draft, or without a
-      status, keeps the status already stored, so re-authoring one never quietly reopens a frozen
-      subsystem; a deliberate demotion is stated by the caller and honoured.
-    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
-    returns: void
   - name: saveComponentSpec
     description: >-
       Validates and persists a component specification, returning placement notices. A spec arriving
@@ -127,4 +120,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-09-27T10:36:26.329Z'
+updatedAt: '2026-09-27T11:02:35.068Z'
