@@ -187,17 +187,17 @@ describe('resolveProjectBinding — subproject-qualified selectors and narrowing
 
   it('resolveSubprojectMounts throws ACTIONABLE errors: unknown mount, non-chained subsystem, escape', () => {
     expect(() => resolveSubprojectMounts('demo', demoRoot, ['ghost'])).toThrow(
-      /unknown subproject mount "ghost" on "demo"/,
+      /unknown member "ghost" on "demo"/,
     );
     expect(() => resolveSubprojectMounts('demo', demoRoot, ['plain'])).toThrow(
-      /not a chained subproject .*projectPath/,
+      /an internal subsystem is not a member/,
     );
     expect(() => resolveSubprojectMounts('demo', demoRoot, ['esc'])).toThrow(
       /must resolve within the project root/,
     );
     // Nested unknown names the qualified position it failed at.
     expect(() => resolveSubprojectMounts('demo', demoRoot, ['billing', 'ghost'])).toThrow(
-      /unknown subproject mount "ghost" on "demo::billing"/,
+      /unknown member "ghost" on "demo::billing"/,
     );
   });
 
@@ -207,8 +207,8 @@ describe('resolveProjectBinding — subproject-qualified selectors and narrowing
     expect(() => assertMintableNarrowingEntry(dataDir, 'demo::billing')).not.toThrow();
     expect(() => assertMintableNarrowingEntry(dataDir, 'demo::billing::payments')).not.toThrow();
     expect(() => assertMintableNarrowingEntry(dataDir, 'ghost')).toThrow(/unknown project "ghost"/);
-    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::ghost')).toThrow(/unknown subproject mount/);
-    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::plain')).toThrow(/not a chained subproject/);
+    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::ghost')).toThrow(/unknown member/);
+    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::plain')).toThrow(/an internal subsystem is not a member/);
     expect(() => assertMintableNarrowingEntry(dataDir, 'demo::')).toThrow(/invalid project narrowing entry/);
   });
 });

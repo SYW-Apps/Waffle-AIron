@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
   loadSubsystemSpec,
   loadSubsystemSpecs,
   loadSystemSpec,
@@ -12,7 +11,6 @@ import {
   loadInterfaceSpecs,
   loadImplementationSpec,
   loadImplementationSpecs,
-  loadTypeSpecs,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -21,7 +19,6 @@ import {
   getImplementationPath,
   invalidateSpecCache,
   assertContainedProjectPath,
-  rebaseReference,
   // The member moves (moveMountToMembers, normalizeReferences) read the graph
   // and write through the spec repository's two maintenance writes.
   graph,
@@ -40,14 +37,14 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../config/pr
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
-import { effectiveProjectId, type ProjectConfig } from '../models/project.js';
+import { declaredMembers, effectiveProjectId, EXTERNAL_ALIAS_RE, type ProjectConfig } from '../models/project.js';
 import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
 import {
   SpecIdSchema,
   type ComponentSpec,
   type ImplementationSpec,
   type InterfaceSpec,
-  type SubsystemSpec,
+  type ProjectFamily,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -100,11 +97,11 @@ function defaultProjectConfig(name: string, now: string, id?: string): ProjectCo
 }
 
 /** The bootstrap L0 system spec a fresh project starts from. */
-function bootstrapSystemSpec(name: string, now: string): Parameters<typeof saveSystemSpec>[0] {
+function bootstrapSystemSpec(name: string, now: string, vision?: string): Parameters<typeof saveSystemSpec>[0] {
   return {
     schemaVersion: '1.0.0',
     name,
-    vision: `Core vision for ${name}`,
+    vision: vision ?? `Core vision for ${name}`,
     boundaries: [],
     globalRequirements: [],
     databases: [],
@@ -140,7 +137,7 @@ export function provisionProject(name: string): void {
  * spec's name so a backfilled project.yaml stays consistent with its tree.
  * Returns which files it created.
  */
-export function ensureProjectInitialized(fallbackName: string, id?: string): { wroteConfig: boolean; wroteSystem: boolean } {
+export function ensureProjectInitialized(fallbackName: string, id?: string, vision?: string): { wroteConfig: boolean; wroteSystem: boolean } {
   const now = new Date().toISOString();
   const paths = aiPathsAt(getProjectRoot());
   const hasSystem = fs.existsSync(paths.specsSystem());
@@ -157,7 +154,7 @@ export function ensureProjectInitialized(fallbackName: string, id?: string): { w
     wroteConfig = true;
   }
   if (!hasSystem) {
-    saveSystemSpec(bootstrapSystemSpec(name, now));
+    saveSystemSpec(bootstrapSystemSpec(name, now, vision));
     wroteSystem = true;
   }
   if (wroteConfig || wroteSystem) invalidateSpecCache();
@@ -165,65 +162,43 @@ export function ensureProjectInitialized(fallbackName: string, id?: string): { w
 }
 
 // ---------------------------------------------------------------------------
-// Chained (external) subsystem lifecycle
+// Members (stage 3)
 //
-// An external subsystem is an L1 whose `projectPath` points at a sibling wairon
-// project; the loader recursively federates that child tree under the parent's
-// namespace. These helpers keep the two halves — the parent link and the child
-// project — in sync, so authoring one never leaves the other dangling.
+// A member is a project the bound project contains: declared in its
+// project.yaml `members` (or, for one release, by a legacy L1 subsystem that
+// carries projectPath). It is never a subsystem of its parent and carries no
+// content there. These writers keep the two halves — the declaration and the
+// member project — in step, and never write the L1 mount form.
 // ---------------------------------------------------------------------------
 
-/**
- * Walk a project and every chained subproject it links (recursively), invoking
- * `onChild` for each child dir together with the subsystem id that mounts it.
- * Shared scan behind the detection + backfill helpers below.
- */
-function walkChainedSubprojects(
-  projectRoot: string,
-  onChild: (childDir: string, subsystemId: string) => void,
-): void {
-  const visited = new Set<string>();
-  const walk = (dir: string): void => {
-    const resolved = path.resolve(dir);
-    if (visited.has(resolved)) return;
-    visited.add(resolved);
-    const specsDir = aiPathsAt(dir).specsDir();
-    if (!fs.existsSync(specsDir)) return;
-    for (const file of listFilesRecursive(specsDir, '.yaml')) {
-      let raw: unknown;
-      try {
-        raw = readYamlFile(file);
-      } catch {
-        continue;
-      }
-      if (!(raw && typeof raw === 'object' && 'parentSystem' in raw)) continue;
-      const pp = (raw as { projectPath?: unknown }).projectPath;
-      if (typeof pp !== 'string' || pp.trim() === '') continue;
-      let childDir: string;
-      try {
-        childDir = assertContainedProjectPath(dir, pp);
-      } catch {
-        continue; // absolute / escaping projectPath — never touch it
-      }
-      const id = (raw as { id?: unknown }).id;
-      onChild(childDir, typeof id === 'string' ? id : path.basename(childDir));
-      walk(childDir); // recurse into the chain (handles multi-level subprojects)
-    }
-  };
-  walk(projectRoot);
+/** One member a project declares, as the discovery helpers below read it. */
+interface MemberAt {
+  alias: string;
+  /** The path as written, relative to the declaring root. */
+  path: string;
+  form: 'members' | 'mount';
 }
 
 /**
- * The DIRECT chained subprojects of a project (one level — the projectPath
- * subsystems declared in THIS project's own spec tree, not those nested deeper
- * inside a child). Each entry is the resolved child dir + the mounting subsystem
- * id. Used by layered `wairon generate` to cascade one level at a time (each
- * child then lists its own direct subprojects), so every layer is generated in
- * its own .wai without the parent enumerating the whole deep tree.
+ * The members a root declares: its `members` entries first (read through that
+ * root's binding), then — for one release — each legacy L1 mount of its own
+ * spec tree whose alias `members` does not hold. A declaration with a problem,
+ * or a mount whose alias `externals` also declares, is not followed.
  */
-export function listDirectChainedSubprojects(projectRoot: string): { dir: string; subsystemId: string }[] {
-  const out: { dir: string; subsystemId: string }[] = [];
-  const specsDir = aiPathsAt(projectRoot).specsDir();
+function memberDeclarationsAt(dir: string): MemberAt[] {
+  let config: ProjectConfig | null = null;
+  try {
+    config = projectConfigRepositoryAt(dir).load();
+  } catch {
+    config = null;
+  }
+  const out: MemberAt[] = [];
+  const seen = new Set<string>();
+  for (const member of config ? declaredMembers(config) : []) {
+    seen.add(member.alias);
+    if (!member.problem) out.push({ alias: member.alias, path: member.path, form: 'members' });
+  }
+  const specsDir = aiPathsAt(dir).specsDir();
   if (!fs.existsSync(specsDir)) return out;
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
     let raw: unknown;
@@ -234,123 +209,168 @@ export function listDirectChainedSubprojects(projectRoot: string): { dir: string
     }
     if (!(raw && typeof raw === 'object' && 'parentSystem' in raw)) continue;
     const pp = (raw as { projectPath?: unknown }).projectPath;
-    if (typeof pp !== 'string' || pp.trim() === '') continue;
-    let dir: string;
-    try {
-      dir = assertContainedProjectPath(projectRoot, pp);
-    } catch {
-      continue;
-    }
     const id = (raw as { id?: unknown }).id;
-    out.push({ dir, subsystemId: typeof id === 'string' ? id : path.basename(dir) });
+    if (typeof pp !== 'string' || pp.trim() === '' || typeof id !== 'string') continue;
+    if (seen.has(id) || config?.externals?.[id] !== undefined) continue;
+    seen.add(id);
+    out.push({ alias: id, path: pp, form: 'mount' });
   }
   return out;
 }
 
-/** True when a child dir has a spec tree but no project.yaml (un-runnable standalone). */
+/**
+ * Walk a project and every member it declares (recursively, either form),
+ * invoking `onMember` for each member directory with its alias. Shared scan
+ * behind the detection + backfill helpers below.
+ */
+function walkMembers(projectRoot: string, onMember: (memberDir: string, alias: string) => void): void {
+  const visited = new Set<string>();
+  const walk = (dir: string): void => {
+    const resolved = path.resolve(dir);
+    if (visited.has(resolved)) return;
+    visited.add(resolved);
+    for (const member of memberDeclarationsAt(dir)) {
+      let memberDir: string;
+      try {
+        memberDir = assertContainedProjectPath(dir, member.path);
+      } catch {
+        continue; // absolute / escaping path — never touch it
+      }
+      onMember(memberDir, member.alias);
+      walk(memberDir); // recurse into the member's own members
+    }
+  };
+  walk(projectRoot);
+}
+
+/**
+ * core_orchestrator.listDirectChainedSubprojects — the DIRECT members of a
+ * project, one level deep: its `members` entries and, for one release, its
+ * legacy L1 mounts, each resolved inside the project root as the member's
+ * directory, alias and form. An absolute or escaping path is skipped. Used by
+ * layered `wairon generate` to cascade one level at a time.
+ */
+export function listDirectChainedSubprojects(projectRoot: string): { dir: string; alias: string; form: 'members' | 'mount' }[] {
+  const out: { dir: string; alias: string; form: 'members' | 'mount' }[] = [];
+  // Steps 1-2: the member declarations, `members` entries first.
+  for (const member of memberDeclarationsAt(projectRoot)) {
+    // Step 3: resolved inside the root; an absolute or escaping path is skipped.
+    let dir: string;
+    try {
+      dir = assertContainedProjectPath(projectRoot, member.path);
+    } catch {
+      continue;
+    }
+    // Step 4: the member's directory, alias and form.
+    out.push({ dir, alias: member.alias, form: member.form });
+  }
+  // Step 5.
+  return out;
+}
+
+/** True when a member dir has a spec tree but no project.yaml (un-runnable standalone). */
 function childHasSpecsButNoConfig(childDir: string): boolean {
   return fs.existsSync(aiPathsAt(childDir).specsDir()) && !projectConfigRepositoryAt(childDir).exists();
 }
 
 /**
- * Detect chained subprojects (recursively) that have specs but no project.yaml —
- * the state that makes a subproject un-runnable standalone (`wairon` reports "No
- * wairon project found"). Pure read; returns the child dirs. Used by the doctor
- * report to point the user at `--fix`.
+ * Detect members (recursively, either declaration form) that have specs but
+ * no project.yaml — the state that makes a member un-runnable standalone
+ * (`wairon` reports "No wairon project found"). Pure read; returns the member
+ * dirs. Used by the doctor report to point the user at `--fix`.
  */
 export function findChainingSubprojectsMissingConfig(projectRoot: string): string[] {
   const missing: string[] = [];
-  walkChainedSubprojects(projectRoot, (childDir) => {
-    if (childHasSpecsButNoConfig(childDir)) missing.push(childDir);
+  walkMembers(projectRoot, (memberDir) => {
+    if (childHasSpecsButNoConfig(memberDir)) missing.push(memberDir);
   });
   return missing;
 }
 
 /**
- * Backfill a missing project.yaml on any chained subproject that has a spec tree
- * but no project config. Existing specs are never touched. Returns the child dirs
- * repaired. Used by `wairon doctor --fix`.
+ * Backfill a missing project.yaml on any member that has a spec tree but no
+ * project config, declaring its alias as its project id. Existing specs are
+ * never touched. Returns the member dirs repaired. Used by `wairon doctor --fix`.
  */
 export function backfillChainedSubprojectConfigs(projectRoot: string): string[] {
   const backfilled: string[] = [];
-  walkChainedSubprojects(projectRoot, (childDir, subsystemId) => {
-    if (childHasSpecsButNoConfig(childDir)) {
-      runWithProjectRoot(childDir, () => {
-        // A chained child is identified by its mount's subsystem id.
-        ensureProjectInitialized(subsystemId, localSegment(subsystemId));
+  walkMembers(projectRoot, (memberDir, alias) => {
+    if (childHasSpecsButNoConfig(memberDir)) {
+      runWithProjectRoot(memberDir, () => {
+        // A member is identified by the alias its parent declares it under.
+        ensureProjectInitialized(alias, alias);
       });
-      backfilled.push(childDir);
+      backfilled.push(memberDir);
     }
   });
   return backfilled;
 }
 
 /**
- * Create a chained subproject subsystem: persist the parent L1 subsystem spec
- * (with `projectPath`) at the bound root, then scaffold an isolated child wairon
- * project at that path when one does not already exist. Idempotent — re-running
- * against an already-initialized child wires the parent only.
+ * core_orchestrator.createMember — create a member of the bound project:
+ * FULLY yet NON-DESTRUCTIVELY initialize the member project at the path (its
+ * specs directory, project.yaml declaring the alias as its id, and an L0 —
+ * each only when absent), then declare it in the bound project's `members`.
+ * No L1 spec is written: a member carries no content in its parent.
+ * Idempotent — a re-run with the same arguments writes nothing.
  */
-export function createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void {
-  if (!subsystem.projectPath || subsystem.projectPath.trim() === '') {
-    throw new WaironError('projectPath is required to create a chained subsystem.');
+export function createMember(alias: string, path: string, description?: string): void {
+  // Steps 1-2: guard the alias and the path.
+  if (!EXTERNAL_ALIAS_RE.test(alias) || typeof path !== 'string' || path.trim() === '') {
+    throw new WaironError(
+      `an alias and a path are required to create a member: the alias must fit [a-z0-9-_]+ (got "${alias}") and the path must not be empty.`,
+    );
   }
-
-  // Store projectPath with forward slashes so the spec tree stays portable
-  // across platforms (path.resolve accepts them everywhere).
-  const projectPath = toPosixPath(subsystem.projectPath);
-
-  // 1. Persist the parent L1 subsystem spec (with projectPath) at the parent root.
-  saveSubsystemSpec({ ...subsystem, projectPath });
-
-  // 2. Resolve + contain the child project directory relative to the bound
-  //    (parent) root. Fix B2: reject an absolute or ../-escaping projectPath so
-  //    a chained subproject can never scaffold, load, or execute code outside
-  //    its parent. Throws before any child scaffolding below.
-  const childDir = assertContainedProjectPath(getProjectRoot(), projectPath);
-
-  // 3. Fully initialize the child project in the SAME action — but
-    //    NON-DESTRUCTIVELY: create the specs dir, project.yaml, and L0 system
-    //    spec only when each is absent. A fresh child gets a complete, runnable
-    //    project (so an agent never has to hand-author project.yaml); an
-    //    already-scaffolded or partially-scaffolded child (specs but no
-    //    project.yaml) is completed without clobbering its existing spec tree.
-  runWithProjectRoot(childDir, () => {
-    ensureDir(aiPathsAt(childDir).specsDir());
-    // The child is named after the subsystem, and identified by its id.
-    ensureProjectInitialized(projectName, localSegment(subsystem.id));
+  // Step 3: the member directory, from the bound project root. Stored with
+  // forward slashes so the configuration stays portable across platforms.
+  const relPath = toPosixPath(path);
+  // Steps 4-5: containment guard — absolute, ../-escaping and link-escaping
+  // paths are refused before anything is scaffolded.
+  const memberDir = assertContainedProjectPath(getProjectRoot(), relPath);
+  // A bootstrapped L0's vision: the description given, else one line naming
+  // the member of this project.
+  const parentName = loadSystemSpec()?.name;
+  const vision = description ?? `Member ${alias} of ${parentName ? `the ${parentName} project` : 'its parent project'}`;
+  // Steps 6-12: scoped to the member, complete only what is missing.
+  runWithProjectRoot(memberDir, () => {
+    ensureDir(aiPathsAt(memberDir).specsDir());
+    ensureProjectInitialized(alias, alias, vision);
   });
-
+  // Step 13: declare it in `members`; an equal declaration writes nothing and
+  // a different one under the alias is refused.
+  projectConfigRepository.declareMember(alias, {
+    path: relPath,
+    ...(description !== undefined ? { description } : {}),
+  });
   invalidateSpecCache();
+  // Step 14: member declared and its project ensured.
 }
 
 /**
- * Relocate an external subsystem's subproject: move its directory on disk from
- * the current `projectPath` to `newProjectPath` and persist the updated link.
- * Throws if the subsystem has no `projectPath` (i.e. it is not external).
+ * core_orchestrator.moveMember — relocate a member of the bound project: move
+ * its directory on disk and point its `members` entry there. A member still
+ * declared by a legacy L1 mount is first moved into `members`
+ * (moveMountToMembers), so wairon never rewrites the L1 form.
  */
-export function moveSubsystemProject(subsystemId: string, newProjectPath: string): void {
-  const sub = loadSubsystemSpec(subsystemId);
-  if (!sub) {
-    throw new WaironError(`Subsystem "${subsystemId}" does not exist.`);
+export function moveMember(alias: string, newPath: string): void {
+  // Step 1: the graph of the bound root — the member the alias declares.
+  const member = graph().nodes.find((n) => n.parent === '' && n.mountAlias === alias);
+  // Steps 2-3: guard that the alias declares a member.
+  if (!member) {
+    throw new WaironError(`no member is declared under that alias: the bound project declares no member "${alias}".`);
   }
-  if (!sub.projectPath || sub.projectPath.trim() === '') {
-    throw new WaironError(
-      `Subsystem "${subsystemId}" has no projectPath to move (not an external subproject).`,
-    );
-  }
-
-  const nextPath = toPosixPath(newProjectPath);
+  // Steps 4-6: a legacy declaration moves into `members` first.
+  if (member.mountForm === 'mount') moveMountToMembers(alias);
+  // Step 7: relocate the directory under the containment guard.
   const root = getProjectRoot();
-  // Fix B2: contain BOTH the persisted source and the new target within the
-  // bound root before any on-disk relocation or spec write; absolute/../-escaping
-  // paths are rejected (the source is attacker-influenced via set-project-path).
-  const oldDir = assertContainedProjectPath(root, sub.projectPath);
+  const declared = declaredMembers(projectConfigRepository.load() ?? {}).find((m) => m.alias === alias);
+  const currentPath = declared?.path ?? member.legacyMount?.projectPath ?? '';
+  const nextPath = toPosixPath(newPath);
+  const oldDir = assertContainedProjectPath(root, currentPath);
   const newDir = assertContainedProjectPath(root, nextPath);
-
   if (oldDir !== newDir) {
     if (!fs.existsSync(oldDir)) {
-      throw new WaironError(`Subproject directory not found at its current path: ${oldDir}`);
+      throw new WaironError(`Member directory not found at its current path: ${oldDir}`);
     }
     if (fs.existsSync(newDir)) {
       throw new WaironError(`Target directory already exists: ${newDir}`);
@@ -358,17 +378,12 @@ export function moveSubsystemProject(subsystemId: string, newProjectPath: string
     ensureDir(path.dirname(newDir));
     fs.renameSync(oldDir, newDir);
   }
-
-  saveSubsystemSpec({ ...sub, projectPath: nextPath, updatedAt: new Date().toISOString() });
+  // Step 8: point the `members` entry at the new path.
+  projectConfigRepository.setMemberPath(alias, nextPath);
   invalidateSpecCache();
 }
 
 /** Normalize a filesystem path to forward-slash form for portable storage. */
-/** The local segment of a subsystem id — the name its own mount knows it by. */
-function localSegment(subsystemId: string): string {
-  return subsystemId.split('::').pop()!;
-}
-
 function toPosixPath(p: string): string {
   return p.replace(/\\/g, '/');
 }
@@ -381,189 +396,322 @@ function isWithinDir(dir: string, file: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Subsystem migration: externalize (internal -> subproject) and internalize
-// (subproject -> internal). Only the .wai specs move; the source code is the
-// user's responsibility. Both directions keep the tree valid by rewriting the
-// references that change: the parent's cross-subsystem references, whose
-// targets gain/lose the `<subsystem>::` namespace prefix, and the moved
-// subtree's own references, which now load one mount deeper/shallower.
+// Externalize (internal subsystem -> member) and internalize (member -> internal
+// subsystem). Only the .wai specs move; the source code is the user's
+// responsibility. Every reference keeps its target: before the move, each one
+// that will cross the new boundary is re-expressed so it keeps binding what it
+// bound — `alias::name` into the member, `<parent id>::name` back out, never
+// `super::` — and the re-save through the writer then spells each canonically.
 // ---------------------------------------------------------------------------
 
 /**
- * Externalize an internal subsystem into a standalone subproject: provision a
- * child wairon project at projectPath, move the subsystem's spec subtree there,
- * reduce the parent entry to a projectPath mount, rewrite cross-subsystem
- * references to the new namespaced ids, and rewrite the moved subtree's outgoing
- * references into super:: form. Source code is not moved.
+ * The reference positions a boundary move re-expresses by id: what names a
+ * component or a contract, and — on the parent's side — a type the moved
+ * subtree takes with it, read through the member's alias. A type the moved
+ * subtree names in the parent is matched by name against every loaded type,
+ * whichever project the naming spec sits in, so it stays as written.
  */
-export function externalizeSubsystem(subsystemId: string, projectPath: string): void {
+const MOVED_REF_POSITIONS: ReadonlySet<RefPosition> = new Set<RefPosition>(['component', 'interface']);
+const INTO_MEMBER_POSITIONS: ReadonlySet<RefPosition> = new Set<RefPosition>([...MOVED_REF_POSITIONS, 'type']);
+
+/**
+ * core_orchestrator.externalizeSubsystem — turn an internal subsystem into a
+ * new member project at `memberPath`: provision the member (configuration
+ * declaring the subsystem id as its project id, and its L0), move the
+ * subsystem's spec subtree there, declare it in `members` under the subsystem
+ * id, re-save every reference across the new boundary, declare the parent as
+ * the member's external when the moved specs reference it, and restate the
+ * parent L0's re-exports of the subsystem as re-exports of the member.
+ */
+export function externalizeSubsystem(subsystemId: string, memberPath: string): void {
   if (subsystemId.includes('::')) {
     throw new WaironError('cannot externalize a nested/namespaced subsystem; run from its owning project.');
   }
+  // Step 1: the subsystem.
   const foo = loadSubsystemSpec(subsystemId);
-  if (!foo || foo.projectPath) {
-    throw new WaironError(`cannot externalize: subsystem "${subsystemId}" is missing or already external.`);
+  // Steps 2-3: it exists and is a subsystem, not a legacy mount (a member declaration).
+  // A subsystem of the bound root itself: a member's own subsystem is found by
+  // its bare id too, and a legacy mount is a member declaration.
+  if (!foo || foo.projectPath || graph().owners.get(subsystemId) !== '') {
+    throw new WaironError(`cannot externalize: subsystem "${subsystemId}" is missing or is already a member.`);
   }
-
   const parentRoot = getProjectRoot();
   const parentSpecsDir = aiPathsAt(parentRoot).specsDir();
   const fooDir = path.join(parentSpecsDir, subsystemId);
   if (!fs.existsSync(fooDir)) {
     throw new WaironError(`subsystem specs directory not found: ${fooDir}`);
   }
-
-  const relPath = toPosixPath(projectPath);
-  // Fix B2: contain the child project within the parent root before provisioning
-  // or moving any specs; absolute/../-escaping projectPaths are rejected.
-  const childDir = assertContainedProjectPath(parentRoot, relPath);
-  const childFooDir = path.join(childDir, '.wai', 'specs', subsystemId);
-  if (fs.existsSync(childFooDir)) {
-    throw new WaironError(`target already contains a "${subsystemId}" subsystem: ${childFooDir}`);
+  const relPath = toPosixPath(memberPath);
+  // The containment guard: the member must lie within the declaring project.
+  const memberDir = assertContainedProjectPath(parentRoot, relPath);
+  const memberFooDir = path.join(aiPathsAt(memberDir).specsDir(), subsystemId);
+  if (fs.existsSync(memberFooDir)) {
+    throw new WaironError(`target already contains a "${subsystemId}" subsystem: ${memberFooDir}`);
+  }
+  // What crosses the new boundary, read BEFORE anything moves: the moved ids,
+  // which the parent now names as `<id>::<local>`, and the parent ids the moved
+  // subtree names, which it now names as `<parent id>::<local>`.
+  const moved = movedIdsUnder(fooDir);
+  const parentIds = new Set([...movedIdsUnder(parentSpecsDir)].filter((id) => !moved.has(id)));
+  const parentId = effectiveProjectId(projectConfigRepository.load() ?? { name: loadSystemSpec()?.name ?? '' });
+  // A `super::` the moved subtree wrote climbs from where the spec lives; one
+  // level deeper it would climb somewhere else. Each is re-expressed by the
+  // project its target lies in — never as `super::`; one whose target lies
+  // beyond this root's reach cannot be, and is refused before anything moves.
+  const climbs = climbingReferences(graph(), specIdsUnder(fooDir), parentId);
+  if (climbs.refused.length > 0) {
+    throw new WaironError(
+      `cannot externalize "${subsystemId}": ${climbs.refused.map((r) => `"${r}"`).join(', ')} climb${climbs.refused.length === 1 ? 's' : ''} `
+      + 'above this project, where the target cannot be named from here. Run `wairon doctor --fix` from the top project first, which rewrites them as `alias::name`.',
+    );
+  }
+  const outward = climbs.map.size > 0 || referencesUnder(fooDir, (ref) => parentIds.has(ref));
+  if (outward && parentId === null) {
+    throw new WaironError('cannot externalize: the moved specs reference this project, and it has no project id for the member to declare as its external. Declare one first (`wairon id set`).');
   }
 
-  // Build the rename map (bare id -> namespaced) from foo's public surface BEFORE moving.
-  const renameMap = buildRenameMap(subsystemId, /* externalize */ true);
-
-  // Provision the child project, then move foo's subtree in. The child's configuration
-  // comes first, through the Repository. It refuses a child that already has one,
-  // before anything has moved. The child's bootstrap L0 follows.
-  const childSystemName = foo.name || subsystemId;
-  runWithProjectRoot(childDir, () => {
+  // Step 4: the member's configuration, declaring the subsystem id as its project id.
+  const memberName = foo.name || subsystemId;
+  runWithProjectRoot(memberDir, () => {
     const now = new Date().toISOString();
-    projectConfigRepository.create(defaultProjectConfig(childSystemName, now, subsystemId));
-    ensureDir(path.join(childDir, '.wai', 'specs'));
-    saveSystemSpec(bootstrapSystemSpec(childSystemName, now));
+    projectConfigRepository.create(defaultProjectConfig(memberName, now, subsystemId));
+    ensureDir(aiPathsAt(memberDir).specsDir());
+    // Step 5: the member's bootstrap L0.
+    saveSystemSpec(bootstrapSystemSpec(memberName, now));
   });
-  ensureDir(path.dirname(childFooDir));
-  fs.renameSync(fooDir, childFooDir);
-  // The moved implementations' file paths were read against the parent root; a
-  // chained child's are read against its own. Re-express them — the same files,
-  // so code left outside the child now reads as escaping it.
-  rebaseImplementationPaths(childFooDir, parentRoot, childDir);
-
-  // Re-home the moved subsystem under the child system; it must not carry projectPath.
-  patchSubsystemIndex(path.join(childFooDir, '.index.yaml'), (s) => {
-    s.parentSystem = childSystemName;
+  // Step 6: move the subtree in, re-express its implementation paths, re-home
+  // the subsystem under the member's L0, and re-express the references that
+  // now cross the boundary.
+  ensureDir(path.dirname(memberFooDir));
+  fs.renameSync(fooDir, memberFooDir);
+  rebaseImplementationPaths(memberFooDir, parentRoot, memberDir);
+  patchSubsystemIndex(path.join(memberFooDir, '.index.yaml'), (s) => {
+    s.parentSystem = memberName;
     delete s.projectPath;
   });
-
-  // Write the minimal parent mount (id + projectPath, empty public surface).
-  ensureDir(fooDir);
-  writeYamlFile(path.join(fooDir, '.index.yaml'), {
-    id: subsystemId,
-    name: foo.name,
-    description: foo.description,
-    parentSystem: foo.parentSystem,
-    publicInterfaces: [],
-    projectPath: relPath,
-    trustedLinks: [],
-    status: foo.status ?? 'draft',
-    createdAt: foo.createdAt ?? new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Rewrite cross-subsystem references in the remaining parent specs…
-  rewriteRefsInDir(parentSpecsDir, renameMap, fooDir);
-  // …and the moved subtree's own, which now load one mount deeper: a reference
-  // leaving the subtree climbs out with super::, one inside it stays as written.
-  rebaseMovedRefs(childFooDir, subsystemId, 'into');
+  const parentSide = rewriteRefFields(parentSpecsDir, (ref, position) =>
+    (INTO_MEMBER_POSITIONS.has(position) && moved.has(ref) ? `${subsystemId}::${ref}` : ref));
+  const memberSide = rewriteRefFields(memberFooDir, (ref, position) =>
+    climbs.map.get(ref) ?? (MOVED_REF_POSITIONS.has(position) && parentIds.has(ref) ? `${parentId}::${ref}` : ref));
+  // Step 7: back in the parent's scope, declare the member — no L1 mount is written.
+  projectConfigRepository.declareMember(subsystemId, { path: relPath });
   invalidateSpecCache();
+  // Step 8: re-save each spec whose references crossed the boundary, so the
+  // writer spells each from where it now lives.
+  const memberKey = graph().nodes.find((n) => n.parent === '' && n.mountAlias === subsystemId)?.namespace ?? subsystemId;
+  for (const spec of parentSide) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, spec.id);
+  for (const spec of memberSide) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, `${memberKey}::${spec.id}`);
+  // Step 9: the member declares the parent as its external when it references it.
+  if (memberSide.length > 0 && parentId !== null) {
+    projectConfigRepositoryAt(memberDir).declareExternal(parentId, {});
+  }
+  // Step 10: the parent L0's re-exports of the subsystem now re-export the
+  // member by its alias — the same text, restated; nothing is added.
+  restateReExports(subsystemId, subsystemId);
+  invalidateSpecCache();
+  // Step 11.
 }
 
 /**
- * Internalize an external subsystem back into the parent tree: move the
- * subproject's spec subtree back under the parent subsystem, drop projectPath,
- * delete the child .wai project, rewrite references back to bare ids, and take
- * the moved subtree's super:: references back to their parent-local form. Only
- * a flat subproject (whose sole subsystem is the mount id) can be internalized.
+ * core_orchestrator.internalizeMember — take a single-subsystem member back
+ * into the bound project: move its specs in, remove its declaration, delete
+ * its .wai project, and re-save every reference that crossed the old boundary
+ * as a local id. Refuses a member holding more than one subsystem, or
+ * declaring members or externals of its own other than the parent.
  */
-export function internalizeSubsystem(subsystemId: string): void {
-  if (subsystemId.includes('::')) {
-    throw new WaironError('cannot internalize a nested/namespaced subsystem; run from its owning project.');
+export function internalizeMember(alias: string): void {
+  // Step 1: the graph of the bound root.
+  const family = graph();
+  const member = family.nodes.find((n) => n.parent === '' && n.mountAlias === alias);
+  // Steps 2-3: the alias declares a member.
+  if (!member) {
+    throw new WaironError(`cannot internalize: no member is declared under that alias ("${alias}").`);
   }
-  const foo = loadSubsystemSpec(subsystemId);
-  if (!foo || !foo.projectPath) {
-    throw new WaironError(`cannot internalize: subsystem "${subsystemId}" is missing or not external.`);
+  // Steps 4-5: the member can be taken in whole.
+  const root = family.nodes.find((n) => n.namespace === '');
+  const parentId = root?.id;
+  const subsystems = loadSubsystemSpecs().filter((s) => family.owners.get(s.id) === member.namespace);
+  const ownExternals = Object.keys(configAt(member.directory)?.externals ?? {}).filter((a) => a !== parentId);
+  if (subsystems.length !== 1 || member.members.length > 0 || ownExternals.length > 0) {
+    throw new WaironError(
+      `cannot internalize: the member is not a single subsystem, or declares members or externals of its own (member "${alias}": `
+      + `${subsystems.length} subsystem(s), ${member.members.length} member(s), externals ${ownExternals.length ? ownExternals.join(', ') : 'none'}).`,
+    );
   }
-
   const parentRoot = getProjectRoot();
   const parentSpecsDir = aiPathsAt(parentRoot).specsDir();
-  // Fix B2: the PERSISTED projectPath is attacker-influenced (a prior
-  // set-project-path). Contain it before resolving — otherwise the fs.rmSync of
-  // childWai below could delete a directory outside the bound project root.
-  const childDir = assertContainedProjectPath(parentRoot, foo.projectPath);
-  const childWai = path.join(childDir, '.wai');
-  const childFooDir = path.join(childDir, '.wai', 'specs', subsystemId);
-  if (!fs.existsSync(childFooDir)) {
-    throw new WaironError(`external subproject missing subsystem "${subsystemId}": ${childFooDir}`);
-  }
-
-  // Guard: the subproject must be a single flat subsystem matching the mount id.
-  const childOwnSubs = runWithProjectRoot(childDir, () => loadSubsystemSpecs()).filter((s) => !s.id.includes('::'));
-  if (childOwnSubs.length !== 1 || childOwnSubs[0].id !== subsystemId) {
-    throw new WaironError(`cannot internalize: subproject is a multi-subsystem system, not a flat "${subsystemId}".`);
-  }
-
-  // Reverse rename map (namespaced -> bare), from the federated parent view, BEFORE moving.
-  const renameMap = buildRenameMap(subsystemId, /* externalize */ false);
-  const parentSystemName = loadSystemSpec()?.name ?? foo.parentSystem;
-
-  // Replace the parent mount stub with the child's subtree.
-  const fooDir = path.join(parentSpecsDir, subsystemId);
-  fs.rmSync(fooDir, { recursive: true, force: true });
-  ensureDir(path.dirname(fooDir));
-  fs.renameSync(childFooDir, fooDir);
-  // …and back: the child's paths were read against its own root.
-  rebaseImplementationPaths(fooDir, childDir, parentRoot);
-
-  // Re-home the internalized subsystem under the parent system; drop projectPath.
-  patchSubsystemIndex(path.join(fooDir, '.index.yaml'), (s) => {
-    s.parentSystem = parentSystemName;
+  const memberDir = assertContainedProjectPath(parentRoot, path.relative(parentRoot, member.directory) || '.');
+  const memberSpecsDir = aiPathsAt(memberDir).specsDir();
+  const localSub = subsystems[0].id.slice(member.namespace.length + 2);
+  // What crosses the old boundary, read BEFORE anything moves: each reference
+  // the parent makes into the member, and the member makes back into the
+  // parent, by the target the scan bound it to.
+  const intoMember = crossingReferences(family, '', member.namespace);
+  const backOut = crossingReferences(family, member.namespace, '');
+  // Step 6: delete a legacy mount document first, so the moved subsystem can take its folder.
+  deleteMount(alias);
+  // Step 7: move the member's specs in (refused before anything moves on a collision).
+  const movedFiles = moveTreeInto(memberSpecsDir, parentSpecsDir, new Set([path.resolve(aiPathsAt(memberDir).specsSystem())]));
+  rebaseImplementationPaths(parentSpecsDir, memberDir, parentRoot, movedFiles);
+  const parentSystemName = loadSystemSpec()?.name;
+  patchSubsystemIndex(path.join(parentSpecsDir, localSub, '.index.yaml'), (s) => {
+    if (parentSystemName) s.parentSystem = parentSystemName;
     delete s.projectPath;
   });
-
-  // Delete the child .wai project entirely (project.yaml + specs).
-  fs.rmSync(childWai, { recursive: true, force: true });
-
-  // Rewrite references back to bare ids…
-  rewriteRefsInDir(parentSpecsDir, renameMap, fooDir);
-  // …and the moved subtree's own, one mount shallower: each super:: hop it took
-  // out of the subproject is one it no longer needs.
-  rebaseMovedRefs(fooDir, subsystemId, 'outOf');
+  const rewritten = [
+    ...rewriteRefFields(parentSpecsDir, (ref) => intoMember.get(ref) ?? backOut.get(ref) ?? ref),
+  ];
+  // Step 8: remove the member from `members` (false for a legacy declaration).
+  projectConfigRepository.removeMember(alias);
+  // Step 9: delete the member's .wai project.
+  fs.rmSync(path.join(memberDir, '.wai'), { recursive: true, force: true });
   invalidateSpecCache();
+  // Step 10: re-save each spec whose references crossed the old boundary.
+  for (const spec of rewritten) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, spec.id);
+  // Step 11: the parent L0's re-exports from the member now re-export the moved subsystem.
+  restateReExports(alias, localSub);
+  invalidateSpecCache();
+  // Step 12.
+}
+
+/** A root's configuration read through that root's binding; null when it has none or it fails its schema. */
+function configAt(dir: string): ProjectConfig | null {
+  try {
+    return projectConfigRepositoryAt(dir).load();
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Map foo's public ids to/from their namespaced form. externalize=true yields
- * bare -> `foo::bare`; externalize=false yields `foo::x` -> `x`. Built from the
- * federated view, so it reflects foo's components, interfaces, and types.
+ * The `super::` references the specs `specIds` of the bound root wrote, each
+ * as authored → the text that names the same target from one level deeper:
+ * `<project id>::<local>` by the project the scan bound it to (the bound root
+ * by `parentId`). A climb whose target the scan could not read is refused.
  */
-function buildRenameMap(subsystemId: string, externalize: boolean): Map<string, string> {
+function climbingReferences(
+  family: ProjectFamily,
+  specIds: ReadonlySet<string>,
+  parentId: string | null,
+): { map: Map<string, string>; refused: string[] } {
   const map = new Map<string, string>();
-  const prefix = `${subsystemId}::`;
-  const add = (bare: string, namespaced: string) =>
-    externalize ? map.set(bare, namespaced) : map.set(namespaced, bare);
+  const refused: string[] = [];
+  for (const ref of family.authoredReferences) {
+    if (ref.form !== 'super' || !specIds.has(ref.specId)) continue;
+    const producer = ref.producer === undefined ? undefined : family.nodes.find((n) => n.namespace === ref.producer);
+    const projectId = producer?.namespace === '' ? parentId : producer?.id;
+    const local = producer && producer.namespace !== '' && ref.resolved.startsWith(`${producer.namespace}::`)
+      ? ref.resolved.slice(producer.namespace.length + 2)
+      : ref.resolved;
+    if (!producer || !projectId || ref.binding === 'outside' || ref.binding === 'unresolved') {
+      refused.push(ref.authored);
+      continue;
+    }
+    map.set(ref.authored, `${projectId}::${local}`);
+  }
+  return { map, refused: [...new Set(refused)] };
+}
 
-  // Loaded through the parent, a member's own subsystem is keyed under the
-  // member (stage 3): `<member key>::<subsystem>`, never merged with the mount.
-  const owning = new Set([subsystemId, `${prefix}${subsystemId}`]);
-  const comps = loadComponentSpecs().filter((c) => owning.has(c.subsystem));
-  const compIds = new Set(comps.map((c) => c.id));
-  for (const c of comps) {
-    const bare = c.id.startsWith(prefix) ? c.id.slice(prefix.length) : c.id;
-    add(bare, `${prefix}${bare}`);
+/** The id of every spec document under `dir`, whatever its kind. */
+function specIdsUnder(dir: string): Set<string> {
+  const ids = new Set<string>();
+  for (const file of listFilesRecursive(dir, '.yaml')) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    if (raw && typeof raw === 'object' && typeof raw.id === 'string') ids.add(raw.id);
   }
-  for (const i of loadInterfaceSpecs()) {
-    if (!compIds.has(i.component)) continue;
-    const bare = i.id.startsWith(prefix) ? i.id.slice(prefix.length) : i.id;
-    add(bare, `${prefix}${bare}`);
+  return ids;
+}
+
+/**
+ * Every reference with `::` that a project `from` wrote into the project `to`,
+ * as authored → the id it becomes once both live in one project: the local id
+ * the scan bound it to.
+ */
+function crossingReferences(family: ProjectFamily, from: string, to: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const ref of family.authoredReferences) {
+    // A leading `::` is anchored at the bound root and names the same target
+    // from every depth, so a move never needs to touch it.
+    if (ref.form === 'leading') continue;
+    if (ref.producer !== to || (family.owners.get(ref.specId) ?? '') !== from) continue;
+    const local = to === '' ? ref.resolved : ref.resolved.startsWith(`${to}::`) ? ref.resolved.slice(to.length + 2) : null;
+    if (local) out.set(ref.authored, local);
   }
-  for (const t of loadTypeSpecs()) {
-    if (!owning.has(t.subsystem ?? '')) continue;
-    const bare = t.id.startsWith(prefix) ? t.id.slice(prefix.length) : t.id;
-    add(bare, `${prefix}${bare}`);
+  return out;
+}
+
+/** The ids of every component, interface and type the spec files under `dir` declare. */
+function movedIdsUnder(dir: string): Set<string> {
+  const ids = new Set<string>();
+  for (const file of listFilesRecursive(dir, '.yaml')) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    const kind = raw && typeof raw === 'object' ? specKind(raw) : null;
+    if ((kind === 'component' || kind === 'interface' || kind === 'type') && typeof raw.id === 'string') ids.add(raw.id);
   }
-  return map;
+  return ids;
+}
+
+/** Whether any spec under `dir` references an id `matches` accepts, at a moved position. */
+function referencesUnder(dir: string, matches: (ref: string) => boolean): boolean {
+  let found = false;
+  for (const file of listFilesRecursive(dir, '.yaml')) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    rewriteSpecRefs(raw, (ref, position) => {
+      if (MOVED_REF_POSITIONS.has(position) && matches(ref)) found = true;
+      return ref;
+    });
+  }
+  return found;
+}
+
+/**
+ * Move every file under `src` (except those in `skip`) to the same relative
+ * place under `dst`, refusing — before anything moves — when one would land on
+ * an existing file. Returns the files at their new place.
+ */
+function moveTreeInto(src: string, dst: string, skip: ReadonlySet<string>): string[] {
+  if (!fs.existsSync(src)) return [];
+  const files = listFilesRecursive(src, '').filter((f) => !skip.has(path.resolve(f)));
+  const targets = files.map((f) => path.join(dst, path.relative(src, f)));
+  const taken = targets.filter((t) => fs.existsSync(t));
+  if (taken.length > 0) {
+    throw new WaironError(`cannot internalize: the member's specs would overwrite ${taken.map((t) => path.relative(dst, t)).join(', ')} in this project.`);
+  }
+  files.forEach((file, i) => {
+    ensureDir(path.dirname(targets[i]));
+    fs.renameSync(file, targets[i]);
+  });
+  return targets;
+}
+
+/**
+ * Restate the bound L0's re-exports that name `from` as re-exports of `to`,
+ * re-saving the L0 only when one does. The text is the same whenever the
+ * member's alias is the subsystem's id, which is how both moves declare it.
+ */
+function restateReExports(from: string, to: string): void {
+  const system = loadSystemSpec();
+  const entries = (system?.publicInterfaces ?? []) as { from?: string }[];
+  if (!system || !entries.some((e) => e.from === from)) return;
+  saveSystemSpec({
+    ...system,
+    publicInterfaces: entries.map((e) => (e.from === from ? { ...e, from: to } : e)) as typeof system.publicInterfaces,
+  });
 }
 
 /**
@@ -586,48 +734,6 @@ interface RewrittenSpec {
   id: string;
 }
 
-/** Rewrite cross-subsystem reference fields in every spec under `specsDir`, skipping `excludeDir`. */
-function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excludeDir?: string): void {
-  if (renameMap.size === 0) return;
-  rewriteRefFields(specsDir, (ref) => renameMap.get(ref) ?? ref, excludeDir);
-}
-
-/**
- * Re-express the references a moved subtree's specs store for the namespace the
- * subtree now loads in — one mount deeper (`into`) or shallower (`outOf`) — so
- * each names the target it named before; rebaseReference does the id-space
- * arithmetic. Going into the mount, the components the subtree declares travel
- * with it; going out, everything inside the mount does.
- *
- * Only component positions are rebased. A type is matched by name against every
- * loaded type, whichever namespace the naming spec sits in — the loader never
- * qualifies a parameter or field type — so moving the spec cannot change what it
- * resolves to, and a super:: hop written into one would match no type at all.
- * An entity's componentClass and a narrative step's component auth source are
- * matched by exact id, never qualified, so they too stay as written. An
- * interface reference — a contract, a published interface — names a contract of
- * a component in the moved subtree, which travels with it.
- */
-function rebaseMovedRefs(movedDir: string, mount: string, direction: 'into' | 'outOf'): void {
-  const declared = componentIdsUnder(movedDir);
-  rewriteRefFields(movedDir, (ref, position) =>
-    (position === 'component' ? rebaseReference(ref, mount, direction, (id) => declared.has(id)) : ref));
-}
-
-/** The ids of the components declared by the spec files under `dir`. */
-function componentIdsUnder(dir: string): Set<string> {
-  const ids = new Set<string>();
-  for (const file of listFilesRecursive(dir, '.yaml')) {
-    let raw: any;
-    try {
-      raw = readYamlFile(file);
-    } catch {
-      continue;
-    }
-    if (raw && typeof raw === 'object' && 'componentType' in raw && typeof raw.id === 'string') ids.add(raw.id);
-  }
-  return ids;
-}
 /**
  * Rewrite the reference fields of every spec under `specsDir` through `remap`,
  * skipping `excludeDir`, and return the specs it rewrote.
@@ -706,8 +812,8 @@ function rekeyLintAllows(specsDir: string, rename: IdentityRename): RewrittenSpe
  * of `fromRoot`. The file a path names never changes — only the root it is
  * relative to. Empty and absolute paths are left as they are.
  */
-function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: string): void {
-  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: string, only?: string[]): void {
+  for (const file of only?.filter((f) => f.endsWith('.yaml')) ?? listFilesRecursive(specsDir, '.yaml')) {
     let raw: any;
     try {
       raw = readYamlFile(file);

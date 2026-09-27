@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
+import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import * as adapter from '../../src/commands/adapters/core.js';
 import * as portal from '../../src/core/index.js';
 import * as generator from '../../src/exporters/generate.js';
@@ -64,8 +64,8 @@ describe('wairon generate reaches the generator through cli_core_adapter, not th
       vision: 'a generation-boundary fixture', boundaries: [], globalRequirements: [],
       createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec(subsystem('dom-a'));
-    saveSubsystemSpec(subsystem('dom-b'));
+    saveSpec('subsystem', subsystem('dom-a'));
+    saveSpec('subsystem', subsystem('dom-b'));
     invalidateSpecCache();
     return proj;
   }

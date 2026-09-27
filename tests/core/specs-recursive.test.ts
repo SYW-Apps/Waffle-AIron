@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveTypeSpec,
@@ -50,7 +50,7 @@ describe('recursive subproject loading and namespacing', () => {
     });
 
     const relPath = path.relative(rootDir, childDir);
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing',
       name: 'Billing',
       description: 'Handles billing',
@@ -82,7 +82,7 @@ describe('recursive subproject loading and namespacing', () => {
       updatedAt: now,
     });
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'invoice',
       name: 'Invoice management',
       description: 'Manages invoices',
@@ -159,7 +159,7 @@ describe('recursive subproject loading and namespacing', () => {
     });
 
     const relPath = path.relative(rootDir, childDir);
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing',
       name: 'Billing',
       description: 'Handles billing',
@@ -183,7 +183,7 @@ describe('recursive subproject loading and namespacing', () => {
       updatedAt: now,
     });
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'invoice',
       name: 'Invoice management',
       description: 'Manages invoices',
@@ -274,7 +274,7 @@ describe('recursive subproject loading and namespacing', () => {
     expect(itemContents).toContain('subsystem: invoice');
 
     // 8. Save a namespaced subsystem under the child's namespace and check parentSystem rewriting
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing::tax',
       name: 'Tax Management',
       description: 'Handles tax calculations',
@@ -313,7 +313,7 @@ describe('recursive subproject loading and namespacing', () => {
       updatedAt: now,
     });
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing',
       name: 'Billing',
       description: 'Handles billing',
@@ -338,7 +338,7 @@ describe('recursive subproject loading and namespacing', () => {
       updatedAt: now,
     });
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'invoice',
       name: 'Invoice management',
       description: 'Manages invoices',
@@ -363,7 +363,7 @@ describe('recursive subproject loading and namespacing', () => {
       updatedAt: now,
     });
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'tax',
       name: 'Tax Calculation',
       description: 'Calculates tax',
@@ -419,7 +419,7 @@ describe('recursive subproject loading and namespacing', () => {
       updatedAt: now,
     });
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing',
       name: 'Billing',
       description: 'Handles billing',
@@ -444,7 +444,7 @@ describe('recursive subproject loading and namespacing', () => {
       updatedAt: now,
     });
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'invoice',
       name: 'Invoice management',
       description: 'Manages invoices',

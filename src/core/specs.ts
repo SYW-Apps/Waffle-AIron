@@ -143,6 +143,8 @@ export interface ScannedProjectRoot {
   mountForm?: 'members' | 'mount';
   /** The legacy L1 mount subsystem as the parent wrote it; null for a members-declared root and the bound root. */
   legacyMount: SubsystemSpec | null;
+  /** What its parent's declaration says the member is (the `members` description, or a legacy mount's). */
+  memberDescription?: string;
   /** The root directory, absolute. */
   directory: string;
   /** The root's own L0, its export entries keyed into its key; null when it has none. */
@@ -161,6 +163,28 @@ export interface ScannedProjectRoot {
   authoredReferences: AuthoredReference[];
   /** The family problems the scan met at this root: its identity, its members, its duplicate keys. */
   problems: ProjectFamilyProblem[];
+}
+
+/**
+ * The keys of `raw` that `parsed` (its schema's reading) no longer carries,
+ * appended to `out` as `path: value`. Follows an object the schema kept, and
+ * an array element by element when the schema kept every element.
+ */
+function unknownKeysIn(raw: unknown, parsed: unknown, at: string, out: string[]): void {
+  if (Array.isArray(raw)) {
+    if (!Array.isArray(parsed) || parsed.length !== raw.length) return;
+    raw.forEach((item, i) => unknownKeysIn(item, parsed[i], `${at}[${i}]`, out));
+    return;
+  }
+  if (!raw || typeof raw !== 'object' || !parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const keyPath = at ? `${at}.${key}` : key;
+    if (!(key in (parsed as Record<string, unknown>))) {
+      out.push(`${keyPath}: ${typeof value === 'string' ? value : JSON.stringify(value)}`);
+      continue;
+    }
+    unknownKeysIn(value, (parsed as Record<string, unknown>)[key], keyPath, out);
+  }
 }
 
 function emptyIndex(): SpecIndex {
@@ -1140,7 +1164,7 @@ type StoredSpec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | I
 
 /**
  * ONE change a write made to a stored spec, addressed by a dotted path with
- * names and indexes: `methods.createChainedSubsystem.narrative.step 7.type`,
+ * names and indexes: `methods.createMember.narrative.step 7.type`,
  * `dependsOn`, `description`.
  */
 export interface SpecChange {
@@ -1201,6 +1225,14 @@ export interface SpecChangeReport {
    * The write that creates the collision is the one that reports it.
    */
   testsToRevisit: TestsToRevisit[];
+  /**
+   * Keys the stored document on disk carries that its level's schema does not
+   * know — read from the raw file, since the parse already discarded them —
+   * which this write drops (or, on a dry run, would drop), each as
+   * `path: value` (`status: draft` on an L0). Absent when there are none, and
+   * on a write that changes nothing, because nothing is re-serialized then.
+   */
+  strippedKeys?: string[];
 }
 
 /**
@@ -2139,6 +2171,7 @@ export class SpecWorkspace {
       ...(parent ? { parent: parent.record.namespace } : {}),
       ...(member ? { mountAlias: member.alias, mountForm: member.form } : {}),
       legacyMount: member?.legacyMount ?? null,
+      ...(member?.description !== undefined ? { memberDescription: member.description } : {}),
       directory: path.resolve(dir),
       system: null,
       config,
@@ -2928,19 +2961,18 @@ export class SpecWorkspace {
     return issues;
   }
 
-  saveSubsystemSpec(spec: SubsystemSpec, opts?: SaveSpecOptions): void {
+  /**
+   * The subsystem writer behind save('subsystem', ...). Private: the generic
+   * save is the one write door, and a subsystem is never a mount — the
+   * authoring seam refuses a projectPath before anything reaches here, and a
+   * stored legacy mount is read as a member declaration, not loaded as a
+   * subsystem, so no mount document is re-saved through this path.
+   */
+  private writeSubsystemSpec(spec: SubsystemSpec, opts?: SaveSpecOptions): void {
     const p = this.getSubsystemPath(spec.id);
     ensureDir(path.dirname(p));
 
     const { prefix } = splitNamespace(spec.id);
-    // Fix B2 (defense in depth): never persist an escaping projectPath, so no
-    // later code path can resolve+act on it. Only for a top-level (non-prefixed)
-    // subsystem, whose projectPath is relative to this.rootDir; a namespaced
-    // subsystem's projectPath is child-relative and is contained by the
-    // load-time guards (resolveSubprojectForNamespace + the recursive loader).
-    if (!prefix && spec.projectPath && spec.projectPath.trim() !== '') {
-      assertContainedProjectPath(this.rootDir, spec.projectPath);
-    }
     // ALWAYS strip: an external subsystem's members carry the subsystem's own
     // id prefix even when the subsystem itself is mounted at the root (empty
     // prefix) — skipping the strip there wrote qualified member ids the
@@ -3413,6 +3445,37 @@ export class SpecWorkspace {
   }
 
   /**
+   * spec_change_report.strippedKeys — every key the stored document of one
+   * spec carries on disk that its level's schema does not know, each as
+   * `path: value`. Read from the RAW file: the parsed spec has already lost
+   * them. Nested objects are followed where the schema kept the object, and
+   * arrays element by element where it kept every element.
+   */
+  strippedKeysOf(kind: WritableSpecKind, id: string): string[] {
+    const file = kind === 'system' ? this.paths.specsSystem() : this.scanAll().paths[kind][id];
+    if (!file || !pathExists(file)) return [];
+    let raw: unknown;
+    try {
+      raw = readSpecFile(file);
+    } catch {
+      return [];
+    }
+    const schema = {
+      system: SystemSpecSchema,
+      subsystem: SubsystemSpecSchema,
+      component: ComponentSpecSchema,
+      interface: InterfaceSpecSchema,
+      implementation: ImplementationSpecSchema,
+      type: TypeSpecSchema,
+    }[kind];
+    const parsed = schema.safeParse(raw);
+    if (!parsed.success) return [];
+    const out: string[] = [];
+    unknownKeysIn(raw, parsed.data, '', out);
+    return out;
+  }
+
+  /**
    * Persist one spec through the typed writer of its kind, answering with that
    * writer's placement notices (none for the L0 and a subsystem). A draft or
    * status-less save keeps the stored status, exactly as the typed writers do.
@@ -3425,7 +3488,7 @@ export class SpecWorkspace {
   private saveOfKind(kind: WritableSpecKind, spec: StoredSpec, opts?: SaveSpecOptions): string[] {
     switch (kind) {
       case 'system':         this.saveSystemSpec(spec as SystemSpec); return [];
-      case 'subsystem':      this.saveSubsystemSpec(spec as SubsystemSpec, opts); return [];
+      case 'subsystem':      this.writeSubsystemSpec(spec as SubsystemSpec, opts); return [];
       case 'component':      return this.saveComponentSpec(spec as ComponentSpec, opts);
       case 'interface':      return this.saveInterfaceSpec(spec as InterfaceSpec, opts);
       case 'implementation': return this.saveImplementationSpec(spec as ImplementationSpec, opts);
@@ -3623,7 +3686,7 @@ export class SpecWorkspace {
   applySpecStatus(kind: SpecKind, id: string, status: SpecStatus): void {
     const keepStamp: SaveSpecOptions = { preserveUpdatedAt: true };
     switch (kind) {
-      case 'subsystem':      { const s = this.loadSubsystemSpec(id);      if (s) this.saveSubsystemSpec({ ...s, status }, keepStamp); break; }
+      case 'subsystem':      { const s = this.loadSubsystemSpec(id);      if (s) this.writeSubsystemSpec({ ...s, status }, keepStamp); break; }
       case 'component':      { const s = this.loadComponentSpec(id);      if (s) this.saveComponentSpec({ ...s, status }, keepStamp); break; }
       case 'interface':      { const s = this.loadInterfaceSpec(id);      if (s) this.saveInterfaceSpec({ ...s, status }, keepStamp); break; }
       case 'implementation': { const s = this.loadImplementationSpec(id); if (s) this.saveImplementationSpec({ ...s, status }, keepStamp); break; }
@@ -4558,6 +4621,10 @@ export class SpecWorkspace {
     // write that the write itself would be refused is not an account worth
     // having.
     const gateNotices = hooks?.gate?.(kind, mergedResult);
+    // The keys the stored FILE carries that the schema does not know: the
+    // parse above already dropped them, and the save below re-serializes
+    // through the schema, so without this they would vanish unannounced.
+    const stripped = this.strippedKeysOf(kind, id);
     if (gateNotices?.length) notices.push(...gateNotices);
 
     // The account, and nothing else. Stamping happens below, so a dry run
@@ -4572,6 +4639,7 @@ export class SpecWorkspace {
         ineffective,
         notices,
         testsToRevisit: [],
+        ...(stripped.length ? { strippedKeys: stripped } : {}),
         summary: `Dry run on ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'} would be made. Nothing was written.`,
       };
     }
@@ -4598,6 +4666,7 @@ export class SpecWorkspace {
       // nothing about the rule engine that reads code. The GATED write above
       // it fills this in, which is also the only write path a human drives.
       testsToRevisit: [],
+      ...(stripped.length ? { strippedKeys: stripped } : {}),
       summary: `Updated ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'}.`,
     };
   }
@@ -5517,10 +5586,6 @@ export function loadSubsystemSpecs(): SubsystemSpec[] {
 
 export function loadSubsystemSpec(id: string): SubsystemSpec | null {
   return current().loadSubsystemSpec(id);
-}
-
-export function saveSubsystemSpec(spec: SubsystemSpec): void {
-  current().saveSubsystemSpec(spec);
 }
 
 export function deleteSubsystemSpec(id: string): boolean {

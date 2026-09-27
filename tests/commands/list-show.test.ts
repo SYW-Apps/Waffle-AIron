@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
+import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import { ProjectNotInitializedError } from '../../src/utils/errors.js';
 import { resolveAgentTopology } from '../../src/commands/adapters/core.js';
 import { runList } from '../../src/commands/list.js';
@@ -56,8 +56,8 @@ function buildTwoDomainProject(rootDir: string): void {
     createdAt: now,
     updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('dom-a'));
-  saveSubsystemSpec(subsystem('dom-b'));
+  saveSpec('subsystem', subsystem('dom-a'));
+  saveSpec('subsystem', subsystem('dom-b'));
   invalidateSpecCache();
 }
 

@@ -84,7 +84,9 @@ describe('reference family: the loader without position', () => {
     const ws = workspaceFor(family.top);
     const keep = { preserveUpdatedAt: true };
     const index = ws.scanAll();
-    for (const s of index.subsystems) ws.saveSubsystemSpec(s, keep);
+    // The subsystem writer behind save('subsystem', …), reached directly for the
+    // mechanical re-save's preserveUpdatedAt (the generic save always stamps).
+    for (const s of index.subsystems) (ws as unknown as { writeSubsystemSpec(x: unknown, o: unknown): void }).writeSubsystemSpec(s, keep);
     for (const c of workspaceFor(family.top).scanAll().components) workspaceFor(family.top).saveComponentSpec(c, keep);
     for (const i of workspaceFor(family.top).scanAll().interfaces) workspaceFor(family.top).saveInterfaceSpec(i, keep);
     for (const t of workspaceFor(family.top).scanAll().types) workspaceFor(family.top).saveTypeSpec(t, keep);

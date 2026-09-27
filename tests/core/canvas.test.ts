@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -170,7 +170,7 @@ describe('interactive canvas generation', () => {
       createdAt: now,
       updatedAt: now,
     });
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing',
       name: 'Billing',
       description: 'billing context',
@@ -180,7 +180,7 @@ describe('interactive canvas generation', () => {
       createdAt: now,
       updatedAt: now,
     });
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'shipping',
       name: 'Shipping',
       description: 'shipping context',

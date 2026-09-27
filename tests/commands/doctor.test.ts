@@ -7,7 +7,7 @@ import { promisify } from 'util';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   loadComponentSpec,
   invalidateSpecCache,
@@ -103,7 +103,7 @@ function buildProject(rootDir: string): void {
     schemaVersion: '1.0.0', name: 'doctor-sys', vision: 'a doctor fixture system',
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
-  saveSubsystemSpec(sub('calc'));
+  saveSpec('subsystem', sub('calc'));
   saveComponentSpec(comp('ledger', 'Store', { durability: 'durable' }));
   saveComponentSpec(specialist('leaf', []));
   saveComponentSpec(specialist('stamp', ['ledger']));

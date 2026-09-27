@@ -107,6 +107,8 @@ export interface ProjectNode {
   mountForm?: 'members' | 'mount';
   /** The legacy L1 mount subsystem as its parent wrote it; null otherwise. */
   legacyMount: SubsystemSpec | null;
+  /** What the parent's declaration says the member is (the `members` description, or a legacy mount's); shown on its canvas node. */
+  memberDescription?: string;
   /** Whether the project has an L0 of its own. */
   hasSystem: boolean;
   /** The project's root directory, absolute. */

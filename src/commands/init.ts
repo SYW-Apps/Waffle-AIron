@@ -11,15 +11,14 @@ import {
   getProjectRootOverride,
   setProjectRoot,
 } from '../utils/fs.js';
-import type { SubsystemSpec } from '../models/index.js';
-import type { SpecRestatement } from '../core/authoring.js';
 import { writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/paths.js';
 import {
   createProjectConfig,
   projectConfigExists,
   loadSystemSpec,
-  loadSubsystemSpec,
+  loadProjectConfig,
+  createMember,
   defaultPackSelections,
   ensureProjectInitialized,
   // Through the core adapter, never ../utils/ai-guide.js: writing a tool's
@@ -31,10 +30,8 @@ import {
   syncContextFiles,
 } from './adapters/core.js';
 import { exportSddSkills } from './adapters/skills.js';
-// cli_authoring_adapter: authoring the subsystem goes through the gated seam.
-import { writeSpec } from './adapters/authoring.js';
 import { defaultTargetConfig } from '../config/defaults.js';
-import { ProjectConfig, TargetConfig, activeTargetTypes, effectiveProjectId } from '../models/project.js';
+import { ProjectConfig, TargetConfig, activeTargetTypes, declaredMembers, effectiveProjectId } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
 // init command
@@ -65,9 +62,9 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   }
 
   // Case (c): cwd sits inside a parent wairon project → offer to make this
-  // directory an external subsystem of that parent instead of dead-ending.
+  // directory a member of that parent instead of dead-ending.
   if (ancestorRoot) {
-    await runInitAsExternalSubsystem(ancestorRoot, cwd, options);
+    await runInitAsMember(ancestorRoot, cwd, options);
     return;
   }
 
@@ -81,82 +78,82 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// External-subsystem branch: cwd is a subdirectory of an existing project
+// Member branch: cwd is a subdirectory of an existing project
 // ---------------------------------------------------------------------------
 
-async function runInitAsExternalSubsystem(
+/** A directory name as a member alias: lowercased, every character outside [a-z0-9-_] made a hyphen. */
+function memberAliasOf(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'member';
+}
+
+async function runInitAsMember(
   parentRoot: string,
   cwd: string,
   options: InitOptions,
 ): Promise<void> {
-  const relPath = path.relative(parentRoot, cwd) || '.';
-  const defaultId = path.basename(cwd);
+  const relPath = (path.relative(parentRoot, cwd) || '.').split(path.sep).join('/');
+  const defaultAlias = memberAliasOf(path.basename(cwd));
 
   logger.info(`Detected a parent wairon project at ${parentRoot}`);
   logger.info(`This directory ("${relPath}") is not yet a wairon project.`);
 
+  // Steps 5-7: ask, and stop without changes when declined.
   if (!options.yes) {
     const { proceed } = await inquirer.prompt<{ proceed: boolean }>([
       {
         type: 'confirm',
         name: 'proceed',
-        message: `Create "${relPath}" as an external subsystem of the parent project?`,
+        message: `Create "${relPath}" as a member project of the parent project?`,
         default: true,
       },
     ]);
     if (!proceed) {
       logger.info('Cancelled — no changes made.');
-      logger.info('To design this subproject, add it from the parent with `wairon subsystem add` or the SDD tools.');
+      logger.info('To add this directory later, run `wairon member add <alias> <path>` from the parent project.');
       return;
     }
   }
 
-  let subsystemId = defaultId;
+  let alias = defaultAlias;
   if (!options.yes) {
     const { id } = await inquirer.prompt<{ id: string }>([
       {
         type: 'input',
         name: 'id',
-        message: 'Subsystem id:',
-        default: defaultId,
+        message: 'Member alias (also its project id):',
+        default: defaultAlias,
       },
     ]);
-    subsystemId = id?.trim() || defaultId;
+    alias = memberAliasOf(id?.trim() || defaultAlias);
   }
 
-  // Author the subsystem against the PARENT root, through the authoring seam,
-  // which wires it there and provisions this directory as the child.
+  // Everything below runs against the PARENT root: the member is declared
+  // there, and this directory is scaffolded as its project.
   const prevOverride = getProjectRootOverride();
   setProjectRoot(parentRoot);
   try {
+    // Step 8: the parent's system spec; a parent without one is refused.
     const system = loadSystemSpec();
     if (!system) {
       throw new WaironError(`Parent project at ${parentRoot} has no system spec.`);
     }
-    // Step 9: the subsystem the parent already stores under that id, if any.
-    const stored = loadSubsystemSpec(subsystemId);
-    // Step 10: the restatement, with only what this command owns — the id and
-    // the projectPath — plus, for a subsystem the parent does not store yet,
-    // the name and the placeholder description a new subsystem requires. The
-    // seam derives parentSystem from the L0, fills a new spec's lists from the
-    // schema defaults, and carries whatever an existing one already holds.
-    const spec: Record<string, unknown> = { id: subsystemId, projectPath: relPath };
-    const fields = ['id', 'projectPath'];
-    if (!stored) {
-      Object.assign(spec, { name: subsystemId, description: `External subsystem ${subsystemId}` });
-      fields.push('name', 'description');
-    }
-    const restatement: SpecRestatement = { kind: 'subsystem', spec: spec as unknown as SubsystemSpec, fields };
-    // Step 11: into the parent project through the authoring client adapter.
-    const receipt = writeSpec(restatement);
-    for (const notice of receipt.notices) logger.info(notice);
+    // Step 9: the members the parent already declares — a re-run finds this
+    // directory under the alias it was declared with.
+    const config = loadProjectConfig();
+    const declared = config ? declaredMembers(config).find((m) => m.path === relPath) : undefined;
+    // Step 10: the member — its alias and its path from the parent root.
+    if (declared) alias = declared.alias;
+    // Step 11: scaffold this directory's project and declare it in the
+    // parent's `members`; no L1 spec is written into the parent.
+    createMember(alias, relPath);
   } finally {
     setProjectRoot(prevOverride);
   }
 
-  logger.success(`Created "${subsystemId}" as an external subsystem of the parent project.`);
-  logger.info(`Wired the parent (projectPath: ${relPath}) and scaffolded this directory as a child wairon project.`);
-  logger.info(`Design its spec tree from the parent using namespaced ids (e.g. ${subsystemId}::<component>).`);
+  // Step 12: the member was created.
+  logger.success(`Created "${relPath}" as the member "${alias}" of the parent project.`);
+  logger.info(`Declared it in the parent's project.yaml \`members\` and scaffolded this directory as its project (id "${alias}").`);
+  logger.info(`Design it from here, and export what the parent consumes from its L0; the parent references it as ${alias}::<name>.`);
 }
 
 // ---------------------------------------------------------------------------

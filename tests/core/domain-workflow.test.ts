@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
+import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import * as projector from '../../src/core/domain_projector.js';
 import * as curator from '../../src/core/domain_curator.js';
 import * as topology from '../../src/core/topology.js';
@@ -80,8 +80,8 @@ describe('domain_projector and domain_curator span the two sources the Repositor
       vision: 'a domain workflow fixture', boundaries: [], globalRequirements: [],
       createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec(subsystem('billing'));
-    saveSubsystemSpec(subsystem('shipping'));
+    saveSpec('subsystem', subsystem('billing'));
+    saveSpec('subsystem', subsystem('shipping'));
     invalidateSpecCache();
     return proj;
   }

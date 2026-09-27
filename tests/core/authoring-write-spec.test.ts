@@ -34,7 +34,7 @@ import {
   saveComponentSpec,
   saveImplementationSpec,
   saveInterfaceSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveSystemSpec,
 } from '../../src/core/specs.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SystemSpec, TypeSpec } from '../../src/models/specs.js';
@@ -77,7 +77,7 @@ function project(opts: { testRoots?: string[]; system?: boolean } = {}): string 
   invalidateSpecCache();
   if (opts.system === false) return root;
   saveSystemSpec({ schemaVersion: '1.0.0', name: 'Shop System', vision: 'v', boundaries: [], globalRequirements: [], databases: [], createdAt: now, updatedAt: now });
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     id: 'shop', name: 'Shop', description: 'd', parentSystem: 'Shop System', publicInterfaces: [], trustedLinks: [],
     status: 'draft', createdAt: now, updatedAt: now,
   } as SubsystemSpec);
@@ -241,17 +241,18 @@ describe('writeSpec — a subsystem', () => {
     expect(loadSubsystemSpec('billing')?.parentSystem).toBe('Shop System');
   });
 
-  it('scaffolds the child project of a chained subsystem and names it on the receipt', () => {
+  it('refuses a subsystem naming a projectPath (the legacy mount form), pointing at sdd_add_member, and writes nothing', () => {
     const root = project();
-    const receipt = writeSpec(subsystem({ projectPath: 'packages/billing' }));
-    expect(receipt.scaffoldedProjectPath).toBe('packages/billing');
-    expect(fs.existsSync(path.join(root, 'packages', 'billing', '.wai', 'project.yaml'))).toBe(true);
+    expect(() => writeSpec(subsystem({ projectPath: 'packages/billing' }))).toThrow(/mount form refused.*sdd_add_member/);
+    expect(fs.existsSync(path.join(root, 'packages', 'billing'))).toBe(false);
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('billing')).toBeNull();
   });
 
   it('carries lint and names createdAt first, as the create tool always did', () => {
     project();
     const stored = loadSubsystemSpec('shop')!;
-    saveSubsystemSpec({ ...stored, lint: { allow: [{ code: 'X', reason: 'r' }] } } as SubsystemSpec);
+    saveSpec('subsystem', { ...stored, lint: { allow: [{ code: 'X', reason: 'r' }] } } as SubsystemSpec);
     invalidateSpecCache();
     const receipt = writeSpec({ ...subsystem({ id: 'shop', name: 'Shop' }) });
     expect(receipt.notices).toContain('Carried forward (not expressible through this tool): createdAt, lint.');

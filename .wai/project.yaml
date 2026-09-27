@@ -253,7 +253,7 @@ rules:
               - '4:cli_validator_adapter.validateRegistry'
               - '5:cli_validator_adapter.validateProjectConfig'
               - '6:cli_validator_adapter.validateSddTree'
-      # 82 finding(s), 109 unit(s).
+      # 80 finding(s), 106 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -603,12 +603,6 @@ rules:
               - 'spec_registry.invalidateCache'
           - code: UNDECLARED_COLOCATED_CALL
             spec: spec_loader_impl
-            at: 'saveSubsystemSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-              - 'core_orchestrator.assertContainedProjectPath'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_loader_impl
             at: 'saveSystemSpec'
             covers:
               - 'spec_registry.invalidateCache'
@@ -683,11 +677,6 @@ rules:
             at: 'resolve'
             covers:
               - 'secret_store.read'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_registry_impl
-            at: 'saveSubsystemSpec'
-            covers:
-              - 'core_orchestrator.assertContainedProjectPath'
           - code: UNDECLARED_COLOCATED_CALL
             spec: project_repository_impl
             at: 'existingRoot'

@@ -8,7 +8,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   invalidateSpecCache,
@@ -72,7 +72,7 @@ function buildChainedWorld(rootDir: string): string {
     createdAt: now,
     updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('core-sub', {
+  saveSpec('subsystem', subsystem('core-sub', {
     publicInterfaces: [{ type: 'REST', details: 'api', component: 'gateway-portal' }],
   }));
   saveComponentSpec(component('gateway-portal', 'core-sub', {

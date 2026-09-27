@@ -67,6 +67,7 @@ function makeNodes(roots: ScannedProjectRoot[]): ProjectNode[] {
       ...(root.mountAlias !== undefined ? { mountAlias: root.mountAlias } : {}),
       ...(root.mountForm !== undefined ? { mountForm: root.mountForm } : {}),
       legacyMount: root.legacyMount,
+      ...(root.memberDescription !== undefined ? { memberDescription: root.memberDescription } : {}),
       hasSystem: root.system !== null,
       directory: root.directory,
       members: roots.filter((r) => r.parent === root.namespace && r.namespace !== root.namespace).map((r) => r.namespace),

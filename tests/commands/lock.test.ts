@@ -7,7 +7,7 @@ import { promisify } from 'util';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   loadComponentSpec,
@@ -17,7 +17,7 @@ import {
   specPathsInScope,
 } from '../../src/core/specs.js';
 import { diffAgainstApproval } from '../../src/core/approval.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { saveSnapshot } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import { runLock } from '../../src/commands/lock.js';
@@ -91,7 +91,7 @@ function buildLockableProject(rootDir: string, withEndpoint = true): void {
     createdAt: now,
     updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('core-sub', {
+  saveSpec('subsystem', subsystem('core-sub', {
     publicInterfaces: [{ type: 'REST', details: 'api', component: 'gateway-portal' }],
   }));
   saveComponentSpec(component('gateway-portal', 'core-sub', {
@@ -177,7 +177,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
   it('--subsystem approves only its own scope, never the whole tree', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
     buildLockableProject(rootDir);
-    saveSubsystemSpec(subsystem('aux-sub'));
+    saveSpec('subsystem', subsystem('aux-sub'));
     saveComponentSpec(component('aux-orchestrator', 'aux-sub'));
     invalidateSpecCache();
     setProjectRoot(rootDir);
@@ -238,7 +238,7 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery 
   it('a locked parent writes nothing into a chained child — the child pins its own surfaces', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-e2e-'));
     buildLockableProject(rootDir);
-    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
     invalidateSpecCache();
     setProjectRoot(null);
     const kidDir = path.join(rootDir, 'packages', 'kid');

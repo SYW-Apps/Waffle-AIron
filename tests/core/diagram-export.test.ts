@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
@@ -32,12 +32,12 @@ describe('editable diagram exports (draw.io / Excalidraw)', () => {
       schemaVersion: '1.0.0', name: 'ExportSys', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing', name: 'Billing', description: 'd', parentSystem: 'ExportSys',
       publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }],
       trustedLinks: [], createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'shipping', name: 'Shipping', description: 'd', parentSystem: 'ExportSys',
       publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now,
     });

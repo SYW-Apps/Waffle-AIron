@@ -23,7 +23,7 @@ import { buildCodeModel, findTestsReferencing } from '../../src/core/source-anal
 import { findTestsReferencing as findThroughValidator } from '../../src/core/validation.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -296,7 +296,7 @@ function seedGatedProject(testRoots?: string[]): string {
   }));
   setProjectRoot(proj);
 
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     schemaVersion: '1.0.0', id: 'billing', name: 'Billing', description: 'Billing',
     parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now,
   });

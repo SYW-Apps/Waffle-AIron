@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { validateSddTree } from '../../src/core/validation.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { invalidateSpecCache, saveSubsystemSpec, saveSystemSpec, workspaceFor } from '../../src/core/specs.js';
+import { invalidateSpecCache, saveSpec, saveSystemSpec, workspaceFor } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
 // Invariant registry — the HONEST declaration+backing linter. An entity
@@ -383,7 +383,7 @@ describe('invariants inside a chained subproject — ids resolve through the mou
       schemaVersion: '1.0.0', name: 'root-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'inventory', name: 'inventory', description: 'mount', parentSystem: 'root-system',
       publicInterfaces: [], projectPath: 'packages/inventory', status: 'complete', createdAt: now, updatedAt: now,
     });
@@ -395,7 +395,7 @@ describe('invariants inside a chained subproject — ids resolve through the mou
       schemaVersion: '1.0.0', name: 'inventory-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    child.saveSubsystemSpec({
+    child.save('subsystem', {
       id: 'inv-core', name: 'inv-core', description: 'd', parentSystem: 'inventory-system',
       publicInterfaces: [], status: 'complete', createdAt: now, updatedAt: now,
     });

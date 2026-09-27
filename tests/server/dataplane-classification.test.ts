@@ -49,6 +49,14 @@ describe('data-plane tool classification', () => {
     }
   });
 
+  it('gates the member tools as tree-scoped writes, by their prefixes', () => {
+    for (const name of ['sdd_add_member', 'sdd_move_member', 'sdd_internalize_member', 'sdd_externalize_subsystem']) {
+      expect(requiredDataPlaneCapability(name)).toBe('project:write');
+      expect(toolScope(name)).toBe('tree');
+      expect(isExplicitlyClassifiedTool(name)).toBe(true);
+    }
+  });
+
   it('gates sdd_rename_component as a tree-scoped write, on purpose', () => {
     expect(requiredDataPlaneCapability('sdd_rename_component')).toBe('project:write');
     expect(toolScope('sdd_rename_component')).toBe('tree');

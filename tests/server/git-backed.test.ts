@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { excludeLocalFiles } from '../../src/git/adapter.js';
 import {
   invalidateSpecCache,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -489,7 +489,7 @@ describe('git-backed projects (sdd_git)', () => {
     // a detached call. Returns each authored file's repo-relative path.
     const now = '2026-07-05T00:00:00.000Z';
     const authored = runWithProjectRoot(root, () => {
-      saveSubsystemSpec({
+      saveSpec('subsystem', {
         id: 'demo-core',
         name: 'Demo Core',
         description: 'session handling',

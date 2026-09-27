@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -25,7 +25,7 @@ import {
 import { computeStateIdAt, loadSystemSpec } from '../../src/core/specs.js';
 import { toOpenApi, toOpenApiSet, fromOpenApi, isOpenApiDocument } from '../../src/core/openapi.js';
 import { validateSddTree, type ValidationResult } from '../../src/core/validation.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import type {
   ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SurfaceContractEntry, SurfaceSnapshot,
@@ -62,7 +62,7 @@ function buildParent(rootDir: string): void {
     createdAt: now,
     updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('core-sub', {
+  saveSpec('subsystem', subsystem('core-sub', {
     publicInterfaces: [
       { type: 'REST', details: 'api', component: 'gateway-portal' },
       { type: 'Custom', details: 'family', component: 'family-portal' },
@@ -391,12 +391,12 @@ describe('standalone-child validation against pinned parent snapshots', () => {
   function buildFamily(): string {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
-    createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
+    writeLegacyMount(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
     const childDir = path.join(rootDir, 'packages', 'transpiler');
 
     // Child content: an Adapter consuming the parent's gateway across the tree.
     setProjectRoot(childDir);
-    saveSubsystemSpec(subsystem('transpiler', { parentSystem: 'transpiler' }));
+    saveSpec('subsystem', subsystem('transpiler', { parentSystem: 'transpiler' }));
     saveComponentSpec(component('parent-gateway-adapter', 'transpiler', {
       componentType: 'Adapter', dependsOn: ['super::gateway-portal'],
     } as Partial<ComponentSpec>));
@@ -575,11 +575,11 @@ describe('cross-tree references are matched by the provider they name', () => {
       schemaVersion: '1.0.0', name: 'root-system', vision: 'provider matching fixture',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
     const kidDir = path.join(root, 'packages', 'kid');
 
     setProjectRoot(kidDir);
-    saveSubsystemSpec(subsystem('desk', { parentSystem: 'kid' }));
+    saveSpec('subsystem', subsystem('desk', { parentSystem: 'kid' }));
     saveComponentSpec(component('invoice-client', 'desk', {
       componentType: 'Adapter', dependsOn: [ref],
     } as Partial<ComponentSpec>));
@@ -707,7 +707,7 @@ describe('stage-1 family pins + computeStateIdAt', () => {
   function buildChainedWorld(): string {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
-    createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
+    writeLegacyMount(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
     invalidateSpecCache();
     const childDir = path.join(rootDir, 'packages', 'transpiler');
     const snap = (projectName: string, origin: 'generated' | 'authored') => SurfaceSnapshotSchema.parse({
@@ -776,7 +776,7 @@ describe('surface projection over the resolved export table', () => {
       fields: [{ name: 'amount', type: 'number', optional: false }],
       methods: [], createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec(subsystem('core-sub', {
+    saveSpec('subsystem', subsystem('core-sub', {
       publicInterfaces: [
         { type: 'REST', details: 'api', component: 'gateway-portal' },
         { type: 'Custom', details: 'family', component: 'family-portal' },

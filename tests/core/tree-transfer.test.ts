@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   invalidateSpecCache,
   listChainedRoots,
 } from '../../src/core/specs.js';
@@ -90,11 +90,11 @@ describe('listChainedRoots', () => {
     // Re-bind to the parent and declare the chain top-down.
     setProjectRoot(child);
     invalidateSpecCache();
-    saveSubsystemSpec(subsystem('ledger', 'billing', 'vendor/ledger'));
+    saveSpec('subsystem', subsystem('ledger', 'billing', 'vendor/ledger'));
     setProjectRoot(root);
     invalidateSpecCache();
-    saveSubsystemSpec(subsystem('billing', 'parent', 'packages/billing'));
-    saveSubsystemSpec(subsystem('ghost', 'parent', 'packages/missing'));
+    saveSpec('subsystem', subsystem('billing', 'parent', 'packages/billing'));
+    saveSpec('subsystem', subsystem('ghost', 'parent', 'packages/missing'));
 
     expect(listChainedRoots()).toEqual(['packages/billing', 'packages/billing/vendor/ledger']);
   });
@@ -139,7 +139,7 @@ describe('exportSpecTree', () => {
     initProject(path.join(root, 'packages', 'billing'), 'billing');
     setProjectRoot(root);
     invalidateSpecCache();
-    saveSubsystemSpec(subsystem('billing', 'parent', 'packages/billing'));
+    saveSpec('subsystem', subsystem('billing', 'parent', 'packages/billing'));
 
     const result = exportSpecTree();
     expect(result.roots).toEqual(['.', 'packages/billing']);
@@ -160,7 +160,7 @@ describe('exportSpecTree', () => {
     setProjectRoot(root);
     invalidateSpecCache();
     // 'ghost' declares a mount whose directory was never created.
-    saveSubsystemSpec(subsystem('ghost', 'parent', 'packages/missing'));
+    saveSpec('subsystem', subsystem('ghost', 'parent', 'packages/missing'));
 
     expect(() => exportSpecTree()).toThrow(/ghost/);
     expect(() => exportSpecTree()).toThrow(/missing/);
@@ -179,7 +179,7 @@ describe('exportSpecTree', () => {
     fs.mkdirSync(path.join(root, 'packages', 'empty'), { recursive: true });
     setProjectRoot(root);
     invalidateSpecCache();
-    saveSubsystemSpec(subsystem('empty', 'parent', 'packages/empty'));
+    saveSpec('subsystem', subsystem('empty', 'parent', 'packages/empty'));
 
     expect(() => exportSpecTree()).toThrow(/no-spec-tree/);
 
@@ -216,7 +216,7 @@ describe('importSpecTree', () => {
   function authorSubsystem(root: string, parentSystem: string): void {
     setProjectRoot(root);
     invalidateSpecCache();
-    saveSubsystemSpec(subsystem('authored', parentSystem));
+    saveSpec('subsystem', subsystem('authored', parentSystem));
   }
 
   it('REFUSES a destination holding AUTHORED design unless replaceExisting is set', () => {
@@ -270,7 +270,7 @@ describe('importSpecTree', () => {
     initProject(path.join(src, 'packages', 'billing'), 'billing');
     setProjectRoot(src);
     invalidateSpecCache();
-    saveSubsystemSpec(subsystem('billing', 'parent', 'packages/billing'));
+    saveSpec('subsystem', subsystem('billing', 'parent', 'packages/billing'));
     const archive = exportSpecTree().archive;
 
     const dest = mkTmp('wai-chain-dest-');

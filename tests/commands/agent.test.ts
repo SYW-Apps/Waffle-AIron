@@ -5,7 +5,7 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
+import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -47,7 +47,7 @@ function buildProject(rootDir: string): void {
     parentSystem: 'agent-system', publicInterfaces: [], trustedLinks: [],
     status: 'draft', createdAt: now, updatedAt: now,
   };
-  saveSubsystemSpec(sub);
+  saveSpec('subsystem', sub);
   invalidateSpecCache();
   setProjectRoot(null);
 }

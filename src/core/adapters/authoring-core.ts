@@ -14,7 +14,6 @@ export {
   loadImplementationSpecs,
   saveSpec,
   deleteSpec,
-  createChainedSubsystem,
 } from '../index.js';
 
 /**

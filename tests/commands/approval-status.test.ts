@@ -6,7 +6,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSystemSpec, saveSubsystemSpec, saveComponentSpec, invalidateSpecCache,
+  saveSystemSpec, saveSpec, saveComponentSpec, invalidateSpecCache,
 } from '../../src/core/specs.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
 
@@ -40,7 +40,7 @@ function buildProject(root: string): void {
     schemaVersion: '1.0.0', name: 'approve-sys', vision: 'an approval fixture',
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     id: 'dom', name: 'dom', description: 'the approval domain',
     parentSystem: 'approve-sys', publicInterfaces: [], trustedLinks: [],
     status: 'draft', createdAt: now, updatedAt: now,

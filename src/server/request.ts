@@ -36,9 +36,9 @@ import type {
 // and bind the authorized project's isolated root, then dispatch the sdd_* tool
 // call into a fresh, reused MCP server within that scope. Because the whole
 // dispatch runs inside runWithProjectRoot, every sdd_* handler resolves to the
-// bound project's .wai/ tree with no other changes. A subproject-qualified
-// narrowing/selector ('projectId::subsystemId') binds the mounted CHILD root —
-// every scoped tool then operates on the subtree — while permission
+// bound project's .wai/ tree with no other changes. A member-qualified
+// narrowing/selector ('projectId::alias', one member alias per hop) binds the
+// MEMBER's root — every scoped tool then operates on the member's tree — while permission
 // capabilities keep resolving over the TOP project (a qualifier narrows reach,
 // never refines grants) and audit events keep the TOP project id for
 // provenance, additionally recording the bound qualifier.
@@ -420,7 +420,7 @@ function dataPlanePermissionError(
 
 // ── Subproject confinement guard (steps 10–11 of handleRequest) ──────────────
 //
-// A hosted token may be narrowed to a chained subproject ('projectId::subsystemId'),
+// A hosted token may be narrowed to a member project ('projectId::alias'),
 // and the data plane then binds the CHILD root for every ordinary sdd_* tool. The
 // RECORD-level hosted tools bypass that binding by construction: they act on the
 // hosted project record with the TOP project id. Serving one to a qualified

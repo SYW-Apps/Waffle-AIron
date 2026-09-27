@@ -154,8 +154,9 @@ export interface CanvasModel {
 /**
  * A node per member project of the graph, keyed by the member's key so the
  * engine's containment (`key::…`) hangs the member's specs under it. It shows
- * the alias the member is declared under, and the legacy mount's description
- * or the member's own name. Ids stay honest: a subsystem `billing::billing`
+ * the alias the member is declared under, and the description its parent's
+ * declaration gives it (a `members` entry or a legacy mount), or its own
+ * name. Ids stay honest: a subsystem `billing::billing`
  * keeps that id and shows its own name.
  */
 function memberProjectNodes(): CanvasModel['subsystems'] {
@@ -164,7 +165,7 @@ function memberProjectNodes(): CanvasModel['subsystems'] {
     .map((n) => ({
       id: n.namespace,
       name: n.mountAlias ?? n.namespace,
-      description: n.legacyMount?.description ?? n.name ?? '',
+      description: n.memberDescription ?? n.name ?? '',
       trustedLinks: [],
       project: true,
     }));

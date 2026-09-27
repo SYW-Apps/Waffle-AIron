@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { routeData } from '../../src/server/http.js';
-import { invalidateSpecCache, saveSystemSpec, saveSubsystemSpec } from '../../src/core/specs.js';
+import { invalidateSpecCache, saveSystemSpec, saveSpec } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { pushTree, pullTree, runRemote } from '../../src/commands/remote.js';
 import { allow, mintUserToken, createPlacedProject } from '../server/helpers.js';
@@ -84,7 +84,7 @@ describe('wairon remote (push/pull against a live hosted instance)', () => {
       createdAt: now,
       updatedAt: now,
     };
-    saveSubsystemSpec(spec);
+    saveSpec('subsystem', spec);
   }
 
   beforeEach(async () => {
@@ -184,7 +184,7 @@ describe('wairon remote (push/pull against a live hosted instance)', () => {
     initLocalProject(child, 'Billing');
     setProjectRoot(local);
     invalidateSpecCache();
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing',
       name: 'billing',
       description: 'chained billing',

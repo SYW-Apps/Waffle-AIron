@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   getComponentPath,
   invalidateSpecCache,
@@ -35,7 +35,7 @@ describe('ownership-driven component layout', () => {
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
 
-    saveSubsystemSpec(sub());
+    saveSpec('subsystem', sub());
     // members + a shared adapter created FIRST (flat), then the owning repository
     saveComponentSpec(comp({ id: 'subscription-store', componentType: 'Store' }));
     saveComponentSpec(comp({ id: 'database-adapter', componentType: 'Adapter' }));
@@ -61,7 +61,7 @@ describe('ownership-driven component layout', () => {
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
 
-    saveSubsystemSpec(sub());
+    saveSpec('subsystem', sub());
     saveGroupSpec({
       kind: 'group',
       id: 'billing::invoices',

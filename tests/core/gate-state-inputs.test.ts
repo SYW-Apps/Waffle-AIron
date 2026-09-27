@@ -3,9 +3,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache, readLockState } from '../../src/core/specs.js';
+import { saveSystemSpec, saveSpec, invalidateSpecCache, readLockState } from '../../src/core/specs.js';
 import { computeGateStateId } from '../../src/core/validation.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { stateIdEquals } from '../../src/core/statehash.js';
 import { writeLockRecord, type LockRecord } from '../../src/core/lockfile.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
@@ -39,7 +39,7 @@ function buildRoot(rootDir: string, systemName = 'gate-inputs-sys'): void {
     schemaVersion: '1.0.0', name: systemName, vision: 'gate input fixture',
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     id: 'dom', name: 'dom', description: 'the domain', parentSystem: systemName,
     publicInterfaces: [], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now,
   } as SubsystemSpec);
@@ -125,7 +125,7 @@ describe('the gate identity digests consumed surface snapshots', () => {
   it('swapping a CHAINED MOUNT\'s stored snapshot changes computeGateStateId', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
     buildRoot(rootDir);
-    createChainedSubsystem(
+    writeLegacyMount(
       { id: 'kid', name: 'kid', description: 'chained kid', parentSystem: 'gate-inputs-sys',
         publicInterfaces: [], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now,
         projectPath: 'packages/kid' } as SubsystemSpec,

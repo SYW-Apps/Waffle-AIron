@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { validateSddTree } from '../../src/core/validation.js';
-import { invalidateSpecCache, updateSpec, saveSubsystemSpec, saveInterfaceSpec, saveImplementationSpec, loadImplementationSpec } from '../../src/core/specs.js';
+import { invalidateSpecCache, updateSpec, saveSpec, saveInterfaceSpec, saveImplementationSpec, loadImplementationSpec } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { stepGraph } from '../../src/models/index.js';
 import type { NarrativeStep } from '../../src/models/index.js';
@@ -227,7 +227,7 @@ describe('updateSpec relocation + labels for parallel branches', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-parallel-upd-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       schemaVersion: '1.0.0', id: 'sub-a', name: 'SubA', description: 'd',
       parentSystem: 'TS', publicInterfaces: [], createdAt: now, updatedAt: now,
     });

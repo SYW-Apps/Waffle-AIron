@@ -4,7 +4,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot, listFilesRecursive } from '../../src/utils/fs.js';
 import { invalidateSpecCache, workspaceFor } from '../../src/core/specs.js';
-import { createChainedSubsystem, renameMethod } from '../../src/core/provision.js';
+import { renameMethod } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -171,9 +172,9 @@ function books(): string {
   setProjectRoot(root);
   invalidateSpecCache();
 
-  createChainedSubsystem(sub('ext', { projectPath: 'packages/ext' }), 'ext');
+  writeLegacyMount(sub('ext', { projectPath: 'packages/ext' }), 'ext');
   const ext = workspaceFor(path.join(root, 'packages', 'ext'));
-  ext.saveSubsystemSpec(sub('ext', { parentSystem: 'ext' }));
+  ext.save('subsystem', sub('ext', { parentSystem: 'ext' }));
   ext.saveComponentSpec(comp('widget', 'ext', 'Adapter'));
   invalidateSpecCache();
   return root;

@@ -19,6 +19,8 @@ export {
   // The approval: the per-spec digests a lock RECORDS.
   captureApprovedSpecs,
   currentChildPins,
+  // The project graph: the members a bound root declares, for the lock's pins.
+  projectFamily,
   renderDiagram,
   // The full CanvasModel as data — the web app's canvas and share snapshots.
   buildCanvasDataModel,
@@ -49,7 +51,7 @@ export {
   checkDeclarativePack,
   packEntryRef,
   packEntryLabel,
-  // A mount's projectPath resolved within its root — the hosted
-  // mount-resolution seam. The adapter names it for what it answers.
+  // A member's path resolved within the root that declares it — the hosted
+  // member-resolution seam. The adapter names it for what it answers.
   assertContainedProjectPath as resolveContainedProjectPath,
 } from '../../core/index.js';

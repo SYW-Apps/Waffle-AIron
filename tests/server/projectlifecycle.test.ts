@@ -19,6 +19,10 @@ import { computeGateStateId } from '../../src/server/adapters/validator.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
+import { pinOf } from '../../src/core/approval.js';
+import { createMember } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import type { SubsystemSpec } from '../../src/models/index.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { seedChainedMount, seedSubsystem } from './helpers.js';
 import { createUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
@@ -414,6 +418,28 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(fs.existsSync(lockPathOf(child))).toBe(false);
   });
 
+  it('a hosted lock pins each member the bound tree declares, in `members` or the legacy form', () => {
+    // A member is never a subsystem (stage 3), so the pins come from the project
+    // graph: the hosted lock used to hand the subsystem specs over and pin nothing.
+    seedProject('hosted-pins');
+    const root = existingProjectRoot(dataDir, 'hosted-pins')!;
+    runWithProjectRoot(root, () => {
+      createMember('billing', 'packages/billing');
+      writeLegacyMount({
+        id: 'claims', name: 'claims', description: 'd', parentSystem: 'x', publicInterfaces: [], trustedLinks: [],
+        projectPath: 'packages/claims', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+      } as SubsystemSpec, 'claims');
+    });
+    invalidateSpecCache();
+    // Each member approves its own tree first (a member-scoped hosted lock).
+    const billing = executeApprovedLock(cfg, 'hosted-pins', TEST_APPROVER, 'billing');
+    const claims = executeApprovedLock(cfg, 'hosted-pins', TEST_APPROVER, 'claims');
+    invalidateSpecCache();
+
+    const parent = executeApprovedLock(cfg, 'hosted-pins', TEST_APPROVER);
+    expect(parent.children).toEqual({ billing: pinOf(billing.stateId), claims: pinOf(claims.stateId) });
+  });
+
   it('a hosted lock records the approval and writes NOTHING into the spec tree', () => {
     // The local lock stopped ratcheting spec statuses; the hosted one had been
     // left behind — and because a hosted lock also COMMITS AND PUSHES .wai/,
@@ -533,14 +559,14 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
 
     // Unknown mount, a subsystem carrying no projectPath, and a nested unknown all throw.
     expect(() => lockProject(cfg, MASTER, 'confine-bad', 'ghost')).toThrow(
-      /unknown subproject mount "ghost" on "confine-bad"/,
+      /unknown member "ghost" on "confine-bad"/,
     );
-    expect(() => lockProject(cfg, MASTER, 'confine-bad', 'plain')).toThrow(/not a chained subproject/);
+    expect(() => lockProject(cfg, MASTER, 'confine-bad', 'plain')).toThrow(/an internal subsystem is not a member/);
     expect(() => lockProject(cfg, MASTER, 'confine-bad', 'billing::ghost')).toThrow(
-      /unknown subproject mount "ghost" on "confine-bad::billing"/,
+      /unknown member "ghost" on "confine-bad::billing"/,
     );
-    expect(() => executeApprovedLock(cfg, 'confine-bad', TEST_APPROVER, 'ghost')).toThrow(/unknown subproject mount/);
-    expect(() => executeApprovedLock(cfg, 'confine-bad', TEST_APPROVER, 'plain')).toThrow(/not a chained subproject/);
+    expect(() => executeApprovedLock(cfg, 'confine-bad', TEST_APPROVER, 'ghost')).toThrow(/unknown member/);
+    expect(() => executeApprovedLock(cfg, 'confine-bad', TEST_APPROVER, 'plain')).toThrow(/an internal subsystem is not a member/);
 
     // DID NOT HAPPEN: nothing was locked anywhere — not the parent (the silent
     // fallback that IS the bug) and not the child.

@@ -8,10 +8,10 @@
 // ---------------------------------------------------------------------------
 export {
   loadSystemSpec,
-  loadSubsystemSpec,
-  moveSubsystemProject,
+  createMember,
+  moveMember,
   externalizeSubsystem,
-  internalizeSubsystem,
+  internalizeMember,
   composeAgentBrief,
   exportSpecTree,
   importSpecTree,

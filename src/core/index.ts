@@ -41,7 +41,7 @@ export * from './rules/index.js';
 //
 // spec_tree_portal: every read of the tree (loadSystemSpec … specPathsInScope).
 // spec_store_portal: the raw, UNGATED writes — saveSpec, deleteSpec,
-// updateSpec, moveMethods and, below, createChainedSubsystem — published to
+// updateSpec and moveMethods — published to
 // the authoring seam alone, which gates every authored write before it lands
 // here. The typed save*/delete* writes are not on any contract any more:
 // after the seam took every authored write nothing called them through a
@@ -93,8 +93,8 @@ export {
   // names. Not gated on any request's reach — resolveChainingParent above is —
   // so a caller gates on its own reach before it calls this one.
   findChainingParent,
-  // spec_tree_portal assertContainedProjectPath: a mount's projectPath resolved
-  // within its root.
+  // spec_tree_portal assertContainedProjectPath: a member's path resolved
+  // within the root that declares it.
   assertContainedProjectPath,
   // spec_maintenance_portal findLegacySpecFiles: what `doctor` and `validate`
   // report before a migration.
@@ -106,20 +106,20 @@ export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile } from './s
 // each bound to its producer — a dispatch to the external-producers workflow.
 export { resolveDeclared as resolveExternals } from './external-producers.js';
 
-// Project provisioning and the chained-subproject wiring
-// (spec_maintenance_portal provisionProject … internalizeSubsystem;
-// spec_tree_portal listDirectChainedSubprojects; spec_store_portal
-// createChainedSubsystem, the seam's raw write) — 1:1 forwards to the core
-// orchestrator. `wairon init` and `wairon subsystem` are sdd_cli commands and
-// the scaffolding is sdd_core's, so the boundary is crossed here.
+// Project provisioning and the member writers
+// (spec_maintenance_portal provisionProject, createMember, moveMember,
+// externalizeSubsystem, internalizeMember; spec_tree_portal
+// listDirectChainedSubprojects) — 1:1 forwards to the core orchestrator.
+// `wairon init` and `wairon member` are sdd_cli commands and the scaffolding
+// is sdd_core's, so the boundary is crossed here.
 export {
   provisionProject,
   ensureProjectInitialized,
   listDirectChainedSubprojects,
-  createChainedSubsystem,
-  moveSubsystemProject,
+  createMember,
+  moveMember,
   externalizeSubsystem,
-  internalizeSubsystem,
+  internalizeMember,
   // spec_maintenance_portal findChainingSubprojectsMissingConfig /
   // backfillChainedSubprojectConfigs: what `wairon doctor` reports and repairs.
   findChainingSubprojectsMissingConfig,

@@ -8,7 +8,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -17,7 +17,7 @@ import {
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -58,14 +58,14 @@ function books(): string {
   });
   setProjectRoot(root);
   saveSystemSpec({ schemaVersion: '1.0.0', name: 'books-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
-  saveSubsystemSpec(sub('books', { lifecycle: [{ phase: 'init', component: 'ledger', method: 'post' }] }));
+  saveSpec('subsystem', sub('books', { lifecycle: [{ phase: 'init', component: 'ledger', method: 'post' }] }));
   saveComponentSpec(comp('ledger', 'books', 'Orchestrator'));
   saveInterfaceSpec(intf('iledger', 'ledger', ['post', 'close']));
   saveImplementationSpec(impl('ledger_impl', 'iledger', ['post', 'close']));
   saveComponentSpec(comp('books_orch', 'books', 'Orchestrator', { dependsOn: ['ledger'] }));
-  createChainedSubsystem(sub('ext', { projectPath: 'packages/ext' }), 'ext');
+  writeLegacyMount(sub('ext', { projectPath: 'packages/ext' }), 'ext');
   const ext = workspaceFor(path.join(root, 'packages', 'ext'));
-  ext.saveSubsystemSpec(sub('ext', { parentSystem: 'ext' }));
+  ext.save('subsystem', sub('ext', { parentSystem: 'ext' }));
   ext.saveComponentSpec(comp('widget', 'ext', 'Adapter'));
   ext.saveInterfaceSpec(intf('iwidget', 'widget', ['post']));
   invalidateSpecCache();

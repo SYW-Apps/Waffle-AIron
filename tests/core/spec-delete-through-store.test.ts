@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSystemSpec, saveSubsystemSpec, saveComponentSpec,
+  saveSystemSpec, saveSpec, saveComponentSpec,
   saveInterfaceSpec, saveImplementationSpec, saveTypeSpec,
   deleteSubsystemSpec, deleteComponentSpec, deleteInterfaceSpec,
   deleteImplementationSpec, deleteTypeSpec,
@@ -88,7 +88,7 @@ describe('spec deletes route through the file store', () => {
   it('removes the document and prunes the directories the deletion emptied, stopping at the specs root', () => {
     root = project('wairon-delete-prune-');
     const specsRoot = path.join(root, '.wai', 'specs');
-    saveSubsystemSpec(subsystem());
+    saveSpec('subsystem', subsystem());
     saveComponentSpec(component());
 
     const compPath = getComponentPath('worker');
@@ -115,7 +115,7 @@ describe('spec deletes route through the file store', () => {
 
   it('leaves a directory standing while a sibling document is still in it', () => {
     root = project('wairon-delete-sibling-');
-    saveSubsystemSpec(subsystem());
+    saveSpec('subsystem', subsystem());
     saveTypeSpec(type());
     saveTypeSpec({ ...type(), id: 'invoice', name: 'Invoice' });
 
@@ -145,7 +145,7 @@ describe('spec deletes route through the file store', () => {
 
   it('deletes all five kinds and answers false on the second attempt', () => {
     root = project('wairon-delete-kinds-');
-    saveSubsystemSpec(subsystem());
+    saveSpec('subsystem', subsystem());
     saveComponentSpec(component());
     saveInterfaceSpec(iface());
     saveImplementationSpec(impl());
@@ -184,7 +184,7 @@ describe('spec deletes route through the file store', () => {
 
   it('drops the index cache on delete, so an immediate re-read cannot serve a ghost', () => {
     root = project('wairon-delete-cache-');
-    saveSubsystemSpec(subsystem());
+    saveSpec('subsystem', subsystem());
     saveComponentSpec(component());
 
     // Warm the cache: within the freshness TTL the next scan is served from it,

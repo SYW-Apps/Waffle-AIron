@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
@@ -66,7 +66,7 @@ describe('wairon diagram renders through cli_core_adapter, not through sdd_core 
       schemaVersion: '1.0.0', name: 'BoundarySys', vision: 'a rendering fixture',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing', name: 'Billing', description: 'billing',
       parentSystem: 'BoundarySys',
       publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }],

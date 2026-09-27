@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   invalidateSpecCache,
@@ -62,7 +62,7 @@ function buildTwoPortalProject(rootDir: string): void {
     createdAt: now,
     updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('core-sub', {
+  saveSpec('subsystem', subsystem('core-sub', {
     publicInterfaces: [
       { type: 'REST', details: 'public api', component: 'gateway-portal' },
       { type: 'REST', details: 'operator api', component: 'admin-portal' },

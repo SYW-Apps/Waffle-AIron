@@ -15,7 +15,9 @@
 // the tree as the rest of wairon sees it.
 // ---------------------------------------------------------------------------
 
+import * as path from 'path';
 import {
+  graph,
   loadSystemSpec,
   loadSubsystemSpecs,
   loadComponentSpecs,
@@ -24,7 +26,7 @@ import {
   getLoaderIssues,
   scanAllSpecs,
 } from './specs.js';
-import { implementationSourceFiles } from '../models/specs.js';
+import { implementationSourceFiles, type SubsystemSpec } from '../models/specs.js';
 import { pathExists, fromProjectRoot } from '../utils/fs.js';
 
 /**
@@ -60,7 +62,7 @@ export interface StatusReport {
 export interface StatusOptions {
   /** Report on one subsystem rather than the whole tree. Accepts a namespaced id. */
   subsystem?: string;
-  /** How far into chained subprojects to follow. Absent means all the way down. */
+  /** How far into members to follow. Absent means all the way down. */
   recursive?: boolean | number;
 }
 
@@ -87,7 +89,7 @@ export interface StatusDecor {
   emphasis?(text: string): string;
   /**
    * A layer's label, given which layer it is — `system`, `subsystem`,
-   * `component`, `interface` or `implementation` — so a caller may distinguish
+   * `project` (a member), `component`, `interface` or `implementation` — so a caller may distinguish
    * them or not, as it chooses.
    */
   layer?(kind: string, text: string): string;
@@ -134,7 +136,7 @@ function fillDecor(decor?: StatusDecor): FilledDecor {
 export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor): StatusReport {
   const mark = fillDecor(decor);
 
-  // Step 1: load the tree, following chained subprojects as far as the options allow
+  // Step 1: load the tree, following members as far as the options allow
   scanAllSpecs({ recursive: options.recursive ?? true });
 
   const system = loadSystemSpec();
@@ -180,10 +182,9 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
     });
   }
 
-  // Step 7: count each component's progress through the layers, marking each
-  // part through the role the caller supplied — structure, layer, score, draft,
-  // present or missing. Roles rather than colours, so this renderer never
-  // learns what a terminal is.
+  // The component scores the tree below is marked with, through the roles the
+  // caller supplied — structure, layer, score, draft, present or missing. Roles
+  // rather than colours, so this renderer never learns what a terminal is.
   let output = '';
   const componentScores = new Map<string, number>();
 
@@ -238,16 +239,30 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
 
   output += `${mark.layer('system', '● System:')} ${mark.emphasis(system.name)} ${mark.score(systemScore, `(${systemScore}% Complete)`)}\n`;
 
-  for (let i = 0; i < subsystems.length; i++) {
-    const sub = subsystems[i];
-    const isLastSub = i === subsystems.length - 1;
+  // Step 7: the project graph — each member the tree reaches prints as a
+  // project holding its own subsystems, never as a subsystem of its parent.
+  const family = graph();
+  const ownerOf = (key: string): string => family.owners.get(key) ?? '';
+  /** A source file a spec names, read against the root of the project that owns the spec. */
+  const sourceExists = (specId: string, file: string): boolean => {
+    const owner = ownerOf(specId);
+    const dir = owner === '' ? undefined : family.nodes.find((n) => n.namespace === owner)?.directory;
+    return pathExists(dir ? path.resolve(dir, file) : fromProjectRoot(file));
+  };
+  /** Whether a project, or a member below it, holds a subsystem this report shows (narrowed reports only). */
+  const holdsShown = (ns: string): boolean =>
+    subsystems.some((s) => ownerOf(s.id) === ns)
+    || family.nodes.some((n) => n.parent === ns && n.namespace !== ns && holdsShown(n.namespace));
+
+  // Step 8: each component's progress through the layers, per project.
+  const renderSubsystem = (sub: SubsystemSpec, label: string, indent: string, isLastSub: boolean): void => {
     const subPrefix = isLastSub ? '└── ' : '├── ';
-    const subIndent = isLastSub ? '    ' : '│   ';
+    const subIndent = indent + (isLastSub ? '    ' : '│   ');
 
     const subScore = getSubsystemScore(sub.id);
     const subStatusStr = sub.status !== 'complete' ? mark.draft(` [${sub.status}]`) : '';
 
-    output += `${mark.structure(subPrefix)}${mark.layer('subsystem', `[Subsystem] ${sub.id}`)}${subStatusStr} ${mark.score(subScore, `(${subScore}%)`)}\n`;
+    output += `${mark.structure(indent + subPrefix)}${mark.layer('subsystem', `[Subsystem] ${label}`)}${subStatusStr} ${mark.score(subScore, `(${subScore}%)`)}\n`;
 
     const subComps = components.filter(c => c.subsystem === sub.id);
     for (let j = 0; j < subComps.length; j++) {
@@ -277,7 +292,7 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
         const methodsWithOwnPath = impl.methods.filter(m => m.sourcePath);
         let pathStr: string;
         if (impl.sourcePath) {
-          pathStr = pathExists(fromProjectRoot(impl.sourcePath))
+          pathStr = sourceExists(impl.id, impl.sourcePath)
             ? mark.present(` -> ${impl.sourcePath}`)
             : mark.missing(` -> ${impl.sourcePath} (File Missing!)`);
         } else if (methodsWithOwnPath.length > 0) {
@@ -293,7 +308,7 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
           const isLastMethod = k === methodsWithOwnPath.length - 1;
           const methodPrefix = isLastMethod ? '└── ' : '├── ';
           const methodPath = method.sourcePath as string;
-          const methodLine = pathExists(fromProjectRoot(methodPath))
+          const methodLine = sourceExists(impl.id, methodPath)
             ? mark.present(`method ${method.name} -> ${methodPath}`)
             : mark.missing(`method ${method.name} -> ${methodPath} (File Missing!)`);
           output += `${mark.structure(methodIndent + methodPrefix)}${methodLine}\n`;
@@ -302,9 +317,31 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
         output += `${mark.structure(subIndent + compIndent + '└── ')}${mark.missing('Implementation: Missing (-30%)')}\n`;
       }
     }
-  }
+  };
 
-  // Step 8: answer the report as text, not failed, so a terminal, an MCP
+  /** A project's own subsystems, then each member it declares as a `[Project]` holding its own. */
+  const renderProject = (ns: string, indent: string): void => {
+    const ownSubs = subsystems.filter((s) => ownerOf(s.id) === ns);
+    // Every member prints; narrowed to one subsystem, only the members leading to it.
+    const members = family.nodes.filter((n) => n.parent === ns && n.namespace !== ns && (!options.subsystem || holdsShown(n.namespace)));
+    const total = ownSubs.length + members.length;
+    ownSubs.forEach((sub, i) => {
+      // Under a member a subsystem is labelled by its local name: its key
+      // stays honest (`billing::billing`), the display does not repeat it.
+      const label = ns !== '' && sub.id.startsWith(`${ns}::`) ? sub.id.slice(ns.length + 2) : sub.id;
+      renderSubsystem(sub, label, indent, i === total - 1);
+    });
+    members.forEach((member, j) => {
+      const isLast = ownSubs.length + j === total - 1;
+      const form = member.mountForm === 'mount' ? mark.draft(' [mount form]') : '';
+      const label = `[Project] ${member.mountAlias ?? member.namespace} (${member.id ?? 'no id'})`;
+      output += `${mark.structure(indent + (isLast ? '└── ' : '├── '))}${mark.layer('project', label)}${form}\n`;
+      renderProject(member.namespace, indent + (isLast ? '    ' : '│   '));
+    });
+  };
+  renderProject('', '');
+
+  // Step 9: answer the report as text, not failed, so a terminal, an MCP
   // client and a test all read the same account rather than three renderings
   // that can drift apart.
   return { text: output, failed: false };

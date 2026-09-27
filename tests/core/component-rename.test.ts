@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot, listFilesRecursive } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -17,7 +17,8 @@ import {
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem, renameComponent } from '../../src/core/provision.js';
+import { renameComponent } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { validateSddTree } from '../../src/core/validation.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -130,7 +131,7 @@ function books(): string {
     publicInterfaces: [{ id: 'ledger-api', name: 'Ledger API', subsystem: 'books', component: 'ledger', interface: 'iledger', type: 'Custom', details: 'the ledger', audience: 'project' }],
     createdAt: now, updatedAt: now,
   });
-  saveSubsystemSpec(sub('books', {
+  saveSpec('subsystem', sub('books', {
     publicInterfaces: [{ type: 'Custom', details: 'the ledger', component: 'ledger', interface: 'iledger' }],
     lifecycle: [{ phase: 'init', component: 'ledger', method: 'open' }],
   }));
@@ -166,9 +167,9 @@ function books(): string {
     fields: [{ name: 'id', type: 'string', optional: false }], methods: [], createdAt: now, updatedAt: now,
   });
 
-  createChainedSubsystem(sub('ext', { projectPath: 'packages/ext' }), 'ext');
+  writeLegacyMount(sub('ext', { projectPath: 'packages/ext' }), 'ext');
   const ext = workspaceFor(path.join(root, 'packages', 'ext'));
-  ext.saveSubsystemSpec(sub('ext', { parentSystem: 'ext' }));
+  ext.save('subsystem', sub('ext', { parentSystem: 'ext' }));
   ext.saveComponentSpec(comp('widget', 'ext', 'Adapter'));
   invalidateSpecCache();
   return root;
@@ -293,7 +294,7 @@ describe('renameComponent', () => {
       schemaVersion: '1.0.0', name: 'books-sys', vision: 'v', boundaries: [], globalRequirements: [], databases: [],
       publicInterfaces: [], createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec(sub('books'));
+    saveSpec('subsystem', sub('books'));
     const httpIntf = (id: string, component: string, method: string, routePath: string): InterfaceSpec => {
       const spec = intf(id, component, [method]);
       spec.methods[0].endpoint = { transport: 'HTTP', method: 'GET', path: routePath };
@@ -333,7 +334,7 @@ describe('renameComponent', () => {
     root = projectRoot('rename-kept-intf-');
     setProjectRoot(root);
     saveSystemSpec({ schemaVersion: '1.0.0', name: 'books-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
-    saveSubsystemSpec(sub('books'));
+    saveSpec('subsystem', sub('books'));
     saveComponentSpec(comp('ledger', 'books', 'Orchestrator'));
     saveInterfaceSpec(intf('ibook_keeping', 'ledger', ['post']));
     saveImplementationSpec(impl('ledger_impl', 'ibook_keeping', { post: [{ type: 'local' }] }));
@@ -356,7 +357,7 @@ describe('renameComponent', () => {
     root = projectRoot('rename-kept-impl-');
     setProjectRoot(root);
     saveSystemSpec({ schemaVersion: '1.0.0', name: 'books-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
-    saveSubsystemSpec(sub('books'));
+    saveSpec('subsystem', sub('books'));
     saveComponentSpec(comp('ledger', 'books', 'Orchestrator'));
     saveInterfaceSpec(intf('iledger', 'ledger', ['post']));
     saveImplementationSpec(impl('double_entry_impl', 'iledger', { post: [{ type: 'local' }] }));

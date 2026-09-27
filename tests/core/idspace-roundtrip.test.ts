@@ -6,7 +6,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
   loadSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -18,7 +18,7 @@ import {
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { validateSddTree } from '../../src/core/validation.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -84,14 +84,14 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
   function buildFixture(): string {
     rootDir = makeRoot();
     // Root-level component the child references across the tree.
-    saveSubsystemSpec(subsystem('core-sub'));
+    saveSpec('subsystem', subsystem('core-sub'));
     saveComponentSpec(component('crates-portal', 'core-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
 
     // Chained child project mounted as "transpiler".
-    createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler' }), 'transpiler');
+    writeLegacyMount(subsystem('transpiler', { projectPath: 'packages/transpiler' }), 'transpiler');
     const childDir = path.join(rootDir, 'packages', 'transpiler');
     const child = workspaceFor(childDir);
-    child.saveSubsystemSpec(subsystem('transpiler', { parentSystem: 'transpiler' }));
+    child.save('subsystem', subsystem('transpiler', { parentSystem: 'transpiler' }));
     child.saveComponentSpec(component('transpiler-orch', 'transpiler', { dependsOn: ['super::crates-portal'] }));
     child.saveInterfaceSpec(iface('itranspiler-orch', 'transpiler-orch', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -194,7 +194,7 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
     rootDir = makeRoot();
 
     // Mount `amid` under the top root.
-    saveSubsystemSpec(subsystem('amid', { projectPath: 'amid' }));
+    saveSpec('subsystem', subsystem('amid', { projectPath: 'amid' }));
     const aDir = path.join(rootDir, 'amid');
     fs.mkdirSync(path.join(aDir, '.wai', 'specs'), { recursive: true });
 
@@ -204,9 +204,9 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
       schemaVersion: '1.0.0', name: 'amid-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    a.saveSubsystemSpec(subsystem('a-core', { parentSystem: 'amid-system' }));
+    a.save('subsystem', subsystem('a-core', { parentSystem: 'amid-system' }));
     a.saveComponentSpec(component('a-portal', 'a-core', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
-    a.saveSubsystemSpec(subsystem('bleaf', { parentSystem: 'amid-system', projectPath: 'bleaf' }));
+    a.save('subsystem', subsystem('bleaf', { parentSystem: 'amid-system', projectPath: 'bleaf' }));
 
     // bleaf's tree, authored via bleaf's workspace. b-orch (in bleaf) depends on
     // a-portal (in amid, one level up), authored as the relative super:: form.
@@ -217,7 +217,7 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
       schemaVersion: '1.0.0', name: 'bleaf-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    b.saveSubsystemSpec(subsystem('b-core', { parentSystem: 'bleaf-system' }));
+    b.save('subsystem', subsystem('b-core', { parentSystem: 'bleaf-system' }));
     b.saveComponentSpec(component('b-orch', 'b-core', { dependsOn: ['super::a-portal'] }));
     invalidateSpecCache();
 
@@ -252,10 +252,10 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
 
   function buildFixture(): string {
     rootDir = makeRoot();
-    createChainedSubsystem(subsystem('network_http', { projectPath: 'packages/network_http' }), 'network_http');
+    writeLegacyMount(subsystem('network_http', { projectPath: 'packages/network_http' }), 'network_http');
     const childDir = path.join(rootDir, 'packages', 'network_http');
     const child = workspaceFor(childDir);
-    child.saveSubsystemSpec(subsystem('network_http', {
+    child.save('subsystem', subsystem('network_http', {
       parentSystem: 'network_http',
       publicInterfaces: [{ type: 'MessageBus', details: 'net.http capability provider', component: 'http-portal' }],
     }));
@@ -273,7 +273,7 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
     expect(loaded!.publicInterfaces[0].component).toBe('network_http::http-portal');
 
     // THE bug: this threw "Refusing to write invalid subsystem spec" on lock.
-    expect(() => saveSubsystemSpec(loaded!)).not.toThrow();
+    expect(() => saveSpec('subsystem', loaded!)).not.toThrow();
 
     invalidateSpecCache();
     const reloaded = loadSubsystemSpec('network_http::network_http');
@@ -288,7 +288,7 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
   it('lifecycle entrypoint component refs round-trip with the same member prefix', () => {
     const childDir = buildFixture();
     const child = workspaceFor(childDir);
-    child.saveSubsystemSpec(subsystem('network_http', {
+    child.save('subsystem', subsystem('network_http', {
       parentSystem: 'network_http',
       publicInterfaces: [{ type: 'MessageBus', details: 'net.http capability provider', component: 'http-portal' }],
       lifecycle: [{ phase: 'init', component: 'http-portal', method: 'provision' }],
@@ -298,7 +298,7 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
     const loaded = loadSubsystemSpec('network_http::network_http');
     expect(loaded!.lifecycle![0].component).toBe('network_http::http-portal');
 
-    expect(() => saveSubsystemSpec(loaded!)).not.toThrow();
+    expect(() => saveSpec('subsystem', loaded!)).not.toThrow();
     invalidateSpecCache();
     expect(loadSubsystemSpec('network_http::network_http')!.lifecycle![0].component).toBe('network_http::http-portal');
   });
@@ -332,7 +332,7 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     // Simulate opening a chained child standalone: its file carries a
     // super:: ref whose target lives in the (absent) parent project.
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('transpiler'));
+    saveSpec('subsystem', subsystem('transpiler'));
     saveComponentSpec(component('transpiler-orch', 'transpiler', { dependsOn: ['super::crates-portal'] }));
     saveInterfaceSpec(iface('itranspiler-orch', 'transpiler-orch', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -367,9 +367,9 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     // `kid::parent-portal`, which does not exist — a typo-grade error, and the
     // parent says so.
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('parent-sub'));
+    saveSpec('subsystem', subsystem('parent-sub'));
     saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
-    saveSubsystemSpec(subsystem('kid', { projectPath: 'kid' }));
+    saveSpec('subsystem', subsystem('kid', { projectPath: 'kid' }));
 
     const kidDir = path.join(rootDir, 'kid');
     fs.mkdirSync(path.join(kidDir, '.wai', 'specs'), { recursive: true });
@@ -378,7 +378,7 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
       schemaVersion: '1.0.0', name: 'kid-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    kid.saveSubsystemSpec(subsystem('k-core', { parentSystem: 'kid-system' }));
+    kid.save('subsystem', subsystem('k-core', { parentSystem: 'kid-system' }));
     // A dependency on a component that only exists in the parent tree.
     kid.saveComponentSpec(component('k-orch', 'k-core', { dependsOn: ['parent-portal'] }));
     invalidateSpecCache();
@@ -409,7 +409,7 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     // leading segment names no local subsystem — an honest cross-tree edge, not a
     // typo, so it must warn (CROSS_TREE_REF_UNRESOLVED), not flood hard errors.
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('transpiler'));
+    saveSpec('subsystem', subsystem('transpiler'));
     saveComponentSpec(component('transpiler-orch', 'transpiler', { dependsOn: ['waffler_core::blueprints-portal'] }));
     invalidateSpecCache();
 
@@ -432,7 +432,7 @@ describe('keyed merges for dispatch and lifecycle arrays', () => {
 
   it('a one-entry dispatch delta upserts by capability instead of erasing the table', () => {
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('sub-a', {
+    saveSpec('subsystem', subsystem('sub-a', {
       lifecycle: [
         { phase: 'init', component: 'boot-orch', method: 'hydrate' },
         { phase: 'shutdown', component: 'boot-orch', method: 'drain' },
@@ -517,7 +517,7 @@ describe('narrative insert vs jump targets (captureJumps)', () => {
 
   function buildFixture(): void {
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('sub-a'));
+    saveSpec('subsystem', subsystem('sub-a'));
     saveComponentSpec(component('orch-a', 'sub-a'));
     saveInterfaceSpec(iface('iorch-a', 'orch-a', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -558,7 +558,7 @@ describe('narrative insert vs jump targets (captureJumps)', () => {
 
   it('captureJumps never captures a loop endStep — the region grows to keep its original last step', () => {
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('sub-a'));
+    saveSpec('subsystem', subsystem('sub-a'));
     saveComponentSpec(component('loop-orch', 'sub-a'));
     saveInterfaceSpec(iface('iloop-orch', 'loop-orch', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -631,10 +631,10 @@ describe("a chained child's implementation file paths are relative to its own ro
 
   function mountKid(): string {
     rootDir = makeRoot();
-    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
     const kidDir = path.join(rootDir, 'packages', 'kid');
     const kid = workspaceFor(kidDir);
-    kid.saveSubsystemSpec(subsystem('kid', { parentSystem: 'kid' }));
+    kid.save('subsystem', subsystem('kid', { parentSystem: 'kid' }));
     kid.saveComponentSpec(component('kid-orch', 'kid'));
     kid.saveInterfaceSpec(iface('ikid-orch', 'kid-orch', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -778,18 +778,18 @@ describe('a member\'s own subsystem named like its alias, at every depth', () =>
   /** top → kid (flat) → extra (flat, mounted inside kid). */
   function nestedFlatFamily(): { extraDir: string } {
     rootDir = makeRoot();
-    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
     const kidDir = path.join(rootDir, 'packages', 'kid');
     const kid = workspaceFor(kidDir);
-    kid.saveSubsystemSpec(subsystem('kid', { parentSystem: 'kid' }));
+    kid.save('subsystem', subsystem('kid', { parentSystem: 'kid' }));
     kid.saveComponentSpec(component('kid-comp', 'kid'));
     invalidateSpecCache();
 
     setProjectRoot(kidDir);
-    createChainedSubsystem(subsystem('extra', { parentSystem: 'kid', projectPath: 'packages/extra' }), 'extra');
+    writeLegacyMount(subsystem('extra', { parentSystem: 'kid', projectPath: 'packages/extra' }), 'extra');
     const extraDir = path.join(kidDir, 'packages', 'extra');
     const extra = workspaceFor(extraDir);
-    extra.saveSubsystemSpec(subsystem('extra', { parentSystem: 'extra' }));
+    extra.save('subsystem', subsystem('extra', { parentSystem: 'extra' }));
     extra.saveComponentSpec(component('extra-comp', 'extra'));
     invalidateSpecCache();
     setProjectRoot(rootDir);
@@ -829,11 +829,11 @@ describe('public_interface.consumers are subsystem references in a chained subpr
   /** A child project mounted as "pharmacy" whose dispensing surface is published to its sibling "stock". */
   function buildFixture(): string {
     rootDir = makeRoot();
-    createChainedSubsystem(subsystem('pharmacy', { projectPath: 'services/pharmacy' }), 'pharmacy');
+    writeLegacyMount(subsystem('pharmacy', { projectPath: 'services/pharmacy' }), 'pharmacy');
     const childDir = path.join(rootDir, 'services', 'pharmacy');
     const child = workspaceFor(childDir);
-    child.saveSubsystemSpec(subsystem('stock', { parentSystem: 'pharmacy' }));
-    child.saveSubsystemSpec(subsystem('dispensing', {
+    child.save('subsystem', subsystem('stock', { parentSystem: 'pharmacy' }));
+    child.save('subsystem', subsystem('dispensing', {
       parentSystem: 'pharmacy',
       publicInterfaces: [{ type: 'Custom', details: 'dispense orders', component: 'dispensing-portal', consumers: ['stock'] }],
     }));
@@ -861,7 +861,7 @@ describe('public_interface.consumers are subsystem references in a chained subpr
 
   it('writes them back relative to the subproject, so load → save → load is a fixpoint', () => {
     const childDir = buildFixture();
-    saveSubsystemSpec(loadSubsystemSpec('pharmacy::dispensing')!);
+    saveSpec('subsystem', loadSubsystemSpec('pharmacy::dispensing')!);
     invalidateSpecCache();
     expect(storedConsumers(childDir)).toMatch(/consumers:\s*\n\s*- stock/);
     expect(loadSubsystemSpec('pharmacy::dispensing')?.publicInterfaces[0].consumers).toEqual(['pharmacy::stock']);

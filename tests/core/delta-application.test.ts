@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSubsystemSpec,
+  saveSpec,
   saveInterfaceSpec,
   loadInterfaceSpec,
   saveImplementationSpec,
@@ -31,7 +31,7 @@ const now = new Date().toISOString();
 function seedTree(proj: string): void {
   fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
   setProjectRoot(proj);
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     schemaVersion: '1.0.0',
     id: 'billing',
     name: 'Billing',

@@ -14,7 +14,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { setProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, setProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
@@ -34,7 +34,6 @@ import type { SpecDeletion, SpecRestatement, SpecWriteReceipt } from '../core/au
 import type { SpecChange, SpecChangeReport } from '../core/specs.js';
 import * as pathsModule from '../config/paths.js';
 import { summarize } from '../models/execution.js';
-import { declaredMembers } from '../models/project.js';
 import type { AgentBrief } from '../models/agent.js';
 // The server's client adapters, one module per provider subsystem. Every name
 // this server takes from another subsystem lands on one of these modules, which
@@ -52,9 +51,11 @@ import {
   loadImplementationSpec,
   loadTypeSpec,
   resolveChainingParent,
-  moveSubsystemProject,
+  createMember,
+  moveMember,
   externalizeSubsystem,
-  internalizeSubsystem,
+  internalizeMember,
+  listDirectChainedSubprojects,
   renameComponent,
   renameMethod,
   loadProjectConfig,
@@ -108,10 +109,15 @@ export function statusFamilyContext(): string {
           'what it consumes is declared under `externals` (sdd_get_externals_status).',
       );
     }
-    const config = loadProjectConfig();
-    const members = config ? declaredMembers(config) : [];
+    // Step 2: the members this root declares, either form.
+    const root = getProjectRoot();
+    const members = listDirectChainedSubprojects(root);
     if (members.length > 0) {
-      lines.push(`Family: member projects declared here — ${members.map((m) => `${m.alias} (${m.path})`).join(', ')}.`);
+      const described = members.map((m) => {
+        const rel = path.relative(root, m.dir).split(path.sep).join('/') || '.';
+        return `${m.alias} (${rel}${m.form === 'mount' ? ', legacy L1 mount' : ''})`;
+      });
+      lines.push(`Family: member projects declared here — ${described.join(', ')}.`);
     }
   } catch { /* the family context must never break the status report */ }
   return lines.length > 0 ? `${lines.join('\n')}\n\n` : '';
@@ -361,6 +367,11 @@ function renderChangeReport(report: SpecChangeReport): string {
     lines.push('', 'NO EFFECT:', ...report.ineffective.map(i => `- ${i}`));
   }
   if (report.notices.length) lines.push('', 'NOTICE:', ...report.notices.map(n => `- ${n}`));
+  // Keys the stored file carried that the schema does not know: the write
+  // re-serializes through the schema, so they are named rather than lost.
+  if (report.strippedKeys?.length) {
+    lines.push('', `DROPPED FROM THE STORED FILE (${report.dryRun ? 'would be ' : ''}removed — the schema does not know them):`, ...report.strippedKeys.map(k => `- ${k}`));
+  }
   // The tests this write just invalidated. A structured field nobody renders
   // is a field nobody reads, and the whole point is that the change which
   // creates the collision is the one that says so.
@@ -426,9 +437,6 @@ const specWriteReceiptOutput = {
     'The notice lines the text answer lists, one per entry: what was carried forward, what a restatement '
     + 'removed, what an omission cleared, and every gate warning the write raised. Empty for a clean create.',
   ),
-  scaffoldedProjectPath: z.string().optional().describe(
-    'The child project directory a chained subsystem\'s create scaffolded; absent for every other write.',
-  ),
   testsToRevisit: testsToRevisitOutput,
   ...staleServerOutput,
 } satisfies Record<keyof SpecWriteReceipt | keyof typeof staleServerOutput, z.ZodTypeAny>;
@@ -484,6 +492,10 @@ const specChangeReportOutput = {
   notices: z.array(z.string()).describe('Store placement notices, gate warnings and delta notices.'),
   summary: z.string().describe('One line for people.'),
   testsToRevisit: testsToRevisitOutput,
+  strippedKeys: z.array(z.string()).optional().describe(
+    "Keys the stored file carries that the level's schema does not know, each as `path: value`, which this write "
+    + 'drops (or, on a dry run, would drop). Absent when there are none.',
+  ),
   ...staleServerOutput,
 } satisfies Record<keyof SpecChangeReport | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
@@ -777,10 +789,10 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_initialize_system',
   'sdd_add_subsystem',
   'sdd_set_public_interfaces',
-  'sdd_set_subsystem_project_path',
-  'sdd_move_subsystem_project',
+  'sdd_add_member',
+  'sdd_move_member',
   'sdd_externalize_subsystem',
-  'sdd_internalize_subsystem',
+  'sdd_internalize_member',
   'sdd_rename_component',
   'sdd_rename_method',
   'sdd_add_component',
@@ -1287,7 +1299,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         name: z.string().describe('Human-readable display name'),
         description: z.string().describe('Purpose and details of the subsystem'),
         publicInterfaces: z.array(publicInterfaceItemInput).optional().describe('The subsystem\'s export table: its own entrypoints, each bound to a realizing component, and re-exports of what other subsystems of this project export'),
-        projectPath: z.string().optional().describe('Relative path to external project root for subsystem chaining'),
+        projectPath: z.string().optional().describe('REFUSED: the legacy L1 mount form. A subsystem is never a mount — declare a member project with sdd_add_member instead'),
         targetLanguage: z.string().optional().describe('Override of the system-level targetLanguage for this subsystem'),
         profile: z.string().optional().describe('Architectural profile override for this subsystem (built-ins: backend, frontend-reactive, frontend-controller, lowlevel-os, game-ecs, realtime-embedded, plc-cyclic; extension packs may add more — unknown names get UNKNOWN_PROFILE)'),
         designDepth: z.enum(['components', 'interfaces', 'implementations', 'narratives']).optional().describe('How deep THIS subsystem commits to designing (overrides project rules.designDepth; default narratives = full depth). Expectation checks below the depth are gated — soundness of authored content always applies.'),
@@ -1308,7 +1320,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; name: string; description: string; publicInterfaces?: { type?: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string }[]; projectPath?: string; targetLanguage?: string; profile?: string; designDepth?: 'components' | 'interfaces' | 'implementations' | 'narratives'; trustedLinks?: { subsystem: string; reason: string }[]; lifecycle?: { phase: 'init' | 'shutdown' | 'cyclic' | 'interrupt' | 'scheduled'; component: string; method: string; description?: string }[]; status?: StatedStatus }>(server,
     'sdd_add_subsystem',
     {
-      description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced, lint/ext are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the child project directory a chained subsystem scaffolded.',
+      description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced, lint/ext are carried forward, and the stored status is kept unless this input states a higher one. A subsystem is never a mount: a projectPath is refused, naming sdd_add_member, which declares a member project in project.yaml `members`. The answer carries a write receipt as structured content beside the sentence — the status written and whether a spec already held the id.',
       inputSchema: subsystemInput,
       outputSchema: specWriteReceiptOutput,
     },
@@ -1334,15 +1346,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           fields: subsystemInputFields,
           status,
         };
-        // Step 2: through the authoring seam, which requires the L0 and scaffolds
-        // the child project of a chained subsystem. Step 3: the receipt.
+        // Step 2: through the authoring seam, which requires the L0 and refuses
+        // a projectPath (the legacy mount form). Step 3: the receipt.
         const receipt = writeSpec(restatement);
-        if (receipt.scaffoldedProjectPath) {
-          return writeReceipt(
-            `Successfully added external subsystem "${name}" (${id}) and scaffolded its child project at ${receipt.scaffoldedProjectPath}.`,
-            receipt,
-          );
-        }
         return writeReceipt(`Successfully added L1 Subsystem Spec "${name}" (${id}).`, receipt);
       } catch (e) {
         return errMessage(e);
@@ -1381,84 +1387,81 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ subsystem: string; projectPath?: string }>(server,
-    'sdd_set_subsystem_project_path',
+  reg<{ alias: string; path: string; description?: string }>(server,
+    'sdd_add_member',
     {
-      description: 'Set (or clear) the projectPath of an L1 Subsystem for subsystem chaining. projectPath should be a relative path to the external project root directory. It rewrites the link only (sdd_move_subsystem_project relocates the directory with it). Written through the authoring seam as a gated delta, and answered with the change report as structured content beside the sentence.',
+      description: "Create a member of the bound project: scaffold the member project at the path (its project.yaml declaring the alias as its project id, and its L0), each part only when absent, and declare it in the bound project's project.yaml `members` with the description. Nothing is written into the bound project's spec tree: a member is reached only as `alias::name` through its own L0 exports. Idempotent — the same call again writes nothing; a different member under the alias is refused.",
       inputSchema: {
-        subsystem: z.string().describe('The L1 subsystem id to update'),
-        projectPath: z.string().optional().describe('Relative path to external project root (or omit to clear)'),
-      },
-      outputSchema: specChangeReportOutput,
-    },
-    ({ subsystem, projectPath }) => {
-      try {
-        // mcp_orchestrator.setSubsystemProjectPath step 1: the change as a delta —
-        // only the link moves, never the directory it names.
-        const delta = projectPath ? { projectPath } : { unset: ['projectPath'] };
-        // Step 2: through the authoring seam, which refuses an id no subsystem
-        // holds. Step 3: the change report.
-        const report = updateSpecGated('subsystem', subsystem, delta);
-        return structured(
-          `Updated projectPath for subsystem "${subsystem}" to: ${projectPath || 'none (cleared)'}\n${renderChangeReport(report)}`,
-          report,
-        );
-      } catch (e) {
-        return errMessage(e);
-      }
-    },
-  );
-
-  reg<{ subsystem: string; newProjectPath: string }>(server,
-    'sdd_move_subsystem_project',
-    {
-      description: 'Relocate an external subsystem: move its subproject directory on disk to newProjectPath and update its projectPath link in one step. Errors if the subsystem has no projectPath (not an external subproject).',
-      inputSchema: {
-        subsystem: z.string().describe('The external L1 subsystem id to relocate'),
-        newProjectPath: z.string().describe('The new relative path for the subproject directory'),
+        alias: z.string().describe("The member's alias and new project id ([a-z0-9-_]+)"),
+        path: z.string().describe("The member's root, relative to the bound project"),
+        description: z.string().optional().describe('What the member is to this project; also the vision of a bootstrapped L0'),
       },
     },
-    ({ subsystem, newProjectPath }) => {
+    ({ alias, path: memberPath, description }) => {
       try {
-        moveSubsystemProject(subsystem, newProjectPath);
-        return text(`Moved subsystem "${subsystem}" to: ${newProjectPath}`);
+        // mcp_orchestrator.addMember step 1: scaffold and declare via core.
+        createMember(alias, memberPath, description);
+        return text(`Added member "${alias}" at ${memberPath} (declared in project.yaml \`members\`). Design it from its own root and export what others consume from its L0; reference it here as ${alias}::<name>.`);
       } catch (e) {
         return errText(String(e));
       }
     },
   );
 
-  reg<{ subsystem: string; projectPath: string }>(server,
+  reg<{ alias: string; newPath: string }>(server,
+    'sdd_move_member',
+    {
+      description: "Relocate a member's directory on disk and point its `members` entry there in one step (a member still declared in the legacy L1 form is moved into `members` first). Errors if the alias declares no member, or the new path escapes the project or already exists.",
+      inputSchema: {
+        alias: z.string().describe("The member's alias"),
+        newPath: z.string().describe("The member's new root, relative to the bound project"),
+      },
+    },
+    ({ alias, newPath }) => {
+      try {
+        // mcp_orchestrator.moveMember step 1: relocate via core.
+        moveMember(alias, newPath);
+        return text(`Moved member "${alias}" to: ${newPath}`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ subsystem: string; path: string }>(server,
     'sdd_externalize_subsystem',
     {
-      description: 'Migrate an internal subsystem into a standalone subproject at projectPath: move its spec subtree out, mount it via projectPath, and rewrite cross-subsystem references to the new namespaced ids. Source code is not moved. Errors if the subsystem is missing or already external.',
+      description: "Turn an internal subsystem into a member project at the path: provision the member, move the subsystem's specs there, declare it in project.yaml `members` under the subsystem id, and re-save every reference across the new boundary as `alias::name`. Source code is not moved; the exports either side now needs are left to `wairon doctor --fix`. Errors if the subsystem is missing or is already a member.",
       inputSchema: {
         subsystem: z.string().describe('The internal L1 subsystem id to externalize'),
-        projectPath: z.string().describe('Relative destination directory for the new subproject'),
+        path: z.string().describe('Relative destination directory for the new member project'),
       },
     },
-    ({ subsystem, projectPath }) => {
+    ({ subsystem, path: memberPath }) => {
       try {
-        externalizeSubsystem(subsystem, projectPath);
-        return text(`Externalized subsystem "${subsystem}" into subproject: ${projectPath}. Move its source code there and re-validate.`);
+        // mcp_orchestrator.externalizeSubsystem steps 1-2: the core refuses a
+        // missing subsystem, and turns an existing one into a member.
+        externalizeSubsystem(subsystem, memberPath);
+        return text(`Externalized subsystem "${subsystem}" into the member project at ${memberPath}. Move its source code there, run \`wairon doctor --fix\` for the exports either side now needs, and re-validate.`);
       } catch (e) {
         return errText(String(e));
       }
     },
   );
 
-  reg<{ subsystem: string }>(server,
-    'sdd_internalize_subsystem',
+  reg<{ alias: string }>(server,
+    'sdd_internalize_member',
     {
-      description: 'Migrate an external subsystem back into the parent tree: move its subproject spec subtree back under the parent, drop projectPath, delete the child .wai project, and rewrite references back to bare ids. Errors if the subsystem is not external or its subproject is not a single flat subsystem.',
+      description: 'Take a single-subsystem member back into the bound project: move its specs in, re-save every reference across the old boundary as a local id, remove it from `members` and delete its .wai project. Errors if the alias declares no member, or the member holds more than one subsystem or declares members or externals of its own.',
       inputSchema: {
-        subsystem: z.string().describe('The external L1 subsystem id to internalize'),
+        alias: z.string().describe("The member's alias"),
       },
     },
-    ({ subsystem }) => {
+    ({ alias }) => {
       try {
-        internalizeSubsystem(subsystem);
-        return text(`Internalized subsystem "${subsystem}" back into this project (child .wai removed).`);
+        // mcp_orchestrator.internalizeMember step 1: via core.
+        internalizeMember(alias);
+        return text(`Internalized member "${alias}" into this project (its .wai project removed).`);
       } catch (e) {
         return errText(String(e));
       }
@@ -1989,7 +1992,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       description: 'Validate the SDD spec tree, checking parent references, contract compatibility, narratives, and component type boundaries. Supports scoping and recursion controls. Findings come back as structured content too, under the schema this tool declares — errors, warnings and notices already split into three lists (a notice never makes the tree invalid and never fails --ci), each with its code, severity, message and the spec it concerns — so a caller filters them as objects instead of parsing the JSON text block and hoping its shape holds.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only validate the specified subsystem (granular)'),
-        recursive: z.boolean().optional().describe('Whether to recursively validate subprojects (default: true)'),
+        recursive: z.boolean().optional().describe('Whether to descend into the members this project declares (default: true)'),
       },
       outputSchema: validateTreeOutput,
     },
@@ -2160,7 +2163,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       description: 'Get the completeness status dashboard of the SDD spec tree. Supports scoping and recursion controls.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only show status for the specified subsystem'),
-        recursive: z.boolean().optional().describe('Whether to recursively load subprojects (default: true)'),
+        recursive: z.boolean().optional().describe('Whether to descend into the members this project declares (default: true)'),
       },
     },
     ({ subsystem, recursive }) => {
@@ -2372,7 +2375,7 @@ function advertiseHostedTools(server: McpServer, options: McpServerOptions): voi
     reg<{ allowPartial?: boolean }>(server, 'sdd_host_export_tree', {
       description: 'Hosted spec-tree transfer: pack the BOUND project\'s WHOLE spec tree — its own .wai plus every chained subproject — into a .waitree archive, returned as base64 with its roots, file count and state id. The migration counterpart of an import: use it to take a hosted project local, or to move it to another instance. Requires project:read over the project. Bounded by the data-plane body cap; a very large tree exports through the web download route instead. Refuses when a chained mount cannot be packed (escaping, missing, cyclic, too deep, or holding no .wai), naming every one and why, unless allowPartial is set — then the archive is built anyway and the result lists what was skipped.',
       inputSchema: {
-        allowPartial: z.boolean().optional().describe('Build the archive even when some chained mounts cannot be packed, listing them as skipped; default false (refuse and name them)'),
+        allowPartial: z.boolean().optional().describe('Build the archive even when some members cannot be packed, listing them as skipped; default false (refuse and name them)'),
       },
     }, hostedStub);
     reg<{ archiveBase64: string; replaceExisting?: boolean }>(server, 'sdd_host_import_tree', {

@@ -32,11 +32,11 @@ instructions: |
     unit of work (your host tool's Task/subagent mechanism). Instruct each to
     split ITSELF further if its slice is still too large. This keeps every
     session's loaded context proportional to one layer.
-  * **If your domain is a chained subproject** (your description says so and
-    points at a `projectPath`): its detailed agents live in THAT subproject's own
+  * **If your domain is a member project** (your description says so and
+    points at its path): its detailed agents live in THAT member's own
     `.wai` / `.claude/agents` — one layer deeper. Delegate work INTO it; do not
     implement its internals from here. If its agents are missing, run
-    `wairon generate` inside the subproject directory to materialize its layer.
+    `wairon generate` inside the member's directory to materialize its layer.
   * Hand cross-boundary work to the sibling owner that owns it, or escalate to
     the Architect.
 

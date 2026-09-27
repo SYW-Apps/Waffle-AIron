@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -18,7 +18,7 @@ import {
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import type {
   ComponentSpec,
   ImplementationSpec,
@@ -331,7 +331,7 @@ function materialize(shape: GenShape, rootDir: string): void {
     if (lvl.parentIdx === null || !lvl.mountLocalId) continue;
     const parent = shape.levels[lvl.parentIdx];
     setProjectRoot(parent.dir);
-    createChainedSubsystem(
+    writeLegacyMount(
       subsystemSpec(lvl.mountLocalId, {
         parentSystem: parent.systemName,
         projectPath: `packages/${lvl.mountLocalId}`,
@@ -352,7 +352,7 @@ function materialize(shape: GenShape, rootDir: string): void {
   //    into `default/` fallback folders. See report: adjacent stale-workspace
   //    hazard in invalidateSpecCache().
   for (const lvl of shape.levels) {
-    workspaceFor(lvl.dir).saveSubsystemSpec(subsystemSpec(lvl.subsystemLocal, { parentSystem: lvl.systemName }));
+    workspaceFor(lvl.dir).save('subsystem', subsystemSpec(lvl.subsystemLocal, { parentSystem: lvl.systemName }));
     for (const comp of lvl.components) {
       workspaceFor(lvl.dir).saveComponentSpec({
         id: comp.local,
@@ -456,7 +456,7 @@ function snapshotIds(tree: LoadedTree): Record<string, unknown> {
 
 /** Re-save EVERY loaded spec through the parent root, as any edit/lock does. */
 function resaveAllThroughRoot(tree: LoadedTree): void {
-  for (const s of tree.subsystems) saveSubsystemSpec(s);
+  for (const s of tree.subsystems) saveSpec('subsystem', s);
   for (const c of tree.components) saveComponentSpec(c);
   for (const i of tree.interfaces) saveInterfaceSpec(i);
   for (const im of tree.implementations) saveImplementationSpec(im);
@@ -636,16 +636,16 @@ describe('KNOWN COUNTEREXAMPLE: depth-2 (child-of-child) specs cannot be re-save
       createdAt: now,
       updatedAt: now,
     });
-    createChainedSubsystem(subsystemSpec('mnt-l1', { projectPath: 'packages/mnt-l1' }), 'mnt-l1');
+    writeLegacyMount(subsystemSpec('mnt-l1', { projectPath: 'packages/mnt-l1' }), 'mnt-l1');
     setProjectRoot(path.join(rootDir, 'packages', 'mnt-l1'));
-    createChainedSubsystem(
+    writeLegacyMount(
       subsystemSpec('mnt-l2', { parentSystem: 'mnt-l1', projectPath: 'packages/mnt-l2' }),
       'mnt-l2',
     );
     setProjectRoot(rootDir);
 
     const l2dir = path.join(rootDir, 'packages', 'mnt-l1', 'packages', 'mnt-l2');
-    workspaceFor(l2dir).saveSubsystemSpec(subsystemSpec('sub-l2', { parentSystem: 'mnt-l2' }));
+    workspaceFor(l2dir).save('subsystem', subsystemSpec('sub-l2', { parentSystem: 'mnt-l2' }));
     workspaceFor(l2dir).saveComponentSpec({
       id: 'leaf-comp',
       name: 'leaf-comp',
