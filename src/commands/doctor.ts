@@ -47,7 +47,8 @@ import { claudeMcpConfigPath } from './mcp.js';
 // The chaining migration is sdd_cli's own workflow. Bound as a namespace so each
 // call site names the contract method it reaches (chainingMigration.plan / .apply).
 import * as chainingMigration from './chaining-migration.js';
-import type { ChainingMigrationPlan, ProjectMigration } from './chaining-migration.js';
+import type { ChainingMigrationPlan, PlannedExport, ProjectMigration } from './chaining-migration.js';
+import type { PlannedRewrite } from './position-migration.js';
 
 /** The bound project's enabled targets; none for a project without a configuration. */
 function enabledTargets(): string[] {
@@ -644,9 +645,10 @@ function printApplied(written: string[], relock: string[]): void {
   for (const dir of relock) console.log(`      ${dir}`);
 }
 
-/** How many writes the plan holds: ids, entries, externals and pins. */
+/** How many writes the plan holds: ids, L0s, entries, externals, pins, mounts, rewrites and family pins. */
 function pendingCount(migration: ChainingMigrationPlan): number {
-  return migration.projects.reduce((n, p) => n + (p.idToWrite ? 1 : 0) + p.exports.length + p.externals.length + p.pins.length, 0);
+  return migration.rewrites.length + migration.projects.reduce((n, p) => n + (p.idToWrite ? 1 : 0) + (p.createsSystem ? 1 : 0)
+    + p.exports.length + p.externals.length + p.pins.length + p.members.length + p.supersededPins.length, 0);
 }
 
 /** The totals the report ends with — the P1 probe's counts. */
@@ -655,20 +657,25 @@ function chainingTotals(migration: ChainingMigrationPlan): string {
   const entries = sum((p) => p.exports.length);
   return [
     `${sum((p) => (p.idToWrite ? 1 : 0))} id(s)`,
+    `${sum((p) => (p.createsSystem ? 1 : 0))} L0(s) to create`,
     `${entries} L0 entr${entries === 1 ? 'y' : 'ies'}`,
     `${sum((p) => p.externals.length)} external(s)`,
     `${sum((p) => p.pins.length)} pin(s)`,
-    `${sum((p) => p.supersededPins.length)} superseded pin(s)`,
+    `${sum((p) => p.members.length)} mount(s) to move`,
+    `${migration.rewrites.length} rewrite(s)`,
+    `${sum((p) => p.supersededPins.length)} family pin(s) to delete`,
+    `${sum((p) => p.droppedKeys.length)} dropped key(s)`,
     `${migration.findings.length} finding(s)`,
   ].join(', ');
 }
 
-/** The plan per project, then every finding and the totals. */
+/** The plan per project, then every rewrite, every finding and the totals. */
 function printChainingPlan(migration: ChainingMigrationPlan): void {
   console.log(chalk.bold('Chaining migration'));
   console.log(chalk.gray(`  family root: ${migration.familyRoot}${migration.whole ? '' : ' (partial: a hop above was out of reach)'}`));
   if (chainingMigration.isEmpty(migration)) console.log('  Nothing to migrate.');
   for (const p of migration.projects) printProjectMigration(p);
+  printRewrites(migration);
   for (const f of migration.findings) {
     const where = f.project === '' ? 'top root' : f.project;
     console.log(`  ${icon(f.blocking ? 'error' : 'warn')} ${f.kind} [${where}]${f.blocking ? ' (blocks apply)' : ''}: ${f.detail}`);
@@ -677,22 +684,60 @@ function printChainingPlan(migration: ChainingMigrationPlan): void {
   logger.blank();
 }
 
+const projectLabel = (project: string): string => (project === '' ? '(top root)' : project);
+
 function printProjectMigration(p: ProjectMigration): void {
-  console.log(`  ${chalk.bold(p.project === '' ? '(top root)' : p.project)} ${chalk.gray(p.directory)}`);
+  console.log(`  ${chalk.bold(projectLabel(p.project))} ${chalk.gray(p.directory)}`);
   if (p.idToWrite) console.log(`    id: declare "${p.idToWrite}"`);
-  for (const e of p.exports) {
-    const item = e.component !== undefined ? `component: ${e.component}` : `typeDef: ${e.typeDef}`;
-    const members = e.members.length > 0 ? `, reaching ${e.members.join(', ')}` : '';
-    const consumers = e.consumers.map((c) => c || '(top root)').join(', ');
-    console.log(`    L0 entry: { from: ${e.from}, ${item}, audience: ${e.audience} } as "${e.publicName}" — for ${consumers}${members}`);
+  if (p.createsSystem) console.log('    L0: create a minimal one — the project exports and has none');
+  for (const e of p.exports) console.log(`    L0 entry: ${describeEntry(e)}`);
+  if (p.droppedKeys.length > 0) {
+    console.log(`    will be removed from its stored L0 by the first write (the schema does not know them): ${p.droppedKeys.join('; ')}`);
   }
   for (const x of p.externals) {
     const why = x.reason === 'legacy-pin' ? 'replaces the stage-1 family pin of' : 'its references cross into';
-    console.log(`    external: ${x.alias}: {} — ${why} ${x.producer || '(top root)'}`);
+    console.log(`    external: ${x.alias}: {} — ${why} ${projectLabel(x.producer)}`);
   }
   if (p.pins.length > 0) console.log(`    pin: ${p.pins.join(', ')}`);
-  for (const key of p.supersededPins) {
-    console.log(`    superseded sibling pin: ${key} — left on disk until stage 3 (stage-1 resolution still reads it; nothing deletes it)`);
+  for (const m of p.members) {
+    const described = m.description !== undefined ? ', its description carried' : '';
+    const carried = m.carried.length > 0 ? `; carries ${m.carried.length} L0 entr${m.carried.length === 1 ? 'y' : 'ies'} into ${projectLabel(m.member)}` : '';
+    console.log(`    member: ${m.alias}: ${m.path} — moved from its legacy L1 mount${described}${carried}`);
+    if (m.retired.length > 0) console.log(`      retires with the mount: ${m.retired.join('; ')}`);
+  }
+  if (p.supersededPins.length > 0) {
+    console.log(`    superseded family pins: ${p.supersededPins.length} — deleted once the externals that replace them are pinned; nothing reads them since stage 3`);
+  }
+}
+
+/** One planned L0 entry, its item, where it came from and whom it serves. */
+function describeEntry(e: PlannedExport): string {
+  const item = [
+    e.from !== undefined ? `from: ${e.from}` : undefined,
+    e.component !== undefined ? `component: ${e.component}` : `typeDef: ${e.typeDef}`,
+    e.interface !== undefined ? `interface: ${e.interface}` : undefined,
+    e.type !== undefined ? `type: ${e.type}` : undefined,
+    `audience: ${e.audience}`,
+  ].filter((x) => x !== undefined).join(', ');
+  const why = e.reason === 'mount'
+    ? `carried from its legacy mount${e.publishAtL1 ? `, published at L1 in ${e.from} first (its subsystem does not publish it yet)` : ''}`
+    : `${e.from === undefined ? 'its own project-level type, ' : ''}for ${e.consumers.map(projectLabel).join(', ')}${e.members.length > 0 ? `, reaching ${e.members.join(', ')}` : ''}`;
+  return `{ ${item} } as "${e.publicName}" — ${why}`;
+}
+
+/** Every rewrite, grouped per project and spec, each group with its count. */
+function printRewrites(migration: ChainingMigrationPlan): void {
+  if (migration.rewrites.length === 0) return;
+  console.log(`  ${chalk.bold('Rewrites')} (${migration.rewrites.length}) — each reference out of a deprecated form, to the text the writer emits:`);
+  const byProject = new Map<string, PlannedRewrite[]>();
+  for (const r of migration.rewrites) byProject.set(r.project, [...(byProject.get(r.project) ?? []), r]);
+  for (const [project, rewrites] of byProject) {
+    console.log(`    ${projectLabel(project)} (${rewrites.length}):`);
+    const bySpec = new Map<string, PlannedRewrite[]>();
+    for (const r of rewrites) bySpec.set(r.specId, [...(bySpec.get(r.specId) ?? []), r]);
+    for (const [specId, own] of bySpec) {
+      console.log(`      ${own[0].kind} ${specId} (${own.length}): ${own.map((r) => `${r.from} → ${r.to} [${r.position}]`).join('; ')}`);
+    }
   }
 }
 
