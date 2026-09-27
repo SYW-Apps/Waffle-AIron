@@ -197,7 +197,11 @@ methods:
     returns: boolean
     description: >-
       Whether a type reference resolves to a builtin, one of the given generic parameters, or a
-      defined type
+      defined type. A reference written through an alias (`marketplace.resolved-dependency`,
+      `billing::money` — the first segment before `::` or `.`) is also read through the family's
+      alias tables: the alias names the key of the project it declares (a member with no declared id
+      is keyed by its name slug, so the key need not be the alias), and the rest is looked up as a
+      type of that project — the same reading the scan gives a reference, without position
   - name: targetLanguageFor
     signature: 'targetLanguageFor(subsystemId?: string): string | undefined'
     returns: string | undefined
@@ -330,4 +334,4 @@ methods:
       rule that accuses
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-27T10:42:00.182Z'
+updatedAt: '2026-09-27T15:25:20.216Z'

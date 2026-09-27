@@ -73,7 +73,14 @@ fields:
     type: ResolvedExternal[]
     description: The project's declared externals, each bound to its producer (empty when none are declared).
     optional: false
+  - name: memberDescription
+    type: string
+    description: >-
+      What the parent's declaration says the member is — the `members` long form's description, or a
+      legacy mount's description — which the canvas shows on the member's project node; absent for
+      the bound root and for a member declared without one.
+    optional: true
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:52.264Z'
-updatedAt: '2026-09-27T10:33:24.520Z'
+updatedAt: '2026-09-27T15:26:03.139Z'

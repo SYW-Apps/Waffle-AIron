@@ -534,12 +534,12 @@ methods:
       - stepNumber: 2
         description: Require the new location
         type: branch
-        condition: options.projectPath is not provided
+        condition: no new path was given
         onFalseStep: 4
       - stepNumber: 3
         description: 'Reject: the new location is required'
         type: throw
-        error: '--project-path (the new location) is required'
+        error: 'a new path is required: wairon member move <alias> <path>'
       - stepNumber: 4
         description: Move the member's directory and point its `members` entry there
         type: call
@@ -561,12 +561,12 @@ methods:
       - stepNumber: 2
         description: Require the destination path
         type: branch
-        condition: options.projectPath is not provided
+        condition: options.path is not provided
         onFalseStep: 4
       - stepNumber: 3
         description: 'Reject: the destination is required'
         type: throw
-        error: '--project-path (the subproject destination) is required'
+        error: '--path (the member''s destination) is required'
       - stepNumber: 4
         description: Turn the subsystem into a member project declared in `members`
         type: call
@@ -574,8 +574,8 @@ methods:
         targetMethod: externalizeSubsystem
       - stepNumber: 5
         description: >-
-          Print confirmation, the new subproject path, and a reminder to move the source code and
-          re-validate
+          Print confirmation, the member's new path, and a reminder to move the source code, run
+          `wairon doctor --fix` for the exports either side now needs, and re-validate
         type: local
   - name: runMemberInternalize
     sourcePath: src/commands/subsystem.ts
@@ -2686,4 +2686,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-27T11:02:03.375Z'
+updatedAt: '2026-09-27T15:28:03.332Z'

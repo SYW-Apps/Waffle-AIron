@@ -815,10 +815,13 @@ methods:
           A write method's narrative asserts the invariant when one of its steps lists, in
           assertsInvariants, a ref the shared refMatchesInvariant helper accepts: the ref splits at
           its last dot (splitInvariantRef) into a type ref and an invariant id equal to inv.id, t
-          declares that id, and t.matchesRef(type ref) holds. An implementation that does not
-          implement the method has no such step: the obligation attaches to the contract's write
-          method, which exists, so the finding stands beside MISSING_IMPLEMENTATION_METHOD and names
-          the invariants the missing narrative must assert
+          declares that id, and t.matchesRef(type ref) holds — the type ref read as written and,
+          when its first segment is an alias some project of the family declares
+          (`sdk_cli::credential.inv`), through the family alias tables (familyAliases: alias → the
+          keys it names, since a member's key need not be its alias) as `<key>::<rest>`. An
+          implementation that does not implement the method has no such step: the obligation
+          attaches to the contract's write method, which exists, so the finding stands beside
+          MISSING_IMPLEMENTATION_METHOD and names the invariants the missing narrative must assert
         type: branch
         condition: the private helper stepAsserts(impl, method.name, t, inv.id) finds no asserting step
         onFalseStep: 8
@@ -848,9 +851,14 @@ methods:
       - stepNumber: 2
         description: >-
           The ref resolves when it splits at its last dot and some type in ctx.types with invariants
-          both matchesRef(type ref) and declares that invariant id
+          both matchesRef(type ref) and declares that invariant id — the type ref read as written
+          and, when its first segment is an alias a project of the family declares, through the
+          family alias tables (familyAliases) as `<key>::<rest>`, so a ref written through an alias
+          (`sdk_cli::credential.inv`) resolves to the member's entity
         type: branch
-        condition: the shared resolveInvariantRef(ref, ctx.types) helper resolves nothing
+        condition: >-
+          the shared resolveInvariantRef(ref, ctx.types, familyAliases(ctx.projectFamily)) helper
+          resolves nothing
         onFalseStep: 1
       - stepNumber: 3
         label: refsEnd
@@ -905,4 +913,4 @@ methods:
     exportedVia: portalMountsRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-24T19:43:53.054Z'
+updatedAt: '2026-09-27T15:25:34.288Z'

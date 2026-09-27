@@ -362,18 +362,23 @@ methods:
           spec of that local id (unexported, lenient until stage 4); an alias whose producer the
           scan did not read keeps the text as written (outside). leading `::a::rest` and path
           `a::rest` (a first segment the root does not declare) are read the stage-2 way, as a
-          member path from the bound root, one alias per segment, the last segment a local id;
-          `super::x` climbs one containing project per hop and reads the rest there, local first. A
-          deprecated form landing in the referring root is local; landing in another project it
-          binds like the alias form when the referrer declares that producer, else leniently
-          (undeclared). A first segment that names no alias, no member path and no family project id
-          stays as written (unresolved). Record the form, the binding, the producer, the public name
-          and the rewrite the writer would emit (AuthoredReference)
+          member path from the bound root, one alias per segment, the last segment a local id; a
+          path whose first segment walks no member path from the bound root but names exactly one
+          project of the family by its id — the bound root included, as a path written from a root
+          above it reads — walks on from that project, one alias per segment, at any depth, so a
+          deprecated form lands on the same target whichever root the family is loaded from, for its
+          one-release grace; `super::x` climbs one containing project per hop and reads the rest
+          there, local first. A deprecated form landing in the referring root is local; landing in
+          another project it binds like the alias form when the referrer declares that producer,
+          else leniently (undeclared). A first segment that names no alias, no member path and no
+          family project id stays as written (unresolved). Record the form, the binding, the
+          producer, the public name and the rewrite the writer would emit (AuthoredReference)
         type: local
       - stepNumber: 14
         description: >-
-          Record per root its key, parent, alias and form, legacy mount, L0, configuration, alias
-          table, tables, spec keys and authored references, and the family problems met
+          Record per root its key, parent, alias and form, the description its parent's declaration
+          gives it, legacy mount, L0, configuration, alias table, tables, spec keys and authored
+          references, and the family problems met
         type: local
       - stepNumber: 15
         description: Answer the recorded roots, bound root first
@@ -382,4 +387,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-27T10:36:09.600Z'
+updatedAt: '2026-09-27T15:25:56.061Z'

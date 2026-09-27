@@ -203,15 +203,16 @@ methods:
       Pre-authorized entry for the approval workflow: performs the same privileged action as
       lockProject but WITHOUT credential authentication — the caller
       (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
-      exposed on any portal. An optional subproject qualifier binds the CHAINED CHILD's tree instead
-      of the project's own, resolved through the project repository's containment-checked qualified
-      resolution (the same seam the data plane binds through, so a qualifier can never resolve
-      outside the project root). Because the git binding is read from the BOUND root, a
-      subproject-scoped lock finds no repository binding there and therefore performs no sync and no
-      publish: the child is not the git unit. The frozen child tree persists in the project's
-      working tree, but note it is NOT staged by the project's own .wai/-scoped commit either — a
-      chained child lives outside that pathspec — so reaching a remote requires a commit whose scope
-      covers the child's path.
+      exposed on any portal. An optional member qualifier ('a' or 'a::b', one member alias per hop)
+      binds the MEMBER's tree instead of the project's own, resolved through the project
+      repository's containment-checked qualified resolution (the same seam the data plane binds
+      through, so a qualifier can never resolve outside the project root). Because the git binding
+      is read from the BOUND root, a member-scoped lock finds no repository binding there and
+      therefore performs no sync and no publish: the member is not the git unit. The frozen member
+      tree persists in the project's working tree, but note it is NOT staged by the project's own
+      .wai/-scoped commit either — a member lives outside that pathspec — so reaching a remote
+      requires a commit whose scope covers the member's path. The record pins each member the bound
+      tree declares, keyed by its alias.
     signature: 'executeApprovedLock(projectId: string, subproject?: string): LockRecord'
     returns: LockRecord
     params:
@@ -220,8 +221,8 @@ methods:
       - name: subproject
         type: string
         description: >-
-          Chained-subsystem mount chain to bind instead of the project root; absent binds the
-          project's own tree.
+          Member chain to bind instead of the project root — one member alias per hop ('a' or
+          'a::b'), the same strings the legacy mount ids were; absent binds the project's own tree.
         optional: true
   - name: commitProject
     description: >-
@@ -294,8 +295,8 @@ methods:
     description: >-
       Pack a hosted project's spec tree into a .waitree archive. Requires project:read over the
       project — the same grant that already reads every spec individually, so bulk export grants
-      nothing new. TREE-scoped: a subproject qualifier binds the chained child's tree, so a
-      credential narrowed to one child exports exactly that child.
+      nothing new. TREE-scoped: a member qualifier binds that member's tree, so a credential
+      narrowed to one member exports exactly that member.
     signature: >-
       exportProjectTree(credential: string, project: string, subproject?: string, includeDerived?:
       boolean, allowPartial?: boolean): TreeExportResult
@@ -308,8 +309,8 @@ methods:
       - name: subproject
         type: string
         description: >-
-          Chained-subproject mount chain ('a' or 'a::b') — binds the child tree instead of the
-          project root
+          Member chain ('a' or 'a::b', one member alias per hop) — binds the member's tree instead
+          of the project root
         optional: true
       - name: includeDerived
         type: boolean
@@ -317,8 +318,8 @@ methods:
       - name: allowPartial
         type: boolean
         description: >-
-          Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left
-          out in the result, instead of refusing the whole export.
+          Pack whatever CAN be packed when a member cannot be, and list the members left out in the
+          result, instead of refusing the whole export.
         optional: true
   - name: importProjectTree
     description: >-
@@ -341,6 +342,9 @@ methods:
         type: bytes
       - name: subproject
         type: string
+        description: >-
+          Member chain ('a' or 'a::b', one member alias per hop) — replaces that member's tree
+          instead of the project's own
         optional: true
       - name: replaceExisting
         type: boolean
@@ -360,4 +364,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-25T22:55:52.955Z'
+updatedAt: '2026-09-27T15:26:57.712Z'

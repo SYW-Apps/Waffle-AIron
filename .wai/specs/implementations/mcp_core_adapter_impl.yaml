@@ -46,7 +46,7 @@ methods:
   - name: moveMember
     narrative:
       - stepNumber: 1
-        description: Call moveSubsystemProject on core portal
+        description: Call moveMember on the spec maintenance portal
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: moveMember
@@ -60,7 +60,7 @@ methods:
   - name: internalizeMember
     narrative:
       - stepNumber: 1
-        description: Call internalizeSubsystem on core portal
+        description: Call internalizeMember on the spec maintenance portal
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: internalizeMember
@@ -169,7 +169,14 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: createMember
+  - name: listDirectChainedSubprojects
+    narrative:
+      - stepNumber: 1
+        description: Call listDirectChainedSubprojects on the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: listDirectChainedSubprojects
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T11:02:32.376Z'
+updatedAt: '2026-09-27T15:27:09.759Z'

@@ -527,12 +527,13 @@ methods:
         targetMethod: getStatusReport
       - stepNumber: 2
         description: >-
-          Read the bound project's configuration for its members (project_config.declaredMembers()),
-          so the context line can name which projects this answer spans — a report that silently
-          covered three projects would read exactly like one that covered this one
+          Read the members the bound root declares — its project.yaml `members` entries and, for one
+          release, its legacy L1 mounts, each with its alias, path and form — so the context line
+          can name which projects this answer spans; a report that silently covered three projects
+          would read exactly like one that covered this one
         type: call
         targetComponent: mcp_core_adapter
-        targetMethod: loadProjectConfig
+        targetMethod: listDirectChainedSubprojects
       - stepNumber: 3
         description: >-
           Ask what the lock says about the tree as it stands. An agent reading this tool is deciding
@@ -560,4 +561,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-27T10:58:30.148Z'
+updatedAt: '2026-09-27T15:27:11.406Z'

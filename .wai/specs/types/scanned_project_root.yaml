@@ -101,7 +101,13 @@ fields:
       a key two of its spec files declare (duplicate-spec, naming both files). The identity problems
       (collisions, no-id, defaulted) are the project family index's to derive from the nodes.
     optional: false
+  - name: memberDescription
+    type: string
+    description: >-
+      What its parent's declaration says the member is: the `members` entry's description, or a
+      legacy mount's description; absent for the bound root and for a member declared without one.
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-26T17:39:58.407Z'
-updatedAt: '2026-09-27T12:17:40.036Z'
+updatedAt: '2026-09-27T15:26:01.899Z'

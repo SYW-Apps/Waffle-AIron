@@ -215,6 +215,19 @@ methods:
         type: string
         description: What the member is to this project
         optional: true
+  - name: listDirectChainedSubprojects
+    description: >-
+      Calls listDirectChainedSubprojects on the core portal: the direct members of a project root,
+      one level deep — its `members` entries and, for one release, its legacy L1 mounts — each as
+      its directory, alias and form.
+    signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
+    returns: ChainedSubprojectDir[]
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root whose members are listed
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T11:02:31.468Z'
+updatedAt: '2026-09-27T15:27:07.694Z'

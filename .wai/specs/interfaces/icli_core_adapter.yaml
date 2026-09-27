@@ -122,7 +122,7 @@ methods:
       Complete the bound project's bootstrap without overwriting anything: the default configuration
       and the L0 system spec, each only when absent. A configuration it writes declares the given
       id, else the chosen name slugified. Forwarded to the core portal.
-    signature: 'ensureProjectInitialized(fallbackName: string, id?: string): ProjectBootstrap'
+    signature: 'ensureProjectInitialized(fallbackName: string, id?: string, vision?: string): ProjectBootstrap'
     returns: ProjectBootstrap
     params:
       - name: fallbackName
@@ -133,6 +133,10 @@ methods:
         description: >-
           The project id a configuration written here declares — a chained child's mount subsystem
           id; omitted, the chosen name slugified
+        optional: true
+      - name: vision
+        type: string
+        description: The vision an L0 written here carries; omitted, a placeholder naming the project
         optional: true
     guarantees:
       - idempotent
@@ -627,4 +631,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T11:02:29.672Z'
+updatedAt: '2026-09-27T16:07:39.085Z'

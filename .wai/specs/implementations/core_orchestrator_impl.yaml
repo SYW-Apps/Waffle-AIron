@@ -294,7 +294,15 @@ methods:
           implementations, and types) into the member's specs dir, re-expressing each moved
           implementation's file paths — sourcePath, each method's sourcePath, simPath — relative to
           the member root (the same files; code is never moved). The moved subsystem is now keyed
-          `<id>::<id>`; every other moved spec `<id>::<local>`
+          `<id>::<id>`; every other moved spec `<id>::<local>`. Each reference that now crosses the
+          boundary is re-expressed so it keeps binding its old target — the parent's references into
+          the moved subtree (components, contracts and the types it takes along) as `<id>::<local>`,
+          the moved subtree's component and contract references back into the parent as `<parent
+          id>::<local>`, and a `super::` the moved subtree wrote as `<project id>::<local>` by the
+          project the scan bound it to — never as `super::`. A type the moved subtree names in the
+          parent resolves by name from any project and stays as written. A moved `super::` whose
+          target lies beyond the bound root's reach has no such text: it is refused before anything
+          moves (run from the top project, `wairon doctor --fix` rewrites it first)
         type: local
       - stepNumber: 7
         description: >-
@@ -369,24 +377,27 @@ methods:
           of its own
       - stepNumber: 6
         description: >-
-          Move the member's spec subtree under the bound project's specs, its keys becoming local,
-          and re-express each moved implementation's file paths — sourcePath, each method's
-          sourcePath, simPath — relative to the bound root
-        type: local
+          Delete its legacy L1 mount document first (false, writing nothing, for a member declared
+          in `members`), so the moved subsystem can take the folder the mount document held
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteMount
       - stepNumber: 7
+        description: >-
+          Move the member's spec subtree under the bound project's specs — its subsystem folder and
+          any project-level spec files beside it, refused before anything moves when one would land
+          on an existing file — its keys becoming local, and re-express each moved implementation's
+          file paths — sourcePath, each method's sourcePath, simPath — relative to the bound root.
+          Each reference that crossed the old boundary is re-expressed with the target the scan
+          bound it to before the move, so the re-save below keeps every target
+        type: local
+      - stepNumber: 8
         description: >-
           Remove the member from `members` (false, writing nothing, for a member declared in the
           legacy form)
         type: call
         targetComponent: project_config_repository
         targetMethod: removeMember
-      - stepNumber: 8
-        description: >-
-          Delete its legacy L1 mount document (false, writing nothing, for a member declared in
-          `members`)
-        type: call
-        targetComponent: spec_loader
-        targetMethod: deleteMount
       - stepNumber: 9
         description: Delete the member's .wai project (project.yaml + specs)
         type: local
@@ -1258,7 +1269,10 @@ methods:
           insert reads as the step added, the shift as renumbered runs and the jumps that followed
           their targets as relocations, never as every later step rewritten — and name every path
           the delta carried that the write does not act on — one the schema drops at a depth the
-          permissive delta cannot refuse, and one whose value the stored spec already held
+          permissive delta cannot refuse, and one whose value the stored spec already held. Read the
+          stored FILE raw as well and name every key it carries that the level's canonical schema
+          does not know, each as `path: value` (strippedKeys): the parse already discarded them, and
+          the write re-serializes through the schema, so they would otherwise be lost without a word
         type: local
       - stepNumber: 11
         description: Decide whether there is anything to write
@@ -1286,9 +1300,9 @@ methods:
       - stepNumber: 15
         label: dry-run
         description: >-
-          Answer with the changes the write would make and the paths it would not act on, marked as
-          an account rather than a write: nothing is stamped and not one byte of the stored file
-          moves
+          Answer with the changes the write would make, the paths it would not act on and the stored
+          keys it would drop (strippedKeys), marked as an account rather than a write: nothing is
+          stamped and not one byte of the stored file moves
         type: return
         outcome: dry run
       - stepNumber: 16
@@ -1301,7 +1315,8 @@ methods:
       - stepNumber: 17
         description: >-
           Report what was written: every change it made, every path of the delta it did not act on,
-          the store's placement notices and the judgement's warnings
+          the stored keys the write dropped (strippedKeys), the store's placement notices and the
+          judgement's warnings
         type: return
         outcome: written
   - name: repairForeignStepFields
@@ -1715,4 +1730,4 @@ methods:
         targetMethod: normalizeReferences
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T10:56:51.506Z'
+updatedAt: '2026-09-27T15:58:16.722Z'
