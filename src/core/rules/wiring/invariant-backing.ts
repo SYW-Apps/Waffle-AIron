@@ -1,6 +1,6 @@
 import { ComponentSpec, ImplementationSpec, InterfaceSpec, TypeSpec, isDraftSubsystem } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
-import { refMatchesInvariant } from './invariant-ref.js';
+import { familyAliases, refMatchesInvariant } from './invariant-ref.js';
 
 // ---------------------------------------------------------------------------
 // The invariant registry — an HONEST linter, deliberately not a prover.
@@ -31,11 +31,17 @@ import { refMatchesInvariant } from './invariant-ref.js';
  * which exists, so the finding stands beside MISSING_IMPLEMENTATION_METHOD and
  * names the invariants the missing narrative must assert.
  */
-function stepAsserts(impl: ImplementationSpec, methodName: string, type: TypeSpec, invariantId: string): boolean {
+function stepAsserts(
+  impl: ImplementationSpec,
+  methodName: string,
+  type: TypeSpec,
+  invariantId: string,
+  aliases: Map<string, string[]>,
+): boolean {
   const method = impl.methods.find(m => m.name === methodName);
   if (!method) return false;
   return method.narrative.some(step =>
-    (step.assertsInvariants ?? []).some(ref => refMatchesInvariant(ref, type, invariantId)),
+    (step.assertsInvariants ?? []).some(ref => refMatchesInvariant(ref, type, invariantId, aliases)),
   );
 }
 
@@ -73,6 +79,8 @@ export const invariantBackingRule: SddRule = {
     { code: 'UNASSERTED_INVARIANT', defaultSeverity: 'warning', summary: 'A write-effect method of the invariant\'s owning component has no narrative step asserting it' },
   ],
   check(ctx) {
+    // A type named through an alias is read through the family's alias tables.
+    const aliases = familyAliases(ctx.projectFamily);
     for (const t of ctx.types) {
       const invariants = t.invariants ?? [];
       if (invariants.length === 0) continue;
@@ -110,7 +118,7 @@ export const invariantBackingRule: SddRule = {
         for (const impl of ctx.implementationsByContract.get(intf.id) ?? []) {
           const isDraftCtx = entityDraft || ctx.isImplementationDraft(impl);
           for (const inv of invariants) {
-            if (stepAsserts(impl, method.name, t, inv.id)) continue;
+            if (stepAsserts(impl, method.name, t, inv.id, aliases)) continue;
             ctx.addIssue(
               'warning',
               'UNASSERTED_INVARIANT',

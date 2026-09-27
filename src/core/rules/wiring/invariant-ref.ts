@@ -1,4 +1,4 @@
-import { TypeSpec, typeMatchesRef } from '../../../models/index.js';
+import { TypeSpec, typeMatchesRef, type ProjectFamily } from '../../../models/index.js';
 
 // ---------------------------------------------------------------------------
 // The invariant REFERENCE grammar: "<type-ref>.<invariant-id>", as a narrative
@@ -17,13 +17,42 @@ export function splitInvariantRef(ref: string): { typeRef: string; invariantId: 
   return { typeRef: ref.slice(0, at), invariantId: ref.slice(at + 1) };
 }
 
+/**
+ * Every alias a project of the family declares, with the keys it names — the
+ * table a type reference written through an alias (`sdk_cli::credential`) is
+ * read by, since a member's key need not be its alias (stage 3: a member with
+ * no declared id is keyed by its name slug).
+ */
+export function familyAliases(family?: ProjectFamily): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const node of family?.nodes ?? []) {
+    for (const [alias, key] of node.aliases) {
+      if (key === '' || key === alias) continue;
+      out.set(alias, [...new Set([...(out.get(alias) ?? []), key])]);
+    }
+  }
+  return out;
+}
+
+/** The ways a type reference may be read: as written, and through any alias its first segment is. */
+function typeRefReadings(typeRef: string, aliases: Map<string, string[]>): string[] {
+  const [first, ...rest] = typeRef.split(/::|\./);
+  if (!rest.length) return [typeRef];
+  return [typeRef, ...(aliases.get(first) ?? []).map((key) => `${key}::${rest.join('::')}`)];
+}
+
 /** Resolve an assertsInvariants reference against the declared entity invariants. */
-export function resolveInvariantRef(ref: string, types: TypeSpec[]): { type: TypeSpec; invariantId: string } | null {
+export function resolveInvariantRef(
+  ref: string,
+  types: TypeSpec[],
+  aliases: Map<string, string[]> = new Map(),
+): { type: TypeSpec; invariantId: string } | null {
   const parts = splitInvariantRef(ref);
   if (!parts) return null;
+  const readings = typeRefReadings(parts.typeRef, aliases);
   for (const t of types) {
     if (!t.invariants?.length) continue;
-    if (!typeMatchesRef(t, parts.typeRef)) continue;
+    if (!readings.some((reading) => typeMatchesRef(t, reading))) continue;
     if (t.invariants.some(inv => inv.id === parts.invariantId)) {
       return { type: t, invariantId: parts.invariantId };
     }
@@ -40,9 +69,14 @@ export function resolveInvariantRef(ref: string, types: TypeSpec[]): { type: Typ
  * happened to list first — crediting the wrong type's write path and flagging
  * the right one. A qualified ref still only matches its own namespace.
  */
-export function refMatchesInvariant(ref: string, type: TypeSpec, invariantId: string): boolean {
+export function refMatchesInvariant(
+  ref: string,
+  type: TypeSpec,
+  invariantId: string,
+  aliases: Map<string, string[]> = new Map(),
+): boolean {
   const parts = splitInvariantRef(ref);
   if (!parts || parts.invariantId !== invariantId) return false;
   if (!(type.invariants ?? []).some(inv => inv.id === invariantId)) return false;
-  return typeMatchesRef(type, parts.typeRef);
+  return typeRefReadings(parts.typeRef, aliases).some((reading) => typeMatchesRef(type, reading));
 }

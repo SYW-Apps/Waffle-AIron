@@ -74,6 +74,6 @@ methods:
         description: The project's key, alias table and the resolved tables of the producers its aliases name
     guarantees:
       - idempotent
-status: design
+status: complete
 createdAt: '2026-09-27T10:34:29.431Z'
-updatedAt: '2026-09-27T10:34:29.442Z'
+updatedAt: '2026-09-27T12:17:44.995Z'

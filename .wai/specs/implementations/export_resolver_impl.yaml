@@ -152,6 +152,6 @@ methods:
         outcome: ResolvedExportTable
     detail: full
     symbol: resolveProjectTable
-status: design
+status: complete
 createdAt: '2026-09-27T10:34:37.874Z'
-updatedAt: '2026-09-27T10:38:32.106Z'
+updatedAt: '2026-09-27T12:17:45.764Z'

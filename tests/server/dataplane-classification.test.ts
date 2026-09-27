@@ -26,7 +26,6 @@ import {
 // ---------------------------------------------------------------------------
 
 const READS_WITHOUT_A_READ_PREFIX = [
-  'sdd_list_external_interfaces',
   'listAgents',
   'getAgent',
   'listDomains',
@@ -121,7 +120,6 @@ describe('subproject confinement by declared tool scope', () => {
       'sdd_get_status',
       'sdd_update_spec',
       'sdd_validate_tree',
-      'sdd_list_external_interfaces',
       'listAgents',
       'sdd_host_lock_project',
       'sdd_host_export_tree',

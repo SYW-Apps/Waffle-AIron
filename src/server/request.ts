@@ -282,7 +282,6 @@ const READ_TOOL_PREFIXES = ['sdd_get_', 'sdd_validate_'];
 /** Read tools whose names carry no read prefix, listed one by one so the
  *  fail-closed default stays in force for every other name. */
 const READ_TOOL_NAMES = new Set<string>([
-  'sdd_list_external_interfaces',
   'listAgents',
   'getAgent',
   'listDomains',

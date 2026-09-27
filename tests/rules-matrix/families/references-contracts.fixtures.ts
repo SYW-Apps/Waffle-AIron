@@ -1035,7 +1035,7 @@ export default [
           projectName: 'PayCore',
           interfaces: [
             {
-              id: 'ipayment_clearinghouse',
+              id: 'payment-clearinghouse',
               name: 'Payment Clearinghouse',
               component: 'payment-clearinghouse',
               audience: 'project',
@@ -1106,7 +1106,7 @@ export default [
           projectName: 'PayCore',
           interfaces: [
             {
-              id: 'ipayment_clearinghouse',
+              id: 'payment-clearinghouse',
               name: 'Payment Clearinghouse',
               component: 'payment-clearinghouse',
               audience: 'project',

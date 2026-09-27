@@ -240,6 +240,8 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
   });
 });
 
+// Stage 3: a member's own subsystem named like its alias is `network_http::network_http` —
+// an honest key, never merged with the mount (which is a member declaration, not a subsystem).
 describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug)', () => {
   let rootDir: string;
   afterEach(() => {
@@ -265,16 +267,16 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
   it('re-saving the loaded (qualified) subsystem does not throw and round-trips', () => {
     const childDir = buildFixture();
 
-    const loaded = loadSubsystemSpec('network_http');
+    const loaded = loadSubsystemSpec('network_http::network_http');
     expect(loaded).not.toBeNull();
-    // Loaded through the parent, the member is namespace-qualified.
+    // Loaded through the parent, the member is keyed under its project.
     expect(loaded!.publicInterfaces[0].component).toBe('network_http::http-portal');
 
     // THE bug: this threw "Refusing to write invalid subsystem spec" on lock.
     expect(() => saveSubsystemSpec(loaded!)).not.toThrow();
 
     invalidateSpecCache();
-    const reloaded = loadSubsystemSpec('network_http');
+    const reloaded = loadSubsystemSpec('network_http::network_http');
     expect(reloaded!.publicInterfaces[0].component).toBe('network_http::http-portal');
 
     // On disk the child file carries the plain local id.
@@ -293,19 +295,19 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
     }));
     invalidateSpecCache();
 
-    const loaded = loadSubsystemSpec('network_http');
+    const loaded = loadSubsystemSpec('network_http::network_http');
     expect(loaded!.lifecycle![0].component).toBe('network_http::http-portal');
 
     expect(() => saveSubsystemSpec(loaded!)).not.toThrow();
     invalidateSpecCache();
-    expect(loadSubsystemSpec('network_http')!.lifecycle![0].component).toBe('network_http::http-portal');
+    expect(loadSubsystemSpec('network_http::network_http')!.lifecycle![0].component).toBe('network_http::http-portal');
   });
 
   it('dryRunSerializeSpecs is clean on a healthy tree and predicts a writer refusal', () => {
     buildFixture();
 
     // Warm the cache the way validate does, then dry-run: clean.
-    const loaded = loadSubsystemSpec('network_http');
+    const loaded = loadSubsystemSpec('network_http::network_http');
     expect(dryRunSerializeSpecs()).toEqual([]);
 
     // Corrupt the in-memory spec so the write pipeline would refuse it: a
@@ -313,7 +315,7 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
     // publicInterfaces schema rejects.
     loaded!.publicInterfaces[0].component = 'other_ns::sneaky';
     const issues = dryRunSerializeSpecs();
-    expect(issues.some(i => i.code === 'ROUNDTRIP_SERIALIZATION' && i.specId === 'network_http')).toBe(true);
+    expect(issues.some(i => i.code === 'ROUNDTRIP_SERIALIZATION' && i.specId === 'network_http::network_http')).toBe(true);
     expect(issues[0].severity).toBe('error');
   });
 });
@@ -757,12 +759,13 @@ describe("a chained child's implementation file paths are relative to its own ro
 });
 
 // ---------------------------------------------------------------------------
-// A flat chained child is its mount at every depth: a grandchild whose own
-// subsystem is named after its mount loads, validates and round-trips exactly
-// as a first-level flat child does.
+// A member's own subsystem named after its alias is keyed under the member's
+// project id at every depth (`extra::extra`), never merged with the mount — and
+// a grandchild loads, validates and round-trips exactly as a first-level
+// member does (stage 3).
 // ---------------------------------------------------------------------------
 
-describe('a flat chained child is its mount at every depth', () => {
+describe('a member\'s own subsystem named like its alias, at every depth', () => {
   let rootDir: string | undefined;
 
   afterEach(() => {
@@ -793,13 +796,13 @@ describe('a flat chained child is its mount at every depth', () => {
     return { extraDir };
   }
 
-  it('loads the grandchild as one subsystem, with its components pointing at it', () => {
+  it('loads the grandchild\'s own subsystem under its key, with its components pointing at it', () => {
     nestedFlatFamily();
 
     const index = workspaceFor(rootDir!).scanAll();
-    const extras = index.subsystems.filter((s) => s.id.startsWith('kid::extra'));
-    expect(extras.map((s) => [s.id, s.projectPath])).toEqual([['kid::extra', 'packages/extra']]);
-    expect(index.components.find((c) => c.id === 'kid::extra::extra-comp')?.subsystem).toBe('kid::extra');
+    const extras = index.subsystems.filter((s) => s.id.startsWith('extra'));
+    expect(extras.map((s) => [s.id, s.projectPath])).toEqual([['extra::extra', undefined]]);
+    expect(index.components.find((c) => c.id === 'extra::extra-comp')?.subsystem).toBe('extra::extra');
   });
 
   it('validates with no dangling subsystem reference and round-trips the member through the top root', async () => {
@@ -809,7 +812,7 @@ describe('a flat chained child is its mount at every depth', () => {
     const res = validateSddTree();
     expect(res.issues.filter((i) => i.code === 'INVALID_SUBSYSTEM_REFERENCE').map((i) => i.specId)).toEqual([]);
 
-    saveComponentSpec(loadComponentSpec('kid::extra::extra-comp')!);
+    saveComponentSpec(loadComponentSpec('extra::extra-comp')!);
     invalidateSpecCache();
     expect(workspaceFor(extraDir).loadComponentSpec('extra-comp')?.subsystem).toBe('extra');
   });

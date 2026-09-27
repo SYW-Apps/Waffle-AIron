@@ -129,7 +129,9 @@ function errors(res: ValidationResult, stripPrefix = ''): string[] {
  * tests/core/externals.test.ts — here the edge is "clean" at the verdict's level.
  */
 const STAGE2_NOTICE = (i: { code: string; severity: string }): boolean =>
-  i.severity === 'notice' && (i.code === 'EXTERNAL_UNDECLARED' || i.code === 'EXTERNAL_NOT_EXPORTED');
+  i.severity === 'notice' && (i.code === 'EXTERNAL_UNDECLARED' || i.code === 'EXTERNAL_NOT_EXPORTED'
+    // stage 3: the `super::` form the fixture writes is itself reported, a notice too.
+    || i.code === 'DEPRECATED_REFERENCE_FORM');
 
 const PARENT_JUDGEMENT = [
   'CROSS_SUBSYSTEM_NON_ADAPTER @kid::k-orch',
@@ -258,7 +260,7 @@ describe('step 1b — a surface held inside a mount decides that mount\'s refere
     writeYamlFile(path.join(fam.kidDir, '.wai', 'surfaces', 'crm.yaml'), {
       projectName: 'crm', origin: 'authored', generatedAt: now, types: [],
       interfaces: [{
-        id: 'icrm', name: 'CRM', component: 'crm-portal', audience: 'external', type: 'REST', details: 'crm',
+        id: 'crm-portal', name: 'CRM', component: 'crm-portal', audience: 'external', type: 'REST', details: 'crm',
         methods: [{ name: 'getCustomer', description: 'd', signature: 'getCustomer(): void', returns: 'void' }],
       }],
     });
@@ -461,7 +463,8 @@ describe('step 3 — a chained child is judged through its parent when the paren
 
     const fromKid2 = verdict(kid2Dir);
 
-    expect(fromKid2.resolvedThrough).toEqual({ root: path.resolve(top), scope: 'par::kid2' });
+    // The grandchild's key in the top's scan is its project id, never the mount chain.
+    expect(fromKid2.resolvedThrough).toEqual({ root: path.resolve(top), scope: 'kid2' });
     expect(errors(fromKid2)).toEqual(['CROSS_SUBSYSTEM_NON_ADAPTER @k2-orch']);
   });
 });

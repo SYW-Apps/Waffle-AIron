@@ -501,9 +501,11 @@ export function validateSddTree(
     // tree. Fail with a clear error instead. A scope is valid when a subsystem's id
     // matches it exactly, or a namespaced (subproject) subsystem lives under it.
     if (scopeSubsystem) {
+      // A member's key is a scope too, even for a member with no subsystem of
+      // its own (a vocabulary project of project-level types).
       const scopeMatches = subsystems.some(
         s => s.id === scopeSubsystem || s.id.startsWith(`${scopeSubsystem}::`),
-      );
+      ) || projectFamily().nodes.some((n) => n.namespace !== '' && n.namespace === scopeSubsystem);
       if (!scopeMatches) {
         const known = subsystems.map(s => s.id).sort();
         const hint = known.length
@@ -533,7 +535,7 @@ export function validateSddTree(
     // RuleContext.mountSurfaceSnapshots). Loaded after the loader issues were
     // collected: resolving a mount that escapes the root raises its issue again.
     const mountSurfaceSnapshots = listMountSnapshots(
-      subsystems.filter((s) => s.projectPath).map((s) => s.id),
+      projectFamily().nodes.filter((n) => n.namespace !== '').map((n) => n.namespace),
     );
 
     // The writer's round-trip dry run over every in-scope spec (same
@@ -688,18 +690,22 @@ function resolveThroughParent(
   if (reach && !reach.parentReach) return null;
   const ceiling = reach?.topRoot ? path.resolve(reach.topRoot) : undefined;
 
-  const chain: string[] = [];
+  let climbed = false;
   let top = path.resolve(boundRoot);
   while (top !== ceiling) {
     const hop = findChainingParent(top, ceiling);
     if (!hop) break;
     const next = path.resolve(hop.parentRoot);
     if (ceiling && !isWithinOrEqual(ceiling, next)) break;
-    chain.unshift(hop.subsystemId);
+    climbed = true;
     top = next;
   }
-  if (chain.length === 0) return null;
-  const scope = chain.join('::');
+  if (!climbed) return null;
+  // The child's key in the top's scan: its project id at any depth (or its
+  // alias path when the id is taken or missing) — never a position.
+  const child = sameDirectory(boundRoot);
+  const scope = runWithProjectRoot(top, () => projectFamily().nodes.find((n) => child(n.directory))?.namespace);
+  if (!scope) return null;
 
   const inner = runWithProjectRoot(top, () => {
     // The parent is read as it is NOW without asking for it here: every spec
@@ -754,6 +760,13 @@ function stripNamespace(text: string, scope: string): string {
 function isIdChar(ch: string): boolean {
   return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')
     || ch === '_' || ch === '-' || ch === '.' || ch === ':';
+}
+
+/** A predicate: whether a directory is the same one as `dir`, case-folded where the filesystem folds case. */
+function sameDirectory(dir: string): (other: string) => boolean {
+  const key = (d: string): string => (process.platform === 'win32' ? path.resolve(d).toLowerCase() : path.resolve(d));
+  const want = key(dir);
+  return (other) => key(other) === want;
 }
 
 function isWithinOrEqual(dir: string, target: string): boolean {

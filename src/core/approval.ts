@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
-import { snapshotSpecFiles, loadSubsystemSpecs } from './specs.js';
+import { snapshotSpecFiles, graph } from './specs.js';
 import { readLockRecord, readLockRecordAt } from './lockfile.js';
 import { describeApprover } from '../models/lock.js';
 import type { LockRecord } from './lockfile.js';
@@ -96,9 +96,11 @@ function digest(content: string): string {
  * diff, which is exactly what the child PIN exists to replace.
  */
 export function currentSpecDigests(root: string = getProjectRoot()): Record<string, string> {
-  const mountDirs = loadSubsystemSpecs()
-    .filter((s) => s.projectPath && !s.id.includes('::'))
-    .map((s) => `${path.resolve(root, s.projectPath as string).split(path.sep).join('/')}/`);
+  // Every member the scan read, in either declaration form (stage 3: a member is
+  // a project of its own, never a subsystem of this one).
+  const mountDirs = graph().nodes
+    .filter((n) => n.namespace !== '')
+    .map((n) => `${path.resolve(n.directory).split(path.sep).join('/')}/`);
 
   const out: Record<string, string> = {};
   for (const [abs, content] of snapshotSpecFiles()) {
@@ -287,6 +289,18 @@ export interface ApprovalVerdict {
 }
 
 /**
+ * The members the bound root declares, in the shape a pin keys them by: the
+ * alias and the path. A member is read from the project graph (stage 3: in
+ * project.yaml `members`, or a legacy L1 mount for one release), never from
+ * the subsystem specs, which no longer hold it.
+ */
+function memberMounts(root: string = getProjectRoot()): { id: string; projectPath: string }[] {
+  return graph().nodes
+    .filter((n) => n.parent === '' && n.mountAlias !== undefined)
+    .map((n) => ({ id: n.mountAlias!, projectPath: path.relative(root, n.directory).split(path.sep).join('/') }));
+}
+
+/**
  * What has changed since the human last approved this tree.
  *
  * This used to report the lock's StateId verdict, which could only ever say
@@ -312,7 +326,7 @@ export function approvalVerdict(): ApprovalVerdict {
     // A moved chained child is a change the parent should review even when none
     // of the parent's OWN specs shifted — the trees are approved separately, and
     // this pin is the only thing that crosses between them.
-    const moved = movedChildren(loadSubsystemSpecs());
+    const moved = movedChildren(memberMounts());
     const childNote = moved.length
       ? `\n${moved.length} chained child project(s) moved since approval: ${moved.map((m) => m.id).join(', ')}.`
       : '';

@@ -1,12 +1,8 @@
 import {
   SURFACE_AUDIENCES,
-  extractTypeIdentifiers,
-  matchTypeRef,
-  methodTypeRefs,
   type ComponentSpec,
   type CrossProjectReference,
   type InterfaceSpec,
-  type ProjectFamily,
   type PublicInterface,
   type SubsystemSpec,
   type SystemPublicInterface,
@@ -21,17 +17,23 @@ import {
   type ResolvedExport,
   type ResolvedExportTable,
 } from '../models/exports.js';
-// export_index projects the scanned specs the Spec Index holds — the one
+// export_index projects the tables the Spec Index's scan resolved — the one
 // sanctioned case of an Index over another Index of the same Repository.
-import { listProjectRoots, loadComponentSpecs, loadInterfaceSpecs, loadSubsystemSpecs, loadSystemSpec, loadTypeSpecs } from './specs.js';
+import { listProjectRoots } from './specs.js';
 // ...and over the Project Family Index of the same Repository, for the
-// members and externals a project table re-exports from (never in a cycle:
-// the family index depends on the Spec Index alone).
+// the references the scan bound, counted into each consumer's usage (never in
+// a cycle: the family index depends on the Spec Index alone).
 import { projectFamilyGraph } from './project-family.js';
 
 // ---------------------------------------------------------------------------
-// export_index — export tables, resolved the way a module resolver resolves
-// `export … from`.
+// export_resolver and export_index — export tables, resolved the way a module
+// resolver resolves `export … from`.
+//
+// The resolver (resolveSubsystemTables, resolveProjectTable) is pure logic over
+// the specs it is handed: the Spec Index's scan calls it for every project, in
+// dependency order, before it binds any `alias::name`. The Index
+// (resolveSubsystemExportTable, resolveProjectExportTable, exportUsageOf) only
+// projects what that scan recorded.
 //
 // A subsystem's table (its L1 publicInterfaces) holds OWN items — a component
 // or type it owns — and RE-EXPORTS: `from` another subsystem, one component,
@@ -416,15 +418,36 @@ export function resolveSubsystemTables(
 
 // ---- the project table ------------------------------------------------------
 
-/** Where a legacy or bare L0 entry re-exports from: `from`, `subsystem`, else its item's owner. */
-function sourceOf(world: ExportWorld, e: SystemPublicInterface): string | undefined {
+/**
+ * export_sources — what a project's L0 table may re-export from beyond its own
+ * subsystems, handed to the pure resolver so it never reaches back into the
+ * scan: the project's key, its alias table, and the already-resolved tables of
+ * the producers those aliases name (null for one still on this path).
+ */
+export interface ExportSources {
+  /** The key of the project whose table is resolved ('' for the bound root). */
+  namespace: string;
+  /** Each member or declared external alias → the key of the project it names in the scan. */
+  aliases: Map<string, string>;
+  /** Each named producer's resolved project table by key; null for one still being resolved (a cycle). */
+  producerTables: Map<string, ResolvedExportTable | null>;
+  /** For each producer key, the audience it shows this project. */
+  audienceOf: Map<string, string>;
+}
+
+/** Where an L0 entry re-exports from: `from`, `subsystem`, else its item's owner; `own` for a project-level type. */
+function sourceOf(world: ExportWorld, e: SystemPublicInterface): string | 'own' | undefined {
   if (e.from ?? e.subsystem) return e.from ?? e.subsystem;
   if (e.component) return world.components.get(e.component)?.subsystem;
   if (e.interface) {
     const intf = world.interfaces.get(e.interface);
     return intf ? world.components.get(intf.component)?.subsystem : undefined;
   }
-  if (e.typeDef) return world.types.get(e.typeDef)?.[0]?.subsystem;
+  if (e.typeDef) {
+    const candidates = world.types.get(e.typeDef) ?? [];
+    if (candidates.some((t) => !t.subsystem)) return 'own';
+    return candidates[0]?.subsystem;
+  }
   return undefined;
 }
 
@@ -448,57 +471,43 @@ function reach(audience: string | undefined): number {
   return idx === -1 ? (SURFACE_AUDIENCES as readonly string[]).indexOf('instance') : idx;
 }
 
-/**
- * Where a project table's entries may come from, beyond its own subsystems: the
- * project graph (members by mount alias, externals by alias) and the tables of
- * the other projects of the family. Absent, every source is a subsystem.
- */
-export interface ProjectExportContext {
-  /** The project's namespace in the family graph ('' for the bound root). */
-  namespace: string;
-  family: ProjectFamily;
-  /** Another family project's table â€” null when it is already being resolved on this path (a cycle). */
-  projectTable: (namespace: string) => ResolvedExportTable | null;
-}
-
 /** An L0 entry's source, classified. */
 type EntrySource =
+  | { kind: 'own' }
   | { kind: 'subsystem'; subsystem: SubsystemSpec }
   | { kind: 'project'; namespace: string; label: string }
   | { kind: 'unresolvable'; detail: string };
 
-/**
- * Classify a source: one of the project's own subsystems; else another project
- * â€” a member by its mount alias, or a declared external whose producer is in
- * the family; else unresolvable.
- */
-function classifySource(world: ExportWorld, sourceId: string | undefined, label: string, context?: ProjectExportContext): EntrySource {
-  if (!sourceId) return { kind: 'unresolvable', detail: `"${label}" names no source subsystem and no item whose owner could supply one` };
+/** Classify a source: an own project-level type, one of the project's subsystems, a member or external by alias, else unresolvable. */
+function classifySource(world: ExportWorld, sourceId: string | 'own' | undefined, label: string, sources: ExportSources): EntrySource {
+  if (sourceId === 'own') return { kind: 'own' };
+  if (!sourceId) return { kind: 'unresolvable', detail: `"${label}" names no source and no item whose owner could supply one` };
   const sub = world.subsystems.get(sourceId);
-  const ownSub = sub && (!context || (context.family.owners.get(sourceId) ?? context.namespace) === context.namespace);
-  if (sub && ownSub) return { kind: 'subsystem', subsystem: sub };
-  if (context) {
-    const member = context.family.nodes.find((n) => n.namespace === sourceId && n.parent === context.namespace);
-    if (member) return { kind: 'project', namespace: member.namespace, label: `member "${member.mountAlias ?? sourceId}"` };
-    const node = context.family.nodes.find((n) => n.namespace === context.namespace);
-    const external = node?.externals.find((x) => x.alias === sourceId || (context.namespace && `${context.namespace}::${x.alias}` === sourceId));
-    if (external?.sourceKind === 'family' && external.producer !== undefined) {
-      return { kind: 'project', namespace: external.producer, label: `external "${external.alias}"` };
-    }
-    if (external?.sourceKind === 'path') {
-      return { kind: 'unresolvable', detail: `"${label}" re-exports from external "${external.alias}", which is found only through source.path â€” the scan cannot follow its table, so a project re-exports only from projects of its family` };
-    }
-    if (external) {
-      return { kind: 'unresolvable', detail: `"${label}" re-exports from external "${external.alias}", which does not resolve: ${external.problem}` };
-    }
+  if (sub) return { kind: 'subsystem', subsystem: sub };
+  const producer = sources.aliases.get(sourceId);
+  if (producer !== undefined) return { kind: 'project', namespace: producer, label: `"${sourceId}"` };
+  return {
+    kind: 'unresolvable',
+    detail: `"${label}" re-exports from "${sourceId}", which is neither a subsystem of this project, a member nor a declared external the scan read — a project re-exports only from its subsystems, members and externals of its family`,
+  };
+}
+
+/** Bind an own project-level type: the crate-root `pub struct`. */
+function bindOwnType(world: ExportWorld, owner: string, e: SystemPublicInterface, problems: ExportProblem[]): ResolvedExport | undefined {
+  const type = (world.types.get(e.typeDef!) ?? []).find((t) => !t.subsystem);
+  if (!type) {
+    problems.push({ kind: 'invalid', owner, publicName: e.as ?? e.id ?? localName(e.typeDef!), detail: `exports type "${e.typeDef}" as its own, but the project owns no project-level type of that id` });
+    return undefined;
   }
-  return { kind: 'unresolvable', detail: `"${label}" re-exports from "${sourceId}", which is neither a subsystem of this project, a member nor a declared external` };
+  const name = e.as ?? e.id ?? localName(type.id);
+  checkPublicName(name, owner, problems);
+  return { publicName: name, kind: 'type', source: owner, typeDef: type.id, via: [] };
 }
 
 /**
  * Bind one L0 entry against another project's table: only its public names can
  * be bound, and an entry declaring a wider audience than the export it
- * re-exports is a widening â€” bound at the source's reach, since a re-export can
+ * re-exports is a widening — bound at the source's reach, since a re-export can
  * narrow reach, never widen it.
  */
 function bindFromProject(
@@ -513,7 +522,7 @@ function bindFromProject(
   const requested = named ? localName(e.interface ?? e.component ?? e.typeDef!) : undefined;
   const picked = named ? table.entries.filter((x) => x.publicName === requested) : table.entries;
   if (named && picked.length === 0) {
-    problems.push({ kind: 'invalid', owner, publicName: e.as ?? e.id ?? requested, detail: `re-exports "${requested}" from ${source.label}, whose export table has no such public name â€” another project is reached only through its L0 exports` });
+    problems.push({ kind: 'invalid', owner, publicName: e.as ?? e.id ?? requested, detail: `re-exports "${requested}" from ${source.label}, whose export table has no such public name — another project is reached only through its L0 exports` });
     return [];
   }
   const declared = e.audience ?? 'instance';
@@ -536,197 +545,148 @@ function bindFromProject(
   });
 }
 
+/** Bind one L0 entry through its source subsystem's table. */
+function bindFromSubsystem(
+  world: ExportWorld,
+  owner: string,
+  e: SystemPublicInterface,
+  subsystem: SubsystemSpec,
+  subsystemTables: Map<string, ResolvedExportTable>,
+  index: number,
+  problems: ExportProblem[],
+): Candidate[] {
+  const sourceTable = subsystemTables.get(subsystem.id) ?? emptyTable(subsystem.id, 'subsystem');
+  if (e.component !== undefined || e.typeDef !== undefined || e.interface !== undefined) {
+    const bound = bindNamed(world, owner, subsystem, sourceTable,
+      { component: e.component, interface: e.interface, typeDef: e.typeDef },
+      // The default public name is the item's own LOCAL id: a member's L0 is
+      // read with its ids keyed under its project, and its entry names the
+      // item as the member wrote it.
+      () => e.as ?? e.id ?? localName(e.interface ?? e.component ?? e.typeDef!),
+      false, problems);
+    if (!bound) return [];
+    checkPublicName(bound.publicName, owner, problems);
+    const entry = withEntryMetadata(bound, e);
+    checkConsumable(entry, owner, problems);
+    return [{ entry, explicit: true, from: index }];
+  }
+  return sourceTable.entries.map((found) => {
+    const entry = withEntryMetadata({ ...found, via: [subsystem.id, ...found.via] }, e);
+    checkConsumable(entry, owner, problems);
+    return { entry, explicit: false, from: index };
+  });
+}
+
 /**
- * Resolve a project's L0 table through the subsystem tables â€” and, with a
- * context, through the tables of its members and family externals. The public
- * name is `as ?? id ?? interface ?? component` (or the typeDef) exactly as the
- * entry writes it, so no existing name moves; each entry's audience (default
- * instance) applies to every name it brings in.
+ * iexport_resolver.projectTable — resolve a project's L0 table through its
+ * subsystem tables, its own project-level types and the tables of the members
+ * and externals its aliases name. The public name is `as ?? id ?? interface ??
+ * component ?? typeDef` exactly as the entry writes it; each entry's audience
+ * (default instance) applies to every name it brings in. A project with no L0
+ * answers an empty table.
  */
 export function resolveProjectTable(
-  system: SystemSpec,
+  system: SystemSpec | null,
   subsystems: SubsystemSpec[],
   components: ComponentSpec[],
   interfaces: InterfaceSpec[],
   types: TypeSpec[],
   subsystemTables: Map<string, ResolvedExportTable>,
-  context?: ProjectExportContext,
+  sources: ExportSources,
 ): ResolvedExportTable {
+  // Steps 1-2: no L0, nothing exported.
+  if (!system) return emptyTable(sources.namespace, 'project');
+  // Step 3: the handed specs, indexed once.
   const world = worldOf(subsystems, components, interfaces, types);
-  const owner = context?.namespace ? context.namespace : system.name;
+  const owner = sources.namespace ? sources.namespace : system.name;
   const problems: ExportProblem[] = [];
   const candidates: Candidate[] = [];
+  // Steps 4-11: each entry, followed by its source's kind.
   (system.publicInterfaces ?? []).forEach((e, index) => {
     const label = e.as ?? e.id ?? e.interface ?? e.component ?? e.typeDef ?? `#${index + 1}`;
-    const source = classifySource(world, sourceOf(world, e), label, context);
-    if (source.kind === 'unresolvable') {
-      problems.push({ kind: 'invalid', owner, publicName: label, detail: source.detail });
-      return;
-    }
-    if (source.kind === 'project') {
-      const table = context!.projectTable(source.namespace);
-      if (!table) {
-        problems.push({ kind: 'named-cycle', owner, publicName: label, targets: [owner, source.namespace], detail: `re-exports "${label}" from ${source.label}, whose table leads back to this project without reaching the item` });
+    const source = classifySource(world, sourceOf(world, e), label, sources);
+    switch (source.kind) {
+      case 'own': {
+        const own = bindOwnType(world, owner, e, problems);
+        if (own) candidates.push({ entry: withEntryMetadata(own, e), explicit: true, from: index });
         return;
       }
-      candidates.push(...bindFromProject(owner, e, source, table, index, problems));
-      return;
-    }
-    const sourceTable = subsystemTables.get(source.subsystem.id) ?? emptyTable(source.subsystem.id, 'subsystem');
-    if (e.component !== undefined || e.typeDef !== undefined || e.interface !== undefined) {
-      const bound = bindNamed(world, owner, source.subsystem, sourceTable,
-        { component: e.component, interface: e.interface, typeDef: e.typeDef },
-        // The default public name is the item's own LOCAL id: a member's L0 is
-        // read with its ids qualified into its mount, and its entry names the
-        // item as the member wrote it.
-        () => e.as ?? e.id ?? localName(e.interface ?? e.component ?? e.typeDef!),
-        false, problems);
-      if (!bound) return;
-      checkPublicName(bound.publicName, owner, problems);
-      const entry = withEntryMetadata(bound, e);
-      checkConsumable(entry, owner, problems);
-      candidates.push({ entry, explicit: true, from: index });
-      return;
-    }
-    for (const found of sourceTable.entries) {
-      const entry = withEntryMetadata({ ...found, via: [source.subsystem.id, ...found.via] }, e);
-      checkConsumable(entry, owner, problems);
-      candidates.push({ entry, explicit: false, from: index });
+      case 'subsystem':
+        candidates.push(...bindFromSubsystem(world, owner, e, source.subsystem, subsystemTables, index, problems));
+        return;
+      case 'project': {
+        const table = sources.producerTables.get(source.namespace);
+        if (table === null) {
+          problems.push({ kind: 'named-cycle', owner, publicName: label, targets: [owner, source.namespace], detail: `re-exports "${label}" from ${source.label}, whose table leads back to this project without reaching the item` });
+          return;
+        }
+        if (table === undefined) {
+          problems.push({ kind: 'invalid', owner, publicName: label, detail: `re-exports "${label}" from ${source.label}, whose table the scan did not resolve` });
+          return;
+        }
+        candidates.push(...bindFromProject(owner, e, source, table, index, problems));
+        return;
+      }
+      default:
+        problems.push({ kind: 'invalid', owner, publicName: label, detail: source.detail });
     }
   });
+  // Steps 12-13: settled as a subsystem table is settled.
   return settle(owner, 'project', candidates, problems);
 }
 
-// ---- the Index: memoized on the scan ----------------------------------------
+// ---- the Index: projections of what the scan resolved -------------------------
 
-/** The tables a scan resolved to, dropped with the scan's subsystem list. */
-const subsystemMemo = new WeakMap<SubsystemSpec[], Map<string, ResolvedExportTable>>();
-/** The project tables per scan, by project namespace, keyed again on the L0 entries each read. */
-const projectMemo = new WeakMap<SubsystemSpec[], Map<string, { key: string; table: ResolvedExportTable }>>();
-/** The project namespaces being resolved on the current path â€” a project met again is a cycle. */
-const resolving = new Set<string>();
-
-/** The scan's subsystem tables, resolved once per scan. */
-function scanTables(subsystems: SubsystemSpec[]): Map<string, ResolvedExportTable> {
-  const memo = subsystemMemo.get(subsystems);
-  if (memo) return memo;
-  const tables = resolveSubsystemTables(subsystems, loadComponentSpecs(), loadInterfaceSpecs(), loadTypeSpecs());
-  subsystemMemo.set(subsystems, tables);
-  return tables;
-}
-
-/** iexport_index.resolveSubsystemExports â€” one subsystem's resolved export table. */
+/** iexport_index.resolveSubsystemExports — one subsystem's table, as the scan resolved it. */
 export function resolveSubsystemExportTable(subsystemId: string): ResolvedExportTable {
-  // Steps 1-12: the scan's subsystems, and their tables resolved once per scan.
-  const tables = scanTables(loadSubsystemSpecs());
-  // Steps 13-14: the requested table, empty for a subsystem the tree does not have.
-  return tables.get(subsystemId) ?? emptyTable(subsystemId, 'subsystem');
+  // Step 1: the roots the current scan recorded, with their subsystem tables.
+  const roots = listProjectRoots();
+  // Step 2: a subsystem key is unique to the root that declares it.
+  for (const root of roots) {
+    const table = root.subsystemExports.get(subsystemId);
+    // Step 3: that table.
+    if (table) return table;
+  }
+  return emptyTable(subsystemId, 'subsystem');
 }
 
-/**
- * iexport_index.resolveProjectExports â€” a project's resolved L0 export table:
- * the bound root's, or the member project's at the given namespace.
- */
+/** iexport_index.resolveProjectExports — a project's L0 table, as the scan resolved it. */
 export function resolveProjectExportTable(project?: string): ResolvedExportTable {
   const namespace = project ?? '';
-  // Steps 1-5: the member root's own L0 as the scan recorded it, else the bound root's.
-  const system = namespace
-    ? listProjectRoots().find((r) => r.namespace === namespace)?.system ?? null
-    : loadSystemSpec();
-  // Steps 6-7: no L0, nothing exported.
-  if (!system) return emptyTable(namespace, 'project');
-  // Steps 8-9: memoized on the scan, the project and the L0 entries it read.
-  const subsystems = loadSubsystemSpecs();
-  const key = JSON.stringify([system.name, system.publicInterfaces ?? []]);
-  const perScan = projectMemo.get(subsystems) ?? new Map<string, { key: string; table: ResolvedExportTable }>();
-  projectMemo.set(subsystems, perScan);
-  const hit = perScan.get(namespace);
-  if (hit && hit.key === key) return hit.table;
-  // Steps 10-12: the specs a legacy entry's source is inferred from, and the graph.
-  const components = loadComponentSpecs();
-  const types = loadTypeSpecs();
-  const family = projectFamilyGraph();
-  // Steps 13-24: each entry bound through its source's table (a project's
-  // through that project's own table; one already on this path is a cycle),
-  // settled and memoized.
-  resolving.add(namespace);
-  try {
-    const subsystemTables = new Map(subsystems.map((sub) => [sub.id, resolveSubsystemExportTable(sub.id)] as const));
-    const table = resolveProjectTable(system, subsystems, components, loadInterfaceSpecs(), types, subsystemTables, {
-      namespace,
-      family,
-      projectTable: (other) => (resolving.has(other) ? null : resolveProjectExportTable(other || undefined)),
-    });
-    perScan.set(namespace, { key, table });
-    // Step 25: the table.
-    return table;
-  } finally {
-    resolving.delete(namespace);
-  }
-}
-
-// ---- export usage -------------------------------------------------------------
-
-/** The type identifiers a table's component entries' signatures name, transitively through type fields. */
-function signatureClosure(entries: ResolvedExport[], interfaces: InterfaceSpec[], types: TypeSpec[]): Set<string> {
-  const closure = new Set<string>();
-  const queue: string[] = [];
-  for (const entry of entries) {
-    if (entry.kind !== 'component') continue;
-    for (const intf of interfaces) {
-      if (intf.component !== entry.component || (entry.interface && intf.id !== entry.interface)) continue;
-      for (const m of intf.methods) queue.push(...methodTypeRefs(m));
-    }
-  }
-  while (queue.length) {
-    const ref = queue.shift()!;
-    for (const t of types) {
-      if (closure.has(t.id) || !matchTypeRef(ref, t.id)) continue;
-      closure.add(t.id);
-      for (const f of t.fields) queue.push(...extractTypeIdentifiers(f.type));
-    }
-  }
-  return closure;
+  // Step 1: the roots the current scan recorded, with their L0 tables.
+  const roots = listProjectRoots();
+  // Step 2: the root with the key — the bound root when none is given.
+  const root = roots.find((r) => r.namespace === namespace);
+  // Step 3: its table, or an empty one.
+  return root?.exports ?? emptyTable(namespace, 'project');
 }
 
 /**
- * iexport_index.usage â€” map one consumer's references into one producer onto
- * the producer's resolved project table: each reference that lands on a
- * public name the consumer may see counts that name as used, with the member
- * it reaches; every other reference is unexported. A type the producer exports
- * only inside a signature closure is neither used nor unexported in stage 2.
+ * iexport_index.usage — one consumer's references into one producer, as the
+ * scan bound them: each reference bound to a public name counts that name, with
+ * the member it reaches; every other reference is unexported.
  */
 export function exportUsageOf(consumer: string, producer: string): ExportUsage {
   // Steps 1-2: the consumer's references into the producer.
   const references = projectFamilyGraph().references.filter((r) => r.consumer === consumer && r.producer === producer);
   // Steps 3-4: none, an empty usage.
   if (references.length === 0) return { consumer, producer, used: [], unexported: [] };
-  // Step 5: the producer's project table.
   const table = resolveProjectExportTable(producer || undefined);
-  // Step 6: a family consumer sees every audience (project is the widest reach inward).
-  const visible = table.entries;
-  const interfaces = loadInterfaceSpecs();
-  const types = loadTypeSpecs();
-  const componentIds = new Set(loadComponentSpecs().map((c) => c.id));
-  const closure = signatureClosure(visible, interfaces, types);
   const used = new Map<string, { kind: 'component' | 'type'; members: Set<string> }>();
   const unexported: CrossProjectReference[] = [];
-  // Steps 7-13: each reference, mapped.
+  // Step 5: each reference counted under the name it bound to.
   for (const ref of references) {
-    const landed = landingEntries(ref, visible, interfaces, componentIds);
-    if (landed.length === 0) {
-      if (ref.position === 'type' && [...closure].some((id) => matchTypeRef(ref.target, id) || id === ref.target)) continue;
+    const entry = ref.publicName !== undefined ? table.entries.find((e) => e.publicName === ref.publicName) : undefined;
+    if (!entry) {
       unexported.push(ref);
       continue;
     }
-    for (const entry of landed) {
-      const slot = used.get(entry.publicName) ?? { kind: entry.kind, members: new Set<string>() };
-      if (entry.kind === 'type') slot.members.add('type');
-      else if (ref.member !== undefined) slot.members.add(ref.member);
-      used.set(entry.publicName, slot);
-    }
+    const slot = used.get(entry.publicName) ?? { kind: entry.kind, members: new Set<string>() };
+    if (entry.kind === 'type') slot.members.add('type');
+    else if (ref.member !== undefined) slot.members.add(ref.member);
+    used.set(entry.publicName, slot);
   }
-  // Step 14: sorted by name, members sorted.
+  // Step 6: names sorted, each name's members sorted.
   return {
     consumer,
     producer,
@@ -735,34 +695,4 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
       .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort() })),
     unexported,
   };
-}
-
-/**
- * The visible entries one reference lands on: a component target by its
- * canonical component (and, for a method reached through a narrowed entry, only
- * where the narrowing declares it); a type target by the entries exporting that
- * type; a re-export source (a subsystem) on none.
- */
-function landingEntries(
-  ref: CrossProjectReference,
-  visible: ResolvedExport[],
-  interfaces: InterfaceSpec[],
-  componentIds: Set<string>,
-): ResolvedExport[] {
-  if (componentIds.has(ref.target)) {
-    return visible.filter((e) => {
-      if (e.kind !== 'component' || e.component !== ref.target) return false;
-      if (!e.interface || ref.member === undefined || ref.member.startsWith('capability:')) return true;
-      return interfaces.some((i) => i.id === e.interface && i.methods.some((m) => m.name === ref.member));
-    });
-  }
-  if (ref.position === 'type' || ref.position === 'reexport') {
-    // A type reference names the type through its subsystem (`operations::route-id`),
-    // which is longer than the exported type's own id, so it is also matched
-    // against the type as its declaring subsystem qualifies it.
-    const typed = visible.filter((e) => e.kind === 'type' && (e.typeDef === ref.target
-      || matchTypeRef(ref.target, e.typeDef ?? '') || ref.target === `${e.source}::${localName(e.typeDef ?? '')}`));
-    if (typed.length > 0 || ref.position === 'type') return typed;
-  }
-  return [];
 }

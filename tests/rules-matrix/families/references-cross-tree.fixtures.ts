@@ -88,7 +88,7 @@ function telemetryHubPin(sibling: string, methods: string[]): string {
     projectName: `FleetWorks::${sibling}`,
     interfaces: [
       {
-        id: 'itelemetry_hub',
+        id: 'telemetry-hub',
         name: 'Telemetry Hub',
         component: 'telemetry-hub',
         audience: 'project',
@@ -181,7 +181,7 @@ export default [
           projectName: 'FleetWorks',
           interfaces: [
             {
-              id: 'itelemetry_hub',
+              id: 'telemetry-hub',
               name: 'Telemetry Hub',
               component: 'telemetry-hub',
               audience: 'project',
@@ -251,7 +251,7 @@ export default [
           projectName: 'FleetWorks',
           interfaces: [
             {
-              id: 'itelemetry_hub',
+              id: 'telemetry-hub',
               name: 'Telemetry Hub',
               component: 'telemetry-hub',
               audience: 'project',
@@ -290,7 +290,7 @@ export default [
           projectName: 'FleetWorks',
           interfaces: [
             {
-              id: 'itelemetry_hub',
+              id: 'telemetry-hub',
               name: 'Telemetry Hub',
               component: 'telemetry-hub',
               audience: 'project',
@@ -335,7 +335,7 @@ export default [
           projectName: 'FleetWorks',
           interfaces: [
             {
-              id: 'irelay_gateway',
+              id: 'relay-gateway',
               name: 'Relay Gateway',
               component: 'relay-gateway',
               audience: 'project',
@@ -377,7 +377,7 @@ export default [
           projectName: 'FleetWorks',
           interfaces: [
             {
-              id: 'irelay_gateway',
+              id: 'relay-gateway',
               name: 'Relay Gateway',
               component: 'relay-gateway',
               audience: 'project',

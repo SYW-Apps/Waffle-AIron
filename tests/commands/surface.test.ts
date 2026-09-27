@@ -11,8 +11,6 @@ import {
   invalidateSpecCache,
 } from '../../src/core/specs.js';
 import { runSurface } from '../../src/commands/surface.js';
-import { listSnapshots } from '../../src/core/surfaces.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -198,141 +196,22 @@ describe('wairon surface export — multi-portal OpenAPI', () => {
 });
 
 // ---------------------------------------------------------------------------
-// `wairon surface externals` — the external-surface discovery table: one row
-// per vendored snapshot with sourceKind, key, origin, freshness, and the
-// interface ids it exposes.
+// `wairon surface pin` and `wairon surface externals` are gone (stage 3): a
+// project consumes another through `externals` and `wairon externals`.
 // ---------------------------------------------------------------------------
 
-describe('wairon surface externals — external-surface discovery', () => {
+describe('wairon surface — the retired family actions', () => {
   let rootDir: string;
-  let childDir: string;
-  let logged: string[];
-
-  beforeEach(async () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-ext-'));
-    buildTwoPortalProject(rootDir);
-    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid', status: 'draft' }), 'kid');
-    invalidateSpecCache();
-    childDir = path.join(rootDir, 'packages', 'kid');
-    setProjectRoot(childDir);
-    await runSurface('pin', {});
-    logged = [];
-    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { logged.push(args.join(' ')); });
-  });
-
   afterEach(() => {
-    vi.restoreAllMocks();
     setProjectRoot(null);
     invalidateSpecCache();
     try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
   });
 
-  it('prints one row per entry: sourceKind, key, origin, freshness, interface ids', async () => {
-    setProjectRoot(childDir);
-    await runSurface('externals', {});
-
-    const output = logged.join('\n');
-    // The family surface pinned from the chaining parent...
-    expect(output).toMatch(/parent\s+.*multi-portal-system/);
-    // ...and the core-sub sibling surface, both generated and fresh.
-    expect(output).toMatch(/sibling\s+.*multi-portal-system::core-sub/);
-    expect(output).toContain('[generated]');
-    expect(output).toContain('fresh');
-    expect(output).not.toContain('stale');
-    // The discovery summary names the exposed interface ids.
-    expect(output).toContain('gateway');
-    expect(output).toContain('admin');
-  });
-
-  it('says so when no external surfaces are stored', async () => {
-    // The PARENT holds no vendored snapshots — a pin writes into the child.
-    setProjectRoot(rootDir);
-    await runSurface('externals', {});
-    expect(logged.join('\n')).toContain('No external surfaces available');
-  });
-
-  it('an unknown action names externals among the supported ones', async () => {
-    setProjectRoot(childDir);
-    await expect(runSurface('bogus', {})).rejects.toThrow(/externals/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// `wairon surface pin` — a chained child PULLS its family and sibling surfaces.
-//
-// Delivery used to be pushed: every parent lock wrote (children × subsystems)
-// snapshots into every child's working tree, on the parent's schedule, and the
-// hosted lock never did it at all. A pin is the child owner's deliberate import
-// — taken while the parent is on disk, committed with the child — so a child
-// cloned WITHOUT its parent still has contracts to validate against.
-// ---------------------------------------------------------------------------
-
-describe('wairon surface pin — the child pulls its family surfaces', () => {
-  let rootDir: string;
-  let childDir: string;
-  let logged: string[];
-
-  beforeEach(() => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-pin-'));
+  it.each(['pin', 'externals'])('refuses `surface %s`, pointing at `wairon externals`', async (action) => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-gone-'));
     buildTwoPortalProject(rootDir);
-    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid', status: 'draft' }), 'kid');
-    invalidateSpecCache();
-    childDir = path.join(rootDir, 'packages', 'kid');
-    logged = [];
-    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { logged.push(args.join(' ')); });
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    setProjectRoot(null);
-    invalidateSpecCache();
-    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
-  });
-
-  const heldBy = (dir: string): string[] => listSnapshots(dir).map((s) => s.projectName).sort();
-  const output = (): string => logged.join(' | ');
-
-  it('pins the family surface and each sibling surface into the child — and writes nothing into the parent', async () => {
-    setProjectRoot(childDir);
-    await runSurface('pin', {});
-
-    expect(heldBy(childDir)).toEqual(['multi-portal-system', 'multi-portal-system::core-sub']);
-    expect(heldBy(rootDir)).toEqual([]);
-    expect(output()).toMatch(/Pinned 2 family surface/);
-  });
-
-  it('a re-pin against an unchanged parent rewrites nothing', async () => {
-    setProjectRoot(childDir);
-    await runSurface('pin', {});
-    logged = [];
-
-    await runSurface('pin', {});
-
-    expect(output()).toContain('already up to date');
-  });
-
-  it('what was pinned is what `surface externals` reports — parent and sibling, fresh', async () => {
-    setProjectRoot(childDir);
-    await runSurface('pin', {});
-    logged = [];
-
-    await runSurface('externals', {});
-
-    expect(output()).toMatch(/parent +.*multi-portal-system/);
-    expect(output()).toMatch(/sibling +.*multi-portal-system::core-sub/);
-    expect(output()).toContain('fresh');
-  });
-
-  it('at a top root there is no family to pin, and it says so', async () => {
     setProjectRoot(rootDir);
-    await runSurface('pin', {});
-
-    expect(output()).toContain('not a chained subproject');
-    expect(heldBy(rootDir)).toEqual([]);
-  });
-
-  it('an unknown action names pin among the supported ones', async () => {
-    setProjectRoot(childDir);
-    await expect(runSurface('bogus', {})).rejects.toThrow(/pin/);
+    await expect(runSurface(action, {})).rejects.toThrow(/supported: export, import, list\)[\s\S]*wairon externals/);
   });
 });

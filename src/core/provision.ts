@@ -22,6 +22,11 @@ import {
   invalidateSpecCache,
   assertContainedProjectPath,
   rebaseReference,
+  // The member moves (moveMountToMembers, normalizeReferences) read the graph
+  // and write through the spec repository's two maintenance writes.
+  graph,
+  deleteMount,
+  normalizeReferences as normalizeSpecReferences,
   // The ONE reference-field table (see core/specs.ts). A rename drives it
   // over raw files, a move over the typed store; the list of where a spec
   // names another spec is written once so neither can go stale alone.
@@ -539,7 +544,10 @@ function buildRenameMap(subsystemId: string, externalize: boolean): Map<string, 
   const add = (bare: string, namespaced: string) =>
     externalize ? map.set(bare, namespaced) : map.set(namespaced, bare);
 
-  const comps = loadComponentSpecs().filter((c) => c.subsystem === subsystemId);
+  // Loaded through the parent, a member's own subsystem is keyed under the
+  // member (stage 3): `<member key>::<subsystem>`, never merged with the mount.
+  const owning = new Set([subsystemId, `${prefix}${subsystemId}`]);
+  const comps = loadComponentSpecs().filter((c) => owning.has(c.subsystem));
   const compIds = new Set(comps.map((c) => c.id));
   for (const c of comps) {
     const bare = c.id.startsWith(prefix) ? c.id.slice(prefix.length) : c.id;
@@ -551,7 +559,7 @@ function buildRenameMap(subsystemId: string, externalize: boolean): Map<string, 
     add(bare, `${prefix}${bare}`);
   }
   for (const t of loadTypeSpecs()) {
-    if (t.subsystem !== subsystemId) continue;
+    if (!owning.has(t.subsystem ?? '')) continue;
     const bare = t.id.startsWith(prefix) ? t.id.slice(prefix.length) : t.id;
     add(bare, `${prefix}${bare}`);
   }
@@ -1188,4 +1196,49 @@ function collectMentions(specsDir: string, methodName: string, moved: InterfaceS
  */
 function identifierPattern(methodName: string): RegExp {
   return new RegExp(`(?<![A-Za-z0-9_])${methodName}(?![A-Za-z0-9_])`);
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3's member moves (core_orchestrator moveMountToMembers /
+// normalizeReferences) — the two writes the chaining migration drives per
+// member: a legacy L1 mount becomes a `members` entry, and a spec's
+// references are re-written in their canonical form.
+// ---------------------------------------------------------------------------
+
+/**
+ * core_orchestrator.moveMountToMembers — move one legacy L1 mount of the bound
+ * project into its `members`: its projectPath as the member's path and its
+ * description as the member's description, then delete the L1 document. The
+ * caller carries the mount's other fields first. Idempotent: a mount already
+ * moved writes nothing.
+ */
+export function moveMountToMembers(alias: string): boolean {
+  // Step 1: the graph of the bound root — the member the alias declares, with its legacy mount.
+  const family = graph();
+  const member = family.nodes.find((n) => n.parent === '' && n.mountAlias === alias);
+  const mount = member?.legacyMount ?? null;
+  // Steps 2-3: no legacy mount under the alias — already moved, or nothing to move.
+  if (!mount || member?.mountForm !== 'mount') {
+    if (member?.mountForm === 'members') return false;
+    throw new WaironError(`Refusing to move "${alias}" into \`members\`: the bound project declares no legacy L1 mount under that alias, and no member.`);
+  }
+  // Step 4: declare the member — refused there when the alias holds a different one.
+  projectConfigRepository.declareMember(alias, {
+    path: mount.projectPath!,
+    ...(mount.description ? { description: mount.description } : {}),
+  });
+  // Step 5: delete the L1 mount document, so the member is declared in one place.
+  deleteMount(alias);
+  // Step 6: it wrote.
+  return true;
+}
+
+/**
+ * core_orchestrator.normalizeReferences — re-save one spec of the family with
+ * every reference in its canonical stage-3 form through the spec repository;
+ * targets never change.
+ */
+export function normalizeReferences(kind: string, id: string): boolean {
+  // Step 1.
+  return normalizeSpecReferences(kind, id);
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolveProjectTable, resolveSubsystemTables } from '../../src/core/exports.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec, SystemSpec, TypeSpec } from '../../src/models/index.js';
+import type { ResolvedExportTable } from '../../src/models/exports.js';
 
 // ---------------------------------------------------------------------------
 // The export index's resolution, over hand-built specs: every table resolved
@@ -150,8 +151,10 @@ describe('export index: the project table', () => {
     ]),
     sub('shipping', [{ type: 'REST', details: 'Shipping API', component: 'shipping_portal', interface: 'ishipping' }]),
   ];
-  const project = (entries: unknown[]) =>
-    resolveProjectTable(system(entries), SUBSYSTEMS, COMPONENTS, INTERFACES, TYPES, tables(SUBSYSTEMS));
+  /** No member or external to re-export from: the bound root alone. */
+  const NO_SOURCES = { namespace: '', aliases: new Map<string, string>(), producerTables: new Map<string, ResolvedExportTable | null>(), audienceOf: new Map<string, string>() };
+  const project = (entries: unknown[], types: TypeSpec[] = TYPES, sources = NO_SOURCES) =>
+    resolveProjectTable(system(entries), SUBSYSTEMS, COMPONENTS, INTERFACES, types, tables(SUBSYSTEMS), sources);
 
   it('reads a legacy entry as a re-export and keeps its published name: id, then interface, then component', () => {
     const t = project([
@@ -180,5 +183,37 @@ describe('export index: the project table', () => {
     const t = project([{ id: 'partner-api', type: 'REST', details: 'd' }]);
     expect(t.entries).toEqual([]);
     expect(t.problems).toEqual([expect.objectContaining({ kind: 'invalid', publicName: 'partner-api' })]);
+  });
+
+  it('answers an empty table for a project with no L0', () => {
+    const t = resolveProjectTable(null, SUBSYSTEMS, COMPONENTS, INTERFACES, TYPES, tables(SUBSYSTEMS), { ...NO_SOURCES, namespace: 'billing' });
+    expect(t).toEqual({ owner: 'billing', level: 'project', entries: [], problems: [] });
+  });
+
+  it('binds an own project-level type (`{ typeDef }` with no `from`) as the crate-root `pub struct`', () => {
+    const t = project([{ typeDef: 'currency-code', audience: 'project' }], [...TYPES, type('currency-code')]);
+    expect(t.entries).toEqual([expect.objectContaining({ publicName: 'currency-code', kind: 'type', typeDef: 'currency-code', audience: 'project', via: [] })]);
+    expect(t.problems).toEqual([]);
+  });
+
+  it('reports an own typeDef the project owns at no project level as invalid', () => {
+    const t = project([{ typeDef: 'currency-code' }]);
+    expect(t.entries).toEqual([]);
+    expect(t.problems).toEqual([expect.objectContaining({ kind: 'invalid' })]);
+  });
+
+  it('re-exports from a member by alias through its resolved table, and a producer on the path is a named cycle', () => {
+    const billing: ResolvedExportTable = {
+      owner: 'billing', level: 'project', problems: [],
+      entries: [{ publicName: 'invoicing', kind: 'component', source: 'billing::billing', component: 'billing::invoice_portal', componentType: 'Portal', audience: 'project', via: [] }],
+    };
+    const through = project([{ from: 'bill', component: 'invoicing', audience: 'project' }], TYPES, {
+      namespace: '', aliases: new Map([['bill', 'billing']]), producerTables: new Map([['billing', billing]]), audienceOf: new Map([['billing', 'project']]),
+    });
+    expect(through.entries).toEqual([expect.objectContaining({ publicName: 'invoicing', component: 'billing::invoice_portal', via: ['billing'] })]);
+    const cycle = project([{ from: 'bill', component: 'invoicing' }], TYPES, {
+      namespace: '', aliases: new Map([['bill', 'billing']]), producerTables: new Map([['billing', null]]), audienceOf: new Map(),
+    });
+    expect(cycle.problems.map((p) => p.kind)).toEqual(['named-cycle']);
   });
 });

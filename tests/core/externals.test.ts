@@ -150,7 +150,8 @@ describe('stage 2b — the project graph and declared externals', () => {
     const roots = at(f.root, () => listProjectRoots());
     expect(roots.map((r) => r.namespace)).toEqual(['', 'billing', 'dispatch']);
     expect(roots[1]).toMatchObject({ parent: '', mountAlias: 'billing', directory: path.resolve(f.billing) });
-    expect(roots[1].system?.publicInterfaces?.[0]).toMatchObject({ from: 'billing', component: 'billing::invoice-portal' });
+    // Keyed into the member's key: its own subsystem `billing` is `billing::billing` (stage 3).
+    expect(roots[1].system?.publicInterfaces?.[0]).toMatchObject({ from: 'billing::billing', component: 'billing::invoice-portal' });
     expect(roots[1].config?.id).toBe('billing');
   });
 

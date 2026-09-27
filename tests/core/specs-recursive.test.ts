@@ -121,10 +121,11 @@ describe('recursive subproject loading and namespacing', () => {
     invalidateSpecCache();
     const index = scanAllSpecs();
 
-    // Verify subsystems
+    // Verify subsystems: the legacy mount declares the member and is no subsystem
+    // itself (stage 3); the member, with no id of its own, is keyed by its alias.
     const billingSub = index.subsystems.find(s => s.id === 'billing');
     const invoiceSub = index.subsystems.find(s => s.id === 'billing::invoice');
-    expect(billingSub).toBeDefined();
+    expect(billingSub).toBeUndefined();
     expect(invoiceSub).toBeDefined();
 
     // Verify component namespacing
@@ -377,23 +378,22 @@ describe('recursive subproject loading and namespacing', () => {
     
     // Depth 0 (non-recursive)
     invalidateSpecCache();
+    // Every level here is a legacy mount (a member declaration, never a
+    // subsystem), and no member declares an id, so each is keyed by its alias path.
     const index0 = scanAllSpecs({ recursive: false });
-    expect(index0.subsystems.find(s => s.id === 'billing')).toBeDefined();
-    expect(index0.subsystems.find(s => s.id === 'billing::invoice')).toBeUndefined();
-    expect(index0.subsystems.find(s => s.id === 'billing::invoice::tax')).toBeUndefined();
+    expect(index0.subsystems.map(s => s.id)).toEqual([]);
 
-    // Depth 1 (recursive up to depth 1)
+    // Depth 1 (recursive up to depth 1): billing is read; its own mount of invoice declares a member.
     invalidateSpecCache();
     const index1 = scanAllSpecs({ recursive: 1 });
-    expect(index1.subsystems.find(s => s.id === 'billing')).toBeDefined();
-    expect(index1.subsystems.find(s => s.id === 'billing::invoice')).toBeDefined();
+    expect(index1.subsystems.find(s => s.id === 'billing::invoice')).toBeUndefined();
     expect(index1.subsystems.find(s => s.id === 'billing::invoice::tax')).toBeUndefined();
 
     // Depth 2 (recursive up to depth 2 / full)
     invalidateSpecCache();
     const index2 = scanAllSpecs({ recursive: true });
-    expect(index2.subsystems.find(s => s.id === 'billing')).toBeDefined();
-    expect(index2.subsystems.find(s => s.id === 'billing::invoice')).toBeDefined();
+    expect(index2.subsystems.find(s => s.id === 'billing')).toBeUndefined();
+    expect(index2.subsystems.find(s => s.id === 'billing::invoice')).toBeUndefined();
     expect(index2.subsystems.find(s => s.id === 'billing::invoice::tax')).toBeDefined();
 
     // Clean up grandchild directory since it's not tracked by afterEach

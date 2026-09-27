@@ -140,6 +140,7 @@ methods:
       only through `members`.
     calls:
       - spec_file_store.remove
+    symbol: removeLegacyMount
   - name: normalizeReferences
     narrative: []
     detail: intent
@@ -155,6 +156,7 @@ methods:
     calls:
       - spec_file_store.read
       - spec_file_store.write
+    symbol: writeCanonicalReferences
 lint:
   allow:
     - code: UNNARRATED_COMPLEXITY
@@ -165,4 +167,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-09-27T11:02:35.796Z'
+updatedAt: '2026-09-27T12:19:36.857Z'

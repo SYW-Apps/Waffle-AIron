@@ -138,8 +138,8 @@ program
 // cli_runner.runLock — the local `wairon lock` workflow: gate on the
 // as-complete dry-run validation (an invalid tree is never frozen), freeze the
 // tree through the lock adapter, and refresh the generated outputs. A parent
-// lock writes nothing into its chained children: each child pins its own family
-// surfaces (`wairon surface pin`) on its own schedule.
+// lock writes nothing into its members: each member pins what it consumes
+// (`wairon externals pin`) on its own schedule.
 //
 // Why validate-as-complete: the conformance gate downgrades completeness
 // errors to warnings while a spec is `draft`, so a draft tree can "pass" yet
@@ -853,7 +853,7 @@ program
 
 program
   .command('surface <action>')
-  .description('public surface exchange: export | import | list | externals | pin')
+  .description('public surface exchange: export | import | list')
   .option('--audience <level>', 'export ceiling: project | department | instance | partner | external (default instance)')
   .option('--format <fmt>', 'export format: native | openapi (default native)')
   .option('--out <path>', 'export output path (else print)')

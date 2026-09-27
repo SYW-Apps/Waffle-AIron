@@ -124,6 +124,10 @@ export {
   // backfillChainedSubprojectConfigs: what `wairon doctor` reports and repairs.
   findChainingSubprojectsMissingConfig,
   backfillChainedSubprojectConfigs,
+  // spec_maintenance_portal moveMountToMembers / normalizeReferences: the
+  // chaining migration's member move and reference normalization.
+  moveMountToMembers,
+  normalizeReferences,
 } from './provision.js';
 
 // The tree's identity (approval_portal computeStateId) — what a lock is taken

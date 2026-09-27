@@ -471,11 +471,11 @@ function convertLegacyPins(ctx: Planning): void {
   for (const node of ctx.family.nodes) {
     if (node.parent === undefined) continue;
     // Steps 21-22: the member's vendored surfaces, with their family role.
-    const vendored = runWithProjectRoot(node.directory, () => surfaces.listExternalInterfaces());
+    const pins = runWithProjectRoot(node.directory, () => surfaces.listFamilyPins());
     // Step 23.
-    for (const surface of vendored) {
-      if (surface.sourceKind === 'sibling') addSorted(entryOf(ctx, node).supersededPins, surface.projectName);
-      else if (surface.sourceKind === 'parent') convertParentPin(ctx, node, node.parent);
+    for (const pin of pins) {
+      if (pin.role === 'sibling') addSorted(entryOf(ctx, node).supersededPins, pin.key);
+      else convertParentPin(ctx, node, node.parent);
     }
   }
 }

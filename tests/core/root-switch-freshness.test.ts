@@ -8,7 +8,6 @@ import {
   saveSystemSpec, saveSubsystemSpec, invalidateSpecCache, workspaceFor, loadSubsystemSpecs,
 } from '../../src/core/specs.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
-import { pinFamilySurfaces, listSnapshots } from '../../src/core/surfaces.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -90,18 +89,19 @@ describe('the spec index re-verifies a tree on a root switch', () => {
       .toBe('edited by an editor, not by wairon');
   });
 
-  it('a family pin projects the parent as it is now, not as this process last scanned it', () => {
+  it('the parent reads its member as it is now, not as this process last scanned it', () => {
     const { root, kidDir } = family();
+    // Warm the parent's scan (it reads its member kid too), then bind the child.
+    expect(runWithProjectRoot(root, () => loadSubsystemSpecs().map(s => s.id))).not.toContain('kid::late-sub');
     setProjectRoot(kidDir);
-    expect(pinFamilySurfaces()).not.toBeNull();
-    expect(listSnapshots(kidDir).map(s => s.projectName)).not.toContain('root-system::late-sub');
+    workspaceFor(kidDir).loadSubsystemSpecs();
 
-    // A sibling subsystem lands in the parent (a git pull), behind the store's back.
-    const siblingFile = workspaceFor(root).getSubsystemPath('parent-sub').replace(/parent-sub/g, 'late-sub');
-    fs.mkdirSync(path.dirname(siblingFile), { recursive: true });
-    writeYamlFile(siblingFile, subsystem('late-sub'));
+    // A subsystem lands in the member (a git pull), behind the store's back.
+    const lateFile = path.join(kidDir, '.wai', 'specs', 'late-sub', '.index.yaml');
+    fs.mkdirSync(path.dirname(lateFile), { recursive: true });
+    writeYamlFile(lateFile, subsystem('late-sub', { parentSystem: 'kid-system' }));
 
-    pinFamilySurfaces();
-    expect(listSnapshots(kidDir).map(s => s.projectName)).toContain('root-system::late-sub');
+    // Well inside the signature TTL: the root switch makes the parent's read fresh.
+    expect(runWithProjectRoot(root, () => loadSubsystemSpecs().map(s => s.id))).toContain('kid::late-sub');
   });
 });

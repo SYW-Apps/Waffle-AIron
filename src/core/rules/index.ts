@@ -195,7 +195,7 @@ export function makeScopeFilter(opts: ScopeFilterOptions): (specId: string) => b
     }
 
     const t = types.find(type => type.id === specId);
-    if (t) return t.subsystem === scopeSubsystem || (t.subsystem ? t.subsystem.startsWith(`${scopeSubsystem}::`) : false);
+    if (t) return t.subsystem === scopeSubsystem || (t.subsystem ? t.subsystem.startsWith(`${scopeSubsystem}::`) : specId.startsWith(`${scopeSubsystem}::`));
 
     if (specId.startsWith(`${scopeSubsystem}::`)) return true;
 
@@ -361,15 +361,32 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     return 'backend';
   };
 
+  // Every alias any project of the family declares, with the keys it names.
+  const aliasTargets = new Map<string, string[]>();
+  for (const node of opts.projectFamily?.nodes ?? []) {
+    for (const [alias, key] of node.aliases) {
+      if (key === '' || key === alias) continue;
+      aliasTargets.set(alias, [...new Set([...(aliasTargets.get(alias) ?? []), key])]);
+    }
+  }
+
   const isTypeResolved = (ref: string, generics: Set<string>): boolean => {
     const refLower = ref.toLowerCase();
     if (BUILTIN_TYPES.has(refLower)) return true;
     if (generics.has(refLower)) return true;
 
-    return types.some(spec => typeMatchesRef(spec, ref));
+    if (types.some(spec => typeMatchesRef(spec, ref))) return true;
+    // A type named through an alias (`billing::money`, `billing.money`) is read
+    // the way the scan reads a reference, without position: the alias names a
+    // project by the alias table, whose key need not be the alias itself (a
+    // member with no declared id is keyed by its name slug).
+    const [first, ...rest] = ref.split(/::|\./);
+    if (!rest.length) return false;
+    return (aliasTargets.get(first) ?? []).some((key) =>
+      types.some(spec => typeMatchesRef(spec, `${key}::${rest.join('::')}`)));
   };
 
-  const targetLanguageFor = (subsystemId: string | undefined): string | undefined => {
+  const targetLanguageFor =(subsystemId: string | undefined): string | undefined => {
     if (subsystemId) {
       const sub = subsystems.find(s => s.id === subsystemId);
       if (sub?.targetLanguage) return normalizeLanguage(sub.targetLanguage);
@@ -377,49 +394,57 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     return system.targetLanguage ? normalizeLanguage(system.targetLanguage) : undefined;
   };
 
-  // ---- chained mounts and cross-tree references -----------------------------
+  // ---- members and cross-project references ---------------------------------
 
-  const isInChainedSubproject = (subsystemId: string): boolean => {
-    const segments = subsystemId.split('::');
-    let prefix = '';
-    for (const segment of segments) {
-      prefix = prefix ? `${prefix}::${segment}` : segment;
-      const sub = subsystems.find(s => s.id === prefix);
-      if (sub?.projectPath) return true;
+  // Every member's key, and each member's enclosing members (its parent chain
+  // below the bound root). From the project graph when the run has one; a
+  // candidate run knows the members only by the snapshots it gathered.
+  const family = opts.projectFamily;
+  const memberKeys: string[] = family
+    ? family.nodes.filter((n) => n.namespace !== '').map((n) => n.namespace)
+    : mountSurfaceSnapshots.map((m) => m.namespace);
+  /** The member that owns a key: its owner in the graph, else the longest member key prefixing it. */
+  const memberOf = (key: string): string | undefined => {
+    const owner = family?.owners.get(key);
+    if (owner !== undefined) return owner === '' ? undefined : owner;
+    let best: string | undefined;
+    for (const k of memberKeys) {
+      if ((key === k || key.startsWith(`${k}::`)) && (!best || k.length > best.length)) best = k;
     }
-    return false;
+    return best;
   };
+
+  const isInChainedSubproject = (subsystemId: string): boolean => memberOf(subsystemId) !== undefined;
 
   /**
-   * The chained mounts enclosing a subsystem, outermost first: every prefix of
-   * its qualified id that is a subsystem carrying `projectPath`.
+   * The members enclosing a subsystem, outermost first: the member that owns it
+   * and, above it, every member that declares that one, up to the bound root.
    */
   const enclosingMounts = (subsystemId: string): string[] => {
-    const mounts: string[] = [];
-    let prefix = '';
-    for (const segment of subsystemId.split('::')) {
-      prefix = prefix ? `${prefix}::${segment}` : segment;
-      if (subsystems.some((s) => s.id === prefix && s.projectPath)) mounts.push(prefix);
+    const nearest = memberOf(subsystemId);
+    if (nearest === undefined) return [];
+    const chain = [nearest];
+    for (let node = family?.nodes.find((n) => n.namespace === nearest); node?.parent; node = family?.nodes.find((n) => n.namespace === node!.parent)) {
+      chain.unshift(node.parent);
     }
-    return mounts;
+    return chain.filter((k) => k !== '');
   };
 
+  const outsideBound = new Set((family?.authoredReferences ?? []).filter((r) => r.binding === 'outside').map((r) => r.authored));
   const isExternalNamespaceRef = (ref: string): boolean => {
     if (ref.startsWith('::') || ref.startsWith('super::')) return true;
+    if (outsideBound.has(ref)) return true;
     const sep = ref.indexOf('::');
     if (sep === -1) return false; // a bare unresolved id is a local typo, not cross-tree
-    return !subsystemIds.has(ref.slice(0, sep));
+    const first = ref.slice(0, sep);
+    return !subsystemIds.has(first) && memberOf(ref) === undefined;
   };
 
-  // The loader qualifies every reference a mount's spec authors locally into the
-  // mount's own namespace (`kid::x`). Only a `super::` / `::` form climbs out of
-  // it — and at a parent root that climb lands on an id WITHOUT the mount prefix,
-  // typically a bare `x`, which isExternalNamespaceRef cannot tell from a local
-  // typo. So: made from inside mount M and not under `M::` means it was authored
-  // to leave M.
+  // A reference made from inside a member was authored to leave it when the
+  // scan bound it into a project other than the member that owns fromSubsystem.
   const isCollapsedCrossTreeRef = (ref: string, fromSubsystem: string): boolean => {
-    const nearest = enclosingMounts(fromSubsystem).pop();
-    return nearest !== undefined && ref !== nearest && !ref.startsWith(`${nearest}::`);
+    const nearest = memberOf(fromSubsystem);
+    return nearest !== undefined && ref !== nearest && memberOf(ref) !== nearest;
   };
 
   // A hit means the edge is validated against the DECLARED contract instead of
@@ -432,10 +457,11 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     const local = segments.pop();
     if (!local) return { kind: 'unresolved' };
     const provider = segments.pop();
-    // For a reference made from inside a chained mount, the snapshots that mount
-    // holds come first, nearest mount first — what the child authored against,
-    // exactly as it resolves from the child's own root — then the bound root's
-    // own. A mount's snapshots are never consulted for a reference made outside it.
+    // For a reference made from inside a member, the snapshots the members
+    // enclosing it hold come first, nearest member first — what the member
+    // authored against, exactly as it resolves from its own root — then the
+    // bound root's own. A member's snapshots are never consulted for a
+    // reference made outside it.
     const mountPools = fromSubsystem
       ? enclosingMounts(fromSubsystem)
         .reverse()
@@ -445,15 +471,9 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
       const candidates: { snapshot: SurfaceSnapshot; entry: SurfaceContractEntry }[] = [];
       for (const snapshot of pool) {
         if (provider !== undefined && !isProvidedBy(snapshot, provider)) continue;
-        // An entry is found by its public name, and by its backing component
-        // only while it carries no public name of its own. An entry projected
-        // from an export table records its componentType; when its id is
-        // neither its component nor its interface it was renamed, and answers
-        // to that name alone. An entry without it (a sibling surface, an older
-        // snapshot) keeps the backing-component fallback, which stage 3 retires.
-        const entry = snapshot.interfaces.find(e => e.id === local)
-          ?? snapshot.interfaces.find(e => e.component === local
-            && (e.componentType === undefined || e.id === e.component || e.id === e.interface));
+        // An entry is found by its public name alone: a renamed or narrowed
+        // export answers to its name, never to its backing component.
+        const entry = snapshot.interfaces.find(e => e.id === local);
         if (entry) candidates.push({ snapshot, entry });
       }
       if (candidates.length === 0) continue;

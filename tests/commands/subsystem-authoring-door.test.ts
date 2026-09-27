@@ -95,8 +95,9 @@ describe('wairon subsystem add writes through the authoring seam', () => {
     const sub = loadSubsystemSpec('billing');
     expect(sub?.name).toBe('Billing');                                   // --name is the command's to state
     expect(sub?.description).toBe('Invoicing and payment collection');  // the placeholder is only for a new one
-    // billing is chained, so its members load qualified by its id.
-    expect(sub?.publicInterfaces).toEqual([{ ...surface[0], component: 'billing::invoice_portal' }]);
+    // billing is a legacy mount (stage 3): a member declaration, never loaded as a
+    // subsystem, so its fields read back exactly as written, for the migration to carry.
+    expect(sub?.publicInterfaces).toEqual(surface);
     expect(sub?.trustedLinks).toEqual([{ subsystem: 'claims', reason: 'in-process claim hand-off' }]);
     expect(sub?.status).toBe('design');
     // The re-authoring is announced, not silent.

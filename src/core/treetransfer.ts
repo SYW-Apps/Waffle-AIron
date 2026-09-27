@@ -257,7 +257,7 @@ export function exportSpecTree(includeDerived?: boolean, allowPartial?: boolean)
   // qualified subsystem id, so it is identified by its project-relative root
   // path instead.
   const root = getProjectRoot();
-  const skipped: SkippedTreeMount[] = [...inspection.skipped];
+  const skipped: SkippedTreeMount[] = inspection.skipped.map(({ mount, projectPath, reason }) => ({ mount, projectPath, reason }));
   const roots: TreeRootSource[] = [{ relativePath: '.', waiDir: aiPathsAt(root).root() }];
   for (const rel of inspection.roots) {
     const waiDir = aiPathsAt(path.resolve(root, rel)).root();

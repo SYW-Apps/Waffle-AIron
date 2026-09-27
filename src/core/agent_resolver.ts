@@ -27,6 +27,9 @@ import {
   getInterfacePath,
   getImplementationPath,
   resolveSubprojectForNamespace,
+  // The members this layer declares (stage 3: a member is not a subsystem), each
+  // collapsing to one delegating owner.
+  graph,
 } from './specs.js';
 import { ComponentSpec, implementationSourceFiles } from '../models/specs.js';
 import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
@@ -251,7 +254,22 @@ export function resolveAgentTopology(): AgentRecord[] {
   // .claude/agents/ (and the context every session loads) proportional to one
   // layer, not the whole deep tree.
   const isLocal = (id: string): boolean => !id.includes('::');
-  const subsystems = loadSubsystemSpecs().filter((s) => isLocal(s.id));
+  // Each member the bound root declares — `members` or a legacy L1 mount — is
+  // one delegating owner here, shaped as the mount subsystem it used to be.
+  const members = graph().nodes
+    .filter((n) => n.parent === '' && n.mountAlias !== undefined)
+    .map((n) => ({
+      id: n.mountAlias!,
+      name: n.mountAlias!,
+      projectPath: path.relative(getProjectRoot(), n.directory).replace(/\\/g, '/'),
+      form: n.mountForm,
+      createdAt: n.legacyMount?.createdAt ?? system.createdAt,
+      updatedAt: n.legacyMount?.updatedAt ?? system.updatedAt,
+    }));
+  const subsystems = [
+    ...loadSubsystemSpecs().filter((s) => isLocal(s.id)),
+    ...members,
+  ] as (ReturnType<typeof loadSubsystemSpecs>[number] & { form?: 'members' | 'mount' })[];
   const components = loadComponentSpecs().filter((c) => isLocal(c.id) && isLocal(c.subsystem));
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
@@ -293,7 +311,11 @@ export function resolveAgentTopology(): AgentRecord[] {
     // It never enumerates the child's internals here — that is the whole point of
     // stacking agents per layer instead of flattening the tree at the top.
     if (sub.projectPath) {
-      const mountSpecPath = path.relative(getProjectRoot(), getSubsystemPath(sub.id)).replace(/\\/g, '/');
+      // The declaration it owns: the legacy mount's spec file, or — declared in
+      // project.yaml `members` — the member's own tree it delegates into.
+      const mountSpecPath = sub.form === 'members'
+        ? `${sub.projectPath}/**`
+        : path.relative(getProjectRoot(), getSubsystemPath(sub.id)).replace(/\\/g, '/');
       agents.push({
         id: `${sub.id}-owner`,
         name: `${sub.name} (chained subproject)`,

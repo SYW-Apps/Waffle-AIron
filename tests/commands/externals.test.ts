@@ -8,13 +8,14 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { runExternals, UnknownExternalsActionError } from '../../src/commands/externals.js';
-import { runSurface } from '../../src/commands/surface.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 
 // ---------------------------------------------------------------------------
 // `wairon externals` and the sdd_pin_externals / sdd_get_externals_status
 // tools, over a small real family: a root that mounts a billing member and
-// declares it as an external it re-exports nothing from.
+// declares it, under a second alias, as an external it re-exports nothing
+// from. (Stage 3: the member's own alias is the member; an external under that
+// same alias would be an alias conflict, and neither would be followed.)
 // ---------------------------------------------------------------------------
 
 const TS = '2026-01-01T00:00:00.000Z';
@@ -33,7 +34,7 @@ function family(): string {
     id, name, targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }], rules: {},
     extensions: { packs: [], useGlobalPacks: false }, ...(externals ? { externals } : {}),
   });
-  write(root, '.wai/project.yaml', project('fleetworks', 'FleetWorks', { billing: {}, ledger: {} }));
+  write(root, '.wai/project.yaml', project('fleetworks', 'FleetWorks', { bill: { project: 'billing' }, ledger: {} }));
   write(root, '.wai/specs/.index.yaml', dump({ name: 'FleetWorks', vision: 'v' }));
   write(root, '.wai/specs/subsystems/billing.yaml', dump({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'FleetWorks', projectPath: 'packages/billing' }));
   write(root, 'packages/billing/.wai/project.yaml', project('billing', 'Billing Service'));
@@ -63,33 +64,22 @@ describe('wairon externals and the externals MCP tools', () => {
 
     await runExternals('pin', [], { json: true });
     const pins = JSON.parse(out.pop()!);
-    expect(pins.map((p: any) => [p.alias, p.outcome])).toEqual([['billing', 'pinned'], ['ledger', 'unresolved']]);
-    expect(fs.existsSync(path.join(root, '.wai', 'externals', 'billing.yaml'))).toBe(true);
+    expect(pins.map((p: any) => [p.alias, p.outcome])).toEqual([['bill', 'pinned'], ['ledger', 'unresolved']]);
+    expect(fs.existsSync(path.join(root, '.wai', 'externals', 'bill.yaml'))).toBe(true);
 
     await runExternals('list', [], { json: true });
     const rows = JSON.parse(out.pop()!);
-    expect(rows[0]).toMatchObject({ alias: 'billing', sourceKind: 'family', relation: 'member', audience: 'project' });
+    expect(rows[0]).toMatchObject({ alias: 'bill', sourceKind: 'family', relation: 'member', audience: 'project' });
 
     await runExternals('status', [], { json: true });
     const statuses = JSON.parse(out.pop()!);
-    expect(statuses[0]).toMatchObject({ alias: 'billing', pinned: true, reachable: true, stale: false });
+    expect(statuses[0]).toMatchObject({ alias: 'bill', pinned: true, reachable: true, stale: false });
     expect(statuses[1]).toMatchObject({ alias: 'ledger', sourceKind: 'unresolved', reachable: false });
 
     await expect(runExternals('sync', [])).rejects.toThrow(UnknownExternalsActionError);
   });
 
-  it('wairon surface pin and surface externals print a deprecation line first', async () => {
-    root = family();
-    const warned: string[] = [];
-    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => { warned.push(args.join(' ')); });
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    await runSurface('externals');
-    await runSurface('pin');
-    expect(warned.some((w) => w.includes('`wairon surface externals` is deprecated'))).toBe(true);
-    expect(warned.some((w) => w.includes('`wairon surface pin` is deprecated'))).toBe(true);
-  });
-
-  it('sdd_pin_externals and sdd_get_externals_status answer with structured content; the old discovery tool says it is deprecated', async () => {
+  it('sdd_pin_externals and sdd_get_externals_status answer with structured content; the old discovery tool is gone', async () => {
     root = family();
     const server = createMcpServer();
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -97,12 +87,12 @@ describe('wairon externals and the externals MCP tools', () => {
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
     try {
       const { tools } = await client.listTools();
-      expect(tools.find((t) => t.name === 'sdd_list_external_interfaces')?.description).toMatch(/^DEPRECATED — .*sdd_pin_externals \/ sdd_get_externals_status/);
-      const pinned: any = await client.callTool({ name: 'sdd_pin_externals', arguments: { aliases: ['billing'] } });
+      expect(tools.find((t) => t.name === 'sdd_list_external_interfaces')).toBeUndefined();
+      const pinned: any = await client.callTool({ name: 'sdd_pin_externals', arguments: { aliases: ['bill'] } });
       expect(pinned.isError ?? false).toBe(false);
-      expect(pinned.structuredContent.pins).toEqual([expect.objectContaining({ alias: 'billing', outcome: 'pinned' })]);
+      expect(pinned.structuredContent.pins).toEqual([expect.objectContaining({ alias: 'bill', outcome: 'pinned' })]);
       const status: any = await client.callTool({ name: 'sdd_get_externals_status', arguments: {} });
-      expect(status.structuredContent.statuses.map((s: any) => [s.alias, s.pinned])).toEqual([['billing', true], ['ledger', false]]);
+      expect(status.structuredContent.statuses.map((s: any) => [s.alias, s.pinned])).toEqual([['bill', true], ['ledger', false]]);
       const refused: any = await client.callTool({ name: 'sdd_pin_externals', arguments: { aliases: ['crm'] } });
       expect(refused.isError).toBe(true);
       expect(refused.content[0].text).toContain('Unknown external alias "crm"');

@@ -34,6 +34,7 @@ import type { SpecDeletion, SpecRestatement, SpecWriteReceipt } from '../core/au
 import type { SpecChange, SpecChangeReport } from '../core/specs.js';
 import * as pathsModule from '../config/paths.js';
 import { summarize } from '../models/execution.js';
+import { declaredMembers } from '../models/project.js';
 import type { AgentBrief } from '../models/agent.js';
 // The server's client adapters, one module per provider subsystem. Every name
 // this server takes from another subsystem lands on one of these modules, which
@@ -45,7 +46,6 @@ import type { AgentBrief } from '../models/agent.js';
 import {
   loadSystemSpec,
   loadSubsystemSpec,
-  loadSubsystemSpecs,
   loadComponentSpec,
   loadComponentSpecs,
   loadInterfaceSpec,
@@ -70,7 +70,7 @@ import {
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
-import { listExternalInterfaces, pinExternals, getExternalsStatus } from './adapters/surfaces.js';
+import { pinExternals, getExternalsStatus } from './adapters/surfaces.js';
 import { validateSddTree, validateRegistry } from './adapters/validator.js';
 
 // ---------------------------------------------------------------------------
@@ -102,14 +102,16 @@ export function statusFamilyContext(): string {
         if (typeof system?.name === 'string') parentName = system.name;
       } catch { /* the parent's name stays unknown */ }
       lines.push(
-        `Family: this project is a chained subproject, mounted as subsystem "${parent.subsystemId}" of ` +
-          `${parentName ? `the parent project "${parentName}"` : 'its parent project'} — ` +
-          'the surfaces it can consume are listed by sdd_list_external_interfaces.',
+        `Family: this project is a member of ` +
+          `${parentName ? `the parent project "${parentName}"` : 'its parent project'}, declared as "${parent.alias}"` +
+          `${parent.form === 'mount' ? ' by a legacy L1 mount' : ''} — ` +
+          'what it consumes is declared under `externals` (sdd_get_externals_status).',
       );
     }
-    const mounts = loadSubsystemSpecs().filter((s) => s.projectPath && !s.id.includes('::'));
-    if (mounts.length > 0) {
-      lines.push(`Family: chained subprojects mounted here — ${mounts.map((s) => `${s.id} (${s.projectPath})`).join(', ')}.`);
+    const config = loadProjectConfig();
+    const members = config ? declaredMembers(config) : [];
+    if (members.length > 0) {
+      lines.push(`Family: member projects declared here — ${members.map((m) => `${m.alias} (${m.path})`).join(', ')}.`);
     }
   } catch { /* the family context must never break the status report */ }
   return lines.length > 0 ? `${lines.join('\n')}\n\n` : '';
@@ -2195,20 +2197,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<Record<string, never>>(server,
-    'sdd_list_external_interfaces',
-    {
-      description: 'DEPRECATED — declare the projects this one consumes under `externals` in .wai/project.yaml and use sdd_pin_externals / sdd_get_externals_status instead; this tool keeps working for one release. List the bound project\'s consumable external surfaces (parent family, siblings, foreign imports) as discovery entries with origin, provenance, and freshness — the tool an agent inside a subproject uses to SEE its outward world instead of discovering it by failed reference resolution. Full contracts stay in the vendored snapshots (.wai/surfaces/); each entry summarizes the interface ids it exposes.',
-    },
-    () => {
-      try {
-        return json(listExternalInterfaces());
-      } catch (e) {
-        return errText(String(e));
-      }
-    },
-  );
-
   reg<{ aliases?: string[] }>(server,
     'sdd_pin_externals',
     {
@@ -2284,14 +2272,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   try {
     const chainingParent = resolveChainingParent();
     if (chainingParent) {
-      let externalSurfaceCount = 0;
-      try {
-        externalSurfaceCount = listExternalInterfaces().length;
-      } catch { /* count stays 0 — the announcement itself still fires */ }
       process.stderr.write(
-        `[wairon mcp] chained subproject: this root is mounted as subsystem "${chainingParent.subsystemId}" ` +
-        `of the parent project at ${chainingParent.parentRoot} — ${externalSurfaceCount} vendored external ` +
-        `surface(s) discoverable via sdd_list_external_interfaces\n`,
+        `[wairon mcp] member project: this root is declared as "${chainingParent.alias}" ` +
+        `by the parent project at ${chainingParent.parentRoot} — its externals are listed by sdd_get_externals_status\n`,
       );
     }
   } catch { /* chaining detection must never break server startup */ }

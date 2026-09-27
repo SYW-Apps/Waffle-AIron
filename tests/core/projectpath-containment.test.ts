@@ -139,8 +139,8 @@ describe('load-time projectPath containment', () => {
     // The loader collected a PROJECTPATH_ESCAPE issue for the escaping child.
     expect(getLoaderIssues().some((i) => i.code === 'PROJECTPATH_ESCAPE')).toBe(true);
 
-    // The mount subsystem itself still exists, but the victim tree was skipped.
-    expect(index.subsystems.some((s) => s.id === 'billing')).toBe(true);
+    // A legacy mount is a member declaration, never a subsystem; the victim tree was skipped.
+    expect(index.subsystems.some((s) => s.id === 'billing')).toBe(false);
     expect(index.subsystems.some((s) => s.id === 'billing::secret')).toBe(false);
     expect(index.subsystems.some((s) => s.id.endsWith('secret'))).toBe(false);
   });
@@ -161,7 +161,8 @@ describe('load-time projectPath containment', () => {
     const index = scanAllSpecs();
 
     expect(getLoaderIssues().some((i) => i.code === 'PROJECTPATH_ESCAPE')).toBe(false);
-    expect(index.subsystems.some((s) => s.id === 'billing')).toBe(true);
+    // The mount declares the member; the member (no id of its own) is keyed by its alias.
+    expect(index.subsystems.some((s) => s.id === 'billing')).toBe(false);
     expect(index.subsystems.some((s) => s.id === 'billing::invoice')).toBe(true);
   });
 });
@@ -204,7 +205,7 @@ describe('containment by the declaring project', () => {
     expect(fromTop.subsystems.some((s) => s.id.endsWith('secret'))).toBe(false);
     expect(inspectChainedRoots()).toEqual({
       roots: ['packages/a'],
-      skipped: [{ mount: 'a::inner', projectPath: '../b', reason: 'escapes' }],
+      skipped: [{ mount: 'a::inner', alias: 'inner', form: 'mount', projectPath: '../b', reason: 'escapes' }],
     });
 
     setProjectRoot(a);
@@ -234,7 +235,7 @@ describe('containment by the declaring project', () => {
 
     expect(getLoaderIssues().find((i) => i.code === 'PROJECTPATH_ESCAPE')?.specId).toBe('billing');
     expect(index.subsystems.some((s) => s.id.endsWith('secret'))).toBe(false);
-    expect(inspectChainedRoots().skipped).toEqual([{ mount: 'billing', projectPath: 'linked', reason: 'escapes' }]);
+    expect(inspectChainedRoots().skipped).toEqual([{ mount: 'billing', alias: 'billing', form: 'mount', projectPath: 'linked', reason: 'escapes' }]);
   });
 
   it('still loads a nested subproject when the project itself is reached through a link', () => {
@@ -317,9 +318,9 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
     expect(inspection.roots).toEqual(['packages/billing']);
     expect(inspection.skipped).toHaveLength(3);
     expect(inspection.skipped).toEqual(expect.arrayContaining([
-      { mount: 'gone', projectPath: 'packages/gone', reason: 'missing' },
-      { mount: 'billing::ledger', projectPath: 'vendor/ledger', reason: 'missing' },
-      { mount: 'billing::again', projectPath: '.', reason: 'cyclic' },
+      { mount: 'gone', alias: 'gone', form: 'mount', projectPath: 'packages/gone', reason: 'missing' },
+      { mount: 'billing::ledger', alias: 'ledger', form: 'mount', projectPath: 'vendor/ledger', reason: 'missing' },
+      { mount: 'billing::again', alias: 'again', form: 'mount', projectPath: '.', reason: 'cyclic' },
     ]));
   });
 
@@ -339,6 +340,6 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
     const inspection = inspectChainedRoots();
 
     expect(inspection.roots).toHaveLength(32);
-    expect(inspection.skipped).toEqual([{ mount: ids.join('::'), projectPath: 'n33', reason: 'too-deep' }]);
+    expect(inspection.skipped).toEqual([{ mount: ids.join('::'), alias: 'n33', form: 'mount', projectPath: 'n33', reason: 'too-deep' }]);
   });
 });

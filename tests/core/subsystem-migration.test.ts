@@ -78,9 +78,11 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     // parent no longer holds core's components
     expect(fs.existsSync(path.join(root, '.wai', 'specs', 'core', 'core_portal'))).toBe(false);
 
-    // federated: core is a single flat subsystem, its portal is namespaced
+    // federated: the member's own subsystem is keyed under its project (stage 3:
+    // `core::core`, never merged with the mount), its portal likewise
     let idx = scanAllSpecs();
-    expect(idx.subsystems.filter((s: any) => s.id === 'core').length).toBe(1);
+    expect(idx.subsystems.filter((s: any) => s.id === 'core').length).toBe(0);
+    expect(idx.subsystems.filter((s: any) => s.id === 'core::core').length).toBe(1);
     expect(idx.components.map((c: any) => c.id)).toContain('core::core_portal');
 
     // the sibling adapter's cross-ref was rewritten and resolves
@@ -339,8 +341,9 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     const fam = family();
     root = fam.root;
     const before = referenceFindings(verdict(fam.root));
-    // The fixture's one finding: a root-anchored id at the top root points above it.
-    expect(before).toEqual(['CROSS_TREE_REF_UNRESOLVED @billing_audit']);
+    // Stage 3 binds the root-anchored id from the bound root: at the top it names
+    // the top's own shared_portal, so nothing is unresolved before the move.
+    expect(before).toEqual([]);
 
     externalizeSubsystem('billing', 'packages/billing');
 
