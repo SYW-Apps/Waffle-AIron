@@ -2,7 +2,7 @@ import { SddRule, RuleCode } from './types.js';
 
 import { hierarchyRule } from './integrity/hierarchy-integrity.js';
 import { reservedIdSegmentsRule } from './integrity/reserved-id-segments.js';
-import { namespaceShadowingRule } from './integrity/namespace-shadowing.js';
+import { localIdsRule } from './integrity/local-ids.js';
 import { projectIdentityRule } from './integrity/project-identity.js';
 import { roundtripRule } from './integrity/roundtrip-serialization.js';
 import { typeDeclarationsRule } from './integrity/type-declarations.js';
@@ -15,7 +15,9 @@ import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound
 import { exportTablesRule } from './integrity/export-tables.js';
 import { externalDeclarationsRule } from './integrity/external-declarations.js';
 import { referenceFormsRule } from './integrity/reference-forms.js';
+import { memberDeclarationsRule } from './integrity/member-declarations.js';
 import { projectBoundariesRule } from './doctrine/project-boundaries.js';
+import { projectCyclesRule } from './doctrine/project-cycles.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { contractSymmetryRule } from './narrative/contract-symmetry.js';
 import { narrativeTargetReferencesRule } from './narrative/narrative-target-references.js';
@@ -119,10 +121,10 @@ export const SDD_RULES: SddRule[] = [
   hierarchyRule,
   // Namespace integrity right after hierarchy: unresolvable/unwritable ids
   // explain many downstream findings, so surface them early in the list. Two
-  // questions of the same ids: the segment no id may spend, and the local name
-  // that would anchor a bare reference to the root instead.
+  // questions of the same ids: the segment no id may spend, and whether a
+  // local id names one spec (and reads apart from the project's aliases).
   reservedIdSegmentsRule,
-  namespaceShadowingRule,
+  localIdsRule,
   // The project's own id, beside the spec ids: declared, well-formed, and the
   // one its lock approved.
   projectIdentityRule,
@@ -219,13 +221,16 @@ export const SDD_RULES: SddRule[] = [
   publicSurfaceBoundContractRule,
   // The export tables the resolver settled: what the published names bind.
   exportTablesRule,
-  // The project graph in three questions: does every declared external
-  // resolve, is every reference written in a form that survives a re-root, and
-  // does every reference into another project go through a declared
-  // dependency and a public name.
+  // The project graph in five questions: does every declared external
+  // resolve, is every reference written in a form that survives a re-root, is
+  // every member declared in project.yaml, does every reference into another
+  // project go through a declared dependency and a public name, and do the
+  // projects depend on each other without a loop.
   externalDeclarationsRule,
   referenceFormsRule,
+  memberDeclarationsRule,
   projectBoundariesRule,
+  projectCyclesRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
   // reader sees the broken edge finding next to the unused-detection fallout

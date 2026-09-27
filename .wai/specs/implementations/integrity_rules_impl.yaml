@@ -1054,6 +1054,6 @@ methods:
     detail: full
     symbol: check
     exportedVia: memberDeclarationsRule
-status: design
+status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-27T10:48:51.206Z'
+updatedAt: '2026-09-27T12:17:46.574Z'

@@ -21,11 +21,12 @@ import type { ProjectIdentity } from '../../../models/index.js';
 export const projectIdentityRule: SddRule = {
   name: 'project-identity',
   description:
-    "A project is keyed on its id, so the id must be declared, well-formed, stable and its own: a project that declares none answers to its display name slugified until it writes one (PROJECT_ID_DEFAULTED — for a member of the family, the finding names its mount's subsystem id as the id to declare), a project whose name yields no id or whose declared id breaks the grammar has nothing reliable to key on, nor do two projects of one family that resolve to one id (PROJECT_ID_AMBIGUOUS — the family half reads the project graph's identity problems), and an id that differs from the one the lock approved has moved under everything that keyed on it (PROJECT_ID_CHANGED).",
+    "A project is keyed on its id, so the id must be declared, well-formed, stable and its own: a project that declares none answers to its display name slugified until it writes one (PROJECT_ID_DEFAULTED — for a member of the family, the finding names its alias as the id to declare), a project whose name yields no id or whose declared id breaks the grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), two members of one family that resolve to one id are one project declared twice (PROJECT_ID_COLLISION — a project is contained once; a project used in two roles is modelled as consumption, one member and several consumers, never as two copies of its tree), and an id that differs from the one the lock approved has moved under everything that keyed on it (PROJECT_ID_CHANGED). The family half reads the project graph's identity problems.",
   codes: [
-    { code: 'PROJECT_ID_DEFAULTED', defaultSeverity: 'notice', summary: 'Project declares no id; it answers to one derived from its display name' },
-    { code: 'PROJECT_ID_AMBIGUOUS', defaultSeverity: 'warning', summary: 'Project has no usable id: its name yields no slug, its declared id breaks the grammar, or another project of its family resolves to the same id' },
-    { code: 'PROJECT_ID_CHANGED', defaultSeverity: 'error', summary: 'Project id differs from the id the lock approved' },
+    { code: 'PROJECT_ID_AMBIGUOUS', defaultSeverity: 'warning', summary: "Project has no usable id: its name yields no slug, or its declared id breaks the grammar" },
+    { code: 'PROJECT_ID_CHANGED', defaultSeverity: 'error', summary: "Project id differs from the id the lock approved" },
+    { code: 'PROJECT_ID_DEFAULTED', defaultSeverity: 'notice', summary: "Project declares no id; it answers to one derived from its display name" },
+    { code: 'PROJECT_ID_COLLISION', defaultSeverity: 'error', summary: "Two members of one family resolve to one project id" },
   ],
   check(ctx) {
     // Step 1: the identity the validator resolved.
@@ -39,16 +40,16 @@ export const projectIdentityRule: SddRule = {
         ctx.addIssue(
           'notice',
           'PROJECT_ID_DEFAULTED',
-          `The member project mounted at "${member}" declares no id in its .wai/project.yaml: ${problem.detail}. Declare \`id: ${problem.id}\` there — its mount's subsystem id, the id the family already knows it by (2c's \`doctor --fix\` writes it).`,
+          `The member project keyed "${member}" declares no id in its .wai/project.yaml: ${problem.detail}. Declare \`id: ${problem.id}\` there — its alias, the name the family already knows it by (\`doctor --fix\` writes it).`,
           member,
         );
       } else if (problem.kind === 'id-collision') {
         ctx.addIssue(
-          'warning',
-          'PROJECT_ID_AMBIGUOUS',
-          `Two projects of one family resolve to the id "${problem.id}": ${problem.detail} — every declaration and reference keyed on "${problem.id}" could mean either. Give each project its own id in its .wai/project.yaml.`,
+          'error',
+          'PROJECT_ID_COLLISION',
+          `Two members of one family resolve to the id "${problem.id}": ${problem.detail} — one project declared twice. A project is contained once: to use one project in two roles, keep one member and let the other consumers declare it under \`externals\`; if they are different projects, give each its own id in its .wai/project.yaml.`,
         );
-      } else {
+      } else if (problem.kind === 'no-id') {
         ctx.addIssue(
           'warning',
           'PROJECT_ID_AMBIGUOUS',

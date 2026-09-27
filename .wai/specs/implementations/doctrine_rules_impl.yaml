@@ -1306,6 +1306,6 @@ methods:
     detail: full
     symbol: check
     exportedVia: projectCyclesRule
-status: design
+status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-27T10:42:19.052Z'
+updatedAt: '2026-09-27T12:17:46.746Z'

@@ -1,16 +1,13 @@
 /**
  * Namespace integrity (RESERVED_ID_SEGMENT in
- * src/core/rules/integrity/reserved-id-segments.ts, NAMESPACE_SHADOWING in
- * src/core/rules/integrity/namespace-shadowing.ts; ROUNDTRIP_SERIALIZATION in
- * src/core/rules/integrity/roundtrip-serialization.ts).
+ * src/core/rules/integrity/reserved-id-segments.ts; ROUNDTRIP_SERIALIZATION in
+ * src/core/rules/integrity/roundtrip-serialization.ts). Local ids and their
+ * shadows (stage 3) live in references-local-ids.fixtures.ts.
  *
  * Documented intents pinned here:
  *  - RESERVED_ID_SEGMENT (error): no id segment may be the reserved namespace
  *    keyword "super" — stored references to such an id would be consumed as a
  *    namespace hop and resolve to a different spec.
- *  - NAMESPACE_SHADOWING (error): a subproject-local name must not shadow a
- *    root-level subsystem id — a bare reference to a shadowed name silently
- *    anchors to the ROOT subsystem, so the local spec becomes unaddressable.
  *  - ROUNDTRIP_SERIALIZATION (error): every loaded spec must re-serialize
  *    through the exact writer pipeline — validate must predict every refusal a
  *    later save or lock would raise. Only the CONTROL is expressible from disk
@@ -96,61 +93,6 @@ export default [
           description: 'Supervises nightly batch runs and restarts failed steps.',
         },
       ],
-    },
-  }),
-
-  // -------------------------------------------------------------------------
-  // NAMESPACE_SHADOWING
-  // -------------------------------------------------------------------------
-  // Regression for the qualifyId declaration/reference bug: the loader used to
-  // root-anchor a bare child DECLARATION whose name collided with a root
-  // subsystem id, silently merging it into the root id space so this tripwire
-  // was structurally unreachable from disk. Declarations now always
-  // mount-qualify (qualifyDeclaredId in src/core/specs.ts); only reference
-  // sites keep the root-subsystem anchor.
-  defineRuleFixture({
-    code: 'NAMESPACE_SHADOWING',
-    severity: 'error',
-    expectFire: true,
-    scenario:
-      'The chained partner-billing subproject defines its own ledger subsystem while the root project already has a ledger subsystem, so bare ledger references inside the subproject silently anchor to the root.',
-    tree: {
-      system: { name: 'CommerceOS', vision: 'Order-to-cash commerce platform with chained partner billing.' },
-      subsystems: [
-        { id: 'ledger', description: 'The root double-entry ledger of record.' },
-        {
-          id: 'partner-billing',
-          description: 'Chained partner billing subproject mount.',
-          projectPath: 'packages/partner-billing',
-        },
-      ],
-      files: childProject('packages/partner-billing', 'PartnerBilling', [
-        { id: 'partner-billing', description: 'Partner billing workflows.' },
-        // The defect: a subproject-local subsystem named like the ROOT ledger subsystem.
-        { id: 'ledger', description: 'Partner-side billing ledger.' },
-      ]),
-    },
-  }),
-  defineRuleFixture({
-    code: 'NAMESPACE_SHADOWING',
-    expectFire: false,
-    reason: 'The subproject-local subsystem carries a name no root subsystem uses, so every bare reference resolves unambiguously.',
-    scenario:
-      'The chained partner-billing subproject names its ledger partner-ledger, avoiding the root ledger subsystem name.',
-    tree: {
-      system: { name: 'CommerceOS', vision: 'Order-to-cash commerce platform with chained partner billing.' },
-      subsystems: [
-        { id: 'ledger', description: 'The root double-entry ledger of record.' },
-        {
-          id: 'partner-billing',
-          description: 'Chained partner billing subproject mount.',
-          projectPath: 'packages/partner-billing',
-        },
-      ],
-      files: childProject('packages/partner-billing', 'PartnerBilling', [
-        { id: 'partner-billing', description: 'Partner billing workflows.' },
-        { id: 'partner-ledger', description: 'Partner-side billing ledger.' },
-      ]),
     },
   }),
 

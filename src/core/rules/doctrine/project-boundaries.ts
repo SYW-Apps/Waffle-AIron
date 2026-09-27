@@ -19,8 +19,8 @@ import {
 // The rule does no I/O and resolves nothing. The validator hands over the
 // project graph (ctx.projectFamily: owners, cross-project references) and the
 // export usages (ctx.exportUsages: which of those references land on a public
-// name); each fact becomes one finding. All three codes are notices in stage 2:
-// references keep their old forms until stage 3 rewrites them to alias::name.
+// name); each fact becomes one finding. The scan bound every reference before
+// this rule reads it, so a finding names the reference as it was written.
 // ---------------------------------------------------------------------------
 
 /** The draft context a finding on this spec takes. */
@@ -38,7 +38,7 @@ function draftOf(ctx: RuleContext, specId: string): boolean {
 function label(node: ProjectNode | null, namespace: string): string {
   if (!node) return `"${namespace}"`;
   const id = node.id ?? node.name ?? '(no id)';
-  return node.namespace === '' ? `"${id}"` : `"${id}" (mounted at "${node.namespace}")`;
+  return node.namespace === '' ? `"${id}"` : `"${id}" (keyed "${node.namespace}")`;
 }
 
 /** The `externals` entry that would declare the producer. */
@@ -51,11 +51,11 @@ function declaration(producer: ProjectNode | null): string {
 export const projectBoundariesRule: SddRule = {
   name: 'project-boundaries',
   description:
-    'Every project is a crate of its own (decision 9): another project reaches it only through its L0 exports, and only as a dependency it declared. A reference that reaches another project the referring project neither mounts as a member nor declares as an external is EXTERNAL_UNDECLARED; a reference that reaches another project at anything but a public name whose audience covers the referrer — an L1-published or internal component, a method outside the entry\'s narrowing, a type neither exported by name nor in an exported signature\'s closure — is EXTERNAL_NOT_EXPORTED; and a trustedLinks entry that names a subsystem of another project is TRUSTED_LINK_CROSSES_PROJECT, since a sanctioned fast lane stays inside one project. A reference is one of the positions CrossProjectReference lists, judged from the project graph (owner of the referring spec versus producer of the target) and the export usages; a reference whose producer the scan cannot place is left to the resolve-through-parent verdict.',
+    "Every project is a crate of its own (decision 9): another project reaches it only through its L0 exports, and only as a dependency it declared. A reference that reaches another project the referring project neither declares as a member nor as an external — found only by a deprecated form or a family project id — is EXTERNAL_UNDECLARED; a reference that reaches another project at anything but a public name of its resolved L0 table whose audience covers the referrer — an L1-published or internal component, a method outside the entry's narrowing, a type the producer exports only inside a signature's closure — is EXTERNAL_NOT_EXPORTED; and a trustedLinks entry that names a subsystem of another project (`alias::sub`) is TRUSTED_LINK_CROSSES_PROJECT, since a sanctioned fast lane stays inside one project. A reference is one of the positions CrossProjectReference lists, judged from what the scan bound it to (project graph and export usages); a reference bound as outside is left to the resolve-through-parent verdict.",
   codes: [
-    { code: 'EXTERNAL_UNDECLARED', defaultSeverity: 'notice', summary: 'A reference reaches another project that the referring project neither mounts nor declares as an external' },
-    { code: 'EXTERNAL_NOT_EXPORTED', defaultSeverity: 'notice', summary: 'A reference reaches another project at anything but a public name whose audience covers the referrer' },
-    { code: 'TRUSTED_LINK_CROSSES_PROJECT', defaultSeverity: 'notice', summary: 'A trustedLinks entry names a subsystem of another project' },
+    { code: 'EXTERNAL_UNDECLARED', defaultSeverity: 'notice', summary: "A reference reaches another project that the referring project neither mounts nor declares as an external" },
+    { code: 'EXTERNAL_NOT_EXPORTED', defaultSeverity: 'notice', summary: "A reference reaches another project at anything but a public name whose audience covers the referrer" },
+    { code: 'TRUSTED_LINK_CROSSES_PROJECT', defaultSeverity: 'notice', summary: "A trustedLinks entry names a subsystem of another project" },
   ],
   check(ctx) {
     // Step 1: the graph and the export usages.
@@ -74,7 +74,7 @@ export const projectBoundariesRule: SddRule = {
       ctx.addIssue(
         'notice',
         'EXTERNAL_UNDECLARED',
-        `"${ref.specId}" reaches "${ref.target}" (${ref.position}) in project ${label(producer, ref.producer)}, which project ${label(consumer, ref.consumer)} neither mounts nor declares as an external — a project reaches another only as a dependency it declared. Declare it in ${ref.consumer === '' ? 'this project\'s' : `the member at "${ref.consumer}"'s`} .wai/project.yaml with ${declaration(producer)}.`,
+        `"${ref.specId}" writes "${ref.authored}" (${ref.position}), which reaches "${ref.target}" in project ${label(producer, ref.producer)} — a project ${label(consumer, ref.consumer)} declares neither as a member nor as an external. A project reaches another only as a dependency it declared: declare it in ${ref.consumer === '' ? 'this project\'s' : `the member keyed "${ref.consumer}"'s`} .wai/project.yaml with ${declaration(producer)}, after which the reference is written \`alias::name\`.`,
         ref.specId,
         draftOf(ctx, ref.specId),
       );
@@ -86,7 +86,7 @@ export const projectBoundariesRule: SddRule = {
         ctx.addIssue(
           'notice',
           'EXTERNAL_NOT_EXPORTED',
-          `"${ref.specId}" reaches "${ref.target}"${ref.member ? ` (${ref.member})` : ''} (${ref.position}) in project ${label(producer, usage.producer)}, which exports no public name covering it — another project may reach it only through an L0 export whose audience covers the referrer. Export it from that project's L0 (audience project reaches the family) and reach it there.`,
+          `"${ref.specId}" writes "${ref.authored}"${ref.member ? ` (${ref.member})` : ''} (${ref.position}), which reaches "${ref.target}" in project ${label(producer, usage.producer)} at no public name of its L0 table — another project may reach it only through a public name whose audience covers the referrer. Export it from that project's L0 (audience project reaches the family; a project-level type takes one own \`{ typeDef }\` entry) and reach it by that name.`,
           ref.specId,
           draftOf(ctx, ref.specId),
         );
@@ -97,7 +97,8 @@ export const projectBoundariesRule: SddRule = {
       const home = ownerOf(family, sub.id);
       if (!home) continue;
       for (const link of sub.trustedLinks ?? []) {
-        // Step 11: the loader leaves trustedLinks raw, so qualify from the declaring subsystem's project.
+        // Step 11: the loader leaves trustedLinks raw, so read it the way the scan binds
+        // a reference: a bare subsystem id is local, `alias::sub` lands where the alias names.
         const producer = producerOf(family, link.subsystem, home.namespace);
         // Step 12: unknown, or its own project.
         if (!producer || producer.namespace === home.namespace) continue;
