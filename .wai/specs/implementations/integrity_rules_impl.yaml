@@ -934,7 +934,9 @@ methods:
       - stepNumber: 5
         description: Is it unresolved?
         type: branch
-        condition: the external's sourceKind is unresolved
+        condition: >-
+          the external's sourceKind is unresolved, and it is not an external of the bound root the
+          chaining climb bound from the family's top (ctx.climbBoundExternals)
         onFalseStep: 7
       - stepNumber: 6
         description: >-
@@ -1056,4 +1058,4 @@ methods:
     exportedVia: memberDeclarationsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-27T12:17:46.574Z'
+updatedAt: '2026-09-27T17:04:16.552Z'

@@ -93,9 +93,12 @@ methods:
       Relocate a member of the bound project: move its directory on disk from its current path to
       the new one and point its `members` entry there. A member still declared in the legacy L1 form
       is first moved into `members` (as moveMountToMembers does), so wairon never writes the L1
-      form. Throws if the alias declares no member, or if the new path does not resolve strictly
-      within the owning project root (absolute or ../-escaping targets are rejected) or already
-      exists.
+      form. Throws if the alias declares no member, if a legacy mount carries a field beyond its
+      path and description (a non-empty publicInterfaces or trustedLinks, a lint allow, a lifecycle,
+      profile, targetLanguage, designDepth or ext) — a move never drops a field, and `wairon doctor
+      --fix` carries them plan-first — or if the new path does not resolve strictly within the
+      owning project root (absolute or ../-escaping targets are rejected) or already exists, each
+      before anything is written.
     signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
     params:
@@ -137,8 +140,9 @@ methods:
       parent's L0 re-exports from the member become re-exports of the moved subsystem. Throws if the
       alias declares no member, if the member is not a single subsystem (a multi-subsystem
       internalize is stage 6's), if the member declares members or externals of its own other than
-      the parent, which would have no home, or if a moved spec file would land on an existing one,
-      before anything moves.
+      the parent, which would have no home, if another project of the family references the member
+      (each reference listed — rewriting other projects is the family migration's job), or if a
+      moved spec file would land on an existing one, before anything moves.
     signature: 'internalizeMember(alias: string): void'
     returns: void
     params:
@@ -789,4 +793,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T16:07:31.253Z'
+updatedAt: '2026-09-27T17:03:59.906Z'

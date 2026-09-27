@@ -18,10 +18,12 @@ fields:
   - name: written
     type: string[]
     description: >-
-      Every file apply changed, in write order (project.yaml ids, L0 system specs created or
-      extended, project.yaml externals, pinned snapshots and externals locks, then project.yaml
-      members, deleted L1 mount documents, rewritten spec files and deleted family-pin snapshots); a
-      write that changed nothing is not listed.
+      Every write apply made, in write order (project.yaml ids, L0 system specs created or extended
+      and L1 publications carried from a mount, project.yaml externals, pinned snapshots and
+      externals locks, then project.yaml members, deleted L1 mount documents, rewritten specs and
+      deleted family-pin snapshots); a write the adapter answers only with whether it wrote is named
+      by where it landed (`<project root>/.wai/specs: <kind> <local id>`, `<project
+      root>/.wai/surfaces: <pin key>`); a write that changed nothing is not listed.
     optional: false
   - name: relock
     type: string[]
@@ -33,4 +35,4 @@ fields:
 methods: []
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:12:09.954Z'
-updatedAt: '2026-09-27T10:46:53.412Z'
+updatedAt: '2026-09-27T17:32:53.873Z'

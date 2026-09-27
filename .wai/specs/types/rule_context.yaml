@@ -175,6 +175,15 @@ fields:
       references mapped onto the producer's public names; the unexported ones are
       EXTERNAL_NOT_EXPORTED's facts. Absent on a candidate run.
     optional: true
+  - name: climbBoundExternals
+    type: string[]
+    description: >-
+      The aliases of the bound root's declared externals that its own scan binds to no project but
+      the chaining climb binds from the family's top (a member naming its parent or a sibling),
+      gathered by the validator. The external-declarations rule does not report them:
+      EXTERNAL_UNRESOLVED fires only when neither the scan nor the climb finds the producer. Absent
+      when nothing was climbed for.
+    optional: true
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -334,4 +343,4 @@ methods:
       rule that accuses
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-27T15:25:20.216Z'
+updatedAt: '2026-09-27T17:04:15.061Z'

@@ -44,5 +44,6 @@ fields:
       findings about the mount spec itself, which stops existing), each listed as `field: value`.
     optional: false
 methods: []
+sourcePath: src/commands/position-migration.ts
 createdAt: '2026-09-27T10:44:23.135Z'
-updatedAt: '2026-09-27T10:44:44.335Z'
+updatedAt: '2026-09-27T17:05:34.511Z'

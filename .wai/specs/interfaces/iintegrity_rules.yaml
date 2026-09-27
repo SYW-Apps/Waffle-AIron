@@ -320,8 +320,11 @@ methods:
       its producer is found — exactly one project of the family answers to the id, or source.path
       names a directory (whose project, when it is in the family, answers to the declared id). A
       declaration that fails is reported (EXTERNAL_UNRESOLVED) with its reason, so a misspelled
-      declaration never passes as declared. The findings name no spec: externals live in
-      configuration. It reads the project graph's bound externals and alias-conflict problems.
+      declaration never passes as declared — but only when neither the scan nor the chaining climb
+      finds the producer: a member validated from its own root that declares its parent or a sibling
+      is not reported when the climb to the family's top binds it (ctx.climbBoundExternals). The
+      findings name no spec: externals live in configuration. It reads the project graph's bound
+      externals and alias-conflict problems.
     signature: 'externalDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -381,4 +384,4 @@ methods:
           `members` entry
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-27T10:41:10.612Z'
+updatedAt: '2026-09-27T17:04:19.388Z'

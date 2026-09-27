@@ -233,26 +233,43 @@ methods:
         description: Is the member still declared in the legacy L1 form?
         type: branch
         condition: the member is declared by a legacy L1 mount
-        onFalseStep: 7
+        onFalseStep: 9
       - stepNumber: 5
+        label: carries-fields
+        description: Does the legacy mount carry more than a path and a description?
+        type: branch
+        condition: >-
+          the mount's L1 spec carries a field beyond projectPath and description that its member
+          would have to hold: a non-empty publicInterfaces or trustedLinks, a lint allow, a
+          lifecycle, profile, targetLanguage, designDepth or ext
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Refuse before anything is written, naming the fields and pointing at `wairon doctor
+          --fix`, whose chaining migration carries them into the member plan-first — a move never
+          drops a field
+        type: throw
+        error: the legacy mount carries fields a move cannot carry
+      - stepNumber: 7
+        label: declare
         description: >-
           Move the declaration into `members` first (its current path, the mount's description), so
           wairon never rewrites the L1 form
         type: call
         targetComponent: project_config_repository
         targetMethod: declareMember
-      - stepNumber: 6
+      - stepNumber: 8
         description: Delete the L1 mount document
         type: call
         targetComponent: spec_loader
         targetMethod: deleteMount
-      - stepNumber: 7
+      - stepNumber: 9
         label: relocate
         description: >-
           Resolve the old and new member directories from the bound project root under the
           containment guard; reject a target that already exists; relocate the directory on disk
         type: local
-      - stepNumber: 8
+      - stepNumber: 10
         description: Point the `members` entry at the new path
         type: call
         targetComponent: project_config_repository
@@ -376,13 +393,30 @@ methods:
           cannot internalize: the member is not a single subsystem, or declares members or externals
           of its own
       - stepNumber: 6
+        label: referenced
+        description: Does another project of the family reference the member?
+        type: branch
+        condition: >-
+          a project of the family other than the bound root and the member itself references the
+          member (the graph's cross-project references)
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Refuse before anything is written, listing each such reference (the project, the spec and
+          the text as written): internalizing would leave them naming a project that no longer
+          exists, and rewriting other projects is the family migration's job, named and dry-run
+          first
+        type: throw
+        error: 'cannot internalize: other projects of the family reference the member'
+      - stepNumber: 8
+        label: take-in
         description: >-
           Delete its legacy L1 mount document first (false, writing nothing, for a member declared
           in `members`), so the moved subsystem can take the folder the mount document held
         type: call
         targetComponent: spec_loader
         targetMethod: deleteMount
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           Move the member's spec subtree under the bound project's specs — its subsystem folder and
           any project-level spec files beside it, refused before anything moves when one would land
@@ -391,17 +425,17 @@ methods:
           Each reference that crossed the old boundary is re-expressed with the target the scan
           bound it to before the move, so the re-save below keeps every target
         type: local
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
           Remove the member from `members` (false, writing nothing, for a member declared in the
           legacy form)
         type: call
         targetComponent: project_config_repository
         targetMethod: removeMember
-      - stepNumber: 9
+      - stepNumber: 11
         description: Delete the member's .wai project (project.yaml + specs)
         type: local
-      - stepNumber: 10
+      - stepNumber: 12
         description: >-
           Re-save every spec that referenced across the old boundary, targets unchanged: the
           parent's `alias::name` references and the moved specs' `<parent id>::name` references
@@ -409,14 +443,14 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: normalizeReferences
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Re-point the parent L0 entries that re-exported from the member (`from: <alias>`) at the
           moved subsystem, and drop the spec cache
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 12
+      - stepNumber: 14
         description: Member internalized into the bound project
         type: return
         outcome: internalized
@@ -1730,4 +1764,4 @@ methods:
         targetMethod: normalizeReferences
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T15:58:16.722Z'
+updatedAt: '2026-09-27T17:03:48.067Z'

@@ -23,5 +23,6 @@ fields:
       in the order found.
     optional: false
 methods: []
+sourcePath: src/commands/position-migration.ts
 createdAt: '2026-09-27T10:44:31.358Z'
-updatedAt: '2026-09-27T10:44:46.032Z'
+updatedAt: '2026-09-27T17:05:36.106Z'

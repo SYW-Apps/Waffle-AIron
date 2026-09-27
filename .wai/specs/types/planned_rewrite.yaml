@@ -37,5 +37,6 @@ fields:
     description: 'leading | super | path: the deprecated form rewritten.'
     optional: false
 methods: []
+sourcePath: src/commands/position-migration.ts
 createdAt: '2026-09-27T10:44:27.609Z'
-updatedAt: '2026-09-27T10:44:45.177Z'
+updatedAt: '2026-09-27T17:05:35.231Z'

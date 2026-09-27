@@ -10,13 +10,18 @@ methods:
     description: >-
       Plan the retirement of position for a family, from its project graph: (a) each legacy L1 mount
       moved into its parent's `members` — the path, the description carried into the member entry,
-      each published entry of the mount carried into the member's L0 at audience project, and every
-      other field either retired and listed (empty arrays, lint allows about the mount itself) or a
-      blocking finding (a public name the member binds to another target; a non-empty trustedLinks
-      or a lifecycle, profile, targetLanguage, designDepth or ext the member must hold itself); (b)
-      each member the family declares whose directory is absent, as a blocking finding; (c) each
-      reference written with a leading `::`, `super::` or a member path, rewritten to the scan's
-      canonical text, or a finding when it has none. Writes nothing.
+      each published entry of the mount carried into the member's L0 at audience project (published
+      first at L1 in its member subsystem, with the entry's type and details, where that subsystem
+      does not publish it yet; an entry naming no component, or one the member's L0 exports already,
+      carries nothing and retires, listed), and every other field either retired and listed (empty
+      arrays, lint allows about the mount itself, the entries' consumers) or a blocking finding (a
+      public name the member binds to another target; a component the member does not hold; a
+      non-empty trustedLinks or a lifecycle, profile, targetLanguage, designDepth or ext the member
+      must hold itself); (b) each member the family declares whose directory is absent, as a
+      blocking finding; (c) each reference written with a leading `::`, `super::` or a member path,
+      raw positions included, rewritten to the scan's canonical text, or a finding when it has none
+      — and the other rewrites of a spec holding a bound reference with none are held back with it,
+      since the re-save refuses that spec whole. Writes nothing.
     signature: 'plan(family: ProjectFamily): PositionMigrationPlan'
     returns: PositionMigrationPlan
     params:
@@ -42,6 +47,6 @@ methods:
         description: The confirmed plan, whose stage-1 writes the chaining migration has already applied
     guarantees:
       - idempotent
-status: design
+status: complete
 createdAt: '2026-09-27T10:45:32.019Z'
-updatedAt: '2026-09-27T10:45:32.036Z'
+updatedAt: '2026-09-27T17:32:55.115Z'

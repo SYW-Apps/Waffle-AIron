@@ -187,7 +187,9 @@ methods:
           Plan the retirement of position from the same graph — the legacy mounts to move with what
           they carry, the deprecated references to rewrite, the absent members — and merge it: each
           planned member into its parent's entry, its carried entries into the member's exports (a
-          member with no L0 marked createsSystem), the rewrites into the plan, its findings after
+          member with no L0 marked createsSystem), the rewrites into the plan (a rewrite into a
+          producer its referrer does not declare yet spelled with the alias this plan declares for
+          it, which is what apply's re-save writes once that external exists), its findings after
           these
         type: call
         targetComponent: position_migration_orchestrator
@@ -308,9 +310,10 @@ methods:
         label: create-system
         description: >-
           Under the producer's binding, when it is marked createsSystem, write its minimal L0
-          through the gated seam first — new content: its display name, as vision the description
-          its parent gives the member (else one line naming it an exporting project), nothing else;
-          an L0 that appeared since the plan is kept and nothing is written
+          through the gated seam first — new content: its display name (read from its
+          configuration), as vision the description its legacy mount carries into the member entry
+          (else one line naming it an exporting project), nothing else; an L0 that appeared since
+          the plan is kept and nothing is written
         type: call
         targetComponent: cli_authoring_adapter
         targetMethod: writeSpec
@@ -318,8 +321,10 @@ methods:
         label: add-entries
         description: >-
           Add the planned entries to its L0 publicInterfaces in one gated delta on its system spec —
-          re-exports, own `{ typeDef }` entries and entries carried from its mount alike. Entries
-          upsert by from + item + interface + as, so an entry already present changes nothing and a
+          re-exports, own `{ typeDef }` entries and entries carried from its mount alike; a carried
+          entry marked publishAtL1 is first published as an own item of its member subsystem, in one
+          gated delta on that subsystem's spec. Entries upsert by from + item + interface + as (an
+          L1 own item by component + interface), so an entry already present changes nothing and a
           second apply writes nothing
         type: call
         targetComponent: cli_authoring_adapter
@@ -386,4 +391,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-09-26T21:13:14.060Z'
-updatedAt: '2026-09-27T11:01:56.614Z'
+updatedAt: '2026-09-27T17:15:26.877Z'
