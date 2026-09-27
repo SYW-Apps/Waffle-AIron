@@ -758,6 +758,70 @@ function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; 
   return out;
 }
 
+/** Each qualified name inside a type string passed through `map`, the rest of the string untouched. */
+function mapTypeNames(typeStr: string | undefined, map: ReferenceMapper): string | undefined {
+  if (typeStr === undefined) return undefined;
+  return typeStr.replace(
+    /(^|[^A-Za-z0-9_:-])((?:::)?[A-Za-z0-9_][A-Za-z0-9_-]*(?:::[A-Za-z0-9_][A-Za-z0-9_-]*)+)/g,
+    (_m, lead: string, name: string) => `${lead}${map('type', name)}`,
+  );
+}
+
+/**
+ * A spec with every reference at a raw position (rawReferences) passed through
+ * `map` — the inverse table of rawReferences, used where a raw reference is
+ * rewritten into its canonical text. An interface method's display signature
+ * follows its parameter and return types, token by token.
+ */
+function mapRawReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper): T {
+  switch (kind) {
+    case 'subsystem': {
+      const s = spec as unknown as SubsystemSpec;
+      return { ...s, trustedLinks: (s.trustedLinks ?? []).map((l) => ({ ...l, subsystem: map('trustedLinks', l.subsystem) })) } as unknown as T;
+    }
+    case 'interface': {
+      const i = spec as unknown as InterfaceSpec;
+      return {
+        ...i,
+        methods: i.methods.map((m) => ({
+          ...m,
+          ...(m.signature !== undefined ? { signature: mapTypeNames(m.signature, map)! } : {}),
+          ...(m.returns !== undefined ? { returns: mapTypeNames(m.returns, map)! } : {}),
+          ...(m.params ? { params: m.params.map((p) => ({ ...p, type: mapTypeNames(p.type, map)! })) } : {}),
+        })),
+      } as unknown as T;
+    }
+    case 'implementation': {
+      const impl = spec as unknown as ImplementationSpec;
+      return {
+        ...impl,
+        methods: impl.methods.map((m) => ({
+          ...m,
+          ...(m.calls ? {
+            calls: m.calls.map((entry) => {
+              const call = parseDeclaredCall(entry);
+              const next = call ? map('calls', call.compId) : undefined;
+              return call && next !== call.compId ? `${next}.${call.methodName}` : entry;
+            }),
+          } : {}),
+          narrative: m.narrative.map((step) => {
+            const source = (step as { auth?: { from?: string } }).auth?.from;
+            if (typeof source !== 'string' || !source.startsWith(COMPONENT_AUTH_SOURCE)) return step;
+            const auth = (step as { auth: Record<string, unknown> }).auth;
+            return { ...step, auth: { ...auth, from: `${COMPONENT_AUTH_SOURCE}${map('auth', source.slice(COMPONENT_AUTH_SOURCE.length))}` } };
+          }),
+        })),
+      } as unknown as T;
+    }
+    case 'type': {
+      const t = spec as unknown as TypeSpec;
+      return { ...t, fields: t.fields.map((f) => ({ ...f, type: mapTypeNames(f.type, map)! })) } as unknown as T;
+    }
+    default:
+      return spec;
+  }
+}
+
 /**
  * A chained subproject's implementation file paths (sourcePath, each method's
  * sourcePath, simPath) are relative to ITS root: the loader reads them against
@@ -3557,10 +3621,18 @@ export class SpecWorkspace {
       );
     }
     const asStored = JSON.stringify(this.prepareForKind(refKind, spec));
+    // The raw positions stay as written in memory: each one the scan recorded
+    // a canonical text for is rewritten to it here, token by token.
+    const rawRewrites = new Map(this.cachedRoots
+      .flatMap((r) => r.authoredReferences)
+      .filter((r) => r.specId === id && !bound.has(r.position) && r.rewrite !== undefined && r.rewrite !== r.authored)
+      .map((r) => [`${r.position}|${r.authored}`, r.rewrite!] as const));
+    const rawRewritten = rawRewrites.size === 0 ? spec
+      : mapRawReferences(refKind as ReferenceKind, spec, (position, value) => rawRewrites.get(`${position}|${value}`) ?? value);
     this.carryDisabled = true;
     try {
-      if (JSON.stringify(this.prepareForKind(refKind, spec)) === asStored) return false;
-      this.saveOfKind(refKind, spec, { preserveUpdatedAt: true });
+      if (JSON.stringify(this.prepareForKind(refKind, rawRewritten)) === asStored) return false;
+      this.saveOfKind(refKind, rawRewritten, { preserveUpdatedAt: true });
     } finally {
       this.carryDisabled = false;
     }

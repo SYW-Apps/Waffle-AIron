@@ -245,6 +245,8 @@ export interface BuildContextOptions {
   projectFamily?: import('../../models/project-family.js').ProjectFamily;
   /** The export usage of every connected project pair (see RuleContext.exportUsages); absent on a candidate run. */
   exportUsages?: import('../../models/exports.js').ExportUsage[];
+  /** The externals the chaining climb bound (see RuleContext.climbBoundExternals); absent when none. */
+  climbBoundExternals?: string[];
   /** Snapshots each chained mount holds, keyed by mount namespace (see RuleContext.mountSurfaceSnapshots). */
   mountSurfaceSnapshots?: import('./types.js').MountSurfaceSnapshots[];
   /** Source-code model for structural conformance; empty when not built. */
@@ -825,6 +827,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ...(opts.exportTables ? { exportTables: opts.exportTables } : {}),
     ...(opts.projectFamily ? { projectFamily: opts.projectFamily } : {}),
     ...(opts.exportUsages ? { exportUsages: opts.exportUsages } : {}),
+    ...(opts.climbBoundExternals ? { climbBoundExternals: opts.climbBoundExternals } : {}),
     mountSurfaceSnapshots,
     codeModel: opts.codeModel ?? emptyCodeModel(),
     roundTripIssues: opts.roundTripIssues,

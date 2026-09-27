@@ -436,6 +436,14 @@ export interface RuleContext {
    */
   exportUsages?: ExportUsage[];
   /**
+   * The aliases of the bound root's declared externals that its own scan binds
+   * to no project but the chaining climb binds from the family's top (a member
+   * naming its parent or a sibling), gathered by the validator. The
+   * external-declarations rule does not report them. Absent when nothing was
+   * climbed for.
+   */
+  climbBoundExternals?: string[];
+  /**
    * The snapshots each chained mount holds in its own `.wai/surfaces/`, keyed
    * by mount namespace. Consulted ONLY for references made from inside that
    * mount — never pooled into `surfaceSnapshots`, so a contract a child

@@ -319,7 +319,7 @@ describe('layered agent topology', () => {
 
     const delegate = resolveAgentTopology().find(a => a.id === 'child-owner')!;
     expect(delegate.tags).toContain('delegate');
-    expect(delegate.description).toMatch(/chained subproject/i);
+    expect(delegate.description).toMatch(/member project/i);
   });
 
   // The end-to-end file-writing cascade (each layer generated into its own

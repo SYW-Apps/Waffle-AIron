@@ -13,7 +13,7 @@ import { SddRule } from '../types.js';
 export const externalDeclarationsRule: SddRule = {
   name: 'external-declarations',
   description:
-    "Every external a project declares in project.yaml must be usable: its alias fits [a-z0-9-_]+ (a dotted producer id needs an explicit alias) and is not also a `members` key (one alias names one project), its producer id fits the project-id grammar, and its producer is found — exactly one project of the family answers to the id, or source.path names a directory (whose project, when it is in the family, answers to the declared id). A declaration that fails is reported (EXTERNAL_UNRESOLVED) with its reason, so a misspelled declaration never passes as declared. The findings name no spec: externals live in configuration. It reads the project graph's bound externals and alias-conflict problems.",
+    "Every external a project declares in project.yaml must be usable: its alias fits [a-z0-9-_]+ (a dotted producer id needs an explicit alias) and is not also a `members` key (one alias names one project), its producer id fits the project-id grammar, and its producer is found — exactly one project of the family answers to the id, or source.path names a directory (whose project, when it is in the family, answers to the declared id). A declaration that fails is reported (EXTERNAL_UNRESOLVED) with its reason, so a misspelled declaration never passes as declared — but only when neither the scan nor the chaining climb finds the producer: a member validated from its own root that declares its parent or a sibling is not reported when the climb to the family's top binds it (ctx.climbBoundExternals). The findings name no spec: externals live in configuration. It reads the project graph's bound externals and alias-conflict problems.",
   codes: [
     { code: 'EXTERNAL_UNRESOLVED', defaultSeverity: 'notice', summary: "A declared external whose alias is malformed or taken by a member, whose producer id is malformed, or whose producer the family and its source.path do not provide" },
   ],
@@ -22,12 +22,15 @@ export const externalDeclarationsRule: SddRule = {
     const family = ctx.projectFamily;
     // Steps 2-3: a candidate run carries none.
     if (!family) return;
+    const climbed = new Set(ctx.climbBoundExternals ?? []);
     // Steps 4-7: every external every project of the family declares.
     for (const node of family.nodes) {
       const where = node.namespace === '' ? 'This project\'s' : `The member keyed "${node.namespace}"'s`;
       const reported = new Set<string>();
       for (const external of node.externals) {
+        // Step 5: unresolved — unless the chaining climb bound it from the family's top.
         if (external.sourceKind !== 'unresolved') continue;
+        if (node.namespace === '' && climbed.has(external.alias)) continue;
         reported.add(external.alias);
         // Step 6.
         ctx.addIssue(

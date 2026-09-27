@@ -86,7 +86,7 @@ import {
 import { getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import * as path from 'path';
 import type {
-  SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, MethodImplementation,
+  SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, MethodImplementation, ProjectFamily,
 } from '../models/index.js';
 
 export type { TestsToRevisit };
@@ -573,6 +573,9 @@ export function validateSddTree(
     const pairs = new Map<string, [string, string]>();
     for (const r of family.references) pairs.set(`${r.consumer}|${r.producer}`, [r.consumer, r.producer]);
     const exportUsages = [...pairs.values()].map(([consumer, producer]) => exportUsage(consumer, producer));
+    // The bound root's externals its own scan cannot bind, bound by climbing to
+    // the family's top instead: a member naming its parent or a sibling.
+    const climbBoundExternals = crossTree === 'off' ? [] : externalsBoundByClimb(family);
 
     const ctx = buildRuleContext({
       system,
@@ -595,6 +598,7 @@ export function validateSddTree(
       ],
       projectFamily: family,
       exportUsages,
+      ...(climbBoundExternals.length > 0 ? { climbBoundExternals } : {}),
       // By-name selections only: a legacy path ref pins nothing to check.
       packSelections: projectPackSelections(),
       // The run that IS the parent's verdict on a chained child judges the
@@ -738,6 +742,40 @@ function resolveThroughParent(
     ...(i.specId !== undefined ? { specId: i.specId === scope ? local : stripNamespace(i.specId, scope) } : {}),
   }));
   return { root: top, scope, issues };
+}
+
+/**
+ * The aliases of the bound root's declared externals its own scan binds to no
+ * project (and gives no source.path), that the family's top binds to a family
+ * producer: the climb toward the top as resolveThroughParent walks it — never
+ * when the request may not read above its root, and never past the request's
+ * top root (the caller must gate on reach itself) — and the top's graph read
+ * with that root bound, this root's node found by its directory.
+ */
+function externalsBoundByClimb(family: ProjectFamily): string[] {
+  const bound = family.nodes.find((n) => n.namespace === '');
+  const wanted = (bound?.externals ?? []).filter((e) => e.sourceKind === 'unresolved' && e.problem?.startsWith('no project of the family'));
+  if (!bound || wanted.length === 0) return [];
+  const reach = getRequestParentReach();
+  if (reach && !reach.parentReach) return [];
+  const ceiling = reach?.topRoot ? path.resolve(reach.topRoot) : undefined;
+  // Step 30: the climb.
+  let top = path.resolve(getProjectRoot());
+  let climbed = false;
+  while (top !== ceiling) {
+    const hop = findChainingParent(top, ceiling);
+    if (!hop) break;
+    const next = path.resolve(hop.parentRoot);
+    if (ceiling && !isWithinOrEqual(ceiling, next)) break;
+    climbed = true;
+    top = next;
+  }
+  if (!climbed) return [];
+  // Step 31: the top's graph binds them, or it does not.
+  const self = sameDirectory(bound.directory);
+  const node = runWithProjectRoot(top, () => projectFamily().nodes.find((n) => self(n.directory)));
+  const aliases = new Set(wanted.map((e) => e.alias));
+  return (node?.externals ?? []).filter((e) => e.sourceKind === 'family' && aliases.has(e.alias)).map((e) => e.alias);
 }
 
 /**

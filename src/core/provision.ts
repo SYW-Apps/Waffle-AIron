@@ -45,6 +45,7 @@ import {
   type ImplementationSpec,
   type InterfaceSpec,
   type ProjectFamily,
+  type SubsystemSpec,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -359,9 +360,20 @@ export function moveMember(alias: string, newPath: string): void {
   if (!member) {
     throw new WaironError(`no member is declared under that alias: the bound project declares no member "${alias}".`);
   }
-  // Steps 4-6: a legacy declaration moves into `members` first.
-  if (member.mountForm === 'mount') moveMountToMembers(alias);
-  // Step 7: relocate the directory under the containment guard.
+  // Step 4: a legacy declaration moves into `members` first.
+  if (member.mountForm === 'mount') {
+    // Steps 5-6: never when the mount carries a field the move cannot carry.
+    const carried = mountFieldsBeyondPath(member.legacyMount);
+    if (carried.length > 0) {
+      throw new WaironError(
+        `Refusing to move the member "${alias}": its legacy L1 mount carries ${carried.join(', ')}, which a move cannot carry `
+        + 'and never drops. Run `wairon doctor --fix` — its chaining migration carries them into the member plan-first — then move it.',
+      );
+    }
+    // Steps 7-8.
+    moveMountToMembers(alias);
+  }
+  // Step 9: relocate the directory under the containment guard.
   const root = getProjectRoot();
   const declared = declaredMembers(projectConfigRepository.load() ?? {}).find((m) => m.alias === alias);
   const currentPath = declared?.path ?? member.legacyMount?.projectPath ?? '';
@@ -378,9 +390,26 @@ export function moveMember(alias: string, newPath: string): void {
     ensureDir(path.dirname(newDir));
     fs.renameSync(oldDir, newDir);
   }
-  // Step 8: point the `members` entry at the new path.
+  // Step 10: point the `members` entry at the new path.
   projectConfigRepository.setMemberPath(alias, nextPath);
   invalidateSpecCache();
+}
+
+/**
+ * The fields of a legacy mount beyond its path and description that its member
+ * would have to hold — each named once, empty when a move loses nothing.
+ */
+function mountFieldsBeyondPath(mount: SubsystemSpec | null): string[] {
+  if (!mount) return [];
+  const out: string[] = [];
+  if (mount.publicInterfaces.length > 0) out.push('publicInterfaces');
+  if (mount.trustedLinks.length > 0) out.push('trustedLinks');
+  if ((mount.lint?.allow ?? []).length > 0) out.push('lint');
+  for (const field of ['lifecycle', 'profile', 'targetLanguage', 'designDepth', 'ext'] as const) {
+    const value = mount[field];
+    if (value !== undefined && !(Array.isArray(value) && value.length === 0)) out.push(field);
+  }
+  return out;
 }
 
 /** Normalize a filesystem path to forward-slash form for portable storage. */
@@ -538,6 +567,15 @@ export function internalizeMember(alias: string): void {
       + `${subsystems.length} subsystem(s), ${member.members.length} member(s), externals ${ownExternals.length ? ownExternals.join(', ') : 'none'}).`,
     );
   }
+  // Steps 6-7: no other project of the family may reference the member.
+  const others = family.references.filter((r) => r.producer === member.namespace && r.consumer !== '' && r.consumer !== member.namespace);
+  if (others.length > 0) {
+    const listed = [...new Set(others.map((r) => `${r.consumer}: ${r.specId} (${r.position}) "${r.authored}"`))];
+    throw new WaironError(
+      `cannot internalize: other projects of the family reference the member "${alias}" — ${listed.join('; ')}. `
+      + 'Internalizing would leave them naming a project that no longer exists; rewriting other projects is the family migration\'s job.',
+    );
+  }
   const parentRoot = getProjectRoot();
   const parentSpecsDir = aiPathsAt(parentRoot).specsDir();
   const memberDir = assertContainedProjectPath(parentRoot, path.relative(parentRoot, member.directory) || '.');
@@ -548,9 +586,9 @@ export function internalizeMember(alias: string): void {
   // parent, by the target the scan bound it to.
   const intoMember = crossingReferences(family, '', member.namespace);
   const backOut = crossingReferences(family, member.namespace, '');
-  // Step 6: delete a legacy mount document first, so the moved subsystem can take its folder.
+  // Step 8: delete a legacy mount document first, so the moved subsystem can take its folder.
   deleteMount(alias);
-  // Step 7: move the member's specs in (refused before anything moves on a collision).
+  // Step 9: move the member's specs in (refused before anything moves on a collision).
   const movedFiles = moveTreeInto(memberSpecsDir, parentSpecsDir, new Set([path.resolve(aiPathsAt(memberDir).specsSystem())]));
   rebaseImplementationPaths(parentSpecsDir, memberDir, parentRoot, movedFiles);
   const parentSystemName = loadSystemSpec()?.name;
@@ -561,17 +599,17 @@ export function internalizeMember(alias: string): void {
   const rewritten = [
     ...rewriteRefFields(parentSpecsDir, (ref) => intoMember.get(ref) ?? backOut.get(ref) ?? ref),
   ];
-  // Step 8: remove the member from `members` (false for a legacy declaration).
+  // Step 10: remove the member from `members` (false for a legacy declaration).
   projectConfigRepository.removeMember(alias);
-  // Step 9: delete the member's .wai project.
+  // Step 11: delete the member's .wai project.
   fs.rmSync(path.join(memberDir, '.wai'), { recursive: true, force: true });
   invalidateSpecCache();
-  // Step 10: re-save each spec whose references crossed the old boundary.
+  // Step 12: re-save each spec whose references crossed the old boundary.
   for (const spec of rewritten) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, spec.id);
-  // Step 11: the parent L0's re-exports from the member now re-export the moved subsystem.
+  // Step 13: the parent L0's re-exports from the member now re-export the moved subsystem.
   restateReExports(alias, localSub);
   invalidateSpecCache();
-  // Step 12.
+  // Step 14.
 }
 
 /** A root's configuration read through that root's binding; null when it has none or it fails its schema. */
