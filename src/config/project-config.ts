@@ -15,6 +15,8 @@ import {
   type PackSelection,
   type ProjectProfileSelection,
   type ExternalDeclaration,
+  type MemberDeclaration,
+  memberDeclarationOf,
 } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
@@ -58,6 +60,9 @@ export interface ProjectConfigRepository {
   rekeyCarried(rename: IdentityRename, dryRun?: boolean): CarriedRekey[];
   setId(id: string): boolean;
   declareExternal(alias: string, declaration: ExternalDeclaration): boolean;
+  declareMember(alias: string, declaration: MemberDeclaration): boolean;
+  setMemberPath(alias: string, path: string): boolean;
+  removeMember(alias: string): boolean;
 }
 
 /** iproject_config_index — the read half of the facade. */
@@ -913,7 +918,68 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       save({ ...config, externals: { ...config.externals, [alias]: declaration } });
       return true;
     },
+    declareMember(alias, declaration) {
+      if (!EXTERNAL_ALIAS_RE.test(alias)) {
+        throw new WaironError(`Refusing to declare the member "${alias}" at ${root}: an alias must fit [a-z0-9-_]+.`);
+      }
+      assertMemberPath(alias, declaration.path, root);
+      const config = current();
+      if (config.externals?.[alias] !== undefined) {
+        throw new WaironError(
+          `Refusing to declare the member "${alias}" at ${root}: \`externals\` already declares "${alias}" as `
+          + `${JSON.stringify(config.externals[alias])}, and one alias names one project.`,
+        );
+      }
+      const written = memberValue(declaration);
+      const existing = config.members?.[alias];
+      if (existing !== undefined) {
+        if (sameValue(memberValue(memberDeclarationOf(existing)), written)) return false;
+        throw new WaironError(
+          `Refusing to declare the member "${alias}" at ${root} as ${JSON.stringify(written)}: `
+          + `it is already declared as ${JSON.stringify(existing)}, and a declaration a person wrote is never overwritten.`,
+        );
+      }
+      save({ ...config, members: { ...config.members, [alias]: written } });
+      return true;
+    },
+    setMemberPath(alias, memberPath) {
+      assertMemberPath(alias, memberPath, root);
+      const config = current();
+      const existing = config.members?.[alias];
+      if (existing === undefined) {
+        throw new WaironError(`Refusing to move the member "${alias}" at ${root}: \`members\` declares no "${alias}".`);
+      }
+      if (memberDeclarationOf(existing).path === memberPath) return false;
+      const next = typeof existing === 'string' ? memberPath : { ...existing, path: memberPath };
+      save({ ...config, members: { ...config.members, [alias]: next } });
+      return true;
+    },
+    removeMember(alias) {
+      const config = current();
+      const members = config.members;
+      if (members?.[alias] === undefined) return false;
+      const rest = Object.fromEntries(Object.entries(members).filter(([key]) => key !== alias));
+      const next: ProjectConfig = { ...config, members: rest };
+      if (Object.keys(rest).length === 0) delete next.members;
+      save(next);
+      return true;
+    },
   };
+}
+
+/** A member's value as it is written: the shorthand when it carries only a path, else the long form. */
+function memberValue(declaration: MemberDeclaration): string | MemberDeclaration {
+  return declaration.description === undefined ? declaration.path : { path: declaration.path, description: declaration.description };
+}
+
+/** Refuse an empty or absolute member path before anything is read. */
+function assertMemberPath(alias: string, memberPath: string, root: string): void {
+  if (typeof memberPath !== 'string' || memberPath.trim() === '') {
+    throw new WaironError(`Refusing to declare the member "${alias}" at ${root}: its path is empty.`);
+  }
+  if (path.isAbsolute(memberPath) || path.win32.isAbsolute(memberPath)) {
+    throw new WaironError(`Refusing to declare the member "${alias}" at ${root}: "${memberPath}" is absolute, and a member path is relative to the project declaring it.`);
+  }
 }
 
 /**
@@ -991,6 +1057,9 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     rekeyCarried(rename, dryRun) { return registry.rekeyCarried(rename, dryRun); },
     setId(id) { return registry.setId(id); },
     declareExternal(alias, declaration) { return registry.declareExternal(alias, declaration); },
+    declareMember(alias, declaration) { return registry.declareMember(alias, declaration); },
+    setMemberPath(alias, memberPath) { return registry.setMemberPath(alias, memberPath); },
+    removeMember(alias) { return registry.removeMember(alias); },
   };
 }
 
@@ -1023,4 +1092,7 @@ export const projectConfigRepository: ProjectConfigRepository = {
   rekeyCarried(rename, dryRun) { return bound().rekeyCarried(rename, dryRun); },
   setId(id) { return bound().setId(id); },
   declareExternal(alias, declaration) { return bound().declareExternal(alias, declaration); },
+  declareMember(alias, declaration) { return bound().declareMember(alias, declaration); },
+  setMemberPath(alias, memberPath) { return bound().setMemberPath(alias, memberPath); },
+  removeMember(alias) { return bound().removeMember(alias); },
 };
