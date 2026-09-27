@@ -25,20 +25,6 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: listSnapshots
-  - name: listExternalInterfaces
-    narrative:
-      - stepNumber: 1
-        description: Forward the discovery read to the surface portal
-        type: call
-        targetComponent: surface_portal
-        targetMethod: listExternalInterfaces
-  - name: pinFamilySurfaces
-    narrative:
-      - stepNumber: 1
-        description: Forward to the surface portal
-        type: call
-        targetComponent: surface_portal
-        targetMethod: pinFamilySurfaces
   - name: pinExternals
     narrative:
       - stepNumber: 1
@@ -60,6 +46,20 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: listExternals
+  - name: listFamilyPins
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listFamilyPins
+  - name: removeSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: removeSnapshot
 status: complete
 createdAt: '2026-07-10T23:16:03.846Z'
-updatedAt: '2026-09-26T17:49:16.400Z'
+updatedAt: '2026-09-27T10:43:06.429Z'

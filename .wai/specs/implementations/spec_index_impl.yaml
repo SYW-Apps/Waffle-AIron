@@ -40,8 +40,11 @@ methods:
         targetMethod: read
       - stepNumber: 3
         description: >-
-          Parse each against SubsystemSpecSchema, qualifying namespaces and collecting refusals as
-          loader issues — a bad file never aborts the sweep
+          Parse each against SubsystemSpecSchema, keying it under its project and binding its
+          references the way the scan does (listProjectRoots: local first, `alias::name` through the
+          root's alias table), collecting refusals as loader issues — a bad file never aborts the
+          sweep. A legacy mount subsystem (one carrying projectPath) is not among them: it is a
+          member declaration of its project, recorded on the member's root
         type: local
   - name: loadSubsystemSpec
     narrative:
@@ -54,7 +57,9 @@ methods:
         targetComponent: spec_file_store
         targetMethod: read
       - stepNumber: 3
-        description: Parse against SubsystemSpecSchema, qualifying namespaces; an absent document yields null
+        description: >-
+          Parse against SubsystemSpecSchema, keyed and bound as the scan binds it; an absent
+          document yields null
         type: local
   - name: loadComponentSpecs
     narrative:
@@ -70,8 +75,8 @@ methods:
         targetMethod: read
       - stepNumber: 3
         description: >-
-          Parse each against ComponentSpecSchema, qualifying namespaces and collecting refusals as
-          loader issues
+          Parse each against ComponentSpecSchema, keyed under its project and its references bound
+          as the scan binds them, collecting refusals as loader issues
         type: local
   - name: loadComponentSpec
     narrative:
@@ -84,7 +89,9 @@ methods:
         targetComponent: spec_file_store
         targetMethod: read
       - stepNumber: 3
-        description: Parse against ComponentSpecSchema, qualifying namespaces; an absent document yields null
+        description: >-
+          Parse against ComponentSpecSchema, keyed and bound as the scan binds it; an absent
+          document yields null
         type: local
   - name: loadInterfaceSpecs
     narrative:
@@ -100,8 +107,8 @@ methods:
         targetMethod: read
       - stepNumber: 3
         description: >-
-          Parse each against InterfaceSpecSchema, qualifying namespaces and collecting refusals as
-          loader issues
+          Parse each against InterfaceSpecSchema, keyed under its project and its references bound
+          as the scan binds them, collecting refusals as loader issues
         type: local
   - name: loadInterfaceSpec
     narrative:
@@ -114,7 +121,9 @@ methods:
         targetComponent: spec_file_store
         targetMethod: read
       - stepNumber: 3
-        description: Parse against InterfaceSpecSchema, qualifying namespaces; an absent document yields null
+        description: >-
+          Parse against InterfaceSpecSchema, keyed and bound as the scan binds it; an absent
+          document yields null
         type: local
   - name: loadImplementationSpecs
     narrative:
@@ -130,8 +139,8 @@ methods:
         targetMethod: read
       - stepNumber: 3
         description: >-
-          Parse each against ImplementationSpecSchema, qualifying namespaces and collecting refusals
-          as loader issues
+          Parse each against ImplementationSpecSchema, keyed under its project and its references
+          bound as the scan binds them, collecting refusals as loader issues
         type: local
   - name: loadImplementationSpec
     narrative:
@@ -145,8 +154,8 @@ methods:
         targetMethod: read
       - stepNumber: 3
         description: >-
-          Parse against ImplementationSpecSchema, qualifying namespaces; an absent document yields
-          null
+          Parse against ImplementationSpecSchema, keyed and bound as the scan binds it; an absent
+          document yields null
         type: local
   - name: loadTypeSpecs
     narrative:
@@ -173,21 +182,22 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Load this project's subsystem specs and keep the top-level ones carrying a projectPath —
-          those are its chained mounts
+          Read the bound project's member declarations as the scan reads them — its `members`
+          entries and, for one release, its legacy L1 mounts (top-level subsystems carrying
+          projectPath)
         type: call
         targetComponent: spec_file_store
         targetMethod: listTree
       - stepNumber: 2
         description: >-
-          Resolve each mount's projectPath against the project that declares it, under the
-          containment guard against THAT project's root (lexically and through links), and skip a
-          mount whose directory does not exist
+          Resolve each member's path against the project that declares it, under the containment
+          guard against THAT project's root (lexically and through links), and skip a member whose
+          directory does not exist
         type: local
       - stepNumber: 3
         description: >-
-          Recurse into each existing child root the same way, prefixing its own mounts with the
-          child's project-relative path, so nested chains contribute every level
+          Recurse into each existing member root the same way, prefixing its own members with the
+          member's project-relative path, so nested members contribute every level
         type: local
       - stepNumber: 4
         description: Return the project-relative roots in walk order
@@ -197,19 +207,19 @@ methods:
     narrative: []
     detail: intent
     intent: >-
-      Walks the namespace segment by segment through the scanned index, resolving each mount's
-      projectPath against the previous mount's directory; a hop whose path escapes the project
-      declaring it (lexically or through a link) raises PROJECTPATH_ESCAPE and is skipped, and a
-      namespace in which no segment is a mount yields null.
+      Looks the key up among the roots the current scan recorded and answers that root's directory;
+      the scan already resolved every member's path against the project declaring it and refused an
+      escaping one (PROJECTPATH_ESCAPE), so a key that names no recorded root — a refused member, or
+      no member at all — yields null.
   - name: inspectChainedRoots
     narrative: []
     detail: intent
     intent: >-
-      Walks the chained mounts exactly as the loader recurses — each projectPath resolved against
-      its declaring project and contained by that project's root, lexically and through links —
-      collecting the followable roots in walk order and every refused mount (escapes, missing,
-      cyclic, too-deep) with its qualified id, declared path and reason; listChainedRoots returns
-      the roots half.
+      Walks the members exactly as the scan recurses — each path resolved against its declaring
+      project and contained by that project's root, lexically and through links, whether declared
+      under `members` or as a legacy L1 mount — collecting the followable roots in walk order and
+      every refused member (escapes, missing, cyclic, too-deep) with its key, alias, form, declared
+      path and reason; listChainedRoots returns the roots half.
   - name: loadTypeSpec
     narrative:
       - stepNumber: 1
@@ -248,45 +258,128 @@ methods:
   - name: listProjectRoots
     narrative:
       - stepNumber: 1
+        label: scan
         description: >-
-          Serve the workspace scan (cached while the tree's file signature holds): the scan walks
-          every spec directory of the bound root and each chained member, recording per root its
-          namespace, parent, mount alias and directory as it recurses
+          Serve the workspace scan while the tree's file signature holds. Otherwise phase one walks
+          the bound root's spec directories, and each member's the same way when the walk reaches it
         type: call
         targetComponent: spec_file_store
         targetMethod: listTree
       - stepNumber: 2
         description: >-
-          At each root, read its own L0 document through the file store — a member's L0 is recorded
-          on its root, never merged into the index, whose L0 stays the bound root's
-        type: call
-        targetComponent: spec_file_store
-        targetMethod: read
-      - stepNumber: 3
-        description: >-
-          Qualify the member L0's export entries into the member's namespace the way the loader
-          qualifies an L1 re-export (`from` against the namespace the member declares its subsystems
-          in, `component`, `interface` and `typeDef` against that source's namespace)
-        type: local
-      - stepNumber: 4
-        description: >-
           Record the root's configuration, read through the configuration bound at that root — the
           per-root binding the scan already reads the root's specs folder through (a scan may read
           the configuration of the root it is walking) — and add the root's .wai/project.yaml to the
-          scan's freshness signature, so an edit to its externals re-scans
+          scan's freshness signature, so an edit to its members or externals re-scans
         type: local
-      - stepNumber: 5
+      - stepNumber: 3
         description: >-
-          Record the ids of every spec the root's files declared (a mount subsystem merged with its
-          realization belongs to the root it mounts), and every reference the root's files wrote
-          with a leading `::`, with its position and the absolute id it qualified to, before
-          qualification erases the form
+          Read the root's member declarations: project_config.declaredMembers(), and, for one
+          release, every top-level L1 subsystem of the root carrying projectPath — a legacy mount,
+          recorded with every field as written on the member it declares and never loaded as a
+          subsystem, since a mount carries no content. A `members` entry and a legacy mount under
+          one alias are one member, the `members` entry winning; an alias declared both as a member
+          and as an external is an alias-conflict problem; a declaration with a problem is recorded
+          and not followed
+        type: local
+      - stepNumber: 4
+        description: >-
+          Read the root's own L0 and every spec document through the file store; a member's L0 is
+          recorded on its root, never merged into the index, whose L0 stays the bound root's
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 5
+        label: key
+        description: >-
+          Key the root: '' for the bound root, else its effective project id
+          (project_config.effectiveId()) — the same at every depth — or, when another member already
+          holds that id or it has none, its alias path, with an id-collision or no-id problem. Key
+          every declaration under it (`billing::invoice_portal`; a subsystem `billing` declared
+          inside member billing is `billing::billing`), and put the root's specs in the index under
+          those keys, folding nothing into another root's namespace. A second declaration of one key
+          in one root is a duplicate-spec problem naming both files; the first stays in the index
         type: local
       - stepNumber: 6
+        description: >-
+          Bind every local reference of the root — an id without `::` — inside it (`key::id`), and
+          record every reference with `::` exactly as written, with its spec and position, before
+          binding erases the form
+        type: local
+      - stepNumber: 7
+        label: members
+        description: Follow each followable member the root declares
+        type: loop
+        loopKind: forEach
+        over: the root's member declarations without a problem, in declaration order
+        endStep: 8
+      - stepNumber: 8
+        label: follow
+        description: >-
+          Resolve the member's path against THIS root and under the containment guard against this
+          root, lexically and through links (the declaring project decides containment, so a member
+          is accepted or refused identically whichever root loads it): an escaping path is
+          PROJECTPATH_ESCAPE, a directory already on the walk CIRCULAR_SUBPROJECT_REFERENCE, a
+          missing one SUBPROJECT_NOT_FOUND with a member-absent problem — each skipped, and each
+          loader issue carrying the member's key. Otherwise, below the depth bound, walk the member
+          the same way from step 2, as a member of this root declared under its alias
+        type: local
+      - stepNumber: 9
+        label: tables
+        description: >-
+          Phase two: resolve every root's export tables, in dependency order — each after the
+          members and externals its L0 re-exports from, a root met again on its own path handed on
+          as null
+        type: loop
+        loopKind: forEach
+        over: the roots read, producers before their consumers
+        endStep: 11
+      - stepNumber: 10
+        description: Resolve the root's L1 subsystem tables from its own specs
+        type: call
+        targetComponent: export_resolver
+        targetMethod: subsystemTables
+      - stepNumber: 11
+        description: >-
+          Resolve the root's L0 table, handing it the root's key, its alias table and the tables
+          already resolved for the producers its aliases name
+        type: call
+        targetComponent: export_resolver
+        targetMethod: projectTable
+      - stepNumber: 12
+        label: bind
+        description: Bind every recorded reference with `::`
+        type: loop
+        loopKind: forEach
+        over: the references with `::` every root's files wrote
+        endStep: 13
+      - stepNumber: 13
+        label: bound
+        description: >-
+          Local first; then by form. alias — the first segment is an alias of the referring root:
+          the name is looked up among the public names of the named producer's resolved L0 table:
+          found, it binds to that entry's canonical target (exported); not found, to the producer's
+          spec of that local id (unexported, lenient until stage 4); an alias whose producer the
+          scan did not read keeps the text as written (outside). leading `::a::rest` and path
+          `a::rest` (a first segment the root does not declare) are read the stage-2 way, as a
+          member path from the bound root, one alias per segment, the last segment a local id;
+          `super::x` climbs one containing project per hop and reads the rest there, local first. A
+          deprecated form landing in the referring root is local; landing in another project it
+          binds like the alias form when the referrer declares that producer, else leniently
+          (undeclared). A first segment that names no alias, no member path and no family project id
+          stays as written (unresolved). Record the form, the binding, the producer, the public name
+          and the rewrite the writer would emit (AuthoredReference)
+        type: local
+      - stepNumber: 14
+        description: >-
+          Record per root its key, parent, alias and form, legacy mount, L0, configuration, alias
+          table, tables, spec keys and authored references, and the family problems met
+        type: local
+      - stepNumber: 15
         description: Answer the recorded roots, bound root first
         type: return
         outcome: ScannedProjectRoot[]
     detail: full
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-26T18:13:11.045Z'
+updatedAt: '2026-09-27T10:36:09.600Z'

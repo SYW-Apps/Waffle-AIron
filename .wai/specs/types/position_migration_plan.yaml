@@ -1,0 +1,27 @@
+kind: value-object
+id: position_migration_plan
+name: PositionMigrationPlan
+description: >-
+  The stage-3 share of a family's chaining migration, planned and not yet applied: the legacy mounts
+  to move into `members` with what they carry, the references to rewrite out of a deprecated form,
+  and every finding it will not decide for a person. The chaining migration merges it into its own
+  plan.
+subsystem: sdd_cli
+fields:
+  - name: members
+    type: PlannedMember[]
+    description: The mounts to move, parents in walk order, each parent's mounts in declaration order.
+    optional: false
+  - name: rewrites
+    type: PlannedRewrite[]
+    description: The references to rewrite, projects in walk order, then spec, then position.
+    optional: false
+  - name: findings
+    type: ChainingMigrationFinding[]
+    description: >-
+      Every mount field that stops the move, every reference with no rewrite, every absent member,
+      in the order found.
+    optional: false
+methods: []
+createdAt: '2026-09-27T10:44:31.358Z'
+updatedAt: '2026-09-27T10:44:46.032Z'

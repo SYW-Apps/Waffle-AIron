@@ -2,24 +2,28 @@ kind: value-object
 id: chaining_parent_ref
 name: ChainingParentRef
 description: >-
-  The detected chaining-mount context of the current project root: which parent project mounts this
-  tree as a chained subsystem. Produced by a filesystem walk-up (never configured), so it reflects
-  where the tree ACTUALLY sits.
+  The detected membership context of the current project root: which parent project declares this
+  tree as a member. Produced by a filesystem walk-up (never configured), so it reflects where the
+  tree ACTUALLY sits.
 subsystem: sdd_core
 fields:
   - name: parentRoot
     type: string
     description: >-
-      Absolute root directory of the parent project whose subsystem projectPath resolves to this
-      project's root.
+      Absolute root directory of the parent project whose `members` entry (or legacy L1 mount's
+      projectPath) resolves to this project's root and stays within the parent's own root.
     optional: false
-  - name: subsystemId
+  - name: alias
     type: string
     description: >-
-      Id of the parent-tree subsystem that mounts this project (the mount point whose namespace this
-      tree occupies when loaded from the parent).
+      The alias the parent declares this project under: its `members` key, or the legacy mount
+      subsystem's id.
+    optional: false
+  - name: form
+    type: string
+    description: 'members | mount: which form the parent declares it in.'
     optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-07-24T17:53:35.762Z'
-updatedAt: '2026-09-19T11:07:06.004Z'
+updatedAt: '2026-09-27T10:33:59.676Z'

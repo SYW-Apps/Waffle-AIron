@@ -1,0 +1,22 @@
+kind: value-object
+id: position_migration_result
+name: PositionMigrationResult
+description: >-
+  What applying the stage-3 share of a chaining migration wrote: every file changed, in write order,
+  and the projects whose approval those writes staled. The chaining migration folds it into its
+  report.
+subsystem: sdd_cli
+fields:
+  - name: written
+    type: string[]
+    description: >-
+      Every file changed, in write order: parents' project.yaml (members), deleted L1 mount
+      documents, rewritten spec files, deleted family-pin snapshots.
+    optional: false
+  - name: relock
+    type: string[]
+    description: The directories of the projects whose lock the writes left stale.
+    optional: false
+methods: []
+createdAt: '2026-09-27T10:44:33.869Z'
+updatedAt: '2026-09-27T10:44:46.811Z'

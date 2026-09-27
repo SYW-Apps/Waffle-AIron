@@ -70,12 +70,26 @@ fields:
   - name: externals
     type: Map<string, ExternalDeclaration>
     description: >-
-      The other projects this project consumes, keyed by alias (the name its references use from
-      stage 3). Each value is an ExternalDeclaration; the alias defaults the producer id, and a
-      producer is found through the family (parent, members, siblings) or an explicit source.path. A
-      member (a project this one mounts) needs no declaration: the mount is its alias. Read by the
-      project graph at scan time. Written by hand, or by `doctor --fix`'s chaining migration through
-      the registry's declareExternal, which adds an alias and never overwrites one.
+      The other projects this project consumes, keyed by alias — the first segment of its
+      `alias::name` references. Each value is an ExternalDeclaration; the alias defaults the
+      producer id, and a producer is found through the family (parent, members' siblings) or an
+      explicit source.path. A member needs no declaration: its `members` key is its alias. An alias
+      both here and under `members` is a problem of both declarations. Read by the scan and the
+      project graph. Written by hand, or by `doctor --fix`'s chaining migration through the
+      registry's declareExternal, which adds an alias and never overwrites one.
+    optional: true
+  - name: members
+    type: Map<string, MemberDeclaration | string>
+    description: >-
+      The projects this project contains, keyed by alias: `billing: services/billing` (shorthand,
+      the value is the path relative to this root) or `ledger: { path: services/ledger, description:
+      ... }` (long form, a MemberDeclaration). A member is not a subsystem of this project: it has
+      no L1 spec here and carries no content here; this project reaches it only as `alias::name`,
+      through the member's own L0 export table, like any other consumer. Its path must lie inside
+      this project (containment is decided against the declaring root). Together with `externals` it
+      is this project's alias table, and one alias names one project. Written by hand, or by `doctor
+      --fix`'s chaining migration through the registry's declareMember, which moves a legacy L1
+      `projectPath` mount here; the L1 form still loads for one release (DEPRECATED_MOUNT_FORM).
     optional: true
 methods:
   - name: declaredPackNames
@@ -126,8 +140,17 @@ methods:
     description: >-
       The configuration's `externals`, one DeclaredExternal per alias in declaration order: the
       producer id is the entry's `project`, else the alias; the source path is copied as written; an
-      alias outside [a-z0-9-_]+ or a producer id outside the project-id grammar is recorded as the
-      entry's problem rather than dropped. Empty when nothing is declared.
+      alias outside [a-z0-9-_]+, an alias `members` also declares, or a producer id outside the
+      project-id grammar is recorded as the entry's problem rather than dropped. Empty when nothing
+      is declared.
+  - name: declaredMembers
+    signature: 'declaredMembers(): DeclaredMember[]'
+    returns: DeclaredMember[]
+    description: >-
+      The configuration's `members`, one DeclaredMember per alias in declaration order, the
+      shorthand read as `{ path }`: the path and description copied as written; an alias outside
+      [a-z0-9-_]+, an empty or absolute path, or an alias `externals` also declares is recorded as
+      the entry's problem rather than dropped. Empty when nothing is declared.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-26T21:14:37.494Z'
+updatedAt: '2026-09-27T10:41:12.293Z'

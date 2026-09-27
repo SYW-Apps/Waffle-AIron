@@ -1,0 +1,157 @@
+id: export_resolver_impl
+name: Export Resolver Implementation
+description: >-
+  The pure half of src/core/exports.ts (resolveSubsystemTables and resolveProjectTable today),
+  separated from the export Index's projection so the scan can call it. Specs are indexed once per
+  call into a lookup world; nothing is cached across calls.
+contract: iexport_resolver
+sourcePath: src/core/exports.ts
+methods:
+  - name: subsystemTables
+    narrative:
+      - stepNumber: 1
+        description: Index the handed subsystems, components, interfaces and types once by key
+        type: local
+      - stepNumber: 2
+        description: >-
+          Bind every subsystem's OWN items: a component or type the subsystem owns, under `as ??
+          interface ?? component` (or `as ?? typeDef`). A public name outside [a-z0-9-_]+, a typeDef
+          the subsystem does not own, or a narrowing onto another component's contract is an invalid
+          problem; an unbound, unknown or foreign own component is left to the public-surface rules
+          and skipped
+        type: local
+      - stepNumber: 3
+        description: >-
+          Order the subsystems by their `from` edges into groups that re-export each other (strongly
+          connected), sources before the subsystems that read them
+        type: local
+      - stepNumber: 4
+        label: groups
+        description: For each group, sources first
+        type: loop
+        loopKind: forEach
+        over: the groups in dependency order
+        endStep: 7
+      - stepNumber: 5
+        description: >-
+          Bind each NAMED re-export by its target in the source's table (the component, narrowed to
+          the interface when one is named). A missing source, an unknown item, or an item the source
+          does not export is an invalid problem; an item the source owns but does not export is
+          still bound, leniently, so no existing name moves. Inside a group whose tables are not yet
+          complete, a name that never grounds is a named-cycle problem
+        type: local
+      - stepNumber: 6
+        description: >-
+          Bring in each WILDCARD's source table under the source's public names unchanged; a group
+          whose members re-export each other through wildcards is iterated to its union and recorded
+          once as a wildcard-cycle problem naming the loop
+        type: local
+      - stepNumber: 7
+        label: settled
+        description: >-
+          Settle each table: an own or explicit entry shadows a name a wildcard brings in; the same
+          target twice under one name is one entry; two wildcards binding one name to different
+          targets is a duplicate problem and the name is left out; a re-export whose target is
+          neither a Portal nor an Observer is an unconsumable problem
+        type: local
+      - stepNumber: 8
+        description: Answer every subsystem's table by key
+        type: return
+        outcome: Map<string, ResolvedExportTable>
+    detail: full
+    symbol: resolveSubsystemTables
+  - name: projectTable
+    narrative:
+      - stepNumber: 1
+        description: Is there an L0 to read exports from?
+        type: branch
+        condition: the project has no L0
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Answer an empty project table owned by the project
+        type: return
+        outcome: empty table
+      - stepNumber: 3
+        label: world
+        description: Index the handed subsystems, components, interfaces and types once by key
+        type: local
+      - stepNumber: 4
+        label: entries
+        description: For each L0 entry
+        type: loop
+        loopKind: forEach
+        over: the L0 publicInterfaces entries, in order
+        endStep: 11
+      - stepNumber: 5
+        description: >-
+          Read the entry the way it was meant: its name `as ?? id` (a public name outside
+          [a-z0-9-_]+ is an invalid problem), and its source — `from ?? subsystem`, else, for a
+          `typeDef` naming a type the project owns at project level (no subsystem), none (an own
+          item), else the owner of the component or type
+        type: local
+      - stepNumber: 6
+        description: Follow the source by its kind
+        type: switch
+        'on': the source's kind
+        cases:
+          - value: own
+            step: 7
+          - value: subsystem
+            step: 8
+          - value: project
+            step: 9
+        defaultStep: 10
+      - stepNumber: 7
+        label: own-type
+        description: >-
+          Bind the project-level type itself as an own type item under `as ?? typeDef` (the
+          crate-root `pub struct`); a typeDef naming no type of the project is an invalid problem
+        type: jump
+        toStep: 11
+      - stepNumber: 8
+        label: subsystem-source
+        description: >-
+          Bind against the source subsystem's table — a named entry by its target (leniently, as for
+          a subsystem table), a wildcard under every name the table exports
+        type: jump
+        toStep: 11
+      - stepNumber: 9
+        label: project-source
+        description: >-
+          Bind against the producing project's table from the sources — the member's or the
+          external's, by alias: only its public names can be bound; a producer present as null
+          (still on this resolution path) is a named-cycle problem naming the projects on the loop
+          and binds nothing; an entry whose declared audience (default instance) ranks wider than
+          the producer export's audience is a widens problem naming both
+        type: jump
+        toStep: 11
+      - stepNumber: 10
+        label: unresolvable
+        description: >-
+          Record an invalid problem: no source at all, an alias that is neither a subsystem, a
+          member nor a declared external, or an external the scan did not read (found only through
+          source.path, or a parent or sibling outside the scan), whose table cannot be followed from
+          here
+        type: local
+      - stepNumber: 11
+        label: bound
+        description: >-
+          Carry the entry's audience, name, transport kind, details, auth policy, version and
+          stability onto every name it brought in, and record a re-exported component that is
+          neither a Portal nor an Observer as an unconsumable problem
+        type: local
+      - stepNumber: 12
+        description: >-
+          Settle the project table as a subsystem table is settled (explicit shadows wildcard, a
+          same-target repeat is one entry, a wildcard-versus-wildcard name is a duplicate and left
+          out)
+        type: local
+      - stepNumber: 13
+        description: Answer the project table with its problems
+        type: return
+        outcome: ResolvedExportTable
+    detail: full
+    symbol: resolveProjectTable
+status: design
+createdAt: '2026-09-27T10:34:37.874Z'
+updatedAt: '2026-09-27T10:38:32.106Z'

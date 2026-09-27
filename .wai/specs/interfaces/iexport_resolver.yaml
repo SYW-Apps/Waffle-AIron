@@ -1,0 +1,79 @@
+id: iexport_resolver
+name: Export Resolver Interface
+description: >-
+  Pure contract for resolving export tables from the specs a caller hands over. Deterministic for
+  equal input, never reads, never writes, never judges: problems come back as facts on the table.
+component: export_resolver
+methods:
+  - name: subsystemTables
+    description: >-
+      Resolve every subsystem's L1 export table of one project: what each makes visible to the other
+      subsystems of its project. Own items bind a component or type the subsystem owns; every
+      re-export is followed to its canonical target, subsystems in dependency order, and wildcards
+      are expanded; a wildcard cycle resolves to its union. Explicit and own entries shadow a name a
+      wildcard brings in, the same target under one name twice is no conflict, and a name two
+      wildcards bring from different targets is left out. Every problem — duplicate, cycle, invalid,
+      unconsumable — is returned as a fact on the table it concerns.
+    signature: >-
+      subsystemTables(subsystems: SubsystemSpec[], components: ComponentSpec[], interfaces:
+      InterfaceSpec[], types: TypeSpec[]): Map<string, ResolvedExportTable>
+    returns: Map<string, ResolvedExportTable>
+    params:
+      - name: subsystems
+        type: SubsystemSpec[]
+        description: The project's subsystems, keys qualified
+      - name: components
+        type: ComponentSpec[]
+        description: The project's components
+      - name: interfaces
+        type: InterfaceSpec[]
+        description: The project's interfaces, for narrowed entries
+      - name: types
+        type: TypeSpec[]
+        description: The project's types, subsystem-owned and project-level
+    guarantees:
+      - idempotent
+  - name: projectTable
+    description: >-
+      Resolve one project's L0 export table — what other projects may consume. A legacy entry reads
+      as a re-export (`subsystem` as `from`, `id` as `as`; a component or subsystem-owned type
+      without a source infers it from its owner); an entry `{ typeDef }` with no `from` naming a
+      type the project owns at project level (no subsystem) binds that type as an own item; the
+      public name is `as ?? id ?? interface ?? component ?? typeDef`; each entry's audience applies
+      to every name it brings in. A source is one of the project's subsystems (through its subsystem
+      table), or a member or external by alias (through that producer's table in the sources — a
+      producer still on the resolution path is a named-cycle problem, one the scan did not read is
+      an invalid problem); an entry declaring a wider audience than the export it re-exports is a
+      widens problem. A project with no L0 answers an empty table.
+    signature: >-
+      projectTable(system: SystemSpec | null, subsystems: SubsystemSpec[], components:
+      ComponentSpec[], interfaces: InterfaceSpec[], types: TypeSpec[], subsystemTables: Map<string,
+      ResolvedExportTable>, sources: ExportSources): ResolvedExportTable
+    returns: ResolvedExportTable
+    params:
+      - name: system
+        type: SystemSpec | null
+        description: The project's own L0, entries qualified into its key; null when it has none
+      - name: subsystems
+        type: SubsystemSpec[]
+        description: The project's subsystems
+      - name: components
+        type: ComponentSpec[]
+        description: The project's components, for legacy source inference
+      - name: interfaces
+        type: InterfaceSpec[]
+        description: The project's interfaces, for narrowed entries
+      - name: types
+        type: TypeSpec[]
+        description: The project's types, for own and re-exported type entries
+      - name: subsystemTables
+        type: Map<string, ResolvedExportTable>
+        description: The project's subsystem tables, as subsystemTables answered them
+      - name: sources
+        type: ExportSources
+        description: The project's key, alias table and the resolved tables of the producers its aliases name
+    guarantees:
+      - idempotent
+status: design
+createdAt: '2026-09-27T10:34:29.431Z'
+updatedAt: '2026-09-27T10:34:29.442Z'

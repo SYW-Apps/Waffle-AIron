@@ -174,6 +174,25 @@ methods:
         description: 'The value under the alias: `{}` when the alias is the producer id'
     guarantees:
       - idempotent
+  - name: declareMember
+    description: >-
+      Declare one member under an alias in `members`: the shorthand `alias: path` when the
+      declaration carries only a path, the long form when it carries a description. Refuses an alias
+      outside [a-z0-9-_]+, an empty or absolute path, and an alias `externals` already declares;
+      refuses when the alias is already a member with a DIFFERENT declaration, so a declaration a
+      person wrote is never overwritten. The same declaration again writes nothing. Covers `doctor
+      --fix`'s move of a legacy L1 mount. Returns whether it wrote.
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias key — the first segment this project's references use for the member
+      - name: declaration
+        type: MemberDeclaration
+        description: The member's path relative to this root, and its description when one is carried
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-09-26T21:10:33.026Z'
+updatedAt: '2026-09-27T10:39:06.879Z'

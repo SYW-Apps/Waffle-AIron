@@ -408,37 +408,6 @@ methods:
         type: local
     symbol: check
     exportedVia: reservedIdSegmentsRule
-  - name: namespaceShadowing
-    sourcePath: src/core/rules/integrity/namespace-shadowing.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Compute rootSubs — the set of root-level subsystem ids: every id in ctx.subsystems with no
-          "::" segment.
-        type: local
-      - stepNumber: 2
-        label: shadowStart
-        description: For each spec id in the tree, with the kind label its findings name it by (ctx.specIds()).
-        type: loop
-        loopKind: forEach
-        over: ctx.specIds()
-        endStep: 4
-      - stepNumber: 3
-        description: 'Branch: is the id in scope, namespaced, and does its local name shadow a root subsystem?'
-        type: branch
-        condition: >-
-          the id is in scope (ctx.isSpecInScope), has more than one "::" segment, and its last
-          segment matches a root-level subsystem id in rootSubs
-        onFalseStep: 2
-      - stepNumber: 4
-        label: shadowReport
-        description: >-
-          Report NAMESPACE_SHADOWING (error) naming the id and its kind label, the root subsystem it
-          shadows, and that a bare reference inside its subproject would anchor to the ROOT
-          subsystem, making the local spec unaddressable — rename one of them.
-        type: local
-    symbol: check
-    exportedVia: namespaceShadowingRule
   - name: publicSurfaceBinding
     sourcePath: src/core/rules/integrity/public-surface-binding.ts
     narrative:
@@ -770,12 +739,13 @@ methods:
         label: family-reported
         description: >-
           Report by the problem's kind: a defaulted member is PROJECT_ID_DEFAULTED (notice), naming
-          the member, the name slug it answers to now, and its mount's subsystem id as the id to
-          declare in its .wai/project.yaml (2c's doctor --fix writes it); an id-collision is
-          PROJECT_ID_AMBIGUOUS (warning) naming the id and each project resolving to it with where
-          its id came from (declared or name) — every declaration and reference keyed on that id
-          could mean either; a member with no id at all is PROJECT_ID_AMBIGUOUS (warning). The bound
-          root's own defaulted and no-id cases are left to the steps above, so each is reported once
+          the member, the name slug it answers to now, and its alias as the id to declare in its
+          .wai/project.yaml (doctor --fix writes it); an id-collision is PROJECT_ID_COLLISION
+          (error) naming the id and each member resolving to it with where its id came from
+          (declared or name), and that a project is contained once — to use one project in two
+          roles, keep one member and let the other consumers declare it as an external; a member
+          with no id at all is PROJECT_ID_AMBIGUOUS (warning). The bound root's own defaulted and
+          no-id cases are left to the steps above, so each is reported once
         type: local
       - stepNumber: 13
         label: judged
@@ -915,17 +885,18 @@ methods:
         outcome: no graph
       - stepNumber: 4
         label: each-reference
-        description: For each reference an author wrote with a leading `::`
+        description: For each reference an author wrote in a deprecated form
         type: loop
         loopKind: forEach
-        over: the graph's authored references
+        over: the graph's authored references whose form is leading, super or path
         endStep: 5
       - stepNumber: 5
         label: reported
         description: >-
           Report DEPRECATED_REFERENCE_FORM (notice) on the referring spec, in its draft context,
-          naming the position, the form as written and the absolute id it resolved to, which is the
-          form to write instead
+          naming the position, the form as written, what it bound to, and the rewrite to write
+          instead (a bare local id, or `alias::publicName`) — or, when it has none, why (its target
+          lies outside the scan, or nothing names its first segment)
         type: local
       - stepNumber: 6
         description: Every authored reference is reported
@@ -964,9 +935,10 @@ methods:
       - stepNumber: 6
         description: >-
           Report EXTERNAL_UNRESOLVED (notice), naming the declaring project, the alias, the producer
-          id and the external's problem (a malformed alias or id, no family project and no
-          source.path, two family projects answering to the id, or a family project at source.path
-          answering to another id), and how to fix it in .wai/project.yaml
+          id and the external's problem (a malformed alias or id, an alias `members` already
+          declares, no family project and no source.path, two family projects answering to the id,
+          or a family project at source.path answering to another id), and how to fix it in
+          .wai/project.yaml
         type: local
       - stepNumber: 7
         label: checked
@@ -979,6 +951,105 @@ methods:
     detail: full
     symbol: check
     exportedVia: externalDeclarationsRule
-status: complete
+  - name: localIds
+    sourcePath: src/core/rules/integrity/local-ids.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph from the rule context (ctx.projectFamily)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        label: duplicates
+        description: For each duplicate-spec problem the scan met
+        type: loop
+        loopKind: forEach
+        over: the graph's duplicate-spec problems
+        endStep: 5
+      - stepNumber: 5
+        description: >-
+          Report DUPLICATE_SPEC_ID (error) on the key, when it is in scope, naming the project and
+          both files that declare it, and that every reference to it could mean either — rename one
+          of them
+        type: local
+      - stepNumber: 6
+        label: shadows
+        description: For each project of the family
+        type: loop
+        loopKind: forEach
+        over: the graph's nodes
+        endStep: 9
+      - stepNumber: 7
+        description: Does a spec the project owns have a local id equal to one of its aliases?
+        type: branch
+        condition: >-
+          some key the project owns (ProjectFamily.owners) has a local id equal to a key of the
+          node's alias table
+        onFalseStep: 9
+      - stepNumber: 8
+        label: shadow-reported
+        description: >-
+          Report LOCAL_ID_SHADOWS_PROJECT (warning) on each such spec, in scope and in its draft
+          context, naming the local id, the member or external the alias names, and that a bare `x`
+          is the local spec while `x::name` reaches the other project — rename the spec or the alias
+        type: local
+      - stepNumber: 9
+        label: project-judged
+        description: The project's ids are judged
+        type: local
+      - stepNumber: 10
+        description: Every id is judged
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: localIdsRule
+  - name: memberDeclarations
+    sourcePath: src/core/rules/integrity/member-declarations.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph from the rule context (ctx.projectFamily)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        label: members
+        description: For each member the family declares in the legacy form
+        type: loop
+        loopKind: forEach
+        over: the graph's nodes carrying a legacy mount
+        endStep: 5
+      - stepNumber: 5
+        label: reported
+        description: >-
+          Report DEPRECATED_MOUNT_FORM (notice) on the member's key, naming the parent, the mount's
+          alias and path, the `members` entry that replaces it (`<alias>: <path>`), and each field
+          the mount carries beyond its description — publicInterfaces, trustedLinks, consumers, lint
+          and any other — that `doctor --fix` moves into the member or stops on; a mount whose alias
+          the parent's `members` also declares is reported as ignored, the `members` entry being the
+          declaration
+        type: local
+      - stepNumber: 6
+        description: Every member declaration is judged
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: memberDeclarationsRule
+status: design
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-26T18:32:11.246Z'
+updatedAt: '2026-09-27T10:42:18.502Z'

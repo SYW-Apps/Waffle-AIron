@@ -1,0 +1,21 @@
+id: export_resolver
+name: Export Resolver
+description: >-
+  The module resolver for export tables, as pure logic over the specs it is handed: it follows every
+  `export … from` to its canonical target, expands wildcards with explicit and own entries
+  shadowing, resolves a wildcard cycle to its union, binds an own project-level type (`{ typeDef }`
+  with no `from`), and returns every problem as a fact. It reads nothing and holds nothing. It is
+  its own component because two Indexes of the spec repository need the same algorithm at different
+  moments: the Spec Index resolves every project's tables during its scan, before it can bind any
+  `alias::name` reference against them, and nothing else may run inside that scan — the Export Index
+  then only projects the tables the scan recorded. Extracted from the export Index rather than
+  depended on through it, since the scan feeding that Index cannot call back into it without a
+  cycle.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+status: design
+createdAt: '2026-09-27T10:34:18.820Z'
+updatedAt: '2026-09-27T10:34:18.832Z'

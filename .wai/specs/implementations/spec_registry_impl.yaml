@@ -1,10 +1,12 @@
 id: spec_registry_impl
 name: Spec Registry Implementation
 description: >-
-  Validated write pipeline of the spec workspace: namespace relativization, updatedAt stamping
-  (skipped on a MECHANICAL re-save that changes no authored content — the lock's status promotion —
-  so a freeze never reads as an edit), writer-schema re-parse, and persistence through the file
-  store; the dry run exercises the identical pipeline in memory.
+  Validated write pipeline of the spec workspace: the inverse of the scan's binding (every reference
+  written relative to the project owning the spec — bare local ids, authored text carried back byte
+  for byte, `alias::publicName` for anything else in another project), updatedAt stamping (skipped
+  on a MECHANICAL re-save that changes no authored content — the lock's status promotion — so a
+  freeze never reads as an edit), writer-schema re-parse, and persistence through the file store;
+  the dry run exercises the identical pipeline in memory.
 contract: ispec_registry
 sourcePath: src/core/specs.ts
 methods:
@@ -24,10 +26,14 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces for the target mount, keep the stored status when the
-          spec arrives at draft or without one so a re-author never quietly reopens a frozen
-          subsystem, stamp updatedAt (unless preserved for a mechanical re-save), and re-parse
-          through the writer schema — a refusal aborts the save
+          Key the spec's own id, write every reference back relative to the project that owns it
+          (the scan's inverse, from the owning project's alias table and the producers' recorded
+          public names; authored text carried back when its bound value is unchanged; never
+          `super::`, a leading `::` or a member path), keep the stored status when the spec arrives
+          at draft or without one so a re-author never quietly reopens a frozen subsystem, stamp
+          updatedAt (unless preserved for a mechanical re-save), and re-parse through the writer
+          schema — a refusal aborts the save. A spec keyed in a member is routed to that member's
+          files
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its subsystem spec path through the file store
@@ -38,10 +44,11 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces, keep the stored status when the spec arrives at draft
-          or without one unless the caller states the demotion, stamp updatedAt (unless preserved
-          for a mechanical re-save), re-parse through the writer schema, and collect placement
-          notices for layout decisions the caller should see
+          Key the spec's own id, write every reference back relative to the project that owns it
+          (the scan's inverse), keep the stored status when the spec arrives at draft or without one
+          unless the caller states the demotion, stamp updatedAt (unless preserved for a mechanical
+          re-save), re-parse through the writer schema, and collect placement notices for layout
+          decisions the caller should see
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its component spec path through the file store
@@ -52,10 +59,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces, keep the stored status when the spec arrives at draft
-          or without one unless the caller states the demotion, stamp updatedAt (unless preserved
-          for a mechanical re-save), re-parse through the writer schema, and collect placement
-          notices
+          Key the spec's own id, write every reference back relative to the project that owns it
+          (the scan's inverse), keep the stored status when the spec arrives at draft or without one
+          unless the caller states the demotion, stamp updatedAt (unless preserved for a mechanical
+          re-save), re-parse through the writer schema, and collect placement notices
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its interface spec path through the file store
@@ -66,14 +73,14 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Qualify ids, relativize namespaces, keep the stored status when the spec arrives at draft
-          or without one unless the caller states the demotion, stamp updatedAt (unless preserved
-          for a mechanical re-save), re-parse through the writer schema, and collect placement
-          notices. A chained subproject's implementation keeps its file paths (sourcePath, each
-          method's sourcePath, simPath) relative to that subproject's root: a path written relative
-          to this root that lands inside the mounted child is re-expressed against the child root,
-          and any other path is taken as already child-relative and kept verbatim, so load → save
-          stays a fixpoint
+          Key the spec's own id, write every reference back relative to the project that owns it
+          (the scan's inverse), keep the stored status when the spec arrives at draft or without one
+          unless the caller states the demotion, stamp updatedAt (unless preserved for a mechanical
+          re-save), re-parse through the writer schema, and collect placement notices. A member's
+          implementation keeps its file paths (sourcePath, each method's sourcePath, simPath)
+          relative to that member's root: a path written relative to this root that lands inside the
+          member is re-expressed against the member root, and any other path is taken as already
+          member-relative and kept verbatim, so load → save stays a fixpoint
         type: local
       - stepNumber: 2
         description: Persist the serialized document to its implementation spec path through the file store
@@ -86,9 +93,9 @@ methods:
     intent: >-
       Re-serializes every currently loaded spec — subsystems, components, interfaces,
       implementations, types, AND groups — in memory through the exact writer pipeline the save
-      paths use: the same deepest-mount prefix derivation, the same namespace relativization, and
-      the same schema parse, shared code with the real save path so the check can never drift from
-      what a write would actually do, without touching the filesystem. An optional include predicate
+      paths use: the same owning-project derivation, the same inverse of the scan's binding, and the
+      same schema parse, shared code with the real save path so the check can never drift from what
+      a write would actually do, without touching the filesystem. An optional include predicate
       skips out-of-scope specs before the expensive clone and parse, so scoped validation pays
       scoped cost. For each spec whose serialized form the writer schema refuses, collects a
       ROUNDTRIP_SERIALIZATION issue naming the spec id and the offending field path (rendered by the
@@ -109,9 +116,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Turn the kind into this registry's typed writer of that kind, whose pipeline qualifies and
-          relativizes ids, keeps the stored status on a draft or status-less save, stamps updatedAt,
-          re-parses through the writer schema and collects placement notices
+          Turn the kind into this registry's typed writer of that kind, whose pipeline keys the id
+          and writes references back relative to the owning project, keeps the stored status on a
+          draft or status-less save, stamps updatedAt, re-parses through the writer schema and
+          collects placement notices
         type: local
       - stepNumber: 2
         description: The typed writer persists the serialized document through the file store
@@ -139,6 +147,32 @@ methods:
         description: Invalidate the index cache when something was removed, and answer whether it was
         type: return
         outcome: removed
+  - name: deleteMount
+    narrative: []
+    detail: intent
+    intent: >-
+      Finds the bound project's own subsystem document for the alias among the files the scan read
+      and deletes it only when it carries projectPath — a legacy mount; a subsystem without
+      projectPath is refused by name (it is content, not a mount), and no document answers false
+      without writing. Drops the index cache after removing it, so the next read sees the member
+      only through `members`.
+    calls:
+      - spec_file_store.remove
+  - name: normalizeReferences
+    narrative: []
+    detail: intent
+    intent: >-
+      Loads the spec by its key as the scan bound it and runs the typed writer of its kind with the
+      authored-text carry turned off, so every reference is written in its canonical form relative
+      to the project owning the spec: bare when it lands there, `alias::publicName` when it lands in
+      another project the scan read. Refuses before writing, naming the position and the text, when
+      a reference carries a deprecated form (leading `::`, `super::`, member path) and bound outside
+      or unresolved, since no canonical text exists for it. Compares the serialized document with
+      the stored one and writes through the file store only when they differ, answering whether it
+      wrote; the lock is never touched.
+    calls:
+      - spec_file_store.read
+      - spec_file_store.write
 lint:
   allow:
     - code: UNNARRATED_COMPLEXITY
@@ -149,4 +183,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-09-25T17:36:35.997Z'
+updatedAt: '2026-09-27T10:36:43.345Z'

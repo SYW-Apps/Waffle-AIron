@@ -2,22 +2,23 @@ kind: value-object
 id: chained_roots_inspection
 name: ChainedRootsInspection
 description: >-
-  The result of walking a project's chained mounts: what can be followed and what cannot, so a
-  whole-tree operation can refuse a partial result instead of silently producing one.
+  The result of walking a project's members (either declaration form): what can be followed and what
+  cannot, so a whole-tree operation can refuse a partial result instead of silently producing one.
 subsystem: sdd_core
 fields:
   - name: roots
     type: string[]
-    description: Project-relative chained subproject roots in walk order, parents before their own children.
+    description: Project-relative member roots in walk order, parents before their own members.
     optional: false
   - name: skipped
     type: object[]
     description: >-
-      Mounts that cannot be followed, each { mount: the mount's qualified id, projectPath: as
-      declared, reason: escapes | missing | cyclic | too-deep } — 'escapes' meaning the path leaves
-      the project that declares it, absolute, ../-escaping, or through a link.
+      Members that cannot be followed, each { mount: the member's key, alias: as its parent declares
+      it, form: members | mount, projectPath: the path as declared, reason: escapes | missing |
+      cyclic | too-deep } — 'escapes' meaning the path leaves the project that declares it,
+      absolute, ../-escaping, or through a link.
     optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-12T17:38:03.363Z'
-updatedAt: '2026-09-19T11:07:05.922Z'
+updatedAt: '2026-09-27T10:47:58.740Z'

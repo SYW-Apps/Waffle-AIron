@@ -583,6 +583,33 @@ methods:
         description: The value under the alias
     guarantees:
       - idempotent
+  - name: moveMountToMembers
+    description: >-
+      Forward to spec_maintenance_portal.moveMountToMembers: move one legacy L1 mount of the bound
+      project into its `members`. Returns whether it wrote.
+    signature: 'moveMountToMembers(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id
+    guarantees:
+      - idempotent
+  - name: normalizeReferences
+    description: >-
+      Forward to spec_maintenance_portal.normalizeReferences: re-save one spec with every reference
+      in its canonical stage-3 form. Returns whether the stored text changed.
+    signature: 'normalizeReferences(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T21:11:21.196Z'
+updatedAt: '2026-09-27T10:39:46.477Z'

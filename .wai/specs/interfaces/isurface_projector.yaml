@@ -16,35 +16,6 @@ methods:
     params:
       - name: maxAudience
         type: string
-  - name: projectChildSurface
-    description: >-
-      Project the parent surface a chained child may see: the family ceiling (a chained child is
-      part of the system family, so project-audience entries are included).
-    signature: 'projectChildSurface(childSubsystemId: string): SurfaceSnapshot'
-    returns: SurfaceSnapshot
-    params:
-      - name: childSubsystemId
-        type: string
-  - name: projectSubsystemSurface
-    description: >-
-      Project ONE subsystem's published surface — its L1 publicInterfaces realized by a component
-      that can legally serve a cross-boundary caller (a Portal, or an Observer for an event
-      surface), with full L3 contracts, dispatch tables, and the transitive type closure — into a
-      self-contained contract-grade snapshot at the family ('project') audience ceiling. This is the
-      SIBLING view a chained child receives: siblings expose exactly what they publish, nothing
-      wider. The publishable set matches what the boundary rules sanction as a cross-subsystem
-      dependency target. A published entry whose backing component can NEVER be a cross-boundary
-      target (a 'Custom' entry backed by, say, an Orchestrator or a Store — declarable, but not
-      consumable across a boundary) is omitted and REPORTED as a diagnostic at generation time, so
-      the author learns why a child cannot see it instead of finding an unexplained gap. The
-      snapshot's projectName is keyed '<systemName>::<subsystemId>' so sibling surfaces never
-      collide with the parent family surface or foreign imports, and carries the parent tree's
-      StateId provenance.
-    signature: 'projectSubsystemSurface(subsystemId: string): SurfaceSnapshot'
-    returns: SurfaceSnapshot
-    params:
-      - name: subsystemId
-        type: string
 status: complete
 createdAt: '2026-07-10T23:13:52.676Z'
-updatedAt: '2026-09-26T16:10:41.418Z'
+updatedAt: '2026-09-27T10:42:40.655Z'

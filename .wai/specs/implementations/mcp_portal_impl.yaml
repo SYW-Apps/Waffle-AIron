@@ -100,13 +100,6 @@ methods:
         targetComponent: mcp_orchestrator
         targetMethod: readResource
     symbol: registerSkillResources
-  - name: sdd_list_external_interfaces
-    narrative:
-      - stepNumber: 1
-        description: Dispatch to the external-surface discovery workflow
-        type: call
-        targetComponent: mcp_externals_orchestrator
-        targetMethod: listInterfaces
   - name: sdd_get_agent_brief
     narrative:
       - stepNumber: 1
@@ -230,4 +223,4 @@ methods:
         targetMethod: status
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T17:50:43.128Z'
+updatedAt: '2026-09-27T10:43:11.769Z'

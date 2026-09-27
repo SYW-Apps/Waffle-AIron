@@ -378,6 +378,20 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: declareExternal
+  - name: moveMountToMembers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: moveMountToMembers
+  - name: normalizeReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: normalizeReferences
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T21:11:26.651Z'
+updatedAt: '2026-09-27T10:39:48.194Z'

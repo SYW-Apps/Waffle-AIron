@@ -1,17 +1,15 @@
 id: export_index
 name: Export Index
 description: >-
-  Read face of the spec repository for export tables. It projects the scanned specs the Spec Index
-  holds into resolved export tables, the way a module resolver flattens `export … from`: each
-  re-export is followed to its canonical target, wildcards are expanded with explicit and own
-  entries shadowing, a wildcard cycle resolves to its union, and every problem is returned as a fact
-  for the validator to judge. A project table's sources are its subsystems, its members and its
-  externals, which it finds through the Project Family Index; the same graph lets it map a
-  consumer's cross-project references onto a producer's public names. The projection is memoized per
-  scan and dropped with it, so it is never stale. It depends on the Spec Index and the Project
-  Family Index of the same Repository — the sanctioned exceptional case of an Index projecting
-  another Index, never in a cycle (the family index depends on the Spec Index alone) — because a
-  second parse of the tree would duplicate state the Spec Index already holds.
+  Read face of the spec repository for export tables. The tables are resolved once per scan, inside
+  it — the Spec Index resolves every project's L1 and L0 tables through the pure export resolver
+  before it binds any `alias::name` against them — and this Index projects what the scan recorded:
+  one subsystem's table, one project's table, and one consumer's usage of one producer (the
+  references the scan bound into it, counted by the public names they bound to). Problems come back
+  as the facts the resolver recorded, for the validator to judge. Nothing is resolved twice and
+  nothing is stale: the projection is dropped with the scan. It depends on the Spec Index and the
+  Project Family Index of the same Repository — the sanctioned exceptional case of an Index
+  projecting another Index, never in a cycle (the family index depends on the Spec Index alone).
 subsystem: sdd_core
 componentType: Index
 owns: []
@@ -20,4 +18,4 @@ dependsOn:
   - project_family_index
 status: complete
 createdAt: '2026-09-26T16:08:20.637Z'
-updatedAt: '2026-09-26T17:41:59.130Z'
+updatedAt: '2026-09-27T10:37:38.546Z'

@@ -1604,6 +1604,55 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: declareExternal
+  - name: moveMountToMembers
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project graph of the bound root: the member the alias declares, with its legacy
+          mount as written (projectPath, description)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 2
+        description: Is there a legacy mount under the alias?
+        type: branch
+        condition: the bound root declares no member under the alias in the legacy L1 form
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Nothing to move: answer false when the alias is already an equal member, else refuse
+          naming the alias
+        type: return
+        outcome: already moved
+      - stepNumber: 4
+        label: declare
+        description: >-
+          Declare the member under the alias — the mount's projectPath as its path, its description
+          when it has one — through the project config Repository; a different member under the
+          alias is refused there and nothing below runs
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+      - stepNumber: 5
+        description: >-
+          Delete the L1 mount document through the spec repository, so the member is declared in one
+          place
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteMount
+      - stepNumber: 6
+        description: Answer that it wrote
+        type: return
+        outcome: moved
+  - name: normalizeReferences
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Re-save the spec with its references in canonical form through the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: normalizeReferences
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T21:10:57.447Z'
+updatedAt: '2026-09-27T10:39:34.816Z'

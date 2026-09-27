@@ -1,0 +1,41 @@
+kind: value-object
+id: planned_rewrite
+name: PlannedRewrite
+description: >-
+  One reference the chaining migration rewrites from a deprecated form to its canonical stage-3 text
+  — the scan's own rewrite, so the target never changes, only its spelling. Listed one by one in the
+  plan, grouped per spec by apply.
+subsystem: sdd_cli
+fields:
+  - name: project
+    type: string
+    description: The key of the project whose file holds the reference.
+    optional: false
+  - name: kind
+    type: string
+    description: 'The kind of the spec holding it: subsystem, component, interface, implementation or type.'
+    optional: false
+  - name: specId
+    type: string
+    description: The spec's in-memory key from the family's top root, where apply rewrites it.
+    optional: false
+    key: primary
+  - name: position
+    type: string
+    description: Where in the spec (as AuthoredReference.position).
+    optional: false
+  - name: from
+    type: string
+    description: The reference as written.
+    optional: false
+  - name: to
+    type: string
+    description: 'What apply writes instead: a bare local id, or `alias::publicName`.'
+    optional: false
+  - name: form
+    type: string
+    description: 'leading | super | path: the deprecated form rewritten.'
+    optional: false
+methods: []
+createdAt: '2026-09-27T10:44:27.609Z'
+updatedAt: '2026-09-27T10:44:45.177Z'

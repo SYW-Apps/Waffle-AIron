@@ -89,20 +89,21 @@ methods:
       - idempotent
   - name: findChainingParent
     description: >-
-      Detect whether the CURRENTLY BOUND project root is a chained subproject: walk the filesystem
-      upward (bounded) for an ancestor project holding a subsystem spec whose projectPath resolves
-      exactly to this root and stays within that ancestor's own root. Returns the parent root and
-      the mounting subsystem id, or null for a genuine top root. Pure detection — never rebinds,
-      never mutates, and not reach-gated: a request-scoped caller discovers its parent through
-      resolveChainingParent, which checks the request's reach before reading anything above the
-      bound root.
+      Detect whether the CURRENTLY BOUND project root is a member of another project: walk the
+      filesystem upward (bounded) for an ancestor project that declares this root as a member — a
+      `members` entry of its configuration or, for one release, a legacy L1 subsystem whose
+      projectPath resolves exactly to this root — staying within that ancestor's own root. Returns
+      the parent root, the alias and the form, or null for a genuine top root. Pure detection —
+      never rebinds, never mutates, and not reach-gated: a request-scoped caller discovers its
+      parent through resolveChainingParent, which checks the request's reach before reading anything
+      above the bound root.
     signature: 'findChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef | null
   - name: listChainedRoots
     description: >-
-      Every chained subproject root beneath the bound project, as project-relative directories in
-      walk order (recursing through nested mounts). The downward companion to findChainingParent,
-      and the roots half of inspectChainedRoots.
+      Every member root beneath the bound project, as project-relative directories in walk order
+      (recursing through members' members, either declaration form). The downward companion to
+      findChainingParent, and the roots half of inspectChainedRoots.
     signature: 'listChainedRoots(): string[]'
     returns: string[]
     guarantees:
@@ -116,9 +117,7 @@ methods:
     guarantees:
       - idempotent
   - name: resolveSubprojectForNamespace
-    description: >-
-      Resolve a chained mount's qualified namespace to its project root, or null. Pure 1:1 forward
-      to the index read face.
+    description: Resolve a member's key to its project root, or null. Pure 1:1 forward to the index read face.
     signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
     returns: string | null
     params:
@@ -242,6 +241,37 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: deleteMount
+    description: >-
+      Delete the bound project's legacy L1 mount declaration for one alias, once the chaining
+      migration has carried its fields and declared the member; false when there is none. Pure 1:1
+      forward to the registry write face.
+    signature: 'deleteMount(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id in the bound project
+    guarantees:
+      - idempotent
+    effect: write
+  - name: normalizeReferences
+    description: >-
+      Re-save one spec with every reference in its canonical stage-3 form (bare local, or
+      `alias::publicName`), targets unchanged; answers whether the stored text changed. Pure 1:1
+      forward to the registry write face.
+    signature: 'normalizeReferences(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+    guarantees:
+      - idempotent
+    effect: write
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-26T17:51:10.062Z'
+updatedAt: '2026-09-27T10:37:23.361Z'

@@ -140,6 +140,35 @@ methods:
     params:
       - name: projectRoot
         type: string
+  - name: moveMountToMembers
+    description: >-
+      Published write: move one legacy L1 mount of the bound project into its `members` (path and
+      description), deleting the L1 document; idempotent. Routed through the core orchestrator.
+      Returns whether it wrote.
+    signature: 'moveMountToMembers(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id
+    guarantees:
+      - idempotent
+  - name: normalizeReferences
+    description: >-
+      Published write: re-save one spec with every reference in its canonical stage-3 form, targets
+      unchanged; idempotent. Routed through the core orchestrator. Returns whether the stored text
+      changed.
+    signature: 'normalizeReferences(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-09-26T15:27:04.032Z'
+updatedAt: '2026-09-27T10:39:41.476Z'

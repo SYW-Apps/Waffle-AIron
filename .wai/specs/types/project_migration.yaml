@@ -3,13 +3,14 @@ id: project_migration
 name: ProjectMigration
 description: >-
   What the chaining migration writes into one project of the family — its owner's share of the plan:
-  the id to declare, the L0 re-export entries to add, the externals to declare, the aliases to pin,
-  and the stage-1 sibling pins those supersede.
+  the id to declare, the minimal L0 to create, the L0 entries to add, the externals to declare, the
+  aliases to pin, the legacy mounts to move into its `members`, and the stage-1 family pins to
+  delete.
 subsystem: sdd_cli
 fields:
   - name: project
     type: string
-    description: The project's namespace in the family graph ('' is the top root).
+    description: The project's key in the family graph ('' is the top root).
     optional: false
     key: primary
   - name: directory
@@ -29,8 +30,9 @@ fields:
   - name: exports
     type: PlannedExport[]
     description: >-
-      The re-export entries apply adds to its L0 publicInterfaces, in source-subsystem then item
-      order.
+      The L0 entries apply adds: re-exports for the references other projects make, own `{ typeDef
+      }` entries for the project-level types they use, and the entries carried from its legacy
+      mount, in source then item order (own types first).
     optional: false
   - name: externals
     type: PlannedExternal[]
@@ -45,12 +47,26 @@ fields:
   - name: supersededPins
     type: string[]
     description: >-
-      The storage keys of its stage-1 sibling pins in .wai/surfaces: they held L1 items the parent
-      never exported, and the planned exports serve those references now. Apply never deletes them:
-      they stay on disk until stage 3, because stage-1 resolution still reads them, and the printed
-      plan says so beside each one.
+      The storage keys of its stage-1 family pins in .wai/surfaces (the parent's family surface and
+      every sibling pin): nothing reads them since stage 3, so apply deletes them once the externals
+      they are replaced by are pinned. The report prints them as one line per project with their
+      count, never one line per pin.
+    optional: false
+  - name: createsSystem
+    type: boolean
+    description: >-
+      Whether apply writes a minimal L0 first: the project gains export entries and has no L0 of its
+      own. The minimal L0 is new content, so it goes through the gated authoring seam: its name is
+      the project's display name, its vision the description the parent gives the member (or one
+      line naming it an exporting project when there is none), and nothing else.
+    optional: false
+  - name: members
+    type: PlannedMember[]
+    description: >-
+      The legacy L1 mounts apply moves into this project's `members`, each with what it carries, in
+      declaration order.
     optional: false
 methods: []
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:11:55.782Z'
-updatedAt: '2026-09-26T21:57:06.523Z'
+updatedAt: '2026-09-27T10:44:55.483Z'

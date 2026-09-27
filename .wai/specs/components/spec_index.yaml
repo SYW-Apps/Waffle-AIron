@@ -4,18 +4,27 @@ description: >-
   Read/lookup face of the spec repository: resolves spec ids and kinds to their file locations
   across flat and per-subsystem layouts, reads documents through the file store, and parses them
   against the level schemas — collecting loader issues instead of throwing on a bad file. Its
-  per-root scan also records each project root it walks (namespace, parent, mount alias, directory,
-  its own L0, its configuration read through that root's binding, the ids its files declare and the
-  leading-`::` references they wrote), the raw material of the project graph. The scan is a cache
-  the index keeps fresh itself: every spec write drops it, a cached scan is re-verified against the
-  tree's file signature — which covers each root's .wai/project.yaml too — at most once per short
-  TTL, and a root switch (a caller binding this project root after another) re-verifies it on the
-  first read regardless of the TTL, so no caller has to invalidate it to read a tree as it is now.
+  per-root scan reads the bound root and every member it declares (a `members` entry of its
+  project.yaml, or a legacy L1 mount for one release), each once, keyed by the member's project id
+  at every depth, and puts every root's specs in the index under that key without folding any of
+  them into another's namespace. It binds references without position, in two passes: first every
+  root is parsed, its declarations keyed and its local references (no `::`) bound inside it; then
+  each root's export tables are resolved through the pure export resolver, in dependency order, and
+  every `alias::name` is bound through the referring root's alias table to a public name of the
+  producer's resolved L0 table — the deprecated leading `::`, `super::` and member-path forms still
+  binding for one release, each recorded with its form and rewrite. It records per root what the
+  graph, the export tables and the writer need (key, alias table, legacy mount, L0, configuration,
+  tables, spec keys, authored references). The scan is a cache the index keeps fresh itself: every
+  spec write drops it, a cached scan is re-verified against the tree's file signature — which covers
+  each root's .wai/project.yaml too — at most once per short TTL, and a root switch re-verifies it
+  on the first read regardless of the TTL, so no caller has to invalidate it to read a tree as it is
+  now.
 subsystem: sdd_core
 componentType: Index
 owns: []
 dependsOn:
   - spec_file_store
+  - export_resolver
 status: complete
 createdAt: '2026-07-18T22:57:53.159Z'
-updatedAt: '2026-09-26T18:13:15.472Z'
+updatedAt: '2026-09-27T10:34:46.399Z'

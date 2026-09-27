@@ -107,53 +107,6 @@ methods:
         type: call
         targetComponent: surface_repository
         targetMethod: removeSnapshot
-  - name: listExternalInterfaces
-    narrative:
-      - stepNumber: 1
-        description: Read all vendored surface snapshots from the repository
-        type: call
-        targetComponent: surface_repository
-        targetMethod: listSnapshots
-      - stepNumber: 2
-        description: >-
-          Detect the chaining-mount context of the current root — null when the bound request may
-          not read above its root
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: resolveChainingParent
-      - stepNumber: 3
-        description: A chaining parent was resolved
-        type: branch
-        condition: a chaining parent was resolved
-        onFalseStep: 5
-      - stepNumber: 4
-        description: >-
-          Bind the parent root read-only and project what it publishes NOW — its family surface and
-          each sibling's published surface, exactly as pinFamilySurfaces would store them — as the
-          content every generated snapshot is compared with
-        type: call
-        targetComponent: surface_projector
-        targetMethod: projectChildSurface
-      - stepNumber: 5
-        description: For each stored snapshot
-        type: loop
-        loopKind: forEach
-        over: stored snapshots
-        endStep: 6
-      - stepNumber: 6
-        description: >-
-          Build the ExternalSurfaceEntry: classify sourceKind (parent = the generated family surface
-          keyed by the parent system name; sibling = a generated '<systemName>::<subsystemId>' key;
-          foreign = exchanged/authored imports), carry origin, generatedAt, stateId/version
-          provenance and the exposed interface ids, and compute freshness on content — 'fresh' when
-          a generated snapshot's contracts equal the current projection for its key, 'stale' when
-          they differ or the key is no longer projected, 'unverifiable' when no projection is
-          available or the snapshot is foreign
-        type: local
-      - stepNumber: 7
-        description: Return the discovery entries
-        type: return
-        outcome: ExternalSurfaceEntry[]
   - name: listMountSnapshots
     narrative:
       - stepNumber: 1
@@ -181,64 +134,6 @@ methods:
         description: Return the per-mount snapshots
         type: return
         outcome: MountSurfaceSnapshots[]
-  - name: pinFamilySurfaces
-    narrative:
-      - stepNumber: 1
-        description: Detect the chaining-mount context of the current (child) root
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: resolveChainingParent
-      - stepNumber: 2
-        description: Only a chained subproject has a family to pin
-        type: branch
-        condition: no chaining parent — the bound root is a top root
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Nothing to pin
-        type: return
-        outcome: 'null'
-      - stepNumber: 4
-        description: >-
-          Bind the parent root read-only for the projection, restoring the child's binding
-          afterwards
-        type: local
-      - stepNumber: 5
-        description: Load the parent's top-level subsystems
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: loadSubsystemSpecs
-      - stepNumber: 6
-        description: Project the family-scoped parent surface this child may consume
-        type: call
-        targetComponent: surface_projector
-        targetMethod: projectChildSurface
-      - stepNumber: 7
-        description: For each SIBLING subsystem
-        type: loop
-        loopKind: forEach
-        over: every top-level parent subsystem except this child's own mount
-        endStep: 8
-      - stepNumber: 8
-        description: Project the sibling's published surface at the family ceiling
-        type: call
-        targetComponent: surface_projector
-        targetMethod: projectSubsystemSurface
-      - stepNumber: 9
-        description: For each projected snapshot
-        type: loop
-        loopKind: forEach
-        over: the projected family and sibling snapshots
-        endStep: 10
-      - stepNumber: 10
-        description: Store it in the CHILD's .wai/surfaces/, leaving an unchanged snapshot untouched
-        type: call
-        targetComponent: surface_repository
-        targetMethod: saveSnapshot
-      - stepNumber: 11
-        description: Return the paths that changed
-        type: return
-        outcome: the changed snapshot paths
   - name: pinExternals
     sourcePath: src/core/surfaces.ts
     narrative:
@@ -468,8 +363,25 @@ methods:
         type: return
         outcome: ExternalListing[]
     detail: full
+  - name: listFamilyPins
+    narrative:
+      - stepNumber: 1
+        description: Read the snapshots the bound root holds through the repository
+        type: call
+        targetComponent: surface_repository
+        targetMethod: listSnapshots
+      - stepNumber: 2
+        description: >-
+          Keep the generated ones — foreign imports (exchanged, authored) are never family pins —
+          and classify each by its key: `<system>::<subsystem>` is a sibling pin, any other
+          generated key the parent's family pin
+        type: local
+      - stepNumber: 3
+        description: Answer the family pins in key order
+        type: return
+        outcome: FamilyPin[]
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-09-26T18:13:39.373Z'
+updatedAt: '2026-09-27T10:42:55.215Z'

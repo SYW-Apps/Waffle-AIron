@@ -1,0 +1,141 @@
+id: position_migration_orchestrator_impl
+name: Position Migration Orchestrator Implementation
+description: >-
+  Plans the mount moves and reference rewrites from the family's graph, and applies them after the
+  chaining migration's stage-2 writes: members under each parent's binding, rewrites under the
+  family's top binding, family-pin deletion under each member's binding; the caller's binding is
+  restored on every path.
+contract: iposition_migration_orchestrator
+sourcePath: src/commands/position-migration.ts
+methods:
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        label: mounts
+        description: Plan each legacy mount's move
+        type: loop
+        loopKind: forEach
+        over: the graph's nodes carrying a legacy mount, parents in walk order
+        endStep: 5
+      - stepNumber: 2
+        description: >-
+          Plan the member entry in the parent: the mount's alias, its projectPath as the path, its
+          description carried into the long form. An equal `members` entry already present leaves
+          only the L1 document to delete; a different one under the alias is a blocking
+          mount-field-conflict
+        type: local
+      - stepNumber: 3
+        description: >-
+          Read the member's current L0 table, so a carried entry can be checked against every name
+          it already binds
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 4
+        description: >-
+          Carry each entry of the mount's publicInterfaces into the member's L0 as `{ from: <the
+          member subsystem owning the component>, component, interface?, type, details, audience:
+          project }` (the family reached it through the mount, so the member exports it to the
+          family); an entry the table already binds to the same target carries nothing, and a public
+          name it binds to another target is a blocking mount-field-conflict. The entries'
+          `consumers` (subsystems of the parent) retire with the mount and are listed
+        type: local
+      - stepNumber: 5
+        label: fields
+        description: >-
+          Sort the mount's remaining fields: an empty publicInterfaces or trustedLinks and lint
+          allows about the mount itself retire and are listed; a non-empty trustedLinks (a fast lane
+          cannot cross a project), a lifecycle, profile, targetLanguage, designDepth or ext is a
+          blocking mount-field-unhomed naming the field and where the member would hold it — nothing
+          is dropped silently
+        type: local
+      - stepNumber: 6
+        description: >-
+          Report each member-absent problem of the graph as a blocking member-absent finding:
+          references into a missing member cannot be rewritten, and its mount cannot be moved
+        type: local
+      - stepNumber: 7
+        label: references
+        description: Plan each deprecated reference's rewrite
+        type: loop
+        loopKind: forEach
+        over: the graph's authored references whose form is leading, super or path
+        endStep: 8
+      - stepNumber: 8
+        label: rewrite
+        description: >-
+          Plan the rewrite from the authored text to the scan's rewrite (a bare local id when it
+          lands in its own project, else `alias::publicName` — the producer's id as the alias where
+          the referrer declares none yet, which the chaining migration's externals declare, and the
+          target's local id where no public name binds it, which its exports add); a reference with
+          no rewrite is a rewrite-unavailable finding saying why
+        type: local
+      - stepNumber: 9
+        description: 'Answer the plan: members, rewrites and findings'
+        type: return
+        outcome: PositionMigrationPlan
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        label: members
+        description: Move each planned mount
+        type: loop
+        loopKind: forEach
+        over: each project's planned members, parents in walk order
+        endStep: 2
+      - stepNumber: 2
+        label: move
+        description: >-
+          Under the parent's binding, declare the member in its `members` and delete the L1 mount
+          document — the carried entries were written with the member's exports already; an
+          already-moved mount writes nothing
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: moveMountToMembers
+      - stepNumber: 3
+        description: >-
+          Bind the family's top root: the deprecated forms bind from there, so every rewrite is read
+          and written where its target is still found
+        type: local
+      - stepNumber: 4
+        label: rewrites
+        description: Rewrite the planned references, one spec at a time
+        type: loop
+        loopKind: forEach
+        over: the plan's rewrites grouped by spec
+        endStep: 5
+      - stepNumber: 5
+        label: normalize
+        description: >-
+          Re-save the spec with every reference in its canonical form; a reference that no longer
+          has one is refused there, by name, before that spec is written
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: normalizeReferences
+      - stepNumber: 6
+        label: pins
+        description: Delete the superseded family pins last, once the externals that replace them are pinned
+        type: loop
+        loopKind: forEach
+        over: each project's superseded pins
+        endStep: 7
+      - stepNumber: 7
+        label: unpin
+        description: Under the project's binding, remove the pin's snapshot; one already gone writes nothing
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: removeSnapshot
+      - stepNumber: 8
+        description: >-
+          Restore the caller's binding. Collect every file that changed, in write order, and every
+          project whose approval the writes staled: a parent whose `members` changed and L1 mount
+          went, a project whose spec files were rewritten, a member whose pins went (gate inputs)
+        type: local
+      - stepNumber: 9
+        description: Answer the files written and the projects to re-lock
+        type: return
+        outcome: PositionMigrationResult
+detail: full
+status: design
+createdAt: '2026-09-27T10:45:51.006Z'
+updatedAt: '2026-09-27T10:45:51.020Z'

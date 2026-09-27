@@ -25,16 +25,26 @@ methods:
         targetMethod: resolveProjectExports
       - stepNumber: 3
         description: >-
-          Emit a node per spec with its level and containment, and an edge per dependency and
-          ownership between the nodes emitted
-        type: local
+          Read the project graph: one project node per member (its alias, display name and the
+          description its parent gives it), drawn through its exports — a member's internals hang
+          under its node, and an edge from another project lands on the member's exported name
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
       - stepNumber: 4
+        description: >-
+          Emit a node per spec with its level and containment — a member's specs under its project
+          node — and an edge per dependency and ownership between the nodes emitted. Ids stay
+          honest; only the displayed label collapses a subsystem whose key repeats its member's
+          alias (`billing::billing` shows as `billing` under the billing node)
+        type: local
+      - stepNumber: 5
         description: >-
           Mark each node the passed-in findings name, keeping each finding's severity, so the canvas
           shows a judgement it did not make — and can draw a node holding only notices apart from
           one holding errors or warnings
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: Answer with the model
         type: return
         outcome: built
@@ -65,4 +75,4 @@ methods:
     symbol: renderCanvasHtml
 status: complete
 createdAt: '2026-09-20T16:38:14.590Z'
-updatedAt: '2026-09-26T16:13:28.845Z'
+updatedAt: '2026-09-27T10:47:27.326Z'

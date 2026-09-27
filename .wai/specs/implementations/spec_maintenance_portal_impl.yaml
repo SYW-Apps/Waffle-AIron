@@ -98,6 +98,20 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: backfillChainedSubprojectConfigs
+  - name: moveMountToMembers
+    narrative:
+      - stepNumber: 1
+        description: Forward the mount move to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: moveMountToMembers
+  - name: normalizeReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward the reference normalization to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: normalizeReferences
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-09-25T21:06:57.742Z'
+updatedAt: '2026-09-27T10:39:43.465Z'

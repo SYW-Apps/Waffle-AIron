@@ -706,6 +706,40 @@ methods:
         description: The value under the alias
     guarantees:
       - idempotent
+  - name: moveMountToMembers
+    description: >-
+      Move one legacy L1 mount of the bound project into its `members`: declare the member under the
+      mount's alias with the mount's projectPath as its path and the mount's description as its
+      description, then delete the L1 mount document. The caller carries the mount's other fields
+      into the member first; this moves only the declaration and the description, which are the
+      parent's own words about its member. Refuses when the alias names no legacy mount of the bound
+      project and no equal member, or when the alias already holds a different member declaration.
+      Idempotent: a mount already moved (an equal member, no L1 document) writes nothing. Returns
+      whether it wrote.
+    signature: 'moveMountToMembers(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id, which becomes the member's alias
+    guarantees:
+      - idempotent
+  - name: normalizeReferences
+    description: >-
+      Re-save one spec of the family with every reference in its canonical stage-3 form (a bare
+      local id, or `alias::publicName`) through the spec repository; targets never change. Returns
+      whether the stored text changed.
+    signature: 'normalizeReferences(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T21:10:55.700Z'
+updatedAt: '2026-09-27T10:39:29.582Z'

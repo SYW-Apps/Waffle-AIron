@@ -197,14 +197,6 @@ methods:
     endpoint:
       transport: Custom
       address: mcp resources/read (SDD skill or agent brief)
-  - name: sdd_list_external_interfaces
-    description: >-
-      List the bound project's consumable external surfaces (parent family, siblings, foreign
-      imports) as discovery entries with origin, provenance, and freshness — the tool an agent
-      inside a subproject uses to SEE its outward world instead of discovering it by failed
-      reference resolution.
-    signature: 'sdd_list_external_interfaces(): ExternalSurfaceEntry[]'
-    returns: ExternalSurfaceEntry[]
   - name: sdd_get_agent_brief
     description: >-
       Tool: compose the LIVE delegation brief for one resolved agent (rendered instructions +
@@ -508,4 +500,4 @@ methods:
       address: mcp tools/call sdd_get_externals_status
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T17:50:04.304Z'
+updatedAt: '2026-09-27T10:43:11.031Z'

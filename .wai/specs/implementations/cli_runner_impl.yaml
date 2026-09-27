@@ -624,11 +624,7 @@ methods:
             step: 4
           - value: list
             step: 6
-          - value: externals
-            step: 8
-          - value: pin
-            step: 10
-        defaultStep: 12
+        defaultStep: 8
       - stepNumber: 2
         description: Export the own surface (audience/format/out/portal from options)
         type: call
@@ -662,34 +658,8 @@ methods:
         outcome: listed
       - stepNumber: 8
         description: >-
-          Print a deprecation line (`wairon surface externals` is deprecated; use `wairon externals
-          list` and `wairon externals status`), then list the project's external surfaces (parent
-          family, siblings, foreign imports) with origin and freshness
-        type: call
-        targetComponent: cli_surfaces_client_adapter
-        targetMethod: listExternalInterfaces
-      - stepNumber: 9
-        description: >-
-          Print the externals table: one row per entry — sourceKind, key, origin, freshness,
-          interface ids
-        type: return
-        outcome: externals listed
-      - stepNumber: 10
-        description: >-
-          Print a deprecation line (`wairon surface pin` is deprecated; declare the parent or
-          sibling under `externals` in .wai/project.yaml and use `wairon externals pin`), then pin
-          the chaining parent's family and sibling surfaces into this chained child
-        type: call
-        targetComponent: cli_surfaces_client_adapter
-        targetMethod: pinFamilySurfaces
-      - stepNumber: 11
-        description: >-
-          Print the changed pinned paths — or that they were already up to date, or that a top root
-          has no family to pin
-        type: return
-        outcome: pinned
-      - stepNumber: 12
-        description: Unknown surface action
+          Unknown surface action — for `externals` and `pin`, which stage 3 removed, the error names
+          `wairon externals list|status|pin` instead
         type: throw
         error: UnknownSurfaceActionError
   - name: runPacks
@@ -1434,11 +1404,14 @@ methods:
         targetMethod: plan
       - stepNumber: 5
         description: >-
-          Print the plan per project — the id to declare, the L0 entries to add with the consumers
-          each serves, the externals to declare, the aliases to pin, and each sibling pin
-          superseded, marked as left on disk until stage 3 (stage-1 resolution still reads it;
-          nothing deletes it) — then every finding and the totals (the P1 probe's counts). Nothing
-          is written
+          Print the plan per project, each item once: the id to declare, the minimal L0 to create,
+          the L0 entries to add with the consumers each serves (own `{ typeDef }` entries and
+          mount-carried entries marked), the externals to declare, the aliases to pin, the legacy
+          mounts moved into `members` with every field they carry or retire, and the superseded
+          family pins as ONE line per project with their count; then every reference rewrite (from →
+          to, grouped per project and spec), every finding once, and the totals (the P1 probe's
+          counts). The plan is computed without projecting any sibling surface, so no projector
+          message reaches it. Nothing is written
         type: return
         outcome: chaining plan reported
       - stepNumber: 6
@@ -1621,10 +1594,11 @@ methods:
         targetMethod: repairForeignStepFields
       - stepNumber: 34
         description: >-
-          Chaining: plan the migration and report how much is pending — ids, entries, externals,
-          pins and findings — pointing at `wairon doctor --report chaining` and `--fix`; silent when
-          nothing is planned or reported. After an applied --fix this plan is empty, which is the
-          run's own idempotence check
+          Chaining: plan the migration and report how much is pending — ids, L0s, entries,
+          externals, pins, mounts to move, references to rewrite, family pins to delete and findings
+          — pointing at `wairon doctor --report chaining` and `--fix`; silent when nothing is
+          planned or reported. After an applied --fix this plan is empty, which is the run's own
+          idempotence check
         type: call
         targetComponent: chaining_migration_orchestrator
         targetMethod: plan
@@ -2726,4 +2700,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-26T21:28:30.734Z'
+updatedAt: '2026-09-27T10:47:16.631Z'
