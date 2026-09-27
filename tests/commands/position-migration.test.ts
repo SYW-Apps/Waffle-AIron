@@ -158,7 +158,8 @@ describe('stage 3 — the position migration over the reference family', () => {
     expect(fs.existsSync(path.join(f.top, '.wai', 'specs', 'shared', '.index.yaml'))).toBe(false);
     // The rewritten text, on disk.
     const lowering = yaml.load(fs.readFileSync(path.join(f.transpiler, '.wai', 'specs', 'lowering', 'lowering-core', '.index.yaml'), 'utf8')) as { dependsOn: string[] };
-    expect(lowering.dependsOn).toEqual(['core::engine-portal', 'lowering-portal', 'core::engine-portal']);
+    // Two texts bound one target; dependsOn is a set, so the canonical write keeps it once.
+    expect(lowering.dependsOn).toEqual(['core::engine-portal', 'lowering-portal']);
   });
 
   it('property: idempotence — the second plan is empty and a second apply writes nothing', () => {
@@ -193,13 +194,13 @@ describe('stage 3 — the position migration over the reference family', () => {
         return `${path.relative(f.top, node.directory).split(path.sep).join('/') || '.'}:${local}`;
       });
     });
-    const expected = ['core:engine-portal', 'core/transpiler:lowering-portal', 'core:engine-portal'];
+    const expected = ['core:engine-portal', 'core/transpiler:lowering-portal'];
     expect(landings(f.top, 'transpiler::lowering-core')).toEqual(expected);
     expect(landings(f.core, 'transpiler::lowering-core')).toEqual(expected);
     // From transpiler's own root the scan holds no core, so the text binds nothing
     // there — and it is the same `alias::name` text, judged through the parent.
     const own = at(f.transpiler, () => projectFamilyGraph().authoredReferences.filter((r) => r.specId === 'lowering-core'));
-    expect(own.map((r) => [r.authored, r.form])).toEqual([['core::engine-portal', 'alias'], ['core::engine-portal', 'alias']]);
+    expect(own.map((r) => [r.authored, r.form])).toEqual([['core::engine-portal', 'alias']]);
   });
 
   it('property: alias-rename-touches-no-sibling — renaming a member alias leaves every sibling byte for byte and verdict for verdict', () => {

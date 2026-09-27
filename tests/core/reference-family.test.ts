@@ -112,11 +112,12 @@ describe('reference family: the loader without position', () => {
     expect(normalizeReferences('component', 'transpiler::lowering-core')).toBe(true);
     const text = fs.readFileSync(path.join(family.transpiler, '.wai', 'specs', 'lowering', 'lowering-core', '.index.yaml'), 'utf8');
     const dependsOn = text.split(/\r?\n/).filter((line) => line.startsWith('  - '));
-    expect(dependsOn).toEqual(['  - core::engine-portal', '  - lowering-portal', '  - core::engine-portal']);
+    // Two texts bound one target; dependsOn is a set, so the canonical write keeps it once.
+    expect(dependsOn).toEqual(['  - core::engine-portal', '  - lowering-portal']);
     expect(text).not.toMatch(/super::|- ::/);
     bind(family.top);
     // The targets did not move, and a second run writes nothing.
-    expect(dependsOnOf('transpiler::lowering-core')).toEqual(['core::engine-portal', 'transpiler::lowering-portal', 'core::engine-portal']);
+    expect(dependsOnOf('transpiler::lowering-core')).toEqual(['core::engine-portal', 'transpiler::lowering-portal']);
     expect(normalizeReferences('component', 'transpiler::lowering-core')).toBe(false);
   });
 

@@ -768,6 +768,18 @@ function mapTypeNames(typeStr: string | undefined, map: ReferenceMapper): string
 }
 
 /**
+ * A component whose `dependsOn` and `owns` name each target once, in
+ * first-written order. The same object when neither list repeats a target.
+ */
+function withUniqueTargets(spec: ComponentSpec): ComponentSpec {
+  const unique = (list: string[] | undefined): string[] | undefined => (list ? [...new Set(list)] : list);
+  const dependsOn = unique(spec.dependsOn);
+  const owns = unique(spec.owns);
+  if (dependsOn?.length === spec.dependsOn?.length && owns?.length === spec.owns?.length) return spec;
+  return { ...spec, dependsOn, owns } as ComponentSpec;
+}
+
+/**
  * A spec with every reference at a raw position (rawReferences) passed through
  * `map` — the inverse table of rawReferences, used where a raw reference is
  * rewritten into its canonical text. An interface method's display signature
@@ -3627,8 +3639,12 @@ export class SpecWorkspace {
       .flatMap((r) => r.authoredReferences)
       .filter((r) => r.specId === id && !bound.has(r.position) && r.rewrite !== undefined && r.rewrite !== r.authored)
       .map((r) => [`${r.position}|${r.authored}`, r.rewrite!] as const));
-    const rawRewritten = rawRewrites.size === 0 ? spec
+    const rewritten = rawRewrites.size === 0 ? spec
       : mapRawReferences(refKind as ReferenceKind, spec, (position, value) => rawRewrites.get(`${position}|${value}`) ?? value);
+    // dependsOn and owns are sets: two authored texts that bound one target
+    // (a member path and a leading `::` form, say) collapse to one entry once
+    // both are written canonically, first-written position kept.
+    const rawRewritten = refKind === 'component' ? withUniqueTargets(rewritten as ComponentSpec) : rewritten;
     this.carryDisabled = true;
     try {
       if (JSON.stringify(this.prepareForKind(refKind, rawRewritten)) === asStored) return false;
