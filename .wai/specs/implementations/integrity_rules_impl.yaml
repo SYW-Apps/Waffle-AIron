@@ -888,7 +888,11 @@ methods:
         description: For each reference an author wrote in a deprecated form
         type: loop
         loopKind: forEach
-        over: the graph's authored references whose form is leading, super or path
+        over: >-
+          the graph's authored references whose form is leading, super or path and whose text
+          changes — a path-form reference whose rewrite equals what was written (`shared::x` from a
+          project that has not declared `shared` yet) becomes canonical by declaring the external
+          alone, which is EXTERNAL_UNDECLARED's to say
         endStep: 5
       - stepNumber: 5
         label: reported
@@ -1052,4 +1056,4 @@ methods:
     exportedVia: memberDeclarationsRule
 status: design
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-27T10:42:18.502Z'
+updatedAt: '2026-09-27T10:48:51.206Z'

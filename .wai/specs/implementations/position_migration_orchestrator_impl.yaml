@@ -59,7 +59,10 @@ methods:
         description: Plan each deprecated reference's rewrite
         type: loop
         loopKind: forEach
-        over: the graph's authored references whose form is leading, super or path
+        over: >-
+          the graph's authored references whose form is leading, super or path and whose rewrite
+          differs from the text as written (one that only needs its external declared is the
+          chaining migration's externals, not a rewrite)
         endStep: 8
       - stepNumber: 8
         label: rewrite
@@ -138,4 +141,4 @@ methods:
 detail: full
 status: design
 createdAt: '2026-09-27T10:45:51.006Z'
-updatedAt: '2026-09-27T10:45:51.020Z'
+updatedAt: '2026-09-27T10:48:52.504Z'
